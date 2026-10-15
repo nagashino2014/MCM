@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
-import { ensureMailbox, updateSignature } from "@/lib/mail/mailbox";
+import { ensureMailbox, getMailboxAddresses, updateSignature } from "@/lib/mail/mailbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +10,11 @@ export async function GET() {
   try {
     const ctx = await requireSession();
     const mailbox = await ensureMailbox(ctx.userId);
+    const addresses = await getMailboxAddresses(mailbox.mailboxId);
     return NextResponse.json({
       address: mailbox.address,
+      // 내 메일함의 모든 주소(대표 포함) — 전체답장에서 나를 빼는 데 쓴다.
+      addresses: addresses.map((a) => a.address),
       displayName: mailbox.displayName,
       signatureHtml: mailbox.signatureHtml,
       status: mailbox.status,

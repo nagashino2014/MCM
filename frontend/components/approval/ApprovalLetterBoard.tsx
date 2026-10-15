@@ -1500,7 +1500,7 @@ export function ApprovalLetterBoard() {
                     onChange={(e) => setInternalCcTarget(e.target.value as "personal" | "company")}
                   >
                     <option value="personal">개인 메일 주소</option>
-                    <option value="company">회사 메일(@koensain.app)</option>
+                    <option value="company">회사 메일</option>
                   </select>
                 </label>
               )}

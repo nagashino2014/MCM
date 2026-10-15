@@ -18,7 +18,7 @@ import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN } from "@/lib/mail/mailbox";
+import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
 import { htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
 
@@ -80,14 +80,18 @@ function parseNotification(body: string): SesNotification | null {
       return null;
     }
   }
-  const receipt = j.receipt as { action?: { bucketName?: string; objectKey?: string } } | undefined;
+  const receipt = j.receipt as { action?: { bucketName?: string; objectKey?: string }; recipients?: string[] } | undefined;
   const mail = j.mail as { destination?: string[]; messageId?: string } | undefined;
   const action = receipt?.action;
   if (!action?.bucketName || !action?.objectKey) return null;
+  // 수신자 = 봉투(SMTP RCPT TO) 중 Receipt Rule 이 매칭한 주소(receipt.recipients).
+  // mail.destination 은 MIME 헤더 To/Cc 라 Bcc 수신이 빠지고, 아마란스 자동전달(헤더 To=.com, 봉투=.app)도 못 받는다.
+  // recipients 가 없는 통지(구형·수동 재처리)만 헤더로 폴백한다.
+  const envelope = Array.isArray(receipt?.recipients) ? receipt!.recipients!.map(String) : [];
   return {
     bucketName: String(action.bucketName),
     objectKey: String(action.objectKey),
-    destination: Array.isArray(mail?.destination) ? mail!.destination!.map(String) : [],
+    destination: envelope.length ? envelope : Array.isArray(mail?.destination) ? mail!.destination!.map(String) : [],
     sesMessageId: mail?.messageId ? String(mail.messageId) : null,
   };
 }
@@ -119,16 +123,31 @@ interface TargetMailbox {
   address: string;
 }
 
-/** 수신자(우리 도메인) 로컬파트 → mailbox 해석. 별칭이면 대상 mailbox 로 fan-out. */
+/**
+ * 수신자 → mailbox 해석. 먼저 주소 원장(280, 도메인 무관 전체 주소)으로 찾고,
+ * 남은 앱 도메인(MAIL_DOMAIN) 주소는 로컬파트로 해석한다. 별칭이면 대상 mailbox 로 fan-out.
+ */
 async function resolveRecipients(destinations: string[]): Promise<TargetMailbox[]> {
+  const result = new Map<string, TargetMailbox>();
+  const byAddress = await resolveMailboxAddresses(destinations);
+  const mailboxIds = [...new Set([...byAddress.values()].map((r) => r.mailboxId))];
+
   const locals = new Set<string>();
   for (const d of destinations) {
     const m = d.toLowerCase().match(/^([^@]+)@(.+)$/);
-    if (m && m[2] === MAIL_DOMAIN) locals.add(m[1]);
+    if (m && m[2] === MAIL_DOMAIN && !byAddress.has(`${m[1]}@${m[2]}`)) locals.add(m[1]);
   }
-  if (!locals.size) return [];
+  if (!locals.size && !mailboxIds.length) return [];
   const db = await getDb();
   const localArr = [...locals];
+
+  if (mailboxIds.length) {
+    const rows = rowsToObjects(
+      await db.exec(`SELECT mailbox_id, address FROM mailboxes WHERE mailbox_id = ANY($1::text[]) AND status = 'active'`, [mailboxIds])
+    );
+    for (const r of rows) result.set(String(r.mailbox_id), { mailboxId: String(r.mailbox_id), address: String(r.address) });
+  }
+  if (!locals.size) return [...result.values()];
 
   const direct = rowsToObjects(
     await db.exec(
@@ -136,7 +155,6 @@ async function resolveRecipients(destinations: string[]): Promise<TargetMailbox[
       [localArr]
     )
   );
-  const result = new Map<string, TargetMailbox>();
   for (const r of direct) result.set(String(r.mailbox_id), { mailboxId: String(r.mailbox_id), address: String(r.address) });
 
   // 미생성 메일함 자동 보장(G6-A) — mailbox 는 최초 웹메일 사용 시 lazy 생성이라,

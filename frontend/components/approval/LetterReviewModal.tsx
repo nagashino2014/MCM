@@ -173,7 +173,7 @@ export function LetterReviewModal({
             검수 메일 받을 주소
             <select className="cd-select" value={target} onChange={(e) => setTarget(e.target.value as "personal" | "company")}>
               <option value="personal">개인 메일 주소</option>
-              <option value="company">회사 메일(@koensain.app)</option>
+              <option value="company">회사 메일</option>
             </select>
           </label>
 

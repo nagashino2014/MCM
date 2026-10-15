@@ -24,7 +24,8 @@ export function MailAliasManager({ mailboxes }: { mailboxes: MailboxOption[] }) 
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<MailAlias | "new" | null>(null);
 
-  const domain = mailboxes[0]?.address?.split("@")[1] ?? "koensain.app";
+  // 별칭은 앱 수신 도메인(MAIL_DOMAIN)에만 걸린다 — 대표 주소가 .com 으로 바뀐 메일함 주소에서 유도하지 않는다.
+  const [domain, setDomain] = useState("koensain.app");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,6 +34,7 @@ export function MailAliasManager({ mailboxes }: { mailboxes: MailboxOption[] }) 
       if (r.ok) {
         const d = await r.json();
         setAliases(Array.isArray(d.aliases) ? d.aliases : []);
+        if (d.domain) setDomain(String(d.domain));
       }
     } finally {
       setLoading(false);

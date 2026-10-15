@@ -3,10 +3,11 @@
 // 메일 설정 화면(G2-12) — 스팸 설정·보관함 용량 배분·외부 클라이언트(POP3/IMAP) 안내 + (관리자) 사용자별 총용량 할당.
 
 import { useCallback, useEffect, useState } from "react";
-import { AtSign, Check, HardDrive, Loader2, Settings2, ShieldAlert, Users } from "lucide-react";
+import { AtSign, Check, HardDrive, Loader2, Mail, Settings2, ShieldAlert, Users } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { MailAddressManager } from "@/components/mail/MailAddressManager";
 import { MailAliasManager } from "@/components/mail/MailAliasManager";
 import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
 import type { MailboxSettings } from "@/lib/mail/spam";
@@ -196,6 +197,17 @@ export function MailSettingsPane() {
           <MailAliasManager
             mailboxes={adminList.map((m) => ({ mailboxId: m.mailboxId, address: m.address, displayName: m.displayName || m.address }))}
           />
+        </section>
+      )}
+
+      {/* 관리자 — 회사 주소(다중 도메인, 280) */}
+      {adminList && (
+        <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2">
+          <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+            <Mail className="w-4 h-4" /> 회사 주소 <span className="text-[10px] cd-text-faint font-medium">(관리자 전용)</span>
+          </h3>
+          <p className="text-xs cd-text-faint">직원별 메일 주소와 발신(대표) 주소를 관리합니다. 대표 주소를 바꾸면 다음 발송부터 그 주소로 나갑니다.</p>
+          <MailAddressManager />
         </section>
       )}
 

@@ -143,11 +143,16 @@ export function MailComposePage() {
       try {
         // 내 메일함(발신 표시) + 기본 서명(서명 템플릿 → 없으면 구 mailbox.signature_html 폴백).
         let signature: string | null = null;
+        // 전체답장에서 뺄 내 주소 전부(.app·.com) — state 는 이 effect 안에서 아직 갱신 전이라 지역 변수로 둔다.
+        let myAddrs: string[] = [];
         try {
           const r = await fetch("/api/mail/mailbox");
           if (r.ok) {
             const d = await r.json();
             setMyAddress(String(d.address ?? ""));
+            myAddrs = [String(d.address ?? ""), ...(Array.isArray(d.addresses) ? d.addresses.map(String) : [])]
+              .map((a) => a.toLowerCase())
+              .filter(Boolean);
             setDisplayName(String(d.displayName ?? ""));
             signature = d.signatureHtml != null ? String(d.signatureHtml) : null;
           }
@@ -204,8 +209,7 @@ export function MailComposePage() {
             } else {
               setTo(d.fromAddr ?? "");
               if (mode === "replyall") {
-                const my = (await (async () => myAddress)()).toLowerCase();
-                const ccList = [...d.toAddrs, ...d.ccAddrs].map((a) => a.address).filter((a) => a.toLowerCase() !== my && a);
+                const ccList = [...d.toAddrs, ...d.ccAddrs].map((a) => a.address).filter((a) => a && !myAddrs.includes(a.toLowerCase()));
                 if (ccList.length) {
                   setCc(ccList.join(", "));
                   setShowCc(true);
@@ -409,7 +413,7 @@ export function MailComposePage() {
         toast(`'${f.name}' — 본문 삽입 이미지는 합계 25MB 까지입니다. 파일로 첨부해 주세요.`, "warn");
         continue;
       }
-      const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@koensain.app`;
+      const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@${myAddress.split("@")[1] || "koensain.app"}`;
       const blobUrl = URL.createObjectURL(f);
       inlineImages.current.push({ cid, file: f, blobUrl });
       editorRef.current?.focus();
@@ -468,7 +472,7 @@ export function MailComposePage() {
           const bin = atob(b64);
           const bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@koensain.app`;
+          const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@${myAddress.split("@")[1] || "koensain.app"}`;
           const file = new File([bytes], `inline-${usedCids.length + 1}.${subtype.split("+")[0]}`, { type: `image/${subtype}` });
           html = html.split(dataUrl).join(`cid:${cid}`);
           fd.append("inlineFiles", file);

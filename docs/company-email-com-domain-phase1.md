@@ -201,8 +201,8 @@ MX가 아마란스에 있으므로 **외부에서 `x@koensain.com`으로 보낸 
 |---|---|---|---|
 | 1-0 | 사전 확인 — **완료(2026-10-15)**: ① 주소 = 이메일 앞자리 + @koensain.com(§2) ② 아마란스 자동전달 기능 있음(헤더 유지 여부는 파일럿) ③ 다우오피스 당분간 사용 → apex SPF 유지 ④ Wix DNS 접근 확인(읽기) ⑤ 네이버·지메일 도착 → 도메인 원인으로 추정 | 사용자 | 완료 |
 | 1-1 | `ses-mail-com.tf` 작성 → `-target` plan 검토 → apply. **2026-10-15 plan 확인: 5 add·0 change·0 destroy**(SES identity·DKIM·MAIL FROM·바운스/신고 토픽 2), 기존 identity 없음·SES 프로덕션 액세스 켜짐 | Claude 작성·사용자 적용 | SES 콘솔에서 koensain.com DKIM 대기 |
-| 1-2 | Wix DNS 입력(§4.2) | 사용자 | SES identity `SUCCESS`, DKIM `SUCCESS`, MAIL FROM `SUCCESS`(또는 생략 결정) |
-| 1-3 | 앱 구현: 마이그 280 + §5.2·5.3·5.4·5.5 | Claude | `tsc`(수정 파일 한정)·로컬 단위 확인 |
+| 1-2 | Wix DNS 입력(§4.2). **2026-10-15 7개 입력 완료**(내장 브라우저, 기존 apex MX·SPF 무변경), Wix NS 조회 7/7 반영, SES identity verified·DKIM SUCCESS·MAIL FROM PENDING(SES 주기 재검사 대기) | 사용자(Claude 대행) | SES identity `SUCCESS`, DKIM `SUCCESS`, MAIL FROM `SUCCESS`(또는 생략 결정) |
+| 1-3 | 앱 구현: 마이그 280 + §5.2·5.3·5.4·5.5. **2026-10-15 구현**(커밋 전): 280 스크래치 PG 17 리허설 2회 적용·검증 10항목 통과, 수정 파일 tsc 오류 0. 관리 화면 = 메일 설정 → 회사 주소(관리자) | Claude | `tsc`(수정 파일 한정)·로컬 단위 확인 |
 | 1-4 | 마이그 적용(`staging-apply-migrations.ps1 -Files`) + Next 배포(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`) | 사용자 | 기존 `.app` 사용자 동작 변화 없음 |
 | 1-5 | 파일럿 1~2명 대표 주소 전환 + 아마란스 자동전달 설정 | 사용자 | 아래 검증 표 통과 |
 | 1-6 | 전사 전환(사람별) | 사용자 | 매핑표 전원 전환 |

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAccessLog } from "@/lib/auth/access-log";
 import { createAlias, deleteAlias, listAliases, updateAlias } from "@/lib/mail/aliases";
+import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await requirePermission("mail.manage");
-    return NextResponse.json({ aliases: await listAliases() });
+    return NextResponse.json({ aliases: await listAliases(), domain: MAIL_DOMAIN });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -149,6 +149,15 @@ export async function ensureMailbox(userId: string): Promise<Mailbox> {
        ON CONFLICT (address) DO NOTHING`,
       [mailboxId, userId, employeeId, address, localPart, displayName, now]
     );
+    // 주소 원장(280)에도 대표 주소로 기록 — 도메인이 등록돼 있을 때만(FK).
+    await wdb.run(
+      `INSERT INTO mailbox_addresses (address, mailbox_id, domain, local_part, is_primary, source, created_at)
+       SELECT $1, mb.mailbox_id, $2, $3, 1, 'legacy', $4
+         FROM mailboxes mb
+        WHERE mb.address = $1 AND EXISTS (SELECT 1 FROM mail_domains WHERE domain = $2)
+       ON CONFLICT (address) DO NOTHING`,
+      [address, MAIL_DOMAIN, localPart, now]
+    );
   });
 
   // 경합(동시 최초 발송)으로 다른 트랜잭션이 먼저 만들었을 수 있어 재조회.
@@ -159,4 +168,227 @@ export async function ensureMailbox(userId: string): Promise<Mailbox> {
   }
   await ensureSystemFolders(created.mailboxId);
   return created;
+}
+
+// ── 다중 도메인 주소 원장(280, koensain.com 1단계) ─────────────────────────
+// 메일함 하나가 여러 주소를 가진다(.app 수신 + .com 발신). mailboxes.address 는 대표(발신) 주소 캐시이며
+// 대표 주소 변경은 setPrimaryAddress 한 곳에서만 한다. 설계: docs/company-email-com-domain-phase1.md §3.
+
+export interface MailDomain {
+  domain: string;
+  inboundMode: "ses" | "external";
+  sendEnabled: boolean;
+  note: string | null;
+}
+
+export interface MailboxAddress {
+  address: string;
+  domain: string;
+  localPart: string;
+  isPrimary: boolean;
+  source: string;
+}
+
+/** 주소를 소문자 로컬파트·도메인으로 나눈다(형식이 아니면 null). */
+export function splitAddress(raw: string): { localPart: string; domain: string } | null {
+  const m = String(raw ?? "").trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+\.[^@\s]+)$/);
+  return m ? { localPart: m[1], domain: m[2] } : null;
+}
+
+function toMailDomain(r: Record<string, unknown>): MailDomain {
+  return {
+    domain: String(r.domain),
+    inboundMode: String(r.inbound_mode) === "external" ? "external" : "ses",
+    sendEnabled: Number(r.send_enabled) === 1,
+    note: r.note != null ? String(r.note) : null,
+  };
+}
+
+export async function listMailDomains(): Promise<MailDomain[]> {
+  const db = await getDb();
+  return rowsToObjects(await db.exec(`SELECT * FROM mail_domains ORDER BY domain`)).map(toMailDomain);
+}
+
+export async function getMailDomain(domain: string): Promise<MailDomain | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec(`SELECT * FROM mail_domains WHERE domain = $1`, [domain.toLowerCase()]));
+  return rows.length ? toMailDomain(rows[0]) : null;
+}
+
+/** 메일함의 주소 전체(대표 주소 먼저). 원장에 대표 행이 없으면 mailboxes.address 를 대표로 보탠다. */
+export async function getMailboxAddresses(mailboxId: string): Promise<MailboxAddress[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT address, domain, local_part, is_primary, source FROM mailbox_addresses
+        WHERE mailbox_id = $1 ORDER BY is_primary DESC, domain, address`,
+      [mailboxId]
+    )
+  );
+  const out: MailboxAddress[] = rows.map((r) => ({
+    address: String(r.address),
+    domain: String(r.domain),
+    localPart: String(r.local_part),
+    isPrimary: Number(r.is_primary) === 1,
+    source: String(r.source),
+  }));
+  if (!out.some((a) => a.isPrimary)) {
+    const mb = rowsToObjects(await db.exec(`SELECT address FROM mailboxes WHERE mailbox_id = $1`, [mailboxId]));
+    const parts = mb.length ? splitAddress(String(mb[0].address)) : null;
+    if (parts && !out.some((a) => a.address === `${parts.localPart}@${parts.domain}`)) {
+      out.unshift({ address: `${parts.localPart}@${parts.domain}`, ...parts, isPrimary: true, source: "legacy" });
+    }
+  }
+  return out;
+}
+
+export interface ResolvedAddress {
+  mailboxId: string;
+  domain: string;
+  inboundMode: "ses" | "external" | null;
+  /** 같은 메일함의 SES 수신 도메인 주소(사내 수신자 단락 배달용). 없으면 null. */
+  sesAddress: string | null;
+}
+
+/**
+ * 주소 → 메일함 해석(원장 + mailboxes.address). 수신 라우팅·사내 수신자 단락이 쓴다.
+ * 활성 메일함만. 키는 소문자 주소.
+ */
+export async function resolveMailboxAddresses(addresses: string[]): Promise<Map<string, ResolvedAddress>> {
+  const list = [...new Set(addresses.map((a) => String(a ?? "").trim().toLowerCase()).filter((a) => a.includes("@")))];
+  const out = new Map<string, ResolvedAddress>();
+  if (!list.length) return out;
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `WITH hit AS (
+         SELECT ma.address, ma.mailbox_id FROM mailbox_addresses ma WHERE ma.address = ANY($1::text[])
+         UNION
+         SELECT lower(mb.address), mb.mailbox_id FROM mailboxes mb WHERE lower(mb.address) = ANY($1::text[])
+       )
+       SELECT h.address, h.mailbox_id, md.inbound_mode, mb.local_part,
+              (SELECT sa.address FROM mailbox_addresses sa JOIN mail_domains sd ON sd.domain = sa.domain
+                WHERE sa.mailbox_id = h.mailbox_id AND sd.inbound_mode = 'ses'
+                ORDER BY (sa.domain = $2) DESC, sa.is_primary DESC, sa.address LIMIT 1) AS ses_address
+         FROM hit h
+         JOIN mailboxes mb ON mb.mailbox_id = h.mailbox_id AND mb.status = 'active'
+         LEFT JOIN mail_domains md ON md.domain = split_part(h.address, '@', 2)`,
+      [list, MAIL_DOMAIN]
+    )
+  );
+  for (const r of rows) {
+    const address = String(r.address);
+    const mode = r.inbound_mode != null ? (String(r.inbound_mode) === "external" ? "external" : "ses") : null;
+    // 원장에 SES 도메인 주소가 없으면 메일함의 .app 로컬파트로 유도(inbound 의 local_part 경로가 받는다).
+    const sesAddress =
+      r.ses_address != null ? String(r.ses_address) : r.local_part != null ? `${String(r.local_part)}@${MAIL_DOMAIN}` : null;
+    out.set(address, {
+      mailboxId: String(r.mailbox_id),
+      domain: address.split("@")[1] ?? "",
+      inboundMode: mode,
+      sesAddress,
+    });
+  }
+  return out;
+}
+
+/** 메일함에 주소 추가(대표 아님). 도메인은 mail_domains 에 있어야 한다. */
+export async function addMailboxAddress(
+  mailboxId: string,
+  rawAddress: string,
+  source: "auto" | "manual" = "manual"
+): Promise<MailboxAddress> {
+  const parts = splitAddress(rawAddress);
+  if (!parts) throw new Error("메일 주소 형식이 올바르지 않습니다.");
+  const localPart = normalizeLocalPart(parts.localPart);
+  if (!localPart || localPart !== parts.localPart) {
+    throw new Error("주소 앞부분은 영문 소문자·숫자·._- 만 쓸 수 있습니다.");
+  }
+  const domain = await getMailDomain(parts.domain);
+  if (!domain) throw new Error(`등록되지 않은 도메인입니다: ${parts.domain}`);
+  const address = `${localPart}@${domain.domain}`;
+  const db = await getDb();
+  const taken = rowsToObjects(
+    await db.exec(
+      `SELECT mailbox_id FROM mailbox_addresses WHERE address = $1
+       UNION SELECT mailbox_id FROM mailboxes WHERE lower(address) = $1`,
+      [address]
+    )
+  );
+  if (taken.some((r) => String(r.mailbox_id) !== mailboxId)) throw new Error(`'${address}' 는 다른 메일함이 쓰고 있습니다.`);
+  // 앱 기본 도메인 주소는 별칭·다른 메일함 로컬파트와도 겹치면 안 된다(inbound 가 로컬파트로도 배달).
+  if (domain.domain === MAIL_DOMAIN) {
+    const clash = rowsToObjects(
+      await db.exec(
+        `SELECT 1 FROM mail_aliases WHERE alias_local = $1
+         UNION ALL SELECT 1 FROM mailboxes WHERE local_part = $1 AND mailbox_id <> $2`,
+        [localPart, mailboxId]
+      )
+    );
+    if (clash.length) throw new Error(`'${address}' 는 별칭이나 다른 메일함과 겹칩니다.`);
+  }
+  await withDbWrite(async (wdb) => {
+    await wdb.run(
+      `INSERT INTO mailbox_addresses (address, mailbox_id, domain, local_part, is_primary, source, created_at)
+       VALUES ($1, $2, $3, $4, 0, $5, $6)
+       ON CONFLICT (address) DO NOTHING`,
+      [address, mailboxId, domain.domain, localPart, source, new Date().toISOString()]
+    );
+  });
+  return { address, domain: domain.domain, localPart, isPrimary: false, source };
+}
+
+/** 대표 아닌 주소 삭제. 대표 주소·기존 수신 주소(legacy)는 지우지 않는다. */
+export async function removeMailboxAddress(mailboxId: string, rawAddress: string): Promise<void> {
+  const address = String(rawAddress ?? "").trim().toLowerCase();
+  const addrs = await getMailboxAddresses(mailboxId);
+  const row = addrs.find((a) => a.address === address);
+  if (!row) throw new Error("이 메일함의 주소가 아닙니다.");
+  if (row.isPrimary) throw new Error("대표 주소는 지울 수 없습니다. 먼저 다른 주소를 대표로 바꾸세요.");
+  if (row.source === "legacy") throw new Error("기존 수신 주소는 지울 수 없습니다.");
+  await withDbWrite(async (wdb) => {
+    await wdb.run(`DELETE FROM mailbox_addresses WHERE mailbox_id = $1 AND address = $2 AND is_primary = 0`, [mailboxId, address]);
+  });
+}
+
+/**
+ * 대표(발신) 주소 전환 — 원장 is_primary 와 mailboxes.address 를 한 트랜잭션에서 함께 바꾼다.
+ * 대상 도메인의 send_enabled 가 꺼져 있으면 거절한다.
+ */
+export async function setPrimaryAddress(mailboxId: string, rawAddress: string): Promise<{ previous: string; current: string }> {
+  const address = String(rawAddress ?? "").trim().toLowerCase();
+  const addrs = await getMailboxAddresses(mailboxId);
+  const target = addrs.find((a) => a.address === address);
+  if (!target) throw new Error("이 메일함에 등록된 주소가 아닙니다.");
+  const previous = addrs.find((a) => a.isPrimary)?.address ?? "";
+  if (target.isPrimary) return { previous, current: address };
+  const domain = await getMailDomain(target.domain);
+  if (!domain?.sendEnabled) throw new Error(`${target.domain} 도메인은 아직 발신이 켜져 있지 않습니다.`);
+  const now = new Date().toISOString();
+  await withDbWrite(async (wdb) => {
+    // 원장에 대표 행이 없던 메일함은 이전 대표 주소를 legacy 로 먼저 남긴다(수신 주소 보존).
+    const p = previous ? splitAddress(previous) : null;
+    if (p) {
+      await wdb.run(
+        `INSERT INTO mailbox_addresses (address, mailbox_id, domain, local_part, is_primary, source, created_at)
+         SELECT $1, $2, $3, $4, 0, 'legacy', $5 WHERE EXISTS (SELECT 1 FROM mail_domains WHERE domain = $3)
+         ON CONFLICT (address) DO NOTHING`,
+        [previous, mailboxId, p.domain, p.localPart, now]
+      );
+    }
+    await wdb.run(`UPDATE mailbox_addresses SET is_primary = 0 WHERE mailbox_id = $1 AND is_primary = 1`, [mailboxId]);
+    await wdb.run(`UPDATE mailbox_addresses SET is_primary = 1 WHERE mailbox_id = $1 AND address = $2`, [mailboxId, address]);
+    await wdb.run(`UPDATE mailboxes SET address = $2, updated_at = $3 WHERE mailbox_id = $1`, [mailboxId, address, now]);
+  });
+  return { previous, current: address };
+}
+
+export async function setDomainSendEnabled(domain: string, enabled: boolean): Promise<void> {
+  await withDbWrite(async (wdb) => {
+    await wdb.run(`UPDATE mail_domains SET send_enabled = $2, updated_at = $3 WHERE domain = $1`, [
+      domain.toLowerCase(),
+      enabled ? 1 : 0,
+      new Date().toISOString(),
+    ]);
+  });
 }

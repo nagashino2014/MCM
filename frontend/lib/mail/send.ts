@@ -9,7 +9,14 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendRawEmail } from "@/lib/notify/email-ses";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { buildMimeMessage, htmlToPlainText, type MailAddress, type MimeAttachment } from "@/lib/mail/mime";
-import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN } from "@/lib/mail/mailbox";
+import {
+  ensureMailbox,
+  getMailDomain,
+  getSystemFolderId,
+  MAIL_DOMAIN,
+  resolveMailboxAddresses,
+  splitAddress,
+} from "@/lib/mail/mailbox";
 import { encodeRecipient } from "@/lib/mail/receipts";
 
 export interface SendAttachmentInput {
@@ -60,14 +67,14 @@ const IMG_EXT: Record<string, string> = {
  * 서명 편집기에서 삽입한 명함 이미지가 이 형태로 저장되는데, Gmail·Outlook 등은 data: 이미지를
  * 차단하므로 그대로 보내면 수신 측에서 깨진다. MIME 은 disposition=inline + Content-ID 로 나간다.
  */
-function extractDataUrlImages(html: string): { html: string; images: MimeAttachment[] } {
+function extractDataUrlImages(html: string, idDomain: string): { html: string; images: MimeAttachment[] } {
   const images: MimeAttachment[] = [];
   if (!html.includes("data:image/")) return { html, images };
   const out = html.replace(/(<img\b[^>]*\bsrc=)(["'])data:(image\/[a-z+]+);base64,([^"']+)\2/gi, (all, prefix, quote, mime, b64) => {
     try {
       const content = Buffer.from(String(b64), "base64");
       if (!content.length) return all;
-      const cid = `${crypto.randomUUID().replace(/-/g, "")}@${MAIL_DOMAIN}`;
+      const cid = `${crypto.randomUUID().replace(/-/g, "")}@${idDomain}`;
       images.push({
         filename: `inline-${images.length + 1}.${IMG_EXT[String(mime).toLowerCase()] ?? "png"}`,
         contentType: String(mime),
@@ -110,8 +117,16 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   const mailbox = await ensureMailbox(input.userId);
   if (mailbox.status !== "active") return { ok: false, error: "발송이 정지된 메일함입니다." };
 
+  // 발신 도메인 검사(280) — 대표 주소 도메인의 발신이 꺼져 있으면 .app 으로 조용히 바꾸지 않고 멈춘다.
+  const fromDomain = splitAddress(mailbox.address)?.domain ?? MAIL_DOMAIN;
+  const domainRow = await getMailDomain(fromDomain);
+  if (domainRow ? !domainRow.sendEnabled : fromDomain !== MAIL_DOMAIN) {
+    return { ok: false, error: `${fromDomain} 도메인 발신이 꺼져 있습니다. 관리자에게 문의하세요.` };
+  }
+
   const from: MailAddress = { name: mailbox.displayName, address: mailbox.address };
-  const messageId = `<${crypto.randomUUID().replace(/-/g, "")}@${MAIL_DOMAIN}>`;
+  // Message-ID·인라인 cid 는 From 도메인으로(From 과 Message-ID 도메인이 다르면 일부 필터가 감점).
+  const messageId = `<${crypto.randomUUID().replace(/-/g, "")}@${fromDomain}>`;
   const dedupKey = input.idempotencyKey ? `idem:${mailbox.mailboxId}:${input.idempotencyKey}` : `mid:${messageId}`;
 
   // 멱등 선점 — 이미 발송된 요청이면 스킵.
@@ -120,7 +135,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
 
   // 본문에 박힌 data URL 이미지(서명 편집기에서 삽입한 명함 등)를 cid 인라인 첨부로 옮긴다.
   // Gmail 등 주요 클라이언트가 data: 이미지를 차단하기 때문에 그대로 보내면 깨져 보인다.
-  const inlined = extractDataUrlImages(input.bodyHtml ?? "");
+  const inlined = extractDataUrlImages(input.bodyHtml ?? "", fromDomain);
   const html = inlined.html;
   const text = htmlToPlainText(html);
   const attachments: MimeAttachment[] = [
@@ -140,6 +155,9 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   // 수신자별 개별 발송: 헤더(To/Cc)는 전체 그대로 두고 SES Destinations 만 1명씩 지정 —
   // 각 수신자에게 자기 전용 추적 픽셀이 든 사본이 전달된다(그룹웨어 수신확인 표준 방식).
   const allRecipients = [...to, ...cc, ...bcc];
+  // 사내 수신자 단락(280) — 외부 MX 도메인(koensain.com=아마란스)의 우리 메일함 주소는 헤더는 그대로 두고
+  // 봉투(SES Destination)만 그 메일함의 SES 수신 주소(.app)로 보내 앱에 바로 배달한다.
+  const internal = await resolveMailboxAddresses(allRecipients.map((r) => r.address));
   let sesMessageId: string | undefined;
   let rawLength = 0;
   const failed: string[] = [];
@@ -158,7 +176,9 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       references: input.references ?? [],
     });
     if (!rawLength) rawLength = raw.length;
-    const res = await sendRawEmail({ raw, source: mailbox.address, destinations: [r.address] });
+    const hit = internal.get(r.address.trim().toLowerCase());
+    const envelopeTo = hit && hit.inboundMode === "external" && hit.sesAddress ? hit.sesAddress : r.address;
+    const res = await sendRawEmail({ raw, source: mailbox.address, destinations: [envelopeTo] });
     if (res.ok) {
       sesMessageId ??= res.sesMessageId;
     } else {

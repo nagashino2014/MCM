@@ -17,7 +17,8 @@ export interface AddressAdminRow {
   mailboxId: string;
   displayName: string;
   localPart: string;
-  /** 사용자 관리에 등록된 이메일의 앞자리 — 로컬파트와 다르면 아마란스 주소와 어긋날 수 있다. */
+  /** 사용자 관리의 이메일 앞자리(users.email_local, 042) — 정규화로 로컬파트와 달라졌으면 아마란스 주소와 어긋날 수 있다.
+   *  users.email 은 사번 로그인으로 바뀐 계정이 있어 비교 기준으로 쓰지 않는다. */
   emailLocal: string | null;
   addresses: MailboxAddress[];
 }
@@ -34,7 +35,7 @@ export async function listAddressAdmin(): Promise<AddressAdminList> {
   const boxes = rowsToObjects(
     await db.exec(
       `SELECT mb.mailbox_id, mb.address, mb.local_part, COALESCE(mb.display_name, mb.address) AS display_name,
-              split_part(lower(u.email), '@', 1) AS email_local
+              lower(u.email_local) AS email_local
          FROM mailboxes mb
          LEFT JOIN users u ON u.user_id = mb.user_id
         WHERE mb.status = 'active'

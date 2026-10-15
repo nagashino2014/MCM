@@ -152,35 +152,48 @@ export function MailAddressManager() {
           <p className="mt-1">문제가 있으면 대표 주소를 koensain.app 으로 되돌리면 다음 발송부터 원래대로 돌아갑니다.</p>
         </CdHelp>
       </div>
-      <div className="flex flex-col gap-1.5">
+      {/* 직원 카드 — 주소는 한 줄에 하나씩(.app·.com 2행), 카드는 너비에 맞춰 여러 열 */}
+      <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
         {rows.map((row) => {
           const mismatch = row.emailLocal != null && row.emailLocal !== row.localPart;
           return (
-            <div key={row.mailboxId} className="rounded-xl border cd-border-c px-3 py-2 flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[12.5px] font-semibold cd-text">{row.displayName}</span>
+            <div key={row.mailboxId} className="rounded-xl border cd-border-c px-3 py-2 flex flex-col gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[12.5px] font-semibold cd-text truncate">{row.displayName}</span>
                 {mismatch && (
-                  <span className="text-[11px] cd-warn-text inline-flex items-center gap-1" title={`사용자 관리 이메일 앞자리: ${row.emailLocal}`}>
-                    <AlertTriangle className="w-3 h-3" /> 이메일 앞자리({row.emailLocal})와 다름 — 아마란스 주소 확인 필요
+                  <span
+                    className="text-[11px] cd-warn-text inline-flex items-center gap-1 shrink-0"
+                    title={`사용자 관리 이메일 앞자리(${row.emailLocal})와 메일 주소 앞자리(${row.localPart})가 다릅니다. 아마란스 주소를 확인하세요.`}
+                  >
+                    <AlertTriangle className="w-3 h-3" /> 앞자리 확인
                   </span>
                 )}
                 <div className="flex-1" />
-                <CdButton size="sm" variant="ghost" icon={<Plus className="w-3.5 h-3.5" />} loading={busy === `add:${row.mailboxId}`} onClick={() => addAddress(row)}>
-                  주소 추가
-                </CdButton>
+                <CdButton
+                  size="sm"
+                  variant="ghost"
+                  title="주소 추가"
+                  aria-label={`${row.displayName} 주소 추가`}
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  loading={busy === `add:${row.mailboxId}`}
+                  onClick={() => addAddress(row)}
+                />
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-col gap-1">
                 {row.addresses.map((a) => (
-                  <div key={a.address} className="flex items-center gap-1 border cd-border-c rounded-lg px-2 py-1">
-                    {a.isPrimary && <Star className="w-3 h-3 cd-text-primary" aria-label="대표 주소" />}
-                    <span className={`text-[12px] ${a.isPrimary ? "font-semibold cd-text" : "cd-text-muted"}`}>{a.address}</span>
+                  <div key={a.address} className="flex items-center gap-1 border cd-border-c rounded-lg px-2 py-1 min-w-0">
+                    {a.isPrimary && <Star className="w-3 h-3 cd-text-primary shrink-0" aria-label="대표 주소" />}
+                    <span className={`text-[12px] truncate flex-1 min-w-0 ${a.isPrimary ? "font-semibold cd-text" : "cd-text-muted"}`} title={a.address}>
+                      {a.address}
+                    </span>
                     {a.isPrimary ? (
-                      <span className="text-[10px] cd-text-primary">대표</span>
+                      <span className="text-[10px] cd-text-primary shrink-0">대표</span>
                     ) : (
                       <>
                         <CdButton
                           size="sm"
                           variant="ghost"
+                          className="shrink-0"
                           disabled={!sendable.has(a.domain) || busy === `primary:${row.mailboxId}`}
                           title={sendable.has(a.domain) ? "이 주소로 발신" : "이 도메인은 발신이 꺼져 있습니다"}
                           onClick={() => makePrimary(row, a.address)}
@@ -191,7 +204,7 @@ export function MailAddressManager() {
                           <CdButton
                             size="sm"
                             variant="ghost"
-                            className="cd-error-text"
+                            className="cd-error-text shrink-0"
                             title="주소 삭제"
                             aria-label={`${a.address} 삭제`}
                             icon={<Trash2 className="w-3.5 h-3.5" />}
@@ -207,7 +220,7 @@ export function MailAddressManager() {
             </div>
           );
         })}
-        {rows.length === 0 && <p className="text-xs cd-text-faint">표시할 메일함이 없습니다.</p>}
+        {rows.length === 0 && <p className="text-xs cd-text-faint col-span-full">표시할 메일함이 없습니다.</p>}
       </div>
     </div>
   );

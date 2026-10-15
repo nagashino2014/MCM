@@ -104,10 +104,14 @@ export function MailSettingsPane() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 flex flex-col gap-4 max-w-3xl">
+    <div className="h-full overflow-y-auto p-4 flex flex-col gap-4">
       <h2 className="text-base font-bold cd-text flex items-center gap-1.5">
         <Settings2 className="w-4 h-4" /> 메일 설정
       </h2>
+
+      {/* 넓은 화면(2xl+)의 관리자: 왼쪽 = 개인·관리 설정, 오른쪽 = 회사 주소(직원별 카드). 좁으면 위아래로 쌓는다. */}
+      <div className={adminList ? "grid gap-4 items-start 2xl:grid-cols-[minmax(0,34rem)_minmax(0,1fr)]" : ""}>
+      <div className="flex flex-col gap-4 min-w-0 max-w-3xl">
 
       {/* 스팸 설정 */}
       <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-3">
@@ -199,10 +203,11 @@ export function MailSettingsPane() {
           />
         </section>
       )}
+      </div>
 
       {/* 관리자 — 회사 주소(다중 도메인, 280) */}
       {adminList && (
-        <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2">
+        <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2 min-w-0">
           <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
             <Mail className="w-4 h-4" /> 회사 주소 <span className="text-[10px] cd-text-faint font-medium">(관리자 전용)</span>
           </h3>
@@ -210,6 +215,7 @@ export function MailSettingsPane() {
           <MailAddressManager />
         </section>
       )}
+      </div>
 
       <MailQuotaModal open={quotaModalOpen} onClose={() => setQuotaModalOpen(false)} onSaved={load} />
     </div>

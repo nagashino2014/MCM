@@ -3,12 +3,13 @@
 // 메일 설정 화면(G2-12) — 스팸 설정·보관함 용량 배분·외부 클라이언트(POP3/IMAP) 안내 + (관리자) 사용자별 총용량 할당.
 
 import { useCallback, useEffect, useState } from "react";
-import { AtSign, Check, HardDrive, Loader2, Mail, Settings2, ShieldAlert, Users } from "lucide-react";
+import { AtSign, Check, Download, HardDrive, Loader2, Mail, Settings2, ShieldAlert, Users } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailAddressManager } from "@/components/mail/MailAddressManager";
 import { MailAliasManager } from "@/components/mail/MailAliasManager";
+import { MailImportManager } from "@/components/mail/MailImportManager";
 import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
 import type { MailboxSettings } from "@/lib/mail/spam";
 
@@ -173,6 +174,15 @@ export function MailSettingsPane() {
           설정 저장
         </CdButton>
       </div>
+
+      {/* 메일 가져오기(281) — 전 직원. 아마란스 백업 ZIP·.eml 을 본인 메일함으로 */}
+      <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-2">
+        <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
+          <Download className="w-4 h-4" /> 메일 가져오기
+        </h3>
+        <p className="text-xs cd-text-faint">아마란스 메일함 백업(ZIP)이나 .eml 파일로 예전 메일을 내 메일함에 옮깁니다.</p>
+        <MailImportManager />
+      </section>
 
       {/* 관리자 — 인원별 용량 배분(조직도 모달, G2-13) */}
       {adminList && (

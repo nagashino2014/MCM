@@ -288,6 +288,21 @@ koensain.com 클라우드 이용 환경 기준으로 다음을 받은 뒤에만 
 
 **IMAP은 I-1·I-2의 선행 조건이 아니다.** 파일 가져오기는 더존 회신과 무관하게 진행한다.
 
+### I-1 구현 기록 (2026-10-16, 커밋 전)
+- 파일: 마이그 [281_mail_import.sql](../infra/aws/281_mail_import.sql), [zip-reader.ts](../frontend/lib/mail/import/zip-reader.ts)(중앙 디렉터리 범위 읽기 + `zlib` 해제 + CRC 검사, **신규 의존성 없음**), [store.ts](../frontend/lib/mail/import/store.ts)(S3 선업로드 + 한 트랜잭션, 메시지 id·첨부 키 = (메일함, Message-ID) 해시), [jobs.ts](../frontend/lib/mail/import/jobs.ts)(presigned 업로드·작업 생성·running 임대·틱 처리), API `/api/mail/import`·`/api/mail/import/upload`·`/api/internal/mail-import-tick`, instrumentation 1분 틱, 메일 설정 → **메일 가져오기** 화면([MailImportManager.tsx](../frontend/components/mail/MailImportManager.tsx)).
+- 검증(스크래치 PG 17 + 실제 마이그 095~104·280·281 + kaikan00 실제 백업 ZIP 2개):
+  - ZIP 해제기 = 파이썬 `zipfile` 결과와 항목 수·바이트·이름+내용 해시 완전 일치
+  - 첫 가져오기 265통: 새로 가져옴 265·실패 0, 틱 예산 5초로 **중단 후 이어서** 처리, 받은 251 → "가져온 메일(아마란스)", 보낸 14 → 보낸편지함, 전부 읽음, 날짜 2024-08~2026-10(원래 날짜), 첨부 464개 = 파서 집계와 일치
+  - 같은 ZIP 재업로드: 중복 265·메시지·첨부 증가 0 / 다른 원본 메일함으로 재업로드: 메시지 증가 0, 폴더 배치만 추가
+  - 롤백 상황 재시도(메일 1통 DB 행 삭제 후 재실행): 같은 메시지 id·첨부 8개 복원, 저장소 파일 수 불변(같은 키 덮어씀)
+  - 취소: 취소 뒤 진행 0
+  - 링크형 첨부 판별: 문구만 보면 10통 → 문구 근처 비이미지 링크 조건으로 **2통**(네이버 bigfile 등 실제 링크)
+- 설계와 다르게 둔 것(후속):
+  - **용량 상한 검사 미구현** — `mailboxes.used_bytes`를 갱신하는 코드가 없어 남은 용량 계산이 불가. 가져온 크기는 작업에 기록(`bytes_imported`)만 한다. 메일함 사용량 집계 정비 후 붙인다.
+  - **접속기록 미기록** — `AccessAction`에 맞는 종류가 없어 본인 작업은 `mail_import_jobs` 행(누가·언제·결과)으로 대신한다.
+  - 업로드 원본 파일 7일 뒤 삭제는 아직 없다(S3 `mail-import-uploads/`에 남음).
+- **화면은 미확인**(실제 DB·S3·로그인이 필요). 배포 후 업로드·진행률·취소·실패 목록을 라이트/다크에서 확인한다.
+
 ### I-1 검증 표 (kaikan00 실제 백업 기준)
 
 | 확인 | 통과 기준 |

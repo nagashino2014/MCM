@@ -23,6 +23,7 @@ export async function register() {
     __cardSlipTimer?: ReturnType<typeof setInterval>;
     __aiBudgetTimer?: ReturnType<typeof setInterval>;
     __todoRemindTimer?: ReturnType<typeof setInterval>;
+    __mailImportTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -93,5 +94,12 @@ export async function register() {
     const mailTick = () => callTick("/api/internal/mail-inbound-tick", "mail-inbound");
     g.__mailInboundTimer = setInterval(mailTick, 60 * 1000);
     setTimeout(mailTick, 45 * 1000); // 기동 직후 1회
+  }
+
+  // 메일 가져오기(281) — 1분마다 작업 1건을 40초 예산으로 처리(진행 위치 저장 → 야간 정지 후 이어서).
+  if (!g.__mailImportTimer) {
+    const importTick = () => callTick("/api/internal/mail-import-tick", "mail-import");
+    g.__mailImportTimer = setInterval(importTick, 60 * 1000);
+    setTimeout(importTick, 105 * 1000); // 기동 직후 1회
   }
 }

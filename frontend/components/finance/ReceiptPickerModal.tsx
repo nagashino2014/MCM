@@ -12,6 +12,8 @@ import { RefreshCw, AlertTriangle, FileText, Plus, Trash2, Upload, Loader2 } fro
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
+import { RelatedCellButton } from "@/components/approval/RelatedPicker";
+import { purposeNeedsRelated, type RelatedRef } from "@/lib/approval/expense-purpose";
 
 export interface ReceiptPickerItem {
   receiptId: string;
@@ -34,8 +36,10 @@ export interface ReceiptPickerItem {
   /** 출처(224) — mobile 촬영 / manual 직접 첨부 */
   source?: "mobile" | "manual";
   payMethod?: string | null;
-  /** 직접 첨부의 지출 목적 — 표 행 detail 프리필 */
+  /** 지출 목적 — 촬영(모바일)·직접 첨부 때 고른 값, 표 행 detail 프리필(2026-10-16 정해진 목록) */
   purpose?: string | null;
+  /** 연관 용역/사업장 — 촬영·직접 첨부 때 고른 값 */
+  related?: RelatedRef | null;
   /** 이미지 썸네일 유무(PDF 원본 직접 첨부는 false) */
   hasImage?: boolean;
 }
@@ -49,6 +53,7 @@ interface ManualDraft {
   totalAmount: string;
   payMethod: string;
   purpose: string;
+  related: RelatedRef | null;
 }
 
 const PAY_METHODS = ["현금", "계좌이체", "개인카드", "기타"];
@@ -58,7 +63,16 @@ const PAY_METHODS = ["현금", "계좌이체", "개인카드", "기타"];
 const ymdInput = (ms: number) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 let draftSeq = 1;
-const newDraft = (): ManualDraft => ({ id: draftSeq++, file: null, storeName: "", paidAt: "", totalAmount: "", payMethod: "계좌이체", purpose: "" });
+const newDraft = (related: RelatedRef | null = null): ManualDraft => ({
+  id: draftSeq++,
+  file: null,
+  storeName: "",
+  paidAt: "",
+  totalAmount: "",
+  payMethod: "계좌이체",
+  purpose: "",
+  related,
+});
 
 export function ReceiptPickerModal({
   open,
@@ -66,6 +80,8 @@ export function ReceiptPickerModal({
   formId,
   existingIds,
   onPick,
+  purposeOptions,
+  defaultRelated,
 }: {
   open: boolean;
   onClose: () => void;
@@ -73,6 +89,10 @@ export function ReceiptPickerModal({
   /** 이미 이 문서의 지출 내역 표에 담긴 영수증(_receiptId) */
   existingIds: string[];
   onPick: (items: ReceiptPickerItem[]) => void;
+  /** 이 양식의 지출 목적 목록(직접 첨부 입력용) */
+  purposeOptions: readonly string[];
+  /** 출장보고서의 용역/사업장 — 직접 첨부 행의 기본값 */
+  defaultRelated?: RelatedRef | null;
 }) {
   const [tab, setTab] = useState<"mobile" | "manual">("mobile");
   const [from, setFrom] = useState(() => ymdInput(Date.now() - 90 * 86400000));
@@ -116,11 +136,13 @@ export function ReceiptPickerModal({
     }
   }, [open, load]);
 
+  // 열 때마다 초기화 — 출장보고서의 용역/사업장이 그 사이 바뀌었을 수 있어 연 시점 값으로 기본값을 잡는다.
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setTab("mobile");
-      setDrafts([newDraft()]);
+      setDrafts([newDraft(defaultRelated ?? null)]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const existing = useMemo(() => new Set(existingIds), [existingIds]);
@@ -173,6 +195,8 @@ export function ReceiptPickerModal({
             totalAmount: Number(d.totalAmount.replace(/[^\d]/g, "")),
             payMethod: d.payMethod,
             purpose: d.purpose.trim(),
+            relatedContractId: d.related?.contractId ?? null,
+            relatedFacilityId: d.related?.facilityId ?? null,
             fileIndex: i,
           }))
         )
@@ -251,7 +275,7 @@ export function ReceiptPickerModal({
               <span className="text-[11px] cd-text-faint">
                 현금 계좌이체 확인증·수기 전표 등의 스캔본(이미지·PDF)을 건별로 올리고 내역을 입력하세요. 여러 건을 한 번에 저장할 수 있습니다.
               </span>
-              <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-auto" onClick={() => setDrafts((p) => [...p, newDraft()])}>
+              <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-auto" onClick={() => setDrafts((p) => [...p, newDraft(defaultRelated ?? null)])}>
                 <Plus className="w-3.5 h-3.5" /> 행 추가
               </button>
             </div>
@@ -265,6 +289,7 @@ export function ReceiptPickerModal({
                     <th className="py-1.5 pr-2 font-normal text-right">금액 *</th>
                     <th className="py-1.5 pr-2 font-normal">지불수단</th>
                     <th className="py-1.5 pr-2 font-normal">지출 목적</th>
+                    <th className="py-1.5 pr-2 font-normal">연관 용역/사업장</th>
                     <th className="py-1.5 font-normal w-8" />
                   </tr>
                 </thead>
@@ -306,8 +331,21 @@ export function ReceiptPickerModal({
                           ))}
                         </select>
                       </td>
-                      <td className="py-1.5 pr-2" style={{ minWidth: 160 }}>
-                        <input className="cd-input text-sm w-full" placeholder="지출 목적" value={d.purpose} onChange={(e) => patchDraft(d.id, { purpose: e.target.value })} />
+                      <td className="py-1.5 pr-2">
+                        <select className="cd-select text-sm" style={{ width: 140 }} value={d.purpose} onChange={(e) => patchDraft(d.id, { purpose: e.target.value })}>
+                          <option value="">선택</option>
+                          {purposeOptions.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-1.5 pr-2" style={{ maxWidth: 180 }}>
+                        <RelatedCellButton
+                          label={d.related?.label ?? ""}
+                          missing={purposeNeedsRelated(d.purpose)}
+                          className="rounded-md border cd-border-c"
+                          onPick={(ref) => patchDraft(d.id, { related: ref })}
+                        />
                       </td>
                       <td className="py-1.5">
                         <button
@@ -315,7 +353,7 @@ export function ReceiptPickerModal({
                           className="cd-btn rounded-lg p-1.5"
                           title="행 삭제"
                           style={{ color: "var(--cd-error)" }}
-                          onClick={() => setDrafts((p) => (p.length > 1 ? p.filter((x) => x.id !== d.id) : [newDraft()]))}
+                          onClick={() => setDrafts((p) => (p.length > 1 ? p.filter((x) => x.id !== d.id) : [newDraft(defaultRelated ?? null)]))}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -366,7 +404,8 @@ export function ReceiptPickerModal({
                 <th className="py-2 pr-3 font-normal">상호</th>
                 <th className="py-2 pr-3 font-normal text-right">금액</th>
                 <th className="py-2 pr-3 font-normal">{tab === "manual" ? "지불수단" : "카드"}</th>
-                <th className="py-2 font-normal">{tab === "manual" ? "지출 목적" : "자동 분류"}</th>
+                <th className="py-2 pr-3 font-normal">지출 목적 · 연관 용역/사업장</th>
+                <th className="py-2 font-normal">자동 분류</th>
               </tr>
             </thead>
             <tbody>
@@ -423,10 +462,15 @@ export function ReceiptPickerModal({
                     <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
                       {tab === "manual" ? item.payMethod ?? "-" : item.cardLast4 ? `****${item.cardLast4}` : "-"}
                     </td>
+                    {/* 촬영·직접 첨부 때 고른 지출 목적과 연관 용역/사업장 */}
+                    <td className="py-1.5 pr-3 text-xs" style={{ maxWidth: 240 }}>
+                      <div className="cd-text truncate" title={item.purpose ?? ""}>{item.purpose || <span className="cd-text-faint">목적 미입력</span>}</div>
+                      {item.related?.label && (
+                        <div className="cd-text-faint truncate" title={item.related.label}>{item.related.label}</div>
+                      )}
+                    </td>
                     <td className="py-1.5">
-                      {tab === "manual" ? (
-                        <span className="text-xs cd-text-muted truncate block max-w-[220px]" title={item.purpose ?? ""}>{item.purpose ?? "-"}</span>
-                      ) : item.categoryLabel ? (
+                      {item.categoryLabel ? (
                         <span className="cd-pill cd-pill-info" title={`근거: ${item.categorySource}`}>
                           {item.formOption ?? item.categoryLabel}
                         </span>
@@ -439,7 +483,7 @@ export function ReceiptPickerModal({
               })}
               {!loading && items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center cd-text-muted text-sm">
+                  <td colSpan={8} className="py-6 text-center cd-text-muted text-sm">
                     {tab === "manual"
                       ? "직접 첨부해 둔 미사용 증빙이 없습니다. 위에서 파일과 내역을 입력해 저장하세요."
                       : '선택 가능한 영수증이 없습니다. 모바일 앱 홈의 "영수증 촬영"으로 지류 영수증을 찍어 두면 여기에 표시됩니다.'}

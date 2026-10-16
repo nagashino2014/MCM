@@ -11,6 +11,7 @@ import { classifyMany, loadCategories } from "@/lib/barobill/classify";
 import { cardSlipName } from "@/lib/finance/card-slip";
 import { cardDeptId, cardTagLabel } from "@/lib/finance/card-dept";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { loadCardExpenseTags } from "@/lib/finance/expense-card-tags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,8 @@ export async function GET(req: NextRequest) {
     );
 
     const byKey = new Map(categories.map((c) => [c.categoryKey, c]));
+    // 전에 기입해 둔 지출 목적·연관 용역/사업장(2026-10-16) — 모달에 미리 채운다
+    const tags = await loadCardExpenseTags(rows.map((r) => r.cardTxnId));
     const items = rows.map((r, i) => {
       const cls = r.merchantCorrection?.status === "review_required" ? null : results[i];
       const cat = cls ? byKey.get(cls.categoryKey) : undefined;
@@ -81,6 +84,8 @@ export async function GET(req: NextRequest) {
         slipName: cardSlipName(r.storeName, r.approvedAt),
         // 대상 양식의 분류 select 옵션 문자열(없으면 null → 사용자가 직접 선택)
         formOption: cat ? cat.formOptionMap[formId] ?? null : null,
+        purpose: tags.get(r.cardTxnId)?.purpose ?? null,
+        related: tags.get(r.cardTxnId)?.related ?? null,
       };
     });
 

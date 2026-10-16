@@ -7,8 +7,10 @@
 // - 실측 안내: 매입내역은 카드 사용 후 확정까지 2~5일 지연될 수 있다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw, AlertTriangle, Search } from "lucide-react";
+import { RefreshCw, AlertTriangle, Search, HelpCircle } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
+import { RelatedCellButton } from "@/components/approval/RelatedPicker";
+import { PURPOSE_HINTS, purposeNeedsRelated, type RelatedRef } from "@/lib/approval/expense-purpose";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { DEPT_CARD_RULES } from "@/lib/finance/card-dept";
 
@@ -28,6 +30,9 @@ export interface CardPickerItem {
   slipKey: string | null;
   slipName: string;
   formOption: string | null;
+  /** 지출 목적·연관 용역/사업장(2026-10-16) — 전에 기입해 둔 값이 있으면 서버가 내려주고, 모달에서 고친 값이 담긴다 */
+  purpose?: string | null;
+  related?: RelatedRef | null;
 }
 
 /** 피커 상단 카드 태그 — 부서별로 묶어 보여 준다(내 부서 먼저). */
@@ -53,6 +58,8 @@ export function CardPickerModal({
   formId,
   existingIds,
   onPick,
+  purposeOptions,
+  defaultRelated,
 }: {
   open: boolean;
   onClose: () => void;
@@ -60,6 +67,10 @@ export function CardPickerModal({
   /** 이미 이 문서의 지출 내역 표에 담긴 카드 건(_cardTxnId) */
   existingIds: string[];
   onPick: (items: CardPickerItem[]) => void;
+  /** 이 양식의 지출 목적 목록(출장보고서 = 출장 4종, 지출결의서 = 일반 4종) */
+  purposeOptions: readonly string[];
+  /** 출장보고서의 용역/사업장 — 연관 용역/사업장을 비워 두면 이 값으로 들어간다 */
+  defaultRelated?: RelatedRef | null;
 }) {
   const [from, setFrom] = useState(() => ymdInput(new Date(Date.now() - 30 * 86400000)));
   const [to, setTo] = useState(() => ymdInput(new Date()));
@@ -72,6 +83,8 @@ export function CardPickerModal({
   /** 타 부서 카드 태그를 펼쳐 볼 부서 */
   const [openDept, setOpenDept] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 행별 지출 목적·연관 용역/사업장 입력(2026-10-16) — 고치면 그 행을 선택한다 */
+  const [edits, setEdits] = useState<Record<string, { purpose?: string; related?: RelatedRef | null }>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +111,7 @@ export function CardPickerModal({
   useEffect(() => {
     if (open) {
       setSelected(new Set());
+      setEdits({});
       load();
     }
   }, [open, load]);
@@ -156,8 +170,18 @@ export function CardPickerModal({
     formId === "frm-expense-report" &&
     items.some((i) => selected.has(i.cardTxnId) && (i.categoryKey === "travel" || i.categoryKey === "lodging" || i.categoryKey === "fuel"));
 
+  const purposeOf = (i: CardPickerItem) => edits[i.cardTxnId]?.purpose ?? (purposeOptions.includes(i.purpose ?? "") ? i.purpose ?? "" : "");
+  const relatedOf = (i: CardPickerItem): RelatedRef | null =>
+    edits[i.cardTxnId] && "related" in edits[i.cardTxnId] ? edits[i.cardTxnId].related ?? null : i.related ?? defaultRelated ?? null;
+  const editRow = (id: string, patch: { purpose?: string; related?: RelatedRef | null }) => {
+    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+    setSelected((prev) => new Set(prev).add(id));
+  };
+
   const submit = () => {
-    const picked = items.filter((i) => selected.has(i.cardTxnId));
+    const picked = items
+      .filter((i) => selected.has(i.cardTxnId))
+      .map((i) => ({ ...i, purpose: purposeOf(i) || null, related: relatedOf(i) }));
     if (!picked.length) return;
     onPick(picked);
     onClose();
@@ -292,6 +316,8 @@ export function CardPickerModal({
                 <th className="py-2 pr-3 font-normal">카드</th>
                 <th className="py-2 pr-3 font-normal">상호</th>
                 <th className="py-2 pr-3 font-normal text-right">금액</th>
+                <th className="py-2 pr-3 font-normal">지출 목적</th>
+                <th className="py-2 pr-3 font-normal">연관 용역/사업장</th>
                 <th className="py-2 pr-3 font-normal">자동 분류</th>
                 <th className="py-2 font-normal">매입</th>
               </tr>
@@ -315,6 +341,39 @@ export function CardPickerModal({
                       {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.amountTotal.toLocaleString("ko-KR")}</td>
+                    {/* 지출 목적·연관 용역/사업장 — 칸을 눌러도 행 선택은 토글하지 않는다 */}
+                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <select
+                          className="cd-input py-1 text-xs"
+                          style={{ width: 136 }}
+                          disabled={used}
+                          value={purposeOf(item)}
+                          onChange={(e) => editRow(item.cardTxnId, { purpose: e.target.value })}
+                        >
+                          <option value="">선택</option>
+                          {purposeOptions.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        {PURPOSE_HINTS[purposeOf(item)] && (
+                          <span className="cd-text-faint cursor-help" title={PURPOSE_HINTS[purposeOf(item)]}>
+                            <HelpCircle className="w-3.5 h-3.5" />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
+                      <RelatedCellButton
+                        label={relatedOf(item)?.label ?? ""}
+                        disabled={used}
+                        missing={purposeNeedsRelated(purposeOf(item))}
+                        className="rounded-md border cd-border-c"
+                        onPick={(ref) => editRow(item.cardTxnId, { related: ref })}
+                      />
+                    </td>
                     <td className="py-1.5 pr-3">
                       {item.categoryLabel ? (
                         <span className="cd-pill cd-pill-info" title={`업태: ${item.storeBizType ?? "-"} · 근거: ${item.categorySource}`}>
@@ -332,7 +391,7 @@ export function CardPickerModal({
               })}
               {!loading && items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center cd-text-muted text-sm">
+                  <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">
                     선택 가능한 매입 내역이 없습니다. 기간을 넓히거나 재무 &gt; 연결 관리에서 수집 상태를 확인하세요.
                   </td>
                 </tr>

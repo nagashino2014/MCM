@@ -6,6 +6,7 @@ import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submi
 import { syncDocCardLinks } from "@/lib/barobill/classify";
 import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
+import { syncCardExpenseTags } from "@/lib/finance/expense-card-tags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,6 +86,12 @@ export async function POST(req: NextRequest) {
       await syncDocReceiptLinks(docId, body.formId, body.fieldValues ?? {}, ctx.userId);
     } catch (err) {
       console.error("[approval/docs] 영수증 연동 실패:", err);
+    }
+    // 법인카드 건의 지출 목적·연관 용역/사업장(2026-10-16) — 회계 원장과 분리된 태그 표에 남긴다.
+    try {
+      await syncCardExpenseTags(body.fieldValues ?? {}, ctx.userId);
+    } catch (err) {
+      console.error("[approval/docs] 카드 지출 목적 기록 실패:", err);
     }
     // 쇼핑몰 전표 연동(224) — _shopReceiptId 귀속/해제.
     try {

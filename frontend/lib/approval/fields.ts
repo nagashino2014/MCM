@@ -146,6 +146,12 @@ export interface ApprovalTableColumn {
   semantic?: ApprovalFieldSemantic;
   /** 기안자 편집 잠금 — 자동 채움 전용 열(지출 표의 분류: 자동 분류 실패 건은 재무 카드 원장에서 분류, 2026-08-26) */
   readonly?: boolean;
+  /** 열 너비(px) — 화면 표·PDF 의 폭 비중. 없으면 자동(2026-10-16 사용일시·금액 열 축소) */
+  width?: number;
+  /** select 선택지별 도움말 — 그 값을 고르면 칸에 (?) 가 붙는다(기타 출장 경비·기타 수수료 예시) */
+  optionHints?: Record<string, string>;
+  /** 조건부 필수 — 같은 행의 key 열 값이 values 중 하나면 이 열을 반드시 채운다(연관 용역/사업장) */
+  requiredWhen?: { key: string; values: string[] };
 }
 
 /** 양식 필드 정의 — row(같은 행 배치)·span(행 내 폭 비중 1~3)으로 레이아웃까지 표현 */
@@ -217,6 +223,20 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
               hint: c.hint != null ? String(c.hint) : undefined,
               semantic: parseSemantic(c.semantic),
               readonly: c.readonly === true,
+              width: c.width != null && Number(c.width) > 0 ? Number(c.width) : undefined,
+              optionHints:
+                c.optionHints && typeof c.optionHints === "object"
+                  ? Object.fromEntries(
+                      Object.entries(c.optionHints as Record<string, unknown>).map(([k, v]) => [k, String(v ?? "")])
+                    )
+                  : undefined,
+              requiredWhen:
+                c.requiredWhen && typeof c.requiredWhen === "object" && Array.isArray((c.requiredWhen as { values?: unknown }).values)
+                  ? {
+                      key: String((c.requiredWhen as { key?: unknown }).key ?? ""),
+                      values: ((c.requiredWhen as { values: unknown[] }).values).map(String),
+                    }
+                  : undefined,
             }))
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,
@@ -238,8 +258,9 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
   }
 }
 
-/** 표 행에 붙는 내부 메타 키(귀속 참조) — 행이 비었는지 판정할 때는 값으로 세지 않는다. */
-const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId", "_shopReceiptId"]);
+/** 표 행에 붙는 내부 메타 키(귀속 참조) — 행이 비었는지 판정할 때는 값으로 세지 않는다.
+ *  _related* = 연관 용역/사업장 열(related)의 계약·사업장 ID(표시 문자열은 열 값, 2026-10-16). */
+const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId", "_shopReceiptId", "_relatedContractId", "_relatedFacilityId"]);
 
 function cellFilled(v: unknown): boolean {
   if (Array.isArray(v)) return v.length > 0;
@@ -258,7 +279,7 @@ export function missingTableRequirements(
   const out: string[] = [];
   for (const f of fields) {
     if (f.type !== "table") continue;
-    const cols = (f.tableColumns ?? []).filter((c) => c.required && c.type !== "rowno");
+    const cols = (f.tableColumns ?? []).filter((c) => (c.required || c.requiredWhen) && c.type !== "rowno");
     if (!cols.length) continue;
     const rows = Array.isArray(values[f.key]) ? (values[f.key] as unknown[]) : [];
     rows.forEach((row, i) => {
@@ -266,7 +287,10 @@ export function missingTableRequirements(
       const entries = Object.entries(row as Record<string, unknown>);
       if (!entries.some(([k, v]) => !TABLE_META_KEYS.has(k) && cellFilled(v))) return;
       for (const c of cols) {
-        if (!cellFilled((row as Record<string, unknown>)[c.key])) out.push(`${f.label} ${i + 1}행: ${c.label}`);
+        const r = row as Record<string, unknown>;
+        // 조건부 필수 — 기준 열 값이 목록에 있을 때만(지출 목적이 출장·초과근무·인쇄비면 연관 용역/사업장)
+        if (!c.required && c.requiredWhen && !c.requiredWhen.values.includes(String(r[c.requiredWhen.key] ?? "").trim())) continue;
+        if (!cellFilled(r[c.key])) out.push(`${f.label} ${i + 1}행: ${c.label}`);
       }
     });
   }

@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
+import { PurposeChips, RelatedField } from '@/components/pickers/ExpensePurposeFields';
+import { RelatedPickerSheet } from '@/components/pickers/RelatedPickerSheet';
 import {
   Badge,
   Button,
@@ -22,6 +24,7 @@ import {
 } from '@/components/ui';
 import { apiFetch } from '@/lib/api';
 import { API_BASE_URL } from '@/lib/config';
+import { ALL_PURPOSES, purposeNeedsRelated, type RelatedRef } from '@/lib/expense-purpose';
 import { getAccessToken } from '@/lib/tokens';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
@@ -54,6 +57,9 @@ interface ReceiptItem {
   cardLast4: string | null;
   items: string[];
   memo: string | null;
+  /** 지출 목적·연관 용역/사업장(2026-10-16) */
+  purpose: string | null;
+  related: RelatedRef | null;
   docId: string | null;
   docTitle: string | null;
   docNo: string | null;
@@ -110,9 +116,12 @@ export default function ReceiptsScreen() {
     }, [tab])
   );
 
-  // 수정 시트 — 날짜 피커를 띄우는 동안에는 시트를 접는다(중첩 Modal 회피).
+  // 수정 시트 — 날짜·용역 피커를 띄우는 동안에는 시트를 접는다(중첩 Modal 회피).
   const [editing, setEditing] = useState<ReceiptItem | null>(null);
   const [datePicker, setDatePicker] = useState(false);
+  const [relatedPicker, setRelatedPicker] = useState(false);
+  const [purpose, setPurpose] = useState('');
+  const [related, setRelated] = useState<RelatedRef | null>(null);
   const [form, setForm] = useState({ date: '', time: '', storeName: '', corpNum: '', totalAmount: '', memo: '' });
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -127,10 +136,13 @@ export default function ReceiptsScreen() {
       totalAmount: String(r.totalAmount ?? ''),
       memo: r.memo ?? '',
     });
+    setPurpose(r.purpose ?? '');
+    setRelated(r.related ?? null);
   };
   const close = () => {
     setEditing(null);
     setDatePicker(false);
+    setRelatedPicker(false);
     setConfirmDelete(false);
   };
 
@@ -170,6 +182,14 @@ export default function ReceiptsScreen() {
       toast.show('사업자번호는 10자리입니다.', 'error');
       return;
     }
+    if (!purpose || !ALL_PURPOSES.includes(purpose)) {
+      toast.show('지출 목적을 목록에서 고르세요.', 'error');
+      return;
+    }
+    if (purposeNeedsRelated(purpose) && !related) {
+      toast.show(`'${purpose}'은(는) 연관 용역/사업장을 골라야 합니다.`, 'error');
+      return;
+    }
     void patch(
       {
         paidAt,
@@ -177,6 +197,8 @@ export default function ReceiptsScreen() {
         storeCorpNum: corpNum || null,
         totalAmount: amount,
         memo: form.memo.trim() || null,
+        purpose,
+        related: related ? { contractId: related.contractId, facilityId: related.facilityId } : null,
       },
       '영수증을 수정했습니다.'
     );
@@ -267,6 +289,11 @@ export default function ReceiptsScreen() {
                   {dateLabel(r)}
                   {r.storeCorpNum ? ` · ${fmtCorpNum(r.storeCorpNum)}` : ''}
                 </Text>
+                {r.purpose || r.related ? (
+                  <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-muted">
+                    {[r.purpose, r.related?.label].filter(Boolean).join(' · ')}
+                  </Text>
+                ) : null}
                 {r.docTitle ? (
                   <Text numberOfLines={1} className="mt-[3px] text-[11px] text-cd-primary">
                     {r.docNo ? `${r.docNo} · ` : ''}
@@ -289,7 +316,7 @@ export default function ReceiptsScreen() {
 
       {/* 수정 시트 — 날짜 피커를 여는 동안에는 접는다(iOS 중첩 Modal 회피) */}
       <Sheet
-        visible={!!editing && !datePicker && !confirmDelete}
+        visible={!!editing && !datePicker && !relatedPicker && !confirmDelete}
         onClose={close}
         title="영수증 상세"
         footer={
@@ -372,11 +399,18 @@ export default function ReceiptsScreen() {
               keyboardType="number-pad"
               editable={!locked}
             />
+            <PurposeChips value={purpose} onChange={setPurpose} disabled={locked} />
+            <RelatedField
+              purpose={purpose}
+              value={related}
+              onPress={() => setRelatedPicker(true)}
+              disabled={locked}
+            />
             <Input
-              label="지출목적"
+              label="메모 (선택)"
               value={form.memo}
               onChangeText={(v) => setForm((s) => ({ ...s, memo: v }))}
-              placeholder="여기서 적어 두면 지출결의서에 그대로 실립니다"
+              placeholder="참고할 내용"
             />
 
             {!locked ? (
@@ -393,6 +427,12 @@ export default function ReceiptsScreen() {
         ) : null}
       </Sheet>
 
+      <RelatedPickerSheet
+        visible={relatedPicker}
+        current={related}
+        onSelect={setRelated}
+        onClose={() => setRelatedPicker(false)}
+      />
       <DatePickerSheet
         visible={datePicker}
         title="사용일 선택"

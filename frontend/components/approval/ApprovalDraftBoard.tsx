@@ -27,6 +27,14 @@ import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardPickerModal";
 import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
 import { ShopReceiptPickerModal, type ShopReceiptPickerItem } from "@/components/finance/ShopReceiptPickerModal";
+import {
+  RELATED_CONTRACT_KEY,
+  RELATED_FACILITY_KEY,
+  purposeNeedsRelated,
+  purposesForTable,
+  relatedMismatch,
+  type RelatedRef,
+} from "@/lib/approval/expense-purpose";
 import "@/components/cdash/cdash.css";
 
 // 카드 내역 자동 기입 대상 양식(P1) — 지출 내역 표(마이그 116)의 key/사용일시 열 key.
@@ -194,6 +202,57 @@ export function ApprovalDraftBoard() {
   // 법인카드 내역 불러오기(P1) — 지출결의서·출장보고서 한정.
   const [cardPicker, setCardPicker] = useState(false);
   const cardExpenseTarget = form ? CARD_EXPENSE_FORMS[form.formId] : undefined;
+
+  // 지출 목적 목록(2026-10-16) — 양식 표의 지출 목적 열 선택지, 없으면 표 key 기준 기본 목록.
+  const purposeOptions = useMemo<readonly string[]>(() => {
+    if (!form || !cardExpenseTarget) return [];
+    const table = form.fields.find((f) => f.type === "table" && f.key === cardExpenseTarget.tableKey);
+    const opts = table?.tableColumns?.find((c) => c.key === "detail")?.options;
+    return opts && opts.length ? opts : purposesForTable(cardExpenseTarget.tableKey);
+  }, [form, cardExpenseTarget]);
+
+  // 출장보고서의 용역/사업장(양식의 용역 선택·업체 선택 필드) — 지출 행의 기본값이자 불러오기 경고 기준.
+  const tripRelated = useMemo<RelatedRef | null>(() => {
+    if (!form || form.formId !== "frm-biz-trip-report") return null;
+    const contractField = form.fields.find((f) => f.type === "contract_select");
+    const companyField = form.fields.find((f) => f.type === "company_select");
+    const contract = (contractField ? values[contractField.key] : null) as { title?: string; contractId?: string } | null;
+    const company = (companyField ? values[companyField.key] : null) as { name?: string; facilityId?: string } | null;
+    const facilityId = company?.facilityId ?? null;
+    if (contract && String(contract.title ?? "").trim()) {
+      return { label: String(contract.title).trim(), contractId: contract.contractId ?? null, facilityId };
+    }
+    if (company && String(company.name ?? "").trim()) {
+      return { label: String(company.name).trim(), contractId: null, facilityId };
+    }
+    return null;
+  }, [form, values]);
+
+  /** 표 행의 연관 용역/사업장 키 묶음 */
+  const relatedCells = (ref: RelatedRef | null | undefined): Record<string, unknown> => ({
+    related: ref?.label ?? "",
+    [RELATED_CONTRACT_KEY]: ref?.contractId ?? null,
+    [RELATED_FACILITY_KEY]: ref?.facilityId ?? null,
+  });
+
+  /**
+   * 출장보고서 — 불러온 건의 연관 용역/사업장이 출장의 용역/사업장과 다르면 경고하고 계속할지 묻는다(2026-10-16 사용자 요청).
+   * false 를 돌려주면 추가하지 않는다.
+   */
+  const confirmTripRelated = (list: { label: string; related: RelatedRef | null | undefined }[]): boolean => {
+    if (!tripRelated) return true;
+    const diff = list.filter((x) => relatedMismatch(x.related, tripRelated));
+    if (!diff.length) return true;
+    return window.confirm(
+      `출장보고서의 용역/사업장(${tripRelated.label})과 다른 용역/사업장으로 등록된 건이 ${diff.length}건 있습니다.\n\n` +
+        diff
+          .slice(0, 8)
+          .map((x) => `· ${x.label} → ${x.related?.label ?? ""}`)
+          .join("\n") +
+        (diff.length > 8 ? `\n… 외 ${diff.length - 8}건` : "") +
+        "\n\n이 출장의 경비가 맞는지 확인하세요. [확인]을 누르면 등록된 용역/사업장 그대로 추가합니다."
+    );
+  };
   const cardExistingIds = useMemo(() => {
     if (!cardExpenseTarget) return [] as string[];
     const rows = values[cardExpenseTarget.tableKey];
@@ -244,6 +303,13 @@ export function ApprovalDraftBoard() {
       );
       if (!filtered || !filtered.length) return;
       const items = filtered;
+      if (
+        !confirmTripRelated(
+          items.map((i) => ({ label: `${i.useDate} ${i.storeName ?? ""} ${i.amountTotal.toLocaleString("ko-KR")}원`, related: i.related }))
+        )
+      ) {
+        return;
+      }
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -255,7 +321,9 @@ export function ApprovalDraftBoard() {
           category: item.formOption ?? "", // 자동 분류 실패 건은 빈 값 → 사용자가 표에서 선택
           vendor: item.storeName ?? "",
           amount: String(item.amountTotal),
-          detail: "", // 지출 목적 — 사용자 입력 몫
+          // 지출 목적·연관 용역/사업장 — 불러오기 모달에서 기입한 값(2026-10-16). 출장보고서는 출장 용역이 기본값.
+          detail: item.purpose && purposeOptions.includes(item.purpose) ? item.purpose : "",
+          ...relatedCells(item.related ?? tripRelated),
           _cardTxnId: item.cardTxnId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -283,7 +351,8 @@ export function ApprovalDraftBoard() {
         }
       })();
     },
-    [cardExpenseTarget, filterByTripPeriod],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cardExpenseTarget, filterByTripPeriod, purposeOptions, tripRelated],
   );
 
   // 개인카드 영수증 불러오기(accounting-expansion P1) — 법인카드와 같은 표 대상, _receiptId 메타.
@@ -308,6 +377,10 @@ export function ApprovalDraftBoard() {
       );
       if (!filtered || !filtered.length) return;
       const items = filtered;
+      const labelOf = (i: ReceiptPickerItem) => `${i.paidDate ?? "사용일 미상"} ${i.storeName ?? ""} ${i.totalAmount.toLocaleString("ko-KR")}원`;
+      if (!confirmTripRelated(items.map((i) => ({ label: labelOf(i), related: i.related })))) return;
+      // 촬영 때 고른 지출 목적이 이 양식의 목록에 없으면(지출결의서에 출장 경비 등) 비워 두고 알린다.
+      const offList = items.filter((i) => i.purpose && !purposeOptions.includes(i.purpose));
       const { tableKey, dateKey } = cardExpenseTarget;
       setValues((prev) => {
         const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -319,11 +392,22 @@ export function ApprovalDraftBoard() {
           category: item.formOption ?? "",
           vendor: item.storeName ?? "",
           amount: String(item.totalAmount),
-          detail: item.purpose ?? "", // 지출 목적 — 직접 첨부(224)는 입력값 프리필, 촬영 건은 사용자 입력 몫
+          // 지출 목적·연관 용역/사업장 — 촬영·직접 첨부 때 고른 값(2026-10-16). 출장보고서는 출장 용역이 기본값.
+          detail: item.purpose && purposeOptions.includes(item.purpose) ? item.purpose : "",
+          ...relatedCells(item.related ?? tripRelated),
           _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
       });
+      if (offList.length) {
+        alert(
+          `이 양식의 지출 목적 목록에 없는 목적으로 등록된 영수증 ${offList.length}건은 지출 목적을 비워 두었습니다:\n` +
+            offList.map((i) => `· ${labelOf(i)} — ${i.purpose}`).join("\n") +
+            (cardExpenseTarget.tableKey === "trip_expenses"
+              ? "\n\n출장보고서에는 출장 경비만 담습니다. 출장 경비가 아니면 지출결의서로 올려 주세요."
+              : "\n\n출장 경비는 출장보고서의 지출내역으로 올려 주세요.")
+        );
+      }
       // 영수증 PDF 는 이미 스토리지에 있으므로 재업로드 없이 첨부 목록에 key 로 참조(중복 추가 방지).
       setFileAttachments((prev) => {
         const known = new Set(prev.map((a) => a.key));
@@ -331,7 +415,8 @@ export function ApprovalDraftBoard() {
         return adds.length ? [...prev, ...adds] : prev;
       });
     },
-    [cardExpenseTarget, filterByTripPeriod],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cardExpenseTarget, filterByTripPeriod, purposeOptions, tripRelated],
   );
 
   // 쇼핑몰 전표 불러오기(2026-09-15) — 지출결의서(법인카드) 한정. 표에 이미 담긴 카드 승인건과 매칭된 전표는
@@ -364,7 +449,7 @@ export function ApprovalDraftBoard() {
             category: "", // 자동 분류 없음 — 재무 원장에서 분류
             vendor: item.siteName,
             amount: String(item.amount),
-            detail: item.title, // 품목이 곧 지출 목적 — 기안자가 다듬는다
+            detail: "", // 지출 목적은 목록에서 고른다(2026-10-16) — 품목은 첨부 전표 PDF 로 확인
             _shopReceiptId: item.receiptId,
             ...(item.matchedTxnId ? { _cardTxnId: item.matchedTxnId } : {}),
           }));
@@ -889,7 +974,22 @@ export function ApprovalDraftBoard() {
       );
       const noDetail = active.filter((r) => !String(r.detail ?? "").trim());
       if (noDetail.length) {
-        alert(`지출 내역의 '지출 목적'이 비어 있는 행이 ${noDetail.length}건 있습니다.\n모든 지출 건에 지출 목적을 입력해야 상신할 수 있습니다.`);
+        alert(`지출 내역의 '지출 목적'이 비어 있는 행이 ${noDetail.length}건 있습니다.\n모든 지출 건에 지출 목적을 선택해야 상신할 수 있습니다.`);
+        return false;
+      }
+      // 목록 밖 지출 목적(자유 기입 시절 임시저장 값) — 목록에서 다시 고르게 한다(2026-10-16).
+      const offList = purposeOptions.length ? active.filter((r) => !purposeOptions.includes(String(r.detail ?? "").trim())) : [];
+      if (offList.length) {
+        alert(`지출 목적이 목록에 없는 값인 행이 ${offList.length}건 있습니다.\n지출 목적을 목록에서 다시 선택해 주세요.`);
+        return false;
+      }
+      // 연관 용역/사업장 — 출장 경비·초과근무 식대·인쇄/제본비는 필수.
+      const noRelated = active.filter((r) => purposeNeedsRelated(r.detail) && !String(r.related ?? "").trim());
+      if (noRelated.length) {
+        alert(
+          `연관 용역/사업장이 비어 있는 행이 ${noRelated.length}건 있습니다.\n` +
+            "출장 경비·초과근무 식대·인쇄/제본비는 어느 용역(사업장)에 쓴 비용인지 선택해야 상신할 수 있습니다."
+        );
         return false;
       }
     }
@@ -1600,6 +1700,8 @@ export function ApprovalDraftBoard() {
           formId={form.formId}
           existingIds={cardExistingIds}
           onPick={appendCardRows}
+          purposeOptions={purposeOptions}
+          defaultRelated={tripRelated}
         />
       )}
 
@@ -1611,6 +1713,8 @@ export function ApprovalDraftBoard() {
           formId={form.formId}
           existingIds={receiptExistingIds}
           onPick={appendReceiptRows}
+          purposeOptions={purposeOptions}
+          defaultRelated={tripRelated}
         />
       )}
 

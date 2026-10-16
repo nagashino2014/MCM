@@ -19,6 +19,9 @@ import { File } from 'expo-file-system';
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { CtaGradientFill } from '@/components/ui';
 import { apiFetch } from '@/lib/api';
+import { PurposeChips, RelatedField } from '@/components/pickers/ExpensePurposeFields';
+import { RelatedPickerSheet } from '@/components/pickers/RelatedPickerSheet';
+import { purposeNeedsRelated, type RelatedRef } from '@/lib/expense-purpose';
 
 // 개인카드 영수증 촬영 (accounting-expansion 블루프린트 §2, P1)
 // 명함 촬영(card.tsx)의 형제 화면 — 찍고 → AI 인식 결과 확인 → 저장(스톡).
@@ -93,6 +96,10 @@ export default function ReceiptScreen() {
     totalAmount: '',
     memo: '',
   });
+  // 지출 목적·연관 용역/사업장(2026-10-16) — 촬영 때 고르면 출장보고서·지출결의서 표에 그대로 실린다.
+  const [purpose, setPurpose] = useState('');
+  const [related, setRelated] = useState<RelatedRef | null>(null);
+  const [relatedPicker, setRelatedPicker] = useState(false);
   const [looking, setLooking] = useState(false);
   /** 상호를 사업자번호로 확정하지 못한 상태 — 이때만 상호 입력란을 연다(평소엔 조회 결과를 보여 준다). */
   const [manualStore, setManualStore] = useState(false);
@@ -226,6 +233,14 @@ export default function ReceiptScreen() {
       setError('영수증 이미지가 없습니다. 다시 촬영해주세요.');
       return;
     }
+    if (!purpose) {
+      setError('지출 목적을 선택하세요.');
+      return;
+    }
+    if (purposeNeedsRelated(purpose) && !related) {
+      setError(`'${purpose}'은(는) 어느 용역(사업장)에 쓴 비용인지 연관 용역/사업장을 선택해야 합니다.`);
+      return;
+    }
     setError(null);
     setStep('saving');
     try {
@@ -246,6 +261,9 @@ export default function ReceiptScreen() {
       fd.append('fields', JSON.stringify(fields));
       if (parsed) fd.append('parsed', JSON.stringify(parsed));
       if (form.memo.trim()) fd.append('memo', form.memo.trim());
+      fd.append('purpose', purpose);
+      if (related?.contractId) fd.append('relatedContractId', related.contractId);
+      if (related?.facilityId) fd.append('relatedFacilityId', related.facilityId);
       if (force) fd.append('force', '1');
       const res = await apiFetch('/api/receipts', { method: 'POST', body: fd });
       const data = (await res.json().catch(() => ({}))) as {
@@ -306,6 +324,8 @@ export default function ReceiptScreen() {
     setImageUri(null);
     setParsed(null);
     setForm({ storeName: '', corpNum: '', paidDate: '', paidTime: '', totalAmount: '', memo: '' });
+    setPurpose('');
+    setRelated(null);
     setManualStore(false);
     setDuplicates(null);
     setSavedStore(null);
@@ -478,11 +498,13 @@ export default function ReceiptScreen() {
                 onChange={(v) => setForm((s) => ({ ...s, totalAmount: v.replace(/[^0-9]/g, '') }))}
                 keyboardType="number-pad"
               />
+              <PurposeChips value={purpose} onChange={setPurpose} />
+              <RelatedField purpose={purpose} value={related} onPress={() => setRelatedPicker(true)} />
               <Field
-                label="지출목적"
+                label="메모"
                 value={form.memo}
                 onChange={(v) => setForm((s) => ({ ...s, memo: v }))}
-                placeholder="지금 적어 두면 지출결의서에 그대로 실립니다"
+                placeholder="선택 — 참고할 내용"
               />
             </View>
 
@@ -535,6 +557,12 @@ export default function ReceiptScreen() {
         ) : null}
       </ScrollView>
 
+      <RelatedPickerSheet
+        visible={relatedPicker}
+        current={related}
+        onSelect={setRelated}
+        onClose={() => setRelatedPicker(false)}
+      />
       <DatePickerSheet
         visible={datePicker}
         title="사용일 선택"

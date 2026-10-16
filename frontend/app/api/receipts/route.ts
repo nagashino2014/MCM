@@ -1,3 +1,4 @@
+import { ALL_PURPOSES } from "@/lib/approval/expense-purpose";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { normalizePaidAt, normalizeReceiptImage, type ReceiptFields } from "@/lib/finance/receipt-parser";
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         source: r.source,
         payMethod: r.payMethod,
         purpose: r.purpose,
+        related: r.related,
         hasImage: !!r.imageKey,
         categoryKey,
         categoryLabel: cat?.label ?? null,
@@ -145,6 +147,10 @@ export async function POST(req: NextRequest) {
       parsed,
       image,
       memo: String(form.get("memo") ?? "") || null,
+      // 지출 목적·연관 용역/사업장(2026-10-16) — 목록 밖 값은 버린다(구버전 앱은 보내지 않는다)
+      purpose: ALL_PURPOSES.includes(String(form.get("purpose") ?? "").trim()) ? String(form.get("purpose")).trim() : null,
+      relatedContractId: String(form.get("relatedContractId") ?? "").trim() || null,
+      relatedFacilityId: String(form.get("relatedFacilityId") ?? "").trim() || null,
     });
     return NextResponse.json({ receipt });
   } catch (err) {

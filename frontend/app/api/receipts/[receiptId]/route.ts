@@ -1,3 +1,4 @@
+import { ALL_PURPOSES } from "@/lib/approval/expense-purpose";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteReceipt, updateReceipt } from "@/lib/finance/receipts";
@@ -18,7 +19,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
       totalAmount?: number;
       excluded?: boolean;
       memo?: string | null;
+      /** 지출 목적·연관 용역/사업장(2026-10-16) — 모바일 영수증함에서 고친다 */
+      purpose?: string | null;
+      related?: { contractId?: string | null; facilityId?: string | null } | null;
     };
+    if (body.purpose !== undefined && body.purpose && !ALL_PURPOSES.includes(String(body.purpose).trim())) {
+      return NextResponse.json({ error: "지출 목적은 목록에서 골라 주세요." }, { status: 400 });
+    }
     // 저장 계약은 POST 와 동일 — 수정 입력도 정규화해서 넣는다(미해석 시 날짜 미상으로).
     if (body.paidAt !== undefined) body.paidAt = normalizePaidAt(body.paidAt ?? null);
     // 사업자번호는 숫자만 남겨 저장한다(표시 하이픈은 화면 몫) — 분류 학습 키와 형식을 맞춘다.
@@ -29,7 +36,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ re
       }
       body.storeCorpNum = digits || null;
     }
-    await updateReceipt(receiptId, ctx.userId, body);
+    await updateReceipt(receiptId, ctx.userId, {
+      ...body,
+      purpose: body.purpose === undefined ? undefined : String(body.purpose ?? "").trim() || null,
+      related:
+        body.related === undefined
+          ? undefined
+          : body.related
+            ? { contractId: body.related.contractId ?? null, facilityId: body.related.facilityId ?? null }
+            : null,
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);

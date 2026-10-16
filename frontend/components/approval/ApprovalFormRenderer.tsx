@@ -9,6 +9,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpCircle, Plus, Users, X } from "lucide-react";
 import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { RelatedCellButton } from "@/components/approval/RelatedPicker";
+import { RELATED_CONTRACT_KEY, RELATED_FACILITY_KEY } from "@/lib/approval/expense-purpose";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import { MailEditor } from "@/components/mail/MailEditor";
@@ -1139,6 +1141,10 @@ function TableInput({
     const next = rows.map((r, i) => (i === ri ? { ...r, [key]: v } : r));
     onSet(next);
   };
+  // 여러 키를 한 번에 — 연관 용역/사업장은 표시 문자열과 계약·사업장 ID(메타 키)를 함께 바꾼다.
+  const updateMany = (ri: number, patch: Record<string, unknown>) => {
+    onSet(rows.map((r, i) => (i === ri ? { ...r, ...patch } : r)));
+  };
   // people 열 조직도 모달 대상(행·열) — 모달은 표당 1개만 렌더한다
   const [peopleTarget, setPeopleTarget] = useState<{ ri: number; colKey: string } | null>(null);
   // link 열 — URL 입력 전용(읽기 모드에서 새 탭 링크). 품명·단가 자동 수집은 주요 쇼핑몰
@@ -1158,8 +1164,16 @@ function TableInput({
         <thead>
           <tr>
             {cols.map((c) => (
-              <th key={c.key} className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap">
+              <th
+                key={c.key}
+                className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap"
+                style={c.width ? { width: c.width } : undefined}
+              >
                 {c.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
+                {/* 조건부 필수(연관 용역/사업장) — 지출 목적에 따라 필수라 흐린 * 로 구분한다 */}
+                {!c.required && c.requiredWhen && (
+                  <span className="cd-text-faint mr-0.5" title={`${c.requiredWhen.values.join(", ")} 이면 필수`}>*</span>
+                )}
                 {c.label}
                 {/* 도움말 — 분류처럼 "무엇을 어디에 넣는지" 헷갈리는 열에 예시를 붙인다. */}
                 {c.hint && (
@@ -1212,20 +1226,49 @@ function TableInput({
                     >
                       {String(r[c.key] ?? "").trim() || <span className="cd-text-faint">자동</span>}
                     </div>
-                  ) : c.type === "select" ? (
-                    <select
-                      className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                  ) : c.type === "related" ? (
+                    // 연관 용역/사업장(2026-10-16) — 표시 문자열은 열 값, 계약·사업장 ID 는 메타 키.
+                    <RelatedCellButton
+                      label={String(r[c.key] ?? "")}
                       disabled={readOnly}
-                      value={String(r[c.key] ?? "")}
-                      onChange={(e) => update(ri, c.key, e.target.value)}
-                    >
-                      <option value="">선택</option>
-                      {(c.options ?? []).map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                      missing={
+                        !!c.required ||
+                        (!!c.requiredWhen && c.requiredWhen.values.includes(String(r[c.requiredWhen.key] ?? "").trim()))
+                      }
+                      onPick={(ref) =>
+                        updateMany(ri, {
+                          [c.key]: ref?.label ?? "",
+                          [RELATED_CONTRACT_KEY]: ref?.contractId ?? null,
+                          [RELATED_FACILITY_KEY]: ref?.facilityId ?? null,
+                        })
+                      }
+                    />
+                  ) : c.type === "select" ? (
+                    <div className="flex items-center">
+                      <select
+                        className="w-full min-w-0 bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                        disabled={readOnly}
+                        value={String(r[c.key] ?? "")}
+                        onChange={(e) => update(ri, c.key, e.target.value)}
+                      >
+                        <option value="">선택</option>
+                        {/* 목록에 없는 기존 값(자유 기입 시절 지출 목적 등)도 보이게 남긴다 */}
+                        {String(r[c.key] ?? "").trim() !== "" && !(c.options ?? []).includes(String(r[c.key])) && (
+                          <option value={String(r[c.key])}>{String(r[c.key])} (목록 외)</option>
+                        )}
+                        {(c.options ?? []).map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                      {/* 선택지별 예시(기타 출장 경비·기타 수수료) — 고른 값에 도움말이 있으면 (?) */}
+                      {c.optionHints?.[String(r[c.key] ?? "")] && (
+                        <span className="pr-1.5 cd-text-faint cursor-help shrink-0" title={c.optionHints[String(r[c.key])]}>
+                          <HelpCircle className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </div>
                   ) : c.type === "date" ? (
                     <AutoDateInput
                       className="w-full bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"

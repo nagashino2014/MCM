@@ -278,15 +278,21 @@ export async function createApprovalDocPdf(doc: ApprovalDocDetail, leaveCatalog:
       w.ensure(40);
       w.page.drawText(field.label, { x: MARGIN_X, y: w.y - 10, size: 9.5, font: fonts.bold, color: INK });
       w.y -= 16;
-      const colW = CONTENT_W / cols.length;
+      // 열 너비 — 양식의 width(px)를 비중으로 쓴다(2026-10-16 사용일시·금액 축소, 연관 용역/사업장 추가).
+      // 너비가 없는 열은 기본 비중(연번 36, 그 외 110). 너비 지정 열이 하나도 없는 표는 종전처럼 균등 분할한다.
+      const hasWidths = cols.some((c) => c.width && c.width > 0);
+      const weights = cols.map((c) => (!hasWidths ? 1 : c.width && c.width > 0 ? c.width : c.type === "rowno" ? 36 : 110));
+      const weightSum = weights.reduce((a, b) => a + b, 0);
+      const colWs = weights.map((wgt) => (CONTENT_W * wgt) / weightSum);
+      const colXs = colWs.map((_, i) => MARGIN_X + colWs.slice(0, i).reduce((a, b) => a + b, 0));
       const drawRow = (texts: string[], bold: boolean, bg: boolean) => {
-        const wrapped = texts.map((t, ci) => wrapText(t, bold ? fonts.bold : fonts.regular, 8, colW - 8));
+        const wrapped = texts.map((t, ci) => wrapText(t, bold ? fonts.bold : fonts.regular, 8, colWs[ci] - 8));
         const lines = Math.max(...wrapped.map((l) => l.length), 1);
         const rh = lines * 10.5 + 8;
         w.ensure(rh);
         texts.forEach((_, ci) => {
-          const x = MARGIN_X + ci * colW;
-          w.page.drawRectangle({ x, y: w.y - rh, width: colW, height: rh, color: bg ? CELL_BG : undefined, borderColor: LINE, borderWidth: 0.5 });
+          const x = colXs[ci];
+          w.page.drawRectangle({ x, y: w.y - rh, width: colWs[ci], height: rh, color: bg ? CELL_BG : undefined, borderColor: LINE, borderWidth: 0.5 });
           wrapped[ci].forEach((ln, li) => {
             w.page.drawText(ln, { x: x + 4, y: w.y - 11 - li * 10.5, size: 8, font: bold ? fonts.bold : fonts.regular, color: INK });
           });

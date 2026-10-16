@@ -3,6 +3,7 @@
 // 귀속 규약: card_transactions 와 동일 — 표 행의 _receiptId 로 doc_id 마킹/해제, 이중 기입 차단.
 // 환급 정산: 급여 합산 금지·별도 이체(사용자 확정) — 이체 실행은 P1 범위 밖(문서 승인 후 수동).
 
+import type { RelatedRef } from "@/lib/approval/expense-purpose";
 import { createHash } from "node:crypto";
 import { getDb, withDbWrite, rowsToObjects } from "@/lib/db";
 import { putContractDocument, deleteContractDocument, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
@@ -55,8 +56,10 @@ export interface PersonalReceipt {
   source: "mobile" | "manual";
   /** 직접 첨부의 지불수단(현금·계좌이체 등) */
   payMethod: string | null;
-  /** 직접 첨부의 지출 목적 — 표 행 detail 프리필 */
+  /** 지출 목적 — 촬영·직접 첨부 때 고른 값(2026-10-16 정해진 목록), 표 행 detail 프리필 */
   purpose: string | null;
+  /** 연관 용역/사업장(2026-10-16) — 계약·사업장 ID 와 표시 이름(조인) */
+  related: RelatedRef | null;
 }
 
 function toReceipt(r: Record<string, unknown>): PersonalReceipt {
@@ -87,8 +90,22 @@ function toReceipt(r: Record<string, unknown>): PersonalReceipt {
     source: String(r.source ?? "mobile") === "manual" ? "manual" : "mobile",
     payMethod: r.pay_method ? String(r.pay_method) : null,
     purpose: r.purpose ? String(r.purpose) : null,
+    related:
+      r.related_contract_id || r.related_facility_id
+        ? {
+            label: String(r.related_contract_title ?? r.related_facility_name ?? ""),
+            contractId: r.related_contract_id ? String(r.related_contract_id) : null,
+            facilityId: r.related_facility_id ? String(r.related_facility_id) : null,
+          }
+        : null,
   };
 }
+
+/** 영수증 한 건 + 연관 용역/사업장 이름 조인 */
+const RECEIPT_JOIN = `LEFT JOIN contracts rc ON rc.contract_id = r.related_contract_id
+         LEFT JOIN facilities rf ON rf.facility_id = r.related_facility_id`;
+const RECEIPT_JOIN_COLS = "rc.contract_title AS related_contract_title, rf.company_name AS related_facility_name";
+const ONE_RECEIPT_SQL = `SELECT r.*, ${RECEIPT_JOIN_COLS} FROM personal_receipts r ${RECEIPT_JOIN} WHERE r.receipt_id = $1`;
 
 /**
  * 직접 첨부 저장(2026-09-15 사용자 요청) — 웹 기안 화면 '직접 첨부' 탭에서 계좌이체 확인증·수기 전표 등의
@@ -104,6 +121,8 @@ export async function saveManualReceipt(params: {
   totalAmount: number;
   payMethod: string | null;
   purpose: string | null;
+  relatedContractId?: string | null;
+  relatedFacilityId?: string | null;
   file: { buffer: Buffer; isPdf: boolean; originalName: string };
 }): Promise<PersonalReceipt> {
   const now = KST_NOW();
@@ -133,17 +152,20 @@ export async function saveManualReceipt(params: {
     await db.run(
       `INSERT INTO personal_receipts
          (receipt_id, owner_user_id, paid_at, store_name, total_amount, items_json,
-          image_key, pdf_key, excluded, memo, created_at, source, pay_method, purpose)
+          image_key, pdf_key, excluded, memo, created_at, source, pay_method, purpose,
+          related_contract_id, related_facility_id)
        VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), $5, '[]'::jsonb,
-               $6, $7, 0, NULLIF($8,''), $9, 'manual', NULLIF($10,''), NULLIF($11,''))`,
+               $6, $7, 0, NULLIF($8,''), $9, 'manual', NULLIF($10,''), NULLIF($11,''),
+               NULLIF($12,''), NULLIF($13,''))`,
       [
         receiptId, params.ownerUserId, params.paidAt ?? "", params.storeName, params.totalAmount,
         imageKey, pdfKey, `원본 파일: ${params.file.originalName}`, now, params.payMethod ?? "", params.purpose ?? "",
+        params.relatedContractId ?? "", params.relatedFacilityId ?? "",
       ],
     );
   });
   const db = await getDb();
-  const rows = rowsToObjects(await db.exec(`SELECT * FROM personal_receipts WHERE receipt_id = $1`, [receiptId]));
+  const rows = rowsToObjects(await db.exec(ONE_RECEIPT_SQL, [receiptId]));
   return toReceipt(rows[0]);
 }
 
@@ -190,6 +212,10 @@ export async function saveReceipt(params: {
   parsed: unknown; // LLM 파싱 원본(감사용, null 가능)
   image: Buffer; // 정규화된 JPEG
   memo?: string | null;
+  /** 지출 목적·연관 용역/사업장(2026-10-16) — 모바일 촬영 때 고른 값 */
+  purpose?: string | null;
+  relatedContractId?: string | null;
+  relatedFacilityId?: string | null;
 }): Promise<PersonalReceipt> {
   const now = KST_NOW();
   const receiptId = hashId("rcp", `${params.ownerUserId}:${now}:${Math.random()}`);
@@ -225,11 +251,13 @@ export async function saveReceipt(params: {
          (receipt_id, owner_user_id, paid_at, store_name, store_corp_num,
           total_amount, supply_amount, tax_amount, card_last4, approval_num,
           items_json, parsed_json, category_key, category_source,
-          image_key, pdf_key, excluded, memo, created_at)
+          image_key, pdf_key, excluded, memo, created_at,
+          purpose, related_contract_id, related_facility_id)
        VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''),
                $6, $7, $8, NULLIF($9,''), NULLIF($10,''),
                $11::jsonb, $12::jsonb, $13, $14,
-               $15, $16, 0, NULLIF($17,''), $18)`,
+               $15, $16, 0, NULLIF($17,''), $18,
+               NULLIF($19,''), NULLIF($20,''), NULLIF($21,''))`,
       [
         receiptId,
         params.ownerUserId,
@@ -249,12 +277,15 @@ export async function saveReceipt(params: {
         pdfKey,
         params.memo ?? "",
         now,
+        params.purpose ?? "",
+        params.relatedContractId ?? "",
+        params.relatedFacilityId ?? "",
       ],
     );
   });
 
   const db = await getDb();
-  const rows = rowsToObjects(await db.exec(`SELECT * FROM personal_receipts WHERE receipt_id = $1`, [receiptId]));
+  const rows = rowsToObjects(await db.exec(ONE_RECEIPT_SQL, [receiptId]));
   return toReceipt(rows[0]);
 }
 
@@ -296,9 +327,10 @@ export async function listMyReceipts(params: {
   const limit = Math.min(Math.max(Number(params.limit ?? 100) || 100, 1), 200);
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT r.*, d.title AS doc_title, d.doc_no AS doc_no, d.status AS doc_status
+      `SELECT r.*, d.title AS doc_title, d.doc_no AS doc_no, d.status AS doc_status, ${RECEIPT_JOIN_COLS}
          FROM personal_receipts r
          LEFT JOIN approval_docs d ON d.doc_id = r.doc_id
+         ${RECEIPT_JOIN}
         WHERE ${conds.join(" AND ")}
         ORDER BY ${BASIS_DATE} DESC, r.created_at DESC LIMIT ${limit}`,
       sqlParams,
@@ -309,7 +341,7 @@ export async function listMyReceipts(params: {
 
 export async function getReceipt(receiptId: string): Promise<PersonalReceipt | null> {
   const db = await getDb();
-  const rows = rowsToObjects(await db.exec(`SELECT * FROM personal_receipts WHERE receipt_id = $1`, [receiptId]));
+  const rows = rowsToObjects(await db.exec(ONE_RECEIPT_SQL, [receiptId]));
   return rows.length ? toReceipt(rows[0]) : null;
 }
 
@@ -324,6 +356,9 @@ export async function updateReceipt(
     totalAmount?: number;
     excluded?: boolean;
     memo?: string | null;
+    /** 지출 목적·연관 용역/사업장(2026-10-16) — memo 처럼 귀속 여부와 무관하게 본인이 고칠 수 있다(결의서에 실린 뒤엔 결의서 저장 값이 덮는다) */
+    purpose?: string | null;
+    related?: { contractId: string | null; facilityId: string | null } | null;
   },
 ): Promise<void> {
   const existing = await getReceipt(receiptId);
@@ -348,6 +383,9 @@ export async function updateReceipt(
          total_amount = COALESCE($7, total_amount),
          excluded = COALESCE($8, excluded),
          memo = CASE WHEN $9 THEN NULLIF($10,'') ELSE memo END,
+         purpose = CASE WHEN $13 THEN NULLIF($14,'') ELSE purpose END,
+         related_contract_id = CASE WHEN $15 THEN NULLIF($16,'') ELSE related_contract_id END,
+         related_facility_id = CASE WHEN $15 THEN NULLIF($17,'') ELSE related_facility_id END,
          updated_at = $2
        WHERE receipt_id = $1`,
       [
@@ -363,6 +401,11 @@ export async function updateReceipt(
         patch.memo ?? "",
         patch.storeCorpNum !== undefined,
         patch.storeCorpNum ?? "",
+        patch.purpose !== undefined,
+        patch.purpose ?? "",
+        patch.related !== undefined,
+        patch.related?.contractId ?? "",
+        patch.related?.facilityId ?? "",
       ],
     );
   });
@@ -389,16 +432,31 @@ export async function deleteReceipt(receiptId: string, ownerUserId: string): Pro
 // ─────────────────────────────────────────────
 
 /** field_values 안의 모든 표(행 배열)에서 { _receiptId, category } 를 수집한다. */
-export function collectReceiptRefs(fieldValues: Record<string, unknown>): Array<{ receiptId: string; categoryOption: string | null }> {
-  const out: Array<{ receiptId: string; categoryOption: string | null }> = [];
+export function collectReceiptRefs(fieldValues: Record<string, unknown>): Array<{
+  receiptId: string;
+  categoryOption: string | null;
+  purpose: string | null;
+  relatedContractId: string | null;
+  relatedFacilityId: string | null;
+}> {
+  const out: ReturnType<typeof collectReceiptRefs> = [];
   for (const value of Object.values(fieldValues)) {
     if (!Array.isArray(value)) continue;
     for (const row of value) {
       if (!row || typeof row !== "object") continue;
       const receiptId = (row as Record<string, unknown>)._receiptId;
       if (typeof receiptId === "string" && receiptId) {
-        const category = (row as Record<string, unknown>).category;
-        out.push({ receiptId, categoryOption: typeof category === "string" && category ? category : null });
+        const r = row as Record<string, unknown>;
+        const category = r.category;
+        const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+        out.push({
+          receiptId,
+          categoryOption: typeof category === "string" && category ? category : null,
+          // 지출 목적·연관 용역/사업장(2026-10-16) — 결의서 표에서 고친 값을 영수증에도 남긴다
+          purpose: str(r.detail),
+          relatedContractId: str(r._relatedContractId),
+          relatedFacilityId: str(r._relatedFacilityId),
+        });
       }
     }
   }
@@ -443,9 +501,12 @@ export async function syncDocReceiptLinks(
             SET doc_id = $2, doc_form_id = $3,
                 category_key = COALESCE($4, category_key),
                 category_source = CASE WHEN $4 IS NOT NULL THEN 'manual' ELSE category_source END,
+                purpose = COALESCE($7, purpose),
+                related_contract_id = CASE WHEN $8 IS NOT NULL OR $9 IS NOT NULL THEN $8 ELSE related_contract_id END,
+                related_facility_id = CASE WHEN $8 IS NOT NULL OR $9 IS NOT NULL THEN $9 ELSE related_facility_id END,
                 updated_at = $5
           WHERE receipt_id = $1 AND owner_user_id = $6`,
-        [ref.receiptId, docId, formId, categoryKey, now, actorUserId],
+        [ref.receiptId, docId, formId, categoryKey, now, actorUserId, ref.purpose, ref.relatedContractId, ref.relatedFacilityId],
       );
       if (categoryKey) {
         const rows = rowsToObjects(

@@ -1,3 +1,4 @@
+import { ALL_PURPOSES } from "@/lib/approval/expense-purpose";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { normalizeReceiptImage } from "@/lib/finance/receipt-parser";
@@ -16,6 +17,9 @@ interface ManualEntry {
   totalAmount?: number | string;
   payMethod?: string;
   purpose?: string;
+  /** 연관 용역/사업장(2026-10-16) */
+  relatedContractId?: string | null;
+  relatedFacilityId?: string | null;
   /** files[] 안의 인덱스 */
   fileIndex?: number;
 }
@@ -65,7 +69,9 @@ export async function POST(req: NextRequest) {
         paidAt: paidAt || null,
         totalAmount: amount,
         payMethod: String(e.payMethod ?? "").trim() || null,
-        purpose: String(e.purpose ?? "").trim() || null,
+        purpose: ALL_PURPOSES.includes(String(e.purpose ?? "").trim()) ? String(e.purpose).trim() : null,
+        relatedContractId: String(e.relatedContractId ?? "").trim() || null,
+        relatedFacilityId: String(e.relatedFacilityId ?? "").trim() || null,
         file: { buffer, isPdf, originalName: file.name },
       });
       // 피커 규약(GET /api/receipts 와 동일 shape) — 분류는 없음(사용자가 표에서 확인).
@@ -90,6 +96,7 @@ export async function POST(req: NextRequest) {
         source: "manual" as const,
         payMethod: r.payMethod,
         purpose: r.purpose,
+        related: r.related,
         hasImage: !!r.imageKey,
       });
     }

@@ -273,8 +273,9 @@ resource "aws_ecs_task_definition" "next" {
         { name = "BAROBILL_CERTKEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:BAROBILL_CERTKEY::" },
         { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:KAKAO_REST_API_KEY::" },
         { name = "EMPLOYEE_PII_ENCRYPTION_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:EMPLOYEE_PII_ENCRYPTION_KEY::" },
-        # ESG 플랫폼 조직도 연동키(GET /api/internal/org-snapshot). ⚠ apply 전에 app 시크릿 JSON 에 ORG_SYNC_SECRET 키를 먼저 넣어야 태스크가 뜬다
-        #   (값은 ESG 쪽 esg-staging/dma-auth 의 DMA_MCM_SYNC_SECRET 과 동일; DMA 저장소 scripts/aws/mcm-set-org-sync-secret.ps1 참고).
+        # ESG 플랫폼 조직도 연동키(GET /api/internal/org-snapshot). 값은 ESG 쪽 esg-staging/dma-auth 의 DMA_MCM_SYNC_SECRET 과 동일
+        #   (DMA 저장소 scripts/aws/mcm-set-org-sync-secret.ps1 이 app 시크릿 JSON 에 넣는다). container_definitions 는 아래 ignore_changes 라
+        #   terraform apply 로는 실제 태스크에 주입되지 않는다 — ops/staging-deploy-next.ps1 -EnsureAppSecretKeys ORG_SYNC_SECRET 로 배포한다.
         { name = "ORG_SYNC_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:ORG_SYNC_SECRET::" }
       ]
       logConfiguration = {

@@ -83,6 +83,17 @@ revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinne
 않는다(옛 태그로 재시작될 뿐). 스크립트가 CLAUDE.md 의 절차(빌드 → 푸시 → image 만 바꾼 새 리비전
 등록 → update-service)를 그대로 수행한다. 프론트 전용 변경은 next 이미지만 재배포하면 된다.
 
+태스크 정의에 **새 app 시크릿 키**를 주입해야 할 때(예: ESG 플랫폼 조직도 연동용 `ORG_SYNC_SECRET`)는
+`-EnsureAppSecretKeys <키>`를 함께 준다. Terraform 은 Next 태스크 정의의 `container_definitions` 를
+`ignore_changes` 하므로 `ecs.tf` 만 고쳐서는 실제 태스크에 반영되지 않는다. 스크립트는 허용 목록
+(`$allowedAppSecretKeys`, ecs.tf 의 secrets 목록과 동일)에 있는 키만 받고, `mcm-ieps-staging/app`
+시크릿 JSON 에 그 키가 먼저 있는지 확인한 뒤(없으면 중단 — 새 태스크가 주입 실패로 기동하지 못한다)
+같은 이름의 secrets 항목을 추가해 새 리비전을 등록한다. 이미 있는 키는 그대로 둔다.
+
+```powershell
+.\infra\aws\ops\staging-deploy-next.ps1 -EnsureAppSecretKeys ORG_SYNC_SECRET -AcknowledgePinnedScheduleLag -Wait
+```
+
 ## 자동 스케줄 → **해제됨** (2026-08-14 설치, 같은 날 해제)
 
 next 는 현재 **24/7 상시 가동**한다. 자동 정지 스케줄은 삭제했다:

@@ -20,6 +20,7 @@
   .\infra\aws\ops\staging-deploy-next.ps1 -Tag tickcache-20260815-1030
   .\infra\aws\ops\staging-deploy-next.ps1 -Wait        # 배포 안정화까지 대기
   .\infra\aws\ops\staging-deploy-next.ps1 -SkipBuild -Tag <이미푸시한태그>
+  .\infra\aws\ops\staging-deploy-next.ps1 -EnsureAppSecretKeys ORG_SYNC_SECRET -AcknowledgePinnedScheduleLag -Wait  # 태스크 정의 secrets 에 키 추가
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",
@@ -29,6 +30,7 @@ param(
   [switch]$Wait,              # services-stable 까지 대기
   [switch]$AcknowledgePinnedScheduleLag, # 두 배치가 기존 숫자 revision에 남는 것을 명시적으로 수용
   [string]$FacilityQualityEnvironmentFile = "", # 정비 워커 연결 설정 JSON, 비밀 값 금지
+  [string[]]$EnsureAppSecretKeys = @(), # app 시크릿(mcm-ieps-staging/app) JSON 키를 같은 이름의 secrets 항목으로 태스크 정의에 추가(허용 목록 내 키만, 이미 있으면 유지)
   [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
 )
 # aws cli 는 정상 흐름에서도 stderr 를 내므로 Stop 을 쓰지 않고 $LASTEXITCODE 로 판정한다
@@ -95,6 +97,8 @@ if (-not $Force) {
 
 # 이미지 빌드·푸시보다 먼저 현재 태스크의 DB 역할 경계를 확인한다. 이 스크립트는
 # 기존 태스크 정의를 복제하므로 검사가 없으면 master 자격증명이 새 리비전에 승계된다.
+# 태스크 정의 secrets 에 허용되는 app 시크릿(mcm-ieps-staging/app) JSON 키. ecs.tf 의 next secrets 목록과 맞춘다.
+$allowedAppSecretKeys = @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY", "ORG_SYNC_SECRET")
 Log "현재 태스크 정의와 DB 역할 경계 사전 확인"
 $preflightCurrent = (aws ecs describe-services --cluster $cluster --services $service --region $Region --query "services[0].taskDefinition" --output text)
 if ($LASTEXITCODE -ne 0 -or -not $preflightCurrent -or $preflightCurrent -eq "None") { Fail "서비스의 태스크 정의를 찾지 못함" }
@@ -106,7 +110,7 @@ try {
     -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
     -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
     -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
-    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY") `
+    -AllowedApplicationSecretKeys $allowedAppSecretKeys `
     -ApplicationSecretKeyOverrides @{ KMA_SERVICE_KEY = "DATA_GO_KR_API_KEY" } `
     -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
     -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"
@@ -166,6 +170,25 @@ if ($FacilityQualityEnvironmentFile) {
   }
 }
 
+# 승인된 app 시크릿 키를 태스크 정의 secrets 에 추가한다(예: ESG 플랫폼 조직도 연동용 ORG_SYNC_SECRET).
+# terraform 은 container_definitions 를 ignore_changes 하므로 ecs.tf 만 고쳐서는 실제 태스크에 주입되지 않는다.
+# 허용 목록 밖 키는 거부하고, 시크릿 JSON 에 키가 먼저 있는지 확인한다(없으면 새 태스크가 주입 실패로 기동하지 못한다).
+if ($EnsureAppSecretKeys.Count) {
+  $appSecretRef = @($target.secrets | Where-Object { $_.name -ceq "AUTH_SECRET" })
+  if ($appSecretRef.Count -ne 1) { Fail "태스크 정의에서 app 시크릿 참조(AUTH_SECRET)를 찾지 못함" }
+  $appSecretArn = [string]$appSecretRef[0].valueFrom -replace ':AUTH_SECRET::$', ''
+  $appSecretRaw = (aws secretsmanager get-secret-value --secret-id "mcm-ieps-staging/app" --region $Region --query SecretString --output text) -join "`n"
+  if ($LASTEXITCODE -ne 0 -or -not $appSecretRaw) { Fail "app 시크릿(mcm-ieps-staging/app) 조회" }
+  $appSecretKeys = @(($appSecretRaw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $_.Name })
+  foreach ($k in $EnsureAppSecretKeys) {
+    if ($allowedAppSecretKeys -cnotcontains $k) { Fail "허용되지 않은 app 시크릿 키: $k" }
+    if ($appSecretKeys -cnotcontains $k) { Fail "mcm-ieps-staging/app 시크릿 JSON 에 $k 키가 없습니다 — 먼저 넣은 뒤 배포하세요(ESG 연동키는 DMA 저장소 scripts/aws/mcm-set-org-sync-secret.ps1)" }
+    if (@($target.secrets | Where-Object { $_.name -ceq $k }).Count) { Log "secrets: $k 이미 있음"; continue }
+    $target.secrets = @($target.secrets) + @(@{ name = $k; valueFrom = "${appSecretArn}:${k}::" })
+    Log "secrets 추가: $k (mcm-ieps-staging/app)"
+  }
+}
+
 # 등록 본문도 같은 경계를 만족해야 한다. 이미지와 승인된 정비 환경 외의 변조가 있으면
 # 두 번째 스케줄 확인이나 register-task-definition 전에 중단한다.
 try {
@@ -173,7 +196,7 @@ try {
     -ExpectedRole "mcm_app" -ExpectedPartition "aws" -ExpectedRegion $Region `
     -ExpectedAccountId $account -ExpectedSecretName "mcm-ieps-staging/db-app" `
     -ExpectedApplicationSecretName "mcm-ieps-staging/app" `
-    -AllowedApplicationSecretKeys @("AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "SOLAPI_API_KEY", "SOLAPI_API_SECRET", "ANTHROPIC_API_KEY", "DART_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "DATA_GO_KR_API_KEY", "VOYAGE_API_KEY", "CLOVA_OCR_URL", "CLOVA_OCR_SECRET", "KMA_SERVICE_KEY", "BAROBILL_CERTKEY", "KAKAO_REST_API_KEY", "EMPLOYEE_PII_ENCRYPTION_KEY") `
+    -AllowedApplicationSecretKeys $allowedAppSecretKeys `
     -ApplicationSecretKeyOverrides @{ KMA_SERVICE_KEY = "DATA_GO_KR_API_KEY" } `
     -ExpectedTaskRoleName "mcm-ieps-staging-ecs-task" `
     -ExpectedExecutionRoleName "mcm-ieps-staging-ecs-execution-next"

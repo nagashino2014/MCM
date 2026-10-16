@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Download, Loader2, X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
@@ -244,6 +244,43 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.contractId, isUnitPrice]);
+
+  // 단가 계약 내역서 PDF(2026-10-16 사용자 요청) — 화면에 보이는 단가표 그대로(저장 전 변경 포함) 내려받는다.
+  const [rateCardPdfBusy, setRateCardPdfBusy] = useState(false);
+  const downloadRateCardPdf = async () => {
+    setRateCardPdfBusy(true);
+    try {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(props.contractId)}/rate-card/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ card: rateCard, unsaved: JSON.stringify(rateCard) !== rateLoadedJson.current }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string })?.error ?? "HTTP " + res.status);
+      }
+      const blob = await res.blob();
+      const m = /filename\*=UTF-8''([^;]+)/i.exec(res.headers.get("content-disposition") ?? "");
+      let fileName = "단가표.pdf";
+      try {
+        if (m) fileName = decodeURIComponent(m[1]);
+      } catch {
+        // 헤더 파일명이 깨졌으면 기본 이름으로 받는다
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      toast.show("단가표 PDF 생성 실패: " + (err as Error).message, "error");
+    } finally {
+      setRateCardPdfBusy(false);
+    }
+  };
 
   /** 단가 기준표를 서버에 저장(변경된 경우만). 차수 단계 추가·모달 저장 양쪽에서 쓴다. */
   const saveRateCardIfDirty = async () => {
@@ -890,6 +927,18 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
           {activeTab === "ratecard" && isUnitPrice && (
             <div className="grid gap-3">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void downloadRateCardPdf()}
+                  disabled={rateCardPdfBusy}
+                  className="cd-btn cd-btn-ghost rounded-xl px-3 py-1.5 text-xs font-bold cd-text-muted inline-flex items-center gap-1 disabled:opacity-60"
+                  title="단가 기준표·차수표·차수별 소계를 PDF로 내려받습니다(저장 전 변경 포함)"
+                >
+                  {rateCardPdfBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  단가표 PDF
+                </button>
+              </div>
               <p className="text-[11px] cd-text-faint">
                 단가 기준표(단가)와 차수표(산정 수량)를 수정하면 저장 시 함께 반영됩니다. 추가 발주(N차 변경)는{" "}
                 <b>차수 추가</b> 후 수량을 입력하고, 차수별 요약의 <b>청구·수금 단계로 추가</b>를 누르면

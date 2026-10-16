@@ -5,7 +5,8 @@ const nextConfig = {
   // 세션마다 NEXT_DIST_DIR=.next-<이름> 을 주면 산출물이 분리돼 충돌하지 않는다.
   // (미설정 시 기존과 동일 — Dockerfile·배포 경로는 영향 없음)
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
-  serverExternalPackages: ["sql.js", "@napi-rs/canvas", "unpdf", "pdfjs-dist"],
+  // imapflow(메일 가져오기 IMAP, 10-16) — 내부 pino 로거가 번들링되면 깨질 수 있어 런타임 로드.
+  serverExternalPackages: ["sql.js", "@napi-rs/canvas", "unpdf", "pdfjs-dist", "imapflow"],
   outputFileTracingIncludes: {
     "/api/finance/supply-group-evidence": ["./node_modules/pdfjs-dist/standard_fonts/**/*", "./node_modules/pdfjs-dist/cmaps/**/*"],
   },

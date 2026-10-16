@@ -236,6 +236,20 @@ export function buildMimeMessage(input: BuildMimeInput): Buffer {
 }
 
 /** 아주 단순한 HTML→plain 변환(alternative text 파트·snippet 용). */
+/**
+ * 목록 미리보기 글(snippet) 정리(10-16) — 평문 파트에 HTML 원문을 넣어 보내는 발신자가 있어
+ * `<h4 style=...`·`&nbsp;` 가 그대로 보이던 문제. style/script 블록·태그·엔티티를 걷어 내고,
+ * 200자에서 잘려 닫히지 않은 태그 꼬리도 지운다. 이미 저장된 snippet 은 목록 조회 때 이 함수로 다시 거른다.
+ */
+export function cleanSnippet(raw: string, max = 200): string {
+  let s = String(raw ?? "");
+  // 완전한 태그나 엔티티가 있을 때만 HTML 로 본다 — "a<b" 같은 평문 비교식은 건드리지 않는다.
+  if (/<\/?[a-z][a-z0-9]*(\s[^>]*)?\/?>|&(nbsp|amp|lt|gt|quot|#39);/i.test(s)) {
+    s = htmlToPlainText(s.replace(/<(style|script)\b[\s\S]*?(<\/\1\s*>|$)/gi, " ")).replace(/<[a-z!/][^>]*$/i, "");
+  }
+  return s.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
 export function htmlToPlainText(html: string): string {
   return String(html ?? "")
     .replace(/<\s*br\s*\/?\s*>/gi, "\n")

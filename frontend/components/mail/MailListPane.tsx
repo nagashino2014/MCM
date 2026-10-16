@@ -245,7 +245,7 @@ export function MailListPane({
           // 본문 미리보기 글은 제목 뒤에 붙이지 않고 돋보기 팝업으로 본다(10-16, 가독성).
           <ul>
             {items.map((m) => {
-              const unread = !m.isRead && folder === "inbox";
+              const unread = !m.isRead && folder !== "sent";
               const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
               const active = activeId === m.messageId;
               return (
@@ -270,7 +270,7 @@ export function MailListPane({
                     </button>
                     <button
                       onClick={() => onOpen(m.messageId)}
-                      className={cn("w-44 shrink-0 text-left text-[13px] truncate", unread ? "font-bold cd-text" : "cd-text-muted")}
+                      className={cn("w-44 shrink-0 text-left text-[13px] truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}
                       title={who}
                     >
                       {who}
@@ -278,7 +278,7 @@ export function MailListPane({
                     <div className="flex-1 min-w-0 flex items-center gap-1.5">
                       <button
                         onClick={() => onOpen(m.messageId)}
-                        className={cn("min-w-0 truncate text-left text-[13px] cd-text", unread && "font-bold")}
+                        className={cn("min-w-0 truncate text-left text-[13px]", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}
                         title={m.subject || "(제목 없음)"}
                       >
                         {m.subject || "(제목 없음)"}
@@ -295,7 +295,7 @@ export function MailListPane({
                     {m.hasAttachments && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" aria-label="첨부 있음" />}
                     <button
                       onClick={() => onOpen(m.messageId)}
-                      className="w-20 shrink-0 text-right text-[12px] cd-text-faint tabular-nums"
+                      className={cn("w-20 shrink-0 text-right text-[12px] tabular-nums", unread ? "font-semibold cd-text" : "cd-text-faint")}
                       tabIndex={-1}
                     >
                       {fmtListDate(m.createdAt)}
@@ -310,7 +310,7 @@ export function MailListPane({
           // 선택 행은 흰 글라스 필, 안읽음은 굵기 + 좌측 6px 점으로 시선 앵커를 만든다.
           <ul>
             {items.map((m) => {
-              const unread = !m.isRead && folder === "inbox";
+              const unread = !m.isRead && folder !== "sent";
               const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
               const active = activeId === m.messageId;
               return (
@@ -327,10 +327,10 @@ export function MailListPane({
                     <CdAvatar name={who} size="sm" className="mt-0.5 w-[30px] h-[30px] text-[11px]" />
                     <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex flex-col gap-[3px]">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "cd-text-muted")}>{who}</span>
+                        <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>{who}</span>
                         <span className="text-[10.5px] cd-text-faint shrink-0 tabular-nums">{fmtListDate(m.createdAt)}</span>
                       </div>
-                      <span className={cn("text-[13px] truncate cd-text", unread && "font-bold")}>
+                      <span className={cn("text-[13px] truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>
                         {m.subject || "(제목 없음)"}
                         {m.hasAttachments && <Paperclip className="inline w-3 h-3 ml-1 cd-text-faint" />}
                       </span>

@@ -4,6 +4,7 @@
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getMailboxByUser, getSystemFolderId } from "@/lib/mail/mailbox";
+import { cleanSnippet } from "@/lib/mail/mime";
 
 export interface MailListItem {
   messageId: string;
@@ -341,7 +342,7 @@ export async function listFolderMessages(
     messageId: String(r.message_id),
     direction: String(r.direction),
     subject: r.subject != null ? String(r.subject) : "",
-    snippet: r.snippet != null ? String(r.snippet) : "",
+    snippet: r.snippet != null ? cleanSnippet(String(r.snippet)) : "",
     fromAddr: r.from_addr != null ? String(r.from_addr) : null,
     toAddrs: parseAddrs(r.to_addrs),
     hasAttachments: Number(r.has_attachments ?? 0) === 1,

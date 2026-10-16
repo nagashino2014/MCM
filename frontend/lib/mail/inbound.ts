@@ -19,7 +19,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
-import { htmlToPlainText } from "@/lib/mail/mime";
+import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
 
 let sqs: InstanceType<typeof SQSClient> | null = null;
@@ -228,7 +228,7 @@ async function storeForMailbox(
   const threadId = references.length ? String(references[0]) : parsed.inReplyTo ? String(parsed.inReplyTo) : rfcMessageId;
   const html = parsed.html || null;
   const text = parsed.text ?? (html ? htmlToPlainText(html) : "");
-  const snippet = (text || "").slice(0, 200);
+  const snippet = cleanSnippet(text || "");
   const receivedAt = parsed.date ? new Date(parsed.date).toISOString() : now;
   const attachments = (parsed.attachments ?? []).filter((a) => a.content && (a.content as Buffer).length);
 

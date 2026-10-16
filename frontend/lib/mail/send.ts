@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendRawEmail } from "@/lib/notify/email-ses";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { buildMimeMessage, htmlToPlainText, type MailAddress, type MimeAttachment } from "@/lib/mail/mime";
+import { buildMimeMessage, cleanSnippet, htmlToPlainText, type MailAddress, type MimeAttachment } from "@/lib/mail/mime";
 import {
   ensureMailbox,
   getMailDomain,
@@ -200,7 +200,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   // 성공 → 첨부 S3 저장 + Sent 폴더 적재 + 로그 확정. Sent 사본에는 픽셀을 넣지 않는다(자기 열람 오기록 방지).
   const now = new Date().toISOString();
   const sentFolderId = await getSystemFolderId(mailbox.mailboxId, "sent");
-  const snippet = text.slice(0, 200);
+  const snippet = cleanSnippet(text);
 
   // 첨부는 트랜잭션 밖에서 S3 업로드(멱등 키 = message_id/파일명).
   // ⚠ input.attachments 가 아니라 **MIME 에 실린 전체**(= 사용자 첨부 + 서명에서 뽑아낸 인라인

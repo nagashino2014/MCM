@@ -11,7 +11,7 @@ import crypto from "node:crypto";
 import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { htmlToPlainText } from "@/lib/mail/mime";
+import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 
 export interface ImportTarget {
   mailboxId: string;
@@ -159,7 +159,7 @@ export async function importRawMessage(raw: Buffer, t: ImportTarget, fallbackDat
           JSON.stringify(bcc),
           parsed.replyTo ? addrList(parsed.replyTo)[0]?.address ?? null : null,
           parsed.subject ?? "",
-          (text || "").slice(0, 200),
+          cleanSnippet(text || ""),
           text,
           html,
           rawKey,

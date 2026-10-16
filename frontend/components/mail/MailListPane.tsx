@@ -28,17 +28,11 @@ import { CdIconButton } from "@/components/cdash/CdButton";
 import type { MailListItem } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
+import { fmtListDate } from "@/components/mail/mail-date";
+import { MailPreviewModal } from "@/components/mail/MailPreviewModal";
 
-/** 그룹웨어 관례 날짜 — 오늘 HH:mm / 올해 M.D / 이전 YYYY.M.D */
-export function fmtListDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  if (d.toDateString() === now.toDateString()) return `${p(d.getHours())}:${p(d.getMinutes())}`;
-  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}.${d.getDate()}`;
-  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
-}
+// 날짜 표시는 mail-date.ts(24시간 이내 오전/오후 시각, 그 밖 YY.MM.DD). 기존 import 경로 유지용 재수출.
+export { fmtListDate };
 
 export type BulkAction = { action: string; target?: string };
 
@@ -81,6 +75,7 @@ export function MailListPane({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [qInput, setQInput] = useState(q);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const isDrafts = folder === "drafts";
 
   // 폴더 전환 시 선택 리셋 — 이전 폴더의 체크가 남아 "N건" 오표시되던 버그 수정(G2-13).
@@ -246,7 +241,8 @@ export function MailListPane({
         ) : items.length === 0 ? (
           <CdEmptyState title={q ? "검색 결과가 없습니다." : "메일이 없습니다."} />
         ) : layout === "row" ? (
-          // 목록형(네이버·지메일식): 한 줄 = 안읽음 점 · 선택 · 별표 · 보낸 사람 · 제목 — 미리보기 · 첨부 · 날짜.
+          // 목록형(네이버·지메일식): 한 줄 = 안읽음 점 · 선택 · 별표 · 보낸 사람 · 제목 · 미리보기(돋보기) · 첨부 · 날짜.
+          // 본문 미리보기 글은 제목 뒤에 붙이지 않고 돋보기 팝업으로 본다(10-16, 가독성).
           <ul>
             {items.map((m) => {
               const unread = !m.isRead && folder === "inbox";
@@ -254,7 +250,7 @@ export function MailListPane({
               const active = activeId === m.messageId;
               return (
                 <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
-                  <div className={cn("flex items-center gap-2.5 px-3 py-2", active ? "cd-glass-active" : "cd-row-hover")}>
+                  <div className={cn("flex items-center gap-2.5 px-3 py-3", active ? "cd-glass-active" : "cd-row-hover")}>
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
@@ -272,16 +268,37 @@ export function MailListPane({
                         className={cn("w-4 h-4", m.isStarred ? "fill-[var(--cd-warning)] text-[color:var(--cd-warning)]" : "cd-text-faint opacity-60")}
                       />
                     </button>
-                    <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex items-center gap-3">
-                      <span className={cn("w-44 shrink-0 text-[13px] truncate", unread ? "font-bold cd-text" : "cd-text-muted")} title={who}>
-                        {who}
-                      </span>
-                      <span className="flex-1 min-w-0 truncate text-[13px]">
-                        <span className={cn("cd-text", unread && "font-bold")}>{m.subject || "(제목 없음)"}</span>
-                        {m.snippet && <span className="cd-text-faint"> — {m.snippet}</span>}
-                      </span>
-                      {m.hasAttachments && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" aria-label="첨부 있음" />}
-                      <span className="w-[72px] shrink-0 text-right text-[11.5px] cd-text-faint tabular-nums">{fmtListDate(m.createdAt)}</span>
+                    <button
+                      onClick={() => onOpen(m.messageId)}
+                      className={cn("w-44 shrink-0 text-left text-[13px] truncate", unread ? "font-bold cd-text" : "cd-text-muted")}
+                      title={who}
+                    >
+                      {who}
+                    </button>
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                      <button
+                        onClick={() => onOpen(m.messageId)}
+                        className={cn("min-w-0 truncate text-left text-[13px] cd-text", unread && "font-bold")}
+                        title={m.subject || "(제목 없음)"}
+                      >
+                        {m.subject || "(제목 없음)"}
+                      </button>
+                      <button
+                        onClick={() => setPreviewId(m.messageId)}
+                        className="shrink-0 p-0.5 rounded cd-text-faint hover:text-[color:var(--cd-text)]"
+                        title="미리보기"
+                        aria-label={`${m.subject || "제목 없음"} 미리보기`}
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {m.hasAttachments && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" aria-label="첨부 있음" />}
+                    <button
+                      onClick={() => onOpen(m.messageId)}
+                      className="w-20 shrink-0 text-right text-[12px] cd-text-faint tabular-nums"
+                      tabIndex={-1}
+                    >
+                      {fmtListDate(m.createdAt)}
                     </button>
                   </div>
                 </li>
@@ -335,6 +352,15 @@ export function MailListPane({
           </ul>
         )}
       </div>
+
+      <MailPreviewModal
+        messageId={previewId}
+        onClose={() => setPreviewId(null)}
+        onOpen={(id) => {
+          setPreviewId(null);
+          onOpen(id);
+        }}
+      />
     </div>
   );
 }

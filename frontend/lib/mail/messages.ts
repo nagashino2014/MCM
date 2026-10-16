@@ -385,7 +385,11 @@ export interface MailMessageDetail {
 }
 
 /** 메시지 상세(소유권 검증 = 이 유저의 mailbox 여야 함). 없거나 남의 것이면 null. 조회 시 읽음 처리. */
-export async function getMessageDetail(userId: string, messageId: string): Promise<MailMessageDetail | null> {
+export async function getMessageDetail(
+  userId: string,
+  messageId: string,
+  opts?: { peek?: boolean }
+): Promise<MailMessageDetail | null> {
   const mailbox = await getMailboxByUser(userId);
   if (!mailbox) return null;
   const db = await getDb();
@@ -414,13 +418,15 @@ export async function getMessageDetail(userId: string, messageId: string): Promi
     ])
   );
 
-  // 읽음 처리(이 유저 mailbox 의 해당 메시지 상태 전부).
-  await withDbWrite(async (wdb) => {
-    await wdb.run(`UPDATE mail_message_state SET is_read = 1 WHERE message_id = $1 AND mailbox_id = $2`, [
-      messageId,
-      mailbox.mailboxId,
-    ]);
-  });
+  // 읽음 처리(이 유저 mailbox 의 해당 메시지 상태 전부). 목록의 미리보기(peek)는 읽음 상태를 바꾸지 않는다.
+  if (!opts?.peek) {
+    await withDbWrite(async (wdb) => {
+      await wdb.run(`UPDATE mail_message_state SET is_read = 1 WHERE message_id = $1 AND mailbox_id = $2`, [
+        messageId,
+        mailbox.mailboxId,
+      ]);
+    });
+  }
 
   return {
     messageId: String(r.message_id),

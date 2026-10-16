@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
-import { cancelImportJob, createFileImportJob, listImportJobs, type FolderKind } from "@/lib/mail/import/jobs";
+import { cancelImportJob, createFileImportJob, listImportJobs, processImportTick, type FolderKind } from "@/lib/mail/import/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
         folderName: String(u.folderName ?? ""),
       })),
     });
+    // 1분 틱을 기다리지 않고 바로 처리를 시작한다(응답은 먼저 보냄). running 임대가 있어 틱과 겹쳐도 한 번만 처리되고,
+    // 끝나지 못한 분량은 기존 1분 틱이 이어받는다.
+    void processImportTick().catch((err) => console.error("[mail-import] immediate tick error", err));
     return NextResponse.json({ job });
   } catch (err) {
     return authErrorToResponse(err);

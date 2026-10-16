@@ -6,10 +6,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Mail, PenSquare } from "lucide-react";
+import { ArrowLeft, Columns2, Mail, PenSquare, Rows3 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { CdButton } from "@/components/cdash/CdButton";
+import { CdButton, CdIconButton } from "@/components/cdash/CdButton";
 import { CdSplitPane } from "@/components/cdash/CdSplitPane";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdToast } from "@/components/cdash/CdToast";
@@ -42,6 +42,26 @@ export function MailBoard() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [isWide, setIsWide] = useState(true);
   const [mobileView, setMobileView] = useState<"list" | "viewer">("list");
+  // 넓은 화면 보기(10-16): list = 목록형(전체 폭 1줄, 열면 목록 자리에 본문) / split = 좌우 분할(기존). 사람별로 기억.
+  const [viewMode, setViewMode] = useState<"list" | "split">("list");
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("mail-view-mode");
+      if (saved === "split" || saved === "list") setViewMode(saved);
+    } catch {
+      /* 저장소 차단 — 기본값 유지 */
+    }
+  }, []);
+  const changeViewMode = (m: "list" | "split") => {
+    setViewMode(m);
+    setMobileView("list");
+    try {
+      window.localStorage.setItem("mail-view-mode", m);
+    } catch {
+      /* noop */
+    }
+  };
+  const listMode = isWide && viewMode === "list";
 
   // 반응형 감지(lg=1024).
   useEffect(() => {
@@ -242,7 +262,10 @@ export function MailBoard() {
         toast(String(d.error ?? "처리에 실패했습니다."), "error");
         return;
       }
-      if (detail && ids.includes(detail.messageId) && ["trash", "delete", "move"].includes(act.action)) setDetail(null);
+      if (detail && ids.includes(detail.messageId) && ["trash", "delete", "move"].includes(act.action)) {
+        setDetail(null);
+        setMobileView("list"); // 보던 메일이 목록에서 빠지면 목록으로 돌아간다
+      }
       refreshAll();
     } catch {
       toast("처리 중 오류가 발생했습니다.", "error");
@@ -292,8 +315,22 @@ export function MailBoard() {
       }}
     />
   );
+  // 보기 전환(넓은 화면만) — 목록형 / 좌우 분할.
+  const viewToggle = isWide ? (
+    <div className="flex items-center gap-0.5" role="group" aria-label="메일 보기 방식">
+      <CdIconButton label="목록형 보기" size="sm" active={viewMode === "list"} aria-pressed={viewMode === "list"} onClick={() => changeViewMode("list")}>
+        <Rows3 className="w-4 h-4" />
+      </CdIconButton>
+      <CdIconButton label="좌우 분할 보기" size="sm" active={viewMode === "split"} aria-pressed={viewMode === "split"} onClick={() => changeViewMode("split")}>
+        <Columns2 className="w-4 h-4" />
+      </CdIconButton>
+    </div>
+  ) : null;
+
   const list = (
     <MailListPane
+      layout={listMode ? "row" : "stack"}
+      toolbarExtra={viewToggle}
       folder={folder}
       items={items}
       drafts={drafts}
@@ -344,12 +381,14 @@ export function MailBoard() {
                   setFolder(k);
                   setQ("");
                   setDetail(null);
+                  setMobileView("list");
                   if (k !== "inbox") setActiveCategory("");
                 }}
                 onSelectCategory={(id) => {
                   setFolder("inbox");
                   setActiveCategory(id);
                   setDetail(null);
+                  setMobileView("list");
                 }}
                 onCreateCategory={createCategory}
                 onDeleteCategory={deleteCategory}
@@ -360,6 +399,20 @@ export function MailBoard() {
                 <MailReceiptsPane />
               ) : folder === "settings" ? (
                 <MailSettingsPane />
+              ) : listMode ? (
+                // 목록형 — 목록이 전체 폭, 메일을 열면 그 자리에 본문 + [목록] 복귀(모바일 재배치와 같은 방식).
+                mobileView === "viewer" ? (
+                  <div className="flex flex-col h-full min-h-0">
+                    <div className="px-2 py-1.5 border-b cd-border-c">
+                      <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={() => setMobileView("list")}>
+                        목록
+                      </CdButton>
+                    </div>
+                    <div className="flex-1 min-h-0">{viewer}</div>
+                  </div>
+                ) : (
+                  list
+                )
               ) : (
                 <CdSplitPane first={list} second={viewer} defaultSize={380} minSize={280} maxSize={620} storageKey="mail-list-w" />
               )

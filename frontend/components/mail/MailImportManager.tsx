@@ -70,11 +70,11 @@ export function MailImportManager() {
     load();
   }, [load]);
 
-  // 진행 중인 작업이 있으면 5초마다 새로 읽는다.
+  // 진행 중인 작업이 있으면 2초마다 새로 읽는다.
   const active = jobs.some((j) => ["pending", "running", "paused"].includes(j.status));
   useEffect(() => {
     if (!active) return;
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 2000);
     return () => clearInterval(t);
   }, [active, load]);
 
@@ -126,7 +126,7 @@ export function MailImportManager() {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(String(d.error ?? "가져오기 작업을 만들지 못했습니다."));
-      toast(`가져오기를 시작했습니다(${d.job?.totalCount ?? 0}통). 1분 안에 처리가 시작됩니다.`, "success");
+      toast(`가져오기를 시작했습니다(${d.job?.totalCount ?? 0}통).`, "success");
       setPicked([]);
       await load();
     } catch (err) {

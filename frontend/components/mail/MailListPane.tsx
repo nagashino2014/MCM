@@ -1,6 +1,6 @@
 "use client";
 
-// 메일 3-pane 중앙 — 메시지 목록(G2-2/3): 검색·체크 일괄작업·별표·안읽음 강조.
+// 메일 목록(G2-2/3): 검색·체크 일괄작업·별표·안읽음 강조. 좌우 분할(stack)·목록형(row, 10-16) 두 가지 행 모양.
 // 폴더별 가용 액션이 다르다(inbox=보관/스팸/휴지통, trash=복원/영구삭제 …).
 
 import { useEffect, useState } from "react";
@@ -57,7 +57,13 @@ export function MailListPane({
   onDeleteDraft,
   onBulk,
   onToggleStar,
+  layout = "stack",
+  toolbarExtra,
 }: {
+  /** stack = 좌우 분할용 3층 행 / row = 목록형(전체 폭 1줄: 보낸 사람 | 제목 — 미리보기 | 날짜). */
+  layout?: "stack" | "row";
+  /** 검색줄 오른쪽 끝에 붙일 요소(보기 전환 버튼 등). */
+  toolbarExtra?: React.ReactNode;
   folder: string;
   items: MailListItem[];
   drafts: MailDraft[];
@@ -155,6 +161,7 @@ export function MailListPane({
         <CdIconButton label="새로고침" size="sm" onClick={onRefresh}>
           <RefreshCw className="w-4 h-4" />
         </CdIconButton>
+        {toolbarExtra}
       </div>
 
       {/* 일괄 액션 툴바(드래프트 폴더 제외) */}
@@ -238,6 +245,49 @@ export function MailListPane({
           )
         ) : items.length === 0 ? (
           <CdEmptyState title={q ? "검색 결과가 없습니다." : "메일이 없습니다."} />
+        ) : layout === "row" ? (
+          // 목록형(네이버·지메일식): 한 줄 = 안읽음 점 · 선택 · 별표 · 보낸 사람 · 제목 — 미리보기 · 첨부 · 날짜.
+          <ul>
+            {items.map((m) => {
+              const unread = !m.isRead && folder === "inbox";
+              const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
+              const active = activeId === m.messageId;
+              return (
+                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
+                  <div className={cn("flex items-center gap-2.5 px-3 py-2", active ? "cd-glass-active" : "cd-row-hover")}>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
+                      aria-hidden
+                    />
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <CdCheckbox checked={selected.has(m.messageId)} onChange={() => toggleOne(m.messageId)} aria-label="선택" />
+                    </span>
+                    <button
+                      onClick={() => onToggleStar(m.messageId, !m.isStarred)}
+                      className="shrink-0"
+                      aria-label={m.isStarred ? "별표 해제" : "별표"}
+                    >
+                      <Star
+                        className={cn("w-4 h-4", m.isStarred ? "fill-[var(--cd-warning)] text-[color:var(--cd-warning)]" : "cd-text-faint opacity-60")}
+                      />
+                    </button>
+                    <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex items-center gap-3">
+                      <span className={cn("w-44 shrink-0 text-[13px] truncate", unread ? "font-bold cd-text" : "cd-text-muted")} title={who}>
+                        {who}
+                      </span>
+                      <span className="flex-1 min-w-0 truncate text-[13px]">
+                        <span className={cn("cd-text", unread && "font-bold")}>{m.subject || "(제목 없음)"}</span>
+                        {m.snippet && <span className="cd-text-faint"> — {m.snippet}</span>}
+                      </span>
+                      {m.hasAttachments && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" aria-label="첨부 있음" />}
+                      <span className="w-[72px] shrink-0 text-right text-[11.5px] cd-text-faint tabular-nums">{fmtListDate(m.createdAt)}</span>
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           // 행 3층(Soft Glass Ink): 안읽음 점 + 아바타 → 발신자/시간 → 제목 → 스니펫.
           // 선택 행은 흰 글라스 필, 안읽음은 굵기 + 좌측 6px 점으로 시선 앵커를 만든다.

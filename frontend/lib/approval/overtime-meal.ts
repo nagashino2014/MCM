@@ -19,12 +19,12 @@ import { offDaySet } from "@/lib/hr/holidays";
 
 /**
  * 검증 대상 양식 → 식대로 보는 분류 옵션. 양식별 라벨이 다르다:
- * 법인카드 지출결의서는 '복리후생비'(마이그 199 통합), 개인카드 지출결의서는 '식대'(마이그 202).
+ * 법인카드·개인카드 지출결의서 모두 '복리후생비'(마이그 199 통합, 개인카드는 284 에서 옵션 정리 — 이전 '식대').
  * 둘 다 expenses 표·used_on 열을 쓴다. 출장보고서의 '식비'는 출장 중 식대라 대상이 아니다.
  */
 const MEAL_FORM_CATEGORY: Record<string, string> = {
   "frm-expense-report": "복리후생비",
-  "frm-expense-personal": "식대",
+  "frm-expense-personal": "복리후생비",
 };
 /** 평일 저녁 식사로 보는 결제 시각 하한 — 점심 회식·다과(초과근무와 무관)를 오탐하지 않기 위한 경계. */
 const DINNER_FROM_HM = "17:00";

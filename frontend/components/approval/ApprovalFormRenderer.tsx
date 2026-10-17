@@ -1221,8 +1221,12 @@ function TableInput({
                     // 자동 채움 전용 열(2026-08-26 — 지출 표의 분류) — 기안자는 편집 불가.
                     // 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
                     <div
-                      className="px-1.5 py-1.5 text-[12px] cd-text-muted whitespace-nowrap"
-                      title="자동으로 채워지는 항목입니다. 미분류 건은 재무 담당자가 카드 원장에서 분류합니다."
+                      className={`px-1.5 py-1.5 text-[12px] cd-text-muted ${c.type === "related" ? "truncate" : "whitespace-nowrap"}`}
+                      title={
+                        c.type === "related"
+                          ? `${String(r[c.key] ?? "").trim() ? `${String(r[c.key])} — ` : ""}문서의 업체·용역에서 자동으로 채워지는 항목입니다.`
+                          : "자동으로 채워지는 항목입니다. 미분류 건은 재무 담당자가 카드 원장에서 분류합니다."
+                      }
                     >
                       {String(r[c.key] ?? "").trim() || <span className="cd-text-faint">자동</span>}
                     </div>

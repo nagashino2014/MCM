@@ -60,6 +60,8 @@ export function CardPickerModal({
   onPick,
   purposeOptions,
   defaultRelated,
+  lockedPeriod,
+  relatedLocked,
 }: {
   open: boolean;
   onClose: () => void;
@@ -71,6 +73,10 @@ export function CardPickerModal({
   purposeOptions: readonly string[];
   /** 출장보고서의 용역/사업장 — 연관 용역/사업장을 비워 두면 이 값으로 들어간다 */
   defaultRelated?: RelatedRef | null;
+  /** 출장보고서의 출장기간 — 주어지면 조회 기간을 이 범위로 고정한다(2026-10-17 사용자 요청) */
+  lockedPeriod?: { from: string; to: string } | null;
+  /** 출장보고서 — 연관 용역/사업장은 문서의 업체·용역(defaultRelated)으로 고정, 행마다 고르지 않는다(2026-10-17 사용자 요청) */
+  relatedLocked?: boolean;
 }) {
   const [from, setFrom] = useState(() => ymdInput(new Date(Date.now() - 30 * 86400000)));
   const [to, setTo] = useState(() => ymdInput(new Date()));
@@ -87,12 +93,16 @@ export function CardPickerModal({
   const [edits, setEdits] = useState<Record<string, { purpose?: string; related?: RelatedRef | null }>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 표에 추가를 눌렀는데 입력이 빠진 행이 있으면 그 칸을 강조한다 */
+  const [showMissing, setShowMissing] = useState(false);
+  const qFrom = lockedPeriod?.from ?? from;
+  const qTo = lockedPeriod?.to ?? to;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ formId, from, to });
+      const params = new URLSearchParams({ formId, from: qFrom, to: qTo });
       if (keyword.trim()) params.set("keyword", keyword.trim());
       if (cardFilter.size) params.set("cardIds", [...cardFilter].join(","));
       const res = await fetch(`/api/finance/card-picker?${params}`, { cache: "no-store" });
@@ -106,12 +116,13 @@ export function CardPickerModal({
     } finally {
       setLoading(false);
     }
-  }, [formId, from, to, keyword, cardFilter]);
+  }, [formId, qFrom, qTo, keyword, cardFilter]);
 
   useEffect(() => {
     if (open) {
       setSelected(new Set());
       setEdits({});
+      setShowMissing(false);
       load();
     }
   }, [open, load]);
@@ -172,17 +183,40 @@ export function CardPickerModal({
 
   const purposeOf = (i: CardPickerItem) => edits[i.cardTxnId]?.purpose ?? (purposeOptions.includes(i.purpose ?? "") ? i.purpose ?? "" : "");
   const relatedOf = (i: CardPickerItem): RelatedRef | null =>
-    edits[i.cardTxnId] && "related" in edits[i.cardTxnId] ? edits[i.cardTxnId].related ?? null : i.related ?? defaultRelated ?? null;
+    relatedLocked
+      ? defaultRelated ?? null
+      : edits[i.cardTxnId] && "related" in edits[i.cardTxnId]
+        ? edits[i.cardTxnId].related ?? null
+        : i.related ?? defaultRelated ?? null;
   const editRow = (id: string, patch: { purpose?: string; related?: RelatedRef | null }) => {
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
     setSelected((prev) => new Set(prev).add(id));
   };
 
+  // 지출 목적(필수)·연관 용역/사업장(목적에 따라 필수)을 채워야 표에 담을 수 있다(2026-10-17 사용자 요청).
+  const purposeMissing = (i: CardPickerItem) => !purposeOf(i);
+  const relatedMissing = (i: CardPickerItem) => purposeNeedsRelated(purposeOf(i)) && !relatedOf(i);
+  const selectedItems = items.filter((i) => selected.has(i.cardTxnId) && !existing.has(i.cardTxnId));
+  const incomplete = selectedItems.filter((i) => purposeMissing(i) || relatedMissing(i));
+  // 빠진 칸을 다 채우면 안내를 걷는다.
+  useEffect(() => {
+    if (showMissing && incomplete.length === 0) setError(null);
+  }, [showMissing, incomplete.length]);
+
   const submit = () => {
-    const picked = items
-      .filter((i) => selected.has(i.cardTxnId))
-      .map((i) => ({ ...i, purpose: purposeOf(i) || null, related: relatedOf(i) }));
-    if (!picked.length) return;
+    if (!selectedItems.length) return;
+    if (incomplete.length) {
+      setShowMissing(true);
+      const np = incomplete.filter(purposeMissing).length;
+      const nr = incomplete.filter((i) => !purposeMissing(i) && relatedMissing(i)).length;
+      setError(
+        [np ? `지출 목적 미입력 ${np}건` : "", nr ? `연관 용역/사업장 미입력 ${nr}건` : ""].filter(Boolean).join(", ") +
+          " — 선택한 건마다 입력해야 표에 추가할 수 있습니다."
+      );
+      return;
+    }
+    // 고정 모드는 전에 기입해 둔 용역을 그대로 넘겨 기안 화면이 출장 용역과 다른지 경고할 수 있게 한다(표에는 문서 값이 들어간다).
+    const picked = selectedItems.map((i) => ({ ...i, purpose: purposeOf(i) || null, related: relatedLocked ? i.related ?? null : relatedOf(i) }));
     onPick(picked);
     onClose();
   };
@@ -195,7 +229,14 @@ export function CardPickerModal({
       size="xl"
       footer={
         <>
-          <span className="text-xs cd-text-muted mr-auto">{selected.size}건 선택</span>
+          <span className="text-xs cd-text-muted mr-auto">
+            {selected.size}건 선택
+            {incomplete.length > 0 && (
+              <span className="ml-1.5" style={{ color: "var(--cd-error)" }}>
+                · 입력 필요 {incomplete.length}건
+              </span>
+            )}
+          </span>
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>
             취소
           </button>
@@ -207,17 +248,26 @@ export function CardPickerModal({
     >
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="cd-label text-xs">기간</label>
-          {/* YYYYMMDD 자동완성 — 종전 <input type="date"> 는 폭을 줄일 수 없었다. */}
-          <DigitDateInput value={from} onChange={setFrom} className="cd-input text-center" style={{ width: 116 }} />
-          <span className="cd-text-muted">~</span>
-          <DigitDateInput value={to} onChange={setTo} className="cd-input text-center" style={{ width: 116 }} />
-          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(7)); setTo(ymdInput(new Date())); }}>
-            1주
-          </button>
-          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(30)); setTo(ymdInput(new Date())); }}>
-            1개월
-          </button>
+          <label className="cd-label text-xs">{lockedPeriod ? "출장기간" : "기간"}</label>
+          {lockedPeriod ? (
+            // 출장보고서 — 문서의 출장기간으로 고정(기간 밖 지출은 담을 수 없다)
+            <span className="text-[13px] cd-text font-medium whitespace-nowrap" title="출장보고서의 출장기간 내 지출만 표시합니다">
+              {lockedPeriod.from} ~ {lockedPeriod.to}
+            </span>
+          ) : (
+            <>
+              {/* YYYYMMDD 자동완성 — 종전 <input type="date"> 는 폭을 줄일 수 없었다. */}
+              <DigitDateInput value={from} onChange={setFrom} className="cd-input text-center" style={{ width: 116 }} />
+              <span className="cd-text-muted">~</span>
+              <DigitDateInput value={to} onChange={setTo} className="cd-input text-center" style={{ width: 116 }} />
+              <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(7)); setTo(ymdInput(new Date())); }}>
+                1주
+              </button>
+              <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { setFrom(daysAgo(30)); setTo(ymdInput(new Date())); }}>
+                1개월
+              </button>
+            </>
+          )}
           <span className="relative flex items-center">
             <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2" />
             <input
@@ -346,7 +396,12 @@ export function CardPickerModal({
                       <div className="flex items-center gap-1">
                         <select
                           className="cd-input py-1 text-xs"
-                          style={{ width: 136 }}
+                          style={{
+                            width: 136,
+                            ...(showMissing && selected.has(item.cardTxnId) && !used && purposeMissing(item)
+                              ? { borderColor: "var(--cd-error)" }
+                              : {}),
+                          }}
                           disabled={used}
                           value={purposeOf(item)}
                           onChange={(e) => editRow(item.cardTxnId, { purpose: e.target.value })}
@@ -368,9 +423,9 @@ export function CardPickerModal({
                     <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
                       <RelatedCellButton
                         label={relatedOf(item)?.label ?? ""}
-                        disabled={used}
+                        disabled={used || relatedLocked}
                         missing={purposeNeedsRelated(purposeOf(item))}
-                        className="rounded-md border cd-border-c"
+                        className={relatedLocked ? "cd-text-muted" : "rounded-md border cd-border-c"}
                         onPick={(ref) => editRow(item.cardTxnId, { related: ref })}
                       />
                     </td>
@@ -392,7 +447,9 @@ export function CardPickerModal({
               {!loading && items.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">
-                    선택 가능한 매입 내역이 없습니다. 기간을 넓히거나 재무 &gt; 연결 관리에서 수집 상태를 확인하세요.
+                    {lockedPeriod
+                      ? "출장기간에 사용한 매입 내역이 없습니다. 매입 확정은 2~5일 걸릴 수 있고, 다른 부서 카드를 썼다면 위 태그에서 고르세요."
+                      : "선택 가능한 매입 내역이 없습니다. 기간을 넓히거나 재무 > 연결 관리에서 수집 상태를 확인하세요."}
                   </td>
                 </tr>
               )}

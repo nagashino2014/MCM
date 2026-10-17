@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, Check, ImageUp, Loader2, ReceiptText, RotateCcw } from "lucide-react";
+import { Camera, Check, HelpCircle, ImageUp, Loader2, ReceiptText, RotateCcw } from "lucide-react";
 import { ErrorBox } from "./mobile-shared";
+import { RelatedCellButton } from "@/components/approval/RelatedPicker";
+import {
+  GENERAL_PURPOSES,
+  PURPOSE_HINTS,
+  TRIP_PURPOSES,
+  purposeNeedsRelated,
+  type RelatedRef,
+} from "@/lib/approval/expense-purpose";
 
 // 개인카드 영수증 촬영 플로우(웹 셸) — 촬영/앨범 → Claude vision 파싱 → 확인·수정 → 스톡 저장.
 // 네이티브(apps/mobile/src/app/receipt.tsx)와 같은 API(/api/receipts/parse, /api/receipts)를 쓴다.
@@ -39,6 +47,9 @@ export function MobileReceipt() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ReceiptFields | null>(null);
   const [form, setForm] = useState({ storeName: "", paidAt: "", totalAmount: "", cardLast4: "", memo: "" });
+  // 지출 목적·연관 용역/사업장(2026-10-17) — 네이티브 앱 촬영 화면과 같다. 고른 값이 결의서·출장보고서 표에 그대로 실린다.
+  const [purpose, setPurpose] = useState("");
+  const [related, setRelated] = useState<RelatedRef | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateInfo[] | null>(null);
   const [savedStore, setSavedStore] = useState<string | null>(null);
 
@@ -93,6 +104,14 @@ export function MobileReceipt() {
       setError("영수증 이미지가 없습니다. 다시 촬영해주세요.");
       return;
     }
+    if (!purpose) {
+      setError("지출 목적을 선택하세요.");
+      return;
+    }
+    if (purposeNeedsRelated(purpose) && !related) {
+      setError(`'${purpose}'은(는) 어느 용역(사업장)에 쓴 비용인지 연관 용역/사업장을 선택해야 합니다.`);
+      return;
+    }
     setError(null);
     setStep("saving");
     try {
@@ -112,6 +131,9 @@ export function MobileReceipt() {
       fd.set("fields", JSON.stringify(fields));
       if (parsed) fd.set("parsed", JSON.stringify(parsed));
       if (form.memo.trim()) fd.set("memo", form.memo.trim());
+      fd.set("purpose", purpose);
+      if (related?.contractId) fd.set("relatedContractId", related.contractId);
+      if (related?.facilityId) fd.set("relatedFacilityId", related.facilityId);
       if (force) fd.set("force", "1");
       const res = await fetch("/api/receipts", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
@@ -137,6 +159,8 @@ export function MobileReceipt() {
     setFile(null);
     setParsed(null);
     setForm({ storeName: "", paidAt: "", totalAmount: "", cardLast4: "", memo: "" });
+    setPurpose("");
+    setRelated(null);
     setDuplicates(null);
     setSavedStore(null);
     setPreviewUrl((old) => {
@@ -217,6 +241,31 @@ export function MobileReceipt() {
             <Field label="메모" value={form.memo} onChange={(v) => setForm((s) => ({ ...s, memo: v }))} placeholder="(선택)" />
           </section>
 
+          <section className="cd-card-bg border cd-border-c rounded-2xl p-3 flex flex-col gap-2">
+            <h3 className="cd-text-muted text-xs font-bold">지출 목적 *</h3>
+            <PurposeGroup label="출장 경비 — 출장보고서에 실립니다" options={TRIP_PURPOSES} value={purpose} onChange={setPurpose} />
+            <PurposeGroup label="그 밖의 경비 — 지출결의서에 실립니다" options={GENERAL_PURPOSES} value={purpose} onChange={setPurpose} />
+            {PURPOSE_HINTS[purpose] && (
+              <p className="flex items-start gap-1 cd-text-muted text-xs">
+                <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {PURPOSE_HINTS[purpose]}
+              </p>
+            )}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="cd-text-faint text-xs shrink-0" style={{ width: 64 }}>
+                {purposeNeedsRelated(purpose) ? "연관 용역 *" : "연관 용역"}
+              </span>
+              <div className="flex-1 min-w-0">
+                <RelatedCellButton
+                  label={related?.label ?? ""}
+                  missing={purposeNeedsRelated(purpose)}
+                  className="cd-input"
+                  onPick={setRelated}
+                />
+              </div>
+            </div>
+          </section>
+
           <div className="flex gap-2">
             <button className="cd-btn cd-btn-ghost shrink-0" onClick={reset} disabled={step === "saving"}>
               <RotateCcw className="w-4 h-4" /> 다시
@@ -241,6 +290,36 @@ export function MobileReceipt() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** 지출 목적 칩 묶음 — 같은 칩을 다시 누르면 선택 해제 */
+function PurposeGroup({
+  label, options, value, onChange,
+}: {
+  label: string;
+  options: readonly string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="cd-text-faint text-[11px]">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => (
+          <button
+            key={o}
+            type="button"
+            data-active={value === o}
+            aria-pressed={value === o}
+            className={`cd-choice cd-btn cd-btn-sm ${value === o ? "cd-btn-primary" : "cd-btn-soft"}`}
+            onClick={() => onChange(value === o ? "" : o)}
+          >
+            {o}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

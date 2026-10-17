@@ -262,6 +262,54 @@ export function ApprovalDraftBoard() {
       .filter((v): v is string => typeof v === "string" && v.length > 0);
   }, [cardExpenseTarget, values]);
 
+  // 출장보고서의 출장기간 — 불러오기 모달의 조회 기간을 이 범위로 고정한다(2026-10-17 사용자 요청).
+  const tripFrom = String(((values.trip_period ?? {}) as { from?: string }).from ?? "").trim().slice(0, 10);
+  const tripTo = String(((values.trip_period ?? {}) as { to?: string }).to ?? "").trim().slice(0, 10);
+  const tripPeriod = useMemo(() => {
+    if (form?.formId !== "frm-biz-trip-report") return null;
+    const ok = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    return ok(tripFrom) && ok(tripTo) && tripFrom <= tripTo ? { from: tripFrom, to: tripTo } : null;
+  }, [form, tripFrom, tripTo]);
+  /** 불러오기 모달 열기 — 출장보고서는 출장기간(기간 내 지출만 보여 줌)과 업체·용역(연관 용역 자동 반영)을 먼저 입력해야 한다. */
+  const openExpensePicker = (open: () => void) => {
+    if (form?.formId === "frm-biz-trip-report" && !tripPeriod) {
+      alert("출장기간을 먼저 입력하세요.\n출장기간 안에 사용한 내역만 불러올 수 있습니다.");
+      return;
+    }
+    if (form?.formId === "frm-biz-trip-report" && !tripRelated) {
+      alert("업체명·용역명을 먼저 입력하세요.\n지출내역의 연관 용역/사업장에 자동으로 반영됩니다.");
+      return;
+    }
+    open();
+  };
+
+  // 출장보고서 — 지출내역의 연관 용역/사업장은 문서의 업체·용역으로 자동 채운다(2026-10-17 사용자 요청).
+  // 내용이 있는 행만 맞춘다(빈 행에 넣으면 빈 행 정리·필수 검사가 그 행을 내용 있는 행으로 본다).
+  const tripExpenseRows = form?.formId === "frm-biz-trip-report" ? values.trip_expenses : undefined;
+  useEffect(() => {
+    if (form?.formId !== "frm-biz-trip-report" || !Array.isArray(tripExpenseRows)) return;
+    const want = {
+      related: tripRelated?.label ?? "",
+      [RELATED_CONTRACT_KEY]: tripRelated?.contractId ?? null,
+      [RELATED_FACILITY_KEY]: tripRelated?.facilityId ?? null,
+    };
+    const hasContent = (r: Record<string, unknown>) =>
+      Object.entries(r).some(([k, v]) => !k.startsWith("_") && k !== "related" && String(v ?? "").trim() !== "");
+    const same = (r: Record<string, unknown>) =>
+      String(r.related ?? "") === want.related &&
+      (r[RELATED_CONTRACT_KEY] ?? null) === want[RELATED_CONTRACT_KEY] &&
+      (r[RELATED_FACILITY_KEY] ?? null) === want[RELATED_FACILITY_KEY];
+    const rows = tripExpenseRows as Record<string, unknown>[];
+    if (!rows.some((r) => r && typeof r === "object" && hasContent(r) && !same(r))) return;
+    setValues((prev) => {
+      const cur = Array.isArray(prev.trip_expenses) ? (prev.trip_expenses as Record<string, unknown>[]) : [];
+      return {
+        ...prev,
+        trip_expenses: cur.map((r) => (r && typeof r === "object" && hasContent(r) && !same(r) ? { ...r, ...want } : r)),
+      };
+    });
+  }, [form?.formId, tripExpenseRows, tripRelated?.label, tripRelated?.contractId, tripRelated?.facilityId]);
+
   // 출장보고서 — 사용일이 출장기간 밖인 카드/영수증은 오인 등록이므로 걸러낸다(2026-08-26 사용자 확정).
   // 기간 미입력이면 대조 자체가 불가라 등록 전에 기간 입력을 요구하고, 사용일 미상 건도 차단한다.
   const filterByTripPeriod = useCallback(
@@ -323,7 +371,7 @@ export function ApprovalDraftBoard() {
           amount: String(item.amountTotal),
           // 지출 목적·연관 용역/사업장 — 불러오기 모달에서 기입한 값(2026-10-16). 출장보고서는 출장 용역이 기본값.
           detail: item.purpose && purposeOptions.includes(item.purpose) ? item.purpose : "",
-          ...relatedCells(item.related ?? tripRelated),
+          ...relatedCells(tripRelated ?? item.related),
           _cardTxnId: item.cardTxnId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -394,7 +442,7 @@ export function ApprovalDraftBoard() {
           amount: String(item.totalAmount),
           // 지출 목적·연관 용역/사업장 — 촬영·직접 첨부 때 고른 값(2026-10-16). 출장보고서는 출장 용역이 기본값.
           detail: item.purpose && purposeOptions.includes(item.purpose) ? item.purpose : "",
-          ...relatedCells(item.related ?? tripRelated),
+          ...relatedCells(tripRelated ?? item.related),
           _receiptId: item.receiptId, // 상신 시 서버가 doc_id 귀속·분류 학습에 사용
         }));
         return { ...prev, [tableKey]: [...nonEmpty, ...added] };
@@ -954,7 +1002,12 @@ export function ApprovalDraftBoard() {
     if (!cardExpenseTarget) return form.fields;
     return form.fields.map((f) =>
       f.type === "table" && f.key === cardExpenseTarget.tableKey && f.tableColumns
-        ? { ...f, tableColumns: f.tableColumns.map((c) => (c.key === "category" ? { ...c, readonly: true } : c)) }
+        ? {
+            ...f,
+            tableColumns: f.tableColumns.map((c) =>
+              c.key === "category" || (c.type === "related" && form.formId === "frm-biz-trip-report") ? { ...c, readonly: true } : c
+            ),
+          }
         : f
     );
   }, [form, cardExpenseTarget]);
@@ -1301,7 +1354,7 @@ export function ApprovalDraftBoard() {
                   <button
                     type="button"
                     className="cd-btn cd-btn-soft cd-btn-sm"
-                    onClick={() => setCardPicker(true)}
+                    onClick={() => openExpensePicker(() => setCardPicker(true))}
                   >
                     <CreditCard className="w-3.5 h-3.5" /> 법인카드 내역 불러오기
                   </button>
@@ -1310,7 +1363,7 @@ export function ApprovalDraftBoard() {
                   <button
                     type="button"
                     className="cd-btn cd-btn-soft cd-btn-sm"
-                    onClick={() => setReceiptPicker(true)}
+                    onClick={() => openExpensePicker(() => setReceiptPicker(true))}
                   >
                     <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
                   </button>
@@ -1702,6 +1755,8 @@ export function ApprovalDraftBoard() {
           onPick={appendCardRows}
           purposeOptions={purposeOptions}
           defaultRelated={tripRelated}
+          lockedPeriod={tripPeriod}
+          relatedLocked={form.formId === "frm-biz-trip-report"}
         />
       )}
 
@@ -1715,6 +1770,8 @@ export function ApprovalDraftBoard() {
           onPick={appendReceiptRows}
           purposeOptions={purposeOptions}
           defaultRelated={tripRelated}
+          lockedPeriod={tripPeriod}
+          relatedLocked={form.formId === "frm-biz-trip-report"}
         />
       )}
 

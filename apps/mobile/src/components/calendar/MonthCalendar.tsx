@@ -257,7 +257,7 @@ export function MonthCalendar({
                     <View
                       className="h-[26px] w-[26px] items-center justify-center rounded-full"
                       style={{ backgroundColor: isEdge ? c.primary : c.primarySoft }}>
-                      <Text className="text-[12px] font-bold" style={{ color: isEdge ? '#FFFFFF' : c.primary }}>
+                      <Text className="text-[12px] font-bold" style={{ color: isEdge ? c.onPrimary : c.primary }}>
                         {day.getDate()}
                       </Text>
                     </View>
@@ -267,7 +267,7 @@ export function MonthCalendar({
                       style={{ backgroundColor: isPicker ? c.surface : c.primary }}>
                       <Text
                         className="text-[12px] font-extrabold"
-                        style={{ color: isPicker ? c.primary : '#FFFFFF' }}>
+                        style={{ color: isPicker ? c.primary : c.onPrimary }}>
                         {day.getDate()}
                       </Text>
                     </View>
@@ -371,7 +371,7 @@ export function MonthCalendar({
                 }}
                 style={{ width: '31%' }}
                 className={`items-center rounded-xl py-3 active:opacity-70 ${sel ? 'bg-cd-primary' : 'bg-cd-surface'}`}>
-                <Text className={`text-[14px] font-bold ${sel ? 'text-white' : 'text-cd-muted'}`}>{m}월</Text>
+                <Text className={`text-[14px] font-bold ${sel ? 'text-cd-on-primary' : 'text-cd-muted'}`}>{m}월</Text>
               </Pressable>
             );
           })}
@@ -382,13 +382,14 @@ export function MonthCalendar({
 }
 
 function RoundNav({ icon, onPress }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
+  const { c } = useTheme(); // 다크 보정(2026-10-18)
   return (
     <Pressable
       onPress={onPress}
       hitSlop={6}
       className="h-7 w-7 items-center justify-center rounded-full active:opacity-60"
-      style={{ backgroundColor: '#f3f4fa' }}>
-      <Ionicons name={icon} size={13} color={DAY_INK} />
+      style={{ backgroundColor: c.surface }}>
+      <Ionicons name={icon} size={13} color={c.muted} />
     </Pressable>
   );
 }

@@ -417,13 +417,13 @@ export default function BidsScreen() {
                   onPress={() => setTypes((p) => toggleIn(p, t.key))}
                   className="flex-1 items-center rounded-full py-[7px] active:opacity-70"
                   style={{
-                    backgroundColor: on ? '#e3e6fb' : 'transparent',
+                    backgroundColor: on ? c.primarySoft : 'transparent',
                     borderWidth: on ? 0 : 1,
-                    borderColor: '#e3e6ef',
+                    borderColor: c.border,
                   }}>
                   <Text
                     className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`}
-                    style={{ color: on ? '#4353e4' : '#9aa0b8' }}>
+                    style={{ color: on ? c.primary : c.faint }}>
                     {t.label}
                   </Text>
                 </Pressable>
@@ -434,13 +434,13 @@ export default function BidsScreen() {
               hitSlop={8}
               className="h-[30px] w-[30px] items-center justify-center rounded-full border active:opacity-60"
               style={{
-                borderColor: filterOpen || cats.length || regs.length ? '#6b7cf6' : '#e3e6ef',
-                backgroundColor: filterOpen ? '#e3e6fb' : 'transparent',
+                borderColor: filterOpen || cats.length || regs.length ? c.primary : c.border,
+                backgroundColor: filterOpen ? c.primarySoft : 'transparent',
               }}>
               <Ionicons
                 name="options-outline"
                 size={16}
-                color={filterOpen || cats.length || regs.length ? '#4353e4' : c.faint}
+                color={filterOpen || cats.length || regs.length ? c.primary : c.faint}
               />
               {cats.length || regs.length ? (
                 <View className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-cd-primary" />
@@ -620,7 +620,8 @@ function FilterChip({
   tint?: { bg: string; text: string };
   onPress: () => void;
 }) {
-  const t = tint ?? { bg: '#e3e6fb', text: '#4353e4' };
+  const { c } = useTheme(); // 다크 보정(2026-10-18)
+  const t = tint ?? { bg: c.primarySoft, text: c.primary };
   return (
     <Pressable
       onPress={onPress}
@@ -628,10 +629,10 @@ function FilterChip({
       style={{
         backgroundColor: on ? t.bg : 'transparent',
         borderWidth: on ? 0 : 1,
-        borderColor: '#e3e6ef',
+        borderColor: c.border,
       }}>
       {tint ? <View style={{ backgroundColor: t.text }} className="h-[6px] w-[6px] rounded-full opacity-70" /> : null}
-      <Text className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? t.text : '#9aa0b8' }}>
+      <Text className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? t.text : c.faint }}>
         {label}
       </Text>
     </Pressable>

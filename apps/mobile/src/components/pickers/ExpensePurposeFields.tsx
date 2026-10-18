@@ -8,6 +8,7 @@ import {
   purposeNeedsRelated,
   type RelatedRef,
 } from '@/lib/expense-purpose';
+import { useTheme } from '@/theme/useTheme';
 
 /**
  * 지출 목적 칩 + 연관 용역/사업장 줄(2026-10-16) — 영수증 촬영·영수증 보관함이 같이 쓴다.
@@ -23,6 +24,7 @@ export function PurposeChips({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const { c } = useTheme(); // 다크 보정(2026-10-18)
   const chip = (p: string) => {
     const on = value === p;
     return (
@@ -49,7 +51,7 @@ export function PurposeChips({
       ) : null}
       {PURPOSE_HINTS[value] ? (
         <View className="mt-1 flex-row items-start gap-1">
-          <Ionicons name="help-circle-outline" size={14} color="#6b7280" />
+          <Ionicons name="help-circle-outline" size={14} color={c.muted} />
           <Text className="flex-1 text-[11.5px] text-cd-muted">{PURPOSE_HINTS[value]}</Text>
         </View>
       ) : null}
@@ -68,6 +70,7 @@ export function RelatedField({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const { c } = useTheme();
   const need = purposeNeedsRelated(purpose);
   return (
     <View className="gap-1.5">
@@ -81,7 +84,7 @@ export function RelatedField({
         <Text numberOfLines={1} className={`flex-1 text-[15px] ${value ? 'text-cd-text' : 'text-cd-faint'}`}>
           {value?.label || (need ? '선택 필요 — 어느 용역에 쓴 비용인지' : '선택(필요 없으면 비워 둠)')}
         </Text>
-        <Ionicons name="chevron-forward" size={16} color="#6b7280" />
+        <Ionicons name="chevron-forward" size={16} color={c.muted} />
       </Pressable>
     </View>
   );

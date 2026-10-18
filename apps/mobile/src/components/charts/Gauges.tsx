@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { CTA_FROM, CTA_TO } from '@/components/ui/GradientButton';
+import { useTheme } from '@/theme/useTheme';
 
 /**
  * 근태·휴가 화면의 인포그래픽 — 핸드오프 3a 수치.
@@ -51,6 +52,8 @@ export function DonutGauge({
   inkColor?: string;
 }) {
   const gid = `ring-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  // 트랙(바탕)·마커는 의미색이 아니라 면이라 테마를 따른다 — 다크 보정(2026-10-18)
+  const { c } = useTheme();
   const r = (size - thickness) / 2;
   const circ = 2 * Math.PI * r;
   const ratio = total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
@@ -64,7 +67,7 @@ export function DonutGauge({
             <Stop offset="1" stopColor={CTA_TO} />
           </LinearGradient>
         </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={CHART.ringTrack} strokeWidth={thickness} fill="none" />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={c.surface} strokeWidth={thickness} fill="none" />
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -93,13 +96,14 @@ export function DonutGauge({
  */
 export function OvertimeGauge({ value, limit, height = 8 }: { value: number; limit: number; height?: number }) {
   const gid = `og-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const { c } = useTheme();
   const over = value > limit;
   // 한도를 넘으면 막대 전체가 '값', 마커는 한도 지점. 아니면 막대는 한도 기준 비율만큼 채운다.
   const fill = over ? 1 : limit > 0 ? Math.max(0, Math.min(1, value / limit)) : 0;
   const markerAt = over && value > 0 ? limit / value : null;
 
   return (
-    <View style={{ height, borderRadius: height / 2, backgroundColor: CHART.track, overflow: 'hidden' }}>
+    <View style={{ height, borderRadius: height / 2, backgroundColor: c.surface, overflow: 'hidden' }}>
       <View style={{ width: `${fill * 100}%`, height }}>
         <Svg width="100%" height={height}>
           <Defs>
@@ -129,7 +133,7 @@ export function OvertimeGauge({ value, limit, height = 8 }: { value: number; lim
             top: -1,
             bottom: -1,
             width: 2,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: c.card,
           }}
         />
       ) : null}
@@ -149,6 +153,7 @@ export function DayBars({
   height?: number;
 }) {
   const gid = `db-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const { c } = useTheme();
   return (
     <View className="gap-1.5">
       <View className="flex-row items-end gap-[9px]" style={{ height }}>
@@ -171,7 +176,7 @@ export function DayBars({
                   width="100%"
                   height={h}
                   rx={5}
-                  fill={m === 0 ? CHART.track : d.over ? `url(#${gid}-${i})` : CHART.normal}
+                  fill={m === 0 ? c.surface : d.over ? `url(#${gid}-${i})` : CHART.normal}
                 />
               </Svg>
             </View>

@@ -27,6 +27,7 @@ export const AI_FEATURES = {
   "approval.metrics_suggest": { label: "지표 정의 제안", group: "전자결재", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   // 업무보고
   "workplan.progress_summary": { label: "업무보고 추진내역 요약", group: "업무보고", critical: true, defaultModel: "claude-haiku-4-5", vision: false },
+  "todo.work_report_draft": { label: "할 일 → 업무보고 초안 다듬기", group: "업무보고", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   // 문서·이미지 파싱
   "receipt.parse": { label: "영수증 파싱", group: "문서 파싱", critical: true, defaultModel: "claude-haiku-4-5", vision: true },
   "business_card.parse": { label: "명함 파싱", group: "문서 파싱", critical: true, defaultModel: "claude-haiku-4-5", vision: true },

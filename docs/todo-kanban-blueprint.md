@@ -452,3 +452,68 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - 웹: `TodoCheck` 에 `status` → 미완료 원의 배경·테두리가 상태 색(진행 `--todo-col-doing`/`--todo-seg-doing`, 검토 `--todo-col-review`/`--todo-seg-review`(#c9b8ec 신설), 보류 `--todo-col-hold`/`--todo-seg-hold`(#b8bec9) 점선). 할 일(todo)은 중립 그대로, 완료는 기존 primary 채움. 목록 행·상세 헤더 적용. 칸반 카드는 체크 원이 없어 제목 앞 8px `StatusDot`(todo 상태는 점 없음, 완료 초록).
 - 모바일: `CheckCircle` 에 `status`(진행 primary/primarySoft, 검토 warning/warningSoft, 보류 muted 점선), 보드 카드 제목 앞 `StatusDot`(statusColor).
 - dev 실측: 진행·검토·보류 3건 생성 → 목록 체크 원 배경/테두리/점선 상태별 확인, 띠(`--todo-tint`)는 보드 색 유지, 칸반 카드 점 색·8px 확인 → 삭제. ⚠dev 서버는 시작 시점의 RDS 마스터 비밀번호를 캐시 — 시크릿 로테이션 뒤 "password authentication failed" 면 preview 재시작.
+
+### 25. 2차 개편 설계(2026-10-18 사용자 요청 5건) — 확정 전 초안
+사용자 요청: ① 담당 변경 시 작성자 목록에서 사라짐 ② 업무추진계획·업무 보고와 실질 연계(메모·하위 작업 진척 → 보고 자동 입력) ③ 하위 작업에 진행율·진척 내용 ④ 상세를 우측 드로어가 아닌 별도 화면으로 ⑤ 모바일 다크 모드 상태 색·메일 본문 등 전수 수정.
+
+**25-1. 담당 규칙(마이그 없음)**
+- 현상: 내 할 일 조회가 `담당=나 OR (담당 없음 AND 작성자=나)`(store.ts listItems/listDueSoon/digest 4곳) → 담당을 남에게 주면 작성자 목록에서 빠진다.
+- 변경: **작성자는 항상 내 할 일에 보인다**(`담당=나 OR 작성자=나`). 담당이 남이면 담당 열에 그 사람 아바타. 공유받음 탭의 "나에게 배정" 섹션은 그대로.
+- 담당 후보: 전 직원 검색이 아니라 **작성자 + 공유 대상(collaborator·watcher) + (보드 작업이면) 보드 멤버**. `PeoplePickerModal` 에 후보 고정 모드 추가. 공유되지 않은 사람에게 주려면 먼저 "공유 추가".
+- 담당은 항상 1명(기본 작성자). "담당 해제" 메뉴는 **"작성자에게 되돌리기"** 로 바꾸고 담당 없음 상태는 만들지 않는다(기존 NULL 행은 조회에서 작성자로 간주). 모바일 동일.
+- 리마인드·아침 요약·위젯 due-soon 도 같은 조건으로(작성자에게도 간다). 알림 중복은 담당=작성자일 때만 1회.
+
+**25-2. 하위 작업 진척(마이그 285 `todo_items` 확장)**
+- 컬럼: `progress_pct integer`(0~100, NULL=미기입) · `progress_note text`(진척 내용) · `stage_order integer`(연결 대상 공정표 단계 번호, NULL=미매핑) · `progress_updated_at text`.
+- 하위 작업 행 UI(웹 상세 페이지·모바일 상세): 체크 · 제목 · **진행율 슬라이더**(단위 = 대상 공정표 `progress_unit_pct`, 없으면 10) · **진척 내용**(한 줄 입력, 펼치면 여러 줄) · **공정 단계**(관련이 계약/업무추진계획이면 그 공정표 단계 드롭다운). 업무 보고 ReportEditor 의 단계 입력(상태·진행율 슬라이더)과 같은 어휘.
+- 상위 작업 진행율 = 하위 작업 평균(자동 표시, 직접 입력 없음). 체크=100%·100% 입력 시 완료 제안. 목록·카드의 분절 바는 유지하되 툴팁에 평균 %.
+- 활동 로그 `progress` 이벤트(이전→이후 %·내용 길이).
+
+**25-3. 업무 보고 연계(마이그 없음, 285 의 단계 매핑 사용)**
+- 대상 판정: 할 일 `link_kind` contract → `subjectKind "contract"` / work_task → `"task"`(그 외 링크·링크 없음이면 버튼 비활성 + 안내).
+- 상세 페이지 "업무 보고 카드": 최근 보고(제출/초안) 2건 + **[업무 보고 초안 만들기]**. 서버 `POST /api/todo/items/:id/work-report` → `saveReport(status draft)`:
+  - 기간: 그 대상의 마지막 제출 보고 다음 날 ~ 오늘(없으면 이번 주 월~금). 보고일 오늘.
+  - stages: 공정 단계가 매핑된 하위 작업만 → `{stageOrder, stageName, status(100→done, 0<pct→in_progress, 0→pending), progressPct}`. 같은 단계에 여러 하위 작업이면 최대 %.
+  - progressText(StructuredNote 포맷): `[할 일 제목]` 소제목 + 하위 작업마다 `① 제목 — N% · 진척 내용` + `[메모]` 아래 메모 본문(줄 단위 `-`). planText: 미완 하위 작업 `- 제목(할 날 M/D)`.
+  - currentStageName/Pct = 매핑 단계 중 최고 진행. 부서는 saveReport 의 기존 순서(대상 owning_dept → 보고자 소속).
+  - 생성 후 `/work-plan/[reportId]` 로 이동해 **사용자가 검토·제출**(자동 제출 없음). 같은 할 일의 기존 초안(미제출)이 있으면 "초안을 다시 채울까요?" 확인 후 갱신(saveReport 가 items/stages 를 지우고 다시 넣는 구조라 전체 덮어쓰기).
+  - 할 일 쪽 기록: 활동 `work_report {reportId}` + 상세 카드에 링크. 보고 쪽 역링크(보고 → 할 일)는 2차.
+- 모바일: 상세에 같은 카드(초안 만들기 → 웹 보고 화면 링크 안내; 모바일 보고 편집 화면은 범위 밖).
+
+**25-4. 상세 화면 → 별도 페이지(웹)**
+- 라우트 `/todo/[itemId]`. 목록·보드·캘린더·알림함·홈 위젯·탑바 검색의 열기 경로를 전부 페이지 이동으로(기존 `?item=` 는 리다이렉트로 호환, 모바일 딥링크 `/todo?item=` 도 그대로 동작).
+- 레이아웃(1280 기준 2열, 1024 이하 1열): 좌(2/3) = 헤더(띠·체크 원·제목·프로젝트) · 핵심 2×2 · 관련 · 메모(넓게) · **하위 작업(진행율·진척 내용·단계)** · 댓글 / 우(1/3) = **업무 보고 카드** · 부가 설정(접힘 해제, 항상 펼침) · 공유·담당 · 활동. 상단에 "← 목록으로"(scope/view 복원)와 이전/다음 할 일 이동.
+- 드로어 코드(`TodoDetailDrawer` 1,483줄)는 섹션별 컴포넌트로 쪼개 페이지가 재사용(핵심·관련·메모·하위·댓글·부가·활동). 드로어 자체는 제거(퀵애드 직후 미리보기도 페이지로).
+- 모바일 `/todo/[itemId]` 는 이미 별도 화면 — 25-2·25-3 요소만 추가.
+
+**25-5. 모바일 다크 모드 전수 수정**(전수 조사 2026-10-18: 확실 19·의심 24 = 43건, 경로는 apps/mobile/src/)
+- **메일 본문(사례 1)**: `components/ui/HtmlView.tsx:39-50`·`HtmlView.web.tsx:54-55` — body 색만 c.text 로 칠하고 본문 안 인라인 `color:#000`·`<font color>`·`bgcolor` 를 덮지 않아 어두운 글자가 남는다. 다크에서 `* { color: inherit !important; background: transparent !important }` 주입(이미지·링크 색은 예외 규칙) — 메일 원문 색을 버리는 대신 읽힌다.
+- **할 일 상태 색(사례 2)**: `lib/todo-utils.ts` statusColor(112-125) hold=c.muted ≈ doing=c.primary(다크 #9aa3bc vs #a9b8ff), statusTone/columnTone(308-329) todo·hold 가 같은 gray, labelColors(302-305) 파스텔 22% 알파라 칩 배경이 전부 회청색. → 다크 전용 상태 팔레트 표(todo=faint, doing=primary, review=secondary(보라), done=success, hold=warning(주황) + 각 Soft 배경)와 라벨 bg/fg 표를 분리. 웹과 색 언어 일치(§24).
+- **흰 글자 on 밝은 primary/error 10곳**(Button danger, DirectoryPane:200, MonthCalendar:260·270·374, contacts:168, login:48, (tabs)/_layout:20, todo/[itemId]:961, todo/parts:167): 다크 primary #a9b8ff 위 흰 글자 1.9:1 → 토큰 `onPrimary`·`onError` 신설(라이트 #fff, 다크 = DARK.bg).
+- **고정 라이트 색 고정**: leave:353·sales:305 카드 `#fbfbfe/#eef0f7` → bg-cd-card/border; sales:228·schedule:185 글자 `#565e82` → c.muted; leave STATUS_TONE 등 파스텔 6건, bids·NewProjectSheet 칩 3건, calendar-entry·schedule 4건, sales·work-reports·work-report 크림 박스 3건, 구분선 2건, Gauges 트랙, Toast 아이콘, parts:186 테두리 rgba(0,0,0,.06), ExpensePurposeFields·RelatedPickerSheet 아이콘 #6b7280 → 전부 토큰(Soft/짝 토큰·border·gridLine·surface).
+- **토큰 자체**: DARK.faint #6e7a96(3.7:1) → #8590ab, DARK primarySoft/secondarySoft/successSoft/warningSoft 가 서로 비슷 → 채도 상향(상태 칩 구분의 전제).
+- 검증: 다크 에뮬(Expo web `prefers-color-scheme: dark`)로 홈·메일 상세·할 일 목록/보드/상세·휴가·영업·입찰·일정 캡처, 대비 4.5:1(본문)·3:1(보조) 표.
+
+**25-6. 단계·검증**
+| 단계 | 내용 | 검증 |
+|---|---|---|
+| M1 | 25-1 담당 규칙 + 25-5 다크 수정(웹·모바일, 마이그 없음) | 담당 변경 후 작성자 목록 유지, 후보 제한, 다크 스크린샷 전수 |
+| M2 | 285 + 25-2 하위 진척 + 25-4 상세 페이지 전환 | 하위 % 평균·단계 매핑, 열기 경로 전수(목록·보드·캘린더·알림함·위젯·검색), 1024/1280 |
+| M3 | 25-3 업무 보고 초안 생성 | 계약·Task 각 1건 초안 → ReportEditor 에서 단계 델타·추진내역 확인·제출 |
+
+**결정(2026-10-18 사용자 확정)**: A~E 전부 권고안. 추가 요청 F: **업무 보고 초안 생성 시 가벼운 LLM(Haiku)로 핵심 내용을 요약·정리한 원고를 생성** — 25-3 의 progressText/planText 를 규칙 직렬화로 먼저 만들고, 그 재료(제목·메모·하위 작업 진척·댓글 최근 5건·단계 매핑)를 Haiku 에 넘겨 StructuredNote 포맷(소제목 `[..]`·글머리 `①`/`-`)의 "이번 기간 추진내역·다음 기간 계획" 원고로 다듬는다. LLM 실패·키 없음이면 규칙 직안으로 폴백(초안 생성은 항상 성공). 모델 ID 는 기존 문서 추출 경로(lib/ai)의 Haiku 설정을 재사용. 토큰 상한·타임아웃 20초. 원고에는 할 일에 없는 사실을 넣지 말라는 지시 고정.
+
+**결정 논점(기록용 — 확정됨)**
+- A. 담당 "해제"를 없애고 항상 1명(기본 작성자)으로 — 권고안.
+- B. 업무 보고는 **초안 생성 → 사용자가 검토·제출**(자동 제출 없음) — 권고안.
+- C. 보고 기간 기본값 = 마지막 제출 보고 다음 날 ~ 오늘(없으면 이번 주) — 권고안.
+- D. 상세 페이지 전환 시 드로어를 완전히 제거(퀵 미리보기 없음) — 권고안. 드로어를 "빠른 보기"로 남기면 코드 두 벌 유지.
+- E. 다크 모드는 메일 원문 색을 버리고 가독성 우선(인라인 색 무시) + 다크 토큰 보정(faint·Soft 채도·onPrimary 신설) — 권고안. 토큰 보정은 다른 화면 색도 미세하게 바뀐다.
+
+**구현 기록(2026-10-18, M1~M3 1차, 미커밋)**
+- M1 담당: store 4쿼리 `담당=나 OR 작성자=나`, PATCH assigneeUserId null=작성자 복귀, 후보 검사 `isAssigneeCandidate`(작성자·shares·board_members, 아니면 400 "먼저 공유를 추가"), unshare 시 작성자 복귀, mapItem 은 옛 NULL 을 작성자로 표시. 웹 `PeoplePickerModal candidates` 모드(라디오 목록)·드로어 메뉴 "작성자에게 되돌리기"·보드 멤버 GET. 모바일 담당 시트=후보 목록.
+- M1 다크: tokens `onPrimary/onError` 신설, DARK faint #8590ab·Soft 채도 상향(global.css·tailwind 동기), TODO_UI 톤별 darkBg + hold 톤, `statusHue`(검토 보라), 보류 점·체크=회색 점선, HtmlView(WebView·web) 다크에서 인라인 색 무시, 잔여 20파일 토큰 치환(에이전트, tsc 0).
+- M2: 마이그 285(progress_pct·progress_note·stage_order·progress_updated_at, NULL 담당 보정, activity action progress·work_report) — 스테이징 리허설 ROLLBACK 통과(UPDATE 3). 서버 normalize/UPDATE/활동 로그, 하위 완료=100, `getItemDetail` 에 progressAvg·stages(listContractStages/listTaskStages)·reportSubject. 웹 상세 페이지 `/todo/[itemId]`(TodoDetailDrawer mode="page" 2열 grid, 목록으로=sessionStorage 마지막 query, `?item=` 리다이렉트, 드로어 마운트 제거), 하위 작업 행 2줄(단계 select·range·%·진척 내용 디바운스). `todoItemLink` → `/todo/<id>`, 모바일 deeplink 수용. 모바일 하위 행에 −/+ 스테퍼·진척 내용·단계 시트.
+- M3: `lib/todo/work-report.ts` createWorkReportDraft — 기간(마지막 제출 다음 날~오늘/이번 주), 단계 델타(최대 %), serializeDraft(StructuredNote), Haiku 다듬기(feature `todo.work_report_draft`, defaultModel claude-haiku-4-5 — 관례, 5.5 전환은 model-caps 등록 후) 실패 시 직안, 기존 초안(활동 work_report reportId·draft) 갱신, 활동 기록. API `POST /api/todo/items/:id/work-report`(work_plan.edit). 웹 카드(최근 보고 2건·초안 만들기·confirm) 우측 열 맨 위, 모바일 Frame 카드 → /work-report/[reportId].
+- 검증: 웹·모바일 tsc 0, 테스트 37. dev 실측·285 적용·커밋·배포·OTA 는 사용자 승인 대기.
+- **dev 실측(10-18, 285 적용 후)**: 테스트 할 일(계약 연결)+하위 2건 → 담당을 공유 안 된 사람에게 지정 400(안내 문구) → 공유 후 지정 200·작성자 목록 유지 → null 로 작성자 복귀. 하위 30%+진척 내용 저장, 다른 하위 완료=100 → 평균 65%. `/todo/<id>` 페이지: 2열 grid(1021/510px)·섹션 8개(우측 업무 보고·부가·활동)·진척 줄·평균·목록으로(목록 복귀 확인)·`?item=` 리다이렉트. 업무 보고 초안 POST → draft(10/12~10/16, Haiku 다듬기 적용: "① 자료 수집 — 30% · …회신 대기 중 / ② 초안 작성 — 100% · 완료", 다음 기간 "- 자료 수집 — 진행 예정"). 공정표 없는 계약이라 단계 select·델타는 미실측. 테스트 할 일·초안 삭제 완료. 모바일은 tsc 만(다크 시각 확인 대기).

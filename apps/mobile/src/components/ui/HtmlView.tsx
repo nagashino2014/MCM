@@ -48,6 +48,10 @@ export function HtmlView({
   td,th{border:1px solid ${c.border};padding:6px}
   blockquote{margin:8px 0;padding-left:10px;border-left:3px solid ${c.border};color:${c.muted}}
   pre{white-space:pre-wrap}
+  ${dark ? `
+  /* 다크(2026-10-18): 메일 원문의 인라인 color·bgcolor(검정 글자·흰 배경)가 어두운 캔버스를 덮지 않게 전부 무시한다 — 원문 색보다 가독성. */
+  body *{color:${c.text}!important;background-color:transparent!important;background-image:none!important;border-color:${c.border}!important}
+  body a{color:${c.primary}!important}` : ''}
 </style></head><body>${body}
 <script>
   function post(){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(
@@ -55,7 +59,7 @@ export function HtmlView({
   window.addEventListener('load',post);setTimeout(post,120);setTimeout(post,600);
 </script>
 </body></html>`;
-  }, [html, showImages, c.card, c.text, c.surface, c.border, c.primary, c.muted]);
+  }, [html, showImages, dark, c.card, c.text, c.surface, c.border, c.primary, c.muted]);
 
   const h = maxHeight ? Math.min(height, maxHeight) : height;
 

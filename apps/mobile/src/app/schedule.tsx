@@ -182,8 +182,8 @@ export default function ScheduleScreen() {
             onPress={() => setRefsOpen(true)}
             hitSlop={8}
             className="flex-row items-center gap-1.5 rounded-full border border-cd-border bg-cd-card px-[13px] py-2 active:opacity-70">
-            <Ionicons name="people-outline" size={14} color="#565e82" />
-            <Text className="text-[12px] font-semibold" style={{ color: '#565e82' }}>
+            <Ionicons name="people-outline" size={14} color={c.muted} />
+            <Text className="text-[12px] font-semibold" style={{ color: c.muted }}>
               참조 지정
             </Text>
           </Pressable>
@@ -245,8 +245,8 @@ export default function ScheduleScreen() {
               key={tag}
               title={CALENDAR_TAG_LABELS[tag]}
               badge={
-                <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: '#f3f4fa' }}>
-                  <Text className="text-[11px] font-bold" style={{ color: '#878ea8' }}>
+                <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: c.surface }}>
+                  <Text className="text-[11px] font-bold" style={{ color: c.muted }}>
                     {list.length}
                   </Text>
                 </View>
@@ -439,8 +439,8 @@ function DetailBody({ ev, entry }: { ev: CalendarEvent; entry: CalendarEntry | n
         {people.length ? (
           <View className="flex-row flex-wrap gap-1.5">
             {people.map((p) => (
-              <View key={p.employeeId} className="rounded-full px-2.5 py-1" style={{ backgroundColor: '#e3edfc' }}>
-                <Text className="text-[12.5px] font-bold" style={{ color: '#2f6fd8' }}>
+              <View key={p.employeeId} className="rounded-full px-2.5 py-1" style={{ backgroundColor: c.primarySoft }}>
+                <Text className="text-[12.5px] font-bold" style={{ color: c.primary }}>
                   {p.name}
                   {p.positionName ? <Text className="font-medium"> {p.positionName}</Text> : null}
                 </Text>

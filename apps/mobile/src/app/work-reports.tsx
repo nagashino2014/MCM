@@ -268,15 +268,15 @@ export default function WorkReportsScreen() {
                 key={r.reportId}
                 onPress={() => router.push({ pathname: '/work-report/[reportId]', params: { reportId: r.reportId } })}
                 className="gap-1 rounded-2xl border p-3.5 active:opacity-70"
-                style={{ backgroundColor: '#fffaf0', borderColor: '#f5e3c0' }}>
+                style={{ backgroundColor: c.warningSoft, borderColor: c.border }}>
                 <View className="flex-row items-center gap-1.5">
-                  <Ionicons name="alert-circle" size={15} color="#b47700" />
-                  <Text numberOfLines={1} className="flex-1 text-[13px] font-bold" style={{ color: '#4a3a12' }}>
+                  <Ionicons name="alert-circle" size={15} color={c.warning} />
+                  <Text numberOfLines={1} className="flex-1 text-[13px] font-bold" style={{ color: c.text }}>
                     {r.subjectLabel ?? '보고'} — 보완·재제출이 필요합니다
                   </Text>
                 </View>
                 {r.reviewerComment ? (
-                  <Text numberOfLines={2} className="text-[12px]" style={{ color: '#8d7c50' }}>
+                  <Text numberOfLines={2} className="text-[12px]" style={{ color: c.muted }}>
                     {r.reviewerComment}
                   </Text>
                 ) : null}

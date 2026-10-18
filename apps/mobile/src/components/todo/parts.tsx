@@ -7,7 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useAuthedSource } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/useTheme';
 import { TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoPriority, type TodoStatus } from '@/lib/todo-types';
-import { TODO_UI, initials, labelColors, statusColor, type DueTone, type LabelTone } from '@/lib/todo-utils';
+import { TODO_UI, initials, labelColors, statusHue, type DueTone, type LabelTone } from '@/lib/todo-utils';
 
 /**
  * To-do 화면의 작은 부품(v4 §19) — 파스텔 라벨 · 마감 라벨 · 우선순위 라벨 · 소형 아바타(사진/중립 이니셜) ·
@@ -43,12 +43,21 @@ export function PastelLabel({
 
 /** 상태 점(2026-10-14) — 보드 카드 제목 앞 8px. 체크 원이 없는 카드에서 상태를 낸다. 할 일(todo) 상태는 점 없음. */
 export function StatusDot({ status }: { status: TodoStatus }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   if (status === 'todo') return null;
+  // 보류는 채운 점 대신 회색 점선 테두리 빈 원(웹 §24 와 동일) — 다크에서 진행(파랑)과 구분된다.
+  if (status === 'hold') {
+    return (
+      <View
+        accessibilityLabel={TODO_STATUS_LABELS[status]}
+        style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.muted, marginTop: 7 }}
+      />
+    );
+  }
   return (
     <View
       accessibilityLabel={TODO_STATUS_LABELS[status]}
-      style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor(status, c), marginTop: 7 }}
+      style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusHue(status, c, dark), marginTop: 7 }}
     />
   );
 }
@@ -121,16 +130,16 @@ export function CheckCircle({
   /** 작업 상태(2026-10-14) — 미완료 원의 배경·테두리를 상태 색으로(진행 파랑·검토 주황·보류 회색 점선). 띠는 보드 색 그대로. */
   status?: TodoStatus;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   const fill = useSharedValue(done ? 1 : 0);
-  // 상태 색 — 완료(done)는 채움 애니메이션이 맡고, 할 일(todo)은 중립.
+  // 상태 색 — 완료(done)는 채움 애니메이션이 맡고, 할 일(todo)은 중립. 진행 파랑·검토 보라·보류 회색 점선(웹 §24 동일).
   const tone =
     done || !status || status === 'todo' || status === 'done'
       ? null
       : status === 'doing'
         ? { border: c.primary, bg: c.primarySoft, dashed: false }
         : status === 'review'
-          ? { border: c.warning, bg: c.warningSoft, dashed: false }
+          ? { border: statusHue('review', c, dark), bg: labelColors('lavender', dark).bg, dashed: false }
           : { border: c.muted, bg: c.surface, dashed: true };
   useEffect(() => {
     fill.value = withTiming(done ? 1 : 0, { duration: 120 });
@@ -164,7 +173,7 @@ export function CheckCircle({
           inner,
         ]}>
         <View className="flex-1 items-center justify-center">
-          <Ionicons name="checkmark" size={size - 9} color="#fff" />
+          <Ionicons name="checkmark" size={size - 9} color={c.onPrimary} />
         </View>
       </Animated.View>
     </Pressable>
@@ -183,7 +192,8 @@ export function BoardStripe({ color, width = 4, inset = 10 }: { color: string; w
 
 /** 맥락 줄 앞 색 점(8px) — 보드 색. */
 export function ContextDot({ color }: { color: string }) {
-  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' }} />;
+  const { c } = useTheme(); // 다크 보정(2026-10-18)
+  return <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, borderWidth: 1, borderColor: c.border }} />;
 }
 
 /**

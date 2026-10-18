@@ -650,3 +650,34 @@
 .todo-cc-note-lb { font-size: 12.5px; color: var(--cd-muted); display: inline-flex; align-items: center; gap: 6px; }
 .todo-cc-req { font-size: 11px; font-weight: 600; color: var(--todo-lbl-over-fg); background: var(--todo-lbl-over-bg); padding: 0 6px; border-radius: 5px; line-height: 17px; }
 .todo-cc-note textarea { resize: vertical; min-height: 72px; font-size: 13px; line-height: 1.5; }
+
+/* ── 상세 페이지 모드(§25-4, /todo/[itemId]) — 드로어 본문을 2열(좌 2/3 핵심·관련·메모·하위·댓글, 우 1/3 업무 보고·부가·활동)로 ── */
+.todo-detail-page { display: flex; flex-direction: column; min-height: 0; background: var(--cd-surface); border-radius: 12px; border: 1px solid var(--cd-border); overflow: hidden; }
+.todo-detail-page .todo-dh { padding: 16px 20px 12px 24px; }
+.todo-detail-page .todo-dh .todo-detail-title { font-size: 20px; }
+.todo-detail-page .todo-db { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-auto-flow: dense; align-items: start; gap: 12px 16px; padding: 16px 20px 24px; }
+.todo-detail-page .todo-db > * { grid-column: 1; }
+.todo-detail-page .todo-db > [data-col="side"] { grid-column: 2; }
+.todo-detail-page .todo-db > .todo-done-ln { grid-column: 1 / -1; }
+.todo-detail-page .todo-fr textarea[name="note"], .todo-detail-page .todo-note-ta { min-height: 160px; }
+.todo-page-back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--cd-muted); padding: 4px 8px; border-radius: 8px; }
+.todo-page-back:hover { background: var(--cd-hover); color: var(--cd-text); }
+.todo-page-back:focus-visible { outline: none; box-shadow: var(--cd-focus-ring); }
+.todo-page-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cd-muted); margin-left: auto; }
+@media (max-width: 1024px) {
+  .todo-detail-page .todo-db { grid-template-columns: minmax(0, 1fr); }
+  .todo-detail-page .todo-db > [data-col="side"] { grid-column: 1; }
+}
+
+/* ── 하위 작업 진척(285, §25-2) — 미완료 하위 행 아래 2번째 줄: 공정 단계 · 진행율 슬라이더 · % · 진척 내용 ── */
+.todo-sr-wrap { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; border-bottom: 1px solid var(--cd-hairline, var(--cd-border)); }
+.todo-sr-wrap:last-of-type { border-bottom: 0; }
+.todo-sr-prog { display: flex; align-items: center; gap: 8px; padding-left: 26px; font-size: 12px; color: var(--cd-muted); flex-wrap: wrap; }
+.todo-sr-prog select { height: 26px; font-size: 12px; border: 1px solid var(--cd-border); border-radius: 6px; background: var(--cd-card); color: var(--cd-text); padding: 0 6px; max-width: 180px; }
+.todo-sr-prog input[type="range"] { flex: 0 0 140px; accent-color: var(--cd-primary); height: 18px; }
+.todo-sr-prog .todo-sr-pct { font-variant-numeric: tabular-nums; min-width: 36px; font-weight: 600; color: var(--cd-text); }
+.todo-sr-prog .todo-sr-note { flex: 1; min-width: 140px; height: 26px; border: 1px solid var(--cd-border); border-radius: 6px; background: var(--cd-card); color: var(--cd-text); font-size: 12.5px; padding: 0 8px; }
+.todo-sr-prog .todo-sr-note::placeholder { color: var(--cd-faint); }
+.todo-sr-prog select:focus-visible, .todo-sr-prog .todo-sr-note:focus-visible { outline: none; border-color: var(--cd-primary); box-shadow: var(--cd-focus-ring); }
+.todo-sr-prog[data-readonly="true"] { color: var(--cd-faint); }
+.todo-sec-avg { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--cd-muted); }

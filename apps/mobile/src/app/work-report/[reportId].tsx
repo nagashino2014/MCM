@@ -344,14 +344,14 @@ export default function WorkReportDetailScreen() {
 
             {/* 부서장 의견 / 임원 지시·재보고 — 본문보다 먼저(판단 근거) */}
             {r.reviewerComment ? (
-              <View className="gap-1 rounded-2xl border p-3.5" style={{ backgroundColor: '#fffaf0', borderColor: '#f5e3c0' }}>
+              <View className="gap-1 rounded-2xl border p-3.5" style={{ backgroundColor: c.warningSoft, borderColor: c.border }}>
                 <View className="flex-row items-center gap-1.5">
-                  <Ionicons name="chatbubble-ellipses" size={14} color="#b47700" />
-                  <Text className="text-[12.5px] font-bold" style={{ color: '#4a3a12' }}>
+                  <Ionicons name="chatbubble-ellipses" size={14} color={c.warning} />
+                  <Text className="text-[12.5px] font-bold" style={{ color: c.text }}>
                     부서장 의견{r.reviewerCommentKind ? ` — ${COMMENT_KIND_LABEL[r.reviewerCommentKind] ?? r.reviewerCommentKind}` : ''}
                   </Text>
                 </View>
-                <Text className="text-[13px] leading-5" style={{ color: '#6d5c30' }}>
+                <Text className="text-[13px] leading-5" style={{ color: c.muted }}>
                   {r.reviewerComment}
                 </Text>
               </View>

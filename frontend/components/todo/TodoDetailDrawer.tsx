@@ -7,7 +7,9 @@
 // 자동 저장: 필드 변경 → 600ms 디바운스 PATCH /api/todo/items/[id]. 키보드: Esc 닫기(CdDrawer), Ctrl+Enter 댓글, Alt+1~5 상태. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Building2, Calendar, CheckCircle2, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, ClipboardList, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
 import { CdAvatar, CdButton, CdDateInput, CdDrawer, CdDropdown, CdIconButton, CdModal, isValidDateString, useCdToast, type CdMenuItem } from "@/components/cdash";
 import {
   TODO_BOARD_KIND_LABELS,
@@ -40,6 +42,8 @@ import { apiCall, asCompleteRulesFailure, type CompleteRulesFailure } from "./us
 import { contractShort, defaultRemindAt, diffDays, fmtIsoShort, isoToLocalInput, md, normalizeTime, relativeTime, weekdayKo } from "./todo-utils";
 
 export interface TodoDetailDrawerProps {
+  /** §25-4: "page" 면 CdDrawer 없이 상세 페이지 본문으로 렌더(2열 레이아웃, 닫기=목록으로). */
+  mode?: "drawer" | "page";
   itemId: string | null;
   boards: TodoBoard[];
   prefs: TodoPrefs | null;
@@ -88,6 +92,13 @@ function describeActivity(a: TodoActivity): string {
       return "스누즈";
     case "archive":
       return "보관";
+    case "progress": {
+      const d = a.detail as { from?: number | null; to?: number | null; note?: string; stage?: number | null };
+      const pct = d.to != null ? `진행율 ${d.from != null ? `${d.from}% → ` : ""}${d.to}%` : "진척 내용 입력";
+      return `${pct}${d.stage != null ? ` · ${d.stage}단계` : ""}`;
+    }
+    case "work_report":
+      return "업무 보고 초안 생성";
     case "update":
       if (d.subtaskRemoved !== undefined) return `하위 작업 삭제 (${String(d.subtaskRemoved) || "제목 없음"})`;
       return `수정 (${Object.keys((d.changes as Record<string, unknown>) ?? {}).join(", ") || "내용"})`;
@@ -129,9 +140,9 @@ function PropEditor({ onDone, children }: { onDone: () => void; children: ReactN
 }
 
 /** 접힘 프레임 섹션 — 헤더 클릭으로 펼침. 접힘이면 한 줄 요약. */
-function FoldSection({ label, count, summary, open, onToggle, children }: { label: string; count?: number; summary: ReactNode; open: boolean; onToggle: () => void; children: ReactNode }) {
+function FoldSection({ label, count, summary, open, onToggle, col, children }: { label: string; count?: number; summary: ReactNode; open: boolean; onToggle: () => void; col?: "side"; children: ReactNode }) {
   return (
-    <section className="cd-card todo-fr" data-fold="true" aria-label={label}>
+    <section className="cd-card todo-fr" data-fold="true" data-col={col} aria-label={label}>
       <h3>
         <button type="button" className="todo-fold-btn" onClick={onToggle} aria-expanded={open}>
           {open ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
@@ -150,7 +161,7 @@ function FoldSection({ label, count, summary, open, onToggle, children }: { labe
   );
 }
 
-export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPhotoUrl, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
+export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUserId, myName, myPhotoUrl, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
   const { toast } = useCdToast();
   const [detail, setDetail] = useState<TodoItemDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,6 +173,12 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
   const [note, setNote] = useState("");
   const [timeDraft, setTimeDraft] = useState("");
   const [pickerRole, setPickerRole] = useState<TodoShareRole | null>(null);
+  // §25-1 담당 후보 = 작성자 + 공유 대상 + 보드 멤버(개인 보드는 멤버 없음). 보드 멤버는 담당 지정을 열 때 한 번 읽는다.
+  const [boardMembers, setBoardMembers] = useState<{ userId: string; name: string }[] | null>(null);
+  // §25-3 업무 보고 — 관련 대상(계약/Task)의 최근 보고 2건 + 초안 만들기(POST /work-report → /work-plan/[reportId]).
+  const router = useRouter();
+  const [reports, setReports] = useState<{ reportId: string; periodStart: string; periodEnd: string; status: string }[] | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [rooms, setRooms] = useState<{ roomId: number; name: string; roomType: string; memberCount: number }[] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -169,7 +186,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
   const [subTitle, setSubTitle] = useState("");
   const [subConfirmId, setSubConfirmId] = useState<string | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
-  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(mode === "page");
   const [busy, setBusy] = useState(false);
   // 완료 확인 모달(276) — 완료 조건이 있거나 서버가 409 로 거절했을 때
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -395,6 +412,42 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
     }
   };
 
+  // 하위 작업 진척(285, §25-2) — 진행율·진척 내용·공정 단계. 슬라이더는 400ms, 내용은 800ms 디바운스로 PATCH, 같은 하위의 보류 값은 합친다.
+  const subTimers = useRef<Record<string, number>>({});
+  const subPending = useRef<Record<string, Record<string, unknown>>>({});
+  const [subDraft, setSubDraft] = useState<Record<string, { pct?: number; note?: string }>>({});
+  const patchSubtask = async (sub: TodoItem, body: Record<string, unknown>) => {
+    try {
+      await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}`, { method: "PATCH", body: JSON.stringify(body) });
+      await refresh();
+      setSubDraft((d) => {
+        const n = { ...d };
+        delete n[sub.itemId];
+        return n;
+      });
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+  const queueSubtask = (sub: TodoItem, body: Record<string, unknown>, delay = 400) => {
+    setSubDraft((d) => ({
+      ...d,
+      [sub.itemId]: {
+        ...d[sub.itemId],
+        ...(body.progressPct !== undefined ? { pct: Number(body.progressPct) } : {}),
+        ...(body.progressNote !== undefined ? { note: String(body.progressNote ?? "") } : {}),
+      },
+    }));
+    subPending.current[sub.itemId] = { ...subPending.current[sub.itemId], ...body };
+    if (subTimers.current[sub.itemId]) window.clearTimeout(subTimers.current[sub.itemId]);
+    subTimers.current[sub.itemId] = window.setTimeout(() => {
+      const pending = subPending.current[sub.itemId] ?? {};
+      delete subPending.current[sub.itemId];
+      void patchSubtask(sub, pending);
+    }, delay);
+  };
+  const stageUnit = (stageOrder: number | null) => detail?.stages.find((st) => st.stageOrder === stageOrder)?.progressUnitPct ?? 10;
+
   const toggleSubtask = async (sub: TodoItem) => {
     try {
       await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}/complete`, { method: "POST", body: JSON.stringify({ done: sub.status !== "done" }) });
@@ -593,6 +646,75 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
   const moveHint = targetBoard && targetBoard.kind !== "personal" ? `${TODO_BOARD_KIND_LABELS[targetBoard.kind]} 보드의 멤버 ${targetBoard.memberCount}명에게 보입니다` : null;
   const otherSharedBoard = boards.find((b) => b.kind !== "personal" && b.myRole !== "viewer");
   const shares = detail?.shares.filter((s) => s.role !== "assignee") ?? [];
+  useEffect(() => {
+    if (pickerRole !== "assignee" || !detail || detail.boardKind === "personal") {
+      setBoardMembers(null);
+      return;
+    }
+    let alive = true;
+    apiCall<{ members: { userId: string; name: string }[] }>(`/api/todo/boards/${encodeURIComponent(detail.boardId)}/members`)
+      .then((d) => {
+        if (alive) setBoardMembers(d.members.map((m) => ({ userId: m.userId, name: m.name })));
+      })
+      .catch(() => {
+        if (alive) setBoardMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [pickerRole, detail]);
+  const assigneeCandidates = useMemo(() => {
+    if (!detail) return [];
+    const seen = new Set<string>();
+    const out: { userId: string; name: string }[] = [];
+    const add = (userId: string | null | undefined, name: string | null | undefined) => {
+      if (!userId || seen.has(userId)) return;
+      seen.add(userId);
+      out.push({ userId, name: name ?? userId });
+    };
+    add(detail.ownerUserId, detail.ownerName ? `${detail.ownerName} (작성자)` : "작성자");
+    for (const sh of detail.shares) add(sh.userId, sh.name);
+    for (const m of boardMembers ?? []) add(m.userId, m.name);
+    return out;
+  }, [detail, boardMembers]);
+  const reportSubject = detail?.reportSubject ?? null;
+  const reportSubjectId = detail?.linkId ?? null;
+  useEffect(() => {
+    if (!reportSubject || !reportSubjectId) {
+      setReports(null);
+      return;
+    }
+    let alive = true;
+    const url = reportSubject === "task" ? `/api/work-tasks/${encodeURIComponent(reportSubjectId)}/reports` : `/api/work-plan/service/${encodeURIComponent(reportSubjectId)}/reports`;
+    apiCall<{ reports: { reportId: string; periodStart: string; periodEnd: string; status: string }[] }>(url)
+      .then((d) => {
+        if (alive) setReports((d.reports ?? []).slice(0, 2));
+      })
+      .catch(() => {
+        if (alive) setReports([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [reportSubject, reportSubjectId, detail?.activity.length]);
+  const createReportDraft = async () => {
+    if (!detail || reportBusy) return;
+    const hasDraft = detail.activity.some((a) => a.action === "work_report") && reports?.some((r) => r.status === "draft");
+    if (hasDraft && !window.confirm("이 할 일로 만든 미제출 초안이 있습니다. 지금 내용으로 초안을 다시 채울까요?")) return;
+    setReportBusy(true);
+    try {
+      const r = await apiCall<{ reportId: string; href: string; updated: boolean; aiUsed: boolean; periodStart: string; periodEnd: string }>(
+        `/api/todo/items/${encodeURIComponent(detail.itemId)}/work-report`,
+        { method: "POST", body: JSON.stringify({ ai: true }) }
+      );
+      toast(`${r.updated ? "초안을 갱신했습니다" : "업무 보고 초안을 만들었습니다"}(${r.periodStart} ~ ${r.periodEnd}${r.aiUsed ? " · AI 요약" : " · 규칙 직안"}). 검토 후 제출하세요.`, "success");
+      router.push(r.href);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setReportBusy(false);
+    }
+  };
   // 댓글 입력란의 "나" 아바타 — 새 API 없이: 목록에서 넘어온 사진(myPhotoUrl) → 상세 응답의 owner·담당·공유·댓글 중 내 userId 와 같은 사진.
   const me = useMemo(() => {
     let photo = myPhotoUrl ?? null;
@@ -675,9 +797,9 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
     </div>
   );
 
-  return (
-    <CdDrawer open={open} onClose={close} side="right" widthClass="max-w-[580px]" footer={detail ? footer : undefined} closeOnBackdrop>
-      <div className="todo-vars todo-drawer" onKeyDown={onRootKey}>
+  const inner = (
+    <>
+      <div className={`todo-vars ${mode === "page" ? "todo-detail-page" : "todo-drawer"}`} onKeyDown={onRootKey}>
         {loading && !detail && <div className="todo-loading">불러오는 중…</div>}
         {loadError && !detail && (
           <div className="flex flex-col gap-2 items-start p-4">
@@ -720,9 +842,27 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
                 )}
                 items={moreMenu}
               />
-              <CdIconButton label="닫기" size="sm" onClick={close}>
-                <X className="w-4 h-4" aria-hidden="true" />
-              </CdIconButton>
+              {mode === "page" ? (
+                <>
+                  <span className="todo-page-save todo-save-state" data-state={saveState} aria-live="polite">
+                    <i aria-hidden="true" />
+                    {saveLabel}
+                    {saveState === "error" && (
+                      <button type="button" onClick={() => void flush()}>
+                        재시도
+                      </button>
+                    )}
+                  </span>
+                  <button type="button" className="todo-page-back" onClick={close} title="할 일 목록으로">
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                    목록으로
+                  </button>
+                </>
+              ) : (
+                <CdIconButton label="닫기" size="sm" onClick={close}>
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </CdIconButton>
+              )}
             </div>
 
             <div className="todo-db">
@@ -802,7 +942,12 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
                         )}
                         items={[
                           { key: "pick", label: detail.assigneeUserId ? "담당 변경" : "담당 지정", onSelect: () => setPickerRole("assignee") },
-                          { key: "clear", label: "담당 해제", disabled: !detail.assigneeUserId, onSelect: () => schedule({ assigneeUserId: null }, true) },
+                          {
+                            key: "clear",
+                            label: "작성자에게 되돌리기",
+                            disabled: !detail.assigneeUserId || detail.assigneeUserId === detail.ownerUserId,
+                            onSelect: () => schedule({ assigneeUserId: null }, true),
+                          },
                         ]}
                       />
                     ) : (
@@ -1011,14 +1156,18 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
                           <i key={i} data-s={s} />
                         ))}
                       </span>
+                      {detail.progressAvg != null && <span className="todo-sec-avg">평균 {detail.progressAvg}%</span>}
                     </>
                   )}
                 </h3>
                 {detail.subtasks.map((s) => {
                   const st = s.status === "done" ? "done" : s.status === "doing" || s.status === "review" ? "doing" : undefined;
                   const aux = s.dueDate ? (s.dueDate === today ? "오늘" : md(s.dueDate)) : s.assigneeName;
+                  const draftPct = subDraft[s.itemId]?.pct ?? s.progressPct ?? 0;
+                  const draftNote = subDraft[s.itemId]?.note ?? s.progressNote ?? "";
                   return (
-                    <div key={s.itemId} className="todo-sr" data-done={s.status === "done" ? "true" : undefined}>
+                    <div key={s.itemId} className="todo-sr-wrap">
+                    <div className="todo-sr" data-done={s.status === "done" ? "true" : undefined}>
                       <TodoCheck done={s.status === "done"} size="sm" state={st} onClick={() => void toggleSubtask(s)} />
                       <span className="todo-sr-t">{s.title}</span>
                       {st && (
@@ -1043,6 +1192,47 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
                             <X aria-hidden="true" />
                           </button>
                         ))}
+                    </div>
+                    {s.status !== "done" && (
+                      <div className="todo-sr-prog" data-readonly={!canEdit ? "true" : undefined}>
+                        {detail.stages.length > 0 && (
+                          <select
+                            value={s.stageOrder ?? ""}
+                            disabled={!canEdit}
+                            aria-label={`${s.title} 공정 단계`}
+                            title="관련 계약·업무추진계획의 공정 단계 — 업무 보고 단계 진행율에 반영"
+                            onChange={(e) => void patchSubtask(s, { stageOrder: e.target.value ? Number(e.target.value) : null })}
+                          >
+                            <option value="">단계 없음</option>
+                            {detail.stages.map((stg) => (
+                              <option key={stg.stageOrder} value={stg.stageOrder}>
+                                {stg.stageOrder}. {stg.stageName}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={stageUnit(s.stageOrder)}
+                          value={draftPct}
+                          disabled={!canEdit}
+                          aria-label={`${s.title} 진행율`}
+                          onChange={(e) => queueSubtask(s, { progressPct: Number(e.target.value) })}
+                        />
+                        <span className="todo-sr-pct">{draftPct}%</span>
+                        <input
+                          className="todo-sr-note"
+                          value={draftNote}
+                          placeholder="진척 내용(업무 보고 추진내역에 들어갑니다)"
+                          disabled={!canEdit}
+                          maxLength={2000}
+                          aria-label={`${s.title} 진척 내용`}
+                          onChange={(e) => queueSubtask(s, { progressNote: e.target.value || null }, 800)}
+                        />
+                      </div>
+                    )}
                     </div>
                   );
                 })}
@@ -1116,7 +1306,44 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
               </section>
 
               {/* ⑥ 부가 설정(접힘) */}
-              <FoldSection label="부가 설정" summary={extraSummary} open={extraOpen} onToggle={() => setExtraOpen((v) => !v)}>
+              {/* §25-3 업무 보고 — 관련이 계약/업무추진계획일 때만 활성 */}
+              <section className="cd-card todo-fr" data-col="side" aria-label="업무 보고">
+                <h3>
+                  <ClipboardList className="inline w-4 h-4 mr-1 align-[-2px]" aria-hidden="true" />
+                  업무 보고
+                </h3>
+                {reportSubject ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[12px] cd-text-muted">
+                      메모·하위 작업 진척(공정 단계 포함)으로 {reportSubject === "task" ? "업무추진계획" : "용역"} 보고 초안을 만듭니다. 생성 후 보고 화면에서 검토·제출합니다.
+                    </p>
+                    {reports && reports.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {reports.map((r) => (
+                          <li key={r.reportId} className="flex items-center gap-2 text-[12.5px]">
+                            <span className="todo-sc" data-s={r.status === "submitted" ? "done" : "doing"}>
+                              {r.status === "submitted" ? "제출" : "초안"}
+                            </span>
+                            <Link href={`/work-plan/${encodeURIComponent(r.reportId)}`} className="cd-text hover:underline">
+                              {r.periodStart} ~ {r.periodEnd}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {reports && reports.length === 0 && <p className="text-[12px] cd-text-faint">아직 보고가 없습니다.</p>}
+                    {canEdit && (
+                      <CdButton variant="soft" size="sm" loading={reportBusy} onClick={() => void createReportDraft()}>
+                        업무 보고 초안 만들기
+                      </CdButton>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[12px] cd-text-faint">관련 항목을 계약(용역) 또는 업무추진계획으로 연결하면 업무 보고 초안을 만들 수 있습니다.</p>
+                )}
+              </section>
+
+              <FoldSection label="부가 설정" col="side" summary={extraSummary} open={extraOpen} onToggle={() => setExtraOpen((v) => !v)}>
                 {/* 우선순위 */}
                 <div className="todo-pr">
                   <span className="todo-pr-label">우선순위</span>
@@ -1353,6 +1580,7 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
               {/* ⑦ 활동(접힘) */}
               <FoldSection
                 label="활동"
+                col="side"
                 count={detail.activity.length}
                 summary={
                   detail.activity.length === 0 ? (
@@ -1395,6 +1623,8 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
         withRole={pickerRole !== "assignee"}
         defaultRole={pickerRole ?? "watcher"}
         excludeUserIds={[detail?.ownerUserId ?? "", ...(detail?.shares.map((s) => s.userId) ?? [])].filter(Boolean)}
+        candidates={pickerRole === "assignee" ? assigneeCandidates : undefined}
+        currentUserId={detail?.assigneeUserId ?? null}
         busy={busy}
         onClose={() => setPickerRole(null)}
         onPick={async (people, role) => {
@@ -1478,6 +1708,12 @@ export function TodoDetailDrawer({ itemId, boards, prefs, myUserId, myName, myPh
       >
         <p className="text-sm cd-text">'{detail?.title}' 을(를) 삭제합니다. 하위 작업·댓글·활동 기록이 함께 삭제되며 되돌릴 수 없습니다.</p>
       </CdModal>
+    </>
+  );
+  if (mode === "page") return inner;
+  return (
+    <CdDrawer open={open} onClose={close} side="right" widthClass="max-w-[580px]" footer={detail ? footer : undefined} closeOnBackdrop>
+      {inner}
     </CdDrawer>
   );
 }

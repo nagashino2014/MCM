@@ -167,6 +167,8 @@ export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string
 
 export const TODO_ACTIVITY_ACTIONS = [
   "create", "update", "status", "assign", "due", "move", "share", "comment", "complete", "reopen", "snooze", "archive",
+  // 285: 하위 작업 진척 입력 · 업무 보고 초안 생성(§25-2·25-3)
+  "progress", "work_report",
 ] as const;
 export type TodoActivityAction = (typeof TODO_ACTIVITY_ACTIONS)[number];
 
@@ -298,6 +300,11 @@ export interface TodoItem {
   completionNote: string | null;
   /** 상태가 review 로 바뀐 시각(ISO) — 규칙 review 의 근거. */
   reviewedAt: string | null;
+  /** 하위 작업 진척(285, §25-2) — 진행율 0~100(NULL=미기입), 진척 내용, 공정 단계 매핑, 갱신 시각. 상위 작업은 쓰지 않는다. */
+  progressPct: number | null;
+  progressNote: string | null;
+  stageOrder: number | null;
+  progressUpdatedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;
@@ -312,11 +319,26 @@ export interface TodoItem {
   isOwner: boolean;
 }
 
+/** 관련 대상(계약/업무추진계획 Task)의 공정표 단계 — 하위 작업 stage_order 매핑과 업무 보고 단계 델타의 기준(§25-2·25-3). */
+export interface TodoStageRef {
+  stageOrder: number;
+  stageName: string;
+  status: "pending" | "in_progress" | "done";
+  progressPct: number;
+  progressUnitPct: number;
+}
+
 export interface TodoItemDetail extends TodoItem {
   subtasks: TodoItem[];
   shares: TodoShare[];
   comments: TodoComment[];
   activity: TodoActivity[];
+  /** 하위 작업 평균 진행율(완료=100, 미기입=0; 하위 없으면 null) — 상위 작업 진행율(§25-2). */
+  progressAvg: number | null;
+  /** 관련이 계약/업무추진계획이면 그 공정표 단계(없거나 다른 연결이면 []). */
+  stages: TodoStageRef[];
+  /** 업무 보고 대상 종류 — contract(계약) | task(업무추진계획 Task) | null(보고 불가). */
+  reportSubject: "contract" | "task" | null;
 }
 
 export interface TodoColumn {
@@ -495,4 +517,5 @@ export const TODO_APPROVAL_EVENT_LABELS: Record<TodoApprovalEvent["kind"], strin
 export const isPendingApproval = (ev: Pick<TodoApprovalEvent, "kind">): boolean => ev.kind === "pending";
 
 /** 상세 링크 — 푸시·메신저 공유 공용. */
-export const todoItemLink = (itemId: string): string => `/todo?item=${encodeURIComponent(itemId)}`;
+/** 할 일 상세 링크 — §25-4 별도 페이지(/todo/[itemId]). 옛 `/todo?item=` 는 TodoBoardPage 가 리다이렉트한다. */
+export const todoItemLink = (itemId: string): string => `/todo/${encodeURIComponent(itemId)}`;

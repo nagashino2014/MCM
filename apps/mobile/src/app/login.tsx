@@ -45,7 +45,7 @@ export default function LoginScreen() {
         className="flex-1 justify-center px-6">
         <View className="mb-10 items-center">
           <View className="mb-3 h-14 w-14 items-center justify-center rounded-2xl bg-cd-primary">
-            <Text className="text-xl font-extrabold text-white">M</Text>
+            <Text className="text-xl font-extrabold text-cd-on-primary">M</Text>
           </View>
           <Text className="text-2xl font-extrabold text-cd-text">MCM</Text>
           <Text className="mt-1 text-sm text-cd-muted">한국환경안전연구원 그룹웨어</Text>

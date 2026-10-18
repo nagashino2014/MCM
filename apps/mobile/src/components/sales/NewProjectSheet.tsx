@@ -166,16 +166,17 @@ export function NewProjectSheet({
 
 /** 선택 칩 — 선택은 primary 틴트, 비선택은 흰 배경 + 윤곽선(일정 필터 칩과 같은 문법). */
 export function PickChip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const { c } = useTheme(); // 다크 보정(2026-10-18)
   return (
     <Pressable
       onPress={onPress}
       className="rounded-full px-[13px] py-[7px] active:opacity-70"
       style={{
-        backgroundColor: on ? '#e3e6fb' : 'transparent',
+        backgroundColor: on ? c.primarySoft : 'transparent',
         borderWidth: on ? 0 : 1,
-        borderColor: '#e3e6ef',
+        borderColor: c.border,
       }}>
-      <Text className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? '#4353e4' : '#9aa0b8' }}>
+      <Text className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? c.primary : c.faint }}>
         {label}
       </Text>
     </Pressable>

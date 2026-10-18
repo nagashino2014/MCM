@@ -197,7 +197,7 @@ export function ExternalContactsHint() {
         <Pressable
           onPress={() => router.push('/contacts')}
           className="min-h-[44px] justify-center rounded-xl bg-cd-primary px-5 active:opacity-80">
-          <Text className="text-[15px] font-bold text-white">담당자 열기</Text>
+          <Text className="text-[15px] font-bold text-cd-on-primary">담당자 열기</Text>
         </Pressable>
       }
     />

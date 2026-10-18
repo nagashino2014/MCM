@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, EmptyState, SearchBar, Sheet, SkeletonList } from '@/components/ui';
 import { apiJson } from '@/lib/api';
 import type { RelatedRef } from '@/lib/expense-purpose';
+import { useTheme } from '@/theme/useTheme';
 
 /**
  * 연관 용역/사업장 선택 시트(2026-10-16) — 영수증 촬영·영수증함에서 "어느 용역(사업장)에 쓴 비용인지" 고른다.
@@ -37,6 +38,7 @@ export function RelatedPickerSheet({
   onSelect: (ref: RelatedRef | null) => void;
   onClose: () => void;
 }) {
+  const { c: t } = useTheme(); // 다크 보정(2026-10-18) — map 변수 c 와 충돌해 별칭
   const [q, setQ] = useState('');
   const [contracts, setContracts] = useState<ContractHit[]>([]);
   const [facilities, setFacilities] = useState<FacilityHit[]>([]);
@@ -102,7 +104,7 @@ export function RelatedPickerSheet({
                 key={c.contractId}
                 onPress={() => pick({ label: c.title, contractId: c.contractId, facilityId: c.facilityId })}
                 className="flex-row items-center gap-2 border-b border-cd-grid-line py-3 active:opacity-70">
-                <Ionicons name="document-text-outline" size={16} color="#5D87FF" />
+                <Ionicons name="document-text-outline" size={16} color={t.primary} />
                 <View className="flex-1">
                   <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                     {c.title}
@@ -121,7 +123,7 @@ export function RelatedPickerSheet({
                     key={f.facilityId}
                     onPress={() => pick({ label: f.name, contractId: null, facilityId: f.facilityId })}
                     className="flex-row items-center gap-2 border-b border-cd-grid-line py-3 active:opacity-70">
-                    <Ionicons name="business-outline" size={16} color="#6b7280" />
+                    <Ionicons name="business-outline" size={16} color={t.muted} />
                     <View className="flex-1">
                       <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                         {f.name}

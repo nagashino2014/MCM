@@ -176,19 +176,19 @@ export default function SalesScreen() {
                           : undefined
                       }
                       className="flex-row items-center gap-3 rounded-xl border p-3 active:opacity-70"
-                      style={{ backgroundColor: '#fffaf0', borderColor: '#f5e3c0' }}>
+                      style={{ backgroundColor: c.warningSoft, borderColor: c.border }}>
                       <TypeTag short={meta.short} color={meta.color} ink={meta.ink} />
                       <View className="flex-1">
-                        {/* 카드 배경이 테마 무관 크림색이라 글자색도 고정 잉크로(다크에서 밝은 토큰색이 묻힘). */}
-                        <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: '#4a3a12' }}>
+                        {/* 크림 카드 → warningSoft 토큰, 글자도 테마색으로 — 다크 보정(2026-10-18) */}
+                        <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: c.text }}>
                           {r.title}
                         </Text>
-                        <Text numberOfLines={1} className="mt-0.5 text-[11.5px]" style={{ color: '#8d7c50' }}>
+                        <Text numberOfLines={1} className="mt-0.5 text-[11.5px]" style={{ color: c.muted }}>
                           {[r.facilityName, (a.endedAt ?? a.scheduledAt)?.slice(0, 10)].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
                       {canEdit ? (
-                        <Text className="text-[12px] font-bold" style={{ color: '#b47700' }}>
+                        <Text className="text-[12px] font-bold" style={{ color: c.warning }}>
                           경과 입력
                         </Text>
                       ) : null}
@@ -213,10 +213,10 @@ export default function SalesScreen() {
                   <View className="mt-2.5 flex-row items-center gap-2">
                     <Text
                       className={`text-[11.5px] ${day === today ? 'font-extrabold' : 'font-bold'}`}
-                      style={{ color: day === today ? '#4353e4' : '#9aa0b8' }}>
+                      style={{ color: day === today ? c.primary : c.faint }}>
                       {day === today ? `오늘 · ${dayLabel(day)}` : dayLabel(day)}
                     </Text>
-                    <View className="h-px flex-1" style={{ backgroundColor: '#f0f1f7' }} />
+                    <View className="h-px flex-1" style={{ backgroundColor: c.gridLine }} />
                   </View>
                   {list.map((a) => {
                     const meta = ACTIVITY_TYPE_META[a.activityType];
@@ -225,7 +225,7 @@ export default function SalesScreen() {
                         key={a.activityId}
                         onPress={() => setDetail(a)}
                         className="flex-row items-center gap-3 py-2.5 active:opacity-70">
-                        <Text className="w-[42px] text-[12px] font-bold tabular-nums" style={{ color: '#565e82' }}>
+                        <Text className="w-[42px] text-[12px] font-bold tabular-nums" style={{ color: c.muted }}>
                           {a.scheduledAt.slice(11, 16) || '--:--'}
                         </Text>
                         <TypeTag short={meta.short} color={meta.color} ink={meta.ink} />
@@ -302,7 +302,7 @@ export default function SalesScreen() {
                     <View
                       key={p.id}
                       className="flex-row items-center gap-2 rounded-xl border p-3"
-                      style={{ backgroundColor: '#fbfbfe', borderColor: '#eef0f7' }}>
+                      style={{ backgroundColor: c.card, borderColor: c.border }}>
                       <View className="flex-1">
                         <Text className="text-[13.5px] font-semibold text-cd-text">
                           {p.personName ?? '담당자'}

@@ -34,7 +34,7 @@ export function HtmlView({
   showImages?: boolean;
   maxHeight?: number;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
 
   const body = useMemo(() => {
     const clean = sanitize(html);
@@ -46,7 +46,16 @@ export function HtmlView({
 
   return (
     <View>
+      {dark
+        ? createElement("style", {
+            // 다크(2026-10-18): 메일 원문 인라인 색을 무시한다 — WebView 판(HtmlView.tsx)과 같은 규칙.
+            dangerouslySetInnerHTML: {
+              __html: `.mcm-html-dark *{color:${c.text}!important;background-color:transparent!important;background-image:none!important;border-color:${c.border}!important}.mcm-html-dark a{color:${c.primary}!important}`,
+            },
+          })
+        : null}
       {createElement("div", {
+        className: dark ? "mcm-html-dark" : undefined,
         style: {
           padding: 12,
           maxHeight,

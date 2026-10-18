@@ -1,6 +1,7 @@
 "use client";
 
 // 담당·공유 인원 선택 모달 — 기존 AttendeePicker(조직도 트리) 재사용. employee → users.user_id 는 조직 스냅샷의 userId 로 변환한다.
+// candidates 가 오면(담당 지정, §25-1) 조직도 대신 그 목록에서 1명을 고른다 — 담당은 작성자·공유 대상·보드 멤버로 제한.
 
 import { useMemo, useState } from "react";
 import { CdButton, CdModal, CdSelect } from "@/components/cdash";
@@ -19,6 +20,8 @@ export function PeoplePickerModal({
   withRole = true,
   defaultRole = "watcher",
   excludeUserIds = [],
+  candidates,
+  currentUserId,
   busy,
   onClose,
   onPick,
@@ -28,13 +31,18 @@ export function PeoplePickerModal({
   withRole?: boolean;
   defaultRole?: TodoShareRole;
   excludeUserIds?: string[];
+  /** 고정 후보 모드 — 있으면 조직도 검색 없이 이 목록에서 1명 선택(담당 지정). */
+  candidates?: PickedPerson[];
+  /** 후보 모드에서 현재 담당(표시용 — 선택 불가) */
+  currentUserId?: string | null;
   busy?: boolean;
   onClose: () => void;
   onPick: (people: PickedPerson[], role: TodoShareRole) => Promise<void> | void;
 }) {
   const [value, setValue] = useState<CalendarPerson[]>([]);
   const [role, setRole] = useState<TodoShareRole>(defaultRole);
-  const snapshot = useOrgSnapshot(open);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const snapshot = useOrgSnapshot(open && !candidates);
 
   const picked = useMemo(() => {
     const out: PickedPerson[] = [];
@@ -49,8 +57,11 @@ export function PeoplePickerModal({
 
   const close = () => {
     setValue([]);
+    setChosen(null);
     onClose();
   };
+  const candidateMode = !!candidates;
+  const chosenPerson = candidateMode ? candidates.find((p) => p.userId === chosen) ?? null : null;
 
   return (
     <CdModal
@@ -67,13 +78,18 @@ export function PeoplePickerModal({
           <CdButton
             variant="primary"
             loading={busy}
-            disabled={!picked.out.length}
+            disabled={candidateMode ? !chosenPerson : !picked.out.length}
             onClick={async () => {
+              if (candidateMode) {
+                if (chosenPerson) await onPick([chosenPerson], role);
+                setChosen(null);
+                return;
+              }
               await onPick(picked.out, role);
               setValue([]);
             }}
           >
-            추가{picked.out.length ? ` (${picked.out.length})` : ""}
+            {candidateMode ? "지정" : `추가${picked.out.length ? ` (${picked.out.length})` : ""}`}
           </CdButton>
         </>
       }
@@ -88,8 +104,34 @@ export function PeoplePickerModal({
             ))}
           </CdSelect>
         )}
-        <AttendeePicker value={value} onChange={setValue} height="40vh" />
-        {picked.missing.length > 0 && (
+        {candidateMode ? (
+          <div className="flex flex-col gap-1" role="radiogroup" aria-label="담당 후보">
+            <p className="text-[12px] cd-text-muted">담당은 작성자·공유받은 사람·보드 멤버 중에서 고릅니다. 다른 사람에게 맡기려면 먼저 공유를 추가하세요.</p>
+            {candidates.length === 0 && <p className="text-[13px] cd-text-faint py-3">후보가 없습니다.</p>}
+            {candidates.map((p) => {
+              const isCurrent = p.userId === currentUserId;
+              const on = chosen === p.userId;
+              return (
+                <button
+                  key={p.userId}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={isCurrent}
+                  onClick={() => setChosen(p.userId)}
+                  className="w-full text-left px-3 py-2 rounded-lg border cd-border-c flex items-center justify-between cd-row-hover disabled:opacity-60"
+                  style={on ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)" } : undefined}
+                >
+                  <span className="text-sm cd-text">{p.name}</span>
+                  <span className="text-[11px] cd-text-muted">{isCurrent ? "현재 담당" : on ? "선택됨" : ""}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <AttendeePicker value={value} onChange={setValue} height="40vh" />
+        )}
+        {!candidateMode && picked.missing.length > 0 && (
           <p className="text-[12px] cd-error-text">계정이 없거나 이미 추가된 사람은 제외됩니다: {picked.missing.join(", ")}</p>
         )}
       </div>

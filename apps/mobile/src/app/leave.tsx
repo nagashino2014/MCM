@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, GradientButton, OutlineButton, ScreenHeader, SkeletonList } from '@/components/ui';
 import { CHART, DayBars, DonutGauge, OvertimeGauge } from '@/components/charts/Gauges';
 import { useApi } from '@/lib/use-api';
+import type { CdPalette } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 
 /**
@@ -75,14 +76,14 @@ const STATUS_LABEL: Record<string, string> = {
   rejected: '반려',
   canceled: '취소',
 };
-/** 상태 배지 색 — 핸드오프의 '승인'(#1f9d76 / #e2f5ee) 계열. */
-const STATUS_TONE: Record<string, { fg: string; bg: string }> = {
-  approved: { fg: '#1f9d76', bg: '#e2f5ee' },
-  rejected: { fg: '#c0392e', bg: '#fdeceb' },
-  in_progress: { fg: '#4353e4', bg: '#e3e6fb' },
-  draft: { fg: '#878ea8', bg: '#f3f4fa' },
-  canceled: { fg: '#878ea8', bg: '#f3f4fa' },
-};
+/** 상태 배지 색 — 핸드오프의 '승인' 계열을 테마 Soft/본색 짝으로. 다크 보정(2026-10-18) */
+const statusTone = (c: CdPalette): Record<string, { fg: string; bg: string }> => ({
+  approved: { fg: c.success, bg: c.successSoft },
+  rejected: { fg: c.error, bg: c.errorSoft },
+  in_progress: { fg: c.primary, bg: c.primarySoft },
+  draft: { fg: c.muted, bg: c.surface },
+  canceled: { fg: c.muted, bg: c.surface },
+});
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const d1 = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
@@ -215,7 +216,7 @@ export default function LeaveScreen() {
         {/* 휴가 사용 내역 — 날짜·유형·차감(2026-09-14 신설: 모바일에는 없던 상세) */}
         <Card
           title="휴가 사용 내역"
-          badge={usedEntries.length ? <TintBadge label={`${year}년 ${usedEntries.length}건`} fg="#4353e4" bg="#e3e6fb" /> : undefined}
+          badge={usedEntries.length ? <TintBadge label={`${year}년 ${usedEntries.length}건`} fg={c.primary} bg={c.primarySoft} /> : undefined}
           action={usedEntries.length > 6 ? { label: showAllUsed ? '접기' : '전체보기', onPress: () => setShowAllUsed((v) => !v) } : undefined}>
           {usage.loading && !usage.data ? (
             <SkeletonList count={1} />
@@ -254,10 +255,10 @@ export default function LeaveScreen() {
           <Card title="연차 사용 촉진 고지">
             <View className="mt-2 gap-2">
               {pendingNotices.map((n) => (
-                <View key={n.noticeId} className="gap-1 rounded-xl px-3 py-2.5" style={{ backgroundColor: '#fdf1d8' }}>
+                <View key={n.noticeId} className="gap-1 rounded-xl px-3 py-2.5" style={{ backgroundColor: c.warningSoft }}>
                   <View className="flex-row items-center gap-1.5">
-                    <Ionicons name="alert-circle" size={14} color="#b47700" />
-                    <Text className="flex-1 text-[13px] font-bold" style={{ color: '#b47700' }}>
+                    <Ionicons name="alert-circle" size={14} color={c.warning} />
+                    <Text className="flex-1 text-[13px] font-bold" style={{ color: c.warning }}>
                       {n.round}차 고지 — 회신이 필요합니다
                     </Text>
                   </View>
@@ -271,7 +272,7 @@ export default function LeaveScreen() {
         {/* 이번 주 초과근무 */}
         <Card
           title="이번 주 초과근무"
-          badge={weekOver52 ? <TintBadge label="주 52시간 초과" fg="#c0392e" bg="#fdeceb" /> : undefined}
+          badge={weekOver52 ? <TintBadge label="주 52시간 초과" fg={c.error} bg={c.errorSoft} /> : undefined}
           action={{ label: '주별 상세', onPress: () => router.push('/attendance') }}>
           {att.loading && !att.data ? (
             <SkeletonList count={1} />
@@ -344,13 +345,13 @@ export default function LeaveScreen() {
           ) : (
             <View className="mt-3 gap-2">
               {docs.map((d) => {
-                const tone = STATUS_TONE[d.status] ?? STATUS_TONE.draft;
+                const tone = statusTone(c)[d.status] ?? statusTone(c).draft;
                 return (
                   <Pressable
                     key={d.docId}
                     onPress={() => router.push({ pathname: '/approval/[docId]', params: { docId: d.docId } })}
                     className="flex-row items-center gap-3 rounded-xl border p-3 active:opacity-70"
-                    style={{ backgroundColor: '#fbfbfe', borderColor: '#eef0f7' }}>
+                    style={{ backgroundColor: c.card, borderColor: c.border }}>
                     <View className="flex-1">
                       <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: CHART.ink }}>
                         {d.title}
@@ -387,10 +388,11 @@ function StatRow({
   /** 값 텍스트 기본색 — 다크에서 테마 텍스트색을 넘긴다. */
   ink?: string;
 }) {
+  const { c } = useTheme();
   return (
     <View
       className={`flex-row items-baseline justify-between ${divider ? 'border-t pt-[9px]' : ''}`}
-      style={divider ? { borderTopColor: '#f0f1f7' } : undefined}>
+      style={divider ? { borderTopColor: c.gridLine } : undefined}>
       <Text className="text-[12px]" style={{ color: CHART.weekday }}>
         {label}
       </Text>
@@ -414,12 +416,13 @@ function TintBadge({ label, fg, bg }: { label: string; fg: string; bg: string })
 
 /** 세그먼트 칩 — 선택은 primary 틴트, 비선택은 회색 틴트(핸드오프 '내 신청'). */
 function SegChip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       className="rounded-full px-4 py-[7px] active:opacity-70"
-      style={{ backgroundColor: on ? '#e3e6fb' : '#f3f4fa' }}>
-      <Text className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? '#4353e4' : '#878ea8' }}>
+      style={{ backgroundColor: on ? c.primarySoft : c.surface }}>
+      <Text className={`text-[12px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? c.primary : c.muted }}>
         {label}
       </Text>
     </Pressable>

@@ -34,6 +34,9 @@ export interface CdPalette {
   error: string;
   errorSoft: string;
   gridLine: string;
+  /** primary/error 면 위의 글자색(2026-10-18 다크 보정) — 라이트 흰색, 다크는 캔버스색(밝은 primary 위 흰 글자는 1.9:1). */
+  onPrimary: string;
+  onError: string;
 }
 
 /**
@@ -75,6 +78,8 @@ export const LIGHT: CdPalette = {
   errorSoft: "#fcebe8",
   // 표·그리드의 보조선 — border 보다 한 단계 옅다(구분이 아니라 정렬용).
   gridLine: "#e4e8f2",
+  onPrimary: "#ffffff",
+  onError: "#ffffff",
 };
 
 export const DARK: CdPalette = {
@@ -87,22 +92,26 @@ export const DARK: CdPalette = {
   text: "#e7eaf4",
   body: "#c6cde0",
   muted: "#9aa3bc",
-  faint: "#6e7a96",
+  // faint 는 글자로도 쓰여 card 위 4.5:1 이상이어야 한다(2026-10-18: #6e7a96 3.7:1 → 상향).
+  faint: "#8590ab",
   primary: "#a9b8ff",
-  primarySoft: "#2e3656",
+  // Soft 면은 상태 칩 배경이라 서로 색상(hue)이 구분돼야 한다(2026-10-18 채도 상향).
+  primarySoft: "#2c3a66",
   primaryStrong: "#8fa5ff",
   secondary: "#7ec8f0",
-  secondarySoft: "#293850",
+  secondarySoft: "#24405a",
   accent: "#f09a8b",
   accentSoft: "#3d3444",
   accentStrong: "#f09a8b",
   success: "#5fc7a5",
-  successSoft: "#253846",
+  successSoft: "#1f4438",
   warning: "#ebc06a",
-  warningSoft: "#3c3a3e",
+  warningSoft: "#4a3d22",
   error: "#f09a8b",
-  errorSoft: "#3d3444",
+  errorSoft: "#4a2f33",
   gridLine: "#303548",
+  onPrimary: "#141824",
+  onError: "#141824",
 };
 
 /** "#5d87ff" → "93 135 255" (tailwind 의 `rgb(var(--x) / <alpha-value>)` 가 요구하는 형식). */
@@ -138,6 +147,8 @@ export function paletteVars(p: CdPalette): Record<string, string> {
     "--cd-error": triplet(p.error),
     "--cd-error-soft": triplet(p.errorSoft),
     "--cd-grid-line": triplet(p.gridLine),
+    "--cd-on-primary": triplet(p.onPrimary),
+    "--cd-on-error": triplet(p.onError),
   };
 }
 

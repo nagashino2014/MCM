@@ -171,6 +171,7 @@ export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string
 
 export const TODO_ACTIVITY_ACTIONS = [
   "create", "update", "status", "assign", "due", "move", "share", "comment", "complete", "reopen", "snooze", "archive",
+  "progress", "work_report",
 ] as const;
 export type TodoActivityAction = (typeof TODO_ACTIVITY_ACTIONS)[number];
 
@@ -302,6 +303,11 @@ export interface TodoItem {
   completionNote: string | null;
   /** 상태가 review 로 바뀐 시각(ISO) — 규칙 review 의 근거. */
   reviewedAt: string | null;
+  /** 하위 작업 진척(285, §25-2) — 진행율·진척 내용·공정 단계 매핑. 상위 작업은 쓰지 않는다. */
+  progressPct: number | null;
+  progressNote: string | null;
+  stageOrder: number | null;
+  progressUpdatedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;
@@ -316,11 +322,24 @@ export interface TodoItem {
   isOwner: boolean;
 }
 
+/** 관련 대상(계약/업무추진계획 Task)의 공정표 단계(§25-2·25-3). */
+export interface TodoStageRef {
+  stageOrder: number;
+  stageName: string;
+  status: "pending" | "in_progress" | "done";
+  progressPct: number;
+  progressUnitPct: number;
+}
+
 export interface TodoItemDetail extends TodoItem {
   subtasks: TodoItem[];
   shares: TodoShare[];
   comments: TodoComment[];
   activity: TodoActivity[];
+  /** 하위 작업 평균 진행율(하위 없으면 null). */
+  progressAvg: number | null;
+  stages: TodoStageRef[];
+  reportSubject: "contract" | "task" | null;
 }
 
 export interface TodoColumn {

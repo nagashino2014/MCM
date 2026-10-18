@@ -19,7 +19,7 @@ const BOX: Record<Variant, string> = {
 const LABEL: Record<Variant, string> = {
   primary: "text-white",
   ghost: "text-cd-text",
-  danger: "text-white",
+  danger: "text-cd-on-error",
   soft: "text-cd-primary",
 };
 
@@ -50,9 +50,11 @@ export function Button({
   const dim = !!disabled && !loading;
   const iconColor = dim
     ? c.faint
-    : variant === "primary" || variant === "danger"
-      ? "#fff"
-      : variant === "soft"
+    : variant === "primary"
+      ? "#fff" // 그라데이션 위는 흰색 유지 — 다크 보정(2026-10-18)
+      : variant === "danger"
+        ? c.onError
+        : variant === "soft"
         ? c.primary
         : c.text;
 

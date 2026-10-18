@@ -270,18 +270,21 @@ export function withAlpha(hex: string, alpha: number): string {
 
 // ── v4 파스텔 팔레트(§19-1·2, 시안 Main/Board/Detail/Mobile) — 라이트 고정값. 다크는 labelColors() 가 알파·밝은 글자로 바꾼다. ──
 export const TODO_UI = {
+  // 다크(2026-10-18 보정): 알파 합성 대신 톤마다 darkBg 를 둔다 — 알파 22% 는 배경이 전부 회청색으로 뭉개졌다.
   /** 지연·높음 라벨 */
-  over: { bg: '#FBE3E3', fg: '#9b2222', darkFg: '#f5a3a3' },
+  over: { bg: '#FBE3E3', fg: '#9b2222', darkBg: '#4a2a2e', darkFg: '#f5a3a3' },
   /** 오늘 마감 라벨 */
-  today: { bg: '#FDEBD3', fg: '#8a4b06', darkFg: '#f2c27a' },
+  today: { bg: '#FDEBD3', fg: '#8a4b06', darkBg: '#4a3a22', darkFg: '#f2c27a' },
   /** 오늘 그룹 pill · 진행 중 칩 */
-  sky: { bg: '#D9E8F8', fg: '#1a47a8', darkFg: '#a9b8ff' },
-  /** 검토 칩 */
-  lavender: { bg: '#E4DDF7', fg: '#4d5260', darkFg: '#d2d6e0' },
+  sky: { bg: '#D9E8F8', fg: '#1a47a8', darkBg: '#2c3a66', darkFg: '#a9b8ff' },
+  /** 검토 칩 — 보라(웹 §24 와 같은 색 언어, 다크 글자도 보라) */
+  lavender: { bg: '#E4DDF7', fg: '#5b4a9e', darkBg: '#3a3358', darkFg: '#c9b8ec' },
   /** 확인 대기·완료 칩 */
-  sage: { bg: '#DDF0D3', fg: '#1c7850', darkFg: '#8fd8b4' },
-  /** 할 일·보류 칩, 낮음 라벨 */
-  gray: { bg: '#eef0f3', fg: '#646a76', darkFg: '#a1a8b5' },
+  sage: { bg: '#DDF0D3', fg: '#1c7850', darkBg: '#1f4438', darkFg: '#8fd8b4' },
+  /** 할 일 칩, 낮음 라벨 */
+  gray: { bg: '#eef0f3', fg: '#646a76', darkBg: '#2b3040', darkFg: '#a1a8b5' },
+  /** 보류 칩 — 회색 바탕에 점선 테두리(웹 §24). 글자는 gray 보다 한 단계 진하게 */
+  hold: { bg: '#eef0f3', fg: '#4d5260', darkBg: '#2b3040', darkFg: '#b8bec9' },
   /** 하위 작업 분절 — 완료·진행 중 */
   segDone: '#9FD9BA',
   segDoing: '#B9CFEE',
@@ -296,12 +299,28 @@ export const TODO_UI = {
   },
 } as const;
 
-export type LabelTone = 'over' | 'today' | 'sky' | 'lavender' | 'sage' | 'gray';
+export type LabelTone = 'over' | 'today' | 'sky' | 'lavender' | 'sage' | 'gray' | 'hold';
 
-/** 파스텔 라벨 색 — 라이트는 고정값, 다크는 같은 색을 22% 알파로 깔고 글자를 밝게. */
+/** 파스텔 라벨 색 — 라이트는 고정값, 다크는 톤별 darkBg/darkFg(2026-10-18: 알파 합성 폐기). */
 export function labelColors(tone: LabelTone, dark: boolean): { bg: string; fg: string } {
   const t = TODO_UI[tone];
-  return dark ? { bg: withAlpha(t.bg, 0.22), fg: t.darkFg } : { bg: t.bg, fg: t.fg };
+  return dark ? { bg: t.darkBg, fg: t.darkFg } : { bg: t.bg, fg: t.fg };
+}
+
+/** 상태 → 점·체크 원 색(라이트/다크 공통 규칙: 진행 파랑·검토 보라·완료 초록·보류 회색·할 일 중립). */
+export function statusHue(s: TodoStatus | null | undefined, c: CdPalette, dark: boolean): string {
+  switch (s) {
+    case 'doing':
+      return c.primary;
+    case 'review':
+      return dark ? TODO_UI.lavender.darkFg : TODO_UI.lavender.fg;
+    case 'done':
+      return c.success;
+    case 'hold':
+      return c.muted;
+    default:
+      return c.faint;
+  }
 }
 
 /** 상태 → 파스텔 칩 톤(§19-3 열 이름 칩과 같은 규칙). */
@@ -313,6 +332,8 @@ export function statusTone(s: TodoStatus | null | undefined): LabelTone {
       return 'lavender';
     case 'done':
       return 'sage';
+    case 'hold':
+      return 'hold';
     default:
       return 'gray';
   }
@@ -325,7 +346,8 @@ const COLUMN_CYCLE: LabelTone[] = ['sky', 'lavender', 'sage', 'over', 'today'];
  * 완료·보류는 보드 아래 접힘 행(sage·회색).
  */
 export function columnTone(col: Pick<TodoColumn, 'name' | 'statusMap'>, index: number): LabelTone {
-  if (col.statusMap === 'todo' || col.statusMap === 'hold') return 'gray';
+  if (col.statusMap === 'todo') return 'gray';
+  if (col.statusMap === 'hold') return 'hold';
   if (col.statusMap === 'doing') return 'sky';
   if (col.statusMap === 'review') return 'lavender';
   if (col.statusMap === 'done') return 'sage';

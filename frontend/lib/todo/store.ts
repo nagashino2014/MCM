@@ -59,6 +59,9 @@ import {
   type ItemAccessRow,
 } from "./visibility";
 import { notifyTodoAssigned, notifyTodoComment, notifyTodoStatus } from "./notify";
+import { listContractStages } from "@/lib/contracts/process-stages";
+import { listTaskStages } from "@/lib/work-plan/task-stages";
+import type { TodoStageRef } from "./types";
 
 const nowIso = () => new Date().toISOString();
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -934,9 +937,10 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     ownerUserId: String(r.owner_user_id),
     ownerName: r.owner_name != null ? String(r.owner_name) : null,
     ownerPhotoUrl: photos ? photoOf(photos, String(r.owner_user_id)) : null,
-    assigneeUserId: r.assignee_user_id != null ? String(r.assignee_user_id) : null,
-    assigneeName: r.assignee_name != null ? String(r.assignee_name) : null,
-    assigneePhotoUrl: photos && r.assignee_user_id != null ? photoOf(photos, String(r.assignee_user_id)) : null,
+    // §25-1: 담당은 항상 1명 — 옛 행의 NULL 은 작성자로 보여 준다(쓰기 경로는 더 이상 NULL 을 만들지 않는다).
+    assigneeUserId: r.assignee_user_id != null ? String(r.assignee_user_id) : String(r.owner_user_id),
+    assigneeName: r.assignee_user_id != null ? (r.assignee_name != null ? String(r.assignee_name) : null) : r.owner_name != null ? String(r.owner_name) : null,
+    assigneePhotoUrl: photos ? photoOf(photos, r.assignee_user_id != null ? String(r.assignee_user_id) : String(r.owner_user_id)) : null,
     boardName: String(r.board_name ?? ""),
     boardKind,
     boardColor: todoBoardColorHex(r.board_color != null ? String(r.board_color) : null, boardKind),
@@ -949,6 +953,10 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     completeRules: normalizeCompleteRules(r.complete_rules),
     completionNote: text(r.completion_note),
     reviewedAt: r.reviewed_at != null ? String(r.reviewed_at) : null,
+    progressPct: r.progress_pct != null ? Number(r.progress_pct) : null,
+    progressNote: r.progress_note != null ? String(r.progress_note) : null,
+    stageOrder: r.stage_order != null ? Number(r.stage_order) : null,
+    progressUpdatedAt: r.progress_updated_at != null ? String(r.progress_updated_at) : null,
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
     createdBy: r.created_by != null ? String(r.created_by) : null,
@@ -1035,7 +1043,7 @@ export async function listItems(userId: string, q: ListItemsQuery): Promise<List
   if (q.archivedOnly) where.push("i.archived_at IS NOT NULL");
   else if (!q.includeArchived) where.push("i.archived_at IS NULL");
   if (q.view === "my") {
-    where.push("(i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))");
+    where.push("(i.assignee_user_id = $1 OR i.owner_user_id = $1)");
   } else if (q.view === "board") {
     const boardId = str(q.boardId, 40);
     if (!boardId) throw fail("board 가 필요합니다.");
@@ -1171,7 +1179,22 @@ export async function getItemDetail(userId: string, itemId: string): Promise<Tod
       [itemId]
     )
   ).map(mapActivity);
-  return { ...base, subtasks, shares, comments, activity };
+  // §25-2 상위 진행율 = 하위 평균(완료 100, 미기입 0). §25-3 관련 대상의 공정표.
+  const progressAvg = subtasks.length
+    ? Math.round(subtasks.reduce((acc, st) => acc + (st.status === "done" ? 100 : st.progressPct ?? 0), 0) / subtasks.length)
+    : null;
+  const reportSubject: TodoItemDetail["reportSubject"] =
+    base.linkKind === "contract" && base.linkId ? "contract" : base.linkKind === "work_task" && base.linkId ? "task" : null;
+  let stages: TodoStageRef[] = [];
+  if (reportSubject && base.linkId) {
+    try {
+      const rows = reportSubject === "contract" ? await listContractStages(base.linkId) : await listTaskStages(base.linkId);
+      stages = rows.map((r) => ({ stageOrder: r.stageOrder, stageName: r.stageName, status: r.status, progressPct: r.progressPct, progressUnitPct: r.progressUnitPct }));
+    } catch (e) {
+      console.error("[todo] 공정표 조회 실패", base.linkKind, base.linkId, e);
+    }
+  }
+  return { ...base, subtasks, shares, comments, activity, progressAvg, stages, reportSubject };
 }
 
 async function logActivity(db: PgDatabase, itemId: string, userId: string | null, action: TodoActivityAction, detail: Record<string, unknown> = {}) {
@@ -1278,6 +1301,10 @@ interface NormalizedItemInput {
   linkId: string | null;
   linkLabel: string | null;
   color: string | null;
+  /** 285 하위 작업 진척(상위 작업에서는 무시) */
+  progressPct: number | null;
+  progressNote: string | null;
+  stageOrder: number | null;
 }
 
 function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unknown>): NormalizedItemInput {
@@ -1310,6 +1337,13 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
   const linkKind = (linkKindRaw as TodoLinkKind | null) ?? null;
   const color = str(pick("color", "color"), 20);
   if (color && !/^#[0-9a-fA-F]{6}$|^[a-z]{3,20}$/.test(color)) throw fail("색 값이 올바르지 않습니다.");
+  // 285 하위 작업 진척 — 진행율 0~100 정수(빈 값=미기입), 단계 번호 양의 정수(빈 값=미매핑)
+  const pctRaw = pick("progressPct", "progress_pct");
+  const progressPct = pctRaw == null || pctRaw === "" ? null : Number(pctRaw);
+  if (progressPct != null && (!Number.isInteger(progressPct) || progressPct < 0 || progressPct > 100)) throw fail("진행율은 0~100 사이 정수로 입력하세요.");
+  const stageRaw = pick("stageOrder", "stage_order");
+  const stageOrder = stageRaw == null || stageRaw === "" ? null : Number(stageRaw);
+  if (stageOrder != null && (!Number.isInteger(stageOrder) || stageOrder < 1)) throw fail("공정 단계 번호가 올바르지 않습니다.");
   return {
     title,
     note: str(pick("note", "note"), 5000),
@@ -1324,6 +1358,9 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
     linkId: linkKind ? str(pick("linkId", "link_id"), 500) : null,
     linkLabel: linkKind ? str(pick("linkLabel", "link_label"), 200) : null,
     color,
+    progressPct,
+    progressNote: str(pick("progressNote", "progress_note"), 2000),
+    stageOrder,
   };
 }
 
@@ -1523,13 +1560,27 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     }
     if (position !== String(cur.position)) note("position", String(cur.position), position);
 
+    // ── 하위 작업 진척(285) — 상위 작업은 무시(하위 평균으로 계산) ──
+    const isSub = cur.parent_item_id != null;
+    let progressPct = isSub ? v.progressPct : null;
+    const progressNote = isSub ? v.progressNote : null;
+    const stageOrder = isSub ? v.stageOrder : null;
+    // 완료로 바뀌는 하위 작업은 100%, 되돌리면 기존 값 유지
+    if (isSub && status === "done" && String(cur.status) !== "done") progressPct = 100;
+    note("progressPct", cur.progress_pct != null ? Number(cur.progress_pct) : null, progressPct);
+    note("progressNote", cur.progress_note ?? null, progressNote);
+    note("stageOrder", cur.stage_order != null ? Number(cur.stage_order) : null, stageOrder);
+    const progressUpdatedAt = changes.progressPct || changes.progressNote ? nowIso() : cur.progress_updated_at != null ? String(cur.progress_updated_at) : null;
+
     // ── 담당 ──
     let assigneeId = cur.assignee_user_id != null ? String(cur.assignee_user_id) : null;
     if (patch.assigneeUserId !== undefined) {
-      const next = str(patch.assigneeUserId, 80);
-      if (next) {
+      // §25-1: 담당은 항상 1명 — null 은 "작성자에게 되돌리기". 후보는 작성자·공유 대상·보드 멤버로 제한한다.
+      const next = str(patch.assigneeUserId, 80) ?? String(cur.owner_user_id);
+      if (next !== String(cur.owner_user_id)) {
         const ex = rowsToObjects(await db.exec(`SELECT 1 FROM users WHERE user_id = $1`, [next]));
         if (!ex.length) throw fail("담당자를 찾을 수 없습니다.", 404);
+        if (!(await isAssigneeCandidate(db, cur, next))) throw fail("담당은 공유받은 사람이나 보드 멤버 중에서 지정할 수 있습니다. 먼저 공유를 추가하세요.", 400);
       }
       if (next !== assigneeId) {
         note("assigneeUserId", assigneeId, next);
@@ -1617,7 +1668,8 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
          remind_at = $14, remind_sent_at = $15, snoozed_until = $16, recurrence = $17,
          link_kind = $18, link_id = $19, link_label = $20, color = $21, assignee_user_id = $22,
          completed_at = $23, completed_by = $24, updated_at = $25, updated_by = $26,
-         complete_rules = $27::jsonb, completion_note = $28, reviewed_at = $29
+         complete_rules = $27::jsonb, completion_note = $28, reviewed_at = $29,
+         progress_pct = $30, progress_note = $31, stage_order = $32, progress_updated_at = $33
        WHERE item_id = $1`,
       [
         itemId,
@@ -1649,11 +1701,23 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
         JSON.stringify(completeRules),
         completionNote,
         reviewedAt,
+        progressPct,
+        progressNote,
+        stageOrder,
+        progressUpdatedAt,
       ]
     );
 
     // ── 활동 로그(분류별) ──
     const byName = await userName(db, userId);
+    if (changes.progressPct || changes.progressNote || changes.stageOrder) {
+      await logActivity(db, itemId, userId, "progress", {
+        from: changes.progressPct?.[0] ?? null,
+        to: changes.progressPct?.[1] ?? progressPct,
+        note: changes.progressNote ? (progressNote ?? "").slice(0, 80) : undefined,
+        stage: changes.stageOrder?.[1],
+      });
+    }
     if (changes.status) {
       const action: TodoActivityAction = status === "done" ? "complete" : String(cur.status) === "done" ? "reopen" : "status";
       await logActivity(db, itemId, userId, action, { from: changes.status[0], to: changes.status[1], ...(action === "complete" && completionNote ? { note: completionNote } : {}) });
@@ -1692,7 +1756,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     }
     const rest = Object.fromEntries(
       Object.entries(changes).filter(
-        ([k]) => !["status", "assigneeUserId", "doDate", "doTime", "dueDate", "boardId", "columnId", "position", "remindAt"].includes(k)
+        ([k]) => !["status", "assigneeUserId", "doDate", "doTime", "dueDate", "boardId", "columnId", "position", "remindAt", "progressPct", "progressNote", "stageOrder"].includes(k)
       )
     );
     if (Object.keys(rest).length) await logActivity(db, itemId, userId, "update", { changes: rest });
@@ -1764,6 +1828,10 @@ export async function completeItem(userId: string, itemId: string, done: boolean
         WHERE item_id = $1`,
       [itemId, status, columnId, done ? now : null, done ? userId : null, now, userId, done ? completionNote : cur.completion_note ?? null]
     );
+    // 285: 하위 작업을 완료하면 진행율 100(되돌려도 유지 — 사용자가 다시 조정)
+    if (done && cur.parent_item_id != null && Number(cur.progress_pct ?? -1) !== 100) {
+      await db.run(`UPDATE todo_items SET progress_pct = 100, progress_updated_at = $2 WHERE item_id = $1`, [itemId, now]);
+    }
     await logActivity(db, itemId, userId, done ? "complete" : "reopen", {
       from: String(cur.status),
       to: status,
@@ -1971,15 +2039,33 @@ export async function shareItem(userId: string, itemId: string, input: Record<st
   return getItemDetail(userId, itemId);
 }
 
-/** 공유 해제 — owner 만(본인 공유 해제는 허용). 담당 해제면 assignee 도 비운다. */
+/**
+ * 담당 후보 판정(§25-1) — 작성자·공유 대상(todo_item_shares)·보드 멤버(개인 보드는 멤버 없음).
+ * 그 밖의 사람은 먼저 공유를 추가해야 담당이 될 수 있다.
+ */
+async function isAssigneeCandidate(db: PgDatabase, cur: Record<string, unknown>, userId: string): Promise<boolean> {
+  if (String(cur.owner_user_id) === userId) return true;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT 1 FROM todo_item_shares WHERE item_id = $1 AND user_id = $2
+       UNION ALL SELECT 1 FROM todo_board_members WHERE board_id = $3 AND user_id = $2
+       LIMIT 1`,
+      [String(cur.item_id), userId, String(cur.board_id)]
+    )
+  );
+  return rows.length > 0;
+}
+
+/** 공유 해제 — owner 만(본인 공유 해제는 허용). 담당이던 사람이면 작성자에게 되돌린다. */
 export async function unshareItem(userId: string, itemId: string, targetId: string): Promise<TodoItemDetail | null> {
   await withDbWrite(async (db) => {
     const cur = await loadItemRow(db, itemId);
     if (String(cur.owner_user_id) !== userId && targetId !== userId) throw fail("공유 해제는 만든 사람만 할 수 있습니다.", 403);
     await db.run(`DELETE FROM todo_item_shares WHERE item_id = $1 AND user_id = $2`, [itemId, targetId]);
     if (cur.assignee_user_id != null && String(cur.assignee_user_id) === targetId) {
-      await db.run(`UPDATE todo_items SET assignee_user_id = NULL, updated_at = $2, updated_by = $3 WHERE item_id = $1`, [itemId, nowIso(), userId]);
-      await logActivity(db, itemId, userId, "assign", { from: targetId, to: null });
+      // §25-1: 담당 없음 상태를 만들지 않는다 — 작성자에게 되돌린다.
+      await db.run(`UPDATE todo_items SET assignee_user_id = $2, updated_at = $3, updated_by = $4 WHERE item_id = $1`, [itemId, String(cur.owner_user_id), nowIso(), userId]);
+      await logActivity(db, itemId, userId, "assign", { from: targetId, to: String(cur.owner_user_id) });
     }
     await logActivity(db, itemId, userId, "share", { userId: targetId, removed: true });
   });
@@ -2017,7 +2103,7 @@ export async function listDueSoon(userId: string, hours = 24): Promise<TodoItem[
     await db.exec(
       `${ITEM_SELECT}
         WHERE ${visibleItemsWhere("$1")}
-          AND (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
+          AND (i.assignee_user_id = $1 OR i.owner_user_id = $1)
           AND i.status <> 'done' AND i.archived_at IS NULL AND i.parent_item_id IS NULL
           AND ((i.do_date IS NOT NULL AND i.do_date <= $3) OR (i.due_date IS NOT NULL AND i.due_date <= $3))
         ORDER BY COALESCE(i.do_date, i.due_date), i.do_time NULLS LAST, i.priority DESC
@@ -2046,7 +2132,7 @@ export async function listTodayForHome(userId: string): Promise<TodoTodaySummary
     await db.exec(
       `${ITEM_SELECT}
         WHERE ${visibleItemsWhere("$1")}
-          AND (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
+          AND (i.assignee_user_id = $1 OR i.owner_user_id = $1)
           AND i.status <> 'done' AND i.archived_at IS NULL AND i.parent_item_id IS NULL
           AND COALESCE(i.do_date, i.due_date) <= $2
         ORDER BY COALESCE(i.do_date, i.due_date), i.do_time NULLS LAST, i.priority DESC, i.position COLLATE "C"`,
@@ -2074,7 +2160,7 @@ export async function countDueBadge(userId: string): Promise<number> {
   const rows = rowsToObjects(
     await db.exec(
       `SELECT COUNT(*)::int AS n FROM todo_items i
-        WHERE (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
+        WHERE (i.assignee_user_id = $1 OR i.owner_user_id = $1)
           AND i.status <> 'done' AND i.archived_at IS NULL AND i.parent_item_id IS NULL
           AND ((i.do_date IS NOT NULL AND i.do_date <= $2) OR (i.due_date IS NOT NULL AND i.due_date <= $2))`,
       [userId, today]

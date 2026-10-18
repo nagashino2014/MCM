@@ -165,7 +165,7 @@ function CategoryTile({
         </View>
         {count > 0 ? (
           <View className="absolute -right-1.5 -top-1 min-w-[18px] items-center justify-center rounded-full bg-cd-primary px-1 py-[1px]">
-            <Text className="text-[9.5px] font-extrabold text-white">
+            <Text className="text-[9.5px] font-extrabold text-cd-on-primary">
               {count > 999 ? '999+' : count}
             </Text>
           </View>

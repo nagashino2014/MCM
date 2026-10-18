@@ -17,7 +17,7 @@ function TabBadge({ count }: { count?: number | null }) {
   if (!count) return null;
   return (
     <View className="absolute -right-2.5 -top-1 min-w-[16px] items-center rounded-full bg-cd-error px-1">
-      <Text className="text-[10px] font-extrabold text-white">{count > 99 ? '99+' : count}</Text>
+      <Text className="text-[10px] font-extrabold text-cd-on-error">{count > 99 ? '99+' : count}</Text>
     </View>
   );
 }

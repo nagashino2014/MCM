@@ -24,7 +24,7 @@ import { QuickAddBar } from "./QuickAddBar";
 import { GroupHeader, MyTodoList, rowListKeyNav, type QuickFilter } from "./MyTodoList";
 import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
-import { TodoDetailDrawer } from "./TodoDetailDrawer";
+import { TODO_LIST_QUERY_KEY } from "./TodoDetailPage";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
 import { CompleteConfirmModal, type CompleteConfirmTarget } from "./CompleteConfirmModal";
@@ -279,8 +279,23 @@ export function TodoBoardPage() {
   };
 
   // ── 공통 동작 ──
-  const openItem = (item: TodoItem | string) => setQuery({ item: typeof item === "string" ? item : item.itemId });
-  const closeItem = () => setQuery({ item: null });
+  // §25-4: 상세는 별도 페이지(/todo/[itemId]). 돌아올 목록 query 를 남기고 이동한다.
+  const openItem = (item: TodoItem | string) => {
+    const id = typeof item === "string" ? item : item.itemId;
+    try {
+      const q = new URLSearchParams(sp.toString());
+      q.delete("item");
+      q.delete("new");
+      window.sessionStorage.setItem(TODO_LIST_QUERY_KEY, q.toString());
+    } catch {
+      /* 저장 실패는 무시 — 기본 목록으로 돌아간다 */
+    }
+    router.push(`/todo/${encodeURIComponent(id)}`);
+  };
+  // 옛 링크 /todo?item=<id> 호환 — 상세 페이지로 넘긴다.
+  useEffect(() => {
+    if (itemParam) router.replace(`/todo/${encodeURIComponent(itemParam)}`);
+  }, [itemParam, router]);
 
   const upsertAll = useCallback(
     (item: TodoItemDetail) => {
@@ -742,31 +757,6 @@ export function TodoBoardPage() {
         </section>
       </div>
 
-      {mounted && (
-        <TodoDetailDrawer
-          itemId={itemParam}
-          boards={boards}
-          prefs={prefs}
-          myUserId={myUserId}
-          myName={myName}
-          myPhotoUrl={myPhotoUrl}
-          today={today}
-          onClose={closeItem}
-          onItemChanged={(item) => {
-            upsertAll(item);
-            if (item.status === "done") graceDrop(item.itemId);
-            else if (archivedMode) {
-              // 보관함 항목을 상세에서 되돌리면 보관이 풀려 목록으로 돌아간다 — 목록들을 다시 읽는다.
-              void my.reload();
-              void shared.reload();
-              void boardData.reload();
-            }
-          }}
-          onItemCreated={createdAll}
-          onItemDeleted={removeAll}
-          onOpenItem={(id) => openItem(id)}
-        />
-      )}
 
       <CompleteConfirmModal open={!!confirm} target={confirm?.target ?? null} failure={confirm?.failure} busy={confirmBusy} onConfirm={(note) => void confirmComplete(note)} onClose={cancelConfirm} />
 

@@ -318,7 +318,7 @@ export default function CalendarEntryScreen() {
                   <View className="gap-1.5">
                     {label('관련 업무')}
                     {contractId ? (
-                      <View className="flex-row items-center gap-2 rounded-xl border px-3.5 py-3" style={{ borderColor: c.primary, backgroundColor: '#e3edfc' }}>
+                      <View className="flex-row items-center gap-2 rounded-xl border px-3.5 py-3" style={{ borderColor: c.primary, backgroundColor: c.primarySoft }}>
                         <Ionicons name="document-text-outline" size={16} color={c.primary} />
                         <Text className="flex-1 text-[14px] font-bold text-cd-text" numberOfLines={1}>{contractTitle}</Text>
                         {!ro ? (
@@ -370,12 +370,12 @@ export default function CalendarEntryScreen() {
                         disabled={ro}
                         onPress={() => setAttendees((prev) => prev.filter((x) => x.employeeId !== p.employeeId))}
                         className="flex-row items-center gap-1 rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: '#e3edfc' }}>
-                        <Text className="text-[12.5px] font-bold" style={{ color: '#2f6fd8' }}>
+                        style={{ backgroundColor: c.primarySoft }}>
+                        <Text className="text-[12.5px] font-bold" style={{ color: c.primary }}>
                           {p.name}
                           {p.positionName ? <Text className="font-medium"> {p.positionName}</Text> : null}
                         </Text>
-                        {!ro ? <Ionicons name="close" size={12} color="#2f6fd8" /> : null}
+                        {!ro ? <Ionicons name="close" size={12} color={c.primary} /> : null}
                       </Pressable>
                     ))
                   ) : (

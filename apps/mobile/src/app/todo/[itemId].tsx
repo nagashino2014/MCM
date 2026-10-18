@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -92,6 +92,8 @@ const ACTIVITY_LABEL: Record<(typeof TODO_ACTIVITY_ACTIONS)[number], string> = {
   reopen: '되돌림',
   snooze: '스누즈',
   archive: '보관',
+  progress: '진척 입력',
+  work_report: '업무 보고 초안',
 };
 
 const HHMM_OK = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -397,6 +399,8 @@ export default function TodoDetailScreen() {
   // ── 시트 상태 ──
   const [statusOpen, setStatusOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  // §25-1 담당 후보 = 작성자 + 공유 대상 + 보드 멤버(개인 보드는 멤버 없음) — 시트를 열 때 한 번 읽는다.
+  const [assignMembers, setAssignMembers] = useState<{ userId: string; name: string }[] | null>(null);
   const [doDateOpen, setDoDateOpen] = useState(false);
   const [dueOpen, setDueOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -494,6 +498,50 @@ export default function TodoDetailScreen() {
   };
 
   // ── 하위 작업 ──
+  // 하위 작업 진척(285, §25-2) — 진행율은 공정 단계 단위(없으면 10)로 −/+, 진척 내용은 입력 후 blur 에 저장.
+  const [subNoteDraft, setSubNoteDraft] = useState<Record<string, string>>({});
+  const [stagePickFor, setStagePickFor] = useState<TodoItem | null>(null);
+  const patchSub = async (sub: TodoItem, body: Record<string, unknown>) => {
+    mark('saving');
+    try {
+      await apiJson(`/api/todo/items/${sub.itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await reload();
+      mark('saved');
+    } catch (e) {
+      mark('error');
+      toast.show((e as Error).message, 'error');
+    }
+  };
+  const stageUnit = (stageOrder: number | null) => item?.stages.find((st) => st.stageOrder === stageOrder)?.progressUnitPct ?? 10;
+  const stepSub = (sub: TodoItem, dir: 1 | -1) => {
+    const unit = stageUnit(sub.stageOrder);
+    const next = Math.max(0, Math.min(100, (sub.progressPct ?? 0) + dir * unit));
+    if (next !== (sub.progressPct ?? 0)) void patchSub(sub, { progressPct: next });
+  };
+
+  // §25-3 업무 보고 초안 — 생성 후 모바일 보고 화면으로 이동(검토·제출은 사용자).
+  const [reportBusy, setReportBusy] = useState(false);
+  const createReportDraft = async () => {
+    if (!item || reportBusy) return;
+    setReportBusy(true);
+    try {
+      const r = await apiJson<{ reportId: string; updated: boolean; aiUsed: boolean; periodStart: string; periodEnd: string }>(
+        `/api/todo/items/${item.itemId}/work-report`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ai: true }) }
+      );
+      toast.show(`${r.updated ? '초안을 갱신했습니다' : '업무 보고 초안을 만들었습니다'} (${r.periodStart} ~ ${r.periodEnd}). 검토 후 제출하세요.`, 'success');
+      router.push({ pathname: '/work-report/[reportId]', params: { reportId: r.reportId } });
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
   const toggleSub = async (s: TodoItem) => {
     const r = await post<{ item: TodoItemDetail }>(`/api/todo/items/${s.itemId}/complete`, { done: s.status !== 'done' });
     if (r) void reload();
@@ -530,6 +578,39 @@ export default function TodoDetailScreen() {
       setItem((p) => (p ? { ...p, comments: r.comments, commentCount: r.comments.length } : p));
     }
   };
+
+  // ── 담당 후보(§25-1) ──
+  useEffect(() => {
+    if (!assignOpen || !item || item.boardKind === 'personal') {
+      setAssignMembers(null);
+      return;
+    }
+    let alive = true;
+    apiJson<{ members: { userId: string; name: string }[] }>(`/api/todo/boards/${encodeURIComponent(item.boardId)}/members`)
+      .then((d) => {
+        if (alive) setAssignMembers(d.members.map((m) => ({ userId: m.userId, name: m.name })));
+      })
+      .catch(() => {
+        if (alive) setAssignMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [assignOpen, item]);
+  const assignCandidates = useMemo(() => {
+    if (!item) return [] as { userId: string; name: string }[];
+    const seen = new Set<string>();
+    const out: { userId: string; name: string }[] = [];
+    const add = (userId: string | null | undefined, name: string | null | undefined) => {
+      if (!userId || seen.has(userId)) return;
+      seen.add(userId);
+      out.push({ userId, name: name ?? userId });
+    };
+    add(item.ownerUserId, item.ownerName ?? '작성자');
+    for (const sh of item.shares) add(sh.userId, sh.name);
+    for (const m of assignMembers ?? []) add(m.userId, m.name);
+    return out;
+  }, [item, assignMembers]);
 
   // ── 공유·담당 ──
   const share = async (emp: OrgEmployee, role: TodoShareRole) => {
@@ -862,6 +943,20 @@ export default function TodoDetailScreen() {
             />
           </Frame>
 
+          {/* 업무 보고(§25-3) — 관련이 계약/업무추진계획일 때만 */}
+          {item.reportSubject ? (
+            <Frame title="업무 보고">
+              <View className="gap-2">
+                <Text className="text-[12.5px] text-cd-muted">
+                  메모·하위 작업 진척으로 {item.reportSubject === 'task' ? '업무추진계획' : '용역'} 보고 초안을 만듭니다. 생성 후 보고 화면에서 검토·제출합니다.
+                </Text>
+                {canEdit ? (
+                  <Button label={reportBusy ? '만드는 중…' : '업무 보고 초안 만들기'} variant="soft" size="sm" onPress={() => void createReportDraft()} />
+                ) : null}
+              </View>
+            </Frame>
+          ) : null}
+
           {/* 하위 작업 */}
           <Frame
             title="하위 작업"
@@ -869,7 +964,7 @@ export default function TodoDetailScreen() {
               item.subtasks.length ? (
                 <>
                   <Text className="text-[12px] text-cd-faint">
-                    {subDone}/{item.subtasks.length} · {subPct}%
+                    {subDone}/{item.subtasks.length} · {subPct}%{item.progressAvg != null ? ` · 평균 ${item.progressAvg}%` : ''}
                   </Text>
                   <SegBar done={subDone} doing={subDoing} total={item.subtasks.length} segW={18} />
                 </>
@@ -877,7 +972,8 @@ export default function TodoDetailScreen() {
             }>
             <View>
               {item.subtasks.map((s) => (
-                <View key={s.itemId} className="min-h-[34px] flex-row items-center gap-2.5">
+                <View key={s.itemId}>
+                <View className="min-h-[34px] flex-row items-center gap-2.5">
                   <CheckCircle done={s.status === 'done'} disabled={!s.canEdit} onPress={() => void toggleSub(s)} size={18} />
                   <Text numberOfLines={1} className={`flex-1 text-[13.5px] ${s.status === 'done' ? 'text-cd-faint line-through' : 'text-cd-text'}`}>
                     {s.title}
@@ -893,6 +989,47 @@ export default function TodoDetailScreen() {
                       <Ionicons name="close-circle-outline" size={18} color={c.muted} />
                     </Pressable>
                   ) : null}
+                </View>
+                {s.status !== 'done' ? (
+                  <View className="mb-1 flex-row flex-wrap items-center gap-2 pl-7">
+                    {item.stages.length ? (
+                      <Pressable
+                        onPress={() => (canEdit ? setStagePickFor(s) : undefined)}
+                        className="h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+                        <Ionicons name="git-branch-outline" size={12} color={c.muted} />
+                        <Text className="text-[11.5px] text-cd-muted" numberOfLines={1}>
+                          {s.stageOrder != null ? `${s.stageOrder}. ${item.stages.find((st) => st.stageOrder === s.stageOrder)?.stageName ?? ''}` : '단계 없음'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    <View className="h-7 flex-row items-center rounded-md border border-cd-border bg-cd-card">
+                      <Pressable onPress={() => stepSub(s, -1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 내리기" className="h-7 w-7 items-center justify-center active:opacity-60">
+                        <Ionicons name="remove" size={14} color={c.muted} />
+                      </Pressable>
+                      <Text className="min-w-[40px] text-center text-[12.5px] font-semibold text-cd-text">{s.progressPct ?? 0}%</Text>
+                      <Pressable onPress={() => stepSub(s, 1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 올리기" className="h-7 w-7 items-center justify-center active:opacity-60">
+                        <Ionicons name="add" size={14} color={c.muted} />
+                      </Pressable>
+                    </View>
+                    <TextInput
+                      value={subNoteDraft[s.itemId] ?? s.progressNote ?? ''}
+                      onChangeText={(t) => setSubNoteDraft((d) => ({ ...d, [s.itemId]: t }))}
+                      onBlur={() => {
+                        const v = subNoteDraft[s.itemId];
+                        if (v !== undefined && v !== (s.progressNote ?? '')) void patchSub(s, { progressNote: v || null });
+                        setSubNoteDraft((d) => {
+                          const n = { ...d };
+                          delete n[s.itemId];
+                          return n;
+                        });
+                      }}
+                      editable={canEdit}
+                      placeholder="진척 내용"
+                      placeholderTextColor={c.faint}
+                      className="h-7 min-w-[120px] flex-1 rounded-md border border-cd-border bg-cd-card px-2 text-[12.5px] text-cd-text"
+                    />
+                  </View>
+                ) : null}
                 </View>
               ))}
               {canEdit ? (
@@ -958,7 +1095,7 @@ export default function TodoDetailScreen() {
                 disabled={!comment.trim() || sendingComment}
                 className="h-9 w-9 items-center justify-center rounded-lg active:opacity-70"
                 style={{ backgroundColor: comment.trim() ? c.primary : c.border, alignSelf: 'flex-end' }}>
-                {sendingComment ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
+                {sendingComment ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="arrow-up" size={18} color={c.onPrimary} />}
               </Pressable>
             </View>
           </Frame>
@@ -1193,23 +1330,62 @@ export default function TodoDetailScreen() {
         </View>
       </Sheet>
 
-      {/* 담당 지정 — 핵심 속성의 "담당" */}
-      <OrgPickerSheet
-        visible={assignOpen}
-        title="담당 지정"
-        hint="담당은 1명이며 편집할 수 있습니다. 바꾸면 이전 담당은 협업자로 남습니다."
-        snapshot={org}
-        selectedIds={[]}
-        onSelect={(emp) => {
-          if (!emp.userId) {
-            toast.show('계정이 없는 직원은 담당으로 지정할 수 없습니다.', 'error');
-            return;
-          }
-          setAssignOpen(false);
-          void share(emp, 'assignee');
-        }}
-        onClose={() => setAssignOpen(false)}
-      />
+      {/* 하위 작업 공정 단계(285) — 관련 계약/업무추진계획의 공정표 단계에 매핑 */}
+      <Sheet visible={!!stagePickFor} onClose={() => setStagePickFor(null)} title={stagePickFor ? `${stagePickFor.title} · 공정 단계` : '공정 단계'}>
+        <View className="gap-2">
+          {[{ stageOrder: null as number | null, stageName: '단계 없음' }, ...(item?.stages ?? [])].map((st) => {
+            const cur = stagePickFor?.stageOrder === st.stageOrder || (st.stageOrder === null && stagePickFor?.stageOrder == null);
+            return (
+              <Pressable
+                key={String(st.stageOrder)}
+                onPress={() => {
+                  const target = stagePickFor;
+                  setStagePickFor(null);
+                  if (target) void patchSub(target, { stageOrder: st.stageOrder });
+                }}
+                className="h-11 flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3 active:opacity-70"
+                style={cur ? { borderColor: c.primary, backgroundColor: c.primarySoft } : undefined}>
+                <Text className="flex-1 text-[14px] text-cd-text" numberOfLines={1}>
+                  {st.stageOrder != null ? `${st.stageOrder}. ` : ''}
+                  {st.stageName}
+                </Text>
+                {cur ? <Ionicons name="checkmark" size={16} color={c.primary} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
+
+      {/* 담당 지정(§25-1) — 작성자·공유 대상·보드 멤버 중 1명. 다른 사람은 먼저 공유를 추가해야 한다. */}
+      <Sheet visible={assignOpen} onClose={() => setAssignOpen(false)} title="담당 지정">
+        <View className="gap-2">
+          <Text className="text-[12px] text-cd-muted">담당은 작성자·공유받은 사람·보드 멤버 중에서 고릅니다. 다른 사람에게 맡기려면 먼저 공유를 추가하세요.</Text>
+          {assignCandidates.map((p) => {
+            const isCurrent = item?.assigneeUserId === p.userId;
+            const isOwner = item?.ownerUserId === p.userId;
+            return (
+              <Pressable
+                key={p.userId}
+                disabled={isCurrent}
+                onPress={() => {
+                  setAssignOpen(false);
+                  if (isOwner) void patch({ assigneeUserId: null });
+                  else void share({ userId: p.userId, name: p.name } as OrgEmployee, 'assignee');
+                }}
+                className="h-12 flex-row items-center gap-2.5 rounded-lg border border-cd-border bg-cd-card px-3 active:opacity-70"
+                style={{ opacity: isCurrent ? 0.55 : 1 }}>
+                <Ionicons name={isOwner ? 'person-circle-outline' : 'person-outline'} size={16} color={c.primary} />
+                <Text className="flex-1 text-[14px] text-cd-text" numberOfLines={1}>
+                  {p.name}
+                  {isOwner ? ' (작성자)' : ''}
+                </Text>
+                {isCurrent ? <Text className="text-[12px] text-cd-faint">현재 담당</Text> : null}
+              </Pressable>
+            );
+          })}
+          {assignMembers === null && item?.boardKind !== 'personal' ? <Text className="text-[12px] text-cd-faint">보드 멤버 불러오는 중…</Text> : null}
+        </View>
+      </Sheet>
       <OrgPickerSheet
         visible={personOpen}
         title="담당·공유할 사람"

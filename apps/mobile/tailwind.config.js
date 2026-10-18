@@ -28,6 +28,8 @@ module.exports = {
           muted: cd("muted"),
           faint: cd("faint"),
           "grid-line": cd("grid-line"),
+          "on-primary": cd("on-primary"),
+          "on-error": cd("on-error"),
           primary: {
             DEFAULT: cd("primary"),
             soft: cd("primary-soft"),

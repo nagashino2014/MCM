@@ -10,6 +10,7 @@ const RULE_HINTS: Record<(typeof TODO_COMPLETE_RULE_KEYS)[number], string> = {
   subtasks: "미완 하위 작업이 남아 있으면 완료할 수 없습니다",
   note: "완료 확인 창에서 메모를 적어야 완료됩니다",
   review: "상태를 '검토'로 한 번 거쳐야 완료할 수 있습니다",
+  deps: "선행 작업(의존 관계)이 모두 완료돼야 완료할 수 있습니다",
 };
 
 export function CompleteRulesFields({ value, disabled, hints, onChange }: { value: TodoCompleteRules; disabled?: boolean; hints?: boolean; onChange: (next: TodoCompleteRules) => void }) {

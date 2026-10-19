@@ -171,23 +171,27 @@ export const TODO_MILESTONE_STAGE_HINTS: Partial<Record<TodoMilestoneKind, strin
 export interface TodoCompleteRules {
   /** 하위 작업이 모두 완료돼야 한다. */
   subtasks?: boolean;
+  /** 선행 작업(288 의존)이 모두 완료돼야 한다. */
+  deps?: boolean;
   /** 완료 메모를 입력해야 한다. */
   note?: boolean;
   /** 검토(review) 단계를 거쳐야 한다(reviewed_at 또는 현재 상태 review). */
   review?: boolean;
 }
-export const TODO_COMPLETE_RULE_KEYS = ["subtasks", "note", "review"] as const;
+export const TODO_COMPLETE_RULE_KEYS = ["subtasks", "note", "review", "deps"] as const;
 export type TodoCompleteRuleKey = (typeof TODO_COMPLETE_RULE_KEYS)[number];
 export const TODO_COMPLETE_RULE_LABELS: Record<TodoCompleteRuleKey, string> = {
   subtasks: "하위 작업 모두 완료",
   note: "완료 메모 입력",
   review: "검토 단계 경유",
+  deps: "선행 작업 모두 완료",
 };
 /** 접힘 요약·행 보조용 짧은 라벨. */
 export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string> = {
   subtasks: "하위 작업",
   note: "메모",
   review: "검토",
+  deps: "선행",
 };
 
 export const TODO_ACTIVITY_ACTIONS = [
@@ -335,6 +339,8 @@ export interface TodoItem {
   /** 하위 작업 마일스톤(287, §27-1) — 실제 일자·종류. 상위 작업은 NULL. */
   actualDate: string | null;
   milestoneKind: TodoMilestoneKind | null;
+  /** 미완료 선행 작업 수(288 의존) — 0 이면 대기 아님. */
+  openDeps: number;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;
@@ -369,6 +375,30 @@ export interface TodoItemDetail extends TodoItem {
   stages: TodoStageRef[];
   /** 업무 보고 대상 종류 — contract(계약) | task(업무추진계획 Task) | null(보고 불가). */
   reportSubject: "contract" | "task" | null;
+}
+
+// ── 선행·후행 의존(288, §28-3) — item_id=후행, depends_on_item_id=선행. 응답은 /api/todo/items/:id/deps ──
+export interface TodoDepRef {
+  itemId: string;
+  title: string;
+  status: TodoStatus;
+  doDate: string | null;
+  dueDate: string | null;
+  endDate: string | null;
+  assigneeName: string | null;
+  boardName: string | null;
+  parentItemId: string | null;
+  /** 현재 사용자가 볼 수 있는지(아니면 제목만 "비공개 할 일") */
+  visible: boolean;
+}
+
+export interface TodoDeps {
+  /** 이 할 일이 기다리는 선행 */
+  blockedBy: TodoDepRef[];
+  /** 이 할 일을 기다리는 후행 */
+  blocks: TodoDepRef[];
+  /** 미완료 선행 수 */
+  openBlockers: number;
 }
 
 export interface TodoColumn {

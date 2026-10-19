@@ -20,11 +20,11 @@ import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPicker
 import { MoveSheet } from '@/components/todo/BoardSections';
 import { CompleteConfirmSheet, CompleteRulesChecks, asCompleteRulesFailure, type CompleteRulesFailure } from '@/components/todo/CompleteConfirmSheet';
 import { LinkPickerSheet } from '@/components/todo/LinkPickerSheet';
-import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDot, SegBar } from '@/components/todo/parts';
+import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDot, SegBar, StatusDot } from '@/components/todo/parts';
 import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { completeRulesSummary, hasAnyCompleteRule } from '@/lib/todo-completion';
-import { TODO_ACTIVITY_ACTIONS, TODO_LINK_KIND_LABELS, TODO_PRIORITY_LABELS, TODO_RECURRENCE_PRESETS, TODO_SHARE_ROLE_LABELS, TODO_SNOOZE_PRESETS, TODO_STATUSES, TODO_STATUS_LABELS, TODO_WEEKDAY_CODES, type TodoActivity, type TodoBoard, type TodoComment, type TodoItem, type TodoItemDetail, type TodoPriority, type TodoShareRole, type TodoStatus, TODO_MILESTONE_KINDS, TODO_MILESTONE_LABELS } from '@/lib/todo-types';
+import { TODO_ACTIVITY_ACTIONS, TODO_LINK_KIND_LABELS, TODO_PRIORITY_LABELS, TODO_RECURRENCE_PRESETS, TODO_SHARE_ROLE_LABELS, TODO_SNOOZE_PRESETS, TODO_STATUSES, TODO_STATUS_LABELS, TODO_WEEKDAY_CODES, type TodoActivity, type TodoBoard, type TodoComment, type TodoItem, type TodoItemDetail, type TodoPriority, type TodoShareRole, type TodoStatus, TODO_MILESTONE_KINDS, TODO_MILESTONE_LABELS, type TodoDepRef, type TodoDeps } from '@/lib/todo-types';
 import { computeDefaultRemindAt, describeRecurrence, dueBadge, fmtIsoShort, fmtMd, fmtMdWd, fmtRelative, labelColors, statusTone, todayLocal, withAlpha } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
@@ -152,6 +152,38 @@ function PickRow({
 }
 
 /** 프레임 카드(§19-6) — 흰 면 + 1px 경계 + 8px 반경, 12/16 안쪽 여백, 머리글 12px/600 muted. */
+/** §28-3 의존 관계 한 줄 — 상태 점 · 제목(탭=이동) · 상태/담당/날짜 · 지연 배지 · 해제. */
+function DepRow({ d, today, onRemove }: { d: TodoDepRef; today: string; onRemove?: () => void }) {
+  const { c } = useTheme();
+  const router = useRouter();
+  const when = d.dueDate ?? d.doDate;
+  const late = d.status !== 'done' && !!when && when < today;
+  const done = d.status === 'done';
+  return (
+    <View className="flex-row items-center gap-2 py-1">
+      <StatusDot status={d.status} />
+      <Pressable onPress={() => (d.visible ? router.push(`/todo/${d.itemId}` as never) : undefined)} className="flex-1 active:opacity-70" style={{ minWidth: 0 }}>
+        <Text numberOfLines={1} className={`text-[13.5px] ${done ? 'text-cd-faint line-through' : d.visible ? 'text-cd-text' : 'italic text-cd-faint'}`}>
+          {d.title}
+        </Text>
+        <Text className="text-[11px] text-cd-faint">
+          {[TODO_STATUS_LABELS[d.status], d.assigneeName, when ? fmtMd(when) : null].filter(Boolean).join(' · ')}
+        </Text>
+      </Pressable>
+      {late ? (
+        <Text className="rounded-md px-1.5 text-[11px] font-semibold" style={{ color: labelColors('over', false).fg, backgroundColor: labelColors('over', false).bg }}>
+          선행 지연
+        </Text>
+      ) : null}
+      {onRemove ? (
+        <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel={`${d.title} 선행 해제`} className="active:opacity-60">
+          <Ionicons name="close-circle-outline" size={18} color={c.muted} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function Frame({
   title,
   head,
@@ -498,6 +530,87 @@ export default function TodoDetailScreen() {
     if (next !== (sub.progressPct ?? 0)) void patchSub(sub, { progressPct: next });
   };
 
+  // §28-3 선행·후행 의존(288) — 상세를 열 때 별도 조회, 추가/해제 응답으로 교체. 선행 검색 시트는 로컬 버퍼(AGENTS.md).
+  const [deps, setDeps] = useState<TodoDeps | null>(null);
+  const [depOpen, setDepOpen] = useState(false);
+  const [depQ, setDepQ] = useState('');
+  const [depResults, setDepResults] = useState<TodoDepRef[] | null>(null);
+  const [depLoading, setDepLoading] = useState(false);
+  const [depBusy, setDepBusy] = useState(false);
+  const depItemId = item?.itemId ?? null;
+  useEffect(() => {
+    setDeps(null);
+    if (!depItemId) return;
+    let alive = true;
+    apiJson<TodoDeps>(`/api/todo/items/${depItemId}/deps`)
+      .then((d) => {
+        if (alive) setDeps(d);
+      })
+      .catch(() => {
+        if (alive) setDeps({ blockedBy: [], blocks: [], openBlockers: 0 });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [depItemId]);
+  useEffect(() => {
+    if (!depOpen || !depItemId) return;
+    const term = depQ.trim();
+    if (!term) {
+      setDepResults(null);
+      return;
+    }
+    let alive = true;
+    setDepLoading(true);
+    const t = setTimeout(() => {
+      apiJson<{ items: TodoDepRef[] }>(`/api/todo/search?q=${encodeURIComponent(term)}&exclude=${encodeURIComponent(depItemId)}`)
+        .then((d) => {
+          if (alive) setDepResults(d.items ?? []);
+        })
+        .catch(() => {
+          if (alive) setDepResults([]);
+        })
+        .finally(() => {
+          if (alive) setDepLoading(false);
+        });
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [depOpen, depQ, depItemId]);
+  const addDep = async (dependsOn: string) => {
+    if (!item || depBusy) return;
+    setDepBusy(true);
+    try {
+      const d = await apiJson<TodoDeps>(`/api/todo/items/${item.itemId}/deps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dependsOnItemId: dependsOn }),
+      });
+      setDeps(d);
+      setItem({ ...item, openDeps: d.openBlockers });
+      setDepOpen(false);
+      toast.show('선행 할 일을 연결했습니다.', 'success');
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setDepBusy(false);
+    }
+  };
+  const removeDep = async (dependsOn: string) => {
+    if (!item || depBusy) return;
+    setDepBusy(true);
+    try {
+      const d = await apiJson<TodoDeps>(`/api/todo/items/${item.itemId}/deps?dependsOn=${encodeURIComponent(dependsOn)}`, { method: 'DELETE' });
+      setDeps(d);
+      setItem({ ...item, openDeps: d.openBlockers });
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setDepBusy(false);
+    }
+  };
   // §26-3 체크리스트 템플릿 — 하위 작업 Frame 머리 [템플릿] → 시트(적용 · 현재 하위 작업 저장 · 삭제)
   const [tplOpen, setTplOpen] = useState(false);
   const [tplList, setTplList] = useState<{ templateId: string; name: string; boardId: string | null; items: { title: string }[]; canEdit: boolean }[] | null>(null);
@@ -532,6 +645,25 @@ export default function TodoDetailScreen() {
       setItem(r.item);
       setTplOpen(false);
       toast.show(`하위 작업 ${r.created}건을 추가했습니다.`, 'success');
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+  // §28-1 공정표 단계로 하위 작업 만들기
+  const fromStages = async () => {
+    if (!item || tplBusy) return;
+    setTplBusy(true);
+    try {
+      const r = await apiJson<{ item: TodoItemDetail; created: number; skipped: number }>(`/api/todo/items/${item.itemId}/subtasks-from-stages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      setItem(r.item);
+      setTplOpen(false);
+      toast.show(r.created ? `공정표 단계 ${r.created}건을 하위 작업으로 추가했습니다${r.skipped ? ` (이미 있는 ${r.skipped}건 제외)` : ''}.` : '모든 단계가 이미 하위 작업에 있습니다.', r.created ? 'success' : 'info');
     } catch (e) {
       toast.show((e as Error).message, 'error');
     } finally {
@@ -1151,6 +1283,61 @@ export default function TodoDetailScreen() {
             </View>
           </Frame>
 
+          {/* §28-3 의존 관계(288) */}
+          <Frame
+            title="의존 관계"
+            head={
+              <>
+                {deps && (deps.blockedBy.length || deps.blocks.length) ? (
+                  <Text className="text-[12px] text-cd-faint">
+                    선행 {deps.blockedBy.length} · 후행 {deps.blocks.length}
+                    {deps.openBlockers ? ` · 대기 ${deps.openBlockers}` : ''}
+                  </Text>
+                ) : null}
+                {canEdit ? (
+                  <Pressable
+                    onPress={() => {
+                      setDepQ('');
+                      setDepResults(null);
+                      setDepOpen(true);
+                    }}
+                    hitSlop={6}
+                    accessibilityLabel="선행 추가"
+                    className="ml-1 h-6 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+                    <Ionicons name="add" size={12} color={c.muted} />
+                    <Text className="text-[11.5px] text-cd-muted">선행 추가</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            }>
+            {!deps ? (
+              <Text className="text-[12.5px] text-cd-faint">불러오는 중…</Text>
+            ) : !deps.blockedBy.length && !deps.blocks.length ? (
+              <Text className="text-[12.5px] text-cd-faint">선행·후행이 없습니다. 먼저 끝나야 하는 할 일이 있으면 [선행 추가]로 연결하세요.</Text>
+            ) : (
+              <View className="gap-3">
+                {deps.blockedBy.length ? (
+                  <View className="gap-0.5">
+                    <Text className="text-[11.5px] text-cd-faint">
+                      이 할 일이 기다리는 선행{deps.openBlockers ? ` · ⛓ ${deps.openBlockers}건 대기` : ''}
+                    </Text>
+                    {deps.blockedBy.map((d) => (
+                      <DepRow key={d.itemId} d={d} today={today} onRemove={canEdit ? () => void removeDep(d.itemId) : undefined} />
+                    ))}
+                  </View>
+                ) : null}
+                {deps.blocks.length ? (
+                  <View className="gap-0.5">
+                    <Text className="text-[11.5px] text-cd-faint">이 할 일을 기다리는 후행</Text>
+                    {deps.blocks.map((d) => (
+                      <DepRow key={d.itemId} d={d} today={today} />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </Frame>
+
           {/* 댓글 */}
           <Frame title="댓글" head={item.comments.length ? <Text className="text-[12px] text-cd-faint">{item.comments.length}</Text> : null}>
             {item.comments.length ? (
@@ -1424,10 +1611,58 @@ export default function TodoDetailScreen() {
         </View>
       </Sheet>
 
+      {/* §28-3 선행 검색 */}
+      <Sheet visible={depOpen} onClose={() => setDepOpen(false)} title="선행 할 일 추가" fillHeight={0.75}>
+        <View className="gap-2">
+          <TextInput
+            value={depQ}
+            onChangeText={setDepQ}
+            placeholder="제목·프로젝트·보드 이름으로 검색"
+            placeholderTextColor={c.faint}
+            autoFocus
+            className="h-10 rounded-lg border border-cd-border bg-cd-card px-3 text-[14px] text-cd-text"
+          />
+          <Text className="text-[11.5px] text-cd-faint">내가 볼 수 있는 미완료 할 일 중에서 고릅니다(자기 자신·이미 선행인 것 제외). 순환이 되는 연결은 거절됩니다.</Text>
+        </View>
+        <ScrollView className="mt-2 flex-1" contentContainerStyle={{ gap: 6, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+          {depLoading ? (
+            <Text className="text-[13px] text-cd-faint">검색 중…</Text>
+          ) : depResults && !depResults.length ? (
+            <Text className="text-[13px] text-cd-faint">일치하는 할 일이 없습니다.</Text>
+          ) : (
+            (depResults ?? []).map((d) => {
+              const when = d.dueDate ?? d.doDate;
+              return (
+                <Pressable key={d.itemId} onPress={() => void addDep(d.itemId)} disabled={depBusy} className="flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3 py-2 active:opacity-70">
+                  <StatusDot status={d.status} />
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
+                      {d.title}
+                    </Text>
+                    <Text className="text-[11.5px] text-cd-faint">
+                      {[d.boardName, d.assigneeName ?? '담당 없음', when ? fmtMd(when) : null, d.parentItemId ? '하위' : null].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+      </Sheet>
+
       {/* 체크리스트 템플릿(286, §26-3) */}
       <Sheet visible={tplOpen} onClose={() => setTplOpen(false)} title="체크리스트 템플릿" fillHeight={0.7}>
         <ScrollView className="flex-1" contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
           <Text className="text-[12px] text-cd-muted">템플릿을 고르면 하위 작업을 뒤에 추가합니다(마감 오프셋은 할 날 기준, 공정 단계는 관련 공정표에 있을 때만).</Text>
+          {item?.stages.length ? (
+            <Pressable onPress={() => void fromStages()} disabled={tplBusy} className="flex-row items-center gap-2 rounded-lg border border-cd-primary/40 bg-cd-card px-3 py-2 active:opacity-70">
+              <Ionicons name="list-outline" size={16} color={c.primary} />
+              <View className="flex-1">
+                <Text className="text-[14px] font-semibold text-cd-text">공정표 단계로 하위 작업 만들기</Text>
+                <Text className="text-[11.5px] text-cd-faint">{item.stages.length}단계 · 이미 매핑된 단계는 건너뜁니다</Text>
+              </View>
+            </Pressable>
+          ) : null}
           {tplList === null ? (
             <Text className="text-[13px] text-cd-faint">불러오는 중…</Text>
           ) : tplList.length === 0 ? (

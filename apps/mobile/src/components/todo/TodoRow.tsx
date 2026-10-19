@@ -101,6 +101,12 @@ export function TodoRow({
         </Text>
       </View>
     );
+  if (item.openDeps > 0 && item.status !== 'done')
+    meta.push(
+      <Text key="dep" className="rounded-md border border-cd-border bg-cd-surface px-1.5 text-[11.5px] font-semibold text-cd-muted">
+        ⛓ 선행 {item.openDeps}건 대기
+      </Text>
+    );
   if (item.commentCount > 0)
     meta.push(
       <Text key="cm" className="text-[12.5px] text-cd-muted">

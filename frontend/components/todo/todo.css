@@ -701,4 +701,32 @@
 .todo-period-band .todo-row { background: transparent; }
 .todo-period { font-size: 11.5px; font-weight: 600; color: var(--cd-primary); background: var(--cd-primary-soft); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
 .todo-sr-prog .todo-sr-date { width: 110px; height: 26px; font-size: 12px; }
-.todo-sr-prog .todo-sr-date input { height: 26px; font-size: 12px; padding: 0 6px; }
+.todo-sr-prog .todo-sr-date input { height: 26px; min-height: 26px; font-size: 12px; padding: 0 6px; line-height: 24px; }
+.todo-sr-prog .todo-sr-date .cd-error-text { display: none; }
+
+/* §28-3 선행·후행 의존(288) — 행/카드 ⛓ 배지, 상세 프레임, 선행 검색 피커 */
+.todo-dep { font-size: 11.5px; font-weight: 600; color: var(--cd-muted); background: var(--cd-surface); border: 1px solid var(--cd-border); border-radius: 5px; padding: 0 6px; white-space: nowrap; }
+.todo-deps { display: flex; flex-direction: column; gap: 10px; }
+.todo-deps-h { margin: 0 0 4px; font-size: 11.5px; color: var(--cd-faint); display: flex; align-items: center; gap: 8px; }
+.todo-deps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.todo-deps-row { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 4px; border-radius: 6px; font-size: 12.5px; }
+.todo-deps-row:hover { background: var(--cd-surface); }
+.todo-deps-row[data-done="1"] .todo-deps-ttl { color: var(--cd-faint); text-decoration: line-through; }
+.todo-deps-ttl { color: var(--cd-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.todo-deps-ttl:hover { text-decoration: underline; }
+.todo-deps-ttl[data-private="1"] { color: var(--cd-faint); font-style: italic; }
+.todo-deps-meta { color: var(--cd-faint); font-size: 11.5px; white-space: nowrap; }
+.todo-deps-late { font-size: 11px; font-weight: 600; color: var(--todo-lbl-over-fg); background: var(--todo-tag-over-bg); border: 1px solid var(--todo-tag-over-bd); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+.todo-deps-x { margin-left: auto; display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 5px; color: var(--cd-faint); background: transparent; border: 0; cursor: pointer; }
+.todo-deps-x:hover { color: var(--cd-text); background: var(--cd-border); }
+.todo-deps-x svg { width: 12px; height: 12px; }
+.todo-dp { display: flex; flex-direction: column; gap: 8px; }
+.todo-dp-search { position: relative; display: block; }
+.todo-dp-search svg { position: absolute; left: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%); color: var(--cd-faint); pointer-events: none; }
+.todo-dp-search input { width: 100%; padding-left: 30px; }
+.todo-dp-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.todo-dp-row { width: 100%; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; background: transparent; text-align: left; font-size: 12.5px; color: var(--cd-text); cursor: pointer; }
+.todo-dp-row:hover, .todo-dp-row:focus-visible { background: var(--cd-surface); border-color: var(--cd-border); outline: none; }
+.todo-dp-row:disabled { opacity: 0.6; cursor: default; }
+.todo-dp-ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-dp-meta { margin-left: auto; color: var(--cd-faint); font-size: 11.5px; white-space: nowrap; }

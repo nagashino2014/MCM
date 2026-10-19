@@ -196,7 +196,7 @@ async function polishWithAi(
 }
 
 /** 초안 생성(또는 기존 초안 갱신). 권한(work_plan.edit)은 라우트에서 검사한다. */
-export async function createWorkReportDraft(userId: string, itemId: string, opts?: { ai?: boolean }): Promise<WorkReportDraftResult> {
+export async function createWorkReportDraft(userId: string, itemId: string, opts?: { ai?: boolean; fresh?: boolean }): Promise<WorkReportDraftResult> {
   const detail = await getItemDetail(userId, itemId);
   const subject = subjectOf(detail);
   if (!subject) {
@@ -210,7 +210,8 @@ export async function createWorkReportDraft(userId: string, itemId: string, opts
   const text = polished ?? raw;
   const stages = stageDelta(detail);
   const top = stages.reduce<ReportStageInput | null>((acc, s) => (acc == null || (s.progressPct ?? 0) >= (acc.progressPct ?? 0) ? s : acc), null);
-  const prior = await existingDraft(detail, subject.kind, subject.id);
+  // fresh(신규 생성 버튼): 기존 초안을 갱신하지 않고 항상 새 보고를 만든다.
+  const prior = opts?.fresh ? null : await existingDraft(detail, subject.kind, subject.id);
   const reportId = await saveReport(userId, {
     reportId: prior ?? undefined,
     subjectKind: subject.kind,

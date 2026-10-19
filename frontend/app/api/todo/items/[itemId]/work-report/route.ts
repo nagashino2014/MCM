@@ -15,8 +15,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { itemId } = await context.params;
-    const body = (await req.json().catch(() => ({}))) as { ai?: unknown };
-    const result = await createWorkReportDraft(actor.userId, itemId, { ai: body.ai !== false });
+    const body = (await req.json().catch(() => ({}))) as { ai?: unknown; fresh?: unknown };
+    const result = await createWorkReportDraft(actor.userId, itemId, { ai: body.ai !== false, fresh: body.fresh === true });
     return NextResponse.json(result);
   } catch (err) {
     const status = (err as { status?: number }).status;

@@ -19,6 +19,7 @@ export interface CompleteRulesFailure {
   message: string;
   missing: TodoCompleteRuleKey[];
   openSubtasks: number;
+  openDeps: number;
 }
 
 export function asCompleteRulesFailure(err: unknown): CompleteRulesFailure | null {
@@ -26,7 +27,7 @@ export function asCompleteRulesFailure(err: unknown): CompleteRulesFailure | nul
   const missing = (Array.isArray(err.data.missing) ? err.data.missing : []).filter((k): k is TodoCompleteRuleKey =>
     (TODO_COMPLETE_RULE_KEYS as readonly string[]).includes(String(k))
   );
-  return { message: err.message, missing, openSubtasks: Number(err.data.openSubtasks ?? 0) };
+  return { message: err.message, missing, openSubtasks: Number(err.data.openSubtasks ?? 0), openDeps: Number(err.data.openDeps ?? 0) };
 }
 
 /** 시트가 판단에 쓰는 최소 필드 — 목록 행(TodoItem)·상세(TodoItemDetail) 모두 만족. */
@@ -39,6 +40,8 @@ export interface CompleteConfirmTarget {
   subtaskDone: number;
   reviewedAt: string | null;
   completionNote: string | null;
+  /** 미완료 선행 작업 수(288). */
+  openDeps?: number;
 }
 
 /** 완료 조건 체크 3개 — 상세 '부가 설정 › 완료 조건' 공용(체크박스 아이콘 + 라벨 + 보조 문구). */
@@ -48,6 +51,7 @@ export function CompleteRulesChecks({ value, disabled, onChange }: { value: Todo
     subtasks: '미완 하위 작업이 남아 있으면 완료할 수 없습니다',
     note: '완료 확인에서 메모를 적어야 완료됩니다',
     review: "상태를 '검토'로 한 번 거쳐야 완료할 수 있습니다",
+    deps: '선행 작업이 모두 완료돼야 완료할 수 있습니다',
   };
   return (
     <View className="gap-2">
@@ -109,6 +113,7 @@ export function CompleteConfirmSheet({
     ? checkCompletion(target.completeRules, {
         status: target.status,
         openSubtasks: Math.max(0, target.subtaskTotal - target.subtaskDone),
+        openDeps: target.openDeps ?? 0,
         completionNote: note,
         reviewedAt: target.reviewedAt,
       })
@@ -116,6 +121,7 @@ export function CompleteConfirmSheet({
   const serverMissing = new Set((failure?.missing ?? []).filter((k) => k !== 'note'));
   const missing = new Set<TodoCompleteRuleKey>([...(check?.missing ?? []), ...serverMissing]);
   const openSubtasks = failure && serverMissing.has('subtasks') ? Math.max(failure.openSubtasks, check?.openSubtasks ?? 0) : (check?.openSubtasks ?? 0);
+  const openDeps = failure && serverMissing.has('deps') ? Math.max(failure.openDeps, check?.openDeps ?? 0) : (check?.openDeps ?? 0);
   const noteRequired = !!target?.completeRules.note;
   const canConfirm = !!target && missing.size === 0 && !busy;
   const ok = labelColors('sage', dark);
@@ -147,6 +153,12 @@ export function CompleteConfirmSheet({
               <Text className="text-[12.5px] text-cd-muted">서버가 완료를 거절했습니다 — 아래 조건을 확인하세요.</Text>
             </View>
           ) : null}
+          {!target.completeRules.deps && openDeps > 0 ? (
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="alert-circle-outline" size={14} color={c.warning ?? bad.fg} />
+              <Text className="text-[12.5px] text-cd-muted">선행 작업 {openDeps}건이 아직 끝나지 않았습니다(경고 — 완료는 가능).</Text>
+            </View>
+          ) : null}
           <View className="overflow-hidden rounded-lg border border-cd-border bg-cd-card">
             {keys.map((k, i) => {
               const miss = missing.has(k);
@@ -158,7 +170,7 @@ export function CompleteConfirmSheet({
                   </View>
                   <Text className="text-[13px] font-medium text-cd-text">{TODO_COMPLETE_RULE_LABELS[k]}</Text>
                   <Text numberOfLines={2} className="flex-1 text-right text-[12px]" style={{ color: miss ? col.fg : c.faint }}>
-                    {miss ? describeMissingRule(k, openSubtasks) : k === 'subtasks' ? `하위 작업 ${target.subtaskDone}/${target.subtaskTotal} 완료` : '충족'}
+                    {miss ? describeMissingRule(k, openSubtasks, openDeps) : k === 'subtasks' ? `하위 작업 ${target.subtaskDone}/${target.subtaskTotal} 완료` : '충족'}
                   </Text>
                 </View>
               );

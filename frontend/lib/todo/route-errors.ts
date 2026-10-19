@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { authErrorToResponse } from "@/lib/auth/guards";
 
 export function completeRulesErrorToResponse(err: unknown): NextResponse {
-  const e = err as { code?: unknown; status?: unknown; message?: string; detail?: { missing?: unknown; openSubtasks?: unknown } };
+  const e = err as { code?: unknown; status?: unknown; message?: string; detail?: { missing?: unknown; openSubtasks?: unknown; openDeps?: unknown } };
   if (e?.code === "complete_rules" && e.status === 409) {
     return NextResponse.json(
       {
@@ -14,6 +14,7 @@ export function completeRulesErrorToResponse(err: unknown): NextResponse {
         code: "complete_rules",
         missing: Array.isArray(e.detail?.missing) ? e.detail.missing : [],
         openSubtasks: Number(e.detail?.openSubtasks ?? 0),
+        openDeps: Number(e.detail?.openDeps ?? 0),
       },
       { status: 409 }
     );

@@ -63,6 +63,7 @@ import { listContractStages } from "@/lib/contracts/process-stages";
 import { listTaskStages } from "@/lib/work-plan/task-stages";
 import type { TodoStageRef } from "./types";
 import { TODO_MILESTONE_KINDS, type TodoMilestoneKind } from "./types";
+import { notifyDependentsUnblocked, openDepCount } from "./deps";
 
 const nowIso = () => new Date().toISOString();
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -886,7 +887,9 @@ const ITEM_SELECT = `
          lc.contract_title AS link_contract_title, lcp.company_name AS link_counterparty_name,
          (SELECT COUNT(*)::int FROM todo_items s WHERE s.parent_item_id = i.item_id AND s.archived_at IS NULL) AS subtask_total,
          (SELECT COUNT(*)::int FROM todo_items s WHERE s.parent_item_id = i.item_id AND s.archived_at IS NULL AND s.status = 'done') AS subtask_done,
-         (SELECT COUNT(*)::int FROM todo_comments c WHERE c.item_id = i.item_id AND c.deleted_at IS NULL) AS comment_count
+         (SELECT COUNT(*)::int FROM todo_comments c WHERE c.item_id = i.item_id AND c.deleted_at IS NULL) AS comment_count,
+         (SELECT COUNT(*)::int FROM todo_item_deps dd JOIN todo_items dp ON dp.item_id = dd.depends_on_item_id
+           WHERE dd.item_id = i.item_id AND dp.status <> 'done' AND dp.archived_at IS NULL) AS open_deps
     FROM todo_items i
     JOIN todo_boards b ON b.board_id = i.board_id
     LEFT JOIN users ou ON ou.user_id = i.owner_user_id
@@ -961,6 +964,7 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     endDate: r.end_date != null ? String(r.end_date) : null,
     actualDate: r.actual_date != null ? String(r.actual_date) : null,
     milestoneKind: r.milestone_kind != null ? (String(r.milestone_kind) as TodoMilestoneKind) : null,
+    openDeps: r.open_deps != null ? Number(r.open_deps) : 0,
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
     createdBy: r.created_by != null ? String(r.created_by) : null,
@@ -1230,11 +1234,12 @@ async function assertCompletable(
   facts: { status: string; completionNote: string | null; reviewedAt: string | null }
 ): Promise<void> {
   const openSubtasks = rules.subtasks ? await openSubtaskCount(db, itemId) : 0;
-  const check = checkCompletion(rules, { ...facts, openSubtasks });
+  const openDeps = rules.deps ? await openDepCount(db, itemId) : 0;
+  const check = checkCompletion(rules, { ...facts, openSubtasks, openDeps });
   if (check.ok) return;
   throw Object.assign(fail(completionErrorMessage(check), 409), {
     code: "complete_rules",
-    detail: { missing: check.missing, openSubtasks: check.openSubtasks },
+    detail: { missing: check.missing, openSubtasks: check.openSubtasks, openDeps: check.openDeps },
   });
 }
 
@@ -1485,14 +1490,24 @@ export async function createItem(userId: string, input: Record<string, unknown>)
         status === "review" ? now : null,
       ]
     );
-    // 287 기간·마일스톤 — INSERT 컬럼 목록을 늘리지 않고 보조 UPDATE 로(없으면 건너뜀)
-    if (v.endDate || v.actualDate || v.milestoneKind) {
-      await db.run(`UPDATE todo_items SET end_date = $2, actual_date = $3, milestone_kind = $4 WHERE item_id = $1`, [
-        itemId,
-        v.endDate,
-        parentItemId ? v.actualDate : null,
-        parentItemId ? v.milestoneKind : null,
-      ]);
+    // 285·287 진척·기간·마일스톤 — INSERT 컬럼 목록을 늘리지 않고 보조 UPDATE 로(없으면 건너뜀). 진척 3종은 하위 작업만.
+    const hasProgress = !!parentItemId && (v.progressPct != null || !!v.progressNote || v.stageOrder != null);
+    if (v.endDate || v.actualDate || v.milestoneKind || hasProgress) {
+      await db.run(
+        `UPDATE todo_items SET end_date = $2, actual_date = $3, milestone_kind = $4, progress_pct = $5, progress_note = $6, stage_order = $7,
+                progress_updated_at = CASE WHEN $8 THEN $9 ELSE progress_updated_at END WHERE item_id = $1`,
+        [
+          itemId,
+          v.endDate,
+          parentItemId ? v.actualDate : null,
+          parentItemId ? v.milestoneKind : null,
+          hasProgress ? v.progressPct : null,
+          hasProgress ? v.progressNote : null,
+          hasProgress ? v.stageOrder : null,
+          hasProgress && (v.progressPct != null || !!v.progressNote),
+          now,
+        ]
+      );
     }
     await logActivity(db, itemId, userId, "create", { title: v.title, boardId, parentItemId });
     if (assigneeId && assigneeId !== userId) {
@@ -1886,6 +1901,8 @@ export async function completeItem(userId: string, itemId: string, done: boolean
     const recipients = await subscribersOf(db, itemId);
     const title = String(cur.title);
     if (done) statusPush = () => notifyTodoStatus({ itemId, title, status: "done", byUserId: userId, byName, recipients });
+    // 288: 선행 완료 → 남은 선행이 없는 후행의 담당자에게 알림
+    if (done) await notifyDependentsUnblocked(db, itemId, userId, byName);
 
     if (done && cur.recurrence && cur.parent_item_id == null) {
       const today = kstToday();

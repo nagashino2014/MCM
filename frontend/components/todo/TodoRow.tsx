@@ -368,6 +368,14 @@ export function TodoRow({ item, today, density = "comfortable", selected, timeCe
                 <MiniSegments done={item.subtaskDone} total={item.subtaskTotal} />
               </>
             )}
+            {item.openDeps > 0 && item.status !== "done" && (
+              <>
+                <span className="todo-sep">·</span>
+                <span className="todo-dep" title="선행 작업이 끝나야 시작할 수 있습니다">
+                  ⛓ 선행 {item.openDeps}건 대기
+                </span>
+              </>
+            )}
             {item.commentCount > 0 && (
               <>
                 <span className="todo-sep">·</span>

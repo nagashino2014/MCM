@@ -1,16 +1,18 @@
 // 견적서 작성 권한 판정 — 2026-08-05 확정: 각 본부별 부서장 + 총괄 + 대표이사 + 영업관리본부 전체.
-// 조직 데이터(employee_profiles→positions/departments) 기반 문자열 매칭. admin role 은 항상 허용.
+// 조직 데이터(employee_profiles→positions/departments) 기반 문자열 매칭. 전사 영업 편집 권한 보유자는 항상 허용.
 // 직책·부서 명칭은 상수로 분리해 조직 개편 시 조정이 쉽도록 한다.
 
 import { getDb, rowsToObjects } from "@/lib/db";
+import { hasGlobalScope } from "@/lib/auth/rbac";
 
 /** 직책명에 포함되면 작성 허용 (부서장급 이상) */
 const ALLOWED_POSITION_KEYWORDS = ["대표이사", "총괄", "본부장", "부서장", "실장", "소장"];
 /** 부서명에 포함되면 소속 전체 작성 허용 */
 const ALLOWED_DEPT_KEYWORDS = ["영업관리"];
 
-export async function canCreateQuote(userId: string, role: string): Promise<boolean> {
-  if (role === "admin") return true;
+export async function canCreateQuote(userId: string): Promise<boolean> {
+  // 전사 범위 영업 편집(sales.edit scope=all — 영업관리·시스템 관리자)은 항상 허용(role=admin 분기 대체, WP4 2026-10-19).
+  if (await hasGlobalScope(userId, "sales.edit")) return true;
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(

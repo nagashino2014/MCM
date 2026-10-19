@@ -11,6 +11,7 @@ import {
   BookOpenText, Database, RefreshCw, Send, Sparkles, Target, Trash2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
@@ -64,8 +65,7 @@ const EXAMPLE_QUESTIONS = [
 export function RagBoard() {
   const router = useRouter();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
   const { theme } = useCdashTheme();
 
   // 현황·발굴 후보·이력

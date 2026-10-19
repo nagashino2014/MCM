@@ -26,20 +26,25 @@ import {
   Award,
   type LucideIcon,
 } from "lucide-react";
-
-export type Role = "admin" | "editor" | "viewer";
+import { hasAnyPerm } from "@/lib/auth/perms";
+import { menuPermissionKeys } from "./menu-permissions";
 
 /** 사이드바 카운트 뱃지 데이터 키(/api/nav/badges 응답 필드와 매핑). */
 export type MenuBadgeKey = "mailUnread" | "approvalPending" | "todoDue";
+
+export interface MenuSubItem {
+  title: string;
+  href: string;
+  /** 명시 override — 미지정 시 href 로 경로별 권한표(config/menu-permissions.ts)를 조회한다. */
+  permissionKey?: string | readonly string[];
+}
 
 export interface MenuItem {
   title: string;
   href: string;
   icon: LucideIcon;
-  submenu?: { title: string; href: string; minRole?: Role }[];
+  submenu?: MenuSubItem[];
   comingSoon?: boolean;
-  /** 이 메뉴를 보려면 필요한 최소 role. 미지정 시 viewer 이상 모두 노출. */
-  minRole?: Role;
   /**
    * 사이드바 카테고리 그룹(G1 IA — docs/groupware-ux-overhaul-blueprint.md §2.1):
    * 홈(home) / 협업(collab) / 업무(work) / 사업 운영(main) / 관리(system)
@@ -48,10 +53,12 @@ export interface MenuItem {
   /** 카운트 뱃지(안읽은 메일·미결재) 데이터 키. */
   badgeKey?: MenuBadgeKey;
   /**
-   * 이 권한키를 가진 사용자에게만 노출(role 과 별개 — 임원·부서장처럼 role 로 가를 수 없는 메뉴).
-   * 보유 여부는 /api/nav/badges 의 menuPermissions 로 받는다.
+   * 이 메뉴를 보려면 필요한 권한키(배열이면 하나라도 보유). 미지정 시 href 로 경로별 권한표를 조회한다.
+   * 보유 여부는 세션의 권한 요약(session.user.perms, lib/auth/perms.ts)으로 판정한다 —
+   * role(minRole) 기반 노출은 role 일원화(2026-10-19, WP5)로 폐지. 역할별 기대값은
+   * docs/open-test-permission-plan-2026-10-19.md §4.1.
    */
-  permissionKey?: string;
+  permissionKey?: string | readonly string[];
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -110,7 +117,7 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "collab",
   },
   // 사규·내규 — 사규 규정집 상시 열람(rules.view) + 원문 임포트·개정·동의 수집(rules.manage, 193)
-  //   + 내부 규정(사규와 별도 규정집, 266) 작성·일람.
+  //   + 내부 규정(사규와 별도 규정집, 266) 작성·일람. 임포트·검수·작성은 rules.manage(권한표).
   {
     title: "사규·내규",
     href: "/rules",
@@ -148,18 +155,19 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "collab",
   },
   // 설문 — 사내 설문(앱 내부 응답 수집) · 외부 설문(구글 폼 링크 + QR 배포 이미지). 마이그 246, survey.*.
-  // 사내 설문은 전 직원이 참여하므로 minRole 을 두지 않고, 작성·집계는 화면에서 survey.manage 로 가른다.
+  // 사내 설문은 전 직원이 참여하고, 외부 설문은 survey.manage(권한표) 보유자에게만 보인다.
   {
     title: "설문",
     href: "/survey/internal",
     icon: ClipboardCheck,
     submenu: [
       { title: "사내 설문", href: "/survey/internal" },
-      { title: "외부 설문", href: "/survey/external", minRole: "editor" },
+      { title: "외부 설문", href: "/survey/external" },
     ],
     group: "collab",
   },
   // ── 업무 ──────────────────────────────────────────
+  // 업무추진계획 — 보고 작성/목록 work_plan.view · 부서장 감독 work_plan.merge|lock_release · 임원 검토·발표 work_plan.directive.
   {
     title: "업무추진계획",
     href: "/work-plan",
@@ -172,6 +180,7 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "work",
   },
+  // 성과급 산정 — bonus.view(부서장 self_dept·임원·관리자·인사).
   {
     title: "성과급 산정",
     href: "/staffing",
@@ -193,7 +202,7 @@ export const MENU_ITEMS: MenuItem[] = [
     permissionKey: "staffing.record.view",
   },
   // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md).
-  // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-09-14 신설).
+  // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 payroll.view(288) 보유자.
   {
     title: "급여·근로계약",
     href: "/payroll/my",
@@ -201,29 +210,29 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "내 급여명세서", href: "/payroll/my" },
       { title: "내 연말정산", href: "/payroll/my-yearend" },
-      { title: "급여대장", href: "/payroll", minRole: "admin" },
-      { title: "직원별 연봉·근로계약", href: "/payroll/contracts", minRole: "admin" },
+      { title: "급여대장", href: "/payroll" },
+      { title: "직원별 연봉·근로계약", href: "/payroll/contracts" },
       // 연말정산(P8) — 총급여·기납부 자동 + 간소화 PDF 파싱 + 결정세액 계산.
-      { title: "연말정산", href: "/payroll/yearend", minRole: "admin" },
-      { title: "급여 항목·설정", href: "/payroll/settings", minRole: "admin" },
+      { title: "연말정산", href: "/payroll/yearend" },
+      { title: "급여 항목·설정", href: "/payroll/settings" },
     ],
     group: "work",
   },
   // 근태·휴가 — 전자결재 하위에서 HR 모듈로 승격(§2.3). 라우트 경로는 무변경(/approval/*).
-  // 본인용(내 휴가·내 근태)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 admin 전용(2026-08-31 확정).
+  // 본인용(내 휴가·내 근태)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 staffing.edit 보유자(§6-4).
   {
     title: "근태·휴가",
     href: "/approval/my-hr",
     icon: CalendarClock,
     submenu: [
       { title: "내 휴가·근태", href: "/approval/my-hr" },
-      { title: "직원별 휴가 관리", href: "/approval/leave", minRole: "admin" },
-      { title: "근태·초과근무 관리", href: "/approval/attendance", minRole: "admin" },
+      { title: "직원별 휴가 관리", href: "/approval/leave" },
+      { title: "근태·초과근무 관리", href: "/approval/attendance" },
       // 증명서 발급 관리(FRM-P2, 204) — 증명신청서 승인 건의 발급 파이프라인.
-      { title: "증명서 발급 관리", href: "/approval/certificates", minRole: "admin" },
-      { title: "연차촉진제도 관리", href: "/approval/leave-promotion", minRole: "admin" },
-      { title: "휴무일 지정", href: "/approval/holidays", minRole: "admin" },
-      { title: "휴가 종류 규정", href: "/approval/leave-types", minRole: "admin" },
+      { title: "증명서 발급 관리", href: "/approval/certificates" },
+      { title: "연차촉진제도 관리", href: "/approval/leave-promotion" },
+      { title: "휴무일 지정", href: "/approval/holidays" },
+      { title: "휴가 종류 규정", href: "/approval/leave-types" },
     ],
     group: "work",
   },
@@ -249,14 +258,12 @@ export const MENU_ITEMS: MenuItem[] = [
     ],
     group: "main",
   },
-  // 재무 — 바로빌 연동. docs/barobill-finance-blueprint.md F0~F5.
-  // 사이드바는 role 기반 노출만 지원하므로 admin 한정. API 는 finance.* RBAC 로 별도 가드.
+  // 재무 — 바로빌 연동. docs/barobill-finance-blueprint.md F0~F5. finance.view 보유자(관리자·임원 조회).
   // 소메뉴 4개로 나누고, 각 소메뉴 안에서만 탭을 쓴다(연결 관리·부가세는 단일 화면이라 탭 없음).
   {
     title: "재무",
     href: "/finance",
     icon: Landmark,
-    minRole: "admin",
     submenu: [
       { title: "연결 관리", href: "/finance?tab=connections" },
       { title: "계좌·카드 원장", href: "/finance?tab=bank" },
@@ -285,7 +292,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "RAG & 영업 발굴", href: "/sales/rag" },
       { title: "공공입찰", href: "/sales/bids" },
       // 견적서 작성 — 전자결재 하위에서 영업으로 이동(2026-10-01 사용자 요청). 라우트 경로는 무변경(/approval/quote).
-      { title: "견적서 작성", href: "/approval/quote" },
+      { title: "견적서 작성", href: "/approval/quote", permissionKey: "sales.view" },
     ],
     group: "main",
   },
@@ -301,6 +308,8 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "main",
   },
   // ── 관리 (운영자) ─────────────────────────────────
+  // 서브메뉴별 권한키가 다르다(계정 account.manage·rbac.* / 접속기록 security.access_log / AI ai.usage.view / 첨부 security.attachment_policy).
+  // 상위 항목은 보이는 서브메뉴가 하나라도 있으면 노출된다.
   {
     title: "사용자 관리",
     href: "/admin/users",
@@ -315,14 +324,12 @@ export const MENU_ITEMS: MenuItem[] = [
       // 메일·메신저 첨부 확장자 정책(262) — 전사 기본 + 인원별 예외. security.attachment_policy RBAC 가드.
       { title: "첨부 확장자 정책", href: "/admin/attachment-policy" },
     ],
-    minRole: "admin",
     group: "system",
   },
   {
     title: "회사 프로필 관리",
     href: "/admin/company-profile",
     icon: Building2,
-    minRole: "admin",
     group: "system",
   },
   // 홍보·채용공고 — 클로드 디자인 핸드오프 템플릿 기반 채용공고 편집기(마이그 212, recruit.*).
@@ -334,10 +341,9 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "채용 공고 관리", href: "/admin/recruit" },
       { title: "템플릿 관리", href: "/admin/recruit/templates" },
     ],
-    minRole: "admin",
     group: "system",
   },
-  // 결재 운영(양식·정책·알림) — 전자결재 하위에서 관리로 이동(§2.3, 운영자 기능).
+  // 결재 운영(양식·정책·알림) — 전자결재 하위에서 관리로 이동(§2.3, 운영자 기능). approval.manage.
   {
     title: "결재 운영 설정",
     href: "/approval/forms",
@@ -350,37 +356,40 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "사전검토 정책", href: "/approval/policies" },
       { title: "결재 알림 설정", href: "/approval/settings" },
     ],
-    minRole: "admin",
     group: "system",
   },
+  // 휴지통 — trash.view(부서장·영업관리·관리자).
   {
     title: "휴지통",
     href: "/trash",
     icon: Trash2,
-    minRole: "editor",
     group: "system",
   },
 ];
 
-const ROLE_RANK: Record<Role, number> = { admin: 3, editor: 2, viewer: 1 };
-
-export function isMenuVisibleForRole(item: MenuItem, role: Role): boolean {
-  if (!item.minRole) return true;
-  return ROLE_RANK[role] >= ROLE_RANK[item.minRole];
+/** 항목(또는 서브 항목)이 요구하는 권한키 — 명시 override 가 없으면 경로별 권한표에서 가져온다. */
+export function menuRequiredKeys(entry: { href: string; permissionKey?: string | readonly string[] }): readonly string[] {
+  if (entry.permissionKey === undefined) return menuPermissionKeys(entry.href);
+  return typeof entry.permissionKey === "string" ? [entry.permissionKey] : entry.permissionKey;
 }
 
-/** 권한키로 노출을 가르는 메뉴가 요구하는 키 목록(/api/nav/badges 가 보유 여부를 계산). */
+/** 모든 메뉴·서브메뉴가 요구하는 권한키 집합(점검·테스트용). */
 export const MENU_PERMISSION_KEYS: string[] = [
-  ...new Set(MENU_ITEMS.map((m) => m.permissionKey).filter((k): k is string => Boolean(k))),
+  ...new Set(
+    MENU_ITEMS.flatMap((m) => [...menuRequiredKeys(m), ...(m.submenu ?? []).flatMap((s) => menuRequiredKeys(s))])
+  ),
 ];
 
-/** role + 권한키 노출 판정 — permissionKey 가 있는 메뉴는 보유 키 목록에 있어야 보인다. */
-export function isMenuVisible(item: MenuItem, role: Role, menuPermissions: readonly string[]): boolean {
-  if (!isMenuVisibleForRole(item, role)) return false;
-  return !item.permissionKey || menuPermissions.includes(item.permissionKey);
+/** 서브메뉴 항목 중 보유 권한으로 열 수 있는 것 — 근태·휴가처럼 본인용/관리용이 한 메뉴에 섞인 경우. */
+export function visibleSubmenu(item: MenuItem, perms: readonly string[]): MenuSubItem[] {
+  return (item.submenu ?? []).filter((s) => hasAnyPerm(perms, menuRequiredKeys(s)));
 }
 
-/** 서브메뉴 항목별 minRole 필터 — 근태·휴가처럼 본인용/관리용이 한 메뉴에 섞인 경우. */
-export function visibleSubmenu(item: MenuItem, role: Role): { title: string; href: string }[] {
-  return (item.submenu ?? []).filter((s) => !s.minRole || ROLE_RANK[role] >= ROLE_RANK[s.minRole]);
+/**
+ * 메뉴 노출 판정 — 권한 요약(perms)만 본다.
+ * 서브메뉴가 있으면 보이는 서브가 하나라도 있어야 노출(상위 href 의 키는 서브가 대표한다).
+ */
+export function isMenuVisible(item: MenuItem, perms: readonly string[]): boolean {
+  if (item.submenu && item.submenu.length > 0) return visibleSubmenu(item, perms).length > 0;
+  return hasAnyPerm(perms, menuRequiredKeys(item));
 }

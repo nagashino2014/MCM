@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Radar, Search, Trash2, X, Wand2 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -36,8 +37,7 @@ function periodRange(period: StatsPeriod): { from: string; to: string } {
 export function IntelBoard() {
   const router = useRouter();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
   const { theme } = useCdashTheme();
 
   // ── 리스트 상태(서버 필터·페이지네이션) ──

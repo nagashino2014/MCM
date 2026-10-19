@@ -1,0 +1,102 @@
+/**
+ * 화면 경로 ↔ 요구 권한키 표 — 메뉴 노출(config/menu.ts)·미들웨어 1차 차단(lib/auth/edge-config.ts)·
+ * 권한 없음 안내(/forbidden)가 같은 표를 쓴다. 역할별 기대값의 출처는
+ * docs/open-test-permission-plan-2026-10-19.md §4.1·§4.2 (2026-10-19 사용자 확정).
+ *
+ * 규칙
+ *  - keys 가 여러 개면 **하나라도** 보유하면 통과(hasAnyPerm).
+ *  - keys 가 빈 배열이면 세션만 요구(본인 데이터 화면). 상위 경로의 요구를 덮어쓰기 위해 둔다(예: /payroll/my).
+ *  - 매칭은 가장 긴 경로 접두(path 와 같거나 path + "/" 로 시작) 우선.
+ *  - 표에 없는 경로는 세션만 요구한다(채팅·메일·일정·주소록·홈 등).
+ *
+ * ⚠ 미들웨어(edge runtime)가 import 한다 — lucide 아이콘·Node 모듈을 넣지 말 것(아이콘은 config/menu.ts 에).
+ */
+
+/** 관리(/admin·/api/admin) 영역 1차 차단에 쓰는 키 — 하나라도 있으면 영역 진입 허용, 세부는 하위 표·API 가 판정. */
+export const ADMIN_AREA_KEYS: readonly string[] = [
+  "account.manage",
+  "rbac.template.manage",
+  "rbac.assignment.manage",
+  "org.edit",
+  "security.access_log",
+  "security.attachment_policy",
+  "ai.usage.view",
+  "recruit.view",
+];
+
+export const ACCOUNT_ADMIN_KEYS: readonly string[] = ["account.manage", "rbac.template.manage", "rbac.assignment.manage"];
+
+export interface RoutePermission {
+  path: string;
+  keys: readonly string[];
+}
+
+export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
+  // ── 관리 ──
+  { path: "/admin", keys: ADMIN_AREA_KEYS },
+  { path: "/admin/users", keys: ACCOUNT_ADMIN_KEYS },
+  { path: "/admin/access-log", keys: ["security.access_log"] },
+  { path: "/admin/ai-usage", keys: ["ai.usage.view"] },
+  { path: "/admin/attachment-policy", keys: ["security.attachment_policy"] },
+  { path: "/admin/company-profile", keys: ["org.edit"] },
+  { path: "/admin/recruit", keys: ["recruit.view"] },
+  // 결재 운영 설정(양식·의미 사전·관계 맵·지표·정책·알림)
+  { path: "/approval/forms", keys: ["approval.manage"] },
+  { path: "/approval/semantic-concepts", keys: ["approval.manage"] },
+  { path: "/approval/semantics", keys: ["approval.manage"] },
+  { path: "/approval/metrics", keys: ["approval.manage"] },
+  { path: "/approval/policies", keys: ["approval.manage"] },
+  { path: "/approval/settings", keys: ["approval.manage"] },
+  // 근태·휴가 관리 6화면(§6-4: 기존 staffing.edit)
+  { path: "/approval/leave", keys: ["staffing.edit"] },
+  { path: "/approval/attendance", keys: ["staffing.edit"] },
+  { path: "/approval/certificates", keys: ["staffing.edit"] },
+  { path: "/approval/leave-promotion", keys: ["staffing.edit"] },
+  { path: "/approval/holidays", keys: ["staffing.edit"] },
+  { path: "/approval/leave-types", keys: ["staffing.edit"] },
+  // ── 업무 ──
+  { path: "/work-plan", keys: ["work_plan.view"] },
+  { path: "/work-plan/oversight", keys: ["work_plan.merge", "work_plan.lock_release"] },
+  { path: "/work-plan/exec", keys: ["work_plan.directive"] },
+  { path: "/work-plan/present", keys: ["work_plan.directive"] },
+  { path: "/staffing", keys: ["bonus.view"] },
+  { path: "/staffing/records", keys: ["staffing.record.view"] },
+  { path: "/payroll", keys: ["payroll.view"] },
+  { path: "/payroll/my", keys: [] },
+  { path: "/payroll/my-yearend", keys: [] },
+  // ── 협업 ──
+  { path: "/rules/admin", keys: ["rules.manage"] },
+  { path: "/rules/internal/edit", keys: ["rules.manage"] },
+  { path: "/survey/external", keys: ["survey.manage"] },
+  // ── 사업 운영 ──
+  { path: "/facilities", keys: ["facility.view"] },
+  { path: "/contracts", keys: ["contract.view"] },
+  { path: "/contracts/filings", keys: ["filing.view"] },
+  { path: "/finance", keys: ["finance.view"] },
+  { path: "/sales", keys: ["sales.view"] },
+  { path: "/sales/contacts", keys: ["contact.view"] },
+  { path: "/data", keys: ["data.view"] },
+  // ── 시스템 ──
+  { path: "/trash", keys: ["trash.view"] },
+];
+
+function matches(entryPath: string, pathname: string): boolean {
+  return pathname === entryPath || pathname.startsWith(entryPath + "/");
+}
+
+/** 경로가 요구하는 권한키. null = 세션만 요구(표에 없거나 빈 keys). */
+export function requiredPermissionsForPath(pathname: string): readonly string[] | null {
+  let best: RoutePermission | null = null;
+  for (const entry of ROUTE_PERMISSIONS) {
+    if (!matches(entry.path, pathname)) continue;
+    if (!best || entry.path.length > best.path.length) best = entry;
+  }
+  if (!best || best.keys.length === 0) return null;
+  return best.keys;
+}
+
+/** 메뉴 href(query 포함 가능)가 요구하는 권한키 — config/menu.ts 가 permissionKey 로 쓴다. */
+export function menuPermissionKeys(href: string): string[] {
+  const path = href.split("?")[0];
+  return [...(requiredPermissionsForPath(path) ?? [])];
+}

@@ -17,7 +17,7 @@ interface OrganizationTreeProps {
   selectedEmployeeId?: string | null;
   /** 마스터(관리자) 노드 하이라이트용 — 선택된 계정의 userId */
   selectedUserId?: string | null;
-  /** 조직도 맨 아래 Master 그룹에 노출할 관리자(role==='admin') 계정 */
+  /** 조직도 맨 아래 Master 그룹에 노출할 시스템 관리자(tpl-system-admin 보유) 계정 */
   adminUsers?: UserRow[];
   onSelectDept?: (dept: DepartmentRow) => void;
   onSelectEmployee?: (employee: OrganizationEmployeeRow) => void;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { Database } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -39,8 +40,7 @@ export default function StatusPage() {
 function StatusPageInner() {
   const { data: session } = useSession();
   const { theme, toggleTheme } = useCdashTheme();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "data.collect");
   const [refreshKey, setRefreshKey] = useState(0);
   const [savedConfigs, setSavedConfigs] = useState<{ id: number; name: string }[]>([]);
   // 가장 최근에 저장된 옵션을 페이지 진입 시 자동 복원하기 위한 initialConfig.

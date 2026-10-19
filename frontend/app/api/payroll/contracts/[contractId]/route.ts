@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteContract, updateContract } from "@/lib/payroll/contracts";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export async function PUT(
   { params }: { params: Promise<{ contractId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const { contractId } = await params;
     const body = await req.json();
     await updateContract(contractId, {
@@ -39,7 +39,7 @@ export async function DELETE(
   { params }: { params: Promise<{ contractId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const { contractId } = await params;
     await deleteContract(contractId);
     return NextResponse.json({ ok: true });

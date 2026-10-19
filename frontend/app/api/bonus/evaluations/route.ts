@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getBonusSettings } from "@/lib/bonus/targets";
 import {
@@ -17,15 +18,26 @@ export async function GET(req: NextRequest) {
     const ctx = await requirePermission("staffing.evaluation.read", { fallbackRoles: ["editor"] });
     const p = parsePeriod(new URL(req.url).searchParams.get("period") ?? "");
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });
-    const [rows, settings] = await Promise.all([
+    const [allRows, settings, access] = await Promise.all([
       listBonusEvaluationBoard(p),
       getBonusSettings(p.year, p.half),
+      loadUserAccess(ctx.userId),
     ]);
+    // 전사(all) 범위가 아니면 계약의 수행부서(owningDeptId)를 target 으로 재판정해 타 부서 용역을 뺀다(X-01, 2026-10-19).
+    const global = access.grants.some(
+      (g) => g.permissionKey === "staffing.evaluation.read" && g.effect === "allow" && g.scopeKind === "all"
+    );
+    const rows = global
+      ? allRows
+      : allRows.filter(
+          (r) => r.owningDeptId != null && checkPermission(access, "staffing.evaluation.read", { deptId: String(r.owningDeptId) })
+        );
     return NextResponse.json({
       rows,
       absoluteGrading: settings.absoluteGrading,
       gradeCaps: settings.gradeCaps,
-      isAdmin: ctx.role === "admin",
+      // 절대평가 설정 편집 가능 여부 — bonus.confirm(288). 이름은 화면 호환을 위해 유지.
+      isAdmin: checkPermission(access, "bonus.confirm"),
     });
   } catch (err) {
     return authErrorToResponse(err);

@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { RefreshCw, ShieldAlert, Users as UsersIcon } from "lucide-react";
+import { RefreshCw, Users as UsersIcon } from "lucide-react";
+import { hasAnyPerm, permsOf } from "@/lib/auth/perms";
+import { ACCOUNT_ADMIN_KEYS } from "@/config/menu-permissions";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import PermissionManagementPanel from "@/components/admin/users/PermissionManagementPanel";
 import type {
@@ -28,7 +31,6 @@ export default function AdminUsersPage() {
 function Inner() {
   const { theme } = useCdashTheme();
   const { data: session, status: sessionStatus } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
   const [organization, setOrganization] = useState<OrganizationSnapshot | null>(null);
   const [permissions, setPermissions] = useState<PermissionsSnapshot | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -65,13 +67,21 @@ function Inner() {
   if (sessionStatus === "loading") {
     return <div className="p-8 cd-text-faint text-sm">세션 확인 중…</div>;
   }
-  if (role !== "admin") {
-    return <AccessDenied theme={theme} />;
+  // 미들웨어가 /admin 을 1차 차단하지만, 권한 요약이 없는 구 토큰·직접 진입에 대비해 화면에서도 같은 키로 판정한다.
+  if (!hasAnyPerm(permsOf(session?.user), ACCOUNT_ADMIN_KEYS)) {
+    return <AccessDenied requiredKeys={ACCOUNT_ADMIN_KEYS} />;
   }
+
+  // 시스템 관리자 = 유효한 tpl-system-admin 템플릿 보유 계정(role 이 아니다 — role 일원화 WP6).
+  const systemAdminUserIds = new Set(
+    (permissions?.assignments ?? [])
+      .filter((a) => a.templateId === "tpl-system-admin" && !a.revokedAt)
+      .map((a) => a.userId)
+  );
 
   const updateAccount = async (
     user: UserRow,
-    patch: Partial<Pick<UserRow, "role" | "status" | "name">>
+    patch: Partial<Pick<UserRow, "status" | "name">>
   ) => {
     try {
       const res = await fetch("/api/admin/users/" + user.userId, {
@@ -125,7 +135,7 @@ function Inner() {
           selectedDeptId={selectedDept?.deptId}
           selectedEmployeeId={selectedAccount?.employeeId ?? null}
           selectedUserId={selectedAccount?.userId ?? null}
-          adminUsers={users.filter((u) => u.role === "admin")}
+          adminUsers={users.filter((u) => systemAdminUserIds.has(u.userId))}
           onSelectDept={(dept) => setSelectedDept(dept)}
           onSelectAccount={(account) => setSelectedAccount(account)}
         />
@@ -140,18 +150,6 @@ function Inner() {
           onDeleteAccount={deleteAccount}
           toast={(message, type) => toast.show(message, type)}
         />
-      </div>
-    </div>
-  );
-}
-
-function AccessDenied({ theme }: { theme: "light" | "dark" }) {
-  return (
-    <div className="cdash flex items-center justify-center min-h-full p-8" data-theme={theme}>
-      <div className="cd-card p-10 text-center max-w-md">
-        <ShieldAlert className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--cd-error)" }} />
-        <h2 className="text-lg font-bold cd-text mb-1">접근 권한이 없습니다</h2>
-        <p className="text-sm cd-text-muted">관리자만 접근할 수 있는 페이지입니다.</p>
       </div>
     </div>
   );

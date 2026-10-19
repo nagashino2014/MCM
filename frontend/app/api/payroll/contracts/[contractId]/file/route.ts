@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { getContractFile } from "@/lib/payroll/contracts";
 import { buildContractPdfById } from "@/lib/payroll/contract-render";
@@ -14,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ contractId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.export");
     const { contractId } = await params;
     const file = await getContractFile(contractId);
     if (!file) {

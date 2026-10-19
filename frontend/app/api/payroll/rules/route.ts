@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { deleteRule, deleteRules, listRules, saveRule, saveRulesBulk } from "@/lib/payroll/rules";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     return NextResponse.json({ rules: await listRules() });
   } catch (err) {
     return authErrorToResponse(err);
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.edit");
     const body = await req.json();
     // 항목별 설정 — 대상자 여러 명에게 같은 규칙을 한 번에(직원 열 = 조직도 선택 태그).
     if (Array.isArray(body.employeeIds)) {
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const sp = new URL(req.url).searchParams;
     const ruleIds = sp.get("ruleIds");
     if (ruleIds) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createRoundDraft, deleteRound, sendRound, syncRoundApproval } from "@/lib/payroll/rounds";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ roundId: string }> }
 ) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.close");
     const { roundId } = await params;
     const body = await req.json();
     const action = String(body.action ?? "");

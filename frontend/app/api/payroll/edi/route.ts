@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEdiStatus, parseEdiCsv, saveEdiNotices } from "@/lib/payroll/edi";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** ?year&month — 해당 귀속월 EDI 업로드 상태 */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const sp = new URL(req.url).searchParams;
     const year = Number(sp.get("year"));
     const month = Number(sp.get("month"));
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 /** multipart: file(건강보험/연금 고지산출내역 CSV, cp949) + year + month — 종류 자동 감지 */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.close");
     const form = await req.formData();
     const file = form.get("file");
     const year = Number(form.get("year"));

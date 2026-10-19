@@ -1,16 +1,18 @@
 // 착수계·준공계 작성 권한 범위 — 작성 책임을 용역 담당 실무자에게 일임한다(2026-08-07 사용자 확정).
-// 관리자(role=admin)는 전 계약, 그 외 사용자는 **본인이 수행인력으로 등록된 계약**만 보인다.
+// 계약 전사 범위(contract.view scope=all) 보유자는 전 계약, 그 외 사용자는 **본인이 수행인력으로 등록된 계약**만 보인다.
 // 수행인력의 단일 진실원은 service_participants(029)이고, 로그인 계정↔조직 인원은
 // users.employee_id → employee_profiles.employee_id 로 연결된다.
 
 import { getDb, rowsToObjects } from "@/lib/db";
+import { hasGlobalScope } from "@/lib/auth/rbac";
 
 /**
  * 이 사용자가 착수계·준공계를 작성할 수 있는 계약 id 목록.
- * null = 제한 없음(관리자) — 호출측은 null 이면 필터를 걸지 않는다.
+ * null = 제한 없음(전사 범위) — 호출측은 null 이면 필터를 걸지 않는다.
  */
-export async function resolveDeliverableContractIds(userId: string, role: string): Promise<string[] | null> {
-  if (role === "admin") return null;
+export async function resolveDeliverableContractIds(userId: string): Promise<string[] | null> {
+  // 계약을 전사 범위로 보는 사용자(contract.view scope=all)는 전 계약(role=admin 분기 대체, WP4 2026-10-19).
+  if (await hasGlobalScope(userId, "contract.view")) return null;
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(

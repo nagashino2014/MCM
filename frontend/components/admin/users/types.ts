@@ -50,7 +50,8 @@ export interface UserRow {
   email: string;
   loginId: string | null;
   name: string;
-  role: "admin" | "editor" | "viewer";
+  /** 부트스트랩 플래그(마이그 289) — 관리자 여부는 tpl-system-admin 템플릿 보유로 판단한다. */
+  role: "admin" | "member";
   status: "active" | "disabled";
   createdAt: string;
   updatedAt: string;

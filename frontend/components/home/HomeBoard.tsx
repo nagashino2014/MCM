@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, CloudSun, Download, LayoutGrid, Monitor, RotateCcw, Save, Smartphone } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { isSystemAdminPerms } from "@/lib/auth/perms";
 import { HomeStats } from "./HomeStats";
 import { HomeEditGrid, type HomeGridEntry } from "./HomeEditGrid";
 import { HOME_WIDGETS, EMPTY_HOME_LAYOUT, HOME_CALENDAR_H, HOME_HALF_H, HOME_COLS, type HomeLayout, type HomeLayoutItem } from "@/lib/home/widgets";
@@ -48,7 +49,7 @@ function todayLabel(): string {
  * 나머지 카드는 사용자가 편집 모드에서 표시 여부·위치·크기를 정한다(HC-B, 서버 저장).
  * 권한이 없는 카드는 각 위젯이 API 403 으로 스스로 숨고, 편집 목록에도 나오지 않는다.
  */
-export function HomeBoard({ role }: { role?: string }) {
+export function HomeBoard({ perms = [] }: { perms?: string[] }) {
   const { theme } = useCdashTheme();
   const [editing, setEditing] = useState(false);
   const [layout, setLayout] = useState<HomeLayout>(EMPTY_HOME_LAYOUT);
@@ -144,7 +145,7 @@ export function HomeBoard({ role }: { role?: string }) {
       billingSummary: <BillingSummaryCard />,
       myServices: <MyServicesCard />,
       intel: <IntelHighlightsCard />,
-      quickFacilities: <QuickFacilitiesCard role={role} />,
+      quickFacilities: <QuickFacilitiesCard perms={perms} />,
       bonusMe: <BonusMyCard />,
       contractInbox: <ContractInboxCard />,
       payslipInbox: <PayslipInboxCard />,
@@ -161,7 +162,7 @@ export function HomeBoard({ role }: { role?: string }) {
     return HOME_WIDGETS.filter(
       (w) => (available.length === 0 || allowed.has(w.key)) && !layout.hidden.includes(w.key)
     ).map((w) => ({ key: w.key, node: NODES[w.key], defaultW: w.defaultW, defaultH: w.defaultH }));
-  }, [available, layout, persist, role, theme]);
+  }, [available, layout, persist, perms, theme]);
 
   const onGridChange = useCallback(
     (items: Record<string, HomeLayoutItem>) => {
@@ -199,7 +200,7 @@ export function HomeBoard({ role }: { role?: string }) {
               모바일 앱 데모
             </a>
             {/* 날씨 씬 미리보기(관리자 전용) — 시기·기상 조건과 무관하게 20 variant(주간/야간 × 10씬)를 확인 */}
-            {role === "admin" && (
+            {isSystemAdminPerms(perms) && (
               <span ref={wxBoxRef} className="relative">
                 <button
                   type="button"

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getBonusSettings, saveBonusSettings, type BonusSettingsInput } from "@/lib/bonus/targets";
 
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
     const p = parsePeriod(new URL(req.url).searchParams.get("period") ?? "");
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });
     const settings = await getBonusSettings(p.year, p.half);
-    return NextResponse.json({ settings, canEdit: ctx.role === "admin" });
+    return NextResponse.json({ settings, canEdit: await hasPermission(ctx.userId, "bonus.confirm") });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 /** 반기 설정 저장 — 관리자 전용. */
 export async function PUT(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("bonus.confirm");
     const body = await req.json();
     const p = parsePeriod(String(body?.period ?? ""));
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });

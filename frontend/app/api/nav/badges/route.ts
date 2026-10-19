@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
-import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
-import { MENU_PERMISSION_KEYS } from "@/config/menu";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { countDueBadge } from "@/lib/todo/store";
 
@@ -70,15 +68,8 @@ export async function GET() {
     } catch {
       /* todo 테이블 미존재 등 — 0 유지 */
     }
-    // 권한키로 노출을 가르는 메뉴(수행인력 실적 등) — 보유한 키만 내려 사이드바가 숨김 판정에 쓴다.
-    let menuPermissions: string[] = [];
-    try {
-      const access = await loadUserAccess(ctx.userId);
-      menuPermissions = MENU_PERMISSION_KEYS.filter((key) => checkPermission(access, key));
-    } catch {
-      /* 빈 목록 유지 — 해당 메뉴는 숨김 */
-    }
-    return NextResponse.json({ mailUnread, approvalPending, chatUnread, todoDue, menuPermissions });
+    // 메뉴 노출 판정은 세션의 권한 요약(session.user.perms)이 담당한다(role 일원화 WP5) — 여기서는 뱃지만 내린다.
+    return NextResponse.json({ mailUnread, approvalPending, chatUnread, todoDue });
   } catch (err) {
     return authErrorToResponse(err);
   }

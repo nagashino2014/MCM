@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Database, FileSignature, RefreshCw, Trash2 } from "lucide-react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -30,8 +31,8 @@ export default function TrashPage() {
   const { theme, toggleTheme } = useCdashTheme();
   const toast = useToast();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role ?? "viewer";
-  const isAdmin = role === "admin";
+  // 영구 삭제 = trash.purge(관리자 템플릿). 목록·복원은 trash.view/restore 로 API 가 판정한다.
+  const isAdmin = hasPerm(permsOf(session?.user), "trash.purge");
   const [type, setType] = useState<TrashType>("facility");
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(false);

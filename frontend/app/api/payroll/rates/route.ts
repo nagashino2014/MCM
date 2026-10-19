@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** 보험요율 관리(162) — ei(고용보험)·ltc(장기요양). 장기요양은 EDI 업로드 시 자동 역산 갱신. */
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(
@@ -34,7 +34,7 @@ export async function GET() {
 /** 수동 추가/수정 — 같은 (kind, validFrom) 이면 갱신(source=manual, EDI 역산보다 우선 유지) */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const body = await req.json();
     const kind = ["ei", "ltc", "ei-exempt-age", "nps-max-age"].includes(String(body.kind)) ? String(body.kind) : null;
     const validFrom = String(body.validFrom ?? "");

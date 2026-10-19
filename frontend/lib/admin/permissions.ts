@@ -266,6 +266,25 @@ export async function revokePermissionAssignment(
         assignmentId,
       ])
     )[0];
+    // 마지막 시스템 관리자 보호(role 일원화 WP6, 2026-10-19): 유효한 tpl-system-admin 을 가진 활성 계정이
+    // 1명 이하로 떨어지는 회수는 거부한다(계정 비활성화·삭제는 api/admin/users/[id] 가 같은 기준으로 막는다).
+    if (before && String(before.template_id ?? "") === "tpl-system-admin" && before.revoked_at == null) {
+      const today = now.slice(0, 10);
+      const remain = rowsToObjects(
+        await db.exec(
+          `SELECT COUNT(DISTINCT u.user_id) AS n FROM users u
+             JOIN user_permission_assignments a ON a.user_id = u.user_id
+            WHERE u.status = 'active' AND a.template_id = 'tpl-system-admin' AND a.revoked_at IS NULL
+              AND a.assignment_id <> $1
+              AND (a.effective_from IS NULL OR left(a.effective_from, 10) <= $2)
+              AND (a.effective_to IS NULL OR left(a.effective_to, 10) >= $2)`,
+          [assignmentId, today]
+        )
+      );
+      if (Number(remain[0]?.n ?? 0) < 1) {
+        throw Object.assign(new Error("마지막 시스템 관리자(tpl-system-admin)의 권한은 회수할 수 없습니다."), { status: 400 });
+      }
+    }
     await db.run(
       "UPDATE user_permission_assignments SET revoked_at = $1, revoked_by = $2 WHERE assignment_id = $3",
       [now, actorUserId, assignmentId]

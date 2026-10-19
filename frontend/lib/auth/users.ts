@@ -1,14 +1,14 @@
 /**
  * users 테이블 read/write 헬퍼.
  * - frontend/lib/db.ts의 withDbWrite (PostgreSQL 트랜잭션) 를 통해 동시 쓰기를 직렬화.
- * - role 은 'admin' | 'editor' | 'viewer'. status 는 'active' | 'disabled'.
+ * - role 은 'admin' | 'member'(부트스트랩 플래그, 마이그 289). status 는 'active' | 'disabled'. 권한의 근거는 권한 템플릿이다.
  */
 
 import crypto from "node:crypto";
 import { getDb, invalidateDb, rowsToObjects, withDbWrite } from "../db";
 import { hashPassword } from "./password";
 
-export type Role = "admin" | "editor" | "viewer";
+export type Role = "admin" | "member";
 export type UserStatus = "active" | "disabled";
 
 export interface UserRow {
@@ -34,7 +34,7 @@ function rowToUser(row: Record<string, unknown>): UserRow {
     email: String(row.email ?? ""),
     loginId: row.login_id != null ? String(row.login_id) : null,
     name: String(row.name ?? ""),
-    role: (String(row.role ?? "viewer") as Role),
+    role: (String(row.role ?? "member") as Role),
     status: (String(row.status ?? "active") as UserStatus),
     mustChangePassword: Number(row.must_change_password ?? 0) === 1,
     createdBy: row.created_by != null ? String(row.created_by) : null,
@@ -121,6 +121,50 @@ export async function countAdmins(): Promise<number> {
   }
 }
 
+/** 유효한 tpl-system-admin assignment 조건(오늘 기준) — countSystemAdmins·isSystemAdminUser 공용. */
+const SYSTEM_ADMIN_ASSIGNMENT_WHERE = `
+  a.template_id = 'tpl-system-admin' AND a.revoked_at IS NULL
+  AND (a.effective_from IS NULL OR left(a.effective_from, 10) <= $1)
+  AND (a.effective_to IS NULL OR left(a.effective_to, 10) >= $1)`;
+
+/**
+ * 시스템 관리자 수 — 유효한 tpl-system-admin 템플릿을 가진 활성 계정(role 과 무관).
+ * "마지막 관리자 보호"(계정 비활성화·삭제·템플릿 회수 거부)의 기준이다(role 일원화 WP6, 2026-10-19).
+ */
+export async function countSystemAdmins(): Promise<number> {
+  invalidateDb();
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const r = await db.exec(
+      `SELECT COUNT(DISTINCT u.user_id) FROM users u
+         JOIN user_permission_assignments a ON a.user_id = u.user_id
+        WHERE u.status = 'active' AND ${SYSTEM_ADMIN_ASSIGNMENT_WHERE}`,
+      [today]
+    );
+    return r.length ? Number(r[0].values[0][0]) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 이 계정이 유효한 tpl-system-admin 템플릿을 가졌는가(활성 여부는 묻지 않는다). */
+export async function isSystemAdminUser(userId: string): Promise<boolean> {
+  invalidateDb();
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const r = await db.exec(
+      `SELECT 1 FROM user_permission_assignments a
+        WHERE a.user_id = $2 AND ${SYSTEM_ADMIN_ASSIGNMENT_WHERE} LIMIT 1`,
+      [today, userId]
+    );
+    return r.length > 0 && r[0].values.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export interface CreateUserInput {
   email: string;
   password: string;
@@ -134,7 +178,7 @@ export async function createUser(input: CreateUserInput): Promise<UserRow> {
   if (!email || !input.password || !input.name) {
     throw new Error("email/password/name이 필요합니다.");
   }
-  if (!["admin", "editor", "viewer"].includes(input.role)) {
+  if (!["admin", "member"].includes(input.role)) {
     throw new Error("invalid role");
   }
   const userId = "u_" + crypto.randomBytes(8).toString("hex");
@@ -184,7 +228,7 @@ export async function updateUser(userId: string, patch: UpdateUserPatch): Promis
       values.push(patch.name.trim());
     }
     if (patch.role !== undefined) {
-      if (!["admin", "editor", "viewer"].includes(patch.role)) throw new Error("invalid role");
+      if (!["admin", "member"].includes(patch.role)) throw new Error("invalid role");
       fields.push(`role = $${pIdx++}`);
       values.push(patch.role);
     }
@@ -257,7 +301,7 @@ export async function findUserByLoginIdentifier(identifier: string): Promise<Aut
     userId: String(r.user_id ?? ""),
     email: String(r.email ?? ""),
     name: String(r.name ?? ""),
-    role: (String(r.role ?? "viewer") as Role),
+    role: (String(r.role ?? "member") as Role),
     status: (String(r.status ?? "active") as UserStatus),
     passwordHash: String(r.password_hash ?? ""),
     mustChangePassword: Number(r.must_change_password ?? 0) === 1,

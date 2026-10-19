@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Building2, ExternalLink, Check } from "lucide-react";
+import { hasPerm } from "@/lib/auth/perms";
 import { HomeCard } from "../HomeCard";
 import { useHomeWidget } from "../useHomeWidget";
 
@@ -13,11 +14,12 @@ interface FacilityItem {
 }
 
 /** H4 — 모바일 간이 등록(mobile-quick) 사업장 정리. 정보 완성 딥링크 + 승격(완성) 버튼. */
-export function QuickFacilitiesCard({ role }: { role?: string }) {
+export function QuickFacilitiesCard({ perms = [] }: { perms?: string[] }) {
   const w = useHomeWidget<{ items: FacilityItem[]; total: number }>(
     "/api/facilities?source=mobile-quick&limit=8&sort=recent"
   );
-  const canPromote = role === "admin" || role === "editor";
+  // 승격(완성) = 사업장 편집 권한. API(/promote)도 facility.edit 로 판정한다.
+  const canPromote = hasPerm(perms, "facility.edit");
   const [promoting, setPromoting] = useState<string | null>(null);
 
   if (w.status === "forbidden") return null;

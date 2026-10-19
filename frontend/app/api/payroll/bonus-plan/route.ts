@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { createBonusPaymentPlanDraft, listBonusPlanCandidates, type BonusPlanInput } from "@/lib/payroll/bonus-plan";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** 상여금 지급 계획 — 대상자 후보(재직자) */
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     return NextResponse.json({ candidates: await listBonusPlanCandidates() });
   } catch (err) {
     return authErrorToResponse(err);
@@ -18,7 +18,7 @@ export async function GET() {
 /** 상여금 지급 계획 기안(draft) 생성 — 결재선=대표이사 직결. 승인 시 상여대장 자동 생성(payroll.bonus_ledger). */
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.edit");
     const body = (await req.json()) as Partial<BonusPlanInput>;
     const out = await createBonusPaymentPlanDraft(ctx.userId, {
       payMonth: String(body.payMonth ?? ""),

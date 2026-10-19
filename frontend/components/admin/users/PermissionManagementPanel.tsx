@@ -42,7 +42,7 @@ interface PermissionManagementPanelProps {
   onReload: () => void;
   onUpdateAccount: (
     user: UserRow,
-    patch: Partial<Pick<UserRow, "role" | "status" | "name">>
+    patch: Partial<Pick<UserRow, "status" | "name">>
   ) => void;
   onDeleteAccount: (user: UserRow) => void;
   toast: (message: string, type?: "success" | "error") => void;
@@ -60,12 +60,6 @@ const SCOPE_LABEL: Record<ScopeKind, string> = {
 
 /** 적용 범위 태그 표시 순서. */
 const SCOPE_ORDER: ScopeKind[] = ["participant", "self", "self_dept", "specific_dept", "all"];
-
-const ROLE_LABEL: Record<UserRow["role"], string> = {
-  admin: "관리자",
-  editor: "편집자",
-  viewer: "조회자",
-};
 
 /** 세부 권한 펼침 시 표시할 scope 라벨(participant 포함). */
 function scopeLabel(kind: string): string {
@@ -820,18 +814,10 @@ function AccountDetailPanel({
         </div>
         {user && (
           <div className="flex items-center gap-2">
-            <select
-              className="cd-select text-xs w-auto"
-              value={user.role}
-              disabled={isSelf}
-              onChange={(e) => onUpdateAccount(user, { role: e.target.value as UserRow["role"] })}
-            >
-              {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            {/* 역할 선택(editor/viewer)은 폐지 — "관리자 지정"은 아래 템플릿 목록에서 시스템 관리자(tpl-system-admin)를 부여한다(role 일원화 WP6). */}
+            <span className="text-xs cd-text-faint" title="메뉴·화면 노출은 다시 로그인해야 반영됩니다. API 권한은 즉시 반영됩니다.">
+              권한 변경은 재로그인 후 메뉴에 반영
+            </span>
             <button
               type="button"
               disabled={isSelf}

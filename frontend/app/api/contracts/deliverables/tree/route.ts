@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("contract.view");
     const visible = await resolveVisibleContractIds(ctx.userId, "contract.view");
-    const mine = await resolveDeliverableContractIds(ctx.userId, ctx.role);
+    const mine = await resolveDeliverableContractIds(ctx.userId);
 
     // RBAC 가시 범위 ∩ 작성 권한 범위. 어느 한쪽이라도 null 이면 그쪽은 제한 없음.
     let ids: string[] | null = visible;

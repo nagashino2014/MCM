@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, CtaGradientFill, EmptyState, Screen, SkeletonList, useToast } from '@/components/ui';
 import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSections';
 import { TimelineView } from '@/components/todo/TimelineView';
+import { AutomationSheet } from '@/components/todo/AutomationSheet';
 import { DateGroupHeader } from '@/components/todo/parts';
 import { QuickAddBar } from '@/components/todo/QuickAddBar';
 import { ApprovalEventRow, TodoRow } from '@/components/todo/TodoRow';
@@ -133,6 +134,8 @@ export default function TodoScreen() {
   const me = user?.id ?? '';
   const [scope, setScope] = useState<Scope>('my');
   const [view, setView] = useState<ViewMode>('list');
+  // 296 자동화 시트(프로젝트 보드)
+  const [autoOpen, setAutoOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const quickRef = useRef<TextInput | null>(null);
@@ -704,7 +707,20 @@ export default function TodoScreen() {
             {viewBtn('timeline', 'git-commit-outline', '타임라인')}
           </View>
         </View>
-        {scope === 'project' && projectBoards.length ? <BoardChips boards={projectBoards} value={selectedProjectId} onChange={setProjectId} /> : null}
+        {scope === 'project' && projectBoards.length ? (
+          <View className="flex-row items-center">
+            <View className="flex-1" style={{ minWidth: 0 }}>
+              <BoardChips boards={projectBoards} value={selectedProjectId} onChange={setProjectId} />
+            </View>
+            {board ? (
+              <Pressable onPress={() => setAutoOpen(true)} hitSlop={6} accessibilityLabel="자동화" className="mr-3 h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+                <Ionicons name="flash-outline" size={13} color={c.muted} />
+                <Text className="text-[11.5px] text-cd-muted">자동화</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        {board ? <AutomationSheet board={board} visible={autoOpen} onClose={() => setAutoOpen(false)} /> : null}
         <ScrollView
           ref={scrollRef}
           className="flex-1"

@@ -15,7 +15,7 @@ import "./todo.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AlignHorizontalDistributeStart, ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus } from "lucide-react";
+import { AlignHorizontalDistributeStart, ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus, Settings2 } from "lucide-react";
 import { CdButton, CdDropdown, CdEmptyState, CdPageHeader, CdTabs, useCdToast, useCdashTheme, type CdMenuItem } from "@/components/cdash";
 import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs, type TodoStatus } from "@/lib/todo/types";
 import { hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -25,6 +25,7 @@ import { GroupHeader, MyTodoList, rowListKeyNav, type QuickFilter } from "./MyTo
 import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
 import { TodoTimeline } from "./TodoTimeline";
+import { TodoPrefsModal } from "./TodoPrefsModal";
 import { TODO_LIST_QUERY_KEY } from "./TodoDetailPage";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
@@ -107,6 +108,8 @@ export function TodoBoardPage() {
   }
 
   const [prefs, setPrefs] = useState<TodoPrefs | null>(null);
+  // §29-3 2차 설정 모달(알림·표시)
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("date");
   // 완료 유예(2초) 중인 행 — id → 완료 전 상태(목록에는 그 상태로 되돌려 넘겨 원래 섹션에 남긴다).
   const [justDone, setJustDone] = useState<Map<string, TodoStatus>>(() => new Map());
@@ -653,6 +656,9 @@ export function TodoBoardPage() {
                   캘린더
                 </button>
               </div>
+              <button type="button" className="cd-icon-button cd-icon-button-sm inline-flex items-center justify-center todo-pf-btn" aria-label="할 일 설정" title="할 일 설정 — 아침·주간 요약, 알림 시각, 표시" disabled={!prefs} onClick={() => setPrefsOpen(true)}>
+                <Settings2 className="w-4 h-4" aria-hidden="true" />
+              </button>
             </div>
           </div>
 
@@ -814,6 +820,8 @@ export function TodoBoardPage() {
 
 
       <CompleteConfirmModal open={!!confirm} target={confirm?.target ?? null} failure={confirm?.failure} busy={confirmBusy} onConfirm={(note) => void confirmComplete(note)} onClose={cancelConfirm} />
+
+      {prefsOpen && prefs && <TodoPrefsModal prefs={prefs} onPatch={patchPrefs} onClose={() => setPrefsOpen(false)} />}
 
       <BoardCreateModal
         open={createOpen}

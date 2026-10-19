@@ -1,7 +1,8 @@
 /*
  * 할 일 주간 리포트(§29-3, 보강 7, 2026-10-19) — remind-tick 이 5분마다 호출하는 디스패처.
  *   대상: 활성 사용자 중 prefs.weekly_digest_time 이 켜져 있고(행 없으면 기본 월 08:40) 오늘 요일·시각이 도래했으며 오늘 아직 보내지 않은 사람.
- *   내용: 지난주 완료 N(주요 3건) · 이번 주 예정 N(기간·마일스톤 포함, 5건) · 지연 N(3건) · 맡긴 일(진행/지연) · 프로젝트 보드별 하위 진행율 평균.
+ *   내용: 지난주 완료 N(주요 3건) · 이번 주 예정 N(기간·마일스톤 포함, 5건) · 지연 N(3건) · 맡긴 일(진행/지연) · 프로젝트 보드별 하위 진행율 평균
+ *   (+ 지난주 같은 요일 스냅샷 대비 변화량, 297). 부서장·임원(tpl-dept-lead/tpl-exec, 소속 부서 있을 때)은 부서원 현황(건수만, 제목 없음)을 덧붙인다(2차).
  *   채널: 인앱 알림 todo.weekly + 푸시(dedup todo-weekly:<user>:<date>) + 사내 메일함 내부 배달(weekly_digest_mail=1, noreply@MAIL_DOMAIN,
  *   inbound 적재와 같은 구조 — SES 외부 발송 아님, rfc_message_id 로 멱등). 0건이면 미발송(아침 요약과 같은 규칙), 평가 기록은 남긴다.
  */
@@ -11,7 +12,9 @@ import { sendPush } from "@/lib/notify/push-expo";
 import { MAIL_DOMAIN, ensureMailbox, getSystemFolderId } from "@/lib/mail/mailbox";
 import { cleanSnippet } from "@/lib/mail/mime";
 import { recordTodoNotifications } from "./inbox";
-import { TODO_DEFAULT_WEEKLY_DOW, TODO_DEFAULT_WEEKLY_TIME } from "./types";
+import { boardAvgOn } from "./snapshots";
+import { isDeptLeadOrExec } from "./visibility";
+import { TODO_DEFAULT_WEEKLY_TIME } from "./types";
 
 const nowIso = () => new Date().toISOString();
 const kstNow = () => new Date(Date.now() + 9 * 3600 * 1000);
@@ -28,6 +31,7 @@ const addDays = (ymd: string, n: number): string => {
 const mondayOf = (ymd: string): string => addDays(ymd, -((new Date(`${ymd}T12:00:00Z`).getUTCDay() + 6) % 7));
 const md = (ymd: string) => `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8, 10))}`;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
+const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 export interface WeeklySummary {
   lastStart: string;
@@ -42,7 +46,17 @@ export interface WeeklySummary {
   overdueTitles: string[];
   delegatedOpenN: number;
   delegatedLateN: number;
-  boards: { name: string; project: string | null; avg: number }[];
+  /** 프로젝트 보드별 하위 진행율 평균 + 지난주 대비 변화(스냅샷 없으면 null) */
+  boards: { boardId: string; name: string; project: string | null; avg: number; delta: number | null }[];
+}
+
+export interface DeptMemberSummary {
+  userId: string;
+  name: string;
+  doneN: number;
+  planN: number;
+  overdueN: number;
+  delegatedOpenN: number;
 }
 
 /** 한 사용자의 주간 집계(상위 할 일 기준, 본인 담당·작성). */
@@ -88,9 +102,9 @@ export async function buildWeeklySummary(userId: string, today: string): Promise
   const overdueTitles = rowsToObjects(
     await db.exec(`SELECT i.title FROM todo_items i WHERE ${mine} AND i.status <> 'done' AND i.archived_at IS NULL AND COALESCE(i.do_date, i.due_date) < $2 ORDER BY COALESCE(i.do_date, i.due_date) LIMIT 3`, [userId, thisStart])
   ).map((r) => String(r.title));
-  const boards = rowsToObjects(
+  const boardRows = rowsToObjects(
     await db.exec(
-      `SELECT b.name, b.project_name, ROUND(AVG(CASE WHEN s.status = 'done' THEN 100 ELSE COALESCE(s.progress_pct, 0) END))::int AS avg
+      `SELECT b.board_id, b.name, b.project_name, ROUND(AVG(CASE WHEN s.status = 'done' THEN 100 ELSE COALESCE(s.progress_pct, 0) END))::int AS avg
          FROM todo_items p
          JOIN todo_boards b ON b.board_id = p.board_id AND b.kind <> 'personal'
          JOIN todo_items s ON s.parent_item_id = p.item_id AND s.archived_at IS NULL
@@ -98,7 +112,17 @@ export async function buildWeeklySummary(userId: string, today: string): Promise
         GROUP BY b.board_id, b.name, b.project_name ORDER BY b.name LIMIT 8`,
       [userId]
     )
-  ).map((r) => ({ name: String(r.name), project: r.project_name != null ? String(r.project_name) : null, avg: Number(r.avg ?? 0) }));
+  );
+  const prev = await boardAvgOn(
+    boardRows.map((r) => String(r.board_id)),
+    lastStart
+  ).catch(() => new Map<string, number>());
+  const boards = boardRows.map((r) => {
+    const id = String(r.board_id);
+    const avg = Number(r.avg ?? 0);
+    const p = prev.get(id);
+    return { boardId: id, name: String(r.name), project: r.project_name != null ? String(r.project_name) : null, avg, delta: p == null ? null : avg - p };
+  });
   return {
     lastStart,
     lastEnd,
@@ -116,6 +140,33 @@ export async function buildWeeklySummary(userId: string, today: string): Promise
   };
 }
 
+/** 부서장·임원용 — 소속 부서(employee_profiles.dept_id)의 다른 활성 직원 요약(건수만). 부서가 없거나 권한이 없으면 null. */
+export async function buildDeptSummary(userId: string, today: string): Promise<{ deptName: string; members: DeptMemberSummary[] } | null> {
+  if (!(await isDeptLeadOrExec(userId))) return null;
+  const db = await getDb();
+  const me = rowsToObjects(
+    await db.exec(
+      `SELECT ep.dept_id, d.dept_name AS dept_name FROM users u JOIN employee_profiles ep ON ep.employee_id = u.employee_id LEFT JOIN departments d ON d.dept_id = ep.dept_id
+        WHERE u.user_id = $1 AND ep.dept_id IS NOT NULL LIMIT 1`,
+      [userId]
+    )
+  )[0];
+  if (!me) return null;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT u.user_id, u.name FROM users u JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE ep.dept_id = $1 AND ep.status = 'active' AND u.status = 'active' AND u.user_id <> $2 ORDER BY u.name`,
+      [String(me.dept_id), userId]
+    )
+  );
+  const members: DeptMemberSummary[] = [];
+  for (const r of rows) {
+    const s = await buildWeeklySummary(String(r.user_id), today);
+    members.push({ userId: String(r.user_id), name: String(r.name), doneN: s.doneN, planN: s.planN, overdueN: s.overdueN, delegatedOpenN: s.delegatedOpenN });
+  }
+  return { deptName: me.dept_name != null ? String(me.dept_name) : "소속 부서", members };
+}
+
 export function weeklyOneLiner(s: WeeklySummary): string {
   const parts = [`지난주 완료 ${s.doneN}건`, `이번 주 예정 ${s.planN}건`];
   if (s.overdueN > 0) parts.push(`지연 ${s.overdueN}건`);
@@ -123,13 +174,26 @@ export function weeklyOneLiner(s: WeeklySummary): string {
   return parts.join(" · ");
 }
 
-export function weeklyMailHtml(s: WeeklySummary, name: string, origin: string): string {
+export function weeklyMailHtml(s: WeeklySummary, name: string, origin: string, dept?: { deptName: string; members: DeptMemberSummary[] } | null): string {
   const li = (xs: string[]) => (xs.length ? `<ul style="margin:4px 0 0 18px;padding:0">${xs.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : "");
   const row = (label: string, value: string, extra = "") =>
     `<tr><td style="padding:6px 10px;color:#6b7280;white-space:nowrap;vertical-align:top">${label}</td><td style="padding:6px 10px">${value}${extra}</td></tr>`;
   const boards = s.boards.length
-    ? `<table style="border-collapse:collapse;margin-top:4px">${s.boards.map((b) => `<tr><td style="padding:2px 8px 2px 0">${esc(b.name)}${b.project ? ` <span style="color:#9ca3af">${esc(b.project)}</span>` : ""}</td><td style="padding:2px 0"><b>${b.avg}%</b></td></tr>`).join("")}</table>`
+    ? `<table style="border-collapse:collapse;margin-top:4px">${s.boards
+        .map(
+          (b) =>
+            `<tr><td style="padding:2px 8px 2px 0">${esc(b.name)}${b.project ? ` <span style="color:#9ca3af">${esc(b.project)}</span>` : ""}</td><td style="padding:2px 0"><b>${b.avg}%</b>${b.delta == null ? "" : ` <span style="color:${b.delta > 0 ? "#15803d" : b.delta < 0 ? "#b91c1c" : "#6b7280"}">(${signed(b.delta)}%p)</span>`}</td></tr>`
+        )
+        .join("")}</table>`
     : "";
+  const deptHtml =
+    dept && dept.members.length
+      ? `<h3 style="font-size:14px;margin:16px 0 6px">${esc(dept.deptName)} 주간 현황 (${dept.members.length}명)</h3>
+<table style="border-collapse:collapse;border:1px solid #e5e7eb;font-size:13px">
+<tr style="background:#f9fafb"><th style="padding:4px 10px;text-align:left">이름</th><th style="padding:4px 10px">지난주 완료</th><th style="padding:4px 10px">이번 주 예정</th><th style="padding:4px 10px">지연</th><th style="padding:4px 10px">맡긴 일</th></tr>
+${dept.members.map((m) => `<tr><td style="padding:4px 10px">${esc(m.name)}</td><td style="padding:4px 10px;text-align:center">${m.doneN}</td><td style="padding:4px 10px;text-align:center">${m.planN}</td><td style="padding:4px 10px;text-align:center;color:${m.overdueN ? "#b91c1c" : "#111827"}">${m.overdueN}</td><td style="padding:4px 10px;text-align:center">${m.delegatedOpenN}</td></tr>`).join("")}
+</table>`
+      : "";
   return `<div style="font-family:'Malgun Gothic',Apple SD Gothic Neo,sans-serif;font-size:14px;color:#111827;line-height:1.5">
 <p>${esc(name)}님, 이번 주 할 일 요약입니다 (${md(s.thisStart)} ~ ${md(s.thisEnd)}).</p>
 <table style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;min-width:360px">
@@ -137,10 +201,11 @@ ${row(`지난주 완료 (${md(s.lastStart)}~${md(s.lastEnd)})`, `<b>${s.doneN}�
 ${row("이번 주 예정", `<b>${s.planN}건</b>`, li(s.planItems.map((p) => `${p.title} — ${p.when}`)))}
 ${row("지연", `<b style="color:${s.overdueN ? "#b91c1c" : "#111827"}">${s.overdueN}건</b>`, li(s.overdueTitles))}
 ${row("맡긴 일", s.delegatedOpenN ? `진행 ${s.delegatedOpenN}건${s.delegatedLateN ? ` · <span style="color:#b91c1c">지연 ${s.delegatedLateN}건</span>` : ""}` : "없음")}
-${s.boards.length ? row("프로젝트 진척(하위 평균)", boards) : ""}
+${s.boards.length ? row("프로젝트 진척(하위 평균 · 지난주 대비)", boards) : ""}
 </table>
+${deptHtml}
 <p style="margin-top:12px"><a href="${origin}/todo" style="color:#4a63d8">할 일 열기</a> · <a href="${origin}/todo?view=timeline" style="color:#4a63d8">타임라인</a></p>
-<p style="color:#9ca3af;font-size:12px">이 메일은 매주 자동 발송됩니다. 할 일 설정에서 주간 요약을 끌 수 있습니다.</p>
+<p style="color:#9ca3af;font-size:12px">이 메일은 매주 자동 발송됩니다. 할 일 › 설정에서 주간 요약을 끄거나 요일·시각을 바꿀 수 있습니다.</p>
 </div>`;
 }
 
@@ -214,13 +279,29 @@ export async function dispatchTodoWeekly(): Promise<{ weeklySent: number; weekly
           [userId, today, nowIso()]
         );
       });
-      if (s.doneN + s.planN + s.overdueN + s.delegatedOpenN === 0) continue;
+      const dept = await buildDeptSummary(userId, today).catch((e) => {
+        console.error("[todo-weekly] 부서 집계 실패", userId, e);
+        return null;
+      });
+      const deptHas = !!dept && dept.members.some((m) => m.doneN + m.planN + m.overdueN + m.delegatedOpenN > 0);
+      if (s.doneN + s.planN + s.overdueN + s.delegatedOpenN === 0 && !deptHas) continue;
       const title = `이번 주 할 일 요약 ${md(s.thisStart)}~${md(s.thisEnd)}`;
       const body = weeklyOneLiner(s);
       await recordTodoNotifications([userId], { event: "todo.weekly", title, body, link: "/todo?view=timeline" });
+      if (dept && dept.members.length) {
+        const dOverdue = dept.members.reduce((a, m) => a + m.overdueN, 0);
+        const dPlan = dept.members.reduce((a, m) => a + m.planN, 0);
+        const dDone = dept.members.reduce((a, m) => a + m.doneN, 0);
+        await recordTodoNotifications([userId], {
+          event: "todo.weekly",
+          title: `${dept.deptName} 주간 현황 (${dept.members.length}명)`,
+          body: `지난주 완료 ${dDone}건 · 이번 주 예정 ${dPlan}건 · 지연 ${dOverdue}건 — 자세한 표는 메일함`,
+          link: "/todo?scope=delegated",
+        });
+      }
       const res = await sendPush([userId], { event: "todo.weekly", title, body, link: "/todo", targetRef: `weekly:${today}`, dedupKey: `todo-weekly:${userId}:${today}` });
       if (Number(u.mail_on ?? 1) === 1) {
-        await deliverInternalMail(userId, name, `[MCM] ${title}`, weeklyMailHtml(s, name, origin), `todo-weekly-${userId}-${s.thisStart}`).catch((e) => console.error("[todo-weekly] 메일 배달 실패", userId, e));
+        await deliverInternalMail(userId, name, `[MCM] ${title}`, weeklyMailHtml(s, name, origin, dept), `todo-weekly-${userId}-${s.thisStart}`).catch((e) => console.error("[todo-weekly] 메일 배달 실패", userId, e));
       }
       if (res.ok) sent += 1;
     } catch (e) {

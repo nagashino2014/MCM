@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { assertContractsVisible, filterByVisibleContracts, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { searchContracts } from "@/lib/deliverable/data";
 import { listCustomTemplatesForFacility } from "@/lib/agreement/store";
@@ -40,7 +41,7 @@ async function loadOrderer(facilityId: string): Promise<OrdererInfo | null> {
 
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const sp = req.nextUrl.searchParams;
 
     // 발주처 상세 — 갑지 자동 채움(대표자는 facilities 에 없어 수동 입력) + 자체양식 추천
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
     // 계약 상세 — 계약에서 시작(연동 자동 채움)
     const contractId = sp.get("contractId");
     if (contractId) {
+      assertContractsVisible(visible, [contractId]); // 가시 범위 밖 계약 상세·금액 차단(2026-10-19 §7.7)
       const db = await getDb();
       const rows = rowsToObjects(
         await db.exec(
@@ -92,8 +94,8 @@ export async function GET(req: NextRequest) {
 
     // 연동 검색 — 계약 + 수주 확정(won) 견적
     const q = (sp.get("q") ?? "").trim();
-    const contracts = await searchContracts(q, 20);
-    const quotes = (await listQuotes({ q: q || null, limit: 60 }))
+    const contracts = filterByVisibleContracts(await searchContracts(q, 20), visible, (c) => c.contractId);
+    const quotes = filterByVisibleContracts(await listQuotes({ q: q || null, limit: 60 }), visible, (r) => r.contractId)
       .filter((r) => r.result === "won")
       .slice(0, 20)
       .map((r) => ({

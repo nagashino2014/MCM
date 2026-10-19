@@ -411,6 +411,76 @@ O = 보임, X = 숨김. **원칙: 메뉴 노출 = 해당 화면의 조회 권한
 
 ---
 
+### 7.7 메뉴 내 부서 분리(부분 열람) 전수 조사 (2026-10-19, 브랜치 `claude/dept-scope-audit`, 기반 main 49f30c8)
+
+사용자 지시: 1본부장이 참여도·평점·지급 대상 LIST에서 2본부·울산지사 용역을 보지 않아야 한다. 먼저 그 메뉴를 점검·수정하고, 부서 범위(self_dept) 권한이 걸린 전 라우트를 전수 조사한다.
+
+**원칙:** `requirePermission(key)`는 target이 없으면 어떤 scope든 통과하므로, 목록 라우트는 반드시 스스로 행을 걸러야 한다. 공통 헬퍼 `resolveDeptScope(access, key)` → all / dept(deptIds) / none 과 `filterRowsByDeptScope(rows, scope, row→deptId)`를 `lib/auth/rbac.ts`에 두고, 부서 차원이 있는 목록은 이 둘로 거른다. 부서 차원이 없는 전사 집계(배분 보드·산정 원천 등)는 `hasGlobalScope`가 아니면 내리지 않는다.
+
+**성과급 메뉴 점검 결과**
+
+| 화면 | API | 머지 전(49f30c8) | 조치 |
+|---|---|---|---|
+| 참여도·평점 | `GET /api/bonus/evaluations` | 수행부서(owningDeptId) 기준 필터 **이미 적용**(일원화 X-01) — 1본부장은 1본부 용역만, 수행부서 미지정 용역은 전사 범위에만 | 없음(배포 후 재측정) |
+| 지급 대상 LIST | `GET /api/bonus/targets` | **필터 없음** — 전사 29건 노출 | `resolveDeptScope(bonus.view)`로 수행부서 필터, 응답에 `scope` 포함, 화면에 "소속 부서 용역만 표시" 안내 |
+| 지급 명세서 생성 > 유관부서/인력 배분 보드 | `GET /api/bonus/allocations` | 전사 합계·전 부서 본부장 확정액·임원/영업지원 개인 배분 노출 | 전사 범위가 아니면 `board:null`, 화면은 "전사 범위 권한에게만 표시" 안내 |
+| (UI 미사용) 산정 원천 | `GET /api/bonus-source/{contracts,evaluations,milestones,spans}` | 전사 데이터 | 전사 범위가 아니면 403 |
+| 지급 명세서 목록 | `GET /api/bonus/statements` | 일원화에서 부서 필터 적용됨 | 없음 |
+| 기안 상태·요율 설정 | `GET /api/bonus/draft`, `GET /api/bonus/settings` | 금액 없는 결재 상태 / 전사 요율(참여도 화면이 절대평가 설정에 필요) | 유지 |
+| 업무추진계획 기본 목록 | `GET /api/work-plan?dept=` | dept 파라미터 그대로(타 부서 6건 노출, X-01 측정) | 전사 범위가 아니면 본인 부서로 고정(다른 work-plan 라우트와 동일 패턴) |
+
+**전수 조사 결과(부서 범위 키가 걸린 라우트 전부, main 49f30c8 기준):** SAFE = 목록을 가시 범위로 거르거나 단건에 target을 넘김 / LEAK = 부서장·사원이 타 부서 행·개체에 닿음 / N-A = 부서 차원이 없는 공용 데이터.
+
+| 모듈 | SAFE | LEAK (핸들러) | N-A |
+|---|---|---|---|
+| 계약 | 목록·트리·단건 24파일·문서 목록·증빙 묶음·서명 증명서 | **계약서 작성**(`agreements` 목록·hwpx·pdf·send·sources) · **착수계·준공계**(`deliverables` 목록·단건·POST/PATCH/DELETE·attach·hwpx·pdf·sources) · `documents` GET(저장소 키 직접 읽기 — 인사 문서와 같은 버킷) · `certificate-bundle` · `roster-bundle` · `facilities/[id]/deposits`(입금·은행 거래) | 조항 라이브러리·템플릿·중복 확인·업종 옵션 |
+| 수주·수금 | billing 6종(+export)·대시보드·홈 요약 | `dashboard/counterparty`(거래처별 전사 수주·매출) | – |
+| 성과급 | targets·allocations·bonus-source(이번 수정)·statements·evaluations GET | `bonus/evaluations` PUT · `bonus/participants` POST/DELETE · `evaluations/suggest` | settings·draft |
+| 인사 | `staffing/evaluations` GET·`staffing/records` | `staffing/evaluations` PUT · `participation-changes/[id]` DELETE · **`admin/employees`(목록·단건·계좌 GET/PATCH·인사이력·문서 다운로드)** — `staffing.view` self/self_dept도 target 없이 통과, 미들웨어 1차 차단은 Bearer(모바일)·구 토큰에 적용 안 됨 | – |
+| 업무추진계획 | 기본 목록(이번 수정)·confirmed·consolidated·dept-*·directives·exec-cards·oversight·merge GET·my-*·rebound·review-context | `work-plan` POST · `oversight/sessions` · `history` · `[reportId]` GET/PUT/DELETE · `report/[id]` GET·review·re-report · `report` POST · `service/[contractId]/reports` GET/DELETE · `merge` POST · `merge-confirmed`(타 부서 reportIds) · `issue-attachments` GET(저장소 키)·DELETE · `issues/[id]`·attachments · `work-tasks/[taskId]/*` 전부 | 공정 프리셋·템플릿·카테고리 |
+| 영업 | projects 목록·단건·활동 | `schedule` · `upcoming-activities` · `upcoming-bids` · `pending-reports` · `facilities/[id]/sales-history` · `bids/package/contract-overviews` · `bids/package/participants` · `bids/package/person-projects`(직원 수행 이력 — 수행인력 실적 범위 우회) | 담당자·직원 디렉터리·입찰·intel·RAG |
+| 할 일 | `work-report` POST(본인 항목) | – | – |
+
+민감도 순위(에이전트 판정, 이 세션 검토 일치): ①인사·계좌 ②저장소 키 직접 읽기 ③평가·참여자 쓰기 ④직원 수행 이력(입찰 패키지) ⑤계약 금액·문서(계약서·착수계·묶음·거래처 대시보드·입금) ⑥계약 문서 쓰기·외부 발송 ⑦업무추진계획 단건·쓰기·병합 ⑧영업 일정.
+
+공통 수정 지점(lib): `searchContracts`(deliverable/data)·`listQuotes` / `listAgreementDocs`·`listDeliverables`·`getDeliverable` / `searchDashboardCounterparties`·`getDashboardCounterpartyDetail` / `loadBundles`·`listSignedCertificates`·`listCertificateDocs` / `loadContractRows`·`loadPersonProjects`·`listParticipantsForContracts` / sales `list*` 5종 / work-plan `getWorkPlanReport`·`saveWorkPlanReport`·`deleteWorkPlanReport`·`getServiceReport`·`saveReport`·`setReportReview`·`submitReReport`·`listServiceReports`·`deleteServiceReports`·`listSubjectHistory`·`createConsolidated`·`mergeConfirmedReports`·tasks·issues / `saveBonusEvaluations`·`setBonusParticipant`·`removeBonusParticipant`·`suggestParticipation`·`saveEvaluations`.
+
+**1차 수정 완료(이 브랜치, 커밋 전):** 공통 헬퍼 `lib/auth/scope-guards.ts` 신설 — `assertContractsInDeptScope`/`requireContractDeptScope`(계약 수행부서 기준), `requireEmployeeScope`/`filterEmployeesByScope`(직원 소속 부서·본인 기준, 계정 없는 직원은 self 통과 금지), `resolveContractIdByDocumentKey`·`resolveIssueAttachmentDept`·`assertKeyInDeptScope`(저장소 키 → 소속 부서), id 역추적 `loadParticipationContractId`·`loadChangeContractId`·`loadHrEventEmployeeId`.
+
+| 순위 | 라우트 | 조치 |
+|---|---|---|
+| ① 인사 | `admin/employees` GET | 목록을 범위로 필터(전사/소속 부서/본인 행) |
+| ① | `admin/employees/[id]` GET·PATCH, `bank-account` GET·PATCH, `hr-events` GET·POST·DELETE(eventId→직원), `employee-documents/download` | 직원 소속 부서·본인 target으로 재판정, 해석 불가 id·직원 미연결 문서는 403/전사만 |
+| ② 저장소 키 | `contracts/documents` GET | 키 → `contract_documents` → 계약 target(부서 소유·부서원 참여·참여). 등록되지 않은 키는 전사 범위만 |
+| ② | `work-plan/issue-attachments` GET | 키 → 이슈 → 계약 수행부서/Task 담당부서 target. 미등록 키는 전사만 |
+| ③ 평가 쓰기 | `bonus/evaluations` PUT, `staffing/evaluations` PUT | 저장 대상 계약 전부 수행부서 범위 확인 |
+| ③ | `bonus/participants` POST·DELETE, `bonus/evaluations/suggest`, `staffing/participation-changes/[id]` DELETE | 계약(또는 참여행·변동행의 계약) 수행부서 범위 확인 |
+| 성과급 메뉴 | `bonus/targets`, `bonus/allocations`, `bonus-source/*`, `work-plan` GET | 위 표 |
+
+**2차 수정 완료(④~⑧, 같은 브랜치, 사용자 지시 2026-10-19):**
+
+| 순위 | 라우트 | 조치 |
+|---|---|---|
+| ① 강화 | `admin/employees/[id]/bank-account` GET·PATCH, `hr-events` POST·DELETE, `employee-documents/download` | 사용자 결정(인사/계좌 = 관리자 vs 그 외): 부서 범위로도 열지 않고 **전사 범위(`requireGlobalScope`) 전용** — 직원 기본 상세·인사이력 조회만 부서장 허용 |
+| ④ | `bids/package/contract-overviews`·`participants` | 요청 계약이 모두 가시 계약이어야 함, 추가 인원(extraIds) 등급·전문분야는 영업 전사 범위만 |
+| ④ | `bids/package/person-projects` | 영업 전사 범위 또는 `staffing.record.view` 직원 범위 안에서만 |
+| ⑤ | `agreements` 목록(lib에 contractId 추가)·hwpx·pdf·sources(단건·검색·수주 견적) | 가시 계약 집합(`requireVisibleContracts`/`filterByVisibleContracts`/`assertContractsVisible`)으로 필터·검증, 계약 미연동 문서는 전사만 |
+| ⑤ | `deliverables` 목록·단건·sources, hwpx·pdf | 동일 |
+| ⑤ | `certificate-bundle`·`roster-bundle` | 요청 계약 중 가시 범위 밖이 있으면 403 |
+| ⑤ | `contracts/dashboard/counterparty` | lib 두 함수에 `contractIds` 인자 추가(가시 계약만 집계) |
+| ⑤ | `facilities/[id]/deposits` | 마일스톤 SQL에 가시 계약 조건 |
+| ⑥ | `deliverables` POST·PATCH·DELETE·attach, `agreements/[docId]/send` | 편집 범위(contract.edit 가시 집합) 확인 후 쓰기·발송 |
+| ⑦ | `work-plan/[reportId]` GET·PUT·DELETE, `report/[reportId]` GET·review·re-report | 보고서 → 소속 부서(self_dept)·작성자(self) target(`requireReportScope`) |
+| ⑦ | `work-plan/report` POST, `work-plan` POST | 기존 보고서는 보고서 범위, 신규는 주제(계약 수행부서·Task 담당부서) 범위 또는 본인 부서로 보정 |
+| ⑦ | `service/[contractId]/reports` GET·DELETE, `history` | 주제 부서 범위(`requireSubjectScope`) |
+| ⑦ | `merge` POST, `merge-confirmed` | 부서 보정 + 원천 항목·보고서가 모두 범위 안인지(`assertItemsInScope`/`assertReportsInScope`) |
+| ⑦ | `issues/[issueId]` PATCH·DELETE, `issues/[issueId]/attachments` GET·POST, `issue-attachments` DELETE | 이슈 → 주제 부서·작성자 target(`requireIssueScope`) |
+| ⑦ | `work-tasks/[taskId]/*` 전부, `work-tasks` POST | Task 담당 부서·생성자 target(`requireTaskScope`), 생성 시 부서 보정 |
+| ⑧ | `sales/schedule`·`upcoming-activities`·`upcoming-bids`·`pending-reports`·`facilities/[id]/sales-history` | 가시 영업건 집합(`resolveVisibleProjectSet`: 전사/담당 부서·부서원 관계자/본인 관계자)으로 필터 |
+| ⑧ | `work-plan/oversight/sessions` | 전사 아니면 본인 부서 고정 |
+
+남은 N-A(의도적 공용): 입찰·intel·RAG 카탈로그, 담당자·직원 디렉터리, 템플릿·조항·프리셋, 요율 설정. 배포 후 본 테스트(10-22)에서 테스트부장으로 §4.3·X-01 재측정한다.
+
 ## 8. 체크리스트 양식
 
 | ID | 층 | 역할 | 경로/행위 | 기대 | 실제(HTTP) | 판정 | 등급 | 증빙 | 메모 |

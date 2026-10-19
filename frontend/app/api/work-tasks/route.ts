@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { forcedDeptId } from "@/lib/auth/scope-guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { createTask } from "@/lib/work-plan/tasks";
 
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
       taskName: body.taskName ?? "",
       categoryId: body.categoryId ?? null,
       startedAt: body.startedAt ?? null,
-      owningDeptId: body.owningDeptId ?? null,
+      // 전사 범위가 아니면 요청 부서를 무시하고 본인 부서로(2026-10-19 §7.7)
+      owningDeptId: (await forcedDeptId(actor.userId, "work_plan.edit", body.owningDeptId ?? null)) || null,
     });
     await recordAuditLog({
       actorUserId: actor.userId,

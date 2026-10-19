@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { filterEmployeesByScope } from "@/lib/auth/scope-guards";
+import { loadUserAccess } from "@/lib/auth/rbac";
 import { listEmployees, saveEmployeeDetail } from "@/lib/admin/employee-records";
 
 export const runtime = "nodejs";
@@ -7,8 +9,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
-    return NextResponse.json({ items: await listEmployees() });
+    const ctx = await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
+    // 목록은 범위로 거른다 — 전사(all) 전체 / 부서장(self_dept) 소속 부서 / 사원(self) 본인 행만(2026-10-19 §7.7).
+    const items = filterEmployeesByScope(await loadUserAccess(ctx.userId), "staffing.view", await listEmployees());
+    return NextResponse.json({ items });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { hasPermission } from "@/lib/auth/rbac";
+import { hasGlobalScope, hasPermission } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getAllocationBoard, saveAllocations } from "@/lib/bonus/statements";
 
@@ -13,7 +13,12 @@ export async function GET(req: NextRequest) {
     const ctx = await requirePermission("bonus.view", { fallbackRoles: ["editor"] });
     const p = parsePeriod(new URL(req.url).searchParams.get("period") ?? "");
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });
-    return NextResponse.json({ board: await getAllocationBoard(p), canEdit: await hasPermission(ctx.userId, "bonus.calculate") });
+    // 배분 보드는 전사 합계·전 부서 본부장 확정액·임원/영업지원 개인 배분을 담으므로
+    // bonus.view 전사 범위 보유자에게만 내린다. 부서장(self_dept)은 board=null(화면은 "보드 없음" 분기) — 2026-10-19.
+    if (!(await hasGlobalScope(ctx.userId, "bonus.view"))) {
+      return NextResponse.json({ board: null, canEdit: false, scope: "dept" });
+    }
+    return NextResponse.json({ board: await getAllocationBoard(p), canEdit: await hasPermission(ctx.userId, "bonus.calculate"), scope: "all" });
   } catch (err) {
     return authErrorToResponse(err);
   }

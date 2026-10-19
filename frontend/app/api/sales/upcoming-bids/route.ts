@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { filterByVisibleProjects, resolveVisibleProjectSet } from "@/lib/auth/scope-guards";
+import { loadUserAccess } from "@/lib/auth/rbac";
 import { listUpcomingBids } from "@/lib/sales/queries";
 
 export const runtime = "nodejs";
@@ -7,8 +9,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requirePermission("sales.view");
-    const bids = await listUpcomingBids();
+    const ctx = await requirePermission("sales.view");
+    // 가시 영업건(sales.view 범위: 전사 / 담당 부서·부서원 관계자 / 본인 관계자)만(2026-10-19 §7.7)
+    const visibleProjects = resolveVisibleProjectSet(await loadUserAccess(ctx.userId), "sales.view");
+    const bids = filterByVisibleProjects(await listUpcomingBids(), visibleProjects, (r) => r.projectId);
     return NextResponse.json({ bids });
   } catch (err) {
     return authErrorToResponse(err);

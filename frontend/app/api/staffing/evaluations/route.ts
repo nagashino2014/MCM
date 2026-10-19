@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { loadUserAccess } from "@/lib/auth/rbac";
+import { assertContractsInDeptScope } from "@/lib/auth/scope-guards";
 import { listEvaluationBoard, saveEvaluations, type EvaluationInput } from "@/lib/staffing/evaluations";
 
 export const runtime = "nodejs";
@@ -26,7 +28,10 @@ export async function PUT(req: NextRequest) {
     const body = (await req.json()) as { year: number; half: string; rows: EvaluationInput[] };
     const year = Number(body.year);
     const half = body.half === "H2" ? "H2" : "H1";
-    await saveEvaluations(actor.userId, year, half, Array.isArray(body.rows) ? body.rows : []);
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    // 저장 대상 계약이 모두 내 부서 범위인지(수행부서 기준, 2026-10-19 §7.7)
+    await assertContractsInDeptScope(await loadUserAccess(actor.userId), "staffing.evaluation.write", rows.map((r) => r.contractId));
+    await saveEvaluations(actor.userId, year, half, rows);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);

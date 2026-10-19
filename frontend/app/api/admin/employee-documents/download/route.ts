@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3ServiceException } from "@aws-sdk/client-s3";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { requireGlobalScope } from "@/lib/auth/scope-guards";
 import { recordAccessLog } from "@/lib/auth/access-log";
 import { findEmployeeDocumentByKey } from "@/lib/admin/employee-records";
 import { getEmployeeDocument } from "@/lib/storage/employee-document-storage";
@@ -20,6 +21,8 @@ export async function GET(req: NextRequest) {
     if (!key) return NextResponse.json({ error: "key가 필요합니다." }, { status: 400 });
     const metadata = await findEmployeeDocumentByKey(key);
     if (!metadata) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
+    // 인사 서류는 소속 부서 범위로도 열지 않는다(2026-10-19 §7.7, 인사/계좌 = 관리자 vs 그 외)
+    await requireGlobalScope("staffing.view"); // 인사 서류는 전사 범위(관리자·인사담당)만
     // 접속기록(PR-P1) — 타인 인사서류 다운로드.
     await recordAccessLog({
       actorUserId: ctx.userId,

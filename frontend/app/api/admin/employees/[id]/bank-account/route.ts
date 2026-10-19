@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireGlobalScope } from "@/lib/auth/scope-guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
@@ -13,8 +14,8 @@ interface RouteContext {
 // 경비/급여 입금 계좌(203) — 개인카드 경비 정산 CMS 파일 생성에 쓴다. 인사관리 탭에서 편집.
 export async function GET(_req: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("staffing.view", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
+    await requireGlobalScope("staffing.view"); // 계좌는 전사 범위(관리자·인사담당)만(2026-10-19 §7.7)
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(`SELECT bank_name, bank_code, bank_account, bank_account_holder FROM employee_profiles WHERE employee_id = $1`, [id])
@@ -34,8 +35,8 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
 // PATCH {bankName, bankCode, bankAccount, accountHolder} — 빈 문자열은 NULL 로 지운다.
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("staffing.changes.record", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
+    const actor = await requireGlobalScope("staffing.changes.record"); // 계좌 변경은 전사 범위만
     const body = (await req.json().catch(() => ({}))) as {
       bankName?: string | null;
       bankCode?: string | null;

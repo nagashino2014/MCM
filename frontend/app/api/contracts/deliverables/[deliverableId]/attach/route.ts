@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertContractsVisible, loadVisibleContractSet } from "@/lib/auth/scope-guards";
 import { CATALOG_BY_TYPE } from "@/lib/deliverable/catalog";
 import { generateDeliverableArtifacts, resolveSpecs, templateDocTitles } from "@/lib/deliverable/generate";
 import {
@@ -27,10 +28,11 @@ interface RouteContext {
 export async function POST(_req: NextRequest, ctx: RouteContext) {
   try {
     const { deliverableId } = await ctx.params;
-    await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
+    const editor = await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
 
     const row = await getDeliverable(deliverableId);
     if (!row) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
+    assertContractsVisible(await loadVisibleContractSet(editor.userId, "contract.edit"), [row.contractId]); // (2026-10-19 §7.7)
 
     // 산출물 보관 실패(스토리지 미설정 등)에도 제목·본문·붙임 템플릿은 돌려준다 —
     // 사용자가 파일만 직접 첨부하면 공문 작성을 이어갈 수 있게 한다.

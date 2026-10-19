@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { assertContractsVisible, filterByVisibleContracts, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { buildAutoValues, loadContractContext, searchContracts } from "@/lib/deliverable/data";
 import { listTemplates } from "@/lib/deliverable/store";
 import type { DeliverableKind } from "@/lib/deliverable/types";
@@ -10,16 +11,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const sp = req.nextUrl.searchParams;
     const contractId = sp.get("contractId");
     const kind: DeliverableKind = sp.get("kind") === "start" ? "start" : "completion";
 
     if (!contractId) {
-      const contracts = await searchContracts(sp.get("q") ?? "", Number(sp.get("limit") ?? 30));
+      const contracts = filterByVisibleContracts(await searchContracts(sp.get("q") ?? "", Number(sp.get("limit") ?? 30)), visible, (c) => c.contractId);
       return NextResponse.json({ contracts });
     }
 
+    assertContractsVisible(visible, [contractId]); // 가시 범위 밖 계약 자동채움 차단(2026-10-19 §7.7)
     const ctx = await loadContractContext(contractId);
     if (!ctx) return NextResponse.json({ error: "계약을 찾을 수 없습니다." }, { status: 404 });
     const values = await buildAutoValues(ctx, kind, {

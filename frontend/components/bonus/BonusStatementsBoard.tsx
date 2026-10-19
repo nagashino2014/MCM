@@ -65,6 +65,8 @@ export default function BonusStatementsBoard() {
   const [detail, setDetail] = useState<StatementDetail | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployeeRow | null>(null);
   const [board, setBoard] = useState<AllocationBoard | null>(null);
+  // 배분 보드 범위 — "dept"면 전사 범위(bonus.view scope=all)가 아니라 보드를 내리지 않은 것(2026-10-19).
+  const [boardScope, setBoardScope] = useState<"all" | "dept">("all");
   const [allocDraft, setAllocDraft] = useState<Record<string, number>>({});
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(null);
   const [settings, setSettings] = useState<BonusSettings | null>(null);
@@ -90,6 +92,7 @@ export default function BonusStatementsBoard() {
       setOverview(ov.overview ?? []);
       setIsAdmin(Boolean(ov.isAdmin));
       setBoard(al.board ?? null);
+      setBoardScope(al.scope === "dept" ? "dept" : "all");
       setAllocDraft({});
       const cfg: BonusSettings | null = st.settings ?? null;
       setSettings(cfg);
@@ -731,7 +734,11 @@ export default function BonusStatementsBoard() {
                 </div>
               )
             ) : !board ? (
-              <div className="p-10 text-center text-sm cd-text-faint">데이터가 없습니다.</div>
+              <div className="p-10 text-center text-sm cd-text-faint">
+                {boardScope === "dept"
+                  ? "유관부서/인력 배분 명세는 전사 범위 권한(관리자·인사 담당)에게만 표시됩니다. 소속 부서 명세는 위 탭에서 확인하세요."
+                  : "데이터가 없습니다."}
+              </div>
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-3">

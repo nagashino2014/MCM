@@ -1109,8 +1109,10 @@ export interface CounterpartyDetail {
   }>;
 }
 
-export async function searchDashboardCounterparties(q: string): Promise<CounterpartySearchItem[]> {
+/** contractIds: 가시 계약 범위(null = 전사). 부서장·사원은 가시 계약만 집계한다(2026-10-19 §7.7). */
+export async function searchDashboardCounterparties(q: string, contractIds?: string[] | null): Promise<CounterpartySearchItem[]> {
   const db = await getDb();
+  const scoped = contractIds !== undefined && contractIds !== null;
   const rows = rowsToObjects(
     await db.exec(
       `SELECT f.facility_id, f.company_name, COUNT(*) AS contract_count
@@ -1118,10 +1120,11 @@ export async function searchDashboardCounterparties(q: string): Promise<Counterp
        JOIN facilities f ON f.facility_id = c.counterparty_facility_id
        WHERE c.deleted_at IS NULL
          AND f.company_name ILIKE '%' || $1 || '%'
+         ${scoped ? "AND c.contract_id = ANY($2::text[])" : ""}
        GROUP BY f.facility_id, f.company_name
        ORDER BY contract_count DESC, f.company_name ASC
        LIMIT 12`,
-      [q]
+      scoped ? [q, contractIds] : [q]
     )
   );
   return rows.map((r) => ({
@@ -1133,10 +1136,15 @@ export async function searchDashboardCounterparties(q: string): Promise<Counterp
 
 export async function getDashboardCounterpartyDetail(
   facilityId: string,
-  year: string
+  year: string,
+  contractIds?: string[] | null
 ): Promise<CounterpartyDetail | null> {
   const db = await getDb();
   const catCase = categoryCaseSql("c.service_type");
+  // 가시 계약 범위(null = 전사) — 아래 모든 집계 쿼리에 같은 조건을 붙인다(2026-10-19 §7.7).
+  const scoped = contractIds !== undefined && contractIds !== null;
+  const scopeSql = scoped ? "AND c.contract_id = ANY($4::text[])" : "";
+  const scopeArgs: unknown[] = scoped ? [contractIds] : [];
 
   const nameRows = rowsToObjects(
     await db.exec(`SELECT company_name FROM facilities WHERE facility_id = $1`, [facilityId])
@@ -1154,8 +1162,9 @@ export async function getDashboardCounterpartyDetail(
        WHERE c.deleted_at IS NULL
          AND c.counterparty_facility_id = $1
          AND SUBSTRING(ol.order_date, 1, 4) BETWEEN $2 AND $3
+         ${scopeSql}
        GROUP BY 1`,
-      [facilityId, fromYear, year]
+      [facilityId, fromYear, year, ...scopeArgs]
     )
   );
   const salesYearRows = rowsToObjects(
@@ -1169,8 +1178,9 @@ export async function getDashboardCounterpartyDetail(
          AND m.invoice_issued = 1
          AND m.invoice_issued_at IS NOT NULL
          AND SUBSTRING(m.invoice_issued_at, 1, 4) BETWEEN $2 AND $3
+         ${scopeSql}
        GROUP BY 1`,
-      [facilityId, fromYear, year]
+      [facilityId, fromYear, year, ...scopeArgs]
     )
   );
 

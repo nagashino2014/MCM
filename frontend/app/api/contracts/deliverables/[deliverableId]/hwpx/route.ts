@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertContractsVisible, loadVisibleContractSet } from "@/lib/auth/scope-guards";
 import { sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 import { generateDeliverableArtifacts } from "@/lib/deliverable/generate";
+import { getDeliverable } from "@/lib/deliverable/store";
 
 // 착수계·준공계 HWPX 다운로드(D2) — 실물 hwp 기반 템플릿 치환 결과(편집용 원본).
 // 기본양식만 지원한다(발주처 자체양식은 PDF).
@@ -16,7 +18,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   try {
     const { deliverableId } = await ctx.params;
     const persist = req.nextUrl.searchParams.get("persist") === "1";
-    await requirePermission(persist ? "contract.edit" : "contract.view", persist ? { fallbackRoles: ["editor"] } : undefined);
+    const viewer = await requirePermission(persist ? "contract.edit" : "contract.view", persist ? { fallbackRoles: ["editor"] } : undefined);
+    const target = await getDeliverable(deliverableId);
+    if (!target) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
+    assertContractsVisible(await loadVisibleContractSet(viewer.userId, persist ? "contract.edit" : "contract.view"), [target.contractId]); // (2026-10-19 §7.7)
 
     const { hwpxBytes, fileBase } = await generateDeliverableArtifacts(deliverableId, { persist });
     if (!hwpxBytes) {

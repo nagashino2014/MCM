@@ -1,6 +1,8 @@
 import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertItemsInScope, forcedDeptId } from "@/lib/auth/scope-guards";
+import { loadUserAccess } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getReporterContext } from "@/lib/work-plan/workspace";
 import { createConsolidated, listStaffInputItems, type MergeInput } from "@/lib/work-plan/merge";
@@ -34,6 +36,9 @@ export async function POST(req: NextRequest) {
     if (!body.deptId || !body.periodStart || !body.periodEnd || !Array.isArray(body.sourceItemIds) || body.sourceItemIds.length === 0) {
       return NextResponse.json({ error: "부서·기간·항목 선택이 필요합니다." }, { status: 400 });
     }
+    // 통합 보고는 본인 부서 범위로만(전사 제외) · 원천 항목이 모두 범위 안인지 확인(2026-10-19 §7.7)
+    body.deptId = await forcedDeptId(actor.userId, "work_plan.merge", body.deptId);
+    await assertItemsInScope(await loadUserAccess(actor.userId), "work_plan.merge", body.sourceItemIds);
     const reportId = await createConsolidated(actor.userId, body);
     await recordAuditLog({
       actorUserId: actor.userId,

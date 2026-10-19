@@ -41,6 +41,8 @@ export default function BonusTargetsBoard() {
   const [category, setCategory] = useState<BonusCategoryKey>("integrated");
   const [tab, setTab] = useState<"list" | "costs">("list");
   const [targets, setTargets] = useState<BonusTargetRow[]>([]);
+  // 목록 범위 — "dept"면 소속 부서 용역만 내려온 것(수행부서 미지정 용역 제외, 2026-10-19).
+  const [scope, setScope] = useState<"all" | "dept" | "none">("all");
   const [settings, setSettings] = useState<BonusSettings | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [departments, setDepartments] = useState<DeptOption[]>([]);
@@ -73,6 +75,7 @@ export default function BonusTargetsBoard() {
       .then(([t, s]) => {
         const rows: BonusTargetRow[] = t.targets ?? [];
         setTargets(rows);
+        setScope(t.scope === "dept" || t.scope === "none" ? t.scope : "all");
         setSettings(s.settings ? withDefaultHeadRates(s.settings) : null);
         setCanEdit(Boolean(s.canEdit));
         setCostDrafts(
@@ -473,6 +476,9 @@ export default function BonusTargetsBoard() {
             <span className="text-[11px] cd-text-faint ml-2">
               (전체 분류 반기 적용금액 {fmtAmount(totalApplied)}원 × {applyRate}%)
             </span>
+            {scope !== "all" && (
+              <span className="text-[11px] cd-text-faint ml-2">· 소속 부서 용역만 표시(수행부서 미지정 용역 제외)</span>
+            )}
           </div>
         </section>
       </div>

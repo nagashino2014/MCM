@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertContractsVisible, loadVisibleContractSet } from "@/lib/auth/scope-guards";
 import { sanitizeDownloadName } from "@/lib/contracts/document-bundle";
 import { generateDeliverableArtifacts } from "@/lib/deliverable/generate";
+import { getDeliverable } from "@/lib/deliverable/store";
 
 // 착수계·준공계 PDF — 기본은 미리보기(inline, 보관 없음).
 // ?download=1 첨부 다운로드 / ?persist=1 S3 보관 + 대장에 키 기록(작성 완료 확정).
@@ -17,7 +19,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const { deliverableId } = await ctx.params;
     const sp = req.nextUrl.searchParams;
     const persist = sp.get("persist") === "1";
-    await requirePermission(persist ? "contract.edit" : "contract.view", persist ? { fallbackRoles: ["editor"] } : undefined);
+    const viewer = await requirePermission(persist ? "contract.edit" : "contract.view", persist ? { fallbackRoles: ["editor"] } : undefined);
+    const target = await getDeliverable(deliverableId);
+    if (!target) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
+    assertContractsVisible(await loadVisibleContractSet(viewer.userId, persist ? "contract.edit" : "contract.view"), [target.contractId]); // (2026-10-19 §7.7)
 
     const { pdfBytes, fileBase } = await generateDeliverableArtifacts(deliverableId, { persist });
     const disposition = sp.get("download") === "1" ? "attachment" : "inline";

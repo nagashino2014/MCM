@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { assertContractsVisible, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { getContractRoster } from "@/lib/staffing/roster";
 import { renderRosterPdf } from "@/lib/staffing/roster-pdf";
 import { listSignedCertificates } from "@/lib/contracts/certificate-storage";
@@ -23,9 +24,10 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const body = (await req.json().catch(() => ({}))) as { contractIds?: string[] };
     const contractIds = [...new Set((body.contractIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
+    assertContractsVisible(visible, contractIds); // 가시 범위 밖 계약이 섞이면 403(2026-10-19 §7.7)
     if (contractIds.length === 0) {
       return NextResponse.json({ error: "계약을 선택하세요." }, { status: 400 });
     }

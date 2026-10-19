@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireReportScope } from "@/lib/auth/scope-guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   deleteWorkPlanReport,
@@ -17,8 +18,8 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("work_plan.view");
     const { reportId } = await ctx.params;
+    await requireReportScope("work_plan.view", reportId); // 소속 부서·작성자 범위(2026-10-19 §7.7)
     const detail = await getWorkPlanReport(reportId);
     if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(detail);
@@ -29,8 +30,8 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { reportId } = await ctx.params;
+    const actor = await requireReportScope("work_plan.edit", reportId);
     const body = (await req.json()) as WorkPlanReportInput;
     const savedId = await saveWorkPlanReport(actor.userId, { ...body, reportId });
     await recordAuditLog({
@@ -48,8 +49,8 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { reportId } = await ctx.params;
+    const actor = await requireReportScope("work_plan.edit", reportId);
     await deleteWorkPlanReport(reportId);
     await recordAuditLog({
       actorUserId: actor.userId,

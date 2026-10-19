@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { assertContractsVisible, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { processAgreementSend } from "@/lib/agreement/send";
+import { getAgreementByDocId } from "@/lib/agreement/store";
 import type { AgreementRecipient } from "@/lib/agreement/types";
 
 // POST: 계약서 발주처 발송(수동 — ① 확정) / 재발송. 동기 실행(공문 재발송 관례).
@@ -10,8 +12,11 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const { docId } = await params;
+    const doc = await getAgreementByDocId(docId);
+    if (!doc) return NextResponse.json({ error: "계약서를 찾을 수 없습니다." }, { status: 404 });
+    assertContractsVisible(visible, [doc.contractId]); // 연동 계약 가시 범위 밖이면 발송 불가(2026-10-19 §7.7)
     const body = (await req.json().catch(() => ({}))) as {
       recipients?: AgreementRecipient[];
       includeHwpx?: boolean;

@@ -182,6 +182,7 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
     if (columnId) body.columnId = columnId;
     if (base) {
       if (base.doDate) body.doDate = base.doDate;
+      if (base.endDate) body.endDate = base.endDate;
       if (base.doTime) body.doTime = base.doTime;
       if (base.dueDate) body.dueDate = base.dueDate;
       if (base.recurrence) body.recurrence = base.recurrence;

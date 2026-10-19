@@ -44,6 +44,8 @@ export interface QuickParseResult {
   doDate: string | null;
   doTime: string | null;
   dueDate: string | null;
+  /** 287 기간 종료일 */
+  endDate: string | null;
   recurrence: string | null;
   priority: 0 | 1 | 2 | 3 | null;
   boardToken: string | null;
@@ -228,6 +230,7 @@ export function parseQuickAdd(input: string, opts: QuickParseOptions): QuickPars
     doDate: null,
     doTime: null,
     dueDate: null,
+    endDate: null,
     recurrence: null,
     priority: null,
     boardToken: null,
@@ -293,6 +296,26 @@ export function parseQuickAdd(input: string, opts: QuickParseOptions): QuickPars
       take("recurrence", s, e, rule);
     }
   );
+
+  // 5.5) 기간(287) — "<날짜>~<날짜>" / "<날짜>부터 N일(간)"
+  scan(new RegExp("(^|\\s)(" + DATE_EXPR + ")\\s*~\\s*(" + DATE_EXPR + ")(?!\\s*까지)" + BOUND_R, "g"), (m, s, e) => {
+    if (result.doDate) return;
+    const a = resolveDateExpr(m[2], today, weekStart);
+    const b = resolveDateExpr(m[3], today, weekStart);
+    if (!a || !b || b < a) return;
+    result.doDate = a;
+    result.endDate = b;
+    take("do_date", s, e, `${a}~${b}`);
+  });
+  scan(new RegExp("(^|\\s)(" + DATE_EXPR + ")\\s*부터\\s*(\\d{1,2})\\s*일\\s*(?:간|동안)?" + BOUND_R, "g"), (m, s, e) => {
+    if (result.doDate) return;
+    const a = resolveDateExpr(m[2], today, weekStart);
+    const n = Number(m[3]);
+    if (!a || !Number.isFinite(n) || n < 1) return;
+    result.doDate = a;
+    result.endDate = n > 1 ? addDays(a, n - 1) : null;
+    take("do_date", s, e, `${a}~${result.endDate ?? a}`);
+  });
 
   // 6) 마감 — "<날짜>까지" / "~<날짜>까지" / "마감 <날짜>"
   scan(new RegExp("(^|\\s)(~?\\s*" + DATE_EXPR + "\\s*까지)" + BOUND_R, "g"), (m, s, e) => {

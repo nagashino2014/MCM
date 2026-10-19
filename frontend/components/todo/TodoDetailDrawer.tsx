@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, ClipboardList, LayoutTemplate, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, ClipboardList, LayoutTemplate, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, ListOrdered, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
 import { CdAvatar, CdButton, CdDateInput, CdDrawer, CdDropdown, CdIconButton, CdModal, isValidDateString, useCdToast, type CdMenuItem } from "@/components/cdash";
 import {
   TODO_BOARD_KIND_LABELS,
@@ -30,6 +30,11 @@ import {
   type TodoPriority,
   type TodoShareRole,
   type TodoStatus,
+  type TodoDeps,
+  TODO_MILESTONE_KINDS,
+  TODO_MILESTONE_LABELS,
+  TODO_MILESTONE_STAGE_HINTS,
+  type TodoMilestoneKind,
 } from "@/lib/todo/types";
 import { describeRecurrence, parseRecurrence } from "@/lib/todo/recurrence";
 import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -39,6 +44,7 @@ import { LinkPickerModal } from "./LinkPickerModal";
 import { CompleteConfirmModal } from "./CompleteConfirmModal";
 import { CompleteRulesFields } from "./CompleteRulesFields";
 import { apiCall, asCompleteRulesFailure, type CompleteRulesFailure } from "./useTodoData";
+import { DepPickerModal, DepsPanel } from "./DepPickerModal";
 import { contractShort, defaultRemindAt, diffDays, fmtIsoShort, isoToLocalInput, md, normalizeTime, relativeTime, weekdayKo } from "./todo-utils";
 
 export interface TodoDetailDrawerProps {
@@ -206,6 +212,10 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   const [confirmFailure, setConfirmFailure] = useState<CompleteRulesFailure | null>(null);
   // 연결 추가·변경은 LinkPickerModal(종류별 검색·목록)로 — 사용자는 개별 ID를 모른다.
   const [linkOpen, setLinkOpen] = useState(false);
+  // §28-3 선행·후행 의존(288) — 상세를 열 때 별도 조회, 추가/해제 응답으로 교체
+  const [deps, setDeps] = useState<TodoDeps | null>(null);
+  const [depOpen, setDepOpen] = useState(false);
+  const [depBusy, setDepBusy] = useState(false);
   const [recDraft, setRecDraft] = useState<{ preset: string; days: string[]; day: string; after: string }>({ preset: "", days: ["MO"], day: "1", after: "7" });
   const queue = useRef<Record<string, unknown>>({});
   const timer = useRef<number | null>(null);
@@ -428,7 +438,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   // 하위 작업 진척(285, §25-2) — 진행율·진척 내용·공정 단계. 슬라이더는 400ms, 내용은 800ms 디바운스로 PATCH, 같은 하위의 보류 값은 합친다.
   const subTimers = useRef<Record<string, number>>({});
   const subPending = useRef<Record<string, Record<string, unknown>>>({});
-  const [subDraft, setSubDraft] = useState<Record<string, { pct?: number; note?: string }>>({});
+  const [subDraft, setSubDraft] = useState<Record<string, { pct?: number; note?: string; doDate?: string; actualDate?: string }>>({});
   const patchSubtask = async (sub: TodoItem, body: Record<string, unknown>) => {
     try {
       await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -471,6 +481,24 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
       setDetail(r.item);
       onItemChanged(r.item);
       toast(`하위 작업 ${r.created}건을 추가했습니다.`, "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  // §28-1 공정표 단계로 하위 작업 만들기(관련이 계약/Task 이고 공정표가 있을 때만 메뉴에 보임)
+  const subtasksFromStages = async () => {
+    if (!detail || templateBusy) return;
+    setTemplateBusy(true);
+    try {
+      const r = await apiCall<{ item: TodoItemDetail; created: number; skipped: number }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/subtasks-from-stages`, {
+        method: "POST",
+        body: "{}",
+      });
+      setDetail(r.item);
+      onItemChanged(r.item);
+      toast(r.created ? `공정표 단계 ${r.created}건을 하위 작업으로 추가했습니다${r.skipped ? ` (이미 있는 ${r.skipped}건 제외)` : ""}.` : "모든 단계가 이미 하위 작업에 있습니다.", r.created ? "success" : "info");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -735,6 +763,54 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
     for (const m of boardMembers ?? []) add(m.userId, m.name);
     return out;
   }, [detail, boardMembers]);
+  const depItemId = detail?.itemId ?? null;
+  useEffect(() => {
+    setDeps(null);
+    if (!depItemId) return;
+    let alive = true;
+    apiCall<TodoDeps>(`/api/todo/items/${encodeURIComponent(depItemId)}/deps`)
+      .then((d) => {
+        if (alive) setDeps(d);
+      })
+      .catch(() => {
+        if (alive) setDeps({ blockedBy: [], blocks: [], openBlockers: 0 });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [depItemId]);
+  const addDep = async (dependsOn: string) => {
+    if (!detail || depBusy) return;
+    setDepBusy(true);
+    try {
+      const d = await apiCall<TodoDeps>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/deps`, { method: "POST", body: JSON.stringify({ dependsOnItemId: dependsOn }) });
+      setDeps(d);
+      setDepOpen(false);
+      const next = { ...detail, openDeps: d.openBlockers };
+      setDetail(next);
+      onItemChanged(next);
+      toast("선행 할 일을 연결했습니다.", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setDepBusy(false);
+    }
+  };
+  const removeDep = async (dependsOn: string) => {
+    if (!detail || depBusy) return;
+    setDepBusy(true);
+    try {
+      const d = await apiCall<TodoDeps>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/deps?dependsOn=${encodeURIComponent(dependsOn)}`, { method: "DELETE" });
+      setDeps(d);
+      const next = { ...detail, openDeps: d.openBlockers };
+      setDetail(next);
+      onItemChanged(next);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setDepBusy(false);
+    }
+  };
   const reportSubject = detail?.reportSubject ?? null;
   const reportSubjectId = detail?.linkId ?? null;
   useEffect(() => {
@@ -755,15 +831,15 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
       alive = false;
     };
   }, [reportSubject, reportSubjectId, detail?.activity.length]);
-  const createReportDraft = async () => {
+  const createReportDraft = async (fresh = false) => {
     if (!detail || reportBusy) return;
-    const hasDraft = detail.activity.some((a) => a.action === "work_report") && reports?.some((r) => r.status === "draft");
+    const hasDraft = !fresh && detail.activity.some((a) => a.action === "work_report") && reports?.some((r) => r.status === "draft");
     if (hasDraft && !window.confirm("이 할 일로 만든 미제출 초안이 있습니다. 지금 내용으로 초안을 다시 채울까요?")) return;
     setReportBusy(true);
     try {
       const r = await apiCall<{ reportId: string; href: string; updated: boolean; aiUsed: boolean; periodStart: string; periodEnd: string }>(
         `/api/todo/items/${encodeURIComponent(detail.itemId)}/work-report`,
-        { method: "POST", body: JSON.stringify({ ai: true }) }
+        { method: "POST", body: JSON.stringify({ ai: true, fresh }) }
       );
       toast(`${r.updated ? "초안을 갱신했습니다" : "업무 보고 초안을 만들었습니다"}(${r.periodStart} ~ ${r.periodEnd}${r.aiUsed ? " · AI 요약" : " · 규칙 직안"}). 검토 후 제출하세요.`, "success");
       router.push(r.href);
@@ -1028,6 +1104,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                     detail.doDate && detail.doDate.length === 10 ? (
                       <>
                         {longDate(detail.doDate)}
+                        {detail.endDate && detail.endDate > detail.doDate ? ` ~ ${longDate(detail.endDate)}` : ""}
                         {detail.doTime ? ` ${detail.doTime}` : ""}
                         {detail.doTime && detail.durationMin ? <span className="todo-mu">· {detail.durationMin}분</span> : null}
                       </>
@@ -1048,6 +1125,27 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                           else setDetail((d) => (d ? { ...d, doDate: v } : d));
                         }}
                       />
+                      {detail.doDate && detail.doDate.length === 10 && (
+                        <>
+                          <span className="todo-mu">~</span>
+                          <CdDateInput
+                            className="todo-w-date"
+                            aria-label="종료일(기간 일정)"
+                            placeholder="종료일"
+                            value={detail.endDate ?? ""}
+                            onChange={(v) => {
+                              if (v === "") schedule({ endDate: null });
+                              else if (v.length === 10 && isValidDateString(v)) {
+                                if (detail.doDate && v < detail.doDate) {
+                                  toast("종료일은 할 날짜 이후여야 합니다.", "error");
+                                  return;
+                                }
+                                schedule({ endDate: v });
+                              } else setDetail((d) => (d ? { ...d, endDate: v } : d));
+                            }}
+                          />
+                        </>
+                      )}
                       <input className="cd-input todo-w-time" aria-label="시각 HH:mm" placeholder="HH:mm" value={timeDraft} onChange={(e) => setTimeDraft(e.target.value)} onBlur={commitTime} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
                       {detail.doTime && (
                         <select className="cd-select todo-w-sel" aria-label="소요 시간" value={detail.durationMin ?? 30} onChange={(e) => schedule({ durationMin: Number(e.target.value) })}>
@@ -1261,6 +1359,9 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                                   onSelect: () => void applyTemplate(t.templateId),
                                 }))),
                           { key: "save", label: "현재 하위 작업을 템플릿으로 저장", icon: <Copy className="w-3.5 h-3.5" />, disabled: templateBusy || !detail.subtasks.length, onSelect: () => void saveAsTemplate() },
+                          ...(detail.stages.length
+                            ? [{ key: "stages", label: `공정표 단계로 하위 작업 만들기 (${detail.stages.length}단계)`, icon: <ListOrdered className="w-3.5 h-3.5" />, disabled: templateBusy, onSelect: () => void subtasksFromStages() }]
+                            : []),
                         ]}
                       />
                     </span>
@@ -1287,6 +1388,9 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   const aux = s.dueDate ? (s.dueDate === today ? "오늘" : md(s.dueDate)) : s.assigneeName;
                   const draftPct = subDraft[s.itemId]?.pct ?? s.progressPct ?? 0;
                   const draftNote = subDraft[s.itemId]?.note ?? s.progressNote ?? "";
+                  const draftDo = subDraft[s.itemId]?.doDate ?? s.doDate ?? "";
+                  const draftActual = subDraft[s.itemId]?.actualDate ?? s.actualDate ?? "";
+                  const setSubDate = (field: "doDate" | "actualDate", v: string) => setSubDraft((d) => ({ ...d, [s.itemId]: { ...d[s.itemId], [field]: v } }));
                   return (
                     <div key={s.itemId} className="todo-sr-wrap">
                     <div className="todo-sr" data-done={s.status === "done" ? "true" : undefined}>
@@ -1317,6 +1421,58 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                     </div>
                     {s.status !== "done" && (
                       <div className="todo-sr-prog" data-readonly={!canEdit ? "true" : undefined}>
+                        <select
+                          value={s.milestoneKind ?? ""}
+                          disabled={!canEdit}
+                          aria-label={`${s.title} 마일스톤 종류`}
+                          title="제출·수령·미팅·보고 같은 날짜 사안 — 캘린더 표시·업무 보고 날짜에 반영"
+                          onChange={(e) => {
+                            const kind = (e.target.value || null) as TodoMilestoneKind | null;
+                            const body: Record<string, unknown> = { milestoneKind: kind };
+                            // 종류를 고르면 관련 공정표 단계명으로 stage_order 자동 제안(없을 때만)
+                            if (kind && s.stageOrder == null && detail.stages.length) {
+                              const hints = TODO_MILESTONE_STAGE_HINTS[kind] ?? [];
+                              const hit = detail.stages.find((stg) => hints.some((h) => stg.stageName.replace(/\s/g, "").includes(h.replace(/\s/g, ""))));
+                              if (hit) body.stageOrder = hit.stageOrder;
+                            }
+                            void patchSubtask(s, body);
+                          }}
+                        >
+                          <option value="">종류 없음</option>
+                          {TODO_MILESTONE_KINDS.map((k) => (
+                            <option key={k} value={k}>
+                              {TODO_MILESTONE_LABELS[k]}
+                            </option>
+                          ))}
+                        </select>
+                        <CdDateInput
+                          className="todo-sr-date"
+                          aria-label={`${s.title} 예정일`}
+                          placeholder="예정일"
+                          value={draftDo}
+                          disabled={!canEdit}
+                          onChange={(v) => {
+                            setSubDate("doDate", v);
+                            if (v === "" || (v.length === 10 && isValidDateString(v))) void patchSubtask(s, { doDate: v || null });
+                          }}
+                        />
+                        <CdDateInput
+                          className="todo-sr-date"
+                          aria-label={`${s.title} 실제 일자`}
+                          placeholder="실제일"
+                          value={draftActual}
+                          disabled={!canEdit}
+                          onChange={(v) => {
+                            setSubDate("actualDate", v);
+                            if (v === "") void patchSubtask(s, { actualDate: null });
+                            else if (v.length === 10 && isValidDateString(v)) {
+                              void patchSubtask(s, { actualDate: v }).then(() => {
+                                // 결정 C: 실제일을 넣으면 완료를 제안(자동 완료 없음)
+                                if (s.status !== "done" && window.confirm(`"${s.title}" 실제 일자를 ${v} 로 기록했습니다. 완료로 표시할까요?`)) void toggleSubtask(s);
+                              });
+                            }
+                          }}
+                        />
                         {detail.stages.length > 0 && (
                           <select
                             value={s.stageOrder ?? ""}
@@ -1384,6 +1540,9 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 )}
               </section>
 
+              {/* §28-3 의존 관계(288) */}
+              <DepsPanel deps={deps} canEdit={canEdit} busy={depBusy} onAdd={() => setDepOpen(true)} onRemove={(id) => void removeDep(id)} />
+
               {/* ⑤ 댓글 */}
               <section className="cd-card todo-fr" aria-label="댓글">
                 <h3>
@@ -1433,6 +1592,19 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 <h3>
                   <ClipboardList className="inline w-4 h-4 mr-1 align-[-2px]" aria-hidden="true" />
                   업무 보고
+                  {/* 우상단 [업무 보고 신규 생성] — 계약(용역) 연결일 때만. 기존 초안을 갱신하지 않고 새 보고를 만든다(2026-10-19 사용자 요청). */}
+                  <span className="todo-tpl-menu">
+                    <CdButton
+                      variant="primary"
+                      size="sm"
+                      loading={reportBusy}
+                      disabled={!canEdit || detail.linkKind !== "contract" || reportSubject !== "contract"}
+                      title={detail.linkKind === "contract" ? "이 할 일의 메모·하위 작업 진척으로 새 업무 보고를 만듭니다" : "관련을 계약(용역)으로 연결하면 활성화됩니다"}
+                      onClick={() => void createReportDraft(true)}
+                    >
+                      업무 보고 신규 생성
+                    </CdButton>
+                  </span>
                 </h3>
                 {reportSubject ? (
                   <div className="flex flex-col gap-2">
@@ -1782,6 +1954,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
       />
 
       {/* 연결 선택 */}
+      {detail && <DepPickerModal open={depOpen} itemId={detail.itemId} busy={depBusy} onClose={() => setDepOpen(false)} onPick={(id) => addDep(id)} />}
       <LinkPickerModal
         open={linkOpen}
         initialKind={detail?.linkKind ?? null}

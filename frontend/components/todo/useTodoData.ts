@@ -49,6 +49,7 @@ export interface CompleteRulesFailure {
   message: string;
   missing: TodoCompleteRuleKey[];
   openSubtasks: number;
+  openDeps: number;
 }
 
 export function asCompleteRulesFailure(err: unknown): CompleteRulesFailure | null {
@@ -58,6 +59,7 @@ export function asCompleteRulesFailure(err: unknown): CompleteRulesFailure | nul
     message: err.message,
     missing: (Array.isArray(err.data.missing) ? err.data.missing : []) as TodoCompleteRuleKey[],
     openSubtasks: Number(err.data.openSubtasks ?? 0),
+    openDeps: Number(err.data.openDeps ?? 0),
   };
 }
 

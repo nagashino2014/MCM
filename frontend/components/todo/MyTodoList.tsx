@@ -15,9 +15,10 @@ import type { TodoApprovalEvent, TodoItem } from "@/lib/todo/types";
 import { comparePosition } from "@/lib/todo/position";
 import { ApprovalRow, TodoColumnHeader, TodoRow, type Density, type TimeCell } from "./TodoRow";
 import { DoneSection } from "./DoneSection";
-import { addDays, approvalSection, compareInSection, effectiveDate, longDateKo, md, sectionOf, weekEnd, type SectionKey, type SortMode } from "./todo-utils";
+import { addDays, approvalSection, compareInSection, effectiveDate, isPeriodItem, longDateKo, md, periodBadge, periodSections, sectionOf, weekEnd, type SectionKey, type SortMode } from "./todo-utils";
 
-type Entry = { kind: "item"; item: TodoItem; date: string; time: string } | { kind: "ref"; ev: TodoApprovalEvent; date: string; time: string };
+// period(287): 기간 일정 — 걸치는 섹션마다 띠에 1회. 일반 행과 섞지 않는다(§27-2 결정 A).
+type Entry = { kind: "item"; item: TodoItem; date: string; time: string; period?: string } | { kind: "ref"; ev: TodoApprovalEvent; date: string; time: string; period?: string };
 
 export type QuickFilter = "today" | "overdue" | "week" | null;
 
@@ -129,8 +130,18 @@ export function MyTodoList({
   const doneItems = useMemo(() => items.filter((i) => !i.parentItemId && i.status === "done"), [items]);
   const { groups, later, laterCount, pendingCount } = useMemo(() => {
     const entries: Entry[] = [];
+    const periodEntries: Partial<Record<SectionKey, Entry[]>> = {};
+    const pushPeriod = (k: SectionKey, e: Entry) => {
+      (periodEntries[k] ??= []).push(e);
+    };
     for (const it of items) {
       if (it.parentItemId || it.status === "done") continue;
+      // 287 기간 할 일 — 끝나지 않았으면 걸치는 섹션마다 띠에, 끝났으면(end_date < 오늘) 지연 행으로 1회
+      if (isPeriodItem(it) && it.endDate! >= today) {
+        const badge = periodBadge(it.doDate!, it.endDate!, today);
+        for (const k of periodSections(it.doDate!, it.endDate!, today, weekStart)) pushPeriod(k, { kind: "item", item: it, date: it.doDate!, time: "", period: badge });
+        continue;
+      }
       const date = effectiveDate(it);
       entries.push({ kind: "item", item: it, date: date ?? "", time: it.doTime ?? "~" });
     }
@@ -141,6 +152,12 @@ export function MyTodoList({
       for (const ev of approvalEvents) {
         if (ev.kind === "pending") continue;
         if (!approvalSection(ev, today, weekStart)) continue;
+        // 287 복수일 결재 일정(출장·휴가·교육)은 걸치는 섹션마다 띠에
+        if (ev.endDate > ev.startDate) {
+          const badge = periodBadge(ev.startDate, ev.endDate, today);
+          for (const k of periodSections(ev.startDate, ev.endDate, today, weekStart)) pushPeriod(k, { kind: "ref", ev, date: ev.startDate, time: "", period: badge });
+          continue;
+        }
         entries.push({ kind: "ref", ev, date: ev.startDate < today ? today : ev.startDate, time: ev.startTime ?? "~" });
       }
     }
@@ -164,8 +181,10 @@ export function MyTodoList({
     const bucket: Record<SectionKey, Entry[]> = { overdue: [], today: [], tomorrow: [], thisWeek: [], nextWeek: [], later: [], none: [] };
     for (const e of entries) bucket[sectionOf(e.date || null, today, weekStart)].push(e);
     for (const l of Object.values(bucket)) l.sort(cmp);
+    // 기간 띠는 섹션 맨 앞(정렬 뒤에 붙여 일반 행 정렬과 섞이지 않게)
+    for (const k of Object.keys(periodEntries) as SectionKey[]) bucket[k] = [...(periodEntries[k] ?? []), ...bucket[k]];
     const weekRange = tomorrow < we ? `${md(addDays(tomorrow, 1))} – ${md(we)}` : undefined;
-    const countOf = (l: Entry[]) => l.filter((e) => e.kind === "item").length;
+    const countOf = (l: Entry[]) => l.filter((e) => e.kind === "item" && !e.period).length;
     const all: Group[] = [
       { key: "overdue", label: "지연", pill: "over", timeCell: "date", entries: bucket.overdue },
       { key: "today", label: "오늘", pill: "today", when: longDateKo(today), timeCell: "time", entries: bucket.today },
@@ -211,8 +230,10 @@ export function MyTodoList({
     );
   }
 
-  const renderEntries = (g: Group) =>
-    g.entries.map((e) =>
+  const renderEntries = (g: Group) => {
+    const periodRows = g.entries.filter((e) => e.period);
+    const normalRows = g.entries.filter((e) => !e.period);
+    const row = (e: Entry) =>
       e.kind === "item" ? (
         <TodoRow
           key={e.item.itemId}
@@ -221,6 +242,7 @@ export function MyTodoList({
           density={density}
           selected={selectedId === e.item.itemId}
           timeCell={g.timeCell}
+          trailing={e.period}
           justDone={justDoneIds?.has(e.item.itemId)}
           onOpen={onOpen}
           onComplete={onComplete}
@@ -228,9 +250,22 @@ export function MyTodoList({
           onSettled={onSettled}
         />
       ) : (
-        <ApprovalRow key={`ref-${e.ev.id}`} event={e.ev} today={today} density={density} timeCell={g.timeCell === "none" ? "date" : g.timeCell} />
-      )
+        <ApprovalRow key={`ref-${e.ev.id}`} event={e.ev} today={today} density={density} timeCell={g.timeCell === "none" ? "date" : g.timeCell} periodLabel={e.period} />
+      );
+    return (
+      <>
+        {periodRows.length > 0 && (
+          <div className="todo-period-band" role="group" aria-label="기간 일정">
+            <div className="todo-period-band-h">
+              기간 일정 <span className="todo-sec-n">{periodRows.length}</span>
+            </div>
+            {periodRows.map(row)}
+          </div>
+        )}
+        {normalRows.map(row)}
+      </>
     );
+  };
 
   return (
     <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
@@ -238,7 +273,7 @@ export function MyTodoList({
       {top}
       {groups.map((g) => (
         <div key={g.key} className="todo-rows" aria-label={g.label}>
-          <GroupHeader label={g.label} pill={g.pill} when={g.when} count={g.entries.filter((e) => e.kind === "item").length} pendingCount={g.key === "today" ? pendingCount : 0} />
+          <GroupHeader label={g.label} pill={g.pill} when={g.when} count={g.entries.filter((e) => e.kind === "item" && !e.period).length} pendingCount={g.key === "today" ? pendingCount : 0} />
           {g.entries.length ? renderEntries(g) : <div className="todo-empty">{g.key === "today" ? "오늘 할 일이 없습니다." : "예정된 업무가 없습니다."}</div>}
         </div>
       ))}

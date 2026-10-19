@@ -21,6 +21,8 @@ export interface CompleteConfirmTarget {
   subtaskDone: number;
   reviewedAt: string | null;
   completionNote: string | null;
+  /** 미완료 선행 작업 수(288) — 목록·상세 응답의 openDeps. */
+  openDeps?: number;
 }
 
 export interface CompleteConfirmModalProps {
@@ -46,6 +48,7 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
         ? checkCompletion(target.completeRules, {
             status: target.status,
             openSubtasks: Math.max(0, target.subtaskTotal - target.subtaskDone),
+            openDeps: target.openDeps ?? 0,
             completionNote: note,
             reviewedAt: target.reviewedAt,
           })
@@ -56,6 +59,7 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
   const serverMissing = useMemo(() => new Set((failure?.missing ?? []).filter((k) => k !== "note")), [failure]);
   const missing = useMemo(() => new Set<TodoCompleteRuleKey>([...(check?.missing ?? []), ...serverMissing]), [check, serverMissing]);
   const openSubtasks = failure && serverMissing.has("subtasks") ? Math.max(failure.openSubtasks, check?.openSubtasks ?? 0) : (check?.openSubtasks ?? 0);
+  const openDeps = failure && serverMissing.has("deps") ? Math.max(failure.openDeps, check?.openDeps ?? 0) : (check?.openDeps ?? 0);
   const noteRequired = !!target?.completeRules.note;
   const canConfirm = !!target && missing.size === 0 && !busy;
 
@@ -86,6 +90,12 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
               서버가 완료를 거절했습니다 — 아래 조건을 확인하세요.
             </p>
           )}
+          {!target.completeRules.deps && openDeps > 0 && (
+            <p className="todo-cc-server" role="status">
+              <AlertCircle aria-hidden="true" />
+              선행 작업 {openDeps}건이 아직 끝나지 않았습니다(경고 — 완료는 가능).
+            </p>
+          )}
           <ul className="todo-cc-rules" aria-label="완료 조건">
             {keys.map((k) => {
               const bad = missing.has(k);
@@ -95,7 +105,7 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
                     {bad ? <AlertCircle /> : <Check strokeWidth={2.6} />}
                   </span>
                   <span className="todo-cc-lb">{TODO_COMPLETE_RULE_LABELS[k]}</span>
-                  <span className="todo-cc-st">{bad ? describeMissingRule(k, openSubtasks) : k === "subtasks" ? `하위 작업 ${target.subtaskDone}/${target.subtaskTotal} 완료` : "충족"}</span>
+                  <span className="todo-cc-st">{bad ? describeMissingRule(k, openSubtasks, openDeps) : k === "subtasks" ? `하위 작업 ${target.subtaskDone}/${target.subtaskTotal} 완료` : "충족"}</span>
                 </li>
               );
             })}

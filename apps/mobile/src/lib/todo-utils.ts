@@ -82,7 +82,27 @@ export function weekEnd(ymd: string): string {
 export const keyDate = (it: Pick<TodoItem, 'doDate' | 'dueDate'>): string | null => it.doDate ?? it.dueDate ?? null;
 
 /** 지연 판정 — 기준일이 지났거나 마감이 지났고 미완료. */
-export function isOverdue(it: Pick<TodoItem, 'doDate' | 'dueDate' | 'status'>, today: string): boolean {
+/** 287 기간 일정(하루 초과) */
+export function isPeriodItem(it: Pick<TodoItem, 'doDate' | 'endDate'>): boolean {
+  return !!it.doDate && !!it.endDate && it.endDate > it.doDate;
+}
+/** 기간이 그 날짜를 덮는지 */
+export function periodCovers(it: Pick<TodoItem, 'doDate' | 'endDate'>, ymd: string): boolean {
+  return !!it.doDate && !!it.endDate && it.doDate <= ymd && ymd <= it.endDate;
+}
+/** "10/20 ~ 10/22 · 2일차" / 시작 전 "· 3일" / 끝난 뒤 범위만 */
+export function periodBadge(start: string, end: string, today: string): string {
+  const span = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+  const days = span(start, end) + 1;
+  const range = `${fmtMd(start)} ~ ${fmtMd(end)}`;
+  if (today < start) return `${range} · ${days}일`;
+  if (today > end) return range;
+  return `${range} · ${span(start, today) + 1}일차`;
+}
+
+export function isOverdue(it: Pick<TodoItem, 'doDate' | 'dueDate' | 'status' | 'endDate'>, today: string): boolean {
+  // 진행 중인 기간 일정은 지연이 아니다
+  if (it.doDate && it.endDate && it.endDate >= today && it.doDate <= today) return false;
   if (it.status === 'done') return false;
   const k = keyDate(it);
   return (k != null && k < today) || (it.dueDate != null && it.dueDate < today);

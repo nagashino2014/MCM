@@ -162,6 +162,7 @@ export function QuickAddBar({
         doDate: parsed.doDate,
         doTime: parsed.doTime,
         dueDate: parsed.dueDate,
+        endDate: parsed.endDate,
         recurrence: parsed.recurrence,
         priority: parsed.priority ?? 0,
         note: parsed.note,

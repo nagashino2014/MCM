@@ -576,3 +576,57 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - B. 마일스톤 종류는 코드 고정 7종 + 기타(권고), 보드별 사전은 2차.
 - C. 실제일 입력 시 완료는 "제안"(권고) vs 자동 완료.
 - D. 결재 일정은 승인 전 문서도 포함해 항상 표시(현상 유지, 권고).
+
+**구현 기록(2026-10-19, §27 S1~S3, 미커밋)**
+- 287: `end_date`·`actual_date`·`milestone_kind` + CHECK(end_date ≥ do_date, 종류 8종) + 기간 인덱스. 스테이징 리허설 ROLLBACK 통과.
+- 서버: normalize(endDate 는 do_date 필요·이상, actualDate, milestoneKind 허용 목록), create 는 보조 UPDATE, update 는 컬럼 3개·활동 note, 홈 위젯은 진행 중 기간을 오늘로, 캘린더는 기간 바 + 하위 마일스톤(◆ 실제/◇ 예정 · "상위 · 종류 · 하위")를 상위 상세로 연결, 보고 단계 델타에 plannedDate(최소 예정일)·actualDate(최대 실제일), 추진내역 항목에 종류·실제/예정 일자. 퀵애드 파서 "10/20~10/22"·"10/20부터 3일간"(테스트 38).
+- 웹: `periodSections`/`periodBadge`, MyTodoList 섹션 맨 앞 "기간 일정" 띠(할 일·복수일 결재 일정, 섹션마다 1회, 건수 집계 제외), TodoRow trailing 배지·ApprovalRow periodLabel, 칸반 카드 기간 배지, 상세 "수행 예정 ~ 종료일"(종료일 < 시작일 거절), 하위 행에 종류 select(공정 단계 자동 제안 TODO_MILESTONE_STAGE_HINTS)·예정일·실제일(실제일 입력 시 완료 제안 confirm).
+- 모바일: 타입·파서·QuickAddBar endDate, isOverdue 는 진행 중 기간 제외, 그룹 배치에 periodCovers, TodoRow 기간 배지, 상세 "~ 종료일" 칩(길게 눌러 해제)·하위 종류 시트·예정일/실제일 DatePickerSheet(실제일 → Alert 완료 제안).
+- 미구현(기록): SharedList·맡긴 일 목록의 기간 배지(TodoRow trailing 미전달), 반복 다음 회차에 end_date 승계, 모바일 결재 일정 "N일차" 표기(범위는 기존 표시).
+- **dev 실측(10-19, 287 적용 후)**: 기간 할 일(10/20~10/22, 계약 연결) 생성 201, 종료일<시작일 400, 하위 '사전협의 제출' 종류·예정일 10/21·실제일 10/18·50% 저장, 캘린더 기간 바 10/20~10/22(초기엔 SELECT 에 end_date 누락 → 수정)·마일스톤 ◆ 이벤트(라벨 중복 제거), 홈 위젯 이번 주 포함, 보고 초안(10/19~10/23) 추진내역 "① 사전협의 제출 — 50% · 사전협의 제출 · 실제 10/18"(공정표 없는 계약이라 단계 델타 0). 목록 '내일'·'이번 주' 섹션 기간 띠 "10/20 ~ 10/22 · 3일"(초기 "-1일" → span 계산으로 수정), 띠 행은 섹션 건수에서 제외. 상세 "수행 예정 10월 20일 (화) ~ 10월 22일 (목)", 하위 줄 종류·예정·실제·진행율·진척 입력 확인. 테스트 데이터·초안 삭제 완료. 모바일은 tsc 만.
+
+### 28. 공정표 양방향 연계 · 보강 4(선행·후행 의존) 설계(2026-10-19, 확정 전)
+**현황**: 공정표(contract/work_task_process_stages)와 하위 작업은 각자 저장되고, 할 일 상세가 공정표 단계를 읽어 `stage_order` 로 매핑 → 보고 초안(단계 델타) → **보고 제출 시** `saveReport` 가 공정표를 갱신(workspace.ts "제출 시 대상 공정표에 진행 델타 반영"). 역방향·자동 생성 없음.
+
+**28-1. 공정표 단계로 하위 작업 만들기**
+- 상세 하위 작업 [템플릿 ▾] 메뉴에 **"공정표 단계로 하위 작업 만들기"**(관련이 계약/Task 이고 공정표가 있을 때만). 모바일 템플릿 시트에 같은 항목.
+- 규칙: 단계마다 하위 작업 1건 — 제목=단계명, `stage_order` 매핑, 예정일=단계 planned_date(없으면 비움), 이미 done 인 단계는 완료 상태·100%·실제일=단계 actual_date 로 생성(결정 E 권고: 생성하되 완료로), in_progress 는 단계 progress_pct 를 진행율로. 같은 stage_order 가 이미 매핑된 하위가 있으면 건너뛴다(중복 방지). 마일스톤 종류는 단계명 키워드로 자동(사전협의→pre_consult 등, TODO_MILESTONE_STAGE_HINTS 역방향).
+- API `POST /api/todo/items/:id/subtasks-from-stages` → `{ item, created, skipped }`, 활동 `update {fromStages: n}`.
+
+**28-2. 보고 제출 → 하위 작업 역동기화**
+- `saveReport(status submitted)` 가 공정표를 갱신한 직후 `syncTodoSubtasksFromStages(subjectKind, subjectId, stages, reportId)` 호출(lib/todo/stage-sync.ts — db 만 사용, 순환 import 없음).
+- 대상: 그 계약/Task 에 연결된(link_kind contract/work_task + link_id 일치, 보관 아님) 모든 할 일의 하위 작업 중 `stage_order` 가 델타 단계와 같은 것.
+- 갱신: progress_pct = 단계 진행율(done 이면 100), actual_date = 단계 actual_date(있을 때만), 예정일은 planned_date 가 있고 하위에 예정일이 없을 때만. 단계가 done 이면 하위를 완료 처리(status done, completed_at, 완료 조건 검사 생략 — 보고가 공식 경로). 우선순위: **보고 값 우선**(결정 F 권고 — 할 일 쪽이 더 최근이어도 덮고, 활동 로그 `progress {source:"report", reportId}` 로 흔적).
+- 알림: 바뀐 하위 작업의 상위 담당자에게 인앱 알림 1건 "업무 보고 제출로 공정 진행율이 갱신됐습니다"(푸시 없음).
+- 멱등: 같은 보고를 다시 제출해도 같은 값이면 변경 없음(diff 0 이면 로그·알림 생략).
+
+**28-3. 보강 4 — 선행·후행 의존 관계(마이그 288 `todo_item_deps`)**
+- 표: `item_id`(후행) · `depends_on_item_id`(선행) · created_by · created_at, PK(item_id, depends_on_item_id). 상위·하위 작업 모두 가능. 자기 참조·순환(DFS) 거절. 범위: 내가 볼 수 있는 할 일(결정 H 권고).
+- 의미: 선행이 완료되지 않은 후행은 **대기(blocked)** — 상태는 바꾸지 않고 행·카드에 ⛓ "선행 1건 대기" 배지, 상세 "의존 관계" 프레임(선행 목록 + 후행 목록, 선행은 제목 클릭으로 이동, 완료 여부·담당 표시). 선행 지연이면 "선행 지연" 빨간 배지.
+- 완료 차단: 기본은 **경고만**(완료 확인 모달에 "선행 N건 미완" 표시), 완료 조건에 새 키 `deps`("선행 작업 모두 완료")를 켜면 차단(결정 G 권고). 보드 기본 완료 조건에도 추가.
+- 알림: 선행 완료 시 후행 담당자에게 푸시+인앱 "선행 '○○' 완료 — 시작할 수 있습니다"(후행이 여러 선행을 가지면 마지막 선행 완료 때만).
+- 추가 UI: 상세 프레임 [+ 선행 추가] → 할 일 검색 피커(새 API `GET /api/todo/items?q=` — 제목·프로젝트명 ILIKE, 가시 범위, 20건, 완료 제외 옵션). 모바일: 프레임 + 검색 시트.
+- 정렬·칸반: 변경 없음. 타임라인(보강 5) 때 의존 화살표를 그린다.
+
+**28-4. 단계·검증**
+| 단계 | 내용 | 검증 |
+|---|---|---|
+| D1 | 288 + 의존 API(목록·추가·삭제·검색)·완료 규칙 deps·알림 | 리허설, 순환 거절 테스트 |
+| D2 | 28-1 생성 API·메뉴(웹·모바일) + 28-2 역동기화 | 공정표 있는 계약으로 생성→보고 제출→하위 갱신 실측 |
+| D3 | 의존 UI 웹·모바일(프레임·배지·모달 경고) | dev 실측, tsc |
+| D4 | 커밋·배포·OTA·m-app | — |
+
+**결정(2026-10-19 사용자 확정)**: E~H 전부 권고안. 추가 요청: 상세 업무 보고 카드 우상단 **[업무 보고 신규 생성]** — 기존 초안 갱신 없이 항상 새 보고(초안)를 만들고 보고 화면으로 이동, 관련이 계약(용역)이 아니면(없음·업무추진계획·결재 문서·링크 등) 비활성. 버그 2건 수정: 하위 예정일/실제일 입력란 높이(cd-input min-height 36 → 26 강제)·부분 입력이 되돌아가 날짜를 못 치던 문제(draft 버퍼).
+
+**결정 논점(기록용)**
+- E. 이미 완료된 단계도 하위 작업으로 만들되 완료 상태로 — 권고(건너뛰면 공정표와 하위 목록이 어긋남).
+- F. 역동기화는 보고 값 우선(활동 로그로 흔적) — 권고. 반대로 할 일 값이 최신이면 보존하는 방식은 보고를 공식 경로로 보는 설계와 충돌.
+- G. 의존 완료 차단은 기본 경고, 완료 조건 `deps` 로 차단 선택 — 권고.
+- H. 선행으로 고를 수 있는 범위 = 내가 볼 수 있는 모든 할 일 — 권고(보드 한정은 2차).
+
+**구현(2026-10-19, 288 적용)**
+- D1: `lib/todo/deps.ts`(listDeps/addDep/removeDep/searchItems/openDepCount/notifyDependentsUnblocked — 순환 DFS·가시 범위 `visibleItemsWhere`·비가시 선행은 "비공개 할 일"), API `items/[itemId]/deps`(GET/POST/DELETE), `GET /api/todo/search?q=&exclude=`. 완료 조건 키 `deps`(types·completion·CompleteRulesFields·모바일 복제본), `ITEM_SELECT` 에 `open_deps` 서브쿼리 → `TodoItem.openDeps`. 409 본문에 `openDeps`. 선행 완료(completeItem) 뒤 남은 선행이 없는 후행 담당자·작성자에게 푸시+인앱.
+- D2: `lib/todo/stage-subtasks.ts createSubtasksFromStages`(+`milestoneKindForStage`), API `subtasks-from-stages`, 웹 템플릿 메뉴·모바일 템플릿 시트 항목. `lib/todo/stage-sync.ts syncTodoSubtasksFromStages` — `workspace.saveReport` 제출 분기 뒤(try/catch, 실패해도 보고 저장 유지). ⚠부수 수정: `createItem` 이 `progress_pct·progress_note·stage_order` 를 저장하지 않아 템플릿의 공정 단계 매핑이 유실되던 결함 → 보조 UPDATE 로 저장(하위 작업만).
+- D3: 웹 `DepPickerModal.tsx`(DepsPanel 프레임 + 검색 피커, 하위 작업 다음·댓글 앞), 행·칸반 `⛓ 선행 N건 대기` 배지(완료 제외), 완료 확인 모달 경고 줄(deps 규칙 없을 때). 모바일 `[itemId]` 의존 프레임·검색 시트·DepRow, TodoRow 배지, CompleteConfirmSheet 경고.
+- 같은 커밋: [업무 보고 신규 생성](fresh — 기존 초안 무시·항상 새 보고), 하위 예정일/실제일 입력 높이 26px(cd-input 36 override)·draft 버퍼로 부분 입력 보존.
+- **dev 실측(10-19, 288 적용 후)**: 선행 추가 200(blockedBy 1·openBlockers 1, 목록 openDeps 1), 역방향 추가 400 "순환 의존", 자기 참조 400, 후행 목록에 표시. 완료 조건 `deps` 켜고 완료 → 409 missing [subtasks, deps]. 공정표 9단계 계약(에이에스이코리아 ctr_a227010bc24de880)에 테스트 할 일 → 공정표 단계로 하위 9건 생성(착수회의→kickoff_report·사전협의→pre_consult·본협의→main_consult 자동), 재실행 created 0·skipped 9. [업무 보고 신규 생성] 2회 → 서로 다른 보고 2건. 제출 보고(1단계 done·2단계 30%/예정 10-25) → 하위 '계약' done·100%·실제일 10-19·completed_at, '착수회의' 30%·예정일 10-25, 활동 `progress {source:"report", reportId}`+`complete`, 상위 progressAvg 14. 같은 보고 재제출 → 활동 수 변화 0(멱등). 웹 상세: 의존 프레임 렌더·[선행 추가] 모달 검색 '견적'→선택→프레임 "선행 1 · 후행 0 · 대기 1"+⛓ 배지, 신규 생성 버튼은 연결 없는 항목에서 disabled, 하위 날짜 입력 높이 26px(= select). 완료 체크 → 완료 확인 모달에 "선행 작업 1건이 아직 끝나지 않았습니다(경고 — 완료는 가능)" 줄, 선행 해제 X → 프레임·API 모두 0건. 테스트 데이터(보고 3건·progress_log·할 일 10건) 삭제·공정표 원복 완료. 모바일은 tsc 만.

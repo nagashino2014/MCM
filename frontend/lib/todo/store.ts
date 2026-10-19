@@ -62,6 +62,8 @@ import { notifyTodoAssigned, notifyTodoComment, notifyTodoStatus } from "./notif
 import { listContractStages } from "@/lib/contracts/process-stages";
 import { listTaskStages } from "@/lib/work-plan/task-stages";
 import type { TodoStageRef } from "./types";
+import { TODO_MILESTONE_KINDS, type TodoMilestoneKind } from "./types";
+import { notifyDependentsUnblocked, openDepCount } from "./deps";
 
 const nowIso = () => new Date().toISOString();
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -885,7 +887,9 @@ const ITEM_SELECT = `
          lc.contract_title AS link_contract_title, lcp.company_name AS link_counterparty_name,
          (SELECT COUNT(*)::int FROM todo_items s WHERE s.parent_item_id = i.item_id AND s.archived_at IS NULL) AS subtask_total,
          (SELECT COUNT(*)::int FROM todo_items s WHERE s.parent_item_id = i.item_id AND s.archived_at IS NULL AND s.status = 'done') AS subtask_done,
-         (SELECT COUNT(*)::int FROM todo_comments c WHERE c.item_id = i.item_id AND c.deleted_at IS NULL) AS comment_count
+         (SELECT COUNT(*)::int FROM todo_comments c WHERE c.item_id = i.item_id AND c.deleted_at IS NULL) AS comment_count,
+         (SELECT COUNT(*)::int FROM todo_item_deps dd JOIN todo_items dp ON dp.item_id = dd.depends_on_item_id
+           WHERE dd.item_id = i.item_id AND dp.status <> 'done' AND dp.archived_at IS NULL) AS open_deps
     FROM todo_items i
     JOIN todo_boards b ON b.board_id = i.board_id
     LEFT JOIN users ou ON ou.user_id = i.owner_user_id
@@ -957,6 +961,10 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     progressNote: r.progress_note != null ? String(r.progress_note) : null,
     stageOrder: r.stage_order != null ? Number(r.stage_order) : null,
     progressUpdatedAt: r.progress_updated_at != null ? String(r.progress_updated_at) : null,
+    endDate: r.end_date != null ? String(r.end_date) : null,
+    actualDate: r.actual_date != null ? String(r.actual_date) : null,
+    milestoneKind: r.milestone_kind != null ? (String(r.milestone_kind) as TodoMilestoneKind) : null,
+    openDeps: r.open_deps != null ? Number(r.open_deps) : 0,
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
     createdBy: r.created_by != null ? String(r.created_by) : null,
@@ -1226,11 +1234,12 @@ async function assertCompletable(
   facts: { status: string; completionNote: string | null; reviewedAt: string | null }
 ): Promise<void> {
   const openSubtasks = rules.subtasks ? await openSubtaskCount(db, itemId) : 0;
-  const check = checkCompletion(rules, { ...facts, openSubtasks });
+  const openDeps = rules.deps ? await openDepCount(db, itemId) : 0;
+  const check = checkCompletion(rules, { ...facts, openSubtasks, openDeps });
   if (check.ok) return;
   throw Object.assign(fail(completionErrorMessage(check), 409), {
     code: "complete_rules",
-    detail: { missing: check.missing, openSubtasks: check.openSubtasks },
+    detail: { missing: check.missing, openSubtasks: check.openSubtasks, openDeps: check.openDeps },
   });
 }
 
@@ -1308,6 +1317,11 @@ interface NormalizedItemInput {
   progressPct: number | null;
   progressNote: string | null;
   stageOrder: number | null;
+  /** 287 기간 종료일(do_date 이상) */
+  endDate: string | null;
+  /** 287 하위 작업 마일스톤 — 실제 일자·종류(상위에서는 무시) */
+  actualDate: string | null;
+  milestoneKind: TodoMilestoneKind | null;
 }
 
 function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unknown>): NormalizedItemInput {
@@ -1344,6 +1358,15 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
   const pctRaw = pick("progressPct", "progress_pct");
   const progressPct = pctRaw == null || pctRaw === "" ? null : Number(pctRaw);
   if (progressPct != null && (!Number.isInteger(progressPct) || progressPct < 0 || progressPct > 100)) throw fail("진행율은 0~100 사이 정수로 입력하세요.");
+  // 287 기간 종료일 — 할 날이 있어야 하고 그 이상. 할 날이 없으면 버린다.
+  const endDateRaw = dateOrNull(pick("endDate", "end_date"), "종료일");
+  if (endDateRaw && doDate && endDateRaw < doDate) throw fail("종료일은 할 날짜 이후여야 합니다.");
+  const endDate = doDate ? endDateRaw : null;
+  // 287 하위 작업 마일스톤
+  const actualDate = dateOrNull(pick("actualDate", "actual_date"), "실제 일자");
+  const mkRaw = str(pick("milestoneKind", "milestone_kind"), 30);
+  if (mkRaw && !(TODO_MILESTONE_KINDS as readonly string[]).includes(mkRaw)) throw fail("마일스톤 종류가 올바르지 않습니다.");
+  const milestoneKind = (mkRaw as TodoMilestoneKind | null) ?? null;
   const stageRaw = pick("stageOrder", "stage_order");
   const stageOrder = stageRaw == null || stageRaw === "" ? null : Number(stageRaw);
   if (stageOrder != null && (!Number.isInteger(stageOrder) || stageOrder < 1)) throw fail("공정 단계 번호가 올바르지 않습니다.");
@@ -1364,6 +1387,9 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
     progressPct,
     progressNote: str(pick("progressNote", "progress_note"), 2000),
     stageOrder,
+    endDate,
+    actualDate,
+    milestoneKind,
   };
 }
 
@@ -1464,6 +1490,25 @@ export async function createItem(userId: string, input: Record<string, unknown>)
         status === "review" ? now : null,
       ]
     );
+    // 285·287 진척·기간·마일스톤 — INSERT 컬럼 목록을 늘리지 않고 보조 UPDATE 로(없으면 건너뜀). 진척 3종은 하위 작업만.
+    const hasProgress = !!parentItemId && (v.progressPct != null || !!v.progressNote || v.stageOrder != null);
+    if (v.endDate || v.actualDate || v.milestoneKind || hasProgress) {
+      await db.run(
+        `UPDATE todo_items SET end_date = $2, actual_date = $3, milestone_kind = $4, progress_pct = $5, progress_note = $6, stage_order = $7,
+                progress_updated_at = CASE WHEN $8 THEN $9 ELSE progress_updated_at END WHERE item_id = $1`,
+        [
+          itemId,
+          v.endDate,
+          parentItemId ? v.actualDate : null,
+          parentItemId ? v.milestoneKind : null,
+          hasProgress ? v.progressPct : null,
+          hasProgress ? v.progressNote : null,
+          hasProgress ? v.stageOrder : null,
+          hasProgress && (v.progressPct != null || !!v.progressNote),
+          now,
+        ]
+      );
+    }
     await logActivity(db, itemId, userId, "create", { title: v.title, boardId, parentItemId });
     if (assigneeId && assigneeId !== userId) {
       await db.run(
@@ -1574,6 +1619,13 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     note("progressNote", cur.progress_note ?? null, progressNote);
     note("stageOrder", cur.stage_order != null ? Number(cur.stage_order) : null, stageOrder);
     const progressUpdatedAt = changes.progressPct || changes.progressNote ? nowIso() : cur.progress_updated_at != null ? String(cur.progress_updated_at) : null;
+    // ── 기간·마일스톤(287) ──
+    const endDate = v.endDate;
+    const actualDate = isSub ? v.actualDate : null;
+    const milestoneKind = isSub ? v.milestoneKind : null;
+    note("endDate", cur.end_date ?? null, endDate);
+    note("actualDate", cur.actual_date ?? null, actualDate);
+    note("milestoneKind", cur.milestone_kind ?? null, milestoneKind);
 
     // ── 담당 ──
     let assigneeId = cur.assignee_user_id != null ? String(cur.assignee_user_id) : null;
@@ -1672,7 +1724,8 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
          link_kind = $18, link_id = $19, link_label = $20, color = $21, assignee_user_id = $22,
          completed_at = $23, completed_by = $24, updated_at = $25, updated_by = $26,
          complete_rules = $27::jsonb, completion_note = $28, reviewed_at = $29,
-         progress_pct = $30, progress_note = $31, stage_order = $32, progress_updated_at = $33
+         progress_pct = $30, progress_note = $31, stage_order = $32, progress_updated_at = $33,
+         end_date = $34, actual_date = $35, milestone_kind = $36
        WHERE item_id = $1`,
       [
         itemId,
@@ -1708,6 +1761,9 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
         progressNote,
         stageOrder,
         progressUpdatedAt,
+        endDate,
+        actualDate,
+        milestoneKind,
       ]
     );
 
@@ -1759,7 +1815,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     }
     const rest = Object.fromEntries(
       Object.entries(changes).filter(
-        ([k]) => !["status", "assigneeUserId", "doDate", "doTime", "dueDate", "boardId", "columnId", "position", "remindAt", "progressPct", "progressNote", "stageOrder"].includes(k)
+        ([k]) => !["status", "assigneeUserId", "doDate", "doTime", "dueDate", "boardId", "columnId", "position", "remindAt", "progressPct", "progressNote", "stageOrder", "endDate"].includes(k)
       )
     );
     if (Object.keys(rest).length) await logActivity(db, itemId, userId, "update", { changes: rest });
@@ -1845,6 +1901,8 @@ export async function completeItem(userId: string, itemId: string, done: boolean
     const recipients = await subscribersOf(db, itemId);
     const title = String(cur.title);
     if (done) statusPush = () => notifyTodoStatus({ itemId, title, status: "done", byUserId: userId, byName, recipients });
+    // 288: 선행 완료 → 남은 선행이 없는 후행의 담당자에게 알림
+    if (done) await notifyDependentsUnblocked(db, itemId, userId, byName);
 
     if (done && cur.recurrence && cur.parent_item_id == null) {
       const today = kstToday();
@@ -2144,8 +2202,10 @@ export async function listTodayForHome(userId: string): Promise<TodoTodaySummary
   );
   const items = await mapItemsWithEdit(db, userId, rows);
   const keyDate = (it: TodoItem) => it.doDate ?? it.dueDate ?? "";
-  const overdue = items.filter((it) => keyDate(it) < today || (it.dueDate != null && it.dueDate < today));
-  const todayItems = items.filter((it) => !overdue.includes(it) && (keyDate(it) === today || it.dueDate === today));
+  // 287: 진행 중인 기간 일정(do_date <= 오늘 <= end_date)은 지연이 아니라 오늘.
+  const inPeriod = (it: TodoItem) => it.doDate != null && it.endDate != null && it.doDate <= today && it.endDate >= today;
+  const overdue = items.filter((it) => !inPeriod(it) && (keyDate(it) < today || (it.dueDate != null && it.dueDate < today)));
+  const todayItems = items.filter((it) => !overdue.includes(it) && (inPeriod(it) || keyDate(it) === today || it.dueDate === today));
   const thisWeek = items.filter((it) => !overdue.includes(it) && !todayItems.includes(it));
   return {
     today,

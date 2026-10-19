@@ -16,7 +16,7 @@ import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion"
 import { DueText, MiniSegments, PriorityLabel, StatusDot, tintStyle, type Density } from "./TodoRow";
 import { CompleteRulesFields } from "./CompleteRulesFields";
 import { apiCall, type MoveArgs } from "./useTodoData";
-import { columnTone, contextParts, contractShort, dueBadge, isFoldedColumn, md, relativeTime } from "./todo-utils";
+import { columnTone, contextParts, contractShort, dueBadge, isFoldedColumn, isPeriodItem, md, periodBadge, relativeTime } from "./todo-utils";
 
 const NONE_COL = "__none__";
 
@@ -55,8 +55,13 @@ function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string
       </div>
       {ctxText && <div className="todo-card-ctx">{ctxText}</div>}
       <div className="todo-card-ft">
-        {badge ? <DueText badge={badge} /> : item.doDate ? <span>{md(item.doDate)}</span> : null}
+        {isPeriodItem(item) ? <span className="todo-period" title="기간 일정">{periodBadge(item.doDate!, item.endDate!, today)}</span> : badge ? <DueText badge={badge} /> : item.doDate ? <span>{md(item.doDate)}</span> : null}
         {item.subtaskTotal > 0 && <MiniSegments done={item.subtaskDone} total={item.subtaskTotal} />}
+        {item.openDeps > 0 && item.status !== "done" && (
+          <span className="todo-dep" title="선행 작업이 끝나야 시작할 수 있습니다">
+            ⛓ {item.openDeps}
+          </span>
+        )}
         {item.commentCount > 0 && (
           <span className="todo-sub" title="댓글">
             <MessageSquare aria-hidden="true" />

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { normalizeReport } from "@/lib/work-plan/normalize";
 import { summarizeProgress } from "@/lib/ai/summarize";
+import { syncTodoSubtasksFromStages } from "@/lib/todo/stage-sync";
 
 export interface MyServiceRow {
   contractId: string;
@@ -580,6 +581,14 @@ export async function saveReport(actorUserId: string, input: SaveReportInput): P
   // 정규화(추진경과/수행인력 집계)는 계약 보고에만 적용.
   if (status === "submitted" && !isTask) {
     await normalizeReport(reportId);
+  }
+  // §28-2 제출 시 할 일 하위 작업(stage_order 매핑) 역동기화 — 보고 값 우선. 실패해도 보고 저장은 유지.
+  if (status === "submitted") {
+    try {
+      await syncTodoSubtasksFromStages(isTask ? "task" : "contract", input.subjectId, input.stages, reportId, actorUserId, input.reportDate || input.periodEnd || null);
+    } catch (e) {
+      console.error("[work-plan] 할 일 하위 작업 역동기화 실패", reportId, e);
+    }
   }
 
   return reportId;

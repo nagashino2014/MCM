@@ -25,6 +25,7 @@ import {
   type LetterLayout,
   type TextRun,
 } from "./types";
+import { LIST_LEVEL_STEP_PT } from "./list-markers";
 
 const INK = rgb(0.1, 0.1, 0.12);
 const LINE_THIN = 0.8;
@@ -155,12 +156,20 @@ export function segsWidth(segs: StyledSeg[], fonts: Fonts, size: number): number
 const BELOW_MARGIN_RATIO = 0.5;
 function paraGeometry(b: Extract<LetterBlock, { kind: "p" }>, fonts: Fonts, size: number): { firstX: number; restX: number; gapAfter: number } {
   const extraIndent = b.indentPt ?? 0;
+  // 글머리 기호로 한 단계 이상 들여 쓴 하위 항목(2026-10-19) — 본문 첫 줄 자리에서 단계마다 15pt 더 들여 쓰고,
+  // 이어지는 줄은 기호 뒤 글자 시작점에 맞춘다(내어쓰기). "- 아 래 -" 아래는 그쪽 좁은 여백을 기준으로 같은 규칙.
+  const level = b.listLevel ?? 0;
+  if (level >= 1) {
+    const base = MARGIN_L + (b.below ? BODY_INDENT * BELOW_MARGIN_RATIO : BODY_INDENT) + extraIndent + level * LIST_LEVEL_STEP_PT;
+    const hang = b.marker ? fonts.regular.widthOfTextAtSize(b.marker, size) : 0;
+    return { firstX: base, restX: base + hang, gapAfter: b.below ? 0 : 2 };
+  }
   if (!b.below) {
     return { firstX: MARGIN_L + BODY_INDENT + extraIndent, restX: MARGIN_L + extraIndent, gapAfter: 2 };
   }
   const depth = b.listDepth ?? 0;
   const base = MARGIN_L + BODY_INDENT * BELOW_MARGIN_RATIO + extraIndent + depth * size * 2;
-  const prefix = depth > 0 ? /^(\d+\.\s+|•\s+)/.exec(b.runs[0]?.text ?? "")?.[0] ?? "" : "";
+  const prefix = depth > 0 ? b.marker ?? /^(\d+\.\s+|•\s+)/.exec(b.runs[0]?.text ?? "")?.[0] ?? "" : "";
   const hang = prefix ? fonts.regular.widthOfTextAtSize(prefix, size) : 0;
   return { firstX: base, restX: base + hang, gapAfter: 0 };
 }

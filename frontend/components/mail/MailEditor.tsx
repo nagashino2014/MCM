@@ -3,7 +3,9 @@
 // 메일 리치 에디터(G2-7/8) — contentEditable 기반, 의존성 0. 네이버 메일급 서식 목표.
 // 서식: 글꼴·크기·B/I/U/취소선·글자색·정렬(좌중우양)·들여/내어쓰기·줄간격(50~180%)·목록·링크·구분선·기호·표·이미지.
 // 표 편집: 커서가 표 안이면 표 툴바(행/열 추가·삭제, 셀 배경색, 너비/높이 같게, 셀 경계 드래그 리사이즈).
-// 자동 글머리: 줄 시작 "-"/"*"/"1." + Space/Enter → 목록 전환(IME 조합 중 제외).
+// 자동 글머리: 줄 시작 "-"/"*"/"1."/"가." + Space/Enter → 목록 전환(IME 조합 중 제외).
+// 글머리 기호 선택 창(2026-10-19): 기호·번호 종류를 목록에 data-marker, 들여쓰기 단계를 data-level 로 남긴다
+// (lib/letter/list-markers.ts — 공문 PDF/HWPX 가 같은 정의로 기호·내어쓰기를 그린다).
 // 목록 마커는 Tailwind 전역 리셋이 지우므로 .cd-mail-editor 스코프 CSS 로 복원(cdash.css).
 // 표·구분선·이미지는 인라인 스타일(외부 메일 클라이언트 호환). MailComposer 에서 사용.
 
@@ -12,12 +14,20 @@ import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart,
   Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand,
-  Image as ImageIcon, Indent, Italic, Link2, List, ListOrdered, Minus as MinusIcon,
+  Image as ImageIcon, Indent, Italic, Link2, ListOrdered, Minus as MinusIcon,
   Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
   TableCellsMerge, TableCellsSplit, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
 import { CdIconButton } from "@/components/cdash/CdButton";
+import {
+  LIST_LEVEL_MAX,
+  LIST_MARKERS,
+  TYPED_MARKER_RE,
+  clampListLevel,
+  listMarkerDef,
+  type ListMarkerKey,
+} from "@/lib/letter/list-markers";
 
 // ── 표 스타일 상수(인라인 — 수신측 호환) ─────────────────────────────
 const HEADER_TD_STYLE = "border:1px solid #c8c8cc;padding:6px 10px;font-size:13px;background:#f2f3f6;font-weight:bold;";
@@ -607,7 +617,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const innerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLDivElement);
 
-  const [toolPopover, setToolPopover] = useState<"symbol" | "table" | "cellcolor" | "textcolor" | "lineheight" | null>(null);
+  const [toolPopover, setToolPopover] = useState<"symbol" | "table" | "cellcolor" | "textcolor" | "lineheight" | "list" | null>(null);
   const [tableHover, setTableHover] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [activeCell, setActiveCell] = useState<HTMLTableCellElement | null>(null);
   const [supActive, setSupActive] = useState(false); // 위 첨자 토글 상태(G2-14)
@@ -662,6 +672,116 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     innerRef.current?.focus();
     document.execCommand("insertHTML", false, html);
     onInput();
+  };
+
+  // ── 글머리 기호(2026-10-19) ──
+  /** 커서가 놓인 목록(ol/ul) — 에디터 밖이면 null */
+  const currentList = (): HTMLOListElement | HTMLUListElement | null => {
+    const node = window.getSelection()?.anchorNode;
+    const el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
+    const list = el?.closest?.("ol,ul") as HTMLOListElement | HTMLUListElement | null;
+    return list && innerRef.current?.contains(list) ? list : null;
+  };
+
+  /** 목록 항목 맨 앞에 손으로 쳐 둔 기호(가. / 1) / • 등)를 지운다 — 기호가 두 번 찍히지 않게 */
+  const stripTypedMarker = (li: HTMLElement) => {
+    const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+    let t = walker.nextNode() as Text | null;
+    while (t && !t.data.trim()) t = walker.nextNode() as Text | null;
+    if (!t) return;
+    const m = TYPED_MARKER_RE.exec(t.data);
+    if (m && (li.textContent ?? "").trim().length > m[0].trim().length) t.data = t.data.slice(m[0].length);
+  };
+
+  /** 글머리 기호 적용(null = 목록 해제). 선택한 줄들이 목록이 아니면 목록으로 만든다. */
+  const applyListStyle = (key: ListMarkerKey | null) => {
+    const ed = innerRef.current;
+    if (!ed) return;
+    ed.focus();
+    const before = currentList();
+    if (key === null) {
+      if (before) document.execCommand(before.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList");
+      onInput();
+      return;
+    }
+    const def = listMarkerDef(key);
+    if (!def) return;
+    const converted = !before || before.tagName !== (def.ordered ? "OL" : "UL");
+    if (converted) document.execCommand(def.ordered ? "insertOrderedList" : "insertUnorderedList");
+    const found = currentList();
+    if (!found) {
+      onInput();
+      return;
+    }
+    let list: HTMLElement = found;
+    const sel = window.getSelection();
+    const saveSel = () => {
+      const r0 = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+      return r0 ? { sc: r0.startContainer, so: r0.startOffset, ec: r0.endContainer, eo: r0.endOffset, collapsed: r0.collapsed } : null;
+    };
+    const restoreSel = (saved: ReturnType<typeof saveSel>, host: HTMLElement) => {
+      if (!saved || !sel || !host.contains(saved.sc) || !host.contains(saved.ec)) return;
+      const r = document.createRange();
+      r.setStart(saved.sc, saved.so);
+      r.setEnd(saved.ec, saved.eo);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    };
+    // 크롬은 목록을 원래 줄의 div 안에 넣기도 한다(<div><ol>…</ol></div>) — 겹을 벗기고 커서를 되돌린다.
+    const wrap = list.parentElement;
+    if (wrap && wrap !== ed && wrap.tagName === "DIV" && wrap.childNodes.length === 1 && !wrap.getAttribute("style")) {
+      const saved = saveSel();
+      wrap.replaceWith(list);
+      restoreSel(saved, list);
+    }
+    // 고른 줄만 새 기호로 — 크롬은 새로 만든 목록을 바로 앞뒤의 같은 종류 목록(예: 위의 1. 2.)에 합쳐 버리므로,
+    // 선택 범위에 걸친 항목만 떼어 별도 목록으로 만든다. 이미 목록 안에서 커서만 둔 경우는 그 목록 전체를 바꾼다.
+    {
+      const saved = saveSel();
+      const range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+      const items = (Array.from(list.children) as HTMLElement[]).filter((li) => li.tagName === "LI");
+      const picked = range && (converted || !range.collapsed) ? items.filter((li) => range.intersectsNode(li)) : [];
+      if (picked.length && picked.length < items.length) {
+        const first = items.indexOf(picked[0]);
+        const last = items.indexOf(picked[picked.length - 1]);
+        const head = items.slice(0, first);
+        const tail = items.slice(last + 1);
+        const target = document.createElement(list.tagName);
+        target.append(...items.slice(first, last + 1));
+        if (head.length) list.after(target);
+        else list.before(target);
+        if (head.length && tail.length) {
+          // 뒤쪽은 원래 목록의 속성을 이어받고, 번호 목록이면 앞 번호에 이어 매긴다
+          const rest = list.cloneNode(false) as HTMLElement;
+          rest.append(...tail);
+          if (rest.tagName === "OL") (rest as HTMLOListElement).start = ((list as HTMLOListElement).start || 1) + head.length;
+          target.after(rest);
+        }
+        list = target;
+        restoreSel(saved, target);
+      }
+    }
+    list.setAttribute("data-marker", def.key);
+    list.setAttribute("data-level", String(def.defaultLevel));
+    list.style.listStyleType = def.css;
+    // 줄 사이 빈 줄은 빈 항목(번호만 차지)이 되므로 지우고, 손으로 쳐 둔 기호는 걷어낸다.
+    for (const li of Array.from(list.children) as HTMLElement[]) {
+      if (li.tagName !== "LI") continue;
+      const empty = !(li.textContent ?? "").replace(/[\s\u00a0]/g, "") && !li.querySelector("img,table");
+      if (empty && list.children.length > 1 && !li.contains(sel?.anchorNode ?? null)) li.remove();
+      else stripTypedMarker(li);
+    }
+    onInput();
+  };
+
+  /** 들여쓰기/내어쓰기 — 글머리 기호를 고른 목록이면 단계(data-level)만 바꾼다. 처리했으면 true. */
+  const shiftListLevel = (delta: number): boolean => {
+    const list = currentList();
+    if (!list || !list.hasAttribute("data-marker")) return false;
+    const cur = clampListLevel(list.getAttribute("data-level")) ?? listMarkerDef(list.getAttribute("data-marker"))?.defaultLevel ?? 0;
+    list.setAttribute("data-level", String(Math.max(0, Math.min(LIST_LEVEL_MAX, cur + delta))));
+    onInput();
+    return true;
   };
 
   /**
@@ -1263,7 +1383,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     }
     if (block.tagName === "LI") return;
     const text = (block.textContent ?? "").trim();
-    if (text !== "-" && text !== "*" && text !== "1.") return;
+    if (text !== "-" && text !== "*" && text !== "1." && text !== "가.") return;
     e.preventDefault();
     // 줄을 완전히 비우면(<br> 조차 없는 빈 div) 커서를 둘 자리가 없어 크롬이 목록을 **윗줄**에 건다
     // (2026-10-13 공문 "가. …" 다음 줄에 "1." 을 치면 "가." 줄이 1번이 되던 원인). <br> 을 남겨 자리를 지킨다.
@@ -1273,10 +1393,19 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     range.collapse(true);
     sel!.removeAllRanges();
     sel!.addRange(range);
-    document.execCommand(text === "1." ? "insertOrderedList" : "insertUnorderedList");
+    document.execCommand(text === "1." || text === "가." ? "insertOrderedList" : "insertUnorderedList");
     // 크롬은 목록을 그 div 안에 넣는다(<div><ol>…</ol></div>) — 불필요한 겹을 벗겨 다른 목록과 같은 모양으로 둔다.
     const only = block.childNodes.length === 1 ? (block.firstChild as HTMLElement) : null;
     if (block.tagName === "DIV" && only && (only.tagName === "OL" || only.tagName === "UL") && !block.getAttribute("style")) {
+      // "가." 로 시작한 목록은 가. 나. 다. 기호·한 단계 들여쓰기로(2026-10-19)
+      if (text === "가.") {
+        const def = listMarkerDef("ganada");
+        if (def) {
+          only.setAttribute("data-marker", def.key);
+          only.setAttribute("data-level", String(def.defaultLevel));
+          only.style.listStyleType = def.css;
+        }
+      }
       block.replaceWith(only);
       const li = only.querySelector("li");
       if (li) {
@@ -1410,8 +1539,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         <EBtn label="오른쪽 정렬" onClick={() => exec("justifyRight")}><AlignRight className="w-3.5 h-3.5" /></EBtn>
         <EBtn label="양쪽 정렬" onClick={() => exec("justifyFull")}><AlignJustify className="w-3.5 h-3.5" /></EBtn>
         {divider}
-        <EBtn label="내어쓰기" onClick={() => exec("outdent")}><Outdent className="w-3.5 h-3.5" /></EBtn>
-        <EBtn label="들여쓰기" onClick={() => exec("indent")}><Indent className="w-3.5 h-3.5" /></EBtn>
+        <EBtn label="내어쓰기" onClick={() => shiftListLevel(-1) || exec("outdent")}><Outdent className="w-3.5 h-3.5" /></EBtn>
+        <EBtn label="들여쓰기" onClick={() => shiftListLevel(1) || exec("indent")}><Indent className="w-3.5 h-3.5" /></EBtn>
 
         {/* 줄 간격 */}
         <span className="relative inline-flex" data-tool-popover>
@@ -1438,8 +1567,58 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           )}
         </span>
         {divider}
-        <EBtn label="글머리 목록" onClick={() => exec("insertUnorderedList")}><List className="w-3.5 h-3.5" /></EBtn>
-        <EBtn label="번호 목록" onClick={() => exec("insertOrderedList")}><ListOrdered className="w-3.5 h-3.5" /></EBtn>
+        {/* 글머리 기호 — 기호·번호 종류를 골라 적용(2026-10-19 사용자 요청, 종전 글머리/번호 두 버튼 통합) */}
+        <span className="relative inline-flex" data-tool-popover>
+          <EBtn label="글머리 기호" active={toolPopover === "list"} onClick={() => setToolPopover((v) => (v === "list" ? null : "list"))}>
+            <ListOrdered className="w-3.5 h-3.5" />
+          </EBtn>
+          {toolPopover === "list" && (
+            <div
+              className="absolute top-full left-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2.5 flex flex-col gap-2"
+              style={{ boxShadow: "var(--cd-shadow)", width: 268 }}
+            >
+              {([
+                ["기호", LIST_MARKERS.filter((m) => !m.ordered)],
+                ["번호", LIST_MARKERS.filter((m) => m.ordered)],
+              ] as const).map(([group, items]) => (
+                <div key={group} className="flex flex-col gap-1">
+                  <span className="text-[11px] cd-text-faint">{group}</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {items.map((m) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        title={m.title}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          applyListStyle(m.key);
+                          setToolPopover(null);
+                        }}
+                        className="cd-btn cd-btn-soft cd-btn-sm justify-center px-0 text-[13px]"
+                      >
+                        {m.sample}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <span className="text-[11px] cd-text-faint leading-snug">
+                1. → 가. → 1) → 가) → (1) → (가) → ① 순으로 한 단계씩 들여 씁니다. 단계는 들여쓰기·내어쓰기 버튼으로 바꿉니다.
+              </span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  applyListStyle(null);
+                  setToolPopover(null);
+                }}
+                className="cd-btn cd-btn-ghost cd-btn-sm self-start"
+              >
+                목록 해제
+              </button>
+            </div>
+          )}
+        </span>
         {divider}
         <EBtn
           label="링크"

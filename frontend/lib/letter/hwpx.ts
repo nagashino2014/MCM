@@ -11,7 +11,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
-import { DEFAULT_TABLE_WIDTH_PCT } from "./types";
+import { BODY_INDENT, DEFAULT_TABLE_WIDTH_PCT } from "./types";
+import { LIST_LEVEL_STEP_PT } from "./list-markers";
 import type { FitParams, LetterBlock, LetterLayout, TableCell, TextRun } from "./types";
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
@@ -169,6 +170,21 @@ export function approxTextWidthPt(text: string, fontPt: number): number {
   let w = 0;
   for (const ch of text) {
     w += /[ᄀ-ᇿ　-鿿가-힯豈-﫿！-｠]/.test(ch) ? fontPt : fontPt * 0.5;
+  }
+  return w;
+}
+
+/**
+ * 목록 기호 폭(pt) 근사 — 맑은 고딕 실측 비율(한글·원문자 1em, 숫자·영문 0.55em, 마침표·괄호·공백 약 0.3em).
+ * approxTextWidthPt 는 반각을 모두 0.5em 으로 잡아 내어쓰기 폭이 기호보다 넓어진다.
+ */
+export function markerWidthPt(text: string, fontPt: number): number {
+  let w = 0;
+  for (const ch of text) {
+    if (/[ᄀ-ᇿ　-鿿가-힯豈-﫿！-｠①-⑳㉮-㉻○□※]/.test(ch)) w += fontPt;
+    else if (/[.,()\s\u00a0]/.test(ch)) w += fontPt * 0.3;
+    else if (/[-–]/.test(ch)) w += fontPt * 0.38;
+    else w += fontPt * 0.55;
   }
   return w;
 }
@@ -411,6 +427,29 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
 
   // 정렬 paraPr 캐시(중앙/우측)
   const alignCache = new Map<string, string>();
+  // 글머리 기호 하위 항목(2026-10-19) — 단계별 좌여백 + 음수 첫 줄(내어쓰기). 한글의 음수 intent 는
+  // 첫 줄이 좌여백에 서고 둘째 줄부터 |intent| 만큼 들어간다(flowdoc 실측) → 좌여백 = 기호 자리,
+  // |intent| = 기호 폭. 단위는 템플릿 본문 첫 줄 들여쓰기(BODY_INDENT ↔ hc:intent 값)에서 환산한다.
+  const listParaCache = new Map<string, string>();
+  const listParaPrOf = (b: Extract<LetterBlock, { kind: "p" }>): string | null => {
+    if (!headerXml || !b.listLevel) return null;
+    const fontPt = opts.fit.bodyFontPt;
+    const basePt = (b.below ? BODY_INDENT * 0.5 : BODY_INDENT) + (b.indentPt ?? 0) + b.listLevel * LIST_LEVEL_STEP_PT;
+    const hangPt = b.marker ? markerWidthPt(b.marker, fontPt) : 0;
+    const key = `${basePt.toFixed(1)}|${hangPt.toFixed(1)}`;
+    const hit = listParaCache.get(key);
+    if (hit) return hit;
+    const intentM = new RegExp(`<hh:paraPr\\b[^>]*\\bid="${bodyParaPr}"[\\s\\S]*?<hc:intent\\b[^>]*value="(-?\\d+)"`).exec(headerXml);
+    const perPt = intentM && Number(intentM[1]) > 0 ? Number(intentM[1]) / BODY_INDENT : 200;
+    // ⚠ 홀수 값은 한글이 내어쓰기를 엉뚱하게 넓힌다(실측: intent -2415 → 둘째 줄이 약 60pt 밀림, -2400 정상) → 20 단위로 맞춘다.
+    const even = (v: number) => Math.round(v / 20) * 20;
+    const reg = registerParaPr(headerXml, bodyParaPr, { leftHwp: even(basePt * perPt), intentHwp: -even(hangPt * perPt) });
+    if (!reg) return null;
+    headerXml = reg.xml;
+    listParaCache.set(key, reg.id);
+    return reg.id;
+  };
+
   const alignParaPrOf = (align: "CENTER" | "RIGHT"): string | null => {
     const hit = alignCache.get(align);
     if (hit) return hit;
@@ -488,10 +527,14 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
       if (b.align === "center" || b.align === "right") {
         const aligned = alignParaPrOf(b.align === "center" ? "CENTER" : "RIGHT");
         if (aligned) paraPr = aligned;
+      } else if (b.listLevel && b.listLevel >= 1) {
+        const listed = listParaPrOf(b);
+        if (listed) paraPr = listed;
       }
       // "- 아 래 -" 아래 하위 항목(가. 밑의 1. 2. 3.) 들여쓰기 — 한글은 새로 등록한 paraPr 의 좌여백을
       // 무시하므로(실측) 깊이마다 전각 공백 2자로 맞춘다(PDF 의 두 글자 폭 들여쓰기와 같은 정도).
-      const runs = b.below && b.listDepth ? [{ ...b.runs[0], text: "\u3000".repeat(b.listDepth * 2) + (b.runs[0]?.text ?? "") }, ...b.runs.slice(1)] : b.runs;
+      // 글머리 기호 단계(listLevel)가 있는 항목은 위 paraPr 이 들여쓰기를 맡는다.
+      const runs = b.below && b.listDepth && b.listLevel === undefined ? [{ ...b.runs[0], text: "\u3000".repeat(b.listDepth * 2) + (b.runs[0]?.text ?? "") }, ...b.runs.slice(1)] : b.runs;
       bodyXmlParts.push(paragraphXml(runs, paraPr, bodyCharPr, boldCharPr));
     } else if (tableTpl) {
       bodyXmlParts.push(buildTableXml(b, tableTpl, opts.fit.bodyFontPt, bodyCharPr, boldCharPr, alignParaPrOf));

@@ -7,6 +7,8 @@ import type { FlowBlock } from "@/lib/flowdoc/types";
 import { parseLetterHtml } from "@/lib/letter/html-parse";
 import { COMPANY_CEO, COMPANY_KO, type LetterBlock } from "@/lib/letter/types";
 import { NOTICE_BODY_INDENT, formatNoticeDate, type NoticeFieldValues } from "./types";
+import { LIST_LEVEL_STEP_PT } from "@/lib/letter/list-markers";
+import { markerWidthPt } from "@/lib/letter/hwpx";
 
 const BODY_PT = 11;
 
@@ -48,6 +50,16 @@ export function buildNoticeFlow(values: NoticeFieldValues, snap: { docNo: string
       continue;
     }
     const aligned = b.align === "center" || b.align === "right";
+    // 글머리 기호 하위 항목(2026-10-19) — 첫 줄은 단계만큼 더 들여 쓰고, 이어지는 줄은 기호 뒤(내어쓰기).
+    // 블록 규약: 모든 줄 = leftPt, 첫 줄 = leftPt + indentPt.
+    if (!aligned && b.listLevel && b.listLevel >= 1) {
+      // ⚠ 한글은 홀수 여백 값에서 내어쓰기를 엉뚱하게 넓힌다(공문 실측) — 0.2pt(=20 단위) 배수로 맞춘다.
+      const r = (v: number) => Math.round(v * 5) / 5;
+      const first = r((b.indentPt ?? 0) + NOTICE_BODY_INDENT + b.listLevel * LIST_LEVEL_STEP_PT);
+      const hang = r(b.marker ? markerWidthPt(b.marker, BODY_PT) : 0);
+      blocks.push({ kind: "p", runs: b.runs, sizePt: BODY_PT, leftPt: first + hang, indentPt: -hang });
+      continue;
+    }
     blocks.push({
       kind: "p",
       runs: b.runs,

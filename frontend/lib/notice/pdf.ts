@@ -35,6 +35,7 @@ import {
   type LetterBlock,
 } from "@/lib/letter/types";
 import { NOTICE_BODY_INDENT, formatNoticeDate, type NoticeFieldValues } from "./types";
+import { LIST_LEVEL_STEP_PT } from "@/lib/letter/list-markers";
 
 const INK = rgb(0.1, 0.1, 0.12);
 const LINE_THICK = 2.2;
@@ -209,9 +210,12 @@ export async function renderNoticePdf(values: NoticeFieldValues, snap: NoticeDoc
           y -= lineH;
         }
       } else {
-        // 첫 줄 들여쓰기(NOTICE_BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터 — 공문(65pt)보다 얕다
-        const firstX = MARGIN_L + NOTICE_BODY_INDENT + extraIndent;
-        const restX = MARGIN_L + extraIndent;
+        // 첫 줄 들여쓰기(NOTICE_BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터 — 공문(65pt)보다 얕다.
+        // 글머리 기호 하위 항목(2026-10-19)은 단계마다 15pt 더 들여 쓰고 이어지는 줄을 기호 뒤에 맞춘다.
+        const level = b.listLevel ?? 0;
+        const firstX = MARGIN_L + NOTICE_BODY_INDENT + extraIndent + level * LIST_LEVEL_STEP_PT;
+        const restX =
+          level >= 1 ? firstX + (b.marker ? fonts.regular.widthOfTextAtSize(b.marker, size) : 0) : MARGIN_L + extraIndent;
         wrapRuns(b.runs, fonts, size, PAGE_W - MARGIN_R - firstX, PAGE_W - MARGIN_R - restX).forEach((segs, i) => {
           ensure(lineH);
           drawSegsLine(segs, i === 0 ? firstX : restX);

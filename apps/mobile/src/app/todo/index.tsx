@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button, CtaGradientFill, EmptyState, Screen, SkeletonList, useToast } from '@/components/ui';
@@ -30,7 +30,7 @@ import { useTheme } from '@/theme/useTheme';
  * ⚠ 헤더는 Screen 의 자체 헤더("+" 는 right 슬롯) — _layout 에서 옵션을 주지 않는다.
  */
 
-type Scope = 'my' | 'shared' | 'project';
+type Scope = 'my' | 'shared' | 'delegated' | 'project';
 type ViewMode = 'list' | 'board';
 type Filter = 'today' | 'overdue' | 'week' | null;
 
@@ -120,6 +120,12 @@ function TagButton({
 
 export default function TodoScreen() {
   const router = useRouter();
+  // §26-1 메일·메신저 [할 일로] — /todo?new=1&linkKind=&linkId=&linkLabel=&title= 로 들어오면 퀵애드를 채운다.
+  const params = useLocalSearchParams<{ new?: string; linkKind?: string; linkId?: string; linkLabel?: string; title?: string }>();
+  const prefill = useMemo(() => {
+    if (params.new !== '1') return null;
+    return { key: `${params.linkKind ?? ''}:${params.linkId ?? ''}:${params.title ?? ''}`, title: params.title ?? null, linkKind: params.linkKind ?? null, linkId: params.linkId ?? null, linkLabel: params.linkLabel ?? null };
+  }, [params.new, params.linkKind, params.linkId, params.linkLabel, params.title]);
   const toast = useToast();
   const { c } = useTheme();
   const { user } = useAuth();
@@ -138,6 +144,8 @@ export default function TodoScreen() {
   // ⚠ from/to 를 주면 날짜 없는 할 일·이후 할 일이 잘린다 — 구간 없이 받고 결재 일정은 서버 기본(이번 달 ±1개월).
   const myApi = useApi<ListRes>('/api/todo/items?view=my&withApproval=1&done=1', { cache: true });
   const sharedApi = useApi<ListRes>('/api/todo/items?view=shared&done=1', { cache: true });
+  // §26-2 맡긴 일 — 내가 만들었고 담당이 남인 작업
+  const delegatedApi = useApi<ListRes>('/api/todo/items?view=delegated&done=1', { cache: true });
   // 알림함(277) 미읽음 수 — 헤더 벨의 점. 목록과 같이 포커스마다 갱신.
   const inboxApi = useApi<{ unread: number }>('/api/todo/notifications?limit=1', { cache: true });
   const boards = useMemo(() => myApi.data?.boards ?? [], [myApi.data]);
@@ -149,15 +157,16 @@ export default function TodoScreen() {
   const boardApi = useApi<ListRes>(`/api/todo/items?view=board&board=${boardTarget ?? ''}&withApproval=1&done=1`, { skip: !boardTarget });
 
   // 돌아올 때 현재 범위만 재조회. ⚠ reload 를 의존성에 넣으면 매 렌더 재요청(무한 루프 이력).
-  const latest = useRef({ scope, myApi, sharedApi, boardApi, boardTarget, inboxApi });
+  const latest = useRef({ scope, myApi, sharedApi, delegatedApi, boardApi, boardTarget, inboxApi });
   useEffect(() => {
-    latest.current = { scope, myApi, sharedApi, boardApi, boardTarget, inboxApi };
+    latest.current = { scope, myApi, sharedApi, delegatedApi, boardApi, boardTarget, inboxApi };
   });
   const reloadCurrent = useCallback(() => {
     const l = latest.current;
     void l.myApi.reload();
     void l.inboxApi.reload();
     if (l.scope === 'shared') void l.sharedApi.reload();
+    if (l.scope === 'delegated') void l.delegatedApi.reload();
     if (l.boardTarget) void l.boardApi.reload();
   }, []);
   useFocusEffect(
@@ -368,6 +377,10 @@ export default function TodoScreen() {
     return !isOverdue(it, today) && ((k != null && k >= today && k <= wEnd) || (it.dueDate != null && it.dueDate >= today && it.dueDate <= wEnd));
   }).length;
 
+  // ── 맡긴 일(§26-2) ──
+  const delegatedItems = useMemo(() => visible(delegatedApi.data?.items ?? []), [delegatedApi.data, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  const delegatedCount = delegatedItems.filter((it) => it.status !== 'done').length;
+
   // ── 공유받음 ──
   const sharedItems = useMemo(() => visible(sharedApi.data?.items ?? []), [sharedApi.data, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
   const sharedBoards = sharedApi.data?.boards ?? boards;
@@ -553,6 +566,16 @@ export default function TodoScreen() {
         );
       return { ...renderGroups(sharedGroups, { showAssignee: (it) => it.assigneeUserId !== me, done: sharedDone }), padded: false };
     }
+    if (scope === 'delegated') {
+      if (delegatedApi.loading && !delegatedApi.data) return plain(<SkeletonList key="sk" />);
+      const dDone = { items: delegatedItems, count: delegatedApi.data?.doneCount ?? 0 };
+      if (!delegatedItems.some((it) => it.status !== 'done'))
+        return withLead(
+          renderGroups([], { showAssignee: () => true, done: dDone }),
+          <EmptyState icon="people-circle-outline" title="맡긴 일이 없습니다" description="내가 만든 할 일의 담당을 다른 사람으로 지정하면 여기에 모입니다." />
+        );
+      return { ...renderGroups(buildGroups(delegatedItems, [], null), { showAssignee: () => true, done: dDone }), padded: false };
+    }
     // 프로젝트 · 내 할 일의 보드 보기
     if (scope === 'project' && !projectBoards.length)
       return plain(
@@ -662,6 +685,7 @@ export default function TodoScreen() {
           <View className="h-full flex-row">
             {scopeTab('my', '내 할 일')}
             {scopeTab('shared', '공유받음', sharedCount)}
+            {scopeTab('delegated', '맡긴 일', delegatedCount)}
             {scopeTab('project', '프로젝트')}
           </View>
           <View className="flex-1" />
@@ -682,6 +706,7 @@ export default function TodoScreen() {
         </ScrollView>
         <QuickAddBar
           inputRef={quickRef}
+          prefill={prefill}
           boardId={scope === 'project' ? selectedProjectId : null}
           resolveAssignee={resolveAssignee}
           resolveBoard={resolveBoard}

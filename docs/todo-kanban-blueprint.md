@@ -517,3 +517,62 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - M3: `lib/todo/work-report.ts` createWorkReportDraft — 기간(마지막 제출 다음 날~오늘/이번 주), 단계 델타(최대 %), serializeDraft(StructuredNote), Haiku 다듬기(feature `todo.work_report_draft`, defaultModel claude-haiku-4-5 — 관례, 5.5 전환은 model-caps 등록 후) 실패 시 직안, 기존 초안(활동 work_report reportId·draft) 갱신, 활동 기록. API `POST /api/todo/items/:id/work-report`(work_plan.edit). 웹 카드(최근 보고 2건·초안 만들기·confirm) 우측 열 맨 위, 모바일 Frame 카드 → /work-report/[reportId].
 - 검증: 웹·모바일 tsc 0, 테스트 37. dev 실측·285 적용·커밋·배포·OTA 는 사용자 승인 대기.
 - **dev 실측(10-18, 285 적용 후)**: 테스트 할 일(계약 연결)+하위 2건 → 담당을 공유 안 된 사람에게 지정 400(안내 문구) → 공유 후 지정 200·작성자 목록 유지 → null 로 작성자 복귀. 하위 30%+진척 내용 저장, 다른 하위 완료=100 → 평균 65%. `/todo/<id>` 페이지: 2열 grid(1021/510px)·섹션 8개(우측 업무 보고·부가·활동)·진척 줄·평균·목록으로(목록 복귀 확인)·`?item=` 리다이렉트. 업무 보고 초안 POST → draft(10/12~10/16, Haiku 다듬기 적용: "① 자료 수집 — 30% · …회신 대기 중 / ② 초안 작성 — 100% · 완료", 다음 기간 "- 자료 수집 — 진행 예정"). 공정표 없는 계약이라 단계 select·델타는 미실측. 테스트 할 일·초안 삭제 완료. 모바일은 tsc 만(다크 시각 확인 대기).
+
+### 26. 보강 1·2·3 도입(2026-10-18 사용자 결정 — 4~7은 추후)
+**26-1. 메일·메신저 → 할 일 전환**
+- link_kind 에 `mail`(메일 메시지 id)·`chat`(`<roomId>:<messageId>`) 추가. 라벨 "메일"/"메신저". 상세 "관련" 프레임에 제목·발신자(또는 방 이름·보낸 사람)와 열기 링크(`/mail?...`, `/chat/<roomId>`).
+- 진입: 웹 메일 뷰어 액션 바 [할 일로], 메신저 메시지 메뉴 [할 일로] → `/todo?new=1&linkKind=&linkId=&linkLabel=&title=`(TopBar Autofill 과 같은 경로) → 퀵애드 모달이 제목·연결을 미리 채운다(제목 = 메일 제목 / 메시지 본문 80자). 모바일: 메일 상세 액션·메시지 길게 누르기 메뉴 → `/todo` 로 이동하며 QuickAddBar 프리필(params new/linkKind/linkId/linkLabel/title).
+- 메일 본문·메시지 원문은 복사하지 않는다(연결만). 메모에 요약을 넣는 것은 사용자가 직접.
+
+**26-2. "맡긴 일" 뷰**
+- store `view: "delegated"` = 작성자=나 AND 담당≠나(상위 작업). 웹 범위 탭 "맡긴 일"(건수) — 목록은 내 할 일과 같은 날짜 섹션(MyTodoList)으로, 담당 열이 사람별로 보인다. 지연 강조는 기존 규칙. 모바일 scope `delegated` 탭 동일.
+- 알림: 맡긴 일이 완료되면 작성자에게 이미 status 푸시(§9) → 추가 없음. 지연 요약은 아침 요약에 "맡긴 일 지연 N건" 한 줄 추가.
+
+**26-3. 체크리스트 템플릿(마이그 286 `todo_templates`)**
+- 템플릿 = 이름 + 항목 배열[{title, stageOrder?, dueOffsetDays?, progressNote?}]. 개인 템플릿(board_id NULL)·보드 템플릿(보드 멤버 공용).
+- API: `GET /api/todo/templates?boardId=`(내 것 + 그 보드 것) · `POST`(name·items·boardId / 또는 `fromItemId` 로 현재 하위 작업을 저장) · `PATCH/DELETE /api/todo/templates/[id]` · `POST /api/todo/items/[id]/apply-template {templateId}` → 하위 작업을 뒤에 추가(dueOffsetDays 는 상위 할 날(없으면 오늘) 기준, stageOrder 는 관련 대상 공정표에 그 단계가 있을 때만), use_count+1, 활동 `update {template}`.
+- 웹: 상세 하위 작업 섹션 제목 우측 [템플릿 ▾] — 적용할 템플릿 목록(개인/보드 구분, 항목 수) · "현재 하위 작업을 템플릿으로 저장"(이름 입력) · 항목별 삭제. 모바일: 하위 작업 Frame 머리 [템플릿] → 시트(같은 구성).
+- 단계: T1 서버(286·store·API) → T2 웹(링크 종류·메일/메신저 버튼·맡긴 일 탭·템플릿 메뉴) → T3 모바일(딥링크 프리필·탭·시트) → T4 실측·OTA·m-app.
+**구현 기록(2026-10-18, T1~T3, 미커밋)**
+- 286: todo_templates + `todo_items.link_kind` CHECK 교체(mail·chat 허용 — 274 인라인 CHECK 가 막아 POST 500 이었음). 스테이징 리허설 ROLLBACK.
+- 서버: `lib/todo/templates.ts`(list/create(fromItemId)/update/delete/apply — 적용 시 dueOffsetDays 는 할 날 기준, stageOrder 는 관련 공정표에 있을 때만, use_count+1·활동 update{template}), API templates·[templateId]·items/[id]/apply-template. `listItems view=delegated`(items API 허용 목록에 추가 — 누락 시 my 로 폴백돼 전체가 보였음). 아침 요약 "맡긴 일 지연 N건". link kinds mail·chat(웹·모바일), 피커 제외, TodoRow linkHref mail→`/mail?id=`(MailBoard 가 ?id= 로 열기), chat 은 웹 링크 없음.
+- 웹: QuickAddBar `prefill`(제목·연결 칩, 생성 body 에 link) — TodoBoardPage 가 `?new=1&title&linkKind&linkId&linkLabel` 을 ref 로 잡아 전달(탑바 Autofill 도 이제 실제 동작). 범위 탭 "맡긴 일"(MyTodoList 재사용, emptyTitle/emptyDescription 추가). 메일 뷰어 ⋯ 메뉴 [할 일로 만들기]. 상세 하위 작업 [템플릿 ▾](적용·현재 저장·삭제).
+- 모바일: QuickAddBar prefill(params new/linkKind/…)·연결 칩은 body 만, 메일 상세 [할 일로] 버튼, 메신저 메시지 길게 누르기 → 시트(답장 / 할 일로 만들기), scope 'delegated' 탭, 상세 [템플릿] 시트(적용·내 템플릿 저장·삭제), 관련 열기 mail/chat 라우트.
+- dev 실측: 맡긴 일 탭 1건(이유억 담당) 정확, 메일 ⋯ → /todo 프리필(제목·연결 칩) 확인. 생성은 286 적용 후 재확인.
+- **dev 실측(10-19, 286 적용 후)**: 메일 연결 할 일 생성 201(link_kind mail), 템플릿 생성(3항목, dueOffset 2/5/없음) → 적용 3건(할 날 10/20 기준 10/22·10/25·없음), 현재 하위 작업을 템플릿으로 저장 시 오프셋 복원, use_count 1. 상세 페이지 관련 프레임 "메일 · 제목 · 열기(/mail?id=)", 하위 작업 [템플릿] 메뉴에 개인 템플릿 2건·"현재 하위 작업을 템플릿으로 저장" 표시. 테스트 할 일·템플릿 삭제 완료. 모바일은 tsc 만.
+
+### 27. 수정 계획 — 하위 작업 마일스톤 날짜 · 복수일(기간) 일정(2026-10-19 사용자 요청, 확정 전)
+**현황(코드 확인)**
+- 결재 일정(출장·휴가·교육·초과근무)은 startDate~endDate 기간을 갖고 캘린더 바는 기간으로 그리지만, **목록에서는 1회만** 배치된다(웹 MyTodoList: 시작일이 지났으면 오늘, 아니면 시작일 섹션; 모바일은 섹션 날짜 포함 여부). 10/20~10/22 출장은 10/19 목록의 "내일"에 1회 보이고, 10/21에 열면 "오늘"에 "10/20 ~ 10/22"로 1회. 즉 **표시는 되지만 기간 일정이라는 감이 약하다**(사용자 지적).
+- 할 일 자체는 do_date(할 날)+due_date(마감)만 있고 기간(종료일) 개념이 없다. 하위 작업도 do_date·due_date 컬럼은 있으나 UI 에 노출되지 않는다(마감만 보조 표시).
+- 공정표(contract/work_task_process_stages)는 planned_date·actual_date 를 갖고 보고 단계 델타(ReportStageInput)도 두 날짜를 받는다 — 하위 작업 날짜를 그대로 흘려보낼 수 있다.
+
+**27-1. 하위 작업 마일스톤 날짜 기입(마이그 287)**
+- `todo_items` 에 `actual_date text`(실제 일자) · `milestone_kind text`(마일스톤 종류) 추가. 예정일은 기존 `do_date` 를 쓴다(하위 작업에서 UI 노출).
+- 종류(코드 상수, 라벨): `pre_consult`(사전협의 제출) · `main_consult`(본협의 제출) · `review_received`(검토결과서 수령) · `meeting`(미팅) · `kickoff_report`(착수보고) · `completion_report`(준공보고) · `submit`(제출) · `other`(기타, 자유 라벨=제목). 보드별 사전은 2차.
+- 웹 하위 행 2번째 줄: [종류 ▾] [예정일] [실제일] [단계] [진행율] [진척 내용]. 종류가 있으면 행 앞 아이콘(제출 Send·수령 Inbox·미팅 Users·보고 FileText). 실제일을 입력하면 "완료로 표시할까요?" 제안(결정 C). 종류 선택 시 관련 공정표 단계명과 유사 매칭(사전협의↔"사전협의", 착수보고↔"착수")으로 `stage_order` 자동 제안.
+- 모바일: 진척 줄에 종류 칩(시트 선택)·예정일/실제일(기존 날짜 시트 재사용).
+- 연계: 업무 보고 단계 델타에 plannedDate=예정일·actualDate=실제일(매핑 단계 기준, 같은 단계 여러 건이면 최근 실제일), 추진내역 항목에 "(실제 10/21)"/"(예정 10/25)". 캘린더: 종류가 있는 하위 작업을 `todo` 태그 이벤트로("상위 제목 · 사전협의 제출", 마름모 표시). 리마인드: 하위 작업 예정일도 remind 대상(현재는 상위만).
+
+**27-2. 복수일(기간) 일정**
+- `todo_items` 에 `end_date text`(종료일, do_date 이상) 추가 → do_date~end_date = 기간 할 일. due_date 는 별도(마감). 결재 일정은 이미 기간을 갖는다.
+- 목록 배치 규칙(웹·모바일 공통, 할 일·결재 일정 동일): 기간이 걸치는 **모든 날짜 섹션**(오늘·내일·이번 주·다음 주 이후)에 표시하되, 섹션 상단의 얇은 "기간 일정" 띠(접기 가능)에 모아 일반 행과 섞이지 않게 한다(결정 A). 행 배지 "10/20 ~ 10/22 · 2일차", 오늘 섹션은 "진행 중". 시작 전이면 시작일 섹션에만 "10/20 ~ 10/22 · 3일".
+- 캘린더 바는 기간(이미), 칸반 카드·공유받음·맡긴 일 행에 기간 배지, 홈 위젯에 "진행 중인 기간 일정 N" 1줄, 위젯 due-soon 은 오늘 진행 중인 기간 일정 포함.
+- 입력: 퀵애드 "10/20~10/22", "10/20부터 3일간" 파싱 → do_date·end_date. 상세 핵심 2×2 "수행 예정" 셀에 "~ 종료일" 입력(종료일 < 시작일이면 거절). 캘린더 드래그는 시작일 이동·기간 유지. 반복 규칙은 시작일 기준.
+- 결재 일정 표시: 토글 기본 켜짐·종류 전부·승인 전(진행 중) 문서 포함 — 현상 유지(결정 D). 하위 작업 유무와 무관하게 항상 목록에 나온다(현재도 그렇다).
+
+**27-3. 단계·검증**
+| 단계 | 내용 | 검증 |
+|---|---|---|
+| S1 서버 | 287(end_date·actual_date·milestone_kind) · normalize/UPDATE · 하위 remind · 캘린더 하위 마일스톤 이벤트 · 보고 델타 날짜 | 리허설·단위 테스트(파서·섹션 배치) |
+| S2 웹 | 퀵애드 기간 파서 · 상세 종료일 · 목록 "기간 일정" 띠 + 배지(결재 일정 포함) · 하위 행 종류/예정일/실제일 · 카드 배지 · 홈 위젯 | dev 실측(10/20~10/22 출장·기간 할 일·마일스톤 입력→보고 초안 날짜) |
+| S3 모바일 | 동일 배치 규칙·배지·하위 종류/날짜 시트 | Expo web 다크/라이트 |
+| S4 | 커밋·배포·OTA·m-app | — |
+
+**결정(2026-10-19 사용자 확정)**: A~D 전부 권고안. 보강 1·2·3(§26)을 먼저 배포한 뒤 §27 구현.
+
+**결정 논점(기록용)**
+- A. 기간 일정을 각 날짜 섹션 상단 "기간 일정" 띠로 모아 표시(권고) vs 일반 행처럼 섞어 반복 표시.
+- B. 마일스톤 종류는 코드 고정 7종 + 기타(권고), 보드별 사전은 2차.
+- C. 실제일 입력 시 완료는 "제안"(권고) vs 자동 완료.
+- D. 결재 일정은 승인 전 문서도 포함해 항상 표시(현상 유지, 권고).

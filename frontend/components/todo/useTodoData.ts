@@ -10,7 +10,7 @@ import { between } from "@/lib/todo/position";
 import { comparePosition } from "@/lib/todo/position";
 
 export interface TodoQuery {
-  view: "my" | "board" | "shared";
+  view: "my" | "board" | "shared" | "delegated";
   boardId?: string | null;
   from?: string | null;
   to?: string | null;

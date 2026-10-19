@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, ClipboardList, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, ClipboardList, LayoutTemplate, ChevronDown, ChevronRight, Copy, ExternalLink, FileSignature, Link2, MessageCircle, MoreHorizontal, Trash2, X } from "lucide-react";
 import { CdAvatar, CdButton, CdDateInput, CdDrawer, CdDropdown, CdIconButton, CdModal, isValidDateString, useCdToast, type CdMenuItem } from "@/components/cdash";
 import {
   TODO_BOARD_KIND_LABELS,
@@ -179,6 +179,19 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   const router = useRouter();
   const [reports, setReports] = useState<{ reportId: string; periodStart: string; periodEnd: string; status: string }[] | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
+  // §26-3 체크리스트 템플릿 — 하위 작업 섹션 [템플릿 ▾]: 적용 / 현재 하위 작업 저장 / 삭제.
+  const [templates, setTemplates] = useState<{ templateId: string; name: string; boardId: string | null; items: { title: string }[]; canEdit: boolean }[] | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const loadTemplates = useCallback(async (boardId: string | null | undefined) => {
+    try {
+      const d = await apiCall<{ templates: { templateId: string; name: string; boardId: string | null; items: { title: string }[]; canEdit: boolean }[] }>(
+        `/api/todo/templates${boardId ? `?boardId=${encodeURIComponent(boardId)}` : ""}`
+      );
+      setTemplates(d.templates ?? []);
+    } catch {
+      setTemplates([]);
+    }
+  }, []);
   const [chatOpen, setChatOpen] = useState(false);
   const [rooms, setRooms] = useState<{ roomId: number; name: string; roomType: string; memberCount: number }[] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -447,6 +460,51 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
     }, delay);
   };
   const stageUnit = (stageOrder: number | null) => detail?.stages.find((st) => st.stageOrder === stageOrder)?.progressUnitPct ?? 10;
+  const applyTemplate = async (templateId: string) => {
+    if (!detail || templateBusy) return;
+    setTemplateBusy(true);
+    try {
+      const r = await apiCall<{ item: TodoItemDetail; created: number }>(`/api/todo/items/${encodeURIComponent(detail.itemId)}/apply-template`, {
+        method: "POST",
+        body: JSON.stringify({ templateId }),
+      });
+      setDetail(r.item);
+      onItemChanged(r.item);
+      toast(`하위 작업 ${r.created}건을 추가했습니다.`, "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  const saveAsTemplate = async () => {
+    if (!detail || !detail.subtasks.length) {
+      toast("저장할 하위 작업이 없습니다.", "info");
+      return;
+    }
+    const name = window.prompt("템플릿 이름(예: 착수 보고 준비)", detail.title.slice(0, 40));
+    if (!name?.trim()) return;
+    const toBoard = detail.boardKind !== "personal" && window.confirm(`"${detail.boardName}" 보드 멤버와 공유하는 보드 템플릿으로 저장할까요?\n(취소 = 내 개인 템플릿)`);
+    setTemplateBusy(true);
+    try {
+      await apiCall("/api/todo/templates", { method: "POST", body: JSON.stringify({ name: name.trim(), fromItemId: detail.itemId, boardId: toBoard ? detail.boardId : null }) });
+      await loadTemplates(detail.boardKind !== "personal" ? detail.boardId : null);
+      toast("템플릿으로 저장했습니다.", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+  const removeTemplate = async (templateId: string, name: string) => {
+    if (!window.confirm(`템플릿 "${name}"을 삭제할까요?`)) return;
+    try {
+      await apiCall(`/api/todo/templates/${encodeURIComponent(templateId)}`, { method: "DELETE" });
+      setTemplates((t) => (t ? t.filter((x) => x.templateId !== templateId) : t));
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
 
   const toggleSubtask = async (sub: TodoItem) => {
     try {
@@ -1143,6 +1201,70 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
               <section className="cd-card todo-fr" aria-label="하위 작업">
                 <h3>
                   하위 작업
+                  {canEdit && (
+                    <span className="todo-tpl-menu" onClick={(e) => e.stopPropagation()}>
+                      <CdDropdown
+                        align="right"
+                        menuWidthClass="w-72"
+                        trigger={(open) => (
+                          <button
+                            type="button"
+                            className="todo-tpl-btn"
+                            aria-expanded={open}
+                            title="체크리스트 템플릿 — 표준 하위 작업 세트를 한 번에 추가"
+                            onClick={() => {
+                              if (templates === null) void loadTemplates(detail.boardKind !== "personal" ? detail.boardId : null);
+                            }}
+                          >
+                            <LayoutTemplate aria-hidden="true" /> 템플릿
+                          </button>
+                        )}
+                        items={[
+                          ...(templates === null
+                            ? [{ key: "loading", label: "불러오는 중…", disabled: true, onSelect: () => {} }]
+                            : templates.length === 0
+                              ? [{ key: "empty", label: "저장된 템플릿이 없습니다", disabled: true, onSelect: () => {} }]
+                              : templates.map((t) => ({
+                                  key: t.templateId,
+                                  label: (
+                                    <span className="todo-tpl-item">
+                                      <span className="todo-tpl-name">
+                                        {t.name}
+                                        <span className="todo-tpl-meta">
+                                          {t.boardId ? "보드" : "개인"} · {t.items.length}항목
+                                        </span>
+                                      </span>
+                                      {t.canEdit && (
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          className="todo-tpl-del"
+                                          title="템플릿 삭제"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void removeTemplate(t.templateId, t.name);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              void removeTemplate(t.templateId, t.name);
+                                            }
+                                          }}
+                                        >
+                                          <X aria-hidden="true" />
+                                        </span>
+                                      )}
+                                    </span>
+                                  ),
+                                  disabled: templateBusy,
+                                  onSelect: () => void applyTemplate(t.templateId),
+                                }))),
+                          { key: "save", label: "현재 하위 작업을 템플릿으로 저장", icon: <Copy className="w-3.5 h-3.5" />, disabled: templateBusy || !detail.subtasks.length, onSelect: () => void saveAsTemplate() },
+                        ]}
+                      />
+                    </span>
+                  )}
                   {subTotal > 0 && (
                     <>
                       <span className="todo-sec-n">

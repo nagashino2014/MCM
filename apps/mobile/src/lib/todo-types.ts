@@ -134,7 +134,7 @@ export const TODO_SHARE_ROLE_LABELS: Record<TodoShareRole, string> = {
   watcher: "참조(열람)",
 };
 
-export const TODO_LINK_KINDS = ["contract", "facility", "sales_project", "approval_doc", "work_task", "directive", "url"] as const;
+export const TODO_LINK_KINDS = ["contract", "facility", "sales_project", "approval_doc", "work_task", "directive", "url", "mail", "chat"] as const;
 export type TodoLinkKind = (typeof TODO_LINK_KINDS)[number];
 export const TODO_LINK_KIND_LABELS: Record<TodoLinkKind, string> = {
   contract: "계약",
@@ -144,6 +144,8 @@ export const TODO_LINK_KIND_LABELS: Record<TodoLinkKind, string> = {
   work_task: "업무추진계획",
   directive: "지시",
   url: "링크",
+  mail: "메일",
+  chat: "메신저",
 };
 
 // ── 완료 조건(276, 2026-10-14) — 완료(status→done) 전에 검사. 검사 함수는 lib/todo/completion.ts(순수). ──

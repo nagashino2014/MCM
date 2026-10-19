@@ -120,15 +120,18 @@ export async function dispatchTodoDigest(): Promise<{ digestsSent: number; evalu
         await db.exec(
           `SELECT
              COUNT(*) FILTER (WHERE i.do_date = $2 OR (i.do_date IS NULL AND i.due_date = $2))::int AS today_n,
-             COUNT(*) FILTER (WHERE (i.do_date IS NOT NULL AND i.do_date < $2) OR (i.due_date IS NOT NULL AND i.due_date < $2))::int AS overdue_n
+             COUNT(*) FILTER (WHERE (i.do_date IS NOT NULL AND i.do_date < $2) OR (i.due_date IS NOT NULL AND i.due_date < $2))::int AS overdue_n,
+             COUNT(*) FILTER (WHERE i.owner_user_id = $1 AND i.assignee_user_id <> $1
+                                AND ((i.do_date IS NOT NULL AND i.do_date < $2) OR (i.due_date IS NOT NULL AND i.due_date < $2)))::int AS delegated_overdue_n
            FROM todo_items i
-          WHERE (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
+          WHERE (i.assignee_user_id = $1 OR i.owner_user_id = $1)
             AND i.status <> 'done' AND i.archived_at IS NULL AND i.parent_item_id IS NULL`,
           [userId, today]
         )
       )[0];
       const todayN = Number(cnt?.today_n ?? 0);
       const overdueN = Number(cnt?.overdue_n ?? 0);
+      const delegatedOverdueN = Number(cnt?.delegated_overdue_n ?? 0);
       // 발송 여부와 무관하게 오늘 평가했음을 기록(5분마다 재집계 방지).
       await withDbWrite(async (tx) => {
         await tx.run(
@@ -140,6 +143,7 @@ export async function dispatchTodoDigest(): Promise<{ digestsSent: number; evalu
       if (todayN + overdueN === 0) continue;
       const parts = [`오늘 할 일 ${todayN}건`];
       if (overdueN > 0) parts.push(`지연 ${overdueN}건`);
+      if (delegatedOverdueN > 0) parts.push(`맡긴 일 지연 ${delegatedOverdueN}건`);
       await recordTodoNotifications([userId], { event: "todo.digest", title: "오늘의 할 일", body: parts.join(" · "), link: "/todo" });
       const res = await sendPush([userId], {
         event: "todo.digest",

@@ -523,6 +523,80 @@ export default function TodoDetailScreen() {
     if (next !== (sub.progressPct ?? 0)) void patchSub(sub, { progressPct: next });
   };
 
+  // §26-3 체크리스트 템플릿 — 하위 작업 Frame 머리 [템플릿] → 시트(적용 · 현재 하위 작업 저장 · 삭제)
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplList, setTplList] = useState<{ templateId: string; name: string; boardId: string | null; items: { title: string }[]; canEdit: boolean }[] | null>(null);
+  const [tplName, setTplName] = useState('');
+  const [tplBusy, setTplBusy] = useState(false);
+  const loadTemplates = useCallback(async () => {
+    if (!item) return;
+    try {
+      const bid = item.boardKind !== 'personal' ? item.boardId : null;
+      const d = await apiJson<{ templates: { templateId: string; name: string; boardId: string | null; items: { title: string }[]; canEdit: boolean }[] }>(
+        `/api/todo/templates${bid ? `?boardId=${encodeURIComponent(bid)}` : ''}`
+      );
+      setTplList(d.templates ?? []);
+    } catch {
+      setTplList([]);
+    }
+  }, [item]);
+  const openTemplates = () => {
+    setTplName(item?.title.slice(0, 40) ?? '');
+    setTplOpen(true);
+    void loadTemplates();
+  };
+  const applyTpl = async (templateId: string) => {
+    if (!item || tplBusy) return;
+    setTplBusy(true);
+    try {
+      const r = await apiJson<{ item: TodoItemDetail; created: number }>(`/api/todo/items/${item.itemId}/apply-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId }),
+      });
+      setItem(r.item);
+      setTplOpen(false);
+      toast.show(`하위 작업 ${r.created}건을 추가했습니다.`, 'success');
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+  const saveTpl = async () => {
+    if (!item || tplBusy) return;
+    if (!item.subtasks.length) {
+      toast.show('저장할 하위 작업이 없습니다.', 'error');
+      return;
+    }
+    if (!tplName.trim()) {
+      toast.show('템플릿 이름을 입력하세요.', 'error');
+      return;
+    }
+    setTplBusy(true);
+    try {
+      await apiJson('/api/todo/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tplName.trim(), fromItemId: item.itemId, boardId: null }),
+      });
+      toast.show('내 템플릿으로 저장했습니다.', 'success');
+      await loadTemplates();
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+  const removeTpl = async (templateId: string) => {
+    try {
+      await apiJson(`/api/todo/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
+      setTplList((l) => (l ? l.filter((t) => t.templateId !== templateId) : l));
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    }
+  };
+
   // §25-3 업무 보고 초안 — 생성 후 모바일 보고 화면으로 이동(검토·제출은 사용자).
   const [reportBusy, setReportBusy] = useState(false);
   const createReportDraft = async () => {
@@ -685,8 +759,12 @@ export default function TodoDetailScreen() {
     if (item.linkKind === 'facility') router.push({ pathname: '/facility/[facilityId]', params: { facilityId: item.linkId } });
     else if (item.linkKind === 'approval_doc') router.push({ pathname: '/approval/[docId]', params: { docId: item.linkId } });
     else if (item.linkKind === 'url') void Linking.openURL(item.linkId);
+    // §26-1 메일·메신저 원문으로
+    else if (item.linkKind === 'mail') router.push({ pathname: '/mail/[messageId]', params: { messageId: item.linkId } });
+    else if (item.linkKind === 'chat') router.push({ pathname: '/chat/[roomId]', params: { roomId: item.linkId.split(':')[0] } });
   };
-  const linkOpenable = item?.linkKind === 'facility' || item?.linkKind === 'approval_doc' || item?.linkKind === 'url';
+  const linkOpenable =
+    item?.linkKind === 'facility' || item?.linkKind === 'approval_doc' || item?.linkKind === 'url' || item?.linkKind === 'mail' || item?.linkKind === 'chat';
 
   const remindLabel = !item
     ? ''
@@ -961,14 +1039,22 @@ export default function TodoDetailScreen() {
           <Frame
             title="하위 작업"
             head={
-              item.subtasks.length ? (
-                <>
-                  <Text className="text-[12px] text-cd-faint">
-                    {subDone}/{item.subtasks.length} · {subPct}%{item.progressAvg != null ? ` · 평균 ${item.progressAvg}%` : ''}
-                  </Text>
-                  <SegBar done={subDone} doing={subDoing} total={item.subtasks.length} segW={18} />
-                </>
-              ) : null
+              <>
+                {item.subtasks.length ? (
+                  <>
+                    <Text className="text-[12px] text-cd-faint">
+                      {subDone}/{item.subtasks.length} · {subPct}%{item.progressAvg != null ? ` · 평균 ${item.progressAvg}%` : ''}
+                    </Text>
+                    <SegBar done={subDone} doing={subDoing} total={item.subtasks.length} segW={18} />
+                  </>
+                ) : null}
+                {canEdit ? (
+                  <Pressable onPress={openTemplates} hitSlop={6} accessibilityLabel="체크리스트 템플릿" className="ml-1 h-6 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+                    <Ionicons name="list-outline" size={12} color={c.muted} />
+                    <Text className="text-[11.5px] text-cd-muted">템플릿</Text>
+                  </Pressable>
+                ) : null}
+              </>
             }>
             <View>
               {item.subtasks.map((s) => (
@@ -1328,6 +1414,48 @@ export default function TodoDetailScreen() {
           })}
           <Text className="pt-1 text-[11px] text-cd-faint">완료할 때 다음 발생 1건이 새로 만들어집니다.</Text>
         </View>
+      </Sheet>
+
+      {/* 체크리스트 템플릿(286, §26-3) */}
+      <Sheet visible={tplOpen} onClose={() => setTplOpen(false)} title="체크리스트 템플릿" fillHeight={0.7}>
+        <ScrollView className="flex-1" contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+          <Text className="text-[12px] text-cd-muted">템플릿을 고르면 하위 작업을 뒤에 추가합니다(마감 오프셋은 할 날 기준, 공정 단계는 관련 공정표에 있을 때만).</Text>
+          {tplList === null ? (
+            <Text className="text-[13px] text-cd-faint">불러오는 중…</Text>
+          ) : tplList.length === 0 ? (
+            <Text className="text-[13px] text-cd-faint">저장된 템플릿이 없습니다.</Text>
+          ) : (
+            tplList.map((t) => (
+              <View key={t.templateId} className="flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3 py-2">
+                <Pressable onPress={() => void applyTpl(t.templateId)} disabled={tplBusy} className="flex-1 active:opacity-70">
+                  <Text className="text-[14px] font-semibold text-cd-text" numberOfLines={1}>
+                    {t.name}
+                  </Text>
+                  <Text className="text-[11.5px] text-cd-faint">
+                    {t.boardId ? '보드' : '개인'} · {t.items.length}항목 · {t.items.slice(0, 3).map((x) => x.title).join(', ')}
+                    {t.items.length > 3 ? ' …' : ''}
+                  </Text>
+                </Pressable>
+                {t.canEdit ? (
+                  <Pressable onPress={() => void removeTpl(t.templateId)} hitSlop={8} accessibilityLabel={`${t.name} 삭제`} className="active:opacity-60">
+                    <Ionicons name="close-circle-outline" size={18} color={c.muted} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ))
+          )}
+          <View className="mt-2 gap-2 rounded-lg border border-cd-border bg-cd-surface p-3">
+            <Text className="text-[12.5px] font-semibold text-cd-text">현재 하위 작업을 템플릿으로 저장</Text>
+            <TextInput
+              value={tplName}
+              onChangeText={setTplName}
+              placeholder="템플릿 이름(예: 착수 보고 준비)"
+              placeholderTextColor={c.faint}
+              className="h-10 rounded-lg border border-cd-border bg-cd-card px-3 text-[14px] text-cd-text"
+            />
+            <Button label={tplBusy ? '저장 중…' : `내 템플릿으로 저장 (${item?.subtasks.length ?? 0}항목)`} variant="soft" size="sm" onPress={() => void saveTpl()} />
+          </View>
+        </ScrollView>
       </Sheet>
 
       {/* 하위 작업 공정 단계(285) — 관련 계약/업무추진계획의 공정표 단계에 매핑 */}

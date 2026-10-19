@@ -31,8 +31,8 @@ import { CompleteConfirmModal, type CompleteConfirmTarget } from "./CompleteConf
 import { TodoColumnHeader, TodoRow, tintStyle } from "./TodoRow";
 import { effectiveDate, localToday, weekEnd, type SortMode } from "./todo-utils";
 
-type ScopeKind = "my" | "shared" | "board";
-type ScopeTab = "my" | "shared" | "none";
+type ScopeKind = "my" | "shared" | "delegated" | "board";
+type ScopeTab = "my" | "shared" | "delegated" | "none";
 type View = "list" | "board";
 const SORT_LABELS: Record<SortMode, string> = { manual: "수동", date: "날짜순", priority: "우선순위순" };
 
@@ -65,6 +65,7 @@ function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | n
   let view: View = viewRaw === "board" ? "board" : "list";
   let calendar = viewRaw === "calendar";
   if (scope === "shared") kind = "shared";
+  else if (scope === "delegated") kind = "delegated";
   else if (scope?.startsWith("board:")) {
     kind = "board";
     boardId = scope.slice(6) || null;
@@ -79,7 +80,7 @@ function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | n
       view = "board";
     } else if (tab === "calendar") calendar = true;
   }
-  if (kind === "shared") view = "list";
+  if (kind === "shared" || kind === "delegated") view = "list";
   return { kind, boardId, view, calendar, archived };
 }
 
@@ -98,6 +99,11 @@ export function TodoBoardPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const newParam = sp.get("new");
+  // §26-1 프리필 — 메일/메신저/탑바에서 넘어온 제목·연결. new 를 지울 때 함께 사라지므로 ref 에 잡아 둔다.
+  const prefillRef = useRef<{ title: string | null; linkKind: string | null; linkId: string | null; linkLabel: string | null } | null>(null);
+  if (newParam === "1") {
+    prefillRef.current = { title: sp.get("title"), linkKind: sp.get("linkKind"), linkId: sp.get("linkId"), linkLabel: sp.get("linkLabel") };
+  }
 
   const [prefs, setPrefs] = useState<TodoPrefs | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("date");
@@ -116,7 +122,7 @@ export function TodoBoardPage() {
 
   // ── URL query ──
   const setQuery = useCallback(
-    (patch: Partial<Record<"scope" | "view" | "item" | "new" | "archived", string | null>>) => {
+    (patch: Partial<Record<"scope" | "view" | "item" | "new" | "archived" | "title" | "linkKind" | "linkId" | "linkLabel", string | null>>) => {
       const next = new URLSearchParams(sp.toString());
       // 구 파라미터는 새 형식으로 정리
       next.delete("tab");
@@ -171,12 +177,14 @@ export function TodoBoardPage() {
   // ── 데이터 — 완료 항목은 항상 함께 받는다(완료 섹션·완료 N 태그). 보관함은 archived=1 일 때만. ──
   const my = useTodoData({ view: "my", done: true, withApproval: showApproval }, true);
   const shared = useTodoData({ view: "shared", done: true }, true);
+  // §26-2 맡긴 일 — 내가 만들었고 담당이 남인 작업
+  const delegated = useTodoData({ view: "delegated", done: true }, true);
   const boards = my.boards.length ? my.boards : shared.boards;
   const personalBoardId = boards.find((b) => b.kind === "personal" && b.isDefault)?.boardId ?? boards.find((b) => b.isDefault)?.boardId ?? boards[0]?.boardId ?? null;
   const scopeBoardId = parsed.kind === "board" && parsed.boardId && boards.some((b) => b.boardId === parsed.boardId) ? parsed.boardId : null;
   const scope: ScopeKind = parsed.kind === "board" ? (scopeBoardId || !boards.length ? "board" : "my") : parsed.kind;
   const archivedMode = parsed.archived;
-  const view: View = scope === "shared" ? "list" : parsed.view;
+  const view: View = scope === "shared" || scope === "delegated" ? "list" : parsed.view;
   // 활성 보드 — 보드 범위면 그 보드, 내 할 일의 보드 보기면 개인 보드
   const activeBoardId = scope === "board" ? scopeBoardId : view === "board" ? personalBoardId : null;
   const board = boards.find((b) => b.boardId === activeBoardId) ?? null;
@@ -195,6 +203,7 @@ export function TodoBoardPage() {
   const justDoneIds = useMemo(() => new Set(justDone.keys()), [justDone]);
   const myItems = useMemo(() => withGrace(my.items), [my.items, withGrace]);
   const sharedItems = useMemo(() => withGrace(shared.items), [shared.items, withGrace]);
+  const delegatedItems = useMemo(() => withGrace(delegated.items), [delegated.items, withGrace]);
   // 상세 드로어 댓글 입력란의 내 아바타 사진 — 새 API 없이 목록 응답의 owner/assignee 사진 맵에서 내 userId 와 같은 것을 찾는다.
   const myPhotoUrl = useMemo(() => {
     if (!myUserId) return null;
@@ -209,7 +218,7 @@ export function TodoBoardPage() {
     if (!assigneeFilter) return list;
     return list.filter((i) => (assigneeFilter === "__none__" ? !i.assigneeUserId : i.assigneeUserId === assigneeFilter));
   }, [boardData.items, withGrace, assigneeFilter]);
-  const doneCount = scope === "my" ? my.doneCount : scope === "shared" ? shared.doneCount : boardData.doneCount;
+  const doneCount = scope === "my" ? my.doneCount : scope === "shared" ? shared.doneCount : scope === "delegated" ? delegated.doneCount : boardData.doneCount;
 
   // ── 통계(태그 버튼 건수) ──
   const stats = useMemo(() => {
@@ -232,7 +241,7 @@ export function TodoBoardPage() {
   useEffect(() => {
     if (newParam === "1") {
       setQuickOpen((n) => n + 1);
-      setQuery({ new: null, ...(scope === "shared" ? { scope: "my" } : {}) });
+      setQuery({ new: null, title: null, linkKind: null, linkId: null, linkLabel: null, ...(scope === "shared" || scope === "delegated" ? { scope: "my" } : {}) });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newParam]);
@@ -256,9 +265,9 @@ export function TodoBoardPage() {
   };
 
   // ── 범위·보기 전환 ──
-  const goScope = (kind: "my" | "shared") => {
+  const goScope = (kind: "my" | "shared" | "delegated") => {
     setQuickFilter(null);
-    setQuery({ scope: kind, view: kind === "shared" ? "list" : view });
+    setQuery({ scope: kind, view: kind === "shared" || kind === "delegated" ? "list" : view });
   };
   const goBoard = (boardId: string, nextView?: View) => {
     setQuickFilter(null);
@@ -514,7 +523,8 @@ export function TodoBoardPage() {
   ];
 
   const sharedCount = sharedItems.filter((i) => !i.parentItemId && i.status !== "done").length;
-  const scopeTab: ScopeTab = scope === "my" ? "my" : scope === "shared" ? "shared" : "none";
+  const delegatedCount = delegatedItems.filter((i) => !i.parentItemId && i.status !== "done").length;
+  const scopeTab: ScopeTab = scope === "my" ? "my" : scope === "shared" ? "shared" : scope === "delegated" ? "delegated" : "none";
   const boardLabel = board ? (board.kind === "personal" ? "개인 보드" : (board.projectName ?? board.name)) : null;
   const quickAddPlaceholder = scope === "board" && board ? `${boardLabel}에 할 일 추가 — #열이름 으로 열 지정` : undefined;
 
@@ -568,11 +578,12 @@ export function TodoBoardPage() {
                 variant="underline"
                 active={scopeTab}
                 onChange={(k) => {
-                  if (k === "my" || k === "shared") goScope(k);
+                  if (k === "my" || k === "shared" || k === "delegated") goScope(k);
                 }}
                 items={[
                   { key: "my", label: "내 할 일" },
                   { key: "shared", label: "공유받음", count: sharedCount || undefined },
+                  { key: "delegated", label: "맡긴 일", count: delegatedCount || undefined },
                 ]}
               />
               <div className="cd-tabs" data-variant="underline" role="presentation">
@@ -688,7 +699,7 @@ export function TodoBoardPage() {
                   selectedId={itemParam}
                   loaded={my.loaded}
                   filter={quickFilter}
-                  top={<QuickAddBar boards={boards} currentBoardId={personalBoardId} prefs={prefs} onCreate={createIn(my)} openRequest={quickOpen} />}
+                  top={<QuickAddBar boards={boards} currentBoardId={personalBoardId} prefs={prefs} onCreate={createIn(my)} openRequest={quickOpen} prefill={prefillRef.current} />}
                   {...doneListProps(my)}
                   onOpen={openItem}
                   onComplete={completeIn(my)}
@@ -742,6 +753,33 @@ export function TodoBoardPage() {
                 onBoardUpdated={onBoardUpdated}
                 onManageMembers={() => setMembersOpen(true)}
               />
+            </>
+          )}
+
+          {!archivedMode && scope === "delegated" && (
+            <>
+              {delegated.loading && !delegated.loaded ? (
+                <div className="todo-loading">불러오는 중…</div>
+              ) : (
+                <MyTodoList
+                  items={delegatedItems}
+                  approvalEvents={[]}
+                  showApproval={false}
+                  today={today}
+                  weekStart={weekStart}
+                  density={density}
+                  sortMode={sortMode}
+                  selectedId={itemParam}
+                  loaded={delegated.loaded}
+                  filter={null}
+                  emptyTitle="맡긴 일이 없습니다"
+                  emptyDescription="내가 만든 할 일의 담당을 다른 사람으로 지정하면 여기에 모입니다. 담당 열에서 누가 맡았는지 보입니다."
+                  {...doneListProps(delegated)}
+                  onOpen={openItem}
+                  onComplete={completeIn(delegated)}
+                  onNew={openNew}
+                />
+              )}
             </>
           )}
 

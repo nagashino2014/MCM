@@ -681,3 +681,16 @@
 .todo-sr-prog select:focus-visible, .todo-sr-prog .todo-sr-note:focus-visible { outline: none; border-color: var(--cd-primary); box-shadow: var(--cd-focus-ring); }
 .todo-sr-prog[data-readonly="true"] { color: var(--cd-faint); }
 .todo-sec-avg { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--cd-muted); }
+
+/* ── 체크리스트 템플릿 메뉴(286, §26-3) — 하위 작업 섹션 제목 우측 ── */
+.todo-tpl-menu { margin-left: auto; display: inline-flex; }
+.todo-tpl-btn { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--cd-muted); border: 1px solid var(--cd-border); border-radius: 6px; background: var(--cd-card); cursor: pointer; }
+.todo-tpl-btn:hover { color: var(--cd-text); background: var(--cd-hover); }
+.todo-tpl-btn:focus-visible { outline: none; box-shadow: var(--cd-focus-ring); }
+.todo-tpl-btn svg { width: 13px; height: 13px; }
+.todo-tpl-item { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.todo-tpl-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.todo-tpl-meta { font-size: 11px; color: var(--cd-faint); font-weight: 400; }
+.todo-tpl-del { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; color: var(--cd-faint); }
+.todo-tpl-del:hover { color: var(--cd-error); background: var(--cd-hover); }
+.todo-tpl-del svg { width: 12px; height: 12px; }

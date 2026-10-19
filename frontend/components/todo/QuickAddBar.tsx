@@ -11,7 +11,7 @@ import { useCdToast } from "@/components/cdash";
 import { useOrgSnapshot } from "@/components/calendar/AttendeePicker";
 import { parseQuickAdd, type QuickParseResult, type QuickToken } from "@/lib/todo/quick-parse";
 import { describeRecurrence } from "@/lib/todo/recurrence";
-import { TODO_PRIORITY_LABELS, type TodoBoard, type TodoItemDetail, type TodoPrefs, type TodoPriority } from "@/lib/todo/types";
+import { TODO_PRIORITY_LABELS, type TodoBoard, type TodoItemDetail, type TodoPrefs, type TodoPriority, TODO_LINK_KIND_LABELS, type TodoLinkKind } from "@/lib/todo/types";
 import { localToday, md, weekdayKo } from "./todo-utils";
 
 export interface QuickAddBarProps {
@@ -23,6 +23,8 @@ export interface QuickAddBarProps {
   /** 값이 바뀔 때마다 입력을 열고 포커스(N 키·새 할 일 버튼·?new=1) */
   openRequest?: number;
   placeholder?: string;
+  /** §26-1 메일·메신저·탑바 Autofill — 제목과 연결(linkKind/linkId/linkLabel)을 미리 채운다. openRequest 와 함께 바뀐다. */
+  prefill?: { title?: string | null; linkKind?: string | null; linkId?: string | null; linkLabel?: string | null } | null;
 }
 
 const tokenKey = (t: QuickToken) => `${t.kind}|${t.text}`;
@@ -54,7 +56,7 @@ function applyDismissed(text: string, parsed: QuickParseResult, dismissed: Set<s
   };
 }
 
-export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, onCreate, openRequest, placeholder }: QuickAddBarProps) {
+export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, onCreate, openRequest, placeholder, prefill }: QuickAddBarProps) {
   const { toast } = useCdToast();
   const ref = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -80,11 +82,21 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
     [parseOn, weekStart]
   );
 
+  // 프리필 연결(§26-1) — 생성 body 에 붙이고, 입력란 아래 칩으로 보여 준다. 생성·닫기 때 비운다.
+  const [link, setLink] = useState<{ kind: string; id: string; label: string | null } | null>(null);
   useEffect(() => {
     if (!openRequest) return;
     setOpen(true);
+    if (prefill) {
+      if (prefill.title) {
+        setText(prefill.title);
+        runParse(prefill.title, new Set());
+      }
+      setLink(prefill.linkKind && prefill.linkId ? { kind: prefill.linkKind, id: prefill.linkId, label: prefill.linkLabel ?? null } : null);
+    }
     const t = window.setTimeout(() => ref.current?.focus(), 0);
     return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRequest]);
 
   useEffect(() => {
@@ -134,6 +146,7 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
 
   const reset = () => {
     setText("");
+    setLink(null);
     setParsed(null);
     setDismissed(new Set());
   };
@@ -158,6 +171,11 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
       return;
     }
     const body: Record<string, unknown> = { title };
+    if (link) {
+      body.linkKind = link.kind;
+      body.linkId = link.id;
+      body.linkLabel = link.label;
+    }
     const boardId = boardMatch?.boardId ?? currentBoardId ?? undefined;
     if (boardId) body.boardId = boardId;
     const columnId = boardMatch?.kind === "column" ? boardMatch.columnId : boardMatch?.kind === "board" ? null : (currentColumnId ?? null);
@@ -238,6 +256,17 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
           Enter
         </span>
       </div>
+      {link && (
+        <div className="todo-qa-chips" aria-label="연결">
+          <span className="todo-qa-chip" data-tone="link" title="생성되는 할 일의 관련 항목으로 연결됩니다">
+            연결: {TODO_LINK_KIND_LABELS[link.kind as TodoLinkKind] ?? link.kind}
+            {link.label ? ` · ${link.label}` : ""}
+            <button type="button" aria-label="연결 해제" onClick={() => setLink(null)}>
+              ×
+            </button>
+          </span>
+        </div>
+      )}
       {parseOn && parsed && chips.length > 0 && (
         <div className="todo-qa-chips" aria-label="인식된 항목">
           {chips.map((t) => {

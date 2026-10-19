@@ -1,4 +1,4 @@
-import { useMemo, useState, type RefObject } from 'react';
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -76,6 +76,7 @@ export function QuickAddBar({
   resolveBoard,
   onCreated,
   inputRef,
+  prefill,
 }: {
   /** 현재 보고 있는 보드(프로젝트 범위) — 지정하면 그 보드에 만든다. */
   boardId?: string | null;
@@ -86,10 +87,22 @@ export function QuickAddBar({
   onCreated: (item: TodoItemDetail) => void;
   /** 헤더 "+" 가 입력에 포커스를 주기 위한 ref. */
   inputRef?: RefObject<TextInput | null>;
+  /** §26-1 메일·메신저에서 넘어온 제목·연결 — key 가 바뀔 때 입력을 채우고 연결 칩을 보인다. */
+  prefill?: { key: string; title?: string | null; linkKind?: string | null; linkId?: string | null; linkLabel?: string | null } | null;
 }) {
   const { c, dark } = useTheme();
   const toast = useToast();
   const [text, setText] = useState('');
+  // 프리필 연결(§26-1)
+  const [link, setLink] = useState<{ kind: string; id: string; label: string | null } | null>(null);
+  const prefillKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prefill || prefill.key === prefillKey.current) return;
+    prefillKey.current = prefill.key;
+    if (prefill.title) setText(prefill.title);
+    setLink(prefill.linkKind && prefill.linkId ? { kind: prefill.linkKind, id: prefill.linkId, label: prefill.linkLabel ?? null } : null);
+    setTimeout(() => inputRef?.current?.focus(), 50);
+  }, [prefill, inputRef]);
   const [ignored, setIgnored] = useState<Set<QuickTokenKind>>(new Set());
   const [sending, setSending] = useState(false);
 
@@ -155,6 +168,11 @@ export function QuickAddBar({
       };
       const bid = targetBoard ?? boardId ?? null;
       if (bid) body.boardId = bid;
+      if (link) {
+        body.linkKind = link.kind;
+        body.linkId = link.id;
+        body.linkLabel = link.label;
+      }
       if (assignee) body.assigneeUserId = assignee.userId;
       const r = await apiJson<{ item: TodoItemDetail }>('/api/todo/items', {
         method: 'POST',
@@ -163,6 +181,7 @@ export function QuickAddBar({
       });
       setText('');
       setIgnored(new Set());
+      setLink(null);
       onCreated(r.item);
     } catch (e) {
       toast.show((e as Error).message, 'error');

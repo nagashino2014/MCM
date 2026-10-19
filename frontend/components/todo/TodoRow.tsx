@@ -169,6 +169,12 @@ export function linkHref(kind: TodoLinkKind | null, id: string | null): string |
       return id ? `/work-plan?focus=${q}` : "/work-plan";
     case "url":
       return id && /^https?:\/\//i.test(id) ? id : null;
+    case "mail":
+      // §26-1 — 메일 상세 직접 진입(MailBoard 가 ?id= 를 열어 준다)
+      return id ? `/mail?id=${q}` : "/mail";
+    case "chat":
+      // 웹에는 메신저 화면이 없다 — 모바일 앱에서만 열린다(링크 없음)
+      return null;
   }
 }
 

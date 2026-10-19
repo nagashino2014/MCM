@@ -56,6 +56,9 @@ export interface MyTodoListProps extends DoneListProps {
   selectedId: string | null;
   loaded: boolean;
   filter?: QuickFilter;
+  /** 빈 상태 문구 덮어쓰기(맡긴 일 탭 등) */
+  emptyTitle?: string;
+  emptyDescription?: string;
   /** 열 머리글 아래 삽입(퀵애드 고스트 행) */
   top?: ReactNode;
   onOpen: (item: TodoItem) => void;
@@ -108,6 +111,8 @@ export function MyTodoList({
   selectedId,
   loaded,
   filter = null,
+  emptyTitle,
+  emptyDescription,
   top,
   doneCount,
   doneOpenRequest,
@@ -193,8 +198,8 @@ export function MyTodoList({
         {top}
         <CdEmptyState
           icon={<ListChecks className="w-6 h-6" />}
-          title="할 일이 없습니다"
-          description="위 '할 일 추가' 줄에 한 줄로 적고 Enter 를 누르면 바로 추가됩니다. 날짜·시각·!우선순위·@담당을 같이 적을 수 있습니다."
+          title={emptyTitle ?? "할 일이 없습니다"}
+          description={emptyDescription ?? "위 '할 일 추가' 줄에 한 줄로 적고 Enter 를 누르면 바로 추가됩니다. 날짜·시각·!우선순위·@담당을 같이 적을 수 있습니다."}
           action={
             <CdButton variant="primary" size="sm" onClick={onNew}>
               새 할 일

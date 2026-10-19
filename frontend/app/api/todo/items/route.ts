@@ -6,7 +6,7 @@ import { listBoardApprovalEvents, listMyPendingApprovals, listTodoApprovalEvents
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 할 일 목록·생성(274). GET ?view=my|board|shared&board=&from=&to=&done=1&archived=1&archivedOnly=1&withApproval=1 / POST 생성.
+// 할 일 목록·생성(274). GET ?view=my|board|shared|delegated(§26-2 맡긴 일)&board=&from=&to=&done=1&archived=1&archivedOnly=1&withApproval=1 / POST 생성.
 //   응답 { items, boards, approvalEvents, doneCount } — done=1 이면 보관되지 않은 완료 항목을 completed_at 내림차순으로 뒤에 붙이고,
 //   doneCount 는 같은 범위의 완료 건수(보관 제외). archivedOnly=1 은 보관함(완료 30일 경과 자동 보관분)만(276, 2026-10-14).
 // 가시성은 lib/todo/visibility.ts 단일 진입점. withApproval=1 이면 결재 일정(휴가·출장·교육·초과근무)을 approvalEvents 로 동봉 —
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const ctx = await requireSession();
     const sp = req.nextUrl.searchParams;
     const viewRaw = sp.get("view") ?? "my";
-    const view = viewRaw === "board" || viewRaw === "shared" ? viewRaw : "my";
+    const view = viewRaw === "board" || viewRaw === "shared" || viewRaw === "delegated" ? viewRaw : "my";
     const from = sp.get("from");
     const to = sp.get("to");
     const { items, boards, doneCount } = await listItems(ctx.userId, {

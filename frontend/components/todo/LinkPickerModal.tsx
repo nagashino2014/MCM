@@ -14,7 +14,8 @@ import { SALES_STAGE_LABELS, type SalesProject } from "@/lib/sales/types";
 import { TODO_LINK_KIND_LABELS, type TodoLinkKind } from "@/lib/todo/types";
 import { ContractPicker } from "./ContractPicker";
 
-export type LinkPickKind = Exclude<TodoLinkKind, "directive">;
+// mail·chat(§26-1)은 메일/메신저 화면의 [할 일로]에서만 붙는다 — 피커 대상이 아니다.
+export type LinkPickKind = Exclude<TodoLinkKind, "directive" | "mail" | "chat">;
 export const LINK_PICK_KINDS: LinkPickKind[] = ["contract", "facility", "approval_doc", "sales_project", "work_task", "url"];
 
 const KIND_ICONS: Record<LinkPickKind, typeof Link2> = {
@@ -102,7 +103,7 @@ export function LinkPickerModal({ open, onClose, onPick, initialKind }: { open: 
 
   useEffect(() => {
     if (!open) return;
-    setKind(initialKind && initialKind !== "directive" ? initialKind : "contract");
+    setKind(initialKind && initialKind !== "directive" && initialKind !== "mail" && initialKind !== "chat" ? initialKind : "contract");
     setQ("");
     setHits([]);
     setSel(null);

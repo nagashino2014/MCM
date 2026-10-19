@@ -224,6 +224,20 @@ export default function MailViewerScreen() {
             full
           />
         </View>
+        <View className="flex-1">
+          <Button
+            label="할 일로"
+            variant="ghost"
+            icon="checkbox-outline"
+            onPress={() =>
+              router.push({
+                pathname: '/todo',
+                params: { new: '1', linkKind: 'mail', linkId: data.messageId, linkLabel: (data.subject || '(제목 없음)').slice(0, 80), title: (data.subject || '').slice(0, 120) },
+              })
+            }
+            full
+          />
+        </View>
       </ActionBar>
     </SafeAreaView>
   );

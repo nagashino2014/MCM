@@ -146,6 +146,9 @@ export function MailBoard() {
     if (composeParamHandled.current) return;
     composeParamHandled.current = true;
     if (searchParams.get("compose") === "1") router.replace("/mail/compose");
+    // §26-1 할 일 "관련"에서 메일로 — /mail?id=<messageId> 를 열어 준다.
+    const id = searchParams.get("id");
+    if (id) void openMessage(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -308,6 +311,11 @@ export function MailBoard() {
       onSetCategory={setMessageCategory}
       onArchive={() => detail && runBulk([detail.messageId], { action: "archive" })}
       onSpam={markSpam}
+      onTodo={() => {
+        if (!detail) return;
+        const q = new URLSearchParams({ new: "1", linkKind: "mail", linkId: detail.messageId, linkLabel: (detail.subject || "(제목 없음)").slice(0, 80), title: (detail.subject || "").slice(0, 120) });
+        router.push(`/todo?${q.toString()}`);
+      }}
       onUnspam={async () => {
         if (!detail) return;
         await runBulk([detail.messageId], { action: "unspam" });

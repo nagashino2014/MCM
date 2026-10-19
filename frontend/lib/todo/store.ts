@@ -1013,7 +1013,7 @@ async function mapItemsWithEdit(db: PgDatabase, userId: string, rows: Record<str
 }
 
 export interface ListItemsQuery {
-  view: "my" | "board" | "shared";
+  view: "my" | "board" | "shared" | "delegated";
   boardId?: string | null;
   from?: string | null;
   to?: string | null;
@@ -1044,6 +1044,9 @@ export async function listItems(userId: string, q: ListItemsQuery): Promise<List
   else if (!q.includeArchived) where.push("i.archived_at IS NULL");
   if (q.view === "my") {
     where.push("(i.assignee_user_id = $1 OR i.owner_user_id = $1)");
+  } else if (q.view === "delegated") {
+    // 맡긴 일(§26-2) — 내가 만들었고 담당이 남인 작업
+    where.push("(i.owner_user_id = $1 AND i.assignee_user_id IS NOT NULL AND i.assignee_user_id <> $1)");
   } else if (q.view === "board") {
     const boardId = str(q.boardId, 40);
     if (!boardId) throw fail("board 가 필요합니다.");

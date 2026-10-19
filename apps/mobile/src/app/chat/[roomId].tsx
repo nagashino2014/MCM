@@ -129,6 +129,8 @@ export default function ChatRoomScreen() {
   const [sending, setSending] = useState(false);
   const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  // §26-1 메시지 길게 누르기 메뉴(답장 · 할 일로 만들기)
+  const [msgMenu, setMsgMenu] = useState<ChatMessage | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [detail, setDetail] = useState<RoomDetail | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -535,7 +537,7 @@ export default function ChatRoomScreen() {
             m={item}
             mine={item.senderId === myId}
             grouped={grouped}
-            onReply={item.kind !== 'system' && !item.deleted ? () => setReplyTarget(item) : undefined}
+            onReply={item.kind !== 'system' && !item.deleted ? () => setMsgMenu(item) : undefined}
           />
         </View>
       );
@@ -681,6 +683,49 @@ export default function ChatRoomScreen() {
       />
 
       {/* 방 관리 시트(MSG-P2) — 멤버·이름 변경·초대·알림·나가기 */}
+      {/* 메시지 메뉴(§26-1) */}
+      <Sheet visible={!!msgMenu} onClose={() => setMsgMenu(null)} title={msgMenu ? `${msgMenu.senderName}의 메시지` : '메시지'}>
+        <View className="gap-2">
+          {msgMenu?.body ? (
+            <Text numberOfLines={3} className="text-[13px] text-cd-muted">
+              {msgMenu.body}
+            </Text>
+          ) : null}
+          <Button
+            label="답장"
+            icon="arrow-undo-outline"
+            variant="soft"
+            onPress={() => {
+              const m = msgMenu;
+              setMsgMenu(null);
+              if (m) setReplyTarget(m);
+            }}
+            full
+          />
+          <Button
+            label="할 일로 만들기"
+            icon="checkbox-outline"
+            variant="ghost"
+            onPress={() => {
+              const m = msgMenu;
+              setMsgMenu(null);
+              if (!m) return;
+              const text = (m.body ?? '').replace(/\s+/g, ' ').trim();
+              router.push({
+                pathname: '/todo',
+                params: {
+                  new: '1',
+                  linkKind: 'chat',
+                  linkId: `${m.roomId}:${m.messageId}`,
+                  linkLabel: `${name ?? '메신저'} · ${m.senderName}`.slice(0, 80),
+                  title: text.slice(0, 120),
+                },
+              });
+            }}
+            full
+          />
+        </View>
+      </Sheet>
       <Sheet visible={menuOpen} onClose={() => setMenuOpen(false)} title="대화방 관리">
         {!detail ? (
           <ActivityIndicator className="py-8" />

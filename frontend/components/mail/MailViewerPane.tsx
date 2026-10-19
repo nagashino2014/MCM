@@ -3,7 +3,7 @@
 // 메일 3-pane 우측 — 본문 뷰어(G2-2/4): 헤더·첨부·본문(sandbox iframe)·답장/전달/삭제.
 // 외부 발신 HTML 은 XSS 방지를 위해 sandbox iframe(스크립트 차단)으로 렌더한다.
 
-import { Archive, CornerUpRight, Download, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
+import { Archive, CornerUpRight, Download, ListChecks, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
@@ -37,6 +37,7 @@ export function MailViewerPane({
   onArchive,
   onSpam,
   onUnspam,
+  onTodo,
 }: {
   detail: MailMessageDetail | null;
   loading: boolean;
@@ -52,6 +53,8 @@ export function MailViewerPane({
   onArchive: () => void;
   onSpam: () => void;
   onUnspam: () => void;
+  /** §26-1 이 메일을 연결한 할 일 만들기(/todo?new=1&linkKind=mail…) */
+  onTodo?: () => void;
 }) {
   if (loading) {
     return (
@@ -101,6 +104,7 @@ export function MailViewerPane({
           )}
           items={[
             { key: "replyAll", label: "전체답장", icon: <ReplyAll className="w-4 h-4" />, onSelect: onReplyAll },
+            ...(onTodo ? [{ key: "todo", label: "할 일로 만들기", icon: <ListChecks className="w-4 h-4" />, onSelect: onTodo }] : []),
             ...(inTrash
               ? [{ key: "restore", label: "복원", icon: <RotateCcw className="w-4 h-4" />, onSelect: onRestore }]
               : [

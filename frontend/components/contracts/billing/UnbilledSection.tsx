@@ -36,7 +36,15 @@ const SUBTYPE_DONUT_COLORS = [
  * 미발행 현황 — 용역/연도 필터 + 미발행 리스트(계약 상세 딥링크) +
  * 연도별 미발행액 추이 / 용역별 미발행 비율 / 이중 도넛 / 3개년 표.
  */
-export function UnbilledSection({ theme }: { theme: CdTheme }) {
+/** 부서장 현황(299)에서 재사용할 때 조회·엑셀 요청에 덧붙이는 범위 쿼리(예: "scope=dept&dept=x"). */
+function scoped(path: string, scopeQuery: string, params?: URLSearchParams): string {
+  const p = new URLSearchParams(params ? params.toString() : "");
+  new URLSearchParams(scopeQuery).forEach((v, k) => p.set(k, v));
+  const qs = p.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { theme: CdTheme; scopeQuery?: string; readOnly?: boolean }) {
   const router = useRouter();
   const pal = chartPalette(theme);
   const [data, setData] = useState<ContractUnbilledStatus | null>(null);
@@ -50,7 +58,7 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/contracts/billing/unbilled", { cache: "no-store" });
+        const res = await fetch(scoped("/api/contracts/billing/unbilled", scopeQuery), { cache: "no-store" });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error((body as { error?: string })?.error ?? "HTTP " + res.status);
@@ -409,7 +417,7 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
       if (category) params.set("category", category);
       if (year && /^\d{4}$/.test(year)) params.set("year", year);
       params.set("format", format);
-      const res = await fetch("/api/contracts/billing/unbilled/export?" + params.toString());
+      const res = await fetch(scoped("/api/contracts/billing/unbilled/export", scopeQuery, params));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -429,6 +437,8 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
   };
 
   const openContract = (row: ContractUnbilledRow) => {
+    // 부서장 현황(읽기 전용)에서는 발행/수금 입력 창으로 이동하지 않는다(299)
+    if (readOnly) return;
     const treeYear = (row.contractDate ?? "").slice(0, 4);
     const params = new URLSearchParams();
     params.set("contract", row.contractId);
@@ -578,7 +588,7 @@ export function UnbilledSection({ theme }: { theme: CdTheme }) {
                 <div
                   key={row.milestoneId}
                   className="cdb-unbilled-row text-xs"
-                  title="클릭하면 계약 관리에서 해당 단계의 발행/수금 입력 창이 열립니다"
+                  title={readOnly ? undefined : "클릭하면 계약 관리에서 해당 단계의 발행/수금 입력 창이 열립니다"}
                   onClick={() => openContract(row)}
                 >
                   <span className="min-w-0">

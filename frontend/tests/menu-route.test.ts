@@ -7,7 +7,7 @@ import { resolveMenuRoute } from "../components/layout/menu-route";
 // 298(2026-10-19): billing.view·sales.view 는 사원·부서장·임원에서 회수, payroll.view·finance.view 는 임원에서 회수.
 const STAFF_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view",
   "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view"];
-const LEAD_PERMS = [...STAFF_PERMS, "contract.edit", "work_plan.merge", "work_plan.lock_release", "bonus.view",
+const LEAD_PERMS = [...STAFF_PERMS, "billing.dept.view", "contract.edit", "work_plan.merge", "work_plan.lock_release", "bonus.view",
   "staffing.evaluation.read", "staffing.evaluation.write", "staffing.record.view", "trash.view", "trash.restore"];
 const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view@all",
   "contact.view@all", "facility.view@all", "work_plan.view@all", "work_plan.directive@all",
@@ -20,7 +20,7 @@ const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finan
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 26);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 74);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 75);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [
@@ -126,6 +126,11 @@ test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 �
   assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all"]).length, 5);
   assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all", "billing.view@all"]).length, 7);
   assert.equal(visibleSubmenu(contracts, EXEC_PERMS).some((s) => s.href === "/contracts/dashboard"), false);
+  // 부서장은 전사 현황 대신 부서 수주·수금 현황(299)
+  const leadContracts = visibleSubmenu(contracts, LEAD_PERMS).map((s) => s.href);
+  assert.equal(leadContracts.includes("/contracts/dept-billing"), true);
+  assert.equal(leadContracts.includes("/contracts/billing"), false);
+  assert.equal(visibleSubmenu(contracts, EXEC_PERMS).some((s) => s.href === "/contracts/dept-billing"), false);
 });
 
 test("영업/마케팅 메뉴는 지정된 영업 담당자·대표이사·관리자만 본다(298)", () => {

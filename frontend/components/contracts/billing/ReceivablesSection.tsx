@@ -36,7 +36,15 @@ interface ReceivablesPayload {
  * 미수금 현황 — 용역 필터 + KPI 카드 + 미수금 리스트(수금 입력) +
  * 3개월 이상 장기 미수금 리스트 + 대응 조치 관리.
  */
-export function ReceivablesSection({ theme }: { theme: CdTheme }) {
+/** 부서장 현황(299)에서 재사용할 때 조회·엑셀 요청에 덧붙이는 범위 쿼리(예: "scope=dept&dept=x"). */
+function scoped(path: string, scopeQuery: string, params?: URLSearchParams): string {
+  const p = new URLSearchParams(params ? params.toString() : "");
+  new URLSearchParams(scopeQuery).forEach((v, k) => p.set(k, v));
+  const qs = p.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }: { theme: CdTheme; scopeQuery?: string; readOnly?: boolean }) {
   void theme;
   const [data, setData] = useState<ReceivablesPayload | null>(null);
   const [category, setCategory] = useState<string | null>(null);
@@ -50,7 +58,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
   const reload = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch("/api/contracts/billing/receivables", { cache: "no-store" });
+      const res = await fetch(scoped("/api/contracts/billing/receivables", scopeQuery), { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as { error?: string })?.error ?? "HTTP " + res.status);
@@ -123,7 +131,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
       if (category) params.set("category", category);
       if (aging !== "all") params.set("aging", aging);
       params.set("format", format);
-      const res = await fetch("/api/contracts/billing/receivables/export?" + params.toString());
+      const res = await fetch(scoped("/api/contracts/billing/receivables/export", scopeQuery, params));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -341,8 +349,8 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
             </div>
           </div>
 
-          {/* 장기 미수금 대응 조치 */}
-          <ReceivableActionsCard selected={selectedLongTerm} onActionsChanged={() => void reload()} />
+          {/* 장기 미수금 대응 조치 — 부서장 현황(읽기 전용)에서는 숨김(조치 기록은 회계 담당, 299) */}
+          {!readOnly && <ReceivableActionsCard selected={selectedLongTerm} onActionsChanged={() => void reload()} />}
         </div>
 
         {/* ---------------- 우측: 미수금 리스트 ---------------- */}
@@ -436,7 +444,7 @@ export function ReceivablesSection({ theme }: { theme: CdTheme }) {
                   key={row.milestoneId}
                   className="cdb-recv-row text-xs"
                   title="클릭하면 수금 정보를 바로 입력할 수 있습니다"
-                  onClick={() => setModalRow(row)}
+                  onClick={() => { if (!readOnly) setModalRow(row); }}
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 min-w-0">

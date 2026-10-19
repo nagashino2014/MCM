@@ -8,6 +8,7 @@ import { ACCOUNT_ADMIN_KEYS } from "@/config/menu-permissions";
 import { AccessDenied } from "@/components/auth/AccessDenied";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import PermissionManagementPanel from "@/components/admin/users/PermissionManagementPanel";
+import { AccountPurgeModal } from "@/components/admin/users/AccountPurgeModal";
 import type {
   DepartmentRow,
   OrganizationSnapshot,
@@ -97,17 +98,16 @@ function Inner() {
     }
   };
 
-  const deleteAccount = async (user: UserRow) => {
-    if (!confirm("'" + (user.loginId ?? user.email) + "' 계정을 삭제할까요?")) return;
-    try {
-      const res = await fetch("/api/admin/users/" + user.userId, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "계정 삭제 실패");
-      toast.show("계정이 삭제되었습니다.");
-      if (selectedAccount?.userId === user.userId) setSelectedAccount(null);
-      void reload();
-    } catch (err) {
-      toast.show("실패: " + (err as Error).message, "error");
-    }
+  // 계정 영구 삭제는 확인 모달(미리보기·로그인 ID 재입력)을 거친다 — AccountPurgeModal.
+  const [purgeTarget, setPurgeTarget] = useState<UserRow | null>(null);
+  // 직원 프로필(조직 인원)에 연결된 계정 — 나머지는 조직도 "미연결 계정" 그룹에 보여 비활성·삭제할 수 있게 한다.
+  const linkedUserIds = new Set((organization?.employees ?? []).map((e) => e.userId).filter((v): v is string => !!v));
+  const deleteAccount = (user: UserRow) => setPurgeTarget(user);
+  const onPurged = (user: UserRow, employeeDeleted: boolean) => {
+    setPurgeTarget(null);
+    toast.show(employeeDeleted ? "계정과 직원 프로필을 삭제했습니다." : "계정을 삭제했습니다.");
+    if (selectedAccount?.userId === user.userId) setSelectedAccount(null);
+    void reload();
   };
 
   return (
@@ -136,9 +136,11 @@ function Inner() {
           selectedEmployeeId={selectedAccount?.employeeId ?? null}
           selectedUserId={selectedAccount?.userId ?? null}
           adminUsers={users.filter((u) => systemAdminUserIds.has(u.userId))}
+          unlinkedUsers={users.filter((u) => !systemAdminUserIds.has(u.userId) && !linkedUserIds.has(u.userId))}
           onSelectDept={(dept) => setSelectedDept(dept)}
           onSelectAccount={(account) => setSelectedAccount(account)}
         />
+        <AccountPurgeModal user={purgeTarget} onClose={() => setPurgeTarget(null)} onPurged={onPurged} />
         <PermissionManagementPanel
           users={users}
           permissions={permissions}

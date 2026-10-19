@@ -64,6 +64,7 @@ export type AuditAction =
   | "user_create"
   | "user_update"
   | "user_delete"
+  | "user_purge"
   | "user_password_reset"
   | "account_provision"
   | "permission_template_update"

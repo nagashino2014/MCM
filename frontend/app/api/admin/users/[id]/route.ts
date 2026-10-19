@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import {
   countSystemAdmins,
-  deleteUser,
   findUserById,
   isSystemAdminUser,
   updateUser,
   type UserStatus,
 } from "@/lib/auth/users";
 import { recordAuditLog } from "@/lib/auth/audit";
+import { purgeAccount } from "@/lib/auth/account-purge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,33 +64,16 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(_: NextRequest, ctx: RouteContext) {
+// 계정 영구 삭제(2026-10-19) — ?confirm=<로그인 ID 또는 이메일>&employee=1|0&ack=1. 미리보기는 GET /purge. 업무 기록이 있는데 ack 가 없으면 409.
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requirePermission("account.manage", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
-    if (id === actor.userId) {
-      return NextResponse.json({ error: "자기 자신을 삭제할 수 없습니다." }, { status: 400 });
-    }
-    const before = await findUserById(id);
-    if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
-    if (await isSystemAdminUser(id)) {
-      const adminTotal = await countSystemAdmins();
-      if (adminTotal <= 1) {
-        return NextResponse.json(
-          { error: "마지막 시스템 관리자(tpl-system-admin 보유자)는 삭제할 수 없습니다." },
-          { status: 400 }
-        );
-      }
-    }
-    await deleteUser(id);
-    await recordAuditLog({
-      actorUserId: actor.userId,
-      action: "user_delete",
-      targetTable: "users",
-      targetId: id,
-      before,
-    });
-    return NextResponse.json({ ok: true });
+    const sp = req.nextUrl.searchParams;
+    const confirm = sp.get("confirm") ?? "";
+    if (!confirm) return NextResponse.json({ error: "확인 문자열(confirm)이 필요합니다. 미리보기: GET /api/admin/users/[id]/purge" }, { status: 400 });
+    const result = await purgeAccount(actor.userId, id, { confirm, withEmployee: sp.get("employee") !== "0", ack: sp.get("ack") === "1" });
+    return NextResponse.json({ ok: true, employeeDeleted: result.employeeDeleted, preview: result.preview });
   } catch (err) {
     return authErrorToResponse(err);
   }

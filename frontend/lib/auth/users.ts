@@ -75,7 +75,7 @@ export async function findUserByIdStrict(userId: string): Promise<UserRow | null
   let result;
   try {
     result = await db.exec(
-      "SELECT user_id, email, name, role, status, must_change_password, created_by, created_at, updated_at FROM users WHERE user_id = $1 LIMIT 1",
+      "SELECT user_id, email, login_id, name, role, status, must_change_password, created_by, created_at, updated_at FROM users WHERE user_id = $1 LIMIT 1",
       [userId]
     );
   } catch {

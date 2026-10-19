@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getAllocationBoard, saveAllocations } from "@/lib/bonus/statements";
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
     const ctx = await requirePermission("bonus.view", { fallbackRoles: ["editor"] });
     const p = parsePeriod(new URL(req.url).searchParams.get("period") ?? "");
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });
-    return NextResponse.json({ board: await getAllocationBoard(p), canEdit: ctx.role === "admin" });
+    return NextResponse.json({ board: await getAllocationBoard(p), canEdit: await hasPermission(ctx.userId, "bonus.calculate") });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 /** 유관부서/임원 개별 배분 저장 — 할당액 초과 시 400(관리자 전용). */
 export async function PUT(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("bonus.calculate");
     const body = await req.json();
     const p = parsePeriod(String(body?.period ?? ""));
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });

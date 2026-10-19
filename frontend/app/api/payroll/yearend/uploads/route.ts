@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { attachOriginalWithholdingPdf, listYearendUploads } from "@/lib/finance/yearend-self";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** 관리자 — ?year= 직원 셀프 업로드 자료 목록(연말정산 화면). */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const year = Number(req.nextUrl.searchParams.get("year") ?? 0);
     if (!year) return NextResponse.json({ error: "year 가 필요합니다." }, { status: 400 });
     const uploads = (await listYearendUploads(year)).map(({ fileKey: _k, ...u }) => u);
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 /** 관리자 — 세무법인 원본 원천징수영수증 PDF 등록(multipart: file, year, employeeId). 개인 열람·증명서 발급 원본이 된다. */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const form = await req.formData();
     const file = form.get("file");
     const year = Number(form.get("year") ?? 0);

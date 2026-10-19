@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeAnnual, listYearNames } from "@/lib/payroll/queries";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** 직원별 연간 추이 — ?year=&name= 피벗 / name 생략 시 해당 연도 성명 목록만. */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const sp = new URL(req.url).searchParams;
     const year = Number(sp.get("year"));
     if (!Number.isInteger(year)) {

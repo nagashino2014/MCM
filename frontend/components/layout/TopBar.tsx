@@ -8,7 +8,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ClipboardCheck, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
-import type { Role } from "@/config/menu";
+import { hasPerm, isSystemAdminPerms } from "@/lib/auth/perms";
 import type { CdTheme } from "@/components/cdash/useCdashTheme";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
@@ -20,18 +20,14 @@ import { GlobalSearch } from "@/components/layout/GlobalSearch";
 interface TopBarProps {
   userName: string | null;
   userEmail: string | null;
-  role: Role;
+  /** 세션의 권한 요약 — 라벨·알림 확인 버튼·전역 검색 후보 판정. */
+  perms: readonly string[];
   theme: CdTheme;
   onToggleTheme: () => void;
   onOpenNav: () => void; // <lg 햄버거 → 사이드바 드로어
   navOpen?: boolean;
 }
 
-const ROLE_LABEL: Record<Role, string> = {
-  admin: "관리자",
-  editor: "편집자",
-  viewer: "조회자",
-};
 
 /** 영업 하위 경로 중 프로젝트 상세가 아닌 것(/sales/<projectId> 만 연결 대상). */
 const SALES_NON_PROJECT = new Set(["bids", "contacts", "intel", "rag"]);
@@ -74,7 +70,9 @@ function todoNewHref(): string {
   return `/todo?${params.toString()}`;
 }
 
-export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpenNav, navOpen = false }: TopBarProps) {
+export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpenNav, navOpen = false }: TopBarProps) {
+  // 계정 라벨 — role 이 아니라 시스템 관리자 템플릿 보유 여부로 표시(role 일원화 WP5).
+  const roleLabel = isSystemAdminPerms(perms) ? "관리자" : "직원";
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -165,7 +163,7 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
       <TodoNotifyBell />
 
       {/* 알림(운영 알람 통합 — AlertBell compact) */}
-      <AlertBell variant="compact" canAck={role === "admin" || role === "editor"} />
+      <AlertBell variant="compact" canAck={hasPerm(perms, "data.collect")} />
 
       {/* 테마 */}
       <CdIconButton label={theme === "dark" ? "라이트 모드" : "다크 모드"} onClick={onToggleTheme}>
@@ -186,7 +184,7 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
           <CdAvatar name={userName || "사용자"} size="sm" />
           <div className="flex-col items-start hidden md:flex">
             <span className="text-[13px] font-medium cd-text leading-4">{userName || "사용자"}</span>
-            <span className="text-[11px] cd-text-muted">{ROLE_LABEL[role]}</span>
+            <span className="text-[11px] cd-text-muted">{roleLabel}</span>
           </div>
         </button>
         {userMenuOpen && (
@@ -203,7 +201,7 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
                 <div className="text-sm font-bold cd-text truncate">{userName || "사용자"}</div>
                 <div className="text-xs cd-text-muted truncate">{userEmail}</div>
                 <div className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide cd-soft-primary px-2 py-0.5 rounded">
-                  {ROLE_LABEL[role]}
+                  {roleLabel}
                 </div>
               </div>
               <button
@@ -223,7 +221,7 @@ export function TopBar({ userName, userEmail, role, theme, onToggleTheme, onOpen
         )}
       </div>
 
-      <GlobalSearch role={role} open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <GlobalSearch perms={perms} open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

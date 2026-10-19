@@ -1,8 +1,12 @@
 /**
  * API 라우트 권한 가드 헬퍼.
  * - requireSession(): 401 없으면 NextResponse 던짐
- * - requireRole(['admin','editor']): 권한 부족 시 403
+ * - requirePermission('contract.view'): 권한 템플릿(grant) 판정, 부족 시 403
+ * - requireAuthenticated(): 세션만 요구(본인 데이터·전직원 공용 조회 라우트)
  * - 모든 API 라우트 진입에서 호출.
+ *
+ * role 기반 가드(requireRole/requireEditor/requireAdmin)는 role 일원화(2026-10-19, WP2)로 삭제했다.
+ * users.role 은 admin|member 부트스트랩 플래그일 뿐 권한의 근거가 아니다.
  */
 
 import { NextResponse } from "next/server";
@@ -18,6 +22,12 @@ export interface AuthContext {
   role: Role;
   status: UserStatus;
 }
+
+/**
+ * 옛 role 값까지 받는 호환 타입 — `fallbackRoles` 인자(WP3 에서 일괄 제거 예정)의 기존 호출부가
+ * "editor"/"viewer" 를 넘기고 있어 타입만 넓혀 둔다. 판정에는 쓰이지 않는다.
+ */
+export type LegacyRole = Role | "editor" | "viewer";
 
 export class AuthError extends Error {
   status: number;
@@ -79,42 +89,21 @@ export async function requireSession(): Promise<AuthContext> {
   return {
     userId: String(user.id ?? ""),
     email: String(user.email ?? ""),
-    role: (user.role ?? "viewer") as Role,
+    role: (user.role ?? "member") as Role,
     status: (user.status ?? "active") as UserStatus,
   };
 }
 
-/**
- * @deprecated role 기반 가드. 권한 판정은 requirePermission(권한키)으로 한다.
- *   남겨둔 이유는 외부 참조 안전뿐이며, 신규 코드에서 쓰지 말 것.
- */
-export async function requireRole(roles: Role | Role[]): Promise<AuthContext> {
-  const ctx = await requireSession();
-  const allowed = Array.isArray(roles) ? roles : [roles];
-  if (!allowed.includes(ctx.role)) {
-    throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);
-  }
-  return ctx;
-}
-
-/** editor 이상 (admin 또는 editor) */
-export async function requireEditor(): Promise<AuthContext> {
-  return requireRole(["admin", "editor"]);
-}
-
-/** admin only */
-export async function requireAdmin(): Promise<AuthContext> {
-  return requireRole("admin");
-}
-
-/** viewer 이상 (전 role) */
+/** 세션만 요구(전 직원) — 본인 데이터·공용 조회 라우트용. */
 export async function requireAuthenticated(): Promise<AuthContext> {
   return requireSession();
 }
 
 /**
  * RBAC 강제 여부. 이제 **기본이 켜짐**이다 — 권한 템플릿으로만 판정한다.
- * env RBAC_ENFORCE='false' 를 명시할 때만 옛 role 호환 모드로 되돌아간다(비상용).
+ * env RBAC_ENFORCE='false' 를 명시할 때만 옛 호환 모드로 되돌아간다(비상용).
+ * ⚠ role 일원화 이후 호환 모드는 role=admin 만 통과시킨다(editor/viewer 가 없으므로 fallbackRoles 는 무의미).
+ *   비상 우회는 RBAC_ADMIN_BYPASS(lib/auth/rbac.ts) 하나로 일원화하고 이 분기는 WP3 에서 제거한다.
  */
 const RBAC_ENFORCE = process.env.RBAC_ENFORCE !== "false";
 
@@ -138,24 +127,22 @@ function logRbacBypassOnce(userId: string): void {
 /**
  * RBAC 권한키 가드.
  *
- * 판정은 오직 권한 템플릿(hasPermission)이다. role(admin/editor/viewer)은 더 이상
- * 상위 권한으로 쓰지 않는다 — 관리자 권한의 근거는 `tpl-system-admin` 템플릿(마이그 111).
+ * 판정은 오직 권한 템플릿(hasPermission)이다. role 은 상위 권한으로 쓰지 않는다 —
+ * 관리자 권한의 근거는 `tpl-system-admin` 템플릿(마이그 111).
  *
- * ⚠ `fallbackRoles` 는 호환 모드(RBAC_ENFORCE=false)에서만 쓰이는 잔재다.
+ * ⚠ `fallbackRoles` 는 호환 모드(RBAC_ENFORCE=false)에서만 쓰이던 잔재다(WP3 에서 일괄 제거).
  *   신규 코드에서는 넘기지 말 것. 기존 호출부의 값은 무시된다.
  */
 export async function requirePermission(
   permissionKey: string,
-  opts?: { target?: PermissionTarget; fallbackRoles?: Role[] }
+  opts?: { target?: PermissionTarget; fallbackRoles?: LegacyRole[] }
 ): Promise<AuthContext> {
   const ctx = await requireSession();
 
   if (!RBAC_ENFORCE) {
-    // 비상 호환 모드 — 옛 role 기준으로만 판정한다.
+    // 비상 호환 모드 — 부트스트랩 관리자(role=admin)만 통과한다.
     logRbacBypassOnce(ctx.userId);
     if (ctx.role === "admin") return ctx;
-    const roles = opts?.fallbackRoles;
-    if (!roles || roles.includes(ctx.role)) return ctx;
     throw new AuthError("이 작업을 수행할 권한이 없습니다.", 403);
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { saveSalesCosts } from "@/lib/bonus/targets";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  */
 export async function PUT(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("bonus.calculate");
     const body = await req.json();
     const rows = Array.isArray(body?.rows) ? body.rows : [];
     const parsed = rows

@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MENU_ITEMS, isMenuVisibleForRole, visibleSubmenu } from "../config/menu";
+import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "../config/menu";
 import { resolveMenuRoute } from "../components/layout/menu-route";
+
+// 역할별 권한 요약(테스트용) — docs/open-test-permission-plan-2026-10-19.md §1.3·§4.1 의 템플릿 grant 를 요약 형식으로 옮긴 것.
+const STAFF_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view", "billing.view",
+  "sales.view", "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view"];
+const LEAD_PERMS = [...STAFF_PERMS, "contract.edit", "work_plan.merge", "work_plan.lock_release", "bonus.view",
+  "staffing.evaluation.read", "staffing.evaluation.write", "staffing.record.view", "trash.view", "trash.restore"];
+const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view@all", "billing.view@all",
+  "sales.view@all", "contact.view@all", "facility.view@all", "work_plan.view@all", "work_plan.directive@all",
+  "work_plan.lock_release@all", "bonus.view@all", "staffing.view@all", "staffing.evaluation.read@all",
+  "staffing.record.view@all", "payroll.view@all", "finance.view@all", "calendar.meeting.manage@all", "todo.admin@all"];
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 26);
@@ -12,9 +22,9 @@ test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한
     { title: "사내 설문", href: "/survey/internal" },
     { title: "외부 설문", href: "/survey/external" },
   ]);
-  assert.equal(isMenuVisibleForRole(survey!, "viewer"), true);
-  assert.deepEqual(visibleSubmenu(survey!, "viewer").map((item) => item.href), ["/survey/internal"]);
-  assert.deepEqual(visibleSubmenu(survey!, "editor").map((item) => item.href), ["/survey/internal", "/survey/external"]);
+  assert.equal(isMenuVisible(survey!, STAFF_PERMS), true);
+  assert.deepEqual(visibleSubmenu(survey!, STAFF_PERMS).map((item) => item.href), ["/survey/internal"]);
+  assert.deepEqual(visibleSubmenu(survey!, ["survey.manage@all"]).map((item) => item.href), ["/survey/internal", "/survey/external"]);
   for (const item of MENU_ITEMS) {
     for (const route of item.submenu?.length ? item.submenu : [item]) {
       const url = new URL(route.href, "https://mcm.local");
@@ -67,11 +77,40 @@ test("query 조건을 모두 만족한 후보 중 구체적인 항목을 고른�
   assert.equal(resolveMenuRoute(routes, "/list", "tab=active")?.href, "/list");
 });
 
-test("역할로 숨긴 메뉴는 matcher 입력에 포함되지 않는다", () => {
-  const viewerMenus = MENU_ITEMS.filter((item) => isMenuVisibleForRole(item, "viewer"));
-  const editorMenus = MENU_ITEMS.filter((item) => isMenuVisibleForRole(item, "editor"));
-  assert.equal(resolveMenuRoute(viewerMenus, "/finance", "tab=bank"), null);
-  assert.equal(resolveMenuRoute(viewerMenus, "/admin/users"), null);
-  assert.equal(resolveMenuRoute(viewerMenus, "/trash"), null);
-  assert.deepEqual(resolveMenuRoute(editorMenus, "/trash"), { parentTitle: "휴지통", href: "/trash" });
+test("권한으로 숨긴 메뉴는 matcher 입력에 포함되지 않는다", () => {
+  const staffMenus = MENU_ITEMS.filter((item) => isMenuVisible(item, STAFF_PERMS));
+  const leadMenus = MENU_ITEMS.filter((item) => isMenuVisible(item, LEAD_PERMS));
+  const execMenus = MENU_ITEMS.filter((item) => isMenuVisible(item, EXEC_PERMS));
+  assert.equal(resolveMenuRoute(staffMenus, "/finance", "tab=bank"), null);
+  assert.equal(resolveMenuRoute(staffMenus, "/admin/users"), null);
+  assert.equal(resolveMenuRoute(staffMenus, "/trash"), null);
+  assert.equal(resolveMenuRoute(staffMenus, "/facilities"), null);
+  assert.equal(resolveMenuRoute(staffMenus, "/data/status"), null);
+  assert.equal(resolveMenuRoute(staffMenus, "/staffing"), null);
+  assert.deepEqual(resolveMenuRoute(leadMenus, "/trash"), { parentTitle: "휴지통", href: "/trash" });
+  assert.deepEqual(resolveMenuRoute(leadMenus, "/staffing"), { parentTitle: "성과급 산정", href: "/staffing" });
+  assert.equal(resolveMenuRoute(leadMenus, "/facilities"), null);
+  assert.deepEqual(resolveMenuRoute(execMenus, "/finance", "tab=bank"), { parentTitle: "재무", href: "/finance?tab=bank" });
+  assert.deepEqual(resolveMenuRoute(execMenus, "/facilities"), { parentTitle: "사업장", href: "/facilities" });
+  assert.equal(resolveMenuRoute(execMenus, "/trash"), null);
+  assert.equal(resolveMenuRoute(execMenus, "/admin/users"), null);
+});
+
+test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 보유 키만큼만 보인다(§4.1)", () => {
+  const payroll = MENU_ITEMS.find((item) => item.title === "급여·근로계약")!;
+  assert.deepEqual(visibleSubmenu(payroll, STAFF_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend"]);
+  assert.deepEqual(visibleSubmenu(payroll, EXEC_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend", "/payroll", "/payroll/contracts", "/payroll/yearend", "/payroll/settings"]);
+  const hr = MENU_ITEMS.find((item) => item.title === "근태·휴가")!;
+  assert.deepEqual(visibleSubmenu(hr, EXEC_PERMS).map((s) => s.href), ["/approval/my-hr"]);
+  assert.equal(visibleSubmenu(hr, ["staffing.edit@all"]).length, 7);
+  const workPlan = MENU_ITEMS.find((item) => item.title === "업무추진계획")!;
+  assert.deepEqual(visibleSubmenu(workPlan, STAFF_PERMS).map((s) => s.href), ["/work-plan"]);
+  assert.deepEqual(visibleSubmenu(workPlan, LEAD_PERMS).map((s) => s.href), ["/work-plan", "/work-plan/oversight"]);
+  assert.deepEqual(visibleSubmenu(workPlan, EXEC_PERMS).map((s) => s.href), ["/work-plan", "/work-plan/oversight", "/work-plan/exec", "/work-plan/present"]);
+  const admin = MENU_ITEMS.find((item) => item.title === "사용자 관리")!;
+  assert.equal(isMenuVisible(admin, ["security.access_log@all"]), true);
+  assert.deepEqual(visibleSubmenu(admin, ["security.access_log@all"]).map((s) => s.href), ["/admin/access-log"]);
+  const contracts = MENU_ITEMS.find((item) => item.title === "계약")!;
+  assert.deepEqual(visibleSubmenu(contracts, STAFF_PERMS).map((s) => s.href).includes("/contracts/filings"), false);
+  assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all"]).length, 7);
 });

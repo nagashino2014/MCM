@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Bell, HardDrive, Megaphone, Paperclip, Pin, Send, X } from "lucide-react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
@@ -45,7 +46,8 @@ export function BoardWriteBoard() {
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setIsAdmin(d?.user?.role === "admin"))
+      // 전사 공지 작성 = board.manage(게시판 운영 권한). 세션의 권한 요약으로 판정한다.
+      .then((d) => setIsAdmin(hasPerm(permsOf(d?.user), "board.manage")))
       .catch(() => {});
     setTimeout(() => {
       if (editorRef.current) editorRef.current.innerHTML = "<div><br></div>";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { importTaxForm, listTaxProfiles, saveTaxProfile } from "@/lib/payroll/rules";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     return NextResponse.json({ profiles: await listTaxProfiles() });
   } catch (err) {
     return authErrorToResponse(err);
@@ -20,7 +20,7 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();

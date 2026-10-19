@@ -6,6 +6,7 @@ import {
   AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ProgressReportModal } from "./ProgressReportModal";
@@ -85,8 +86,7 @@ interface UpcomingActivityItem {
 export function SalesBoard() {
   const router = useRouter();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
   const { theme } = useCdashTheme();
 
   const [projects, setProjects] = useState<SalesProject[]>([]);

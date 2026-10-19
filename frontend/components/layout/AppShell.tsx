@@ -13,17 +13,17 @@ import { CdDrawer } from "@/components/cdash/CdModal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { useNavBadges } from "@/components/layout/useNavBadges";
-import type { Role } from "@/config/menu";
 import "@/components/cdash/cdash.css";
 
 interface AppShellProps {
-  role: Role;
+  /** 세션의 권한 요약(lib/auth/perms.ts) — 사이드바·탑바에 전달. */
+  perms: readonly string[];
   userName: string | null;
   userEmail: string | null;
   children: React.ReactNode;
 }
 
-export function AppShell({ role, userName, userEmail, children }: AppShellProps) {
+export function AppShell({ perms, userName, userEmail, children }: AppShellProps) {
   const { theme, toggleTheme } = useCdashTheme();
   const badges = useNavBadges();
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
@@ -33,12 +33,12 @@ export function AppShell({ role, userName, userEmail, children }: AppShellProps)
       {/* 루트 = 앰비언트 글로우 캔버스(Soft Glass Ink). 프레임 패딩·gap 16px. */}
       <div className="cdash cd-canvas cd-fields-white flex h-dvh p-4 gap-4" data-theme={theme}>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-[200] cd-card p-2">본문으로 건너뛰기</a>
-        <Sidebar role={role} badges={badges} />
+        <Sidebar perms={perms} badges={badges} />
         <div className="flex-1 flex flex-col min-w-0 min-h-0 gap-4">
           <TopBar
             userName={userName}
             userEmail={userEmail}
-            role={role}
+            perms={perms}
             theme={theme}
             onToggleTheme={toggleTheme}
             onOpenNav={() => setNavDrawerOpen(true)}
@@ -56,7 +56,7 @@ export function AppShell({ role, userName, userEmail, children }: AppShellProps)
       {/* <lg 네비 드로어 — 네비 소실 방지(§3.0) */}
       <CdDrawer open={navDrawerOpen} onClose={() => setNavDrawerOpen(false)} title="메뉴" side="left" widthClass="max-w-[19rem]">
         <div id="mobile-navigation" className="-mx-5 -my-4 h-[calc(100%+2rem)]">
-          <Sidebar role={role} badges={badges} mode="drawer" onNavigate={() => setNavDrawerOpen(false)} />
+          <Sidebar perms={perms} badges={badges} mode="drawer" onNavigate={() => setNavDrawerOpen(false)} />
         </div>
       </CdDrawer>
     </CdToastProvider>

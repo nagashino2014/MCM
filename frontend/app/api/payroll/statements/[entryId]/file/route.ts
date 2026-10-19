@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { renderPayslipPdf } from "@/lib/payroll/statement-pdf";
 import { buildPayslipInput } from "@/lib/payroll/statements";
 
@@ -12,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ entryId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.export");
     const { entryId } = await params;
     const input = await buildPayslipInput(entryId);
     const bytes = await renderPayslipPdf(input);

@@ -15,12 +15,13 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/cdash/BrandMark";
 import { CdIconButton } from "@/components/cdash/CdButton";
-import { MENU_ITEMS, isMenuVisible, visibleSubmenu, type MenuItem, type Role } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisible, visibleSubmenu, type MenuItem } from "@/config/menu";
 import { resolveMenuRoute, type MenuRouteMatch } from "./menu-route";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
 interface SidebarProps {
-  role: Role;
+  /** 세션의 권한 요약(lib/auth/perms.ts) — 메뉴 노출 판정 근거. */
+  perms: readonly string[];
   badges: NavBadges;
   /** auto=데스크톱(레일↔확장 CSS 자동) / drawer=오버레이 내부(항상 확장). */
   mode?: "auto" | "drawer";
@@ -56,10 +57,10 @@ function sectionsForPath(pathname: string | null, query: string): string[] {
   return active ? [active.parentTitle] : [];
 }
 
-export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProps) {
+export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const query = useSearchParams().toString();
-  const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisible(item, role, badges?.menuPermissions ?? [])), pathname, query);
+  const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisible(item, perms)), pathname, query);
   const [openSections, setOpenSections] = useState<string[]>(() => sectionsForPath(pathname, query));
   const isDrawer = mode === "drawer";
   const [autoCollapse, setAutoCollapse] = useState(false);
@@ -111,8 +112,8 @@ export function Sidebar({ role, badges, mode = "auto", onNavigate }: SidebarProp
     });
   };
 
-  const visible = MENU_ITEMS.filter((m) => isMenuVisible(m, role, badges?.menuPermissions ?? [])).map((m) =>
-    m.submenu ? { ...m, submenu: visibleSubmenu(m, role) } : m
+  const visible = MENU_ITEMS.filter((m) => isMenuVisible(m, perms)).map((m) =>
+    m.submenu ? { ...m, submenu: visibleSubmenu(m, perms) } : m
   );
   const groups: Array<{ key: string; items: MenuItem[] }> = ["home", "collab", "work", "main", "system"]
     .map((key) => ({ key, items: visible.filter((m) => (m.group ?? "main") === key) }))

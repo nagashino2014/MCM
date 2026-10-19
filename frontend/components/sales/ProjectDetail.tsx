@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { SalesCalendar } from "./SalesCalendar";
 import { SalesProgressCard } from "./SalesProgressCard";
@@ -73,8 +74,7 @@ const STAGE_PILL: Record<string, string> = {
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const role = (session?.user as { role?: "admin" | "editor" | "viewer" } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
   const { theme } = useCdashTheme();
 
   const [project, setProject] = useState<SalesProject | null>(null);

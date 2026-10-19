@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { recordAccessLog } from "@/lib/auth/access-log";
 import { listSettlements, saveSettlement, setSettlementStatus, type YearendInputs } from "@/lib/finance/yearend";
 import { parseSimplifiedPdf } from "@/lib/finance/yearend-pdf-parser";
@@ -7,10 +8,10 @@ import { parseSimplifiedPdf } from "@/lib/finance/yearend-pdf-parser";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 귀속연도 직원별 정산 목록(총급여·기납부 자동 + 저장된 입력·결과). 급여는 admin 전용(§8-4).
+// GET: 귀속연도 직원별 정산 목록(총급여·기납부 자동 + 저장된 입력·결과). payroll.view(291) 보유자(§8-4).
 export async function GET(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.view");
     const year = Number(req.nextUrl.searchParams.get("year") ?? 0) || new Date().getFullYear() - 1;
     const rows = await listSettlements(year);
     // 접속기록(PR-P1) — 연말정산(전 직원 소득·부양가족) 열람.
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
 // POST: JSON(action=save/confirm/unconfirm) 또는 multipart(action=parse_pdf — 간소화 PDF 파싱)
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.edit");
 
     const contentType = req.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result });
     }
     if (body.action === "confirm" || body.action === "unconfirm") {
+      // 연말정산 확정·확정 해제는 payroll.close(291, is_dangerous).
+      if (!(await hasPermission(ctx.userId, "payroll.close"))) {
+        return NextResponse.json({ error: "연말정산 확정 권한(payroll.close)이 없습니다." }, { status: 403 });
+      }
       await setSettlementStatus(year, body.employeeId, body.action === "confirm" ? "confirmed" : "draft", ctx.userId);
       return NextResponse.json({ ok: true });
     }

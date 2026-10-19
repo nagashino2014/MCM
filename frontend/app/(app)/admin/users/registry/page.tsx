@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { FolderPlus, KeyRound, RefreshCw, ShieldAlert, UserRoundPlus } from "lucide-react";
+import { FolderPlus, KeyRound, RefreshCw, UserRoundPlus } from "lucide-react";
+import { hasAnyPerm, permsOf } from "@/lib/auth/perms";
+import { ACCOUNT_ADMIN_KEYS } from "@/config/menu-permissions";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 import EmployeeRegistryPanel from "@/components/admin/users/EmployeeRegistryPanel";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type {
@@ -26,7 +29,6 @@ export default function UserRegistryPage() {
 function Inner() {
   const { theme, toggleTheme } = useCdashTheme();
   const { data: session, status: sessionStatus } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
   const [organization, setOrganization] = useState<OrganizationSnapshot | null>(null);
   const [selectedDept, setSelectedDept] = useState<DepartmentRow | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployeeRow | null>(null);
@@ -133,16 +135,8 @@ function Inner() {
   if (sessionStatus === "loading") {
     return <div className="p-8 cd-text-faint text-sm">세션 확인 중…</div>;
   }
-  if (role !== "admin") {
-    return (
-      <div className="cdash flex items-center justify-center min-h-full p-8" data-theme={theme}>
-        <div className="cd-card p-10 text-center max-w-md">
-          <ShieldAlert className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--cd-error)" }} />
-          <h2 className="text-lg font-bold cd-text mb-1">접근 권한이 없습니다</h2>
-          <p className="text-sm cd-text-muted">관리자만 접근할 수 있는 페이지입니다.</p>
-        </div>
-      </div>
-    );
+  if (!hasAnyPerm(permsOf(session?.user), ACCOUNT_ADMIN_KEYS)) {
+    return <AccessDenied requiredKeys={ACCOUNT_ADMIN_KEYS} />;
   }
 
   return (

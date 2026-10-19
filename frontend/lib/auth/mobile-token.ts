@@ -62,7 +62,7 @@ export async function verifyAccessToken(token: string): Promise<MobileAccessClai
       userId: String(payload.sub),
       email: String(payload.email ?? ""),
       name: String(payload.name ?? ""),
-      role: (payload.role as Role) ?? "viewer",
+      role: (payload.role as Role) ?? "member",
       status: (payload.status as UserStatus) ?? "active",
       mustChangePassword: payload.mustChangePassword === true,
     };

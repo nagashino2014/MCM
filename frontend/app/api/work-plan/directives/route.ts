@@ -1,16 +1,23 @@
+import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { getReporterContext } from "@/lib/work-plan/workspace";
 import { createDirective, listDirectivesByDept, type DirectiveInput } from "@/lib/work-plan/directives";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// 지시 목록 — 전사 범위가 아니면 dept 파라미터를 무시하고 본인 부서로 강제(X-01, 2026-10-19).
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("work_plan.view");
+    const ctx = await requirePermission("work_plan.view");
     const sp = new URL(req.url).searchParams;
-    const deptId = sp.get("dept") ?? "";
+    let deptId = sp.get("dept") ?? "";
     const level = sp.get("level") ?? undefined;
+    if (!(await hasGlobalScope(ctx.userId, "work_plan.view"))) {
+      const reporter = await getReporterContext(ctx.userId);
+      deptId = reporter.deptId ?? "";
+    }
     if (!deptId) return NextResponse.json({ directives: [] });
     return NextResponse.json({ directives: await listDirectivesByDept(deptId, level) });
   } catch (err) {

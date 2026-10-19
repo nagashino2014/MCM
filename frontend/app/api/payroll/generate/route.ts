@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import {
   buildLedger,
   confirmLedger,
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 /** action: preview(미리보기) | create(draft 생성) | update-line(셀 수정) | confirm(확정) | delete(draft 삭제) */
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.edit");
     const body = await req.json();
     const action = String(body.action ?? "");
     if (action === "preview" || action === "create") {
@@ -49,6 +50,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     if (action === "confirm") {
+      // 대장 확정은 payroll.close(291, is_dangerous) — 편집 권한만으로는 확정할 수 없다.
+      if (!(await hasPermission(ctx.userId, "payroll.close"))) {
+        return NextResponse.json({ error: "급여대장 확정 권한(payroll.close)이 없습니다." }, { status: 403 });
+      }
       await confirmLedger(String(body.ledgerId ?? ""));
       return NextResponse.json({ ok: true });
     }

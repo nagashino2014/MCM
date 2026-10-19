@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import {
   getAttendanceSettings,
   listDailyForWeek,
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
       mealWarnings,
       absenceRequests,
       // canTest: 산정 제외자 수당 표시 test 버튼(관리자 한정 — 기능 동작 확인용, 2026-08-31).
-      pay: pay ? { ...pay, canTest: ctx.role === "admin" } : null,
+      pay: pay ? { ...pay, canTest: await hasPermission(ctx.userId, "staffing.edit") } : null,
     });
   } catch (err) {
     return authErrorToResponse(err);

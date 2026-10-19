@@ -54,7 +54,7 @@ export async function resolveContractScope(
  * 호출부는 null 이면 필터를 걸지 않고, 배열이면 `c.contract_id = ANY($n)` 한 조건만 추가하면 된다.
  */
 /** RBAC 강제 전까지(롤아웃 §10) 목록 scope 필터를 적용하지 않는다(기존 전체 노출 유지). */
-const RBAC_ENFORCE = process.env.RBAC_ENFORCE === "true";
+const RBAC_ENFORCE = process.env.RBAC_ENFORCE !== "false";
 
 export async function resolveVisibleContractIds(
   userId: string,

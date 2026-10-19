@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { parsePeriod } from "@/lib/bonus/source";
 import { createBonusPlanDraft, getBonusPlanApproval } from "@/lib/bonus/draft";
 
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 /** 성과급 지급 계획 기안(draft) 생성 — 관리자 전용, 결재선=대표이사 직결. */
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("bonus.calculate");
     const body = await req.json();
     const p = parsePeriod(String(body?.period ?? ""));
     if (!p) return NextResponse.json({ error: "period 형식은 YYYY-H1/H2 입니다." }, { status: 400 });

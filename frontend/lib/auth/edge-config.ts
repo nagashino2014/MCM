@@ -3,12 +3,19 @@
  * - middleware 에서 import. node:crypto / node:fs / sql.js / bcrypt 같은 Node 전용 모듈 사용 금지.
  * - JWT 토큰 검증과 authorized 콜백만 담당.
  * - 실제 자격증명 검증(DB lookup, bcrypt)은 lib/auth/config.ts 의 `auth()` 가 담당.
+ * - 권한 요약(perms)은 config.ts(Node) 의 jwt 콜백이 DB 에서 읽어 토큰에 싣고, 여기서는 읽기만 한다.
  */
 
 import type { NextAuthConfig } from "next-auth";
 import { NextResponse } from "next/server";
+import { hasAnyPerm } from "./perms";
+import { ADMIN_AREA_KEYS, requiredPermissionsForPath } from "@/config/menu-permissions";
 
-export type Role = "admin" | "editor" | "viewer";
+/**
+ * users.role — admin | member (마이그 292). admin 은 부트스트랩 플래그(seed.ts 최초 관리자·RBAC_ADMIN_BYPASS)일 뿐
+ * 권한 판정에 쓰지 않는다. editor/viewer 는 폐기(role 일원화 2026-10-19).
+ */
+export type Role = "admin" | "member";
 export type UserStatus = "active" | "disabled";
 
 export const edgeAuthConfig: NextAuthConfig = {
@@ -34,11 +41,14 @@ export const edgeAuthConfig: NextAuthConfig = {
       if (session.user && token) {
         const t = token as Record<string, unknown>;
         (session.user as { id?: string }).id = (t.userId as string) ?? "";
-        (session.user as { role?: Role }).role = (t.role as Role) ?? "viewer";
+        (session.user as { role?: Role }).role = (t.role as Role) ?? "member";
         (session.user as { status?: UserStatus }).status =
           (t.status as UserStatus) ?? "active";
         (session.user as { mustChangePassword?: boolean }).mustChangePassword =
           t.mustChangePassword === true;
+        // 권한 요약(lib/auth/perms.ts) — 메뉴 노출·화면 게이트가 읽는다(permsOf 가 [] 로 정규화).
+        // 구 토큰(배포 전 발급)은 undefined 로 **그대로 둔다** — authorized 의 1차 차단 유예가 이 값으로 구 토큰을 구분한다(R-2).
+        (session.user as { perms?: string[] }).perms = Array.isArray(t.perms) ? (t.perms as string[]) : undefined;
       }
       return session;
     },
@@ -80,15 +90,25 @@ export const edgeAuthConfig: NextAuthConfig = {
       // 업로드 같은 multipart POST 가 /login 페이지로 재전송되어 "Failed to find Server Action"
       // 텍스트가 내려오고, 클라이언트 fetch 의 res.json() 이 "is not valid JSON" 으로 깨진다.
       // 401 JSON 이면 각 화면의 기존 오류 처리(alert(data.error))가 만료 안내를 그대로 보여준다.
-      const sessionExpired = () =>
-        path.startsWith("/api/")
-          ? NextResponse.json(
-              { error: "로그인이 만료되었습니다. 페이지를 새로고침해 다시 로그인해 주세요." },
-              { status: 401 }
-            )
-          : false;
+      // 페이지 요청은 false(next-auth 기본 리다이렉트) 대신 직접 로그인 화면으로 보낸다 —
+      // 기본 리다이렉트는 callbackUrl 에 nextUrl.href(ECS 뒤에서는 http://localhost:3000/…)를 넣는다(F-03, 2026-10-19 실측).
+      // origin 은 프록시가 전달한 host(x-forwarded-host/proto) 기준, callbackUrl 은 같은 origin 의 경로만 넘긴다.
+      const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      const forwardedProto = request.headers.get("x-forwarded-proto") ?? nextUrl.protocol.replace(":", "");
+      const publicOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : nextUrl.origin;
+      const sessionExpired = () => {
+        if (path.startsWith("/api/")) {
+          return NextResponse.json(
+            { error: "로그인이 만료되었습니다. 페이지를 새로고침해 다시 로그인해 주세요." },
+            { status: 401 }
+          );
+        }
+        const login = new URL("/login", publicOrigin);
+        login.searchParams.set("callbackUrl", path + nextUrl.search);
+        return NextResponse.redirect(login);
+      };
       if (!session?.user) return sessionExpired();
-      const user = session.user as { role?: Role; status?: UserStatus; mustChangePassword?: boolean };
+      const user = session.user as { status?: UserStatus; mustChangePassword?: boolean; perms?: string[] };
       if (user.status && user.status !== "active") return sessionExpired();
 
       // 초기 비밀번호 강제 변경: 변경 전까지 변경 화면/그 API 외 모든 경로를 변경 화면으로 보낸다.
@@ -109,11 +129,27 @@ export const edgeAuthConfig: NextAuthConfig = {
       }
 
       // ⚠ 미들웨어는 edge runtime 이라 DB(권한 템플릿)를 조회할 수 없다.
-      //   여기서는 JWT 의 role 로 1차 차단만 하고, 실제 권한 판정은 각 API 라우트의
-      //   requirePermission(account.manage / org.edit / rbac.* 등)이 한다.
-      //   role 을 완전히 걷어내려면 로그인 시 권한 요약을 JWT 에 실어야 한다(후속 과제).
-      if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
-        return user.role === "admin";
+      //   로그인 시 JWT 에 실은 권한 요약(perms, lib/auth/perms.ts)으로 1차 차단만 하고,
+      //   실제 권한 판정은 각 API 라우트의 requirePermission 이 한다(role 일원화 WP5, 2026-10-19).
+      //   perms 가 없는 토큰(배포 전 발급)은 1차 차단을 건너뛰고 라우트·화면 판정에 맡긴다 —
+      //   전 직원 일제 차단을 피하기 위한 유예. config.ts 가 다음 Node 요청에서 채운다.
+      const perms = Array.isArray(user.perms) ? user.perms : null;
+      if (perms) {
+        if (path.startsWith("/api/admin")) {
+          return hasAnyPerm(perms, ADMIN_AREA_KEYS)
+            ? true
+            : NextResponse.json({ error: "이 작업을 수행할 권한이 없습니다." }, { status: 403 });
+        }
+        if (!path.startsWith("/api/")) {
+          // 메뉴 권한키 표(config/menu-permissions.ts)와 같은 기준 — 메뉴에 없는 화면은 URL 로도 열리지 않는다.
+          const required = requiredPermissionsForPath(path);
+          if (required && !hasAnyPerm(perms, required)) {
+            const url = new URL("/forbidden", nextUrl);
+            url.searchParams.set("from", path);
+            url.searchParams.set("keys", required.join(","));
+            return NextResponse.rewrite(url);
+          }
+        }
       }
 
       return true;

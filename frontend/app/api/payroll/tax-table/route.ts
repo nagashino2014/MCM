@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getTaxTableInfo } from "@/lib/payroll/tax";
 
@@ -71,7 +71,7 @@ function parseHwpxTable(sectionXml: string): Array<{ wageFrom: number; wageTo: n
 /** GET — 현재 DB 버전 + 원격 개정 확인 */
 export async function GET() {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const local = await getTaxTableInfo();
     let remote: RemoteMeta | null = null;
     let updateAvailable = false;
@@ -90,7 +90,7 @@ export async function GET() {
 /** POST action=update — 개정본 다운로드·파싱·새 버전 시딩 */
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.edit");
     const body = await req.json().catch(() => ({}));
     if (String(body.action ?? "update") !== "update") {
       return NextResponse.json({ error: "알 수 없는 action 입니다." }, { status: 400 });

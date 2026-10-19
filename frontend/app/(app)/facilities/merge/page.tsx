@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
+import { AccessDenied } from "@/components/auth/AccessDenied";
 import {
   ArrowLeft,
   CheckCircle2,
   GitMerge,
   RefreshCw,
   Search,
-  ShieldAlert,
   X,
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
@@ -109,8 +110,7 @@ export default function FacilityMergePage() {
 
 function Inner() {
   const { data: session, status: sessionStatus } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role;
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "facility.merge");
   const { theme, toggleTheme } = useCdashTheme();
   const toast = useToast();
 
@@ -414,15 +414,7 @@ function Inner() {
     return <div className="cdash p-8 cd-text-faint text-sm" data-theme={theme}>세션 확인 중…</div>;
   }
   if (!canEdit) {
-    return (
-      <div className="cdash p-8 flex items-center justify-center" data-theme={theme}>
-        <div className="cd-card rounded-3xl p-10 text-center max-w-md">
-          <ShieldAlert className="w-10 h-10 cd-error-text mx-auto mb-3" />
-          <h2 className="text-lg font-bold cd-text mb-1">권한이 없습니다</h2>
-          <p className="text-sm cd-text-faint">사업장 병합은 편집자 이상 권한이 필요합니다.</p>
-        </div>
-      </div>
-    );
+    return <AccessDenied requiredKeys={["facility.merge"]} message="사업장 병합에는 사업장 병합 권한(facility.merge)이 필요합니다." />;
   }
 
   return (

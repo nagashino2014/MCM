@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import {
   createAnnualRound,
   createPromotionRound,
@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
 /** 라운드 목록(+연도별 비율 이력) / ?promotionContext=employeeId 승진 패널 컨텍스트 */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const employeeId = new URL(req.url).searchParams.get("promotionContext");
     if (employeeId) {
       return NextResponse.json(await getPromotionContext(employeeId));
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 /** action: preview(미리보기) | create-annual(일괄 draft 생성) | create-promotion(개별 승진) */
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireAdmin();
+    const ctx = await requirePermission("payroll.edit");
     const body = await req.json();
     const action = String(body.action ?? "");
     if (action === "preview") {

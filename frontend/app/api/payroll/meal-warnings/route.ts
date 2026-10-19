@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAdmin } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import {
   MEAL_WARNING_ACTIONS,
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requirePermission("payroll.view");
     const sp = new URL(req.url).searchParams;
     const year = Number(sp.get("year"));
     const month = Number(sp.get("month"));
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireAdmin();
+    const actor = await requirePermission("payroll.edit");
     const body = (await req.json().catch(() => ({}))) as {
       warningId?: string;
       action?: string;

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
-import { MENU_ITEMS, isMenuVisibleForRole, type Role } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "@/config/menu";
 import { CdModal } from "@/components/cdash/CdModal";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ interface Entry {
   comingSoon?: boolean;
 }
 
-export function GlobalSearch({ role, open, onClose }: { role: Role; open: boolean; onClose: () => void }) {
+export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[]; open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -27,13 +27,13 @@ export function GlobalSearch({ role, open, onClose }: { role: Role; open: boolea
   // 메뉴 → 평탄화된 검색 엔트리(권한 필터 적용).
   const entries = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
-    // 권한키로 노출을 가르는 메뉴는 role 만으로 판정할 수 없어 검색 대상에서 뺀다(사이드바로 진입).
-    for (const m of MENU_ITEMS.filter((m) => isMenuVisibleForRole(m, role) && !m.permissionKey)) {
+    // 사이드바와 같은 권한 요약(perms) 기준 — 숨겨진 메뉴·서브메뉴는 검색 후보에도 나오지 않는다(M-41).
+    for (const m of MENU_ITEMS.filter((m) => isMenuVisible(m, perms))) {
       out.push({ title: m.title, section: m.title, href: m.href, comingSoon: m.comingSoon });
-      for (const s of m.submenu ?? []) out.push({ title: s.title, section: m.title, href: s.href });
+      for (const s of visibleSubmenu(m, perms)) out.push({ title: s.title, section: m.title, href: s.href });
     }
     return out;
-  }, [role]);
+  }, [perms]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

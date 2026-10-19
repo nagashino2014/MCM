@@ -2,6 +2,7 @@
  * Auth.js (NextAuth v5) 전체 설정.
  * - Node runtime 전용. middleware.ts 는 edge-config.ts 를 사용.
  * - credentials provider 의 authorize 가 sql.js + bcrypt 로 DB 조회.
+ * - 로그인·세션 갱신(update()) 시 권한 요약(perms)을 토큰에 싣는다(role 일원화 WP5).
  */
 
 import NextAuth, { type DefaultSession } from "next-auth";
@@ -10,6 +11,7 @@ import { findUserById } from "./users";
 import { verifyCredentials } from "./verify-credentials";
 import type { Role, UserStatus } from "./users";
 import { edgeAuthConfig } from "./edge-config";
+import { loadPermissionSummary } from "./rbac";
 
 declare module "next-auth" {
   interface Session {
@@ -18,6 +20,8 @@ declare module "next-auth" {
       role: Role;
       status: UserStatus;
       mustChangePassword: boolean;
+      /** 권한 요약(lib/auth/perms.ts) — "key" 또는 "key@all". 메뉴·화면 게이트의 판정 근거. 구 토큰은 undefined. */
+      perms?: string[];
     } & DefaultSession["user"];
   }
 
@@ -32,6 +36,16 @@ declare module "next-auth" {
 
 /** 미기억(로그인 유지 미체크) 세션의 수명 — 기존 전역 maxAge(12h)와 동일. */
 const SHORT_SESSION_MS = 12 * 60 * 60 * 1000;
+
+/** 권한 요약 로드 — 실패(DB 일시 장애)해도 로그인을 막지 않고 빈 요약으로 둔다(메뉴만 비고 API 는 DB 판정). */
+async function safePermissionSummary(userId: string): Promise<string[]> {
+  try {
+    return await loadPermissionSummary(userId);
+  } catch (err) {
+    console.warn("[auth] 권한 요약 로드 실패: " + (err as Error).message);
+    return [];
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...edgeAuthConfig,
@@ -77,6 +91,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // 자동 로그인(G-L): 체크 시 쿠키 maxAge(30일)까지 유지, 미체크 시 12시간 후 만료 처리.
         t.rememberMe = u.rememberMe === true;
         t.loginAt = Date.now();
+        // 권한 요약 — 로그인 시점 스냅샷. 변경은 재로그인 또는 update() 로 반영(§6-6).
+        if (u.id) t.perms = await safePermissionSummary(u.id);
       } else if (t.rememberMe !== true) {
         const loginAt = Number(t.loginAt ?? 0);
         if (!loginAt) {
@@ -97,8 +113,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             (token as Record<string, unknown>).role = fresh.role;
             (token as Record<string, unknown>).status = fresh.status;
             (token as Record<string, unknown>).mustChangePassword = fresh.mustChangePassword;
+            (token as Record<string, unknown>).perms = await safePermissionSummary(userId);
           }
         }
+      }
+      if (!user && trigger !== "update" && !Array.isArray(t.perms) && typeof t.userId === "string") {
+        // 배포 전(권한 요약 도입 이전) 발급 토큰 — 1회 보강. 서버 컴포넌트 경로에서는 쿠키가 다시 쓰이지
+        // 않을 수 있어 재로그인 전까지 요청마다 반복될 수 있다(requirePermission 과 같은 비용 수준).
+        t.perms = await safePermissionSummary(t.userId);
       }
       return token;
     },

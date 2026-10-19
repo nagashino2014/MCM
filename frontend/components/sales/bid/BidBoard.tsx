@@ -8,6 +8,7 @@ import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered, FileStack, Download } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -202,8 +203,7 @@ async function jfetch(url: string, init?: RequestInit) {
 
 export function BidBoard() {
   const { data: session } = useSession();
-  const role = (session?.user as { role?: string } | undefined)?.role ?? "viewer";
-  const canEdit = role === "admin" || role === "editor";
+  const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
   const { theme } = useCdashTheme();
 
   const [bidType, setBidType] = useState<BidType>("bid_notice");

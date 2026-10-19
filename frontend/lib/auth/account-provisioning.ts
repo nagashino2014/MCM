@@ -81,7 +81,7 @@ export async function provisionAccountForEmployee(
       `INSERT INTO users
          (user_id, email, password_hash, name, role, status,
           login_id, email_local, must_change_password, employee_id, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'viewer', 'active', $5, $6, 1, $7, $8, $9, $9)`,
+       VALUES ($1, $2, $3, $4, 'member', 'active', $5, $6, 1, $7, $8, $9, $9)`,
       [userId, placeholderEmail, passwordHash, name, loginId, emailLocal, employeeId, actorUserId, now]
     );
 
@@ -91,6 +91,9 @@ export async function provisionAccountForEmployee(
     );
 
     // 직급 기본 권한 템플릿 자동 부여(044 와 동일 규칙·assignment_id 로 멱등).
+    // effective_from 은 날짜 10자리(YYYY-MM-DD) — loadUserAccess 가 오늘 날짜와 문자열 비교하므로
+    // ISO 타임스탬프를 넣으면 발급 당일 grant 0개(F-01, 2026-10-19 실측). assigned_at 만 타임스탬프.
+    const effectiveFrom = now.slice(0, 10);
     const tplRows = rowsToObjects(
       await db.exec(
         `SELECT pdt.template_id, pdt.scope_kind_default, pdt.scope_dept_default
@@ -107,7 +110,7 @@ export async function provisionAccountForEmployee(
         `INSERT INTO user_permission_assignments
            (assignment_id, user_id, template_id, scope_override_kind, scope_override_dept_id,
             effective_from, reason, assigned_by, assigned_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $6)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (assignment_id) DO NOTHING`,
         [
           `auto-${userId}-${templateId}`,
@@ -115,9 +118,10 @@ export async function provisionAccountForEmployee(
           templateId,
           t.scope_kind_default != null ? String(t.scope_kind_default) : null,
           t.scope_dept_default != null ? String(t.scope_dept_default) : null,
-          now,
+          effectiveFrom,
           "직급 기본 권한 템플릿 자동 부여(발급)",
           actorUserId,
+          now,
         ]
       );
     }

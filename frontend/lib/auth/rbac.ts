@@ -2,12 +2,13 @@
  * RBAC 런타임 — 권한 템플릿(permission_template_grants) + 인원 적용(user_permission_assignments)
  * 을 평가해 atomic 권한키 + scope 를 검사한다. (블루프린트 §3.2.6)
  *
- * - admin 역할은 항상 ALLOW.
+ * - role 은 판정에 쓰지 않는다(RBAC_ADMIN_BYPASS 비상 우회만 예외). 관리자 권한의 근거는 tpl-system-admin 템플릿.
  * - deny-overrides: 같은 키에 deny 가 있으면 allow 보다 우선.
  * - scope: self / self_dept / specific_dept / all.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import type { Role } from "./users";
+import { PERM_ALL_SUFFIX } from "./perms";
 
 export type ScopeKind = "self" | "participant" | "self_dept" | "specific_dept" | "all";
 
@@ -27,6 +28,12 @@ export interface UserAccess {
   participantContractIds: Set<string>;
   /** 본인(employee)이 관계자로 등록된 영업 프로젝트 id 집합 — sales.* participant scope 평가용. */
   participantProjectIds: Set<string>;
+  /** 부서 범위 grant(self_dept·specific_dept)가 가리키는 부서 id 합집합 — 단건 target 판정용(F-06). */
+  deptIds: Set<string>;
+  /** deptIds 부서가 소유(owning_dept_id)하거나 부서원이 참여한 계약 id 집합 — self_dept + target.contractId 판정용(F-06). */
+  deptContractIds: Set<string>;
+  /** deptIds 부서가 담당(owner_dept_id)하거나 부서원이 관계자인 영업 프로젝트 id 집합 — self_dept + target.projectId 판정용(F-06). */
+  deptProjectIds: Set<string>;
   grants: GrantRow[];
 }
 
@@ -42,10 +49,18 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
   const db = await getDb();
   const today = new Date().toISOString().slice(0, 10);
 
+  // 소속 부서 = 조직 인원(employee_profiles.dept_id)이 진실원. users.dept_id 는 발급 경로가 채우지 않아 전원 NULL 이라
+  // self_dept 판정이 target 이 오면 항상 불일치·없으면 통과였다(F-02, 2026-10-19 실측) → 조직 인원 우선, 없으면 users 값.
   const userRows = rowsToObjects(
-    await db.exec("SELECT role, dept_id, employee_id FROM users WHERE user_id = $1 LIMIT 1", [userId])
+    await db.exec(
+      `SELECT u.role, COALESCE(ep.dept_id, u.dept_id) AS dept_id, u.employee_id
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE u.user_id = $1 LIMIT 1`,
+      [userId]
+    )
   );
-  const role = (String(userRows[0]?.role ?? "viewer") as Role);
+  const role = (String(userRows[0]?.role ?? "member") as Role);
   const deptId = userRows[0]?.dept_id != null ? String(userRows[0].dept_id) : null;
   const employeeId = userRows[0]?.employee_id != null ? String(userRows[0].employee_id) : null;
 
@@ -78,8 +93,8 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
          JOIN permission_template_grants g ON g.template_id = a.template_id
         WHERE a.user_id = $1
           AND a.revoked_at IS NULL
-          AND (a.effective_from IS NULL OR a.effective_from <= $2)
-          AND (a.effective_to IS NULL OR a.effective_to >= $2)`,
+          AND (a.effective_from IS NULL OR left(a.effective_from, 10) <= $2)
+          AND (a.effective_to IS NULL OR left(a.effective_to, 10) >= $2)`,
       [userId, today]
     )
   );
@@ -91,7 +106,64 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     effect: (String(row.effect ?? "allow") as "allow" | "deny"),
   }));
 
-  return { userId, role, deptId, employeeId, participantContractIds, participantProjectIds, grants };
+  // 부서 범위 단건 판정용 집합(F-06, 2026-10-19 실측: 부서장이 타 부서 계약·영업건 단건을 전부 200).
+  // self_dept/specific_dept grant 가 하나라도 있을 때만 로드한다. 목록 필터(contract-scope.ts)와 같은 규칙:
+  //   계약 = owning_dept_id ∈ 부서 OR 부서원 참여 / 영업건 = owner_dept_id ∈ 부서 OR 부서원 관계자.
+  const deptIds = new Set<string>();
+  for (const g of grants) {
+    if (g.effect !== "allow") continue;
+    if (g.scopeKind === "self_dept" && deptId) deptIds.add(deptId);
+    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+  }
+  const deptContractIds = new Set<string>();
+  const deptProjectIds = new Set<string>();
+  if (deptIds.size > 0) {
+    const depts = [...deptIds];
+    const cRows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT c.contract_id
+           FROM contracts c
+          WHERE c.owning_dept_id = ANY($1)
+             OR EXISTS (
+               SELECT 1 FROM service_participants sp
+               JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
+               WHERE sp.contract_id = c.contract_id AND ep.dept_id = ANY($1)
+             )`,
+        [depts]
+      )
+    );
+    for (const r of cRows) if (r.contract_id != null) deptContractIds.add(String(r.contract_id));
+    const pRows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT p.project_id
+           FROM sales_projects p
+          WHERE p.owner_dept_id = ANY($1)
+             OR EXISTS (
+               SELECT 1 FROM sales_project_members m
+               JOIN employee_profiles ep ON ep.employee_id = m.employee_id
+               WHERE m.project_id = p.project_id AND ep.dept_id = ANY($1)
+             )`,
+        [depts]
+      )
+    );
+    for (const r of pRows) if (r.project_id != null) deptProjectIds.add(String(r.project_id));
+  }
+
+  return {
+    userId, role, deptId, employeeId,
+    participantContractIds, participantProjectIds,
+    deptIds, deptContractIds, deptProjectIds,
+    grants,
+  };
+}
+
+/** 부서 범위 grant 의 단건 판정 — target 의 계약·영업건·부서 중 주어진 것을 모두 만족해야 한다(F-06). */
+function deptScopeMatches(access: UserAccess, deptIdOfGrant: string | null, target: PermissionTarget): boolean {
+  if (!deptIdOfGrant) return false;
+  if (target.contractId != null && !access.deptContractIds.has(target.contractId)) return false;
+  if (target.projectId != null && !access.deptProjectIds.has(target.projectId)) return false;
+  if (target.deptId != null && target.deptId !== deptIdOfGrant) return false;
+  return true;
 }
 
 function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
@@ -106,9 +178,10 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
       return (target.contractId == null || access.participantContractIds.has(target.contractId))
           && (target.projectId == null || access.participantProjectIds.has(target.projectId));
     case "self_dept":
-      return !target.deptId || target.deptId === access.deptId;
+      // target 이 비어 있으면 통과(목록은 도메인 필터가 처리), 계약·영업건·부서가 오면 그 부서 범위 안이어야 한다(F-06).
+      return deptScopeMatches(access, access.deptId, target);
     case "specific_dept":
-      return !target.deptId || target.deptId === grant.scopeDeptId;
+      return deptScopeMatches(access, grant.scopeDeptId, target);
     default:
       return false;
   }
@@ -148,4 +221,27 @@ export async function hasGlobalScope(userId: string, permissionKey: string): Pro
   return access.grants.some(
     (g) => g.permissionKey === permissionKey && g.effect === "allow" && g.scopeKind === "all"
   );
+}
+
+/**
+ * 권한 요약 — 세션(JWT)에 싣는 문자열 목록(lib/auth/perms.ts 형식: "key" 또는 "key@all").
+ * 메뉴 노출·미들웨어 1차 차단·화면 버튼 게이트가 읽는다. deny-overrides 는 checkPermission 과 동일.
+ * (role 일원화 WP5, 2026-10-19)
+ */
+export function summarizePermissions(access: UserAccess): string[] {
+  const keys = [...new Set(access.grants.map((g) => g.permissionKey))].sort();
+  const out: string[] = [];
+  for (const key of keys) {
+    if (!checkPermission(access, key)) continue;
+    const global =
+      (ADMIN_BYPASS && access.role === "admin") ||
+      access.grants.some((g) => g.permissionKey === key && g.effect === "allow" && g.scopeKind === "all");
+    out.push(global ? key + PERM_ALL_SUFFIX : key);
+  }
+  return out;
+}
+
+/** userId 로 로드 후 요약하는 편의 함수(로그인·세션 갱신 시 config.ts 가 호출). */
+export async function loadPermissionSummary(userId: string): Promise<string[]> {
+  return summarizePermissions(await loadUserAccess(userId));
 }

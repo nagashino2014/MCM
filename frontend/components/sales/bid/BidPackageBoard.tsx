@@ -185,14 +185,15 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 // P3 에서 생성할 문서 7종 — 골격 단계에서는 구성 안내만 표시.
-const PACKAGE_DOCS = [
-  "업체 연혁·일반사항",
-  "신용평가 등급",
-  "수행실적 총괄표",
-  "수행인력 집계표",
-  "수행인력 개별 이력사항",
-  "개인정보 수집 및 이용 동의서",
-  "보안 서약서",
+/** 패키지 문서 구성 — 태그를 누르면 해당 서식(docType, lib/bid/package-catalog)만 채운 미리보기를 연다. */
+const PACKAGE_DOCS: { label: string; docType: string }[] = [
+  { label: "업체 연혁·일반사항", docType: "company_profile" },
+  { label: "신용평가 등급", docType: "credit_rating" },
+  { label: "수행실적 총괄표", docType: "performance_summary" },
+  { label: "수행인력 집계표", docType: "staff_summary" },
+  { label: "수행인력 개별 이력사항", docType: "staff_career" },
+  { label: "개인정보 수집 및 이용 동의서", docType: "privacy_consent" },
+  { label: "보안 서약서", docType: "security_pledge" },
 ];
 
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
@@ -478,6 +479,14 @@ export function BidPackageBoard() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // 서류 미리보기(PDF) — docType null = 전체. url 은 blob URL(닫을 때 해제)
+  const [docPreview, setDocPreview] = useState<{
+    label: string;
+    docType: string | null;
+    url: string | null;
+    error: string | null;
+    warnings: number;
+  } | null>(null);
 
   // 초기 로드 — 공고 요약 + 저장된 패키지 상태 + 발주처 기본 양식
   useEffect(() => {
@@ -744,6 +753,10 @@ export function BidPackageBoard() {
   // 업종 필터 해제/적용 토글 — 상태는 staffConfig 에 저장되어 문서 생성 시에도 반영된다
   const toggleIndustryBypass = (employeeId: string) => {
     const next = !staffConfig.industryBypass.includes(employeeId);
+    // 다시 적용하려는데 수행실적 설정의 선택업종이 하나도 켜져 있지 않으면 거를 업종이 없다
+    if (!next && effectivePerfFilter.industries.length === 0) {
+      alert("선택업종 필터가 적용되어 있지 않습니다.");
+    }
     setStaffConfig((prev) => ({
       ...prev,
       industryBypass: next
@@ -883,6 +896,58 @@ export function BidPackageBoard() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  // 서류 미리보기 — 저장 전 화면 상태 그대로 생성 엔진으로 채워 PDF 로 본다(저장·보관 없음)
+  const openDocPreview = async (label: string, docType: string | null) => {
+    if (!bidId) return;
+    if (!form?.hasProfile) {
+      alert("양식 분석(매핑) 후 미리볼 수 있습니다.");
+      return;
+    }
+    setDocPreview({ label, docType, url: null, error: null, warnings: 0 });
+    try {
+      const roles: StaffConfigUI["roles"] = {};
+      for (const id of pickedEmployees) {
+        if (staffConfig.roles[id]) roles[id] = staffConfig.roles[id];
+      }
+      const res = await fetch("/api/sales/bids/package/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bidType,
+          bidId,
+          formId: form.formId,
+          contractIds,
+          employeeIds: Array.from(pickedEmployees),
+          staffConfig: { ...staffConfig, roles, perfFilter: effectivePerfFilter },
+          docType,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string })?.error ?? "미리보기를 만들지 못했습니다.");
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const warnings = Number(res.headers.get("X-Preview-Warnings") ?? 0) || 0;
+      setDocPreview((prev) => {
+        // 그 사이 닫았거나 다른 항목을 열었으면 버린다
+        if (!prev || prev.docType !== docType) {
+          URL.revokeObjectURL(url);
+          return prev;
+        }
+        return { ...prev, url, warnings };
+      });
+    } catch (err) {
+      setDocPreview((prev) => (prev && prev.docType === docType ? { ...prev, error: (err as Error).message } : prev));
+    }
+  };
+
+  const closeDocPreview = () => {
+    setDocPreview((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return null;
+    });
   };
 
   // 대분류가 다른 용역 혼합 선택 차단 + 체크 토글
@@ -1038,8 +1103,9 @@ export function BidPackageBoard() {
               )}
             </section>
 
-            {/* ② 실적 계약 선택 — 절대 높이 고정: 트리를 열어도 카드는 늘지 않고 내부 스크롤 */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col h-[720px] shrink-0">
+            {/* ② 실적 계약 선택 — 기준 높이 0(basis-0)+최소 720px 로 트리를 열어도 행 높이는 늘지 않고 내부 스크롤,
+                우열(④+③)이 더 길면 남는 높이를 채워 두 열 하단을 맞춘다 */}
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col flex-1 basis-0 min-h-[720px]">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 ② 실적 계약 선택
@@ -1141,9 +1207,17 @@ export function BidPackageBoard() {
               </h3>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[12px]">
                 {PACKAGE_DOCS.map((d, i) => (
-                  <li key={d} className="rounded-lg border cd-border-c px-3 py-1 cd-text flex items-center gap-2">
-                    <span className="text-[10px] font-mono cd-text-faint shrink-0">{i + 1}</span>
-                    <span className="truncate">{d}</span>
+                  <li key={d.docType}>
+                    <button
+                      type="button"
+                      onClick={() => openDocPreview(d.label, d.docType)}
+                      title={`${d.label} 미리보기`}
+                      className="w-full rounded-lg border cd-border-c px-3 py-1 cd-text flex items-center gap-2 text-left hover:border-[color:var(--cd-primary)] hover:bg-[color:var(--cd-surface)]"
+                    >
+                      <span className="text-[10px] font-mono cd-text-faint shrink-0">{i + 1}</span>
+                      <span className="truncate">{d.label}</span>
+                      <Eye className="w-3.5 h-3.5 cd-text-faint ml-auto shrink-0" />
+                    </button>
                   </li>
                 ))}
                 <li className="rounded-lg border cd-border-c px-3 py-1 cd-text-faint flex items-center gap-2 md:col-span-2">
@@ -1160,6 +1234,15 @@ export function BidPackageBoard() {
                   title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
                 >
                   {generating ? "생성 중..." : pkg?.output ? "문서 재생성 (HWPX)" : "문서 생성 (HWPX)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openDocPreview("전체", null)}
+                  disabled={!form?.hasProfile}
+                  className="cd-btn cd-btn-soft rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5"
+                  title="현재 화면 상태(저장 전 포함)로 채운 전체 서류를 PDF 로 미리봅니다."
+                >
+                  <Eye className="w-3.5 h-3.5" /> 전체 미리보기
                 </button>
                 {pkg?.output && (
                   <a
@@ -1186,7 +1269,7 @@ export function BidPackageBoard() {
               )}
             </section>
             {/* ③ 수행인력 확정 — 리스트 + 참여직위/담당파트/수행실적 설정(단일 카드) */}
-            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col min-h-0 gap-4">
+            <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 flex flex-col flex-1 min-h-0 gap-4">
               <div className="flex flex-col min-h-[240px]">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 cd-text-primary" />
@@ -1601,6 +1684,35 @@ export function BidPackageBoard() {
                   <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
                 )}
                 <p className="text-[10px] cd-text-faint">인원을 클릭하면 수행인력 리스트에 추가·확정됩니다.</p>
+              </div>
+            </div>
+          )}
+
+          {/* 서류 미리보기 — 생성 엔진으로 채운 HWPX 를 PDF 로 변환해 표시(항목별/전체) */}
+          {docPreview && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={closeDocPreview}>
+              <div className="cdash cdash-vars cd-solid-bg rounded-2xl border cd-border-c w-full max-w-5xl h-[88vh] p-4 flex flex-col gap-3" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-bold cd-text flex-1">
+                    {docPreview.docType ? `미리보기 — ${docPreview.label}` : "전체 미리보기"}
+                    <span className="ml-2 text-[11px] font-normal cd-text-faint">
+                      현재 화면 상태 기준(저장 전 포함) · 실제 생성본과 같은 엔진으로 채움
+                      {docPreview.warnings > 0 && ` · 경고 ${docPreview.warnings.toLocaleString()}건`}
+                    </span>
+                  </h3>
+                  <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={closeDocPreview}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 rounded-xl border cd-border-c overflow-hidden">
+                  {docPreview.error ? (
+                    <p className="text-[12px] cd-error-text py-10 text-center">{docPreview.error}</p>
+                  ) : docPreview.url ? (
+                    <iframe src={docPreview.url} title="서류 미리보기" className="w-full h-full bg-white" />
+                  ) : (
+                    <p className="text-[12px] cd-text-faint py-10 text-center">미리보기를 만드는 중입니다. (문서 변환에 10~30초 걸릴 수 있습니다)</p>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -473,12 +473,138 @@ function fillDocTable(
   return out;
 }
 
-/** 양식 HWPX + form_profile + 데이터 → 채움본 HWPX. opts.creditImage = 신용평가 등급부 이미지(스캔 교체). */
+/** 최상위 문단(<hp:p>) 범위 — 표 안 문단은 깊이 계산으로 제외한다. */
+function topLevelParagraphs(sectionXml: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  const re = /<hp:p\b[^>]*?(\/?)>|<\/hp:p>/g;
+  let depth = 0;
+  let start = -1;
+  for (const m of sectionXml.matchAll(re)) {
+    const idx = m.index ?? 0;
+    if (m[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        out.push({ start, end: idx + m[0].length });
+        start = -1;
+      }
+      continue;
+    }
+    if (m[1] === "/") {
+      if (depth === 0) out.push({ start: idx, end: idx + m[0].length });
+      continue;
+    }
+    if (depth === 0) start = idx;
+    depth += 1;
+  }
+  return out;
+}
+
+const FORM_TITLE_RE = /^\s*(\[\s*별\s*첨|\[\s*별\s*지|\[\s*서\s*식|\[\s*양\s*식|【\s*별\s*첨|【\s*별\s*지|【\s*서\s*식|【\s*양\s*식)/;
+
+/**
+ * 미리보기용 서식 잘라내기 — 지정 문서 타입에 속한 서식 구간(표제·본문·표)만 남긴 섹션과,
+ * 남은 표 기준으로 표 인덱스를 다시 매긴 프로파일을 돌려준다.
+ * 구간 경계: 표를 품은 문단은 그 표의 문서 소유, 서로 다른 문서 사이 문단은 서식 표제
+ * ([별첨 서식 N] 등) → 쪽나눔 문단 → 빈 문단 3개 이상 블록 순으로 경계를 찾고, 못 찾으면 뒤 문서에 붙인다.
+ * 첫 문단은 구역 설정(용지·여백)을 품고 있어 버리지 않고 글자·표만 비운다.
+ */
+export function cropToDocTypes(
+  sectionXml: string,
+  profile: FormProfile,
+  docTypes: Set<string>
+): { xml: string; profile: FormProfile } {
+  const tables = extractTables(sectionXml);
+  const owner = new Map<number, string>();
+  for (const doc of profile.documents) {
+    const refs = new Set<number>(doc.tables);
+    for (const f of doc.fields) if (f.table != null) refs.add(f.table);
+    if (doc.repeat) refs.add(doc.repeat.table);
+    for (const ti of refs) if (!owner.has(ti)) owner.set(ti, doc.docType);
+  }
+  const paras = topLevelParagraphs(sectionXml);
+  const textOf = (xml: string) => [...xml.matchAll(/<hp:t[^>]*>([\s\S]*?)<\/hp:t>/g)].map((m) => m[1]).join("");
+  const parasMeta = paras.map((p) => {
+    const xml = sectionXml.slice(p.start, p.end);
+    const tIdx = tables.map((t, i) => (t.start >= p.start && t.end <= p.end ? i : -1)).filter((i) => i >= 0);
+    const own = tIdx.length ? owner.get(tIdx[0]) ?? `unknown:${tIdx[0]}` : null;
+    const text = textOf(xml);
+    return {
+      ...p,
+      tIdx,
+      owner: own as string | null,
+      isTitle: FORM_TITLE_RE.test(text),
+      isBreak: /^<hp:p\b[^>]*pageBreak="1"/.test(xml),
+      isEmpty: !tIdx.length && !/<hp:pic\b|<hp:ctrl\b/.test(xml) && text.trim() === "",
+    };
+  });
+
+  // 표 없는 문단(간격)의 소유 문서 결정
+  const anchors = parasMeta.map((p, i) => (p.owner ? i : -1)).filter((i) => i >= 0);
+  const assigned: (string | null)[] = parasMeta.map((p) => p.owner);
+  const assignGap = (from: number, to: number, prev: string | null, next: string | null) => {
+    if (from > to) return;
+    if (!prev || !next || prev === next) {
+      for (let i = from; i <= to; i += 1) assigned[i] = prev ?? next;
+      return;
+    }
+    let split = -1;
+    for (let i = from; i <= to && split < 0; i += 1) if (parasMeta[i].isTitle) split = i;
+    for (let i = from; i <= to && split < 0; i += 1) if (parasMeta[i].isBreak) split = i;
+    if (split < 0) {
+      for (let i = from; i <= to && split < 0; i += 1) {
+        let j = i;
+        while (j <= to && parasMeta[j].isEmpty) j += 1;
+        if (j - i >= 3) split = j;
+      }
+    }
+    if (split < 0) split = from;
+    for (let i = from; i <= to; i += 1) assigned[i] = i < split ? prev : next;
+  };
+  if (!anchors.length) return { xml: sectionXml, profile };
+  assignGap(0, anchors[0] - 1, null, parasMeta[anchors[0]].owner);
+  for (let k = 0; k < anchors.length - 1; k += 1) {
+    assignGap(anchors[k] + 1, anchors[k + 1] - 1, parasMeta[anchors[k]].owner, parasMeta[anchors[k + 1]].owner);
+  }
+  assignGap(anchors[anchors.length - 1] + 1, parasMeta.length - 1, parasMeta[anchors[anchors.length - 1]].owner, null);
+
+  const keptTables: number[] = [];
+  const parts: string[] = [];
+  parasMeta.forEach((p, i) => {
+    const xml = sectionXml.slice(p.start, p.end);
+    const keep = assigned[i] != null && docTypes.has(assigned[i] as string);
+    if (keep) {
+      keptTables.push(...p.tIdx);
+      parts.push(xml);
+    } else if (i === 0) {
+      parts.push(xml.replace(TBL_RE, "").replace(T_ALL_RE, "<hp:t></hp:t>"));
+    }
+  });
+  const head = paras.length ? sectionXml.slice(0, paras[0].start) : sectionXml;
+  const tail = paras.length ? sectionXml.slice(paras[paras.length - 1].end) : "";
+  const map = new Map<number, number>(keptTables.map((ti, ni) => [ti, ni]));
+
+  const documents = profile.documents
+    .filter((d) => docTypes.has(d.docType))
+    .map((d) => ({
+      ...d,
+      tables: d.tables.filter((t) => map.has(t)).map((t) => map.get(t)!),
+      fields: d.fields
+        .filter((f) => f.table == null || map.has(f.table))
+        .map((f) => ({ ...f, table: f.table == null ? null : map.get(f.table)! })),
+      repeat: d.repeat && map.has(d.repeat.table) ? { ...d.repeat, table: map.get(d.repeat.table)! } : null,
+    }));
+  return { xml: head + parts.join("") + tail, profile: { ...profile, documents } };
+}
+
+/**
+ * 양식 HWPX + form_profile + 데이터 → 채움본 HWPX. opts.creditImage = 신용평가 등급부 이미지(스캔 교체).
+ * opts.onlyDocTypes = 미리보기용 — 해당 문서 타입의 서식만 남겨 채운다(생성본에는 쓰지 않는다).
+ */
 export async function fillPackageHwpx(
   formBytes: Uint8Array,
-  profile: FormProfile,
+  profileIn: FormProfile,
   data: PackageData,
-  opts?: { creditImage?: Uint8Array }
+  opts?: { creditImage?: Uint8Array; onlyDocTypes?: string[] }
 ): Promise<{ bytes: Uint8Array; warnings: string[] }> {
   const warnings: string[] = [];
   const zip = await JSZip.loadAsync(formBytes);
@@ -492,6 +618,12 @@ export async function fillPackageHwpx(
   }
   const sectionName = sectionNames[0];
   let xml = await zip.files[sectionName].async("string");
+  let profile = profileIn;
+  if (opts?.onlyDocTypes?.length) {
+    const cropped = cropToDocTypes(xml, profileIn, new Set(opts.onlyDocTypes));
+    xml = cropped.xml;
+    profile = cropped.profile;
+  }
 
   const tables = extractTables(xml);
   // 표 교체는 뒤에서부터(앞 위치가 흔들리지 않게). 같은 표를 두 문서가 교체하면 좌표가

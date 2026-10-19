@@ -148,7 +148,8 @@ function parseIds(value: unknown): string[] {
   return [];
 }
 
-function parseStaffConfig(value: unknown): StaffConfig {
+/** 저장본·요청 본문의 staffConfig 정규화 — 미리보기 API 가 저장 전 화면 상태를 그대로 쓸 때도 사용. */
+export function parseStaffConfig(value: unknown): StaffConfig {
   try {
     const v = typeof value === "string" ? JSON.parse(value) : value;
     if (v && typeof v === "object") {

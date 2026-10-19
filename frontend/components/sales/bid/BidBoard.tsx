@@ -1541,7 +1541,7 @@ export function BidBoard() {
       {/* 매칭 알림 설정 모달 — 수신자(조직도)·채널·발송 시각 */}
       {notifyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setNotifyModal(false)}>
-          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="cd-solid-bg rounded-2xl border cd-border-c w-full max-h-[85vh] overflow-y-auto p-5 flex flex-col gap-3" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <BellRing className="w-4 h-4" /> 사업분야 매칭 알림 설정
@@ -1643,15 +1643,15 @@ export function BidBoard() {
                   </label>
                 </div>
                 {/* 발송 시각 — 최대 4개. 각 시각 10분 전에 대상 종류를 최신 수집한 뒤 발송한다(2026-08-20). */}
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
                   <span className="text-[13px] cd-text whitespace-nowrap">발송 시각</span>
                   {sendTimesDraft.map((draft, ti) => (
                     // 제거 버튼은 입력 박스 위에 겹쳐 두고 마우스를 올렸을 때만 보인다
                     // (상시 노출하면 칩 폭이 늘어 4개가 다음 줄로 넘어간다).
-                    <span key={ti} className="relative group">
+                    <span key={ti} className="relative group min-w-0" style={{ flex: "1 1 0", maxWidth: 76 }}>
                       <input
                         className="cd-input text-[13px] text-center"
-                        style={{ width: 64, height: 34 }}
+                        style={{ width: "100%", height: 34 }}
                         inputMode="numeric"
                         maxLength={5}
                         placeholder="HH:MM"
@@ -1678,7 +1678,7 @@ export function BidBoard() {
                   {sendTimesDraft.length < 4 && (
                     <button
                       type="button"
-                      className="cd-btn cd-btn-soft text-[12px]"
+                      className="cd-btn cd-btn-soft text-[12px] shrink-0"
                       style={{ height: 34, width: 34, padding: 0, justifyContent: "center" }}
                       title="발송 시각 추가 (최대 4개)"
                       onClick={() => setSendTimesDraft((prev) => [...prev, ""])}
@@ -1697,6 +1697,7 @@ export function BidBoard() {
               <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 300 }}>
                 <span className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
                   발송 대상
+                  <span className="ml-auto flex items-center gap-2">
                   {TABS.map((t) => (
                     <label key={t.key} className="flex items-center gap-1 text-[12px] cd-text-muted whitespace-nowrap">
                       <input
@@ -1707,6 +1708,7 @@ export function BidBoard() {
                       {t.label}
                     </label>
                   ))}
+                  </span>
                 </span>
                 <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] cd-text-faint whitespace-nowrap">용역 분류</span>
@@ -1742,7 +1744,7 @@ export function BidBoard() {
                     {REGION_GROUPS.map((g) => (
                       <span
                         key={g}
-                        className="cd-chip cd-chip-sm cursor-pointer"
+                        className="cd-chip cd-chip-sm cursor-pointer whitespace-nowrap"
                         data-active={notifyProfile.regionGroups.includes(g)}
                         onClick={() => toggleNotifyRegion(g)}
                       >

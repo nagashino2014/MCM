@@ -90,11 +90,12 @@ function markBelowSeparator(blocks: LetterBlock[]): LetterBlock[] {
  * 않아도 번호 문단 앞에 빈 문단을 삽입한다(직전 블록이 이미 빈 문단이면 그대로).
  * "- 아 래 -" 아래(below)에는 적용하지 않는다 — 하위 항목(가. 밑의 1. 2. 3.)마다 한 줄씩 벌어져
  * A4 를 넘기던 원인(2026-10-13).
+ * 글머리 기호로 한 단계 이상 들여 쓴 하위 항목(가. 1) 등, listLevel ≥ 1)에도 적용하지 않는다(2026-10-19).
  */
 function ensureNumberedItemGaps(blocks: LetterBlock[]): LetterBlock[] {
   const out: LetterBlock[] = [];
   for (const b of blocks) {
-    const isNumbered = b.kind === "p" && !b.below && /^\s*\d+\.\s/.test(b.runs.map((r) => r.text).join(""));
+    const isNumbered = b.kind === "p" && !b.below && !((b.listLevel ?? 0) >= 1) && /^\s*\d+\.\s/.test(b.runs.map((r) => r.text).join(""));
     const prev = out[out.length - 1];
     const prevIsBlank = prev?.kind === "p" && !prev.runs.map((r) => r.text).join("").trim();
     if (isNumbered && out.length > 0 && !prevIsBlank) {

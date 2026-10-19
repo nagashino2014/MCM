@@ -52,6 +52,14 @@ export interface ParagraphBlock {
   indentPt?: number; // 에디터 들여쓰기(margin-left px→pt 환산). BODY_INDENT 에 가산
   /** 목록 항목(li) 문단의 중첩 깊이(1부터). "- 아 래 -" 아래에서 하위 항목 들여쓰기에 쓴다(2026-10-13) */
   listDepth?: number;
+  /**
+   * 글머리 기호 선택 창으로 고른 목록의 들여쓰기 단계(2026-10-19, lib/letter/list-markers.ts).
+   * 0 = 본문 문단 자리, 1 이상 = 단계마다 LIST_LEVEL_STEP_PT 더 들여 쓰고 이어지는 줄은 기호 뒤에 맞춘다.
+   * 기호를 고르지 않은 종전 목록은 undefined(종전 조판 그대로).
+   */
+  listLevel?: number;
+  /** 문단 첫 run 앞에 붙은 목록 기호(뒤 공백 포함) — 내어쓰기 폭 계산·HWPX 기호 칸에 쓴다 */
+  marker?: string;
   /** "- 아 래 -" 표기 아래 문단 — 좁은 좌여백·강제 빈 줄 없음·이어지는 줄도 여백 안(2026-10-13 사용자 요청) */
   below?: boolean;
 }

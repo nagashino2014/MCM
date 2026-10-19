@@ -640,6 +640,16 @@ select.cd-input {
 .cd-mail-editor ul { list-style: disc; padding-left: 1.6em; margin: 0.25em 0; }
 .cd-mail-editor ol { list-style: decimal; padding-left: 1.8em; margin: 0.25em 0; }
 .cd-mail-editor ul ul { list-style: circle; }
+/* 글머리 기호 선택 창(2026-10-19, lib/letter/list-markers.ts) — 목록 data-marker 의 표시 기호와 data-level 단계 들여쓰기.
+   기호 종류는 인라인 list-style-type(mcm-*)이 정하고, 단계는 한 단계마다 20px(≈15pt — 공문 PDF 단계 폭) 더 들여 쓴다. */
+.cd-mail-editor ol[data-marker], .cd-mail-editor ul[data-marker] { padding-left: 2.4em; }
+.cd-mail-editor [data-marker][data-level="1"] { margin-left: 20px; }
+.cd-mail-editor [data-marker][data-level="2"] { margin-left: 40px; }
+.cd-mail-editor [data-marker][data-level="3"] { margin-left: 60px; }
+.cd-mail-editor [data-marker][data-level="4"] { margin-left: 80px; }
+.cd-mail-editor [data-marker][data-level="5"] { margin-left: 100px; }
+.cd-mail-editor [data-marker][data-level="6"] { margin-left: 120px; }
+.cd-mail-editor [data-marker][data-level="7"] { margin-left: 140px; }
 .cd-mail-editor li { display: list-item; }
 .cd-mail-editor hr { border: none; border-top: 1px solid #c8c8cc; margin: 12px 0; }
 .cd-mail-editor img { max-width: 100%; }
@@ -675,3 +685,16 @@ select.cd-input {
 @media (prefers-reduced-motion: reduce) {
   .cdash *, .cdash-vars * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* 글머리 기호 카운터(2026-10-19) — 공문 항목 구분(가. 1) 가) (1) (가) ① ㉮)과 기호(- ○ □ ※). 전역 정의(@counter-style 은 스코프 불가) */
+@counter-style mcm-ganada { system: alphabetic; symbols: "가" "나" "다" "라" "마" "바" "사" "아" "자" "차" "카" "타" "파" "하"; suffix: ". "; }
+@counter-style mcm-ganada-paren { system: alphabetic; symbols: "가" "나" "다" "라" "마" "바" "사" "아" "자" "차" "카" "타" "파" "하"; suffix: ") "; }
+@counter-style mcm-paren-ganada { system: alphabetic; symbols: "가" "나" "다" "라" "마" "바" "사" "아" "자" "차" "카" "타" "파" "하"; prefix: "("; suffix: ") "; }
+@counter-style mcm-decimal-paren { system: extends decimal; suffix: ") "; }
+@counter-style mcm-paren-decimal { system: extends decimal; prefix: "("; suffix: ") "; }
+@counter-style mcm-circled { system: fixed; symbols: "①" "②" "③" "④" "⑤" "⑥" "⑦" "⑧" "⑨" "⑩" "⑪" "⑫" "⑬" "⑭" "⑮" "⑯" "⑰" "⑱" "⑲" "⑳"; suffix: " "; fallback: mcm-paren-decimal; }
+@counter-style mcm-circled-ganada { system: fixed; symbols: "㉮" "㉯" "㉰" "㉱" "㉲" "㉳" "㉴" "㉵" "㉶" "㉷" "㉸" "㉹" "㉺" "㉻"; suffix: " "; fallback: mcm-paren-ganada; }
+@counter-style mcm-dash { system: cyclic; symbols: "-"; suffix: " "; }
+@counter-style mcm-ring { system: cyclic; symbols: "○"; suffix: " "; }
+@counter-style mcm-box { system: cyclic; symbols: "□"; suffix: " "; }
+@counter-style mcm-ref { system: cyclic; symbols: "※"; suffix: " "; }

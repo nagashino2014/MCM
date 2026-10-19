@@ -4,6 +4,7 @@
 // 미지원 서식(글꼴·크기·색·이미지·링크)은 텍스트만 보존한다 — 공문은 단일 서체 원칙.
 // 외부 HTML 파서 의존성이 없어 자체 태그 스택 파서로 구현(서버/클라이언트 공용).
 
+import { LIST_LEVEL_MAX, clampListLevel, listMarkerDef, listMarkerText } from "./list-markers";
 import type { LetterBlock, ParagraphBlock, TableBlock, TableCell, TextRun } from "./types";
 
 interface Fmt {
@@ -118,6 +119,8 @@ export function parseLetterHtml(html: string): LetterBlock[] {
   const indentStack: number[] = [];
   let started = false; // 현재 문단에 내용 유입 여부(연속 flush 로 빈 문단 남발 방지)
   let curListDepth = 0; // 지금 문단이 li 이면 목록 중첩 깊이(1부터)
+  let curListLevel: number | undefined; // 글머리 기호를 고른 목록이면 들여쓰기 단계
+  let curMarker: string | undefined; // 이 li 문단 앞에 붙인 기호
 
   const pushText = (text: string) => {
     if (!text) return;
@@ -141,14 +144,19 @@ export function parseLetterHtml(html: string): LetterBlock[] {
     if (curAlign) p.align = curAlign;
     if (curIndent > 0) p.indentPt = curIndent;
     if (curListDepth > 0) p.listDepth = curListDepth;
+    if (curListLevel !== undefined) p.listLevel = curListLevel;
+    if (curMarker) p.marker = curMarker;
     blocks.push(p);
     runs = [];
     started = false;
     curListDepth = 0;
+    curListLevel = undefined;
+    curMarker = undefined;
   };
 
   // ── 목록 상태 ──
-  const listStack: { ordered: boolean; count: number }[] = [];
+  // marker = 글머리 기호 종류(data-marker), level = 들여쓰기 단계(data-level, 기호를 고른 목록만)
+  const listStack: { ordered: boolean; count: number; marker?: string; level?: number }[] = [];
 
   // ── 표 상태 ──
   // pending[col] = 위 행의 rowspan 병합이 이 열을 앞으로 몇 행 더 덮는지.
@@ -398,8 +406,25 @@ export function parseLetterHtml(html: string): LetterBlock[] {
       if (t.close) listStack.pop();
       else {
         // <ol start="N"> — 갈라진 목록이 앞 번호를 이어받는 경우(에디터가 start 를 단다)
-        const startM = tag === "ol" ? /\bstart\s*=\s*["']?(\d+)/i.exec(String(t.attrs ?? "")) : null;
-        listStack.push({ ordered: tag === "ol", count: startM ? Math.max(0, Number(startM[1]) - 1) : 0 });
+        const attrs = String(t.attrs ?? "");
+        const startM = tag === "ol" ? /\bstart\s*=\s*["']?(\d+)/i.exec(attrs) : null;
+        // 글머리 기호 선택 창(2026-10-19) — 종류·단계. 단계가 없으면 기호의 기본 단계,
+        // 기호 없는 하위 목록이 기호 목록 안에 있으면 바깥 단계 + 1.
+        const markerKey = /\bdata-marker\s*=\s*["']?([\w-]+)/i.exec(attrs)?.[1];
+        const def = listMarkerDef(markerKey);
+        const parent = listStack[listStack.length - 1];
+        const levelAttr = clampListLevel(/\bdata-level\s*=\s*["']?(\d+)/i.exec(attrs)?.[1]);
+        const level = def
+          ? (levelAttr ?? Math.max(def.defaultLevel, parent?.level !== undefined ? parent.level + 1 : 0))
+          : parent?.level !== undefined
+            ? Math.min(LIST_LEVEL_MAX, parent.level + 1)
+            : undefined;
+        listStack.push({
+          ordered: tag === "ol",
+          count: startM ? Math.max(0, Number(startM[1]) - 1) : 0,
+          marker: def?.key,
+          level,
+        });
       }
       flushPara();
       continue;
@@ -413,9 +438,12 @@ export function parseLetterHtml(html: string): LetterBlock[] {
         if (list) {
           list.count++;
           curAlign = undefined;
-          pushText(list.ordered ? `${list.count}. ` : "• ");
+          const marker = listMarkerText(list.marker, list.ordered, list.count);
+          pushText(marker);
           started = false; // 접두만으로는 빈 항목 취급
           curListDepth = listStack.length;
+          curListLevel = list.level;
+          curMarker = marker;
         }
       }
       continue;

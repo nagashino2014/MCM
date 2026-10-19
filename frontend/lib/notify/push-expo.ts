@@ -32,6 +32,7 @@ export type PushEventKey =
   | "calendar.schedule"
   | "todo.remind"
   | "todo.digest"
+  | "todo.weekly"
   | "todo.assigned"
   | "todo.comment"
   | "todo.status";
@@ -61,6 +62,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "calendar.schedule": true,
   "todo.remind": true,
   "todo.digest": true,
+  "todo.weekly": true,
   "todo.assigned": true,
   "todo.comment": true,
   "todo.status": true,
@@ -84,6 +86,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "calendar.schedule", label: "회의·면접·미팅 일정", description: "참석자로 지정된 회의·면접·미팅 일정이 등록·변경됐을 때" },
   { key: "todo.remind", label: "할 일 예정·마감 알림", description: "할 일의 예정 시각(종일은 09:00, 시간 지정은 30분 전)·마감이 다가올 때" },
   { key: "todo.digest", label: "할 일 아침 요약", description: "아침(기본 08:30)에 오늘 할 일·지연 건수 요약(0건이면 보내지 않음)" },
+  { key: "todo.weekly", label: "할 일 주간 요약", description: "매주(기본 월요일 08:40) 지난주 완료·이번 주 예정·지연·맡긴 일 요약(0건이면 보내지 않음, 사내 메일함에도 배달)" },
   { key: "todo.assigned", label: "할 일 배정", description: "동료가 나를 할 일 담당자로 지정했을 때" },
   { key: "todo.comment", label: "할 일 댓글·멘션", description: "내 할 일(담당·공유)에 댓글이 달리거나 @멘션됐을 때" },
   { key: "todo.status", label: "할 일 완료·검토 요청", description: "내가 만들었거나 공유받은 할 일이 완료되거나 검토 요청됐을 때" },

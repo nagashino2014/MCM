@@ -242,6 +242,10 @@ export interface TodoPrefs {
   cardDensity: "comfortable" | "compact";
   showDoneDays: number;
   showApprovalEvents: boolean;
+  /** 주간 리포트(295) — 서버 응답에만 있고 모바일은 아직 편집하지 않는다 */
+  weeklyDigestDow?: number;
+  weeklyDigestTime?: string | null;
+  weeklyDigestMail?: boolean;
 }
 
 export const DEFAULT_TODO_PREFS: Omit<TodoPrefs, "userId"> = {

@@ -225,6 +225,9 @@ export const TODO_WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "�
 export const TODO_DEFAULT_REMIND_ALL_DAY_TIME = "09:00";
 export const TODO_DEFAULT_REMIND_BEFORE_MIN = 30;
 export const TODO_DEFAULT_DIGEST_TIME = "08:30";
+// §29-3 주간 리포트(295) 기본값 — 월요일 08:40(아침 요약 뒤)
+export const TODO_DEFAULT_WEEKLY_DOW = 1;
+export const TODO_DEFAULT_WEEKLY_TIME = "08:40";
 export const TODO_DEFAULT_DURATION_MIN = 30;
 /** 완료 후 자동 보관까지의 일수. */
 export const TODO_ARCHIVE_AFTER_DAYS = 30;
@@ -249,6 +252,10 @@ export interface TodoPrefs {
   cardDensity: "comfortable" | "compact";
   showDoneDays: number;
   showApprovalEvents: boolean;
+  /** 주간 리포트(295) — 요일 0=일…6=토, 시각 HH:mm(null=끔), 사내 메일함 배달 여부 */
+  weeklyDigestDow: number;
+  weeklyDigestTime: string | null;
+  weeklyDigestMail: boolean;
 }
 
 export const DEFAULT_TODO_PREFS: Omit<TodoPrefs, "userId"> = {
@@ -261,6 +268,9 @@ export const DEFAULT_TODO_PREFS: Omit<TodoPrefs, "userId"> = {
   cardDensity: "comfortable",
   showDoneDays: 7,
   showApprovalEvents: true,
+  weeklyDigestDow: TODO_DEFAULT_WEEKLY_DOW,
+  weeklyDigestTime: TODO_DEFAULT_WEEKLY_TIME,
+  weeklyDigestMail: true,
 };
 
 // ── 응답 모델(camelCase) ──

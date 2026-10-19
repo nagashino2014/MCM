@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dispatchTodoDigest, dispatchTodoReminders } from "@/lib/todo/notify";
+import { dispatchTodoWeekly } from "@/lib/todo/weekly";
 import { archiveCompletedItems } from "@/lib/todo/store";
 
 export const runtime = "nodejs";
@@ -26,11 +27,16 @@ export async function POST(req: NextRequest) {
       console.error("[todo-remind] digest error", e);
       return { digestsSent: 0, evaluated: 0 };
     });
+    // §29-3 주간 리포트(295) — 요일·시각 도래 시 사람당 주 1회
+    const weekly = await dispatchTodoWeekly().catch((e) => {
+      console.error("[todo-remind] weekly error", e);
+      return { weeklySent: 0, weeklyEvaluated: 0 };
+    });
     const archive = await archiveCompletedItems().catch((e) => {
       console.error("[todo-remind] archive error", e);
       return { archived: 0 };
     });
-    return NextResponse.json({ ...reminders, ...digest, ...archive });
+    return NextResponse.json({ ...reminders, ...digest, ...weekly, ...archive });
   } catch (err) {
     console.error("[todo-remind] tick error", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, CheckCircle2, Clock, Inbox, MessageSquare, Sun, UserPlus } from "lucide-react";
+import { CheckCheck, CheckCircle2, Clock, Inbox, MessageSquare, Sun, UserPlus, CalendarDays } from "lucide-react";
 import type { TodoNotification } from "@/lib/todo/inbox";
 
 const POLL_MS = 60_000;
@@ -22,6 +22,8 @@ function eventIcon(event: string) {
       return <CheckCircle2 className={cls} />;
     case "todo.digest":
       return <Sun className={cls} />;
+    case "todo.weekly":
+      return <CalendarDays className={cls} />;
     default:
       return <Clock className={cls} />;
   }

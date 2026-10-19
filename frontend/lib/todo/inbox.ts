@@ -6,7 +6,7 @@
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
-export type TodoNotifyEvent = "todo.assigned" | "todo.comment" | "todo.status" | "todo.remind" | "todo.digest";
+export type TodoNotifyEvent = "todo.assigned" | "todo.comment" | "todo.status" | "todo.remind" | "todo.digest" | "todo.weekly";
 
 export interface TodoNotification {
   notifId: string;

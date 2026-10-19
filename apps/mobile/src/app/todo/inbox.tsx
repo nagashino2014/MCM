@@ -29,6 +29,7 @@ const EVENT_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   'todo.status': 'checkmark-circle-outline',
   'todo.digest': 'sunny-outline',
   'todo.remind': 'time-outline',
+  'todo.weekly': 'calendar-outline',
 };
 
 export default function TodoInboxScreen() {

@@ -103,6 +103,9 @@ function mapPrefs(userId: string, r: Record<string, unknown> | undefined): TodoP
     cardDensity: r.card_density === "compact" ? "compact" : "comfortable",
     showDoneDays: Number(r.show_done_days ?? 7),
     showApprovalEvents: Number(r.show_approval_events ?? 1) === 1,
+    weeklyDigestDow: r.weekly_digest_dow != null ? Number(r.weekly_digest_dow) : DEFAULT_TODO_PREFS.weeklyDigestDow,
+    weeklyDigestTime: r.weekly_digest_time === undefined ? DEFAULT_TODO_PREFS.weeklyDigestTime : r.weekly_digest_time != null ? String(r.weekly_digest_time) : null,
+    weeklyDigestMail: Number(r.weekly_digest_mail ?? 1) === 1,
   };
 }
 
@@ -144,12 +147,25 @@ export async function updatePrefs(userId: string, patch: Record<string, unknown>
     next.showDoneDays = n;
   }
   if (patch.showApprovalEvents !== undefined) next.showApprovalEvents = asBool(patch.showApprovalEvents);
+  // 295 주간 리포트
+  if (patch.weeklyDigestDow !== undefined) {
+    const n = Number(patch.weeklyDigestDow);
+    if (!Number.isInteger(n) || n < 0 || n > 6) throw fail("주간 요약 요일은 0(일)~6(토) 사이여야 합니다.");
+    next.weeklyDigestDow = n;
+  }
+  if (patch.weeklyDigestTime !== undefined) {
+    const t = patch.weeklyDigestTime == null || patch.weeklyDigestTime === "" ? null : str(patch.weeklyDigestTime, 5);
+    if (t && !TIME_RE.test(t)) throw fail("주간 요약 시각은 HH:mm 으로 입력하세요.");
+    next.weeklyDigestTime = t;
+  }
+  if (patch.weeklyDigestMail !== undefined) next.weeklyDigestMail = asBool(patch.weeklyDigestMail);
   await withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO todo_user_prefs
          (user_id, default_remind_all_day_time, default_remind_before_min, digest_time, evening_review_time,
-          quick_add_parse, week_start, card_density, show_done_days, show_approval_events, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          quick_add_parse, week_start, card_density, show_done_days, show_approval_events, updated_at,
+          weekly_digest_dow, weekly_digest_time, weekly_digest_mail)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (user_id) DO UPDATE SET
          default_remind_all_day_time = EXCLUDED.default_remind_all_day_time,
          default_remind_before_min = EXCLUDED.default_remind_before_min,
@@ -160,7 +176,10 @@ export async function updatePrefs(userId: string, patch: Record<string, unknown>
          card_density = EXCLUDED.card_density,
          show_done_days = EXCLUDED.show_done_days,
          show_approval_events = EXCLUDED.show_approval_events,
-         updated_at = EXCLUDED.updated_at`,
+         updated_at = EXCLUDED.updated_at,
+         weekly_digest_dow = EXCLUDED.weekly_digest_dow,
+         weekly_digest_time = EXCLUDED.weekly_digest_time,
+         weekly_digest_mail = EXCLUDED.weekly_digest_mail`,
       [
         userId,
         next.defaultRemindAllDayTime,
@@ -173,6 +192,9 @@ export async function updatePrefs(userId: string, patch: Record<string, unknown>
         next.showDoneDays,
         next.showApprovalEvents ? 1 : 0,
         nowIso(),
+        next.weeklyDigestDow,
+        next.weeklyDigestTime,
+        next.weeklyDigestMail ? 1 : 0,
       ]
     );
   });

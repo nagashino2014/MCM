@@ -558,7 +558,7 @@ export async function createBoard(userId: string, input: Record<string, unknown>
       if (mode === "internal") color = "gray";
       else {
         const used = rowsToObjects(
-          await db.exec(`SELECT color FROM todo_boards WHERE kind <> 'personal' AND archived_at IS NULL AND ${visibleBoardsWhere("$1")}`, [userId])
+          await db.exec(`SELECT b.color FROM todo_boards b WHERE b.kind <> 'personal' AND b.archived_at IS NULL AND ${visibleBoardsWhere("$1")}`, [userId])
         ).map((r) => (r.color != null ? String(r.color) : null));
         color = pickBoardColorKey(used);
       }

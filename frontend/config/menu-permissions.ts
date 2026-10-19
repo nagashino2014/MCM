@@ -74,6 +74,8 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   // 계약 Dashboard·수주/수금/발행 현황 — 민감 현황이라 billing.view(관리자·인사/회계·대표이사·영업관리)로 한정(298, 2026-10-19)
   { path: "/contracts/dashboard", keys: ["billing.view"] },
   { path: "/contracts/billing", keys: ["billing.view"] },
+  // 부서장 전용 부서 현황(299)
+  { path: "/contracts/dept-billing", keys: ["billing.dept.view"] },
   { path: "/contracts/filings", keys: ["filing.view"] },
   { path: "/finance", keys: ["finance.view"] },
   { path: "/sales", keys: ["sales.view"] },

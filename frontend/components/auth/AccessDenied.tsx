@@ -33,6 +33,7 @@ const KEY_LABEL: Record<string, string> = {
   "facility.view": "사업장",
   "contract.view": "계약",
   "billing.view": "수주/수금/발행 현황",
+  "billing.dept.view": "부서 수주·수금 현황",
   "filing.view": "대외 신고 대기열",
   "finance.view": "재무",
   "sales.view": "영업/마케팅",

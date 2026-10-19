@@ -251,6 +251,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "계약 관리", href: "/contracts" },
       { title: "Dashboard", href: "/contracts/dashboard" },
       { title: "수주/수금/발행 현황", href: "/contracts/billing" },
+      // 부서 수주·수금 현황(299) — 부서장 전용(billing.dept.view). 전사 현황은 관리자·인사/회계·대표이사만.
+      { title: "부서 수주·수금 현황", href: "/contracts/dept-billing" },
       { title: "계약서 작성", href: "/contracts/agreements" },
       { title: "착수계·준공계 작성", href: "/contracts/deliverables" },
       { title: "다운로드/증명서 생성", href: "/contracts/downloads" },

@@ -37,7 +37,15 @@ const SUBTYPE_DONUT_COLORS = [
  * 연도별 수금액 추이 / 용역별 수금 비율 / 이중 도넛 / 3개년 평균 수금 소요기간.
  * 연도 분류는 모두 해당 용역의 계약일을 기준으로 한다.
  */
-export function CollectionsSection({ theme }: { theme: CdTheme }) {
+/** 부서장 현황(299)에서 재사용할 때 조회·엑셀 요청에 덧붙이는 범위 쿼리(예: "scope=dept&dept=x"). */
+function scoped(path: string, scopeQuery: string, params?: URLSearchParams): string {
+  const p = new URLSearchParams(params ? params.toString() : "");
+  new URLSearchParams(scopeQuery).forEach((v, k) => p.set(k, v));
+  const qs = p.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+export function CollectionsSection({ theme, scopeQuery = "", readOnly = false }: { theme: CdTheme; scopeQuery?: string; readOnly?: boolean }) {
   const router = useRouter();
   const pal = chartPalette(theme);
   const [data, setData] = useState<ContractCollectionsStatus | null>(null);
@@ -51,7 +59,7 @@ export function CollectionsSection({ theme }: { theme: CdTheme }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/contracts/billing/collections", { cache: "no-store" });
+        const res = await fetch(scoped("/api/contracts/billing/collections", scopeQuery), { cache: "no-store" });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error((body as { error?: string })?.error ?? "HTTP " + res.status);
@@ -493,7 +501,7 @@ export function CollectionsSection({ theme }: { theme: CdTheme }) {
       if (category) params.set("category", category);
       if (year && /^\d{4}$/.test(year)) params.set("year", year);
       params.set("format", format);
-      const res = await fetch("/api/contracts/billing/collections/export?" + params.toString());
+      const res = await fetch(scoped("/api/contracts/billing/collections/export", scopeQuery, params));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -513,6 +521,8 @@ export function CollectionsSection({ theme }: { theme: CdTheme }) {
   };
 
   const openContract = (row: ContractCollectionRow) => {
+    // 부서장 현황(읽기 전용)에서는 발행/수금 입력 창으로 이동하지 않는다(299)
+    if (readOnly) return;
     const treeYear = (row.contractDate ?? "").slice(0, 4);
     const params = new URLSearchParams();
     params.set("contract", row.contractId);
@@ -662,7 +672,7 @@ export function CollectionsSection({ theme }: { theme: CdTheme }) {
                 <div
                   key={row.milestoneId}
                   className="cdb-unbilled-row text-xs"
-                  title="클릭하면 계약 관리에서 해당 단계의 발행/수금 입력 창이 열립니다"
+                  title={readOnly ? undefined : "클릭하면 계약 관리에서 해당 단계의 발행/수금 입력 창이 열립니다"}
                   onClick={() => openContract(row)}
                 >
                   <span className="min-w-0">

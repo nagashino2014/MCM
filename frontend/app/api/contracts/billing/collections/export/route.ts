@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireBillingScope } from "@/lib/auth/billing-scope";
 import { getContractCollectionsStatus } from "@/lib/ieps/collections-status";
 import { filterCollectionRows } from "@/lib/ieps/collections-filter";
 import { createTablePdf, createTableWorkbook, type TableDocumentSpec } from "@/lib/export/table-document";
@@ -17,8 +17,8 @@ function stampDisplay(d: Date): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const ctx = await requirePermission("billing.view");
-    const ids = await resolveVisibleContractIds(ctx.userId, "billing.view");
+    // scope=dept 면 부서장 범위(billing.dept.view·수행부서 계약), 아니면 전사 현황(billing.view) — 299
+    const { ids } = await requireBillingScope(req.nextUrl.searchParams);
     const sp = req.nextUrl.searchParams;
     const format = sp.get("format") === "pdf" ? "pdf" : "xlsx";
 

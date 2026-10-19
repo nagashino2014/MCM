@@ -84,7 +84,15 @@ function hexToRgba(hex: string, alpha: number): string {
  * 수주 현황 — 용역/업종/연도 필터 + 시도 지도 컨트롤 + 수주 계약 리스트.
  * 지도에서 시도를 클릭하면 해당 지역으로 리스트가 필터링된다.
  */
-export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
+/** 부서장 현황(299)에서 재사용할 때 조회·엑셀 요청에 덧붙이는 범위 쿼리(예: "scope=dept&dept=x"). */
+function scoped(path: string, scopeQuery: string, params?: URLSearchParams): string {
+  const p = new URLSearchParams(params ? params.toString() : "");
+  new URLSearchParams(scopeQuery).forEach((v, k) => p.set(k, v));
+  const qs = p.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }: { theme: CdTheme; scopeQuery?: string; readOnly?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // 계약 상세의 "돌아가기"(?restore=1)로 진입한 경우 저장된 필터/선택 상태를 복원
@@ -152,7 +160,7 @@ export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
     setError(null);
     const params = new URLSearchParams();
     if (year) params.set("year", year);
-    fetch(`/api/contracts/billing/orders?${params.toString()}`, { cache: "no-store" })
+    fetch(scoped("/api/contracts/billing/orders", scopeQuery, params), { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -263,7 +271,7 @@ export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
       if (industryId) params.set("industry", industryId);
       if (sido) params.set("sido", sido);
       params.set("format", format);
-      const res = await fetch("/api/contracts/billing/orders/export?" + params.toString());
+      const res = await fetch(scoped("/api/contracts/billing/orders/export", scopeQuery, params));
       if (!res.ok) throw new Error("HTTP " + res.status);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -576,6 +584,8 @@ export function OrdersStatusSection({ theme }: { theme: CdTheme }) {
                     } catch {
                       // sessionStorage 사용 불가 환경에서는 복원 없이 진행
                     }
+                    // 부서장 현황(읽기 전용)에서는 계약 화면으로 이동하지 않는다(돌아가기 경로가 전사 현황이라 권한 없음) — 299
+                    if (readOnly) return;
                     router.push(
                       `/contracts?contract=${encodeURIComponent(row.contractId)}${treeYear ? `&year=${treeYear}` : ""}&from=billing-orders`
                     );

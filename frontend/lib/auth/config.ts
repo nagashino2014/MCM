@@ -20,8 +20,8 @@ declare module "next-auth" {
       role: Role;
       status: UserStatus;
       mustChangePassword: boolean;
-      /** 권한 요약(lib/auth/perms.ts) — "key" 또는 "key@all". 메뉴·화면 게이트의 판정 근거. */
-      perms: string[];
+      /** 권한 요약(lib/auth/perms.ts) — "key" 또는 "key@all". 메뉴·화면 게이트의 판정 근거. 구 토큰은 undefined. */
+      perms?: string[];
     } & DefaultSession["user"];
   }
 

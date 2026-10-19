@@ -1,7 +1,7 @@
 /**
  * users 테이블 read/write 헬퍼.
  * - frontend/lib/db.ts의 withDbWrite (PostgreSQL 트랜잭션) 를 통해 동시 쓰기를 직렬화.
- * - role 은 'admin' | 'member'(부트스트랩 플래그, 마이그 289). status 는 'active' | 'disabled'. 권한의 근거는 권한 템플릿이다.
+ * - role 은 'admin' | 'member'(부트스트랩 플래그, 마이그 292). status 는 'active' | 'disabled'. 권한의 근거는 권한 템플릿이다.
  */
 
 import crypto from "node:crypto";

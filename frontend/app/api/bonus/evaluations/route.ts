@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       rows,
       absoluteGrading: settings.absoluteGrading,
       gradeCaps: settings.gradeCaps,
-      // 절대평가 설정 편집 가능 여부 — bonus.confirm(288). 이름은 화면 호환을 위해 유지.
+      // 절대평가 설정 편집 가능 여부 — bonus.confirm(291). 이름은 화면 호환을 위해 유지.
       isAdmin: checkPermission(access, "bonus.confirm"),
     });
   } catch (err) {

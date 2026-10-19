@@ -1,4 +1,4 @@
--- 290: user_permission_assignments.effective_from/effective_to 를 날짜 10자리(YYYY-MM-DD)로 정규화 — F-01 데이터 정리.
+-- 293: user_permission_assignments.effective_from/effective_to 를 날짜 10자리(YYYY-MM-DD)로 정규화 — F-01 데이터 정리.
 --
 -- 배경(2026-10-19 스테이징 실계정 점검, F-01): 계정 발급(lib/auth/account-provisioning.ts)이 effective_from 에
 --   ISO 타임스탬프('2026-10-19T04:35:54.025Z')를 넣고, loadUserAccess(lib/auth/rbac.ts)는 오늘 날짜 10자리('2026-10-19')와

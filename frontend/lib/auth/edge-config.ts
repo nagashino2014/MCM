@@ -12,7 +12,7 @@ import { hasAnyPerm } from "./perms";
 import { ADMIN_AREA_KEYS, requiredPermissionsForPath } from "@/config/menu-permissions";
 
 /**
- * users.role — admin | member (마이그 289). admin 은 부트스트랩 플래그(seed.ts 최초 관리자·RBAC_ADMIN_BYPASS)일 뿐
+ * users.role — admin | member (마이그 292). admin 은 부트스트랩 플래그(seed.ts 최초 관리자·RBAC_ADMIN_BYPASS)일 뿐
  * 권한 판정에 쓰지 않는다. editor/viewer 는 폐기(role 일원화 2026-10-19).
  */
 export type Role = "admin" | "member";
@@ -46,8 +46,9 @@ export const edgeAuthConfig: NextAuthConfig = {
           (t.status as UserStatus) ?? "active";
         (session.user as { mustChangePassword?: boolean }).mustChangePassword =
           t.mustChangePassword === true;
-        // 권한 요약(lib/auth/perms.ts) — 메뉴 노출·화면 게이트가 읽는다. 구 토큰(배포 전 발급)은 undefined.
-        (session.user as { perms?: string[] }).perms = Array.isArray(t.perms) ? (t.perms as string[]) : [];
+        // 권한 요약(lib/auth/perms.ts) — 메뉴 노출·화면 게이트가 읽는다(permsOf 가 [] 로 정규화).
+        // 구 토큰(배포 전 발급)은 undefined 로 **그대로 둔다** — authorized 의 1차 차단 유예가 이 값으로 구 토큰을 구분한다(R-2).
+        (session.user as { perms?: string[] }).perms = Array.isArray(t.perms) ? (t.perms as string[]) : undefined;
       }
       return session;
     },

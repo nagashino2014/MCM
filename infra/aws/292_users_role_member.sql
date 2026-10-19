@@ -1,4 +1,4 @@
--- 289: users.role 을 admin | member 2값으로 축소 — role 일원화 WP6 (docs/rbac-role-unification-plan.md §2 WP6).
+-- 292: users.role 을 admin | member 2값으로 축소 — role 일원화 WP6 (docs/rbac-role-unification-plan.md §2 WP6).
 --
 -- 배경(2026-10-19 사용자 확정, docs/open-test-permission-plan-2026-10-19.md §6-5):
 --   권한의 근거는 권한 템플릿(permission_template_grants)뿐이다. editor/viewer 는 의미를 폐기하고
@@ -7,7 +7,7 @@
 -- 순서: CHECK 제약을 먼저 풀어야 UPDATE 가 통과한다(001 의 인라인 CHECK 는 자동명 users_role_check 이지만
 --   환경마다 다를 수 있어 role 을 언급하는 CHECK 를 카탈로그에서 찾아 제거한다). 멱등.
 
--- 1) role 컬럼의 기존 CHECK 제약 제거
+-- 1) role 컬럼의 기존 CHECK 제약 제거 — 자동명(users_role_check) 또는 정의가 `(role ...` 로 시작하는 CHECK 만(R-4: '%role%' 는 과범위).
 DO $$
 DECLARE
   c record;
@@ -17,7 +17,7 @@ BEGIN
       FROM pg_constraint
      WHERE conrelid = 'users'::regclass
        AND contype = 'c'
-       AND pg_get_constraintdef(oid) ILIKE '%role%'
+       AND (conname = 'users_role_check' OR pg_get_constraintdef(oid) ~ '\(\(?role ')
   LOOP
     EXECUTE 'ALTER TABLE users DROP CONSTRAINT ' || quote_ident(c.conname);
   END LOOP;

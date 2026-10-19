@@ -202,7 +202,7 @@ export const MENU_ITEMS: MenuItem[] = [
     permissionKey: "staffing.record.view",
   },
   // 급여·근로계약 — 급여대장·근로계약 관리(docs/payroll-labor-contract-blueprint.md).
-  // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 payroll.view(288) 보유자.
+  // 본인용(내 급여명세서·내 연말정산)은 전 직원, 전 직원 데이터를 다루는 관리 화면은 payroll.view(291) 보유자.
   {
     title: "급여·근로계약",
     href: "/payroll/my",

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     if (action === "confirm") {
-      // 대장 확정은 payroll.close(288, is_dangerous) — 편집 권한만으로는 확정할 수 없다.
+      // 대장 확정은 payroll.close(291, is_dangerous) — 편집 권한만으로는 확정할 수 없다.
       if (!(await hasPermission(ctx.userId, "payroll.close"))) {
         return NextResponse.json({ error: "급여대장 확정 권한(payroll.close)이 없습니다." }, { status: 403 });
       }

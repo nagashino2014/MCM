@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({
       overview,
-      // 산정·명세서 생성 버튼 노출 — bonus.calculate(288) 보유 여부. 이름은 화면 호환을 위해 유지.
+      // 산정·명세서 생성 버튼 노출 — bonus.calculate(291) 보유 여부. 이름은 화면 호환을 위해 유지.
       isAdmin: checkPermission(access, "bonus.calculate"),
     });
   } catch (err) {

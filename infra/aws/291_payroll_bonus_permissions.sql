@@ -1,4 +1,4 @@
--- 288: 급여·성과급 권한키 신설 + 템플릿 배분 — role 일원화 WP1 (docs/rbac-role-unification-plan.md).
+-- 291: 급여·성과급 권한키 신설 + 템플릿 배분 — role 일원화 WP1 (docs/rbac-role-unification-plan.md).
 --
 -- 배경: 급여(/api/payroll/**)·성과급 변경(/api/bonus/**) 라우트 33개가 deprecated `requireAdmin`(users.role=admin)
 --   으로 막혀 있었다. 권한 키 자체가 카탈로그에 없어 템플릿으로 열 수 없었던 회귀(8월)를 바로잡는다.

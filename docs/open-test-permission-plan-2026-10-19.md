@@ -346,7 +346,7 @@ O = 보임, X = 숨김. **원칙: 메뉴 노출 = 해당 화면의 조회 권한
 
 ## 6. 일원화 구현 전에 확정할 결정 항목
 
-"레거시 제거·템플릿 통일"은 확정됐다. 남은 것은 **템플릿에 어떤 권한키를 배분할지**(= 테스트 기대값)다. **2026-10-19 사용자 확정: 6-1~6-4·6-5·6-6 전부 "제안(기본값)" 열대로 진행** — 임원 payroll.view·finance.view 조회 부여, 급여·성과급 키 tpl-hr 배분, 근태 관리 6화면은 staffing.edit, users.role은 admin|member 유지. 일원화 세션은 origin/main 9ce4d0f에서 분기한 워크트리, 마이그 288·289를 쓴다.
+"레거시 제거·템플릿 통일"은 확정됐다. 남은 것은 **템플릿에 어떤 권한키를 배분할지**(= 테스트 기대값)다. **2026-10-19 사용자 확정: 6-1~6-4·6-5·6-6 전부 "제안(기본값)" 열대로 진행** — 임원 payroll.view·finance.view 조회 부여, 급여·성과급 키 tpl-hr 배분, 근태 관리 6화면은 staffing.edit, users.role은 admin|member 유지. 일원화 세션은 origin/main 9ce4d0f에서 분기한 워크트리, 마이그 291·292를 쓴다.
 
 | # | 사안 | 제안(기본값) | 대안 |
 |---|---|---|---|
@@ -389,10 +389,10 @@ O = 보임, X = 숨김. **원칙: 메뉴 노출 = 해당 화면의 조회 권한
 
 | 시점 | 작업 | 산출물 |
 |---|---|---|
-| 10-19 (일) | §6 결정 확정(완료) · **일원화 WP0·1·2·4·5·6 구현 완료**(브랜치 `claude/rbac-role-unification`, 마이그 288·289, X-01~X-04 수정 포함 — `docs/rbac-role-unification-plan.md` §5) · 커밋·푸시는 사용자 확인 후 · **테스트 계정 4개 발급·비밀번호 변경·픽스처 ID 확보·§3.3 SQL** · §7.1 사전 점검 시작 | 계정표, 픽스처표, 사전 점검 결과 |
+| 10-19 (일) | §6 결정 확정(완료) · **일원화 WP0·1·2·4·5·6 구현 완료**(브랜치 `claude/rbac-role-unification`, 마이그 291·292, X-01~X-04 수정 포함 — `docs/rbac-role-unification-plan.md` §5) · 커밋·푸시는 사용자 확인 후 · **테스트 계정 4개 발급·비밀번호 변경·픽스처 ID 확보·§3.3 SQL** · §7.1 사전 점검 시작 | 계정표, 픽스처표, 사전 점검 결과 |
 | 10-20 (월) | §7.1 사전 점검 마무리·Blocker 핫픽스 → **오픈 테스트 시작**. 오픈 공지문에 §7.3 "알려진 제한" 기재 | 공지문 1차 |
-| 10-20~21 | 일원화 브랜치 검토·main 통합(구현은 10-19 완료, 앞당길 수 있음) | 마이그 288·289, 커밋 |
-| 10-21 저녁 (목표) 또는 10-22 아침 | 일원화 배포: `staging-apply-migrations.ps1 -Files 288_*.sql 289_*.sql 290_*.sql 213_view_all_template.sql`(290 = F-01 effective_from 날짜 정규화) → `staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait` → 관리자 계정 전 메뉴 스모크(lock-out 확인) → **테스터 공지 2차**("재로그인 필요, 메뉴 구성 변경") | 배포 revision 기록, 공지문 2차 |
+| 10-20~21 | 일원화 브랜치 검토·main 통합(구현은 10-19 완료, 앞당길 수 있음) | 마이그 291·292, 커밋 |
+| 10-21 저녁 (목표) 또는 10-22 아침 | 일원화 배포 — **순서 고정(R-3)**: ① lock-out 점검 쿼리(`docs/rbac-role-unification-plan.md` §5.3) → ② `staging-apply-migrations.ps1 -Files 291_payroll_bonus_permissions.sql 293_assignment_effective_date.sql 294_view_all_template.sql`(권한키·F-01 날짜 정규화·view-all, 구 코드와 호환) → ③ `staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait` → ④ 배포 직후 `staging-apply-migrations.ps1 -Files 292_users_role_member.sql`(role=member — 배포 전에 적용하면 구 코드의 minRole 메뉴가 숨고 role 검증이 깨진다) → ⑤ 관리자 계정 전 메뉴 스모크 → **테스터 공지 2차**("재로그인 필요, 메뉴 구성 변경") | 배포 revision 기록, 공지문 2차 |
 | 10-22 (수) | **본 테스트 §4 전체**(§4.1 메뉴 → §4.2 URL → §4.3 데이터 범위 → §4.4·4.4b 우회·결함 후보 → §4.5 반영 시점) · 보류 큐의 권한 결함 보고 재확인 · Blocker·Major 수정·재배포 | 체크리스트, 결함 목록 |
 | 10-23 (목) | 재검증 · 테스터에게 권한 체계 확정 공지(역할별 할 수 있는 일 요약) | 재검증 기록, 공지문 3차 |
 | 오픈 후 | WP3 `fallbackRoles` 제거(기계적) · WP7 모바일 권한 요약 + OTA(1.1.0·1.2.0 두 런타임) · WP8 자산 | 후속 PR |

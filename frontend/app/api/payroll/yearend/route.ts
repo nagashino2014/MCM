@@ -8,7 +8,7 @@ import { parseSimplifiedPdf } from "@/lib/finance/yearend-pdf-parser";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 귀속연도 직원별 정산 목록(총급여·기납부 자동 + 저장된 입력·결과). payroll.view(288) 보유자(§8-4).
+// GET: 귀속연도 직원별 정산 목록(총급여·기납부 자동 + 저장된 입력·결과). payroll.view(291) 보유자(§8-4).
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("payroll.view");
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result });
     }
     if (body.action === "confirm" || body.action === "unconfirm") {
-      // 연말정산 확정·확정 해제는 payroll.close(288, is_dangerous).
+      // 연말정산 확정·확정 해제는 payroll.close(291, is_dangerous).
       if (!(await hasPermission(ctx.userId, "payroll.close"))) {
         return NextResponse.json({ error: "연말정산 확정 권한(payroll.close)이 없습니다." }, { status: 403 });
       }

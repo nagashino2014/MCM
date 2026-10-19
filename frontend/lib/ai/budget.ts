@@ -211,8 +211,8 @@ async function resolveRecipients(recipients: string[]): Promise<string[]> {
     await db.exec(
       `SELECT DISTINCT a.user_id FROM user_permission_assignments a
         WHERE a.template_id = 'tpl-system-admin' AND a.revoked_at IS NULL
-          AND (a.effective_from IS NULL OR a.effective_from <= $1)
-          AND (a.effective_to IS NULL OR a.effective_to >= $1)`,
+          AND (a.effective_from IS NULL OR left(a.effective_from, 10) <= $1)
+          AND (a.effective_to IS NULL OR left(a.effective_to, 10) >= $1)`,
       [today]
     )
   );

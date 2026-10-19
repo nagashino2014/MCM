@@ -2,12 +2,13 @@
  * RBAC 런타임 — 권한 템플릿(permission_template_grants) + 인원 적용(user_permission_assignments)
  * 을 평가해 atomic 권한키 + scope 를 검사한다. (블루프린트 §3.2.6)
  *
- * - admin 역할은 항상 ALLOW.
+ * - role 은 판정에 쓰지 않는다(RBAC_ADMIN_BYPASS 비상 우회만 예외). 관리자 권한의 근거는 tpl-system-admin 템플릿.
  * - deny-overrides: 같은 키에 deny 가 있으면 allow 보다 우선.
  * - scope: self / self_dept / specific_dept / all.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import type { Role } from "./users";
+import { PERM_ALL_SUFFIX } from "./perms";
 
 export type ScopeKind = "self" | "participant" | "self_dept" | "specific_dept" | "all";
 
@@ -42,10 +43,18 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
   const db = await getDb();
   const today = new Date().toISOString().slice(0, 10);
 
+  // 소속 부서 = 조직 인원(employee_profiles.dept_id)이 진실원. users.dept_id 는 발급 경로가 채우지 않아 전원 NULL 이라
+  // self_dept 판정이 target 이 오면 항상 불일치·없으면 통과였다(F-02, 2026-10-19 실측) → 조직 인원 우선, 없으면 users 값.
   const userRows = rowsToObjects(
-    await db.exec("SELECT role, dept_id, employee_id FROM users WHERE user_id = $1 LIMIT 1", [userId])
+    await db.exec(
+      `SELECT u.role, COALESCE(ep.dept_id, u.dept_id) AS dept_id, u.employee_id
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE u.user_id = $1 LIMIT 1`,
+      [userId]
+    )
   );
-  const role = (String(userRows[0]?.role ?? "viewer") as Role);
+  const role = (String(userRows[0]?.role ?? "member") as Role);
   const deptId = userRows[0]?.dept_id != null ? String(userRows[0].dept_id) : null;
   const employeeId = userRows[0]?.employee_id != null ? String(userRows[0].employee_id) : null;
 
@@ -78,8 +87,8 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
          JOIN permission_template_grants g ON g.template_id = a.template_id
         WHERE a.user_id = $1
           AND a.revoked_at IS NULL
-          AND (a.effective_from IS NULL OR a.effective_from <= $2)
-          AND (a.effective_to IS NULL OR a.effective_to >= $2)`,
+          AND (a.effective_from IS NULL OR left(a.effective_from, 10) <= $2)
+          AND (a.effective_to IS NULL OR left(a.effective_to, 10) >= $2)`,
       [userId, today]
     )
   );
@@ -148,4 +157,27 @@ export async function hasGlobalScope(userId: string, permissionKey: string): Pro
   return access.grants.some(
     (g) => g.permissionKey === permissionKey && g.effect === "allow" && g.scopeKind === "all"
   );
+}
+
+/**
+ * 권한 요약 — 세션(JWT)에 싣는 문자열 목록(lib/auth/perms.ts 형식: "key" 또는 "key@all").
+ * 메뉴 노출·미들웨어 1차 차단·화면 버튼 게이트가 읽는다. deny-overrides 는 checkPermission 과 동일.
+ * (role 일원화 WP5, 2026-10-19)
+ */
+export function summarizePermissions(access: UserAccess): string[] {
+  const keys = [...new Set(access.grants.map((g) => g.permissionKey))].sort();
+  const out: string[] = [];
+  for (const key of keys) {
+    if (!checkPermission(access, key)) continue;
+    const global =
+      (ADMIN_BYPASS && access.role === "admin") ||
+      access.grants.some((g) => g.permissionKey === key && g.effect === "allow" && g.scopeKind === "all");
+    out.push(global ? key + PERM_ALL_SUFFIX : key);
+  }
+  return out;
+}
+
+/** userId 로 로드 후 요약하는 편의 함수(로그인·세션 갱신 시 config.ts 가 호출). */
+export async function loadPermissionSummary(userId: string): Promise<string[]> {
+  return summarizePermissions(await loadUserAccess(userId));
 }

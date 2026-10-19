@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requireAuthenticated } from "@/lib/auth/guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import {
   binaryResponse,
   loadBundles,
@@ -23,7 +24,7 @@ interface DownloadRequestBody {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAuthenticated();
+    const ctx = await requirePermission("contract.view");
     const body = (await req.json()) as DownloadRequestBody;
     const contractIds = [...new Set((body.contractIds ?? []).map((id) => String(id).trim()).filter(Boolean))];
     const mode = body.mode ?? "individualZip";
@@ -31,6 +32,14 @@ export async function POST(req: NextRequest) {
 
     if (contractIds.length === 0) {
       return NextResponse.json({ error: "다운로드할 계약을 선택하세요." }, { status: 400 });
+    }
+    // 가시 범위(contract.view scope) 밖의 계약 증빙은 내려주지 않는다(X-02, 2026-10-19).
+    const visible = await resolveVisibleContractIds(ctx.userId, "contract.view");
+    if (visible) {
+      const allowed = new Set(visible);
+      if (contractIds.some((id) => !allowed.has(id))) {
+        return NextResponse.json({ error: "선택한 계약 중 열람 권한이 없는 계약이 있습니다." }, { status: 403 });
+      }
     }
     if (mode === "mergedSingle" && contractIds.length !== 1) {
       return NextResponse.json({ error: "단일 병합은 계약 1건만 선택할 수 있습니다." }, { status: 400 });

@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("staffing.evaluation.read", { fallbackRoles: ["editor"] });
     const sp = new URL(req.url).searchParams;
     const deptId = sp.get("dept") ?? "";
     const year = Number(sp.get("year") ?? new Date().getFullYear());
     const half = sp.get("half") === "H2" ? "H2" : "H1";
+    // 요청한 부서를 target 으로 넘겨 self_dept grant(부서장)가 타 부서를 보지 못하게 한다(X-01, 2026-10-19).
+    await requirePermission("staffing.evaluation.read", { target: deptId ? { deptId } : undefined, fallbackRoles: ["editor"] });
     if (!deptId) return NextResponse.json({ rows: [] });
     return NextResponse.json({ rows: await listEvaluationBoard(deptId, year, half) });
   } catch (err) {

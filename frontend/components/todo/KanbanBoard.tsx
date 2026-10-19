@@ -15,6 +15,7 @@ import { comparePosition } from "@/lib/todo/position";
 import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
 import { DueText, MiniSegments, PriorityLabel, StatusDot, tintStyle, type Density } from "./TodoRow";
 import { CompleteRulesFields } from "./CompleteRulesFields";
+import { BoardAutomationModal } from "./BoardAutomationModal";
 import { apiCall, type MoveArgs } from "./useTodoData";
 import { columnTone, contextParts, contractShort, dueBadge, isFoldedColumn, isPeriodItem, md, periodBadge, relativeTime } from "./todo-utils";
 
@@ -92,6 +93,8 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
   const { toast } = useCdToast();
   const [members, setMembers] = useState<TodoBoardMember[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  // 296 자동화 규칙 모달
+  const [automationOpen, setAutomationOpen] = useState(false);
   const [colOrder, setColOrder] = useState<string[] | null>(null);
   const [addingIn, setAddingIn] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -455,6 +458,7 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
               )}
               items={[
                 { key: "rules", label: "기본 완료 조건…", onSelect: () => setRulesOpen(true) },
+                { key: "automation", label: "자동화…", onSelect: () => setAutomationOpen(true) },
                 ...(board.kind !== "personal" ? [{ key: "members", label: "멤버 관리", onSelect: onManageMembers }] : []),
               ]}
             />
@@ -627,6 +631,7 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
         />
       )}
       {board && rulesOpen && <BoardRulesModal board={board} busy={busy} onClose={() => setRulesOpen(false)} onSave={saveDefaultRules} />}
+      {board && automationOpen && <BoardAutomationModal board={board} onClose={() => setAutomationOpen(false)} />}
       <CdModal
         open={!!colDelete}
         onClose={() => setColDelete(null)}

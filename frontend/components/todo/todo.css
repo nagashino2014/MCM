@@ -794,3 +794,25 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-tl-undated-list { list-style: none; margin: 0; padding: 0 12px 10px 30px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px 16px; font-size: 12.5px; }
 .todo-tl-undated-list .todo-tl-ttl { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 1366px) { .todo-tl-legend { display: none; } }
+
+/* §29-2 보드 자동화 모달 — 규칙 목록 + 빌더 */
+.todo-au { display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.todo-au-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow: auto; }
+.todo-au-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--cd-border); border-radius: 8px; background: var(--cd-card); }
+.todo-au-row[data-off="1"] { opacity: 0.55; }
+.todo-au-row[data-editing="1"] { border-color: var(--cd-primary); }
+.todo-au-ic { width: 14px; height: 14px; color: var(--cd-primary); flex: none; }
+.todo-au-name { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.todo-au-name b { font-weight: 600; font-size: 12.5px; }
+.todo-au-name span { font-size: 11.5px; color: var(--cd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-au-meta { font-size: 11px; color: var(--cd-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.todo-au-sw { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--cd-muted); cursor: pointer; }
+.todo-au-x { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 0; background: transparent; border-radius: 5px; color: var(--cd-faint); cursor: pointer; }
+.todo-au-x:hover { color: var(--cd-error); background: var(--cd-surface); }
+.todo-au-x svg { width: 13px; height: 13px; }
+.todo-au-builder { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--cd-border); border-radius: 8px; background: var(--cd-surface); }
+.todo-au-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.todo-au-grid label, .todo-au-builder > label { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.todo-au-chk { flex-direction: row !important; align-items: center; gap: 6px !important; padding-top: 20px; font-size: 12.5px; }
+.todo-au-preview { margin: 0; font-size: 12.5px; color: var(--cd-text); min-height: 18px; }
+@media (max-width: 900px) { .todo-au-grid { grid-template-columns: 1fr 1fr; } }

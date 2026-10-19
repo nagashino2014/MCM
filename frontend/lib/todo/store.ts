@@ -64,6 +64,17 @@ import { listTaskStages } from "@/lib/work-plan/task-stages";
 import type { TodoStageRef } from "./types";
 import { TODO_MILESTONE_KINDS, type TodoMilestoneKind } from "./types";
 import { notifyDependentsUnblocked, openDepCount } from "./deps";
+import type { TodoRuleEvent } from "./rules";
+
+// 296 자동화 — 커밋 뒤 호출(순환 import 회피: 동적). 실패는 로그만.
+const fireRules = (events: TodoRuleEvent[]) => {
+  if (!events.length) return;
+  void import("./rules")
+    .then(async (m) => {
+      for (const ev of events) await m.runItemRules(ev);
+    })
+    .catch((e) => console.error("[todo] 자동화 실행 실패", e));
+};
 
 const nowIso = () => new Date().toISOString();
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1562,6 +1573,8 @@ export interface MoveInput {
  * 이동(boardId/columnId/afterItemId/beforeItemId)도 같은 PATCH 로 받는다.
  */
 export async function updateItem(userId: string, itemId: string, patch: Record<string, unknown>): Promise<TodoItemDetail> {
+  const ruleEvents: TodoRuleEvent[] = [];
+  const fromRule = patch.__rule === true;
   let pushes: Array<() => void> = [];
   await withDbWrite(async (db) => {
     const cur = await requireEdit(db, userId, itemId);
@@ -1804,6 +1817,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
       await logActivity(db, itemId, userId, action, { from: changes.status[0], to: changes.status[1], ...(action === "complete" && completionNote ? { note: completionNote } : {}) });
       const recipients = await subscribersOf(db, itemId);
       pushes.push(() => notifyTodoStatus({ itemId, title: v.title, status, byUserId: userId, byName, recipients }));
+      if (!fromRule && cur.parent_item_id == null) ruleEvents.push({ kind: status === "done" ? "completed" : "status", itemId, boardId: String(cur.board_id), status, actorUserId: userId });
     }
     if (changes.assigneeUserId) {
       await logActivity(db, itemId, userId, "assign", { from: changes.assigneeUserId[0], to: changes.assigneeUserId[1] });
@@ -1844,6 +1858,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
   });
   for (const p of pushes) p();
   pushes = [];
+  fireRules(ruleEvents);
   return getItemDetail(userId, itemId);
 }
 
@@ -1879,6 +1894,7 @@ export interface CompleteItemOptions {
 export async function completeItem(userId: string, itemId: string, done: boolean, opts: CompleteItemOptions = {}): Promise<{ item: TodoItemDetail; next: TodoItem | null }> {
   let nextId: string | null = null;
   let statusPush: (() => void) | null = null;
+  const ruleEvents: TodoRuleEvent[] = [];
   await withDbWrite(async (db) => {
     const cur = await requireEdit(db, userId, itemId);
     const wasDone = String(cur.status) === "done";
@@ -1925,6 +1941,11 @@ export async function completeItem(userId: string, itemId: string, done: boolean
     if (done) statusPush = () => notifyTodoStatus({ itemId, title, status: "done", byUserId: userId, byName, recipients });
     // 288: 선행 완료 → 남은 선행이 없는 후행의 담당자에게 알림
     if (done) await notifyDependentsUnblocked(db, itemId, userId, byName);
+    // 296 자동화 — 상위 완료 / 하위 완료로 상위의 하위가 모두 끝났을 때
+    if (done && cur.parent_item_id == null) ruleEvents.push({ kind: "completed", itemId, boardId: String(cur.board_id), status: "done", actorUserId: userId });
+    if (done && cur.parent_item_id != null && (await openSubtaskCount(db, String(cur.parent_item_id))) === 0) {
+      ruleEvents.push({ kind: "subtasks_done", itemId: String(cur.parent_item_id), boardId: String(cur.board_id), actorUserId: userId });
+    }
 
     if (done && cur.recurrence && cur.parent_item_id == null) {
       const today = kstToday();
@@ -1990,6 +2011,7 @@ export async function completeItem(userId: string, itemId: string, done: boolean
     }
   });
   if (statusPush) (statusPush as () => void)();
+  fireRules(ruleEvents);
   const item = await getItemDetail(userId, itemId);
   let next: TodoItem | null = null;
   if (nextId) {

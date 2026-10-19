@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse } from "@/lib/auth/guards";
-import { requireEmployeeScope, requireGlobalScope } from "@/lib/auth/scope-guards";
+import { requireGlobalScope } from "@/lib/auth/scope-guards";
 import { createHrEvent, deleteHrEvent, listHrEvents, type HrEventType } from "@/lib/admin/hr-events";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ interface RouteContext {
 export async function GET(_req: NextRequest, ctx: RouteContext) {
   try {
     const { id } = await ctx.params;
-    await requireEmployeeScope("staffing.view", id); // 소속 부서·본인 범위(2026-10-19 §7.7)
+    await requireGlobalScope("staffing.sensitive.view"); // 승진·전보·퇴사 이력은 민감정보 전용 키(298, C-4)
     return NextResponse.json({ events: await listHrEvents(id) });
   } catch (err) {
     return authErrorToResponse(err);

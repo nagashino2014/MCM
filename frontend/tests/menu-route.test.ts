@@ -4,14 +4,19 @@ import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "../config/menu";
 import { resolveMenuRoute } from "../components/layout/menu-route";
 
 // 역할별 권한 요약(테스트용) — docs/open-test-permission-plan-2026-10-19.md §1.3·§4.1 의 템플릿 grant 를 요약 형식으로 옮긴 것.
-const STAFF_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view", "billing.view",
-  "sales.view", "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view"];
+// 298(2026-10-19): billing.view·sales.view 는 사원·부서장·임원에서 회수, payroll.view·finance.view 는 임원에서 회수.
+const STAFF_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view",
+  "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view"];
 const LEAD_PERMS = [...STAFF_PERMS, "contract.edit", "work_plan.merge", "work_plan.lock_release", "bonus.view",
   "staffing.evaluation.read", "staffing.evaluation.write", "staffing.record.view", "trash.view", "trash.restore"];
-const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view@all", "billing.view@all",
-  "sales.view@all", "contact.view@all", "facility.view@all", "work_plan.view@all", "work_plan.directive@all",
+const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view@all",
+  "contact.view@all", "facility.view@all", "work_plan.view@all", "work_plan.directive@all",
   "work_plan.lock_release@all", "bonus.view@all", "staffing.view@all", "staffing.evaluation.read@all",
-  "staffing.record.view@all", "payroll.view@all", "finance.view@all", "calendar.meeting.manage@all", "todo.admin@all"];
+  "staffing.record.view@all", "calendar.meeting.manage@all", "todo.admin@all"];
+// 영업 담당(tpl-sales-staff) — 영업 제설정에서 지정된 인원(298).
+const SALES_STAFF_PERMS = [...STAFF_PERMS, "sales.view@all", "sales.edit@all", "contact.edit@all"];
+// 대표이사(tpl-ceo) 중 메뉴 판정에 쓰이는 키만.
+const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finance.view@all", "sales.view@all"];
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 26);
@@ -90,7 +95,11 @@ test("권한으로 숨긴 메뉴는 matcher 입력에 포함되지 않는다", (
   assert.deepEqual(resolveMenuRoute(leadMenus, "/trash"), { parentTitle: "휴지통", href: "/trash" });
   assert.deepEqual(resolveMenuRoute(leadMenus, "/staffing"), { parentTitle: "성과급 산정", href: "/staffing" });
   assert.equal(resolveMenuRoute(leadMenus, "/facilities"), null);
-  assert.deepEqual(resolveMenuRoute(execMenus, "/finance", "tab=bank"), { parentTitle: "재무", href: "/finance?tab=bank" });
+  // 재무는 관리자·인사/회계·대표이사만(298) — 임원은 숨김
+  assert.equal(resolveMenuRoute(execMenus, "/finance", "tab=bank"), null);
+  const ceoMenus = MENU_ITEMS.filter((item) => isMenuVisible(item, CEO_PERMS));
+  assert.deepEqual(resolveMenuRoute(ceoMenus, "/finance", "tab=bank"), { parentTitle: "재무", href: "/finance?tab=bank" });
+  assert.equal(resolveMenuRoute(ceoMenus, "/admin/users"), null);
   assert.deepEqual(resolveMenuRoute(execMenus, "/facilities"), { parentTitle: "사업장", href: "/facilities" });
   assert.equal(resolveMenuRoute(execMenus, "/trash"), null);
   assert.equal(resolveMenuRoute(execMenus, "/admin/users"), null);
@@ -99,7 +108,8 @@ test("권한으로 숨긴 메뉴는 matcher 입력에 포함되지 않는다", (
 test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 보유 키만큼만 보인다(§4.1)", () => {
   const payroll = MENU_ITEMS.find((item) => item.title === "급여·근로계약")!;
   assert.deepEqual(visibleSubmenu(payroll, STAFF_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend"]);
-  assert.deepEqual(visibleSubmenu(payroll, EXEC_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend", "/payroll", "/payroll/contracts", "/payroll/yearend", "/payroll/settings"]);
+  assert.deepEqual(visibleSubmenu(payroll, EXEC_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend"]);
+  assert.deepEqual(visibleSubmenu(payroll, CEO_PERMS).map((s) => s.href), ["/payroll/my", "/payroll/my-yearend", "/payroll", "/payroll/contracts", "/payroll/yearend", "/payroll/settings"]);
   const hr = MENU_ITEMS.find((item) => item.title === "근태·휴가")!;
   assert.deepEqual(visibleSubmenu(hr, EXEC_PERMS).map((s) => s.href), ["/approval/my-hr"]);
   assert.equal(visibleSubmenu(hr, ["staffing.edit@all"]).length, 7);
@@ -112,5 +122,20 @@ test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 �
   assert.deepEqual(visibleSubmenu(admin, ["security.access_log@all"]).map((s) => s.href), ["/admin/access-log"]);
   const contracts = MENU_ITEMS.find((item) => item.title === "계약")!;
   assert.deepEqual(visibleSubmenu(contracts, STAFF_PERMS).map((s) => s.href).includes("/contracts/filings"), false);
-  assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all"]).length, 7);
+  // Dashboard·수주/수금/발행 현황은 billing.view(관리자·인사/회계·대표이사)만(298)
+  assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all"]).length, 5);
+  assert.equal(visibleSubmenu(contracts, ["contract.view@all", "filing.view@all", "billing.view@all"]).length, 7);
+  assert.equal(visibleSubmenu(contracts, EXEC_PERMS).some((s) => s.href === "/contracts/dashboard"), false);
+});
+
+test("영업/마케팅 메뉴는 지정된 영업 담당자·대표이사·관리자만 본다(298)", () => {
+  const sales = MENU_ITEMS.find((item) => item.title === "영업/마케팅")!;
+  // 담당자 정보 데이터(contact.view)는 전 직원에게 있지만 메뉴는 sales.view 로 가린다
+  assert.equal(isMenuVisible(sales, STAFF_PERMS), false);
+  assert.equal(isMenuVisible(sales, LEAD_PERMS), false);
+  assert.equal(isMenuVisible(sales, EXEC_PERMS), false);
+  assert.equal(isMenuVisible(sales, SALES_STAFF_PERMS), true);
+  assert.equal(isMenuVisible(sales, CEO_PERMS), true);
+  assert.deepEqual(visibleSubmenu(sales, SALES_STAFF_PERMS).map((s) => s.href),
+    ["/sales", "/sales/contacts", "/sales/intel", "/sales/rag", "/sales/bids", "/approval/quote"]);
 });

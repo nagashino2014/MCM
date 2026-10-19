@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { ASSIGNEE_EXCLUDE_NAMES, MIN_ASSIGNEE_RANK } from "./org-tree";
+import { syncSalesStaffGrants } from "./staff-access";
 import {
   ACTIVITY_TYPE_META,
   type ActivityAssigneeRole,
@@ -668,9 +668,10 @@ export async function listActiveEmployees(): Promise<SalesEmployeeOption[]> {
   }));
 }
 
-// ── 영업 담당자 풀(150 sales_assignees) ──────────────────────
-// 목록 '담당' 필터와 담당자 선택 조직도의 모집단.
-// = 직급 규칙(차장 이상, 제외명 제외) ∪ '영업 담당 추가'로 등록한 인원.
+// ── 영업 담당자(150 sales_assignees) ──────────────────────
+// 목록 '담당' 필터·프로젝트 담당자 선택 조직도의 모집단이자 영업 메뉴 권한의 근거.
+// 2026-10-19: 직급 규칙(차장 이상) 자동 포함을 없애고 "영업 제설정 > 영업 담당자 설정"에서 지정한 인원만으로 한정했다.
+//   지정·해제 시 syncSalesStaffGrants 가 tpl-sales-staff(298) 부여·회수를 맞춘다.
 
 // 150 미적용 환경(마이그 반영 전)에서도 직급 규칙만으로 동작하도록 폴백한다.
 async function salesAssigneeTableExists(db: Awaited<ReturnType<typeof getDb>>): Promise<boolean> {
@@ -688,21 +689,16 @@ export async function listManualSalesAssigneeIds(): Promise<string[]> {
 
 export async function listSalesAssignees(): Promise<SalesEmployeeOption[]> {
   const db = await getDb();
-  const manual = (await salesAssigneeTableExists(db))
-    ? "LEFT JOIN sales_assignees sa ON sa.employee_id = e.employee_id"
-    : "";
-  const manualCond = manual ? "sa.employee_id IS NOT NULL OR " : "";
+  if (!(await salesAssigneeTableExists(db))) return [];
   const rows = rowsToObjects(
     await db.exec(
       `SELECT e.employee_id, e.name, e.dept_id, d.dept_name, p.position_name
-         FROM employee_profiles e
+         FROM sales_assignees sa
+         JOIN employee_profiles e ON e.employee_id = sa.employee_id
          LEFT JOIN departments d ON d.dept_id = e.dept_id
          LEFT JOIN positions p ON p.position_id = e.position_id
-         ${manual}
         WHERE e.status = 'active'
-          AND (${manualCond}(COALESCE(p.rank_order, 0) >= $1 AND NOT (e.name = ANY($2::text[]))))
-        ORDER BY COALESCE(d.display_order, 999) ASC, COALESCE(p.rank_order, 0) DESC, e.name ASC`,
-      [MIN_ASSIGNEE_RANK, ASSIGNEE_EXCLUDE_NAMES]
+        ORDER BY COALESCE(d.display_order, 999) ASC, COALESCE(p.rank_order, 0) DESC, e.name ASC`
     )
   );
   return rows.map((row) => ({
@@ -729,6 +725,30 @@ export async function addSalesAssignees(employeeIds: string[], userId: string | 
         [employeeId, userId, now]
       );
     }
+    await syncSalesStaffGrants(db, userId);
+  });
+}
+
+/**
+ * 영업 담당자 목록을 통째로 지정한다("영업 제설정 > 영업 담당자 설정"). 빠진 인원은 담당자에서 해제되고
+ * 영업 메뉴 권한(tpl-sales-staff)도 회수된다. 프로젝트 관계자(sales_project_members) 기록은 건드리지 않는다.
+ */
+export async function setSalesAssignees(employeeIds: string[], userId: string | null): Promise<{ granted: number; revoked: number }> {
+  const ids = Array.from(new Set(employeeIds.map((s) => String(s ?? "").trim()).filter(Boolean)));
+  if (!(await salesAssigneeTableExists(await getDb()))) {
+    throw new Error("영업 담당자 테이블이 아직 준비되지 않았습니다(마이그레이션 150 필요).");
+  }
+  const now = new Date().toISOString();
+  return withDbWrite(async (db) => {
+    await db.run("DELETE FROM sales_assignees WHERE NOT (employee_id = ANY($1::text[]))", [ids]);
+    for (const employeeId of ids) {
+      await db.run(
+        `INSERT INTO sales_assignees (employee_id, created_by, created_at)
+         VALUES ($1, $2, $3) ON CONFLICT (employee_id) DO NOTHING`,
+        [employeeId, userId, now]
+      );
+    }
+    return syncSalesStaffGrants(db, userId);
   });
 }
 

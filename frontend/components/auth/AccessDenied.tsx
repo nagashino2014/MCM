@@ -32,12 +32,15 @@ const KEY_LABEL: Record<string, string> = {
   "survey.manage": "외부 설문",
   "facility.view": "사업장",
   "contract.view": "계약",
+  "billing.view": "수주/수금/발행 현황",
   "filing.view": "대외 신고 대기열",
   "finance.view": "재무",
   "sales.view": "영업/마케팅",
   "contact.view": "담당자 정보 관리",
   "data.view": "데이터",
   "trash.view": "휴지통",
+  "approval.read_all": "전자결재 전 문서 열람",
+  "staffing.sensitive.view": "직원 계좌·인사 서류 열람",
 };
 
 export function AccessDenied({

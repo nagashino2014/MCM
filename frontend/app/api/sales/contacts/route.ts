@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 // ?engagement=contract,sales — 소속 사업장이 용역/영업 진행 중인 담당자만(OR).
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("sales.view");
+    // 주소록·모바일 담당자 화면도 이 API 를 쓴다 — 영업 메뉴 권한(sales.view)과 분리해 contact.view(전 직원)로 판정(298, 2026-10-19)
+    await requirePermission("contact.view");
     const engagementRaw = new URL(req.url).searchParams.get("engagement");
     const engagement = engagementRaw
       ? engagementRaw

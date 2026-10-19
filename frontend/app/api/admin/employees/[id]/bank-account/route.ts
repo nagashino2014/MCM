@@ -15,7 +15,7 @@ interface RouteContext {
 export async function GET(_req: NextRequest, ctx: RouteContext) {
   try {
     const { id } = await ctx.params;
-    await requireGlobalScope("staffing.view"); // 계좌는 전사 범위(관리자·인사담당)만(2026-10-19 §7.7)
+    await requireGlobalScope("staffing.sensitive.view"); // 계좌는 민감정보 전용 키(관리자·인사담당)만(298, C-4)
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(`SELECT bank_name, bank_code, bank_account, bank_account_holder FROM employee_profiles WHERE employee_id = $1`, [id])

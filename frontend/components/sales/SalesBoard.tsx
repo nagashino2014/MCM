@@ -10,6 +10,7 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ProgressReportModal } from "./ProgressReportModal";
+import { SalesSettingsCard } from "./SalesSettingsCard";
 import "@/components/cdash/cdash.css";
 import {
   ACTIVITY_TYPE_META,
@@ -87,10 +88,12 @@ export function SalesBoard() {
   const router = useRouter();
   const { data: session } = useSession();
   const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
+  // 영업 담당자 지정(영업 메뉴 개방) — 대표이사·관리자(298)
+  const canManageStaff = hasPerm(permsOf(session?.user), "sales.staff.manage");
   const { theme } = useCdashTheme();
 
   const [projects, setProjects] = useState<SalesProject[]>([]);
-  // 담당 필터 모집단 = 영업 담당자 풀(직급 규칙 ∪ '영업 담당 추가' 등록분). 전 직원이 아니다.
+  // 담당 필터 모집단 = "영업 제설정"에서 지정한 영업 담당자(298). 전 직원이 아니다.
   const [assignees, setAssignees] = useState<SalesEmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,12 +152,16 @@ export function SalesBoard() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const loadAssignees = useCallback(() => {
     fetch("/api/sales/assignees", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { employees: [] }))
       .then((d) => setAssignees(Array.isArray(d.employees) ? d.employees : []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    loadAssignees();
+  }, [loadAssignees]);
 
   // 초기 표시 탭 우선순위: 투찰 임박 > 경과 보고 > 다가오는 일정.
   // 사용자가 탭을 직접 누르면(userPickedTab) 자동 전환 중단.
@@ -262,6 +269,9 @@ export function SalesBoard() {
           </div>
         </div>
       </div>
+
+      {/* 하단: 영업 제설정(영업 담당자 지정·수집 소스) — 2026-10-19 */}
+      <SalesSettingsCard theme={theme} canManageStaff={canManageStaff} onStaffChanged={loadAssignees} />
 
       {creating && (
         <CreateProjectModal

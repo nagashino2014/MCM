@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import { rowsToObjects, withDbWrite } from "../db";
 import { recordAuditLogInline } from "./audit";
+import { syncSalesStaffGrants } from "@/lib/sales/staff-access";
 import { computeEmployeeNo } from "../admin/employee-no";
 import { hashPassword } from "./password";
 
@@ -125,6 +126,9 @@ export async function provisionAccountForEmployee(
         ]
       );
     }
+
+    // 영업 담당자로 지정된 직원이면 영업 메뉴 권한(tpl-sales-staff)도 함께 부여(298) — 지정은 계정 발급 전에 될 수 있다.
+    await syncSalesStaffGrants(db, actorUserId);
 
     await recordAuditLogInline(db, {
       actorUserId,

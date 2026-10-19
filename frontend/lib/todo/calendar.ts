@@ -5,7 +5,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import type { CalendarEvent } from "@/lib/calendar/types";
 import { visibleItemsWhere } from "./visibility";
-import { TODO_DEFAULT_DURATION_MIN } from "./types";
+import { TODO_DEFAULT_DURATION_MIN, TODO_MILESTONE_LABELS, type TodoMilestoneKind } from "./types";
 
 function monthRange(month: string): { first: string; last: string } {
   const [y, m] = month.split("-").map(Number);
@@ -29,19 +29,63 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT i.item_id, i.title, i.status, i.do_date, i.do_time, i.duration_min, i.due_date, i.note, i.link_kind, i.link_id,
+      `SELECT i.item_id, i.title, i.status, i.do_date, i.do_time, i.duration_min, i.due_date, i.end_date, i.note, i.link_kind, i.link_id,
               i.owner_user_id, i.assignee_user_id
          FROM todo_items i
         WHERE ${visibleItemsWhere("$1")}
           AND (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
           AND i.archived_at IS NULL AND i.parent_item_id IS NULL
-          AND COALESCE(i.do_date, i.due_date) BETWEEN $2 AND $3
+          AND (COALESCE(i.do_date, i.due_date) BETWEEN $2 AND $3
+               OR (i.do_date IS NOT NULL AND i.end_date IS NOT NULL AND i.do_date <= $3 AND i.end_date >= $2))
         ORDER BY COALESCE(i.do_date, i.due_date), i.do_time NULLS LAST`,
       [userId, first, last]
     )
   );
-  return rows.map((r) => {
+  // 287 하위 작업 마일스톤(종류가 있는 것) — "상위 제목 · 종류" 로 그 날(실제 일자 우선, 없으면 예정일)에 표시
+  const msRows = rowsToObjects(
+    await db.exec(
+      `SELECT s.item_id, s.title, s.milestone_kind, s.actual_date, s.do_date, s.status, p.item_id AS parent_id, p.title AS parent_title, p.link_kind, p.link_id
+         FROM todo_items s
+         JOIN todo_items p ON p.item_id = s.parent_item_id
+        WHERE s.milestone_kind IS NOT NULL AND s.archived_at IS NULL AND p.archived_at IS NULL
+          AND (p.assignee_user_id = $1 OR p.owner_user_id = $1)
+          AND COALESCE(s.actual_date, s.do_date) BETWEEN $2 AND $3
+        ORDER BY COALESCE(s.actual_date, s.do_date)`,
+      [userId, first, last]
+    )
+  );
+  const milestones: CalendarEvent[] = msRows.map((r) => {
+    const date = String(r.actual_date ?? r.do_date);
+    const kind = String(r.milestone_kind) as TodoMilestoneKind;
+    const kindLabel = TODO_MILESTONE_LABELS[kind] ?? kind;
+    const subTitle = String(r.title ?? "").trim();
+    // 하위 제목이 종류 라벨과 같으면 한 번만
+    const label = kind === "other" ? subTitle : subTitle && subTitle !== kindLabel ? `${kindLabel} · ${subTitle}` : kindLabel;
+    return {
+      id: `todo:${String(r.item_id)}`,
+      tag: "todo",
+      kind: "todo",
+      title: `${r.actual_date != null ? "◆ " : "◇ "}${String(r.parent_title)} · ${label}`,
+      startDate: date,
+      endDate: date,
+      startTime: null,
+      endTime: null,
+      location: null,
+      people: [],
+      summary: null,
+      docId: null,
+      // 상세는 상위 할 일로(하위는 상위 페이지의 하위 작업 섹션에서 편집)
+      entryId: String(r.parent_id),
+      canEdit: false,
+      canceled: false,
+      status: null,
+      dateField: r.actual_date != null ? undefined : "do",
+    };
+  });
+  const main = rows.map((r) => {
     const date = String(r.do_date ?? r.due_date);
+    // 287 기간 일정 — do_date~end_date 바
+    const endDate = r.do_date != null && r.end_date != null && String(r.end_date) >= date ? String(r.end_date) : date;
     const startTime = r.do_date != null && r.do_time != null ? String(r.do_time) : null;
     const dur = r.duration_min != null ? Number(r.duration_min) : TODO_DEFAULT_DURATION_MIN;
     const done = String(r.status) === "done";
@@ -51,7 +95,7 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
       kind: "todo",
       title: `${done ? "✓ " : ""}${String(r.title)}`,
       startDate: date,
-      endDate: date,
+      endDate,
       startTime,
       endTime: startTime ? addMinutes(startTime, dur) : null,
       location: null,
@@ -66,4 +110,5 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
     };
     return ev;
   });
+  return [...main, ...milestones];
 }

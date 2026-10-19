@@ -30,6 +30,10 @@ import {
   type TodoPriority,
   type TodoShareRole,
   type TodoStatus,
+  TODO_MILESTONE_KINDS,
+  TODO_MILESTONE_LABELS,
+  TODO_MILESTONE_STAGE_HINTS,
+  type TodoMilestoneKind,
 } from "@/lib/todo/types";
 import { describeRecurrence, parseRecurrence } from "@/lib/todo/recurrence";
 import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -1028,6 +1032,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                     detail.doDate && detail.doDate.length === 10 ? (
                       <>
                         {longDate(detail.doDate)}
+                        {detail.endDate && detail.endDate > detail.doDate ? ` ~ ${longDate(detail.endDate)}` : ""}
                         {detail.doTime ? ` ${detail.doTime}` : ""}
                         {detail.doTime && detail.durationMin ? <span className="todo-mu">· {detail.durationMin}분</span> : null}
                       </>
@@ -1048,6 +1053,27 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                           else setDetail((d) => (d ? { ...d, doDate: v } : d));
                         }}
                       />
+                      {detail.doDate && detail.doDate.length === 10 && (
+                        <>
+                          <span className="todo-mu">~</span>
+                          <CdDateInput
+                            className="todo-w-date"
+                            aria-label="종료일(기간 일정)"
+                            placeholder="종료일"
+                            value={detail.endDate ?? ""}
+                            onChange={(v) => {
+                              if (v === "") schedule({ endDate: null });
+                              else if (v.length === 10 && isValidDateString(v)) {
+                                if (detail.doDate && v < detail.doDate) {
+                                  toast("종료일은 할 날짜 이후여야 합니다.", "error");
+                                  return;
+                                }
+                                schedule({ endDate: v });
+                              } else setDetail((d) => (d ? { ...d, endDate: v } : d));
+                            }}
+                          />
+                        </>
+                      )}
                       <input className="cd-input todo-w-time" aria-label="시각 HH:mm" placeholder="HH:mm" value={timeDraft} onChange={(e) => setTimeDraft(e.target.value)} onBlur={commitTime} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
                       {detail.doTime && (
                         <select className="cd-select todo-w-sel" aria-label="소요 시간" value={detail.durationMin ?? 30} onChange={(e) => schedule({ durationMin: Number(e.target.value) })}>
@@ -1317,6 +1343,56 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                     </div>
                     {s.status !== "done" && (
                       <div className="todo-sr-prog" data-readonly={!canEdit ? "true" : undefined}>
+                        <select
+                          value={s.milestoneKind ?? ""}
+                          disabled={!canEdit}
+                          aria-label={`${s.title} 마일스톤 종류`}
+                          title="제출·수령·미팅·보고 같은 날짜 사안 — 캘린더 표시·업무 보고 날짜에 반영"
+                          onChange={(e) => {
+                            const kind = (e.target.value || null) as TodoMilestoneKind | null;
+                            const body: Record<string, unknown> = { milestoneKind: kind };
+                            // 종류를 고르면 관련 공정표 단계명으로 stage_order 자동 제안(없을 때만)
+                            if (kind && s.stageOrder == null && detail.stages.length) {
+                              const hints = TODO_MILESTONE_STAGE_HINTS[kind] ?? [];
+                              const hit = detail.stages.find((stg) => hints.some((h) => stg.stageName.replace(/\s/g, "").includes(h.replace(/\s/g, ""))));
+                              if (hit) body.stageOrder = hit.stageOrder;
+                            }
+                            void patchSubtask(s, body);
+                          }}
+                        >
+                          <option value="">종류 없음</option>
+                          {TODO_MILESTONE_KINDS.map((k) => (
+                            <option key={k} value={k}>
+                              {TODO_MILESTONE_LABELS[k]}
+                            </option>
+                          ))}
+                        </select>
+                        <CdDateInput
+                          className="todo-sr-date"
+                          aria-label={`${s.title} 예정일`}
+                          placeholder="예정일"
+                          value={s.doDate ?? ""}
+                          disabled={!canEdit}
+                          onChange={(v) => {
+                            if (v === "" || (v.length === 10 && isValidDateString(v))) void patchSubtask(s, { doDate: v || null });
+                          }}
+                        />
+                        <CdDateInput
+                          className="todo-sr-date"
+                          aria-label={`${s.title} 실제 일자`}
+                          placeholder="실제일"
+                          value={s.actualDate ?? ""}
+                          disabled={!canEdit}
+                          onChange={(v) => {
+                            if (v === "") void patchSubtask(s, { actualDate: null });
+                            else if (v.length === 10 && isValidDateString(v)) {
+                              void patchSubtask(s, { actualDate: v }).then(() => {
+                                // 결정 C: 실제일을 넣으면 완료를 제안(자동 완료 없음)
+                                if (s.status !== "done" && window.confirm(`"${s.title}" 실제 일자를 ${v} 로 기록했습니다. 완료로 표시할까요?`)) void toggleSubtask(s);
+                              });
+                            }
+                          }}
+                        />
                         {detail.stages.length > 0 && (
                           <select
                             value={s.stageOrder ?? ""}

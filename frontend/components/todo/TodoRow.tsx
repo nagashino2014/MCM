@@ -450,12 +450,12 @@ export function PendingApprovalRow({ event, today, density = "comfortable" }: { 
 }
 
 // ── 결재 일정 읽기 전용 행 ──
-export function ApprovalRow({ event, today, density = "comfortable", timeCell = "time" }: { event: TodoApprovalEvent; today?: string; density?: Density; timeCell?: TimeCell }) {
+export function ApprovalRow({ event, today, density = "comfortable", timeCell = "time", periodLabel }: { event: TodoApprovalEvent; today?: string; density?: Density; timeCell?: TimeCell; /** 287 기간 띠 — "10/20 ~ 10/22 · 2일차" */ periodLabel?: string }) {
   if (event.kind === "pending") return <PendingApprovalRow event={event} today={today ?? event.startDate} density={density} />;
   const href = event.docId ? `/approval?docId=${encodeURIComponent(event.docId)}` : null;
   const label = TODO_APPROVAL_EVENT_LABELS[event.kind] ?? event.kind;
   const Icon = approvalKindIcon(event.kind);
-  const period = event.startDate === event.endDate ? (event.startTime && event.endTime ? `${event.startTime} – ${event.endTime}` : null) : `${md(event.startDate)} – ${md(event.endDate)}`;
+  const period = periodLabel ?? (event.startDate === event.endDate ? (event.startTime && event.endTime ? `${event.startTime} – ${event.endTime}` : null) : `${md(event.startDate)} – ${md(event.endDate)}`);
   const status = event.status === "approved" ? "결재 승인" : event.status === "in_progress" ? "결재 진행" : null;
   const when = timeCell === "date" ? md(event.startDate) : event.startTime ? event.startTime : <span className="todo-mu">종일</span>;
   return (

@@ -145,6 +145,28 @@ export const TODO_LINK_KIND_LABELS: Record<TodoLinkKind, string> = {
   chat: "메신저",
 };
 
+// ── 하위 작업 마일스톤 종류(287, §27-1) — 통합허가 업무의 제출·수령·회의·보고 일자. other 는 제목이 라벨. ──
+export const TODO_MILESTONE_KINDS = ["pre_consult", "main_consult", "review_received", "meeting", "kickoff_report", "completion_report", "submit", "other"] as const;
+export type TodoMilestoneKind = (typeof TODO_MILESTONE_KINDS)[number];
+export const TODO_MILESTONE_LABELS: Record<TodoMilestoneKind, string> = {
+  pre_consult: "사전협의 제출",
+  main_consult: "본협의 제출",
+  review_received: "검토결과서 수령",
+  meeting: "미팅",
+  kickoff_report: "착수보고",
+  completion_report: "준공보고",
+  submit: "제출",
+  other: "기타",
+};
+/** 종류 → 공정 단계명 유사 매칭 키워드(stage_order 자동 제안). */
+export const TODO_MILESTONE_STAGE_HINTS: Partial<Record<TodoMilestoneKind, string[]>> = {
+  pre_consult: ["사전협의", "사전 협의"],
+  main_consult: ["본협의", "본 협의"],
+  review_received: ["검토", "보완"],
+  kickoff_report: ["착수"],
+  completion_report: ["준공", "완료"],
+};
+
 // ── 완료 조건(276, 2026-10-14) — 완료(status→done) 전에 검사. 검사 함수는 lib/todo/completion.ts(순수). ──
 export interface TodoCompleteRules {
   /** 하위 작업이 모두 완료돼야 한다. */
@@ -308,6 +330,11 @@ export interface TodoItem {
   progressNote: string | null;
   stageOrder: number | null;
   progressUpdatedAt: string | null;
+  /** 기간 일정(287, §27-2) — do_date~end_date. NULL=하루 일정. */
+  endDate: string | null;
+  /** 하위 작업 마일스톤(287, §27-1) — 실제 일자·종류. 상위 작업은 NULL. */
+  actualDate: string | null;
+  milestoneKind: TodoMilestoneKind | null;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;

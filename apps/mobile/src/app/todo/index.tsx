@@ -13,7 +13,7 @@ import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { hasAnyCompleteRule } from '@/lib/todo-completion';
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoBoard, type TodoColumn, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
-import { TODO_UI, addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, keyDate, statusTone, todayLocal, weekEnd, withAlpha } from '@/lib/todo-utils';
+import { TODO_UI, addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, isPeriodItem, keyDate, periodCovers, statusTone, todayLocal, weekEnd, withAlpha } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
 import { useTheme } from '@/theme/useTheme';
@@ -330,13 +330,15 @@ export default function TodoScreen() {
     const open = list.filter((it) => it.status !== 'done');
     const overdue = open.filter((it) => isOverdue(it, today));
     const rest = open.filter((it) => !isOverdue(it, today));
-    const on = (ymd: string) => rest.filter((it) => keyDate(it) === ymd || (it.dueDate === ymd && (keyDate(it) ?? '') <= ymd));
+    // 287 기간 일정은 걸치는 날마다 그룹에 든다
+    const on = (ymd: string) => rest.filter((it) => keyDate(it) === ymd || (it.dueDate === ymd && (keyDate(it) ?? '') <= ymd) || periodCovers(it, ymd));
     const todays = on(today);
     const tomorrows = on(tomorrow).filter((it) => !todays.includes(it));
     const weekStart = addDays(today, 2);
     const inWeek = rest.filter((it) => {
       const k = keyDate(it);
-      return k != null && k >= weekStart && k <= wEnd && !todays.includes(it) && !tomorrows.includes(it);
+      const period = isPeriodItem(it) && it.doDate! <= wEnd && it.endDate! >= weekStart;
+      return ((k != null && k >= weekStart && k <= wEnd) || period) && !todays.includes(it) && !tomorrows.includes(it);
     });
     const later = rest.filter((it) => {
       const k = keyDate(it);

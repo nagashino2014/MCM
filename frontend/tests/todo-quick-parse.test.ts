@@ -126,3 +126,17 @@ test("잘못된 기준일은 오늘로 대체되어 예외가 없다", () => {
   const r = parseQuickAdd("내일 회의", { today: "not-a-date" });
   assert.match(r.doDate ?? "", /^\d{4}-\d{2}-\d{2}$/);
 });
+
+test("기간(287) — '10/20~10/22' 는 할 날·종료일, '10/20부터 3일간' 은 +2일, '~10/30까지' 는 여전히 마감", () => {
+  const today = "2026-10-19";
+  const a = parseQuickAdd("울산 출장 10/20~10/22 !높음", { today, weekStart: 1 });
+  assert.equal(a.doDate, "2026-10-20");
+  assert.equal(a.endDate, "2026-10-22");
+  assert.equal(a.title, "울산 출장");
+  const b = parseQuickAdd("현장 측정 10/20부터 3일간", { today, weekStart: 1 });
+  assert.equal(b.doDate, "2026-10-20");
+  assert.equal(b.endDate, "2026-10-22");
+  const c = parseQuickAdd("보고서 ~10/30까지", { today, weekStart: 1 });
+  assert.equal(c.dueDate, "2026-10-30");
+  assert.equal(c.endDate, null);
+});

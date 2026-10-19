@@ -202,6 +202,41 @@ export function approvalSection(ev: TodoApprovalEvent, today: string, weekStart:
   return sectionOf(anchor, today, weekStart);
 }
 
+/** 287 기간 일정(do_date~end_date, 하루 초과)인지. */
+export function isPeriodItem(it: Pick<TodoItem, "doDate" | "endDate">): boolean {
+  return !!it.doDate && !!it.endDate && it.endDate > it.doDate;
+}
+
+/**
+ * 기간이 걸치는 날짜 섹션들(§27-2) — 오늘 이전은 오늘부터, 최대 62일. overdue 는 내지 않는다(끝난 기간은 호출측이 제외).
+ * nextWeek·later 는 "다음 주 이후" 한 묶음이라 later 로 합친다.
+ */
+export function periodSections(start: string, end: string, today: string, weekStart: 0 | 1): SectionKey[] {
+  if (end < today) return [];
+  const out: SectionKey[] = [];
+  let d = start < today ? today : start;
+  let guard = 0;
+  while (d <= end && guard < 62) {
+    let k = sectionOf(d, today, weekStart);
+    if (k === "nextWeek") k = "later";
+    if (k !== "overdue" && k !== "none" && !out.includes(k)) out.push(k);
+    d = addDays(d, 1);
+    guard += 1;
+  }
+  return out;
+}
+
+/** "10/20 ~ 10/22 · 2일차" / 시작 전 "10/20 ~ 10/22 · 3일" / 끝난 뒤 "10/20 ~ 10/22". */
+export function periodBadge(start: string, end: string, today: string): string {
+  // diffDays 의 인자 순서에 기대지 않고 직접 센다(날짜 문자열은 YYYY-MM-DD).
+  const span = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+  const days = span(start, end) + 1;
+  const range = `${md(start)} ~ ${md(end)}`;
+  if (today < start) return `${range} · ${days}일`;
+  if (today > end) return range;
+  return `${range} · ${span(start, today) + 1}일차`;
+}
+
 /** 서버 computeRemindAt 과 같은 기본 알림 시각(ISO). */
 export function defaultRemindAt(
   it: { doDate: string | null; doTime: string | null; dueDate: string | null },

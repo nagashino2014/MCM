@@ -12,7 +12,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { claudeMessages } from "@/lib/ai/claude-client";
 import { saveReport, type ReportStageInput } from "@/lib/work-plan/workspace";
 import { getItemDetail } from "./store";
-import type { TodoItem, TodoItemDetail } from "./types";
+import { TODO_MILESTONE_LABELS, type TodoItem, type TodoItemDetail } from "./types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -80,22 +80,28 @@ async function existingDraft(detail: TodoItemDetail, kind: "contract" | "task", 
 
 /** 하위 작업 → 공정 단계 델타(같은 단계는 최대 %). */
 function stageDelta(detail: TodoItemDetail): ReportStageInput[] {
-  const byOrder = new Map<number, number>();
+  // 287: 같은 단계에 여러 하위 작업이면 진행율은 최대, 예정일은 가장 이른 것, 실제 일자는 가장 늦은 것.
+  const byOrder = new Map<number, { pct: number; planned: string | null; actual: string | null }>();
   for (const s of detail.subtasks) {
     if (s.stageOrder == null) continue;
     const pct = s.status === "done" ? 100 : s.progressPct ?? 0;
-    byOrder.set(s.stageOrder, Math.max(byOrder.get(s.stageOrder) ?? 0, pct));
+    const cur = byOrder.get(s.stageOrder) ?? { pct: 0, planned: null, actual: null };
+    cur.pct = Math.max(cur.pct, pct);
+    if (s.doDate && (!cur.planned || s.doDate < cur.planned)) cur.planned = s.doDate;
+    if (s.actualDate && (!cur.actual || s.actualDate > cur.actual)) cur.actual = s.actualDate;
+    byOrder.set(s.stageOrder, cur);
   }
   const out: ReportStageInput[] = [];
   for (const st of detail.stages) {
-    const pct = byOrder.get(st.stageOrder);
-    if (pct == null) continue;
+    const agg = byOrder.get(st.stageOrder);
+    if (!agg) continue;
     out.push({
       stageOrder: st.stageOrder,
       stageName: st.stageName,
-      status: pct >= 100 ? "done" : pct > 0 ? "in_progress" : "pending",
-      progressPct: pct,
-      actualDate: pct >= 100 ? kstToday() : null,
+      status: agg.pct >= 100 ? "done" : agg.pct > 0 ? "in_progress" : "pending",
+      progressPct: agg.pct,
+      plannedDate: agg.planned,
+      actualDate: agg.actual ?? (agg.pct >= 100 ? kstToday() : null),
     });
   }
   return out;
@@ -106,10 +112,14 @@ export function serializeDraft(detail: TodoItemDetail, today = kstToday()): { pr
   const circled = (n: number) => (n >= 1 && n <= 20 ? String.fromCharCode(0x2460 + n - 1) : `${n}.`);
   const stageName = (s: TodoItem) => detail.stages.find((st) => st.stageOrder === s.stageOrder)?.stageName ?? null;
   const progress: string[] = [`[${detail.title}]`];
-  const active = detail.subtasks.filter((s) => s.status === "done" || (s.progressPct ?? 0) > 0 || (s.progressNote ?? "").trim());
+  const active = detail.subtasks.filter((s) => s.status === "done" || (s.progressPct ?? 0) > 0 || (s.progressNote ?? "").trim() || s.actualDate);
   active.forEach((s, i) => {
     const pct = s.status === "done" ? 100 : s.progressPct ?? 0;
     const parts = [`${s.title} — ${pct}%`];
+    // 287 마일스톤 종류·실제/예정 일자
+    if (s.milestoneKind && s.milestoneKind !== "other") parts.push(TODO_MILESTONE_LABELS[s.milestoneKind]);
+    if (s.actualDate) parts.push(`실제 ${md(s.actualDate)}`);
+    else if (s.doDate) parts.push(`예정 ${md(s.doDate)}`);
     const sn = stageName(s);
     if (sn) parts.push(sn);
     if (s.progressNote?.trim()) parts.push(s.progressNote.trim());

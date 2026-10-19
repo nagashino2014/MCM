@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { useTheme } from '@/theme/useTheme';
 import { TODO_APPROVAL_EVENT_LABELS, type TodoApprovalEvent, type TodoItem } from '@/lib/todo-types';
-import { approvalEventColor, dueBadge, fmtIsoShort, fmtMd, fmtRange, itemContext, pendingAgeDays, pendingContextParts, withAlpha } from '@/lib/todo-utils';
+import { approvalEventColor, dueBadge, fmtIsoShort, fmtMd, fmtRange, isPeriodItem, itemContext, pendingAgeDays, pendingContextParts, periodBadge, withAlpha } from '@/lib/todo-utils';
 
 import { BoardStripe, CheckCircle, ContextDot, DueBadge, KindCircle, MiniAvatar, PastelLabel, SegBar, PriorityLabel } from './parts';
 
@@ -85,6 +85,12 @@ export function TodoRow({
           담당 없음
         </Text>
       )
+    );
+  if (isPeriodItem(item) && today)
+    meta.push(
+      <Text key="period" className="rounded-md bg-cd-primary-soft px-1.5 text-[11.5px] font-semibold text-cd-primary">
+        {periodBadge(item.doDate!, item.endDate!, today)}
+      </Text>
     );
   if (item.subtaskTotal > 0)
     meta.push(

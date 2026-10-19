@@ -171,6 +171,19 @@ export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string
   review: "검토",
 };
 
+export const TODO_MILESTONE_KINDS = ["pre_consult", "main_consult", "review_received", "meeting", "kickoff_report", "completion_report", "submit", "other"] as const;
+export type TodoMilestoneKind = (typeof TODO_MILESTONE_KINDS)[number];
+export const TODO_MILESTONE_LABELS: Record<TodoMilestoneKind, string> = {
+  pre_consult: "사전협의 제출",
+  main_consult: "본협의 제출",
+  review_received: "검토결과서 수령",
+  meeting: "미팅",
+  kickoff_report: "착수보고",
+  completion_report: "준공보고",
+  submit: "제출",
+  other: "기타",
+};
+
 export const TODO_ACTIVITY_ACTIONS = [
   "create", "update", "status", "assign", "due", "move", "share", "comment", "complete", "reopen", "snooze", "archive",
   "progress", "work_report",
@@ -310,6 +323,10 @@ export interface TodoItem {
   progressNote: string | null;
   stageOrder: number | null;
   progressUpdatedAt: string | null;
+  /** 기간 일정(287) do_date~end_date · 하위 마일스톤 실제 일자·종류 */
+  endDate: string | null;
+  actualDate: string | null;
+  milestoneKind: TodoMilestoneKind | null;
   archivedAt: string | null;
   createdAt: string;
   createdBy: string | null;

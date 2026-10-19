@@ -597,6 +597,19 @@ export function BidBoard() {
       );
       setNotifyProfiles(profiles);
     }
+    // 수신자까지 지정했는데 '알림 활성화'를 안 켠 조건 — 발송도 앱 목록 적재도 되지 않는다
+    // (2026-10-19 통합허가 조건이 꺼진 채 저장돼 "알림이 안 온다"로 보고됨). 저장 전에 확인한다.
+    const off = profiles.filter((p) => !p.enabled && p.recipients.length > 0);
+    if (
+      off.length &&
+      confirm(
+        `'알림 활성화'가 꺼져 있어 발송·앱 목록 적재가 되지 않는 조건이 있습니다: ${off.map((p) => p.name).join(", ")}\n\n` +
+          "활성화하고 저장할까요? (취소 = 꺼진 상태로 저장)"
+      )
+    ) {
+      profiles = profiles.map((p) => (off.includes(p) ? { ...p, enabled: true } : p));
+      setNotifyProfiles(profiles);
+    }
     setNotifyBusy(true);
     try {
       const d = await jfetch("/api/sales/bids/notify-settings", {
@@ -1549,8 +1562,8 @@ export function BidBoard() {
                   data-active={i === notifyIdx}
                   onClick={() => selectProfile(i)}
                 >
-                  {p.enabled ? "" : "◦ "}
                   {p.name}
+                  {p.enabled ? null : <span className="cd-text-faint">&nbsp;(꺼짐)</span>}
                   <button type="button" className="ml-1" title="삭제" onClick={(e) => { e.stopPropagation(); removeProfile(i); }}>
                     <X className="w-3 h-3" />
                   </button>

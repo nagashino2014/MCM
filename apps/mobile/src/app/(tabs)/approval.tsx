@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import {
   Badge,
   EmptyState,
   PrimaryIconButton,
+  PullRefresh,
   Screen,
   SegmentedTabs,
   SkeletonList,
@@ -103,7 +104,7 @@ export default function ApprovalScreen() {
           data={docs}
           keyExtractor={(d) => d.docId}
           contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
+          refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
           ListHeaderComponent={
             staleAt ? (
               <View className="pb-3">

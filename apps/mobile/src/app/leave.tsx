@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Card, GradientButton, OutlineButton, ScreenHeader, SkeletonList } from '@/components/ui';
+import { Card, GradientButton, OutlineButton, PullRefresh, ScreenHeader, SkeletonList } from '@/components/ui';
 import { CHART, DayBars, DonutGauge, OvertimeGauge } from '@/components/charts/Gauges';
 import { useApi } from '@/lib/use-api';
 import type { CdPalette } from '@/theme/tokens';
@@ -187,7 +187,7 @@ export default function LeaveScreen() {
       <ScreenHeader title="근태·휴가" subtitle={`${year}년`} back variant="sub" />
       <ScrollView
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         {/* 연차 */}
         {balance.loading && !s ? (
           <SkeletonList count={1} />

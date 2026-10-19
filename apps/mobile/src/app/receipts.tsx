@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import {
   EmptyState,
   HeaderIconButton,
   Input,
+  PullRefresh,
   ScreenHeader,
   SegmentedTabs,
   Sheet,
@@ -237,7 +238,7 @@ export default function ReceiptsScreen() {
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={() => void list.reload()} />}>
+        refreshControl={<PullRefresh refreshing={list.refreshing} onRefresh={() => void list.reload()} />}>
         {list.loading ? (
           <View className="px-4 pt-2">
             <SkeletonList count={4} />

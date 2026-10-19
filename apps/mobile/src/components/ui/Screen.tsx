@@ -1,10 +1,11 @@
 import { type ReactNode } from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { useTheme } from "@/theme/useTheme";
+import { PullRefresh } from "./PullRefresh";
 
 /**
  * 모든 화면의 공통 껍데기 — 배경·안전영역·스크롤·당겨서 새로고침(+옵션 자체 헤더).
@@ -87,7 +88,7 @@ export function Screen({
           keyboardShouldPersistTaps="handled"
           refreshControl={
             onRefresh ? (
-              <RefreshControl
+              <PullRefresh
                 refreshing={!!refreshing}
                 onRefresh={onRefresh}
                 tintColor={c.faint}

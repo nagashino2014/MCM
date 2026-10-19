@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Button, CtaGradientFill, EmptyState, Screen, SkeletonList, useToast } from '@/components/ui';
+import { Button, CtaGradientFill, EmptyState, PullRefresh, Screen, SkeletonList, useToast } from '@/components/ui';
 import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSections';
 import { TimelineView } from '@/components/todo/TimelineView';
 import { AutomationSheet } from '@/components/todo/AutomationSheet';
@@ -727,7 +727,7 @@ export default function TodoScreen() {
           contentContainerStyle={content.padded ? { padding: 16, paddingBottom: 24, gap: 12 } : { paddingBottom: 24 }}
           stickyHeaderIndices={content.sticky}
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reloadCurrent} />}>
+          refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadCurrent} />}>
           {content.nodes}
         </ScrollView>
         <QuickAddBar

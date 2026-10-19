@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   EmptyState,
+  PullRefresh,
   ScreenHeader,
   SegmentedTabs,
   Sheet,
@@ -259,7 +260,7 @@ export default function WorkReportsScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reloadAll()} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void reloadAll()} />}>
         {tab === 'mine' ? (
           <>
             {/* 반려/보완 요청 — 재제출 대상 */}

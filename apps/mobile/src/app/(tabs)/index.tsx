@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 
@@ -10,6 +10,7 @@ import {
   Card,
   CardRow,
   HeaderIconButton,
+  PullRefresh,
   ScreenHeader,
   SkeletonList,
   StatTile,
@@ -192,7 +193,7 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         <ScreenHeader
           title={`${user?.name ?? '사용자'}님, 안녕하세요`}
           subtitle={dateStr}

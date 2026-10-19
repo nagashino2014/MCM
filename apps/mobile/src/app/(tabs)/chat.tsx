@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,6 +8,7 @@ import {
   Count,
   EmptyState,
   GradientIconButton,
+  PullRefresh,
   Screen,
   SearchBar,
   SegmentedTabs,
@@ -203,7 +204,7 @@ export default function ChatScreen() {
         <FlatList
           data={list}
           keyExtractor={(r) => String(r.roomId)}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+          refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => load(true)} />}
           contentContainerStyle={{ paddingBottom: 90 }}
           ListEmptyComponent={
             hits.length ? null : (

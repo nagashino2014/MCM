@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { CtaGradientFill, EmptyState, GradientIconButton, SearchBar, TileGrid } from '@/components/ui';
+import { CtaGradientFill, EmptyState, GradientIconButton, PullRefresh, SearchBar, TileGrid } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { callPhone, sendSms } from '@/lib/format';
 import { ORG_CATEGORIES, UNCATEGORIZED } from '@/lib/org-categories';
@@ -115,7 +115,7 @@ export default function ContactsScreen() {
           data={list}
           keyExtractor={(x) => String(x.id)}
           contentContainerStyle={{ padding: 16, gap: 10 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
+          refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"

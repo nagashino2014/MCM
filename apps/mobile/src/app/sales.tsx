@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,6 +10,7 @@ import {
   GradientButton,
   GradientIconButton,
   OutlineButton,
+  PullRefresh,
   ScreenHeader,
   Sheet,
   SkeletonList,
@@ -128,7 +129,7 @@ export default function SalesScreen() {
       <ScreenHeader title="영업" subtitle={`${cur.y}년 ${cur.m + 1}월`} back variant="sub" />
       <ScrollView
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         {canEdit ? (
           <View className="flex-row gap-2">
             <View className="flex-1">

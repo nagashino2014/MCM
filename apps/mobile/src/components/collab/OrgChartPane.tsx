@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Avatar, EmptyState, SkeletonList } from '@/components/ui';
+import { Avatar, EmptyState, PullRefresh, SkeletonList } from '@/components/ui';
 import { useTheme } from '@/theme/useTheme';
 import { useDirectory, type DirDept, type DirPerson } from './DirectoryPane';
 
@@ -105,7 +105,7 @@ export function OrgChartPane() {
   return (
     <ScrollView
       className="flex-1"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
+      refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
       contentContainerStyle={{ paddingBottom: 24 }}>
       {roots.map((d) => renderDept(d, 0))}
     </ScrollView>

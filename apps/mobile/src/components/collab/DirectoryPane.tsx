@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Linking, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
-import { Avatar, Chip, EmptyState, SearchBar, SkeletonList, useToast } from '@/components/ui';
+import { Avatar, Chip, EmptyState, PullRefresh, SearchBar, SkeletonList, useToast } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { callPhone, sendSms } from '@/lib/format';
 import { useTheme } from '@/theme/useTheme';
@@ -96,7 +96,7 @@ export function DirectoryPane() {
       <FlatList
         data={people}
         keyExtractor={(p) => p.employeeId}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
         contentContainerStyle={{ paddingBottom: 24 }}
         ListEmptyComponent={
           <EmptyState

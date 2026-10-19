@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Dimensions, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Badge, Button, Card, CardRow, EmptyState, ScreenHeader, Sheet, SkeletonList } from '@/components/ui';
+import { Badge, Button, Card, CardRow, EmptyState, PullRefresh, ScreenHeader, Sheet, SkeletonList } from '@/components/ui';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
@@ -191,7 +191,7 @@ export default function ScheduleScreen() {
       />
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
         {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a).
             회의·면접(219) 추가로 7개가 되어 폰트·패딩을 줄여 375 폭에서도 1행에 맞춘다(사용자 요청).
             정렬은 오른쪽 + 고정 간격 — 양쪽 정렬(justify-between)은 넓은 화면(데스크탑 위젯)에서

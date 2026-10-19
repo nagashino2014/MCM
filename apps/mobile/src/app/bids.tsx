@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -10,12 +9,10 @@ import {
   ConfirmSheet,
   EmptyState,
   Screen,
-  SegmentedTabs,
   Sheet,
   SkeletonList,
   useToast,
 } from '@/components/ui';
-import type { SegmentItem } from '@/components/ui';
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { apiJson } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
@@ -47,20 +44,25 @@ interface BidMatch {
   details?: MatchDetail[];
 }
 
-type Tab = 'recent' | 'posted' | 'deadline';
+/** 웹 알림 설정의 발송 조건(프로파일) — 목록 상단 버튼(최대 4개)으로 그 조건의 공고만 본다. */
+interface NotifyProfileTag {
+  profileId: string;
+  name: string;
+  enabled: boolean;
+}
 
-const SEGMENTS: SegmentItem<Tab>[] = [
-  { key: 'recent', label: '최근 매칭' },
-  { key: 'posted', label: '최근 공고' },
-  { key: 'deadline', label: '마감 임박' },
-];
+/** 알림 조건 버튼 칸 수 — 소스 태그(3개 + 여백 1칸)와 같은 너비로 맞춘다(사용자 확정 2026-10-19). */
+const PROFILE_SLOTS = 4;
+/** 앱 목록 표시 기간(개월) — 지난 공고는 앱에서만 사라지고 웹 목록은 영구 보존(2026-10-19). */
+const MAX_AGE_MONTHS = 3;
+
 const TYPE_LABEL: Record<string, string> = {
   order_plan: '발주계획',
   prior_spec: '사전규격',
   bid_notice: '입찰공고',
 };
 
-/** 입찰 소스 3태그(동일 너비 필터) — 정렬 탭 아래 배치(사용자 확정 2026-08-10). */
+/** 입찰 소스 3태그(동일 너비 필터) — 알림 조건 버튼 아래 배치(사용자 확정 2026-08-10 → 10-19). */
 const SOURCE_TAGS: { key: string; label: string }[] = [
   { key: 'bid_notice', label: '입찰 공고' },
   { key: 'order_plan', label: '발주 계획' },
@@ -114,10 +116,19 @@ function regionOf(b: BidMatch): string | null {
   return null;
 }
 
+/** 오늘(YYYY-MM-DD)에서 N개월 전 — 구 서버(maxAgeMonths 미지원) 응답을 클라에서 한 번 더 거르는 기준. */
+function monthsAgo(today: string, n: number): string {
+  const d = new Date(`${today}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setUTCMonth(d.getUTCMonth() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * 공공입찰 매칭 공고(M6-C → P6 확장) — 푸시 알림의 착지 화면.
  *
- * 정렬 3종(최근 매칭·최근 공고·마감 임박) + 용역 구분·지역권 필터 + 선택/일괄 하드 삭제.
+ * 알림 조건 버튼(웹 발송 조건, 최대 4개) + 입찰 소스·용역 구분·지역권 필터 + 선택/일괄 하드 삭제.
+ * 정렬은 최근 매칭순 고정(정렬 3탭은 2026-10-19 제거), 공고일 기준 최근 3개월만 보인다.
  * 필터는 서버(?categories=&regions=)가 원천이고, 구 서버(파라미터 미지원)에서도 화면이
  * 맞게 보이도록 클라이언트에서 한 번 더 거른다(서버가 걸렀으면 전부 통과라 무해).
  * 삭제는 되돌릴 수 없고 웹 알림 이력에서도 사라진다(하드 삭제 — 사용자 확정).
@@ -127,8 +138,8 @@ export default function BidsScreen() {
   const toast = useToast();
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
-  const params = useLocalSearchParams<{ filter?: string }>();
-  const [tab, setTab] = useState<Tab>(params.filter === 'deadline' ? 'deadline' : 'recent');
+  /** 선택한 알림 조건(단일 선택 — 다시 누르면 해제). */
+  const [profile, setProfile] = useState<string | null>(null);
   const [types, setTypes] = useState<string[]>([]);
   const [cats, setCats] = useState<string[]>([]);
   const [regs, setRegs] = useState<string[]>([]);
@@ -150,31 +161,49 @@ export default function BidsScreen() {
 
   const qs = [
     'limit=60',
-    tab === 'deadline' ? 'filter=deadline' : tab === 'posted' ? 'sort=posted' : '',
+    `maxAgeMonths=${MAX_AGE_MONTHS}`,
+    profile ? `profile=${encodeURIComponent(profile)}` : '',
     types.length ? `types=${encodeURIComponent(types.join(','))}` : '',
     cats.length ? `categories=${encodeURIComponent(cats.join(','))}` : '',
     regs.length ? `regions=${encodeURIComponent(regs.join(','))}` : '',
   ]
     .filter(Boolean)
     .join('&');
-  const list = useApi<{ items: BidMatch[]; today: string; categories?: string[]; regionGroups?: string[] }>(
+  const list = useApi<{
+    items: BidMatch[];
+    today: string;
+    since?: string;
+    categories?: string[];
+    regionGroups?: string[];
+    profiles?: NotifyProfileTag[];
+  }>(
     `/api/sales/bids/matches?${qs}`,
     { cache: true }
   );
 
   const raw = list.data?.items ?? [];
+  const today = list.data?.today ?? new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const since = list.data?.since ?? monthsAgo(today, MAX_AGE_MONTHS);
   // 클라 이중 필터(구 서버 폴백) — 지역권은 응답 regionGroup 우선, 없으면 기관명 판정.
+  // 3개월 창도 서버(maxAgeMonths)와 같은 기준(공고일, 없으면 매칭일)으로 한 번 더 거른다.
   const items = useMemo(
     () =>
       raw.filter(
         (b) =>
           (!types.length || types.includes(b.bidType)) &&
           (!cats.length || (b.categoryName != null && cats.includes(b.categoryName))) &&
-          (!regs.length || regs.includes(regionOf(b) ?? ''))
+          (!regs.length || regs.includes(regionOf(b) ?? '')) &&
+          (!since || (b.postedAt || b.matchedAt || '').slice(0, 10) >= since)
       ),
-    [raw, types, cats, regs]
+    [raw, types, cats, regs, since]
   );
-  const today = list.data?.today ?? new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const profiles = (list.data?.profiles ?? []).slice(0, PROFILE_SLOTS);
+  // 선택한 조건이 웹에서 삭제됐으면 선택을 푼다(없는 조건으로 빈 목록이 고정되지 않게).
+  useEffect(() => {
+    if (profile && list.data?.profiles && !list.data.profiles.some((p) => p.profileId === profile)) {
+      setProfile(null);
+    }
+  }, [profile, list.data]);
   const loading = list.loading && !list.data;
 
   // 필터 옵션 — 서버 facet 우선, 구 서버는 현재 페이지의 분류로 폴백.
@@ -221,7 +250,9 @@ export default function BidsScreen() {
             ? { noticeIds: picked }
             : {
                 all: true,
-                filter: tab === 'deadline' ? 'deadline' : undefined,
+                // 앱 표시 창(3개월) 밖의 행은 지우지 않는다 — 웹 목록은 영구 보존.
+                maxAgeMonths: MAX_AGE_MONTHS,
+                profile: profile ?? undefined,
                 types: types.length ? types : undefined,
                 categories: cats.length ? cats : undefined,
                 regions: regs.length ? regs : undefined,
@@ -273,13 +304,8 @@ export default function BidsScreen() {
       return (
         <EmptyState
           icon="briefcase-outline"
-          title={
-            cats.length || regs.length
-              ? '조건에 맞는 공고가 없습니다'
-              : tab === 'deadline'
-                ? '마감이 남은 공고가 없습니다'
-                : '매칭된 공고가 없습니다'
-          }
+          title={profile || types.length || cats.length || regs.length ? '조건에 맞는 공고가 없습니다' : '매칭된 공고가 없습니다'}
+          description={`최근 ${MAX_AGE_MONTHS}개월 공고만 표시합니다.`}
         />
       );
     }
@@ -324,7 +350,7 @@ export default function BidsScreen() {
               <Text
                 className="text-[11px] font-extrabold"
                 style={{ color: urgent ? c.error : c.faint }}>
-                {d === 0 ? '오늘 마감' : `D-${d}`}
+                {d === 0 ? '오늘 마감' : d < 0 ? '마감' : `D-${d}`}
               </Text>
             ) : null}
           </View>
@@ -399,15 +425,47 @@ export default function BidsScreen() {
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, loading, list.error, tab, today, c, expanded, selecting, picked, canEdit, cats.length, regs.length, catTintMap]);
+  }, [items, loading, list.error, profile, types.length, today, c, expanded, selecting, picked, canEdit, cats.length, regs.length, catTintMap]);
 
   return (
     <View className="flex-1">
       <Screen scroll padded={false} refreshing={list.refreshing} onRefresh={list.reload}>
-        <SegmentedTabs items={SEGMENTS} value={tab} onChange={setTab} />
+        <View className="gap-1.5 px-4 pt-3">
+          {/* 알림 조건 버튼 — 웹 발송 조건(기술진단·통합허가 등) 최대 4칸, 소스 태그와 같은 너비.
+              우측 끝은 필터 버튼 폭만큼 비워 아래 행과 칸을 맞춘다. 꺼진 조건은 종 꺼짐 아이콘. */}
+          {profiles.length ? (
+            <View className="flex-row items-center gap-1.5">
+              {Array.from({ length: PROFILE_SLOTS }, (_, i) => {
+                const p = profiles[i];
+                if (!p) return <View key={`empty-${i}`} className="flex-1" />;
+                const on = profile === p.profileId;
+                return (
+                  <Pressable
+                    key={p.profileId}
+                    onPress={() => setProfile(on ? null : p.profileId)}
+                    className="flex-1 flex-row items-center justify-center gap-0.5 rounded-full py-[7px] active:opacity-70"
+                    style={{
+                      backgroundColor: on ? c.primarySoft : 'transparent',
+                      borderWidth: on ? 0 : 1,
+                      borderColor: c.border,
+                    }}>
+                    {!p.enabled ? (
+                      <Ionicons name="notifications-off-outline" size={11} color={on ? c.primary : c.faint} />
+                    ) : null}
+                    <Text
+                      numberOfLines={1}
+                      className={`shrink text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`}
+                      style={{ color: on ? c.primary : c.faint }}>
+                      {p.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              <View className="w-[30px]" />
+            </View>
+          ) : null}
 
-        <View className="gap-1.5 px-4 pt-1">
-          {/* 입찰 소스 3태그(동일 너비) + 우측 끝 필터 토글(분류·지역 드롭다운) */}
+          {/* 입찰 소스 3태그 + 1칸 여백(알림 조건 4칸과 너비 정렬) + 우측 끝 필터 토글(분류·지역 드롭다운) */}
           <View className="flex-row items-center gap-1.5">
             {SOURCE_TAGS.map((t) => {
               const on = types.includes(t.key);
@@ -429,6 +487,7 @@ export default function BidsScreen() {
                 </Pressable>
               );
             })}
+            <View className="flex-1" />
             <Pressable
               onPress={() => setFilterOpen((v) => !v)}
               hitSlop={8}
@@ -528,7 +587,7 @@ export default function BidsScreen() {
           <BulkRow
             icon="trash-outline"
             title="현재 조건 전체 삭제"
-            desc={`지금 정렬·필터에 해당하는 공고 전체(화면에 ${items.length}건 표시 중).`}
+            desc={`지금 알림 조건·필터에 해당하는 최근 ${MAX_AGE_MONTHS}개월 공고 전체(화면에 ${items.length}건 표시 중).`}
             onPress={() => {
               setBulkOpen(false);
               setConfirm('all');
@@ -569,9 +628,9 @@ export default function BidsScreen() {
         }
         message={
           (confirm === 'all'
-            ? `정렬·필터(소스 태그 포함)에 해당하는 매칭 알림 전체가 대상입니다(화면에 ${items.length}건 표시 중). `
+            ? `알림 조건·필터(소스 태그 포함)에 해당하는 최근 ${MAX_AGE_MONTHS}개월 매칭 알림 전체가 대상입니다(화면에 ${items.length}건 표시 중). `
             : confirm === 'range'
-              ? '지정한 기간의 공고가 대상이며, 켜 둔 소스·용역 구분·지역권 필터도 함께 적용됩니다. '
+              ? `지정한 기간의 공고가 대상이며(최근 ${MAX_AGE_MONTHS}개월 이내), 켜 둔 알림 조건·소스·용역 구분·지역권 필터도 함께 적용됩니다. `
               : '') + '삭제하면 되돌릴 수 없으며, 웹의 알림 이력에서도 함께 사라집니다.'
         }
         confirmLabel="삭제"

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
@@ -9,6 +9,7 @@ import {
   EmptyState,
   IconButton,
   ListFooter,
+  PullRefresh,
   Screen,
   SearchBar,
   Sheet,
@@ -209,7 +210,7 @@ export default function MailScreen() {
         <FlatList
           data={list.items}
           keyExtractor={(m) => m.messageId}
-          refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={list.reload} />}
+          refreshControl={<PullRefresh refreshing={list.refreshing} onRefresh={list.reload} />}
           onEndReachedThreshold={0.4}
           onEndReached={() => void list.loadMore()}
           ListFooterComponent={<ListFooter loading={list.loadingMore} end={list.end && list.items.length > 0} />}

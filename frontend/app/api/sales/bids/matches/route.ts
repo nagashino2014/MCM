@@ -94,6 +94,10 @@ function buildMatchWhere(opts: {
   /** 기간별 삭제(P6 추가) — 공고일 기준(YYYY-MM-DD), 공고일이 없는 행은 매칭일로 대체. */
   dateFrom?: string;
   dateTo?: string;
+  /** 표시 기간 하한(모바일 3개월 창, 2026-10-19) — 판정 기준은 dateFrom 과 같다(공고일→매칭일). */
+  sinceDate?: string;
+  /** 알림 조건(프로파일) 버튼 — 그 조건의 분류·지역권·종류로 거른다(사용자 필터와 AND). */
+  profile?: ProfileScope | null;
 }): { whereSql: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
@@ -113,20 +117,60 @@ function buildMatchWhere(opts: {
     where.push(`category_name IN (${ph})`);
   }
   // 지역권 — 발주기관명 키워드 OR 매칭(웹 BidListFilter.regionGroup 과 같은 규칙, raw 없음).
-  if (opts.regions.length) {
+  const regionWhere = (groups: string[]) => {
     const ors: string[] = [];
-    for (const g of opts.regions) {
+    for (const g of groups) {
       for (const k of REGION_GROUPS[g] ?? []) ors.push(`org_name LIKE ${add(`%${k}%`)}`);
     }
     if (ors.length) where.push(`(${ors.join(" OR ")})`);
+  };
+  if (opts.regions.length) regionWhere(opts.regions);
+  // 알림 조건 — 분류는 category_id 로(이름 변경에도 안정), 빈 목록은 "전체"(발송기와 같은 규칙).
+  if (opts.profile) {
+    const p = opts.profile;
+    if (p.bidTypes.length) where.push(`bid_type IN (${p.bidTypes.map((t) => add(t)).join(",")})`);
+    if (p.categoryIds.length) where.push(`category_id IN (${p.categoryIds.map((c) => add(c)).join(",")})`);
+    if (p.regionGroups.length) regionWhere(p.regionGroups);
   }
   const dateExpr = `substring(COALESCE(NULLIF(posted_at, ''), matched_at), 1, 10)`;
   if (opts.dateFrom) where.push(`${dateExpr} >= ${add(opts.dateFrom)}`);
   if (opts.dateTo) where.push(`${dateExpr} <= ${add(opts.dateTo)}`);
+  if (opts.sinceDate) where.push(`${dateExpr} >= ${add(opts.sinceDate)}`);
   return { whereSql: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+interface ProfileScope {
+  bidTypes: string[];
+  categoryIds: string[];
+  regionGroups: string[];
+}
+
+/** 알림 조건(프로파일) id → 목록 필터 범위. 없는 id 면 null(필터 미적용이 아니라 호출측이 판단). */
+async function loadProfileScope(profileId: string): Promise<ProfileScope | null> {
+  if (!profileId) return null;
+  const { profiles } = await loadBidNotifyConfig();
+  const p = profiles.find((x) => x.profileId === profileId);
+  if (!p) return null;
+  return {
+    bidTypes: p.bidTypes,
+    categoryIds: p.categoryIds,
+    regionGroups: p.regionGroups.filter((g) => REGION_GROUPS[g]),
+  };
+}
+
+/**
+ * 표시 기간 하한 — 오늘(KST)에서 N개월 전(1~12). 모바일 공공입찰 목록은 3개월만 보인다
+ * (2026-10-19 사용자 확정: 앱에서만 사라지고 웹 목록·큐 행은 영구 보존 — 행을 지우지 않는다).
+ */
+function sinceMonths(today: string, raw: unknown): string | undefined {
+  const n = Math.trunc(Number(raw));
+  if (!Number.isFinite(n) || n < 1 || n > 12) return undefined;
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() - n);
+  return d.toISOString().slice(0, 10);
+}
 
 function parseListParam(v: string | null): string[] {
   return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -140,8 +184,10 @@ function parseListParam(v: string | null): string[] {
  * 용도로는 맞지 않는다.
  *
  * 정렬: 기본 최근 매칭순 · ?sort=posted 최근 공고순 · ?filter=deadline 마감 임박순(남은 건만).
- * 필터: ?categories=용역분류명,… · ?regions=수도권,…(REGION_GROUPS 키).
- * 응답에 regionGroup(발주기관명 판정)과 categories(큐 전체의 분류 목록 — 필터 UI 옵션)를 싣는다.
+ * 필터: ?categories=용역분류명,… · ?regions=수도권,…(REGION_GROUPS 키) · ?profile=알림 조건 id
+ *       · ?maxAgeMonths=N(공고일 N개월 이내만 — 모바일 3개월 창).
+ * 응답에 regionGroup(발주기관명 판정)과 categories(큐 전체의 분류 목록 — 필터 UI 옵션),
+ * profiles(알림 조건 버튼 — 웹 알림 설정 순서)를 싣는다.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -158,8 +204,13 @@ export async function GET(req: NextRequest) {
       ["bid_notice", "order_plan", "prior_spec"].includes(t)
     );
     const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const sinceDate = sinceMonths(today, sp.get("maxAgeMonths"));
+    const profileId = (sp.get("profile") ?? "").trim();
+    const profile = await loadProfileScope(profileId);
 
-    const { whereSql, params } = buildMatchWhere({ byDeadline, today, categories, regions, bidTypes });
+    const { whereSql, params } = buildMatchWhere({
+      byDeadline, today, categories, regions, bidTypes, sinceDate, profile,
+    });
     const orderSql = byDeadline
       ? "substring(deadline, 1, 10) ASC"
       : byPosted
@@ -213,11 +264,14 @@ export async function GET(req: NextRequest) {
       url: r.url != null ? String(r.url) : null,
       matchedAt: r.matched_at != null ? String(r.matched_at) : null,
     }));
+    const { profiles } = await loadBidNotifyConfig();
     return NextResponse.json({
       items,
       today,
+      ...(sinceDate ? { since: sinceDate } : {}),
       categories: catRows.map((r) => String(r.category_name)),
       regionGroups: Object.keys(REGION_GROUPS),
+      profiles: profiles.map((p) => ({ profileId: p.profileId, name: p.name, enabled: p.enabled })),
     });
   } catch (err) {
     return authErrorToResponse(err);
@@ -229,8 +283,9 @@ export async function GET(req: NextRequest) {
  * 웹의 알림 벨·이력에서도 함께 사라지는 것이 의도된 동작.
  *
  * body: `{ noticeIds: [...] }`(선택 삭제) 또는
- *       `{ all: true, filter?, categories?, regions?, postedFrom?, postedTo? }`
- *       (현재 필터 범위 일괄 — 무조건 전체 금지. postedFrom/To 는 기간별 삭제, 공고일 기준).
+ *       `{ all: true, filter?, categories?, regions?, profile?, maxAgeMonths?, postedFrom?, postedTo? }`
+ *       (현재 필터 범위 일괄 — 무조건 전체 금지. postedFrom/To 는 기간별 삭제, 공고일 기준.
+ *        maxAgeMonths 는 앱 표시 창 — 앱에 안 보이는 오래된 행까지 지워 웹 이력이 사라지지 않게 한다).
  * 카드(bid 단위)와 어긋나지 않게 **(bid_type, bid_id) 쌍 전체 행**을 지운다 —
  * notice 행만 지우면 같은 공고의 다른 분류 매칭 행이 남아 카드가 되살아난다.
  */
@@ -244,6 +299,8 @@ export async function DELETE(req: NextRequest) {
       types?: unknown;
       categories?: unknown;
       regions?: unknown;
+      profile?: unknown;
+      maxAgeMonths?: unknown;
       postedFrom?: unknown;
       postedTo?: unknown;
     };
@@ -266,6 +323,10 @@ export async function DELETE(req: NextRequest) {
         );
       } else if (body.all === true) {
         const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+        const profileId = typeof body.profile === "string" ? body.profile.trim() : "";
+        const profile = await loadProfileScope(profileId);
+        // 없는 조건 id 로 "전체"가 지워지지 않게 — 조건을 지정했는데 못 찾으면 삭제하지 않는다.
+        if (profileId && !profile) return 0;
         const { whereSql, params } = buildMatchWhere({
           byDeadline: body.filter === "deadline",
           today,
@@ -274,6 +335,8 @@ export async function DELETE(req: NextRequest) {
           regions: asList(body.regions).filter((g) => REGION_GROUPS[g]),
           dateFrom: typeof body.postedFrom === "string" && DAY_RE.test(body.postedFrom) ? body.postedFrom : undefined,
           dateTo: typeof body.postedTo === "string" && DAY_RE.test(body.postedTo) ? body.postedTo : undefined,
+          sinceDate: sinceMonths(today, body.maxAgeMonths),
+          profile,
         });
         pairRows = rowsToObjects(
           await db.exec(`SELECT DISTINCT bid_type, bid_id FROM bid_match_notices ${whereSql}`, params)

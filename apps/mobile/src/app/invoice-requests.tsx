@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -12,6 +12,7 @@ import {
   EmptyState,
   GradientButton,
   Input,
+  PullRefresh,
   ScreenHeader,
   SegmentedTabs,
   Sheet,
@@ -225,7 +226,7 @@ export default function InvoiceRequestsScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reloadAll()} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void reloadAll()} />}>
         {inbox.allowed === true && tab === 'inbox' ? (
           // ── 담당자 수신함 ──────────────────────────────
           inbox.loading && !inbox.items ? (

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { EmptyState, Screen, SkeletonList, useToast } from '@/components/ui';
+import { EmptyState, PullRefresh, Screen, SkeletonList, useToast } from '@/components/ui';
 import { apiJson } from '@/lib/api';
 import { routeForLink } from '@/lib/deeplink';
 import { fmtRelative } from '@/lib/todo-utils';
@@ -105,7 +105,7 @@ export default function TodoInboxScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} tintColor={c.faint} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void load()} tintColor={c.faint} />}>
         {items === null ? (
           <View className="p-4">
             <SkeletonList />

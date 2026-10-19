@@ -1,8 +1,8 @@
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Badge, EmptyState, SkeletonList } from '@/components/ui';
+import { Badge, EmptyState, PullRefresh, SkeletonList } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { fmtDate } from '@/lib/format';
 import { useTheme } from '@/theme/useTheme';
@@ -43,7 +43,7 @@ export function BoardList({ scope }: { scope: 'company' | 'dept' }) {
     <FlatList
       data={posts}
       keyExtractor={(p) => p.postId}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={reload} />}
+      refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
       ListEmptyComponent={
         error ? (
           <EmptyState icon="alert-circle-outline" title="불러오지 못했습니다" description={error} />

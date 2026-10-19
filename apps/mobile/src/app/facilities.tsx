@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import {
   Card,
   CardRow,
   EmptyState,
+  PullRefresh,
   ScreenHeader,
   SearchBar,
   Sheet,
@@ -192,7 +193,7 @@ export default function FacilitiesScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 18, paddingTop: 4, gap: 14, paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl
+          <PullRefresh
             refreshing={loading && items.length === 0}
             onRefresh={() => (active ? load(0) : (stats.reload(), options.reload()))}
             tintColor={c.faint}

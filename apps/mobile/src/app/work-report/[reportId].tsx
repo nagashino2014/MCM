@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import {
   Card,
   ConfirmSheet,
   EmptyState,
+  PullRefresh,
   ScreenHeader,
   SkeletonList,
   Textarea,
@@ -255,7 +256,7 @@ export default function WorkReportDetailScreen() {
       <ScreenHeader title="업무보고" subtitle={r?.title || `${r?.periodStart ?? ''} ~ ${r?.periodEnd ?? ''}`} back variant="sub" />
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void reload()} />}>
+        refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void reload()} />}>
         {loading && !r ? (
           <SkeletonList count={3} />
         ) : !r ? (

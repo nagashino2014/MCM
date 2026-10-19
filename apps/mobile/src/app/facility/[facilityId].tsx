@@ -1,9 +1,9 @@
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 
-import { Badge, Card, CardRow, EmptyState, GradientIconButton, ScreenHeader, SkeletonList } from '@/components/ui';
+import { Badge, Card, CardRow, EmptyState, GradientIconButton, PullRefresh, ScreenHeader, SkeletonList } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { callPhone, fmtDate, sendSms } from '@/lib/format';
 import { useTheme } from '@/theme/useTheme';
@@ -89,7 +89,7 @@ export default function FacilityDetailScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl
+          <PullRefresh
             refreshing={detail.refreshing}
             onRefresh={() => {
               detail.reload();

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireVisibleContracts } from "@/lib/auth/scope-guards";
+import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
 import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -39,8 +41,9 @@ export interface FacilityDepositRow {
  */
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("contract.view");
+    const { ctx: who } = await requireVisibleContracts("contract.view");
     const { id } = await ctx.params;
+    const visibleIds = await resolveVisibleContractIds(who.userId, "contract.view"); // null = 전사(2026-10-19 §7.7)
     const db = await getDb();
 
     const milestones = rowsToObjects(
@@ -59,8 +62,9 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
                  OR EXISTS (SELECT 1 FROM contract_facilities cf
                              WHERE cf.contract_id = c.contract_id AND cf.facility_id = $1))
             AND (m.invoice_issued = 1 OR m.payment_collected = 1)
+            AND ($2::text[] IS NULL OR m.contract_id = ANY($2::text[]))
           ORDER BY COALESCE(m.invoice_issued_at, m.payment_collected_at) DESC NULLS LAST, m.stage_order`,
-        [id],
+        [id, visibleIds],
       ),
     );
 

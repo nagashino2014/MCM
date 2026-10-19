@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireEmployeeScope, requireGlobalScope } from "@/lib/auth/scope-guards";
 import { createHrEvent, deleteHrEvent, listHrEvents, type HrEventType } from "@/lib/admin/hr-events";
 
 export const runtime = "nodejs";
@@ -12,8 +13,8 @@ interface RouteContext {
 // 인사 이력 목록.
 export async function GET(_req: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("staffing.view", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
+    await requireEmployeeScope("staffing.view", id); // 소속 부서·본인 범위(2026-10-19 §7.7)
     return NextResponse.json({ events: await listHrEvents(id) });
   } catch (err) {
     return authErrorToResponse(err);
@@ -23,8 +24,8 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
 // 인사 이력 기록(승진/부서이동/퇴사).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("staffing.changes.record", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
+    const actor = await requireGlobalScope("staffing.changes.record"); // 승진·이동·퇴사 기록은 전사 범위만
     const body = (await req.json()) as {
       eventType?: HrEventType;
       eventDate?: string;
@@ -54,12 +55,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 // 인사 이력 삭제(+첨부 문서 행, 퇴사 이벤트면 인원/계정 복구).
 export async function DELETE(req: NextRequest, _ctx: RouteContext) {
   try {
-    const actor = await requirePermission("staffing.changes.record", { fallbackRoles: ["admin"] });
     const { searchParams } = new URL(req.url);
     const eventId = searchParams.get("eventId");
     if (!eventId) {
       return NextResponse.json({ error: "eventId가 필요합니다." }, { status: 400 });
     }
+    const actor = await requireGlobalScope("staffing.changes.record"); // 이력 삭제는 전사 범위만
     await deleteHrEvent(actor.userId, eventId);
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -374,6 +374,8 @@ export interface AgreementDocRow {
   sentAt: string | null;
   pdfKey: string | null;
   hwpxKey: string | null;
+  /** 연동 계약 id(없으면 null) — 가시 범위 필터용(2026-10-19 §7.7). */
+  contractId: string | null;
 }
 
 export async function listAgreementDocs(params: { q?: string | null; limit?: number }): Promise<AgreementDocRow[]> {
@@ -395,7 +397,7 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
               d.field_values->'orderer'->>'name' AS orderer_name,
               (d.field_values->>'amountSupply')::bigint AS amount_supply,
               t.name AS template_name,
-              a.send_status, a.send_error, a.sent_at, a.pdf_key, a.hwpx_key
+              a.send_status, a.send_error, a.sent_at, a.pdf_key, a.hwpx_key, a.contract_id
          FROM approval_docs d
          LEFT JOIN contract_agreements a ON a.doc_id = d.doc_id
          LEFT JOIN agreement_templates t ON t.template_id = a.template_id
@@ -421,6 +423,7 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
     ordererName: sn(r.orderer_name),
     amountSupply: num(r.amount_supply),
     templateName: sn(r.template_name),
+    contractId: sn(r.contract_id),
     sendStatus: r.send_status != null ? (String(r.send_status) as AgreementSendStatus) : null,
     sendError: sn(r.send_error),
     sentAt: sn(r.sent_at),

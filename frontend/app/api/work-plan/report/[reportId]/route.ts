@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireReportScope } from "@/lib/auth/scope-guards";
 import { getServiceReport } from "@/lib/work-plan/workspace";
 
 export const runtime = "nodejs";
@@ -12,8 +13,8 @@ interface RouteContext {
 // 단일 용역 보고 상세(편집용).
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("work_plan.view");
     const { reportId } = await ctx.params;
+    await requireReportScope("work_plan.view", reportId); // (2026-10-19 §7.7)
     const report = await getServiceReport(reportId);
     if (!report) return NextResponse.json({ error: "보고를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({ report });

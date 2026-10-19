@@ -223,6 +223,43 @@ export async function hasGlobalScope(userId: string, permissionKey: string): Pro
   );
 }
 
+/** 목록 라우트가 쓰는 부서 범위 해석 결과. */
+export type DeptScope =
+  | { kind: "all" }
+  | { kind: "dept"; deptIds: string[] }
+  | { kind: "none" };
+
+/**
+ * 권한키의 **부서 범위**를 해석한다 — 부서 차원이 있는 목록(지급 대상·배분 보드·보고서 등)을 거를 때 쓴다.
+ * - all: scope=all grant 보유 → 필터 없음
+ * - dept: self_dept(본인 소속)·specific_dept(지정 부서) grant 의 부서 합집합 → 그 부서 행만
+ * - none: 위 둘이 없음(participant/self 만 있거나 미보유) → 부서 단위 목록은 빈 결과
+ * requirePermission(key) 은 target 이 없으면 어떤 scope 든 통과하므로, 목록 라우트는 반드시 이 결과로 행을 걸러야 한다
+ * (2026-10-19 사전 점검 F-06·지급 대상 LIST 전사 노출의 후속).
+ */
+export function resolveDeptScope(access: UserAccess, permissionKey: string): DeptScope {
+  if (ADMIN_BYPASS && access.role === "admin") return { kind: "all" };
+  const grants = access.grants.filter((g) => g.permissionKey === permissionKey && g.effect === "allow");
+  if (grants.some((g) => g.scopeKind === "all")) return { kind: "all" };
+  const deptIds = new Set<string>();
+  for (const g of grants) {
+    if (g.scopeKind === "self_dept" && access.deptId) deptIds.add(access.deptId);
+    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+  }
+  return deptIds.size > 0 ? { kind: "dept", deptIds: [...deptIds] } : { kind: "none" };
+}
+
+/** 부서 범위로 행을 거른다 — all 은 그대로, dept 는 소속 부서가 범위 안인 행만(부서 미지정 행 제외), none 은 빈 배열. */
+export function filterRowsByDeptScope<T>(rows: T[], scope: DeptScope, deptIdOf: (row: T) => string | null | undefined): T[] {
+  if (scope.kind === "all") return rows;
+  if (scope.kind === "none") return [];
+  const allowed = new Set(scope.deptIds);
+  return rows.filter((row) => {
+    const d = deptIdOf(row);
+    return d != null && allowed.has(String(d));
+  });
+}
+
 /**
  * 권한 요약 — 세션(JWT)에 싣는 문자열 목록(lib/auth/perms.ts 형식: "key" 또는 "key@all").
  * 메뉴 노출·미들웨어 1차 차단·화면 버튼 게이트가 읽는다. deny-overrides 는 checkPermission 과 동일.

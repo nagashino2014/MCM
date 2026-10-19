@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { assertContractsVisible, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { getAgreementByDocId } from "@/lib/agreement/store";
 import { generateAgreementArtifacts } from "@/lib/agreement/generate";
 import { readStorageObject, sanitizeDownloadName } from "@/lib/contracts/document-bundle";
@@ -11,9 +12,10 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const { docId } = await params;
     const row = await getAgreementByDocId(docId);
+    if (row) assertContractsVisible(visible, [row.contractId]); // 연동 계약 가시 범위(2026-10-19 §7.7)
     let bytes: Uint8Array | null = null;
     let fileName = "계약서.pdf";
     if (row?.pdfKey) {

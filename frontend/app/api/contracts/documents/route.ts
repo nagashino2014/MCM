@@ -3,6 +3,8 @@ import path from "node:path";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { resolveContractIdByDocumentKey } from "@/lib/auth/scope-guards";
+import { checkPermission, loadUserAccess, resolveDeptScope } from "@/lib/auth/rbac";
 import { getS3Client } from "@/lib/storage/logo-storage";
 
 export const runtime = "nodejs";
@@ -23,10 +25,19 @@ function contentDisposition(key: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("contract.view");
+    const ctx = await requirePermission("contract.view");
     const key = req.nextUrl.searchParams.get("key")?.trim();
     if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
       return NextResponse.json({ error: "문서 키가 올바르지 않습니다." }, { status: 400 });
+    }
+    // 키 → 계약(contract_documents) → 가시 범위 재판정. 등록되지 않은 키는 전사 범위(contract.view scope=all)만 읽는다
+    // (같은 버킷에 인사 문서가 있어 임의 키 읽기를 막는다 — 2026-10-19 §7.7).
+    const access = await loadUserAccess(ctx.userId);
+    if (resolveDeptScope(access, "contract.view").kind !== "all") {
+      const contractId = await resolveContractIdByDocumentKey(key);
+      if (!contractId || !checkPermission(access, "contract.view", { contractId })) {
+        return NextResponse.json({ error: "이 작업을 수행할 권한이 없습니다." }, { status: 403 });
+      }
     }
 
     const localRoot = process.env.CONTRACT_DOCUMENT_STORAGE_ROOT?.trim();

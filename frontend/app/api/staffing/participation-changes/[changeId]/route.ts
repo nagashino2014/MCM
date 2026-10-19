@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { loadChangeContractId, requireContractDeptScope } from "@/lib/auth/scope-guards";
 import { deleteChange } from "@/lib/staffing/changes";
 
 export const runtime = "nodejs";
@@ -11,8 +12,10 @@ interface RouteContext {
 
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("staffing.changes.record", { fallbackRoles: ["editor"] });
     const { changeId } = await ctx.params;
+    // 변동 행의 계약 수행부서 범위 확인(2026-10-19 §7.7) — 해석 불가 id 는 403
+    const contractId = await loadChangeContractId(changeId);
+    await requireContractDeptScope("staffing.changes.record", [contractId ?? "__missing__"]);
     await deleteChange(changeId);
     return NextResponse.json({ ok: true });
   } catch (err) {

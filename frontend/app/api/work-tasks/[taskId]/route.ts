@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireTaskScope } from "@/lib/auth/scope-guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { deleteTask, getTask } from "@/lib/work-plan/tasks";
 
@@ -12,8 +13,8 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("work_plan.view");
     const { taskId } = await ctx.params;
+    await requireTaskScope("work_plan.view", taskId); // Task 담당 부서·생성자 범위(2026-10-19 §7.7)
     const task = await getTask(taskId);
     if (!task) return NextResponse.json({ error: "Task를 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({ task });
@@ -25,8 +26,8 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 // Task 완전 삭제. (남용 방지를 위한 계정별 권한 제한은 후속 RBAC 단계에서 적용 예정)
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("work_plan.edit", { fallbackRoles: ["editor"] });
     const { taskId } = await ctx.params;
+    const actor = await requireTaskScope("work_plan.edit", taskId);
     await deleteTask(taskId);
     await recordAuditLog({
       actorUserId: actor.userId,

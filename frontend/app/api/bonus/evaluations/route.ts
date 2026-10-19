@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertContractsInDeptScope } from "@/lib/auth/scope-guards";
 import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getBonusSettings } from "@/lib/bonus/targets";
@@ -59,6 +60,8 @@ export async function PUT(req: NextRequest) {
         grade: e?.grade ? String(e.grade) : null,
       }))
       .filter((e: BonusEvalSaveEntry) => e.contractId && e.employeeId);
+    // 저장 대상 계약이 모두 내 부서 범위인지(수행부서 기준) — 부서장이 타 부서 평점을 쓰지 못하게(2026-10-19 §7.7).
+    await assertContractsInDeptScope(await loadUserAccess(actor.userId), "staffing.evaluation.write", entries.map((e) => e.contractId));
     await saveBonusEvaluations(actor.userId, p, entries);
     return NextResponse.json({ ok: true, saved: entries.length });
   } catch (err) {

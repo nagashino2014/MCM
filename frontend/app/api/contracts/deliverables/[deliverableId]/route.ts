@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertContractsVisible, loadVisibleContractSet, requireVisibleContracts } from "@/lib/auth/scope-guards";
 import { deleteDeliverable, getDeliverable, linkDeliverableToLetter, updateDeliverable } from "@/lib/deliverable/store";
 import type { DeliverableValues } from "@/lib/deliverable/types";
 
@@ -13,9 +14,10 @@ interface RouteContext {
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
     const { deliverableId } = await ctx.params;
-    await requirePermission("contract.view");
+    const { visible } = await requireVisibleContracts("contract.view");
     const row = await getDeliverable(deliverableId);
     if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+    assertContractsVisible(visible, [row.contractId]); // 가시 계약 범위(2026-10-19 §7.7)
     return NextResponse.json(row);
   } catch (err) {
     return authErrorToResponse(err);
@@ -35,10 +37,11 @@ interface PatchBody {
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
     const { deliverableId } = await ctx.params;
-    await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
+    const editor = await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
     const body = (await req.json()) as PatchBody;
     const row = await getDeliverable(deliverableId);
     if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+    assertContractsVisible(await loadVisibleContractSet(editor.userId, "contract.edit"), [row.contractId]);
     if (row.status === "sent") {
       return NextResponse.json({ error: "발송 완료된 문서는 수정할 수 없습니다." }, { status: 409 });
     }
@@ -59,7 +62,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 export async function DELETE(_: NextRequest, ctx: RouteContext) {
   try {
     const { deliverableId } = await ctx.params;
-    await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
+    const editor = await requirePermission("contract.edit", { fallbackRoles: ["editor"] });
+    const row = await getDeliverable(deliverableId);
+    if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+    assertContractsVisible(await loadVisibleContractSet(editor.userId, "contract.edit"), [row.contractId]);
     await deleteDeliverable(deliverableId);
     return NextResponse.json({ ok: true });
   } catch (err) {

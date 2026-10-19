@@ -1,6 +1,8 @@
 import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
+import { assertReportsInScope } from "@/lib/auth/scope-guards";
+import { loadUserAccess } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { getReporterContext } from "@/lib/work-plan/workspace";
 import { mergeConfirmedReports } from "@/lib/work-plan/merge";
@@ -23,6 +25,7 @@ export async function POST(req: NextRequest) {
       deptId = reporter.deptId ?? "";
     }
     if (!deptId) return NextResponse.json({ error: "부서를 확인할 수 없습니다." }, { status: 400 });
+    await assertReportsInScope(await loadUserAccess(actor.userId), "work_plan.merge", body.reportIds); // 타 부서 보고서 혼입 차단(2026-10-19 §7.7)
     const reportId = await mergeConfirmedReports(actor.userId, deptId, body.reportIds);
     await recordAuditLog({
       actorUserId: actor.userId,

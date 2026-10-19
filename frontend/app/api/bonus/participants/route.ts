@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { loadParticipationContractId, requireContractDeptScope } from "@/lib/auth/scope-guards";
 import { removeBonusParticipant, setBonusParticipant } from "@/lib/bonus/evaluations";
 
 export const runtime = "nodejs";
@@ -11,7 +12,6 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
-    await requirePermission("staffing.evaluation.write", { fallbackRoles: ["editor"] });
     const body = await req.json();
     const contractId = String(body?.contractId ?? "");
     const employeeId = String(body?.employeeId ?? "");
@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
     if (!contractId || !employeeId || !roleLabel) {
       return NextResponse.json({ error: "contractId/employeeId/roleLabel이 필요합니다." }, { status: 400 });
     }
+    // 계약 수행부서 범위 확인(2026-10-19 §7.7)
+    await requireContractDeptScope("staffing.evaluation.write", [contractId]);
     const result = await setBonusParticipant(contractId, employeeId, roleLabel);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
@@ -28,11 +30,13 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await requirePermission("staffing.evaluation.write", { fallbackRoles: ["editor"] });
     const participationId = new URL(req.url).searchParams.get("participationId") ?? "";
     if (!participationId) {
       return NextResponse.json({ error: "participationId가 필요합니다." }, { status: 400 });
     }
+    // 참여 행의 계약 수행부서 범위 확인(2026-10-19 §7.7) — 해석 불가 id 는 403
+    const contractId = await loadParticipationContractId(participationId);
+    await requireContractDeptScope("staffing.evaluation.write", [contractId ?? "__missing__"]);
     await removeBonusParticipant(participationId);
     return NextResponse.json({ ok: true });
   } catch (err) {

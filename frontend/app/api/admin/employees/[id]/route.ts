@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
+import { requireEmployeeScope } from "@/lib/auth/scope-guards";
 import { getEmployeeDetail, saveEmployeeDetail } from "@/lib/admin/employee-records";
 
 export const runtime = "nodejs";
@@ -11,8 +12,8 @@ interface RouteContext {
 
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
-    await requirePermission("staffing.view", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
+    await requireEmployeeScope("staffing.view", id); // 소속 부서·본인 범위(2026-10-19 §7.7)
     const employee = await getEmployeeDetail(id);
     if (!employee) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json({ employee });
@@ -23,8 +24,8 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
 
 export async function PATCH(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const { id } = await ctx.params;
+    const actor = await requireEmployeeScope("staffing.edit", id);
     const body = await req.json();
     const employeeId = await saveEmployeeDetail(actor.userId, { ...body, employeeId: id });
     return NextResponse.json({ employeeId });

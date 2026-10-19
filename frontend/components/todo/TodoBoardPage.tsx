@@ -15,7 +15,7 @@ import "./todo.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus } from "lucide-react";
+import { AlignHorizontalDistributeStart, ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus } from "lucide-react";
 import { CdButton, CdDropdown, CdEmptyState, CdPageHeader, CdTabs, useCdToast, useCdashTheme, type CdMenuItem } from "@/components/cdash";
 import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs, type TodoStatus } from "@/lib/todo/types";
 import { hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -24,6 +24,7 @@ import { QuickAddBar } from "./QuickAddBar";
 import { GroupHeader, MyTodoList, rowListKeyNav, type QuickFilter } from "./MyTodoList";
 import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
+import { TodoTimeline } from "./TodoTimeline";
 import { TODO_LIST_QUERY_KEY } from "./TodoDetailPage";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
@@ -33,7 +34,7 @@ import { effectiveDate, localToday, weekEnd, type SortMode } from "./todo-utils"
 
 type ScopeKind = "my" | "shared" | "delegated" | "board";
 type ScopeTab = "my" | "shared" | "delegated" | "none";
-type View = "list" | "board";
+type View = "list" | "board" | "timeline";
 const SORT_LABELS: Record<SortMode, string> = { manual: "수동", date: "날짜순", priority: "우선순위순" };
 
 type TodoSource = ReturnType<typeof useTodoData>;
@@ -62,7 +63,7 @@ function parseScope(sp: URLSearchParams): { kind: ScopeKind; boardId: string | n
   const archived = sp.get("archived") === "1";
   let kind: ScopeKind = "my";
   let boardId: string | null = null;
-  let view: View = viewRaw === "board" ? "board" : "list";
+  let view: View = viewRaw === "board" ? "board" : viewRaw === "timeline" ? "timeline" : "list";
   let calendar = viewRaw === "calendar";
   if (scope === "shared") kind = "shared";
   else if (scope === "delegated") kind = "delegated";
@@ -278,7 +279,7 @@ export function TodoBoardPage() {
       router.push("/calendar?tags=todo&from=todo");
       return;
     }
-    if (scope === "shared" && v === "board") return;
+    if (scope === "shared" && (v === "board" || v === "timeline")) return;
     setQuery({ view: v });
   };
   const toggleQuickFilter = (f: Exclude<QuickFilter, null>) => {
@@ -643,6 +644,10 @@ export function TodoBoardPage() {
                   <Kanban aria-hidden="true" />
                   보드
                 </button>
+                <button type="button" className="cd-choice" data-active={view === "timeline" ? "true" : undefined} aria-pressed={view === "timeline"} disabled={scope === "shared" || scope === "delegated"} title={scope === "shared" || scope === "delegated" ? "이 범위는 목록으로만 봅니다" : "기간·마일스톤·선행 관계를 시간축에"} onClick={() => goView("timeline")}>
+                  <AlignHorizontalDistributeStart aria-hidden="true" />
+                  타임라인
+                </button>
                 <button type="button" className="cd-choice" onClick={() => goView("calendar")}>
                   <Calendar aria-hidden="true" />
                   캘린더
@@ -732,6 +737,18 @@ export function TodoBoardPage() {
                 />
               )}
             </>
+          )}
+
+          {/* §29-1 타임라인 — 내 할 일 / 프로젝트 보드 */}
+          {!archivedMode && view === "timeline" && (scope === "my" || scope === "board") && (
+            <TodoTimeline
+              items={scope === "board" ? boardItems : myItems}
+              today={today}
+              selectedId={itemParam}
+              loading={scope === "board" ? boardData.loading && !boardData.loaded : my.loading && !my.loaded}
+              onOpen={openItem}
+              onPatch={(id, patch, optimistic) => (scope === "board" ? boardData : my).patchItem(id, patch, optimistic)}
+            />
           )}
 
           {!archivedMode && view === "board" && scope !== "shared" && (

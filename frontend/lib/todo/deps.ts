@@ -54,6 +54,25 @@ export async function listDeps(userId: string, itemId: string): Promise<TodoDeps
   return { blockedBy, blocks, openBlockers: blockedBy.filter((d) => d.status !== "done").length };
 }
 
+/** 의존 간선 일괄 조회(§29-1 타임라인) — 양쪽이 모두 요청 집합에 있고 가시 범위인 간선만. */
+export async function listDepEdges(userId: string, itemIds: string[]): Promise<{ itemId: string; dependsOnItemId: string }[]> {
+  if (!itemIds.length) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.item_id, d.depends_on_item_id
+         FROM todo_item_deps d
+         JOIN todo_items i ON i.item_id = d.item_id
+         JOIN todo_items p ON p.item_id = d.depends_on_item_id
+        WHERE d.item_id = ANY($2::text[]) AND d.depends_on_item_id = ANY($2::text[])
+          AND i.archived_at IS NULL AND p.archived_at IS NULL
+          AND ${visibleItemsWhere("$1", "i")} AND ${visibleItemsWhere("$1", "p")}`,
+      [userId, itemIds]
+    )
+  );
+  return rows.map((r) => ({ itemId: String(r.item_id), dependsOnItemId: String(r.depends_on_item_id) }));
+}
+
 /** 미완료 선행 수(완료 조건 deps 검사용). */
 export async function openDepCount(db: PgDatabase, itemId: string): Promise<number> {
   const rows = rowsToObjects(

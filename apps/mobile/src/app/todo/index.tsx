@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Button, CtaGradientFill, EmptyState, Screen, SkeletonList, useToast } from '@/components/ui';
 import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSections';
+import { TimelineView } from '@/components/todo/TimelineView';
 import { DateGroupHeader } from '@/components/todo/parts';
 import { QuickAddBar } from '@/components/todo/QuickAddBar';
 import { ApprovalEventRow, TodoRow } from '@/components/todo/TodoRow';
@@ -31,7 +32,7 @@ import { useTheme } from '@/theme/useTheme';
  */
 
 type Scope = 'my' | 'shared' | 'delegated' | 'project';
-type ViewMode = 'list' | 'board';
+type ViewMode = 'list' | 'board' | 'timeline';
 type Filter = 'today' | 'overdue' | 'week' | null;
 
 interface ListRes {
@@ -550,6 +551,12 @@ export default function TodoScreen() {
       sticky: res.sticky.map((i) => i + 1),
       padded: false,
     });
+    // §29-1 타임라인(읽기 전용) — 내 할 일 / 프로젝트 보드
+    if (view === 'timeline' && (scope === 'my' || scope === 'project')) {
+      const src = scope === 'project' ? boardItems : myItems;
+      if ((scope === 'project' ? boardApi.loading && !boardApi.data : myApi.loading && !myApi.data)) return plain(<SkeletonList key="sk" />);
+      return { ...plain(<TimelineView key="tl" items={src} today={today} onOpen={openItem} />), padded: false };
+    }
     if (scope === 'my' && view === 'list') {
       if (myApi.loading && !myApi.data) return plain(<SkeletonList key="sk" />);
       const groups = buildGroups(myItems, myEvents, filter);
@@ -619,7 +626,7 @@ export default function TodoScreen() {
       </Pressable>
     );
   };
-  const viewBtn = (key: ViewMode, icon: 'list-outline' | 'grid-outline', label: string) => {
+  const viewBtn = (key: ViewMode, icon: 'list-outline' | 'grid-outline' | 'git-commit-outline', label: string) => {
     const on = view === key;
     const disabled = scope === 'shared';
     return (
@@ -629,7 +636,7 @@ export default function TodoScreen() {
         disabled={disabled}
         accessibilityLabel={label}
         accessibilityState={{ selected: on, disabled }}
-        className={`h-7 w-[34px] items-center justify-center ${key === 'list' ? 'border-r border-cd-border' : ''} ${on ? 'bg-cd-primary-soft' : 'bg-cd-card'}`}
+        className={`h-7 w-[34px] items-center justify-center ${key !== 'timeline' ? 'border-r border-cd-border' : ''} ${on ? 'bg-cd-primary-soft' : 'bg-cd-card'}`}
         style={{ opacity: disabled ? 0.4 : 1 }}>
         <Ionicons name={icon} size={15} color={on ? c.primary : c.muted} />
       </Pressable>
@@ -694,6 +701,7 @@ export default function TodoScreen() {
           <View className="mb-2 flex-row overflow-hidden rounded-lg border border-cd-border">
             {viewBtn('list', 'list-outline', '목록')}
             {viewBtn('board', 'grid-outline', '보드')}
+            {viewBtn('timeline', 'git-commit-outline', '타임라인')}
           </View>
         </View>
         {scope === 'project' && projectBoards.length ? <BoardChips boards={projectBoards} value={selectedProjectId} onChange={setProjectId} /> : null}

@@ -667,3 +667,8 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - O. 착수 순서 = 5 → 7 → 6(권고) — 5 는 §28 화살표 후속, 7 은 기존 요약 틱 위에 얹어 작음, 6 은 설계·검증이 가장 큼.
 
 **결정(2026-10-19 사용자 확정)**: I~O 전부 권고안 — 자체 SVG 타임라인 · 모바일 1차 읽기 전용 · 자동화 트리거 4×행동 4 · 메신저 방 알림 포함 · 주간 메일 기본 ON · 부서장 집계 2차 · 순서 5→7→6.
+
+**29-1 구현(2026-10-19)**
+- 웹 `components/todo/TodoTimeline.tsx`: 12주 창(월요일-2주 시작)·일/주 눈금·4주 이동·오늘·범례, 라벨 열(sticky)+트랙(주말 음영·행 구분선·오늘선), 막대(do~end, 마감만이면 점선 하루), 하위 펼침(상세 lazy, 공정 단계 라벨·마일스톤 ◆·날짜 없는 하위는 "날짜 없음" 행), 드래그 이동(do/end 동시·마감만이면 due·마일스톤은 actual/do)·오른쪽 끝 리사이즈(end_date), 의존 화살표(SVG elbow, 선행 완료=흐림·지연=빨강, `GET /api/todo/deps?itemIds=` 배치 — `lib/todo/deps.ts listDepEdges`), 하단 "날짜 없음 N건" 접힘. `/todo?view=timeline`(내 할 일·프로젝트 보드, 공유받음·맡긴 일은 비활성), 보기 버튼 4번째(AlignHorizontalDistributeStart 아이콘 — lucide 에 gantt 없음).
+- 모바일 `components/todo/TimelineView.tsx`(읽기 전용, 결정 J): 8주 창 가로 스크롤, 상위 막대·오늘선·주말 음영, 탭=상세, 날짜 없음 건수. index 보기 버튼 3번째(git-commit-outline).
+- **dev 실측(10-19)**: 막대 위치(10/10→151px·10/14→271px, dayW 30)·오늘선(435px)·지연 테두리, 드래그 +2일 → PATCH doDate 10/16(막대 331px), 리사이즈 +3일 → endDate 10/21(폭 238px), 하위 펼침 2행(날짜 없음), 선행 연결 뒤 화살표 1개(edges API 확인), 전부 원복·해제. ⚠합성 PointerEvent 는 setPointerCapture 가 예외를 던져 try/catch 로 감쌈 ⚠dev 라우트 전환 뒤 폭 0 인 잔존 캔버스 DOM 1개(React 트리 없음) — 무시. 모바일은 tsc 만.

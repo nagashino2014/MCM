@@ -45,9 +45,14 @@ export function MobileHome() {
         fetch("/api/sales/upcoming-activities", { cache: "no-store" }),
         fetch("/api/sales/pending-reports", { cache: "no-store" }),
       ]);
-      if (!actRes.ok) throw new Error(`일정 조회 실패 (HTTP ${actRes.status})`);
-      const actData = await actRes.json();
-      setActivities(Array.isArray(actData.activities) ? actData.activities : []);
+      // 영업 권한(sales.view)이 없으면 403 — 오류가 아니라 영업 일정 없음으로 처리(298, 2026-10-19)
+      if (actRes.status === 403) {
+        setActivities([]);
+      } else {
+        if (!actRes.ok) throw new Error(`일정 조회 실패 (HTTP ${actRes.status})`);
+        const actData = await actRes.json();
+        setActivities(Array.isArray(actData.activities) ? actData.activities : []);
+      }
       if (pendRes.ok) {
         const pendData = await pendRes.json();
         const reports: PendingReport[] = Array.isArray(pendData.reports) ? pendData.reports : [];

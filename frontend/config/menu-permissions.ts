@@ -71,10 +71,16 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   // ── 사업 운영 ──
   { path: "/facilities", keys: ["facility.view"] },
   { path: "/contracts", keys: ["contract.view"] },
+  // 계약 Dashboard·수주/수금/발행 현황 — 민감 현황이라 billing.view(관리자·인사/회계·대표이사·영업관리)로 한정(298, 2026-10-19)
+  { path: "/contracts/dashboard", keys: ["billing.view"] },
+  { path: "/contracts/billing", keys: ["billing.view"] },
   { path: "/contracts/filings", keys: ["filing.view"] },
   { path: "/finance", keys: ["finance.view"] },
   { path: "/sales", keys: ["sales.view"] },
-  { path: "/sales/contacts", keys: ["contact.view"] },
+  // 담당자 정보 관리 화면은 영업 메뉴와 같이 영업 담당자만(298). 데이터 API(contact.view)는 주소록 때문에 전 직원 유지.
+  { path: "/sales/contacts", keys: ["sales.view"] },
+  // 견적서 작성 화면(라우트는 /approval/quote) — 영업 메뉴 하위이므로 sales.view(298). 견적 결재 문서 열람은 전자결재 문서함 경로라 무관.
+  { path: "/approval/quote", keys: ["sales.view"] },
   { path: "/data", keys: ["data.view"] },
   // ── 시스템 ──
   { path: "/trash", keys: ["trash.view"] },

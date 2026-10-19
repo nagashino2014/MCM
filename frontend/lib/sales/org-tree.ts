@@ -21,6 +21,19 @@ export function filterAssigneeTree(
   return withKeptDepartments(snapshot, emps);
 }
 
+/**
+ * 영업 담당자(sales_assignees)로 지정된 인원만 남긴 조직도 — 프로젝트 담당자 선택용(2026-10-19, 298).
+ * 직급 규칙은 쓰지 않는다: 영업 메뉴 권한이 지정 인원에게만 있으므로 담당자도 지정 인원 중에서 고른다.
+ */
+export function filterSalesStaffTree(
+  snapshot: OrganizationSnapshot | null,
+  staffEmployeeIds: Iterable<string>
+): OrganizationSnapshot | null {
+  if (!snapshot) return null;
+  const staff = new Set(staffEmployeeIds);
+  return withKeptDepartments(snapshot, snapshot.employees.filter((e) => staff.has(e.employeeId)));
+}
+
 /** filterAssigneeTree 의 여집합 — 아직 영업 담당이 아닌 인원만 남긴 조직도('영업 담당 추가'용). */
 export function filterNonAssigneeTree(
   snapshot: OrganizationSnapshot | null,

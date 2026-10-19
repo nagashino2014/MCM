@@ -1,33 +1,9 @@
-// 견적서 작성 권한 판정 — 2026-08-05 확정: 각 본부별 부서장 + 총괄 + 대표이사 + 영업관리본부 전체.
-// 조직 데이터(employee_profiles→positions/departments) 기반 문자열 매칭. 전사 영업 편집 권한 보유자는 항상 허용.
-// 직책·부서 명칭은 상수로 분리해 조직 개편 시 조정이 쉽도록 한다.
+// 견적서 작성 권한 판정 — sales.edit 보유자(영업관리·대표이사·시스템 관리자 등 권한 템플릿 기준).
+// 2026-08-05 의 직책·부서명 문자열 매칭(대표이사·총괄·본부장·영업관리…)은 권한 템플릿과 무관하게 열려
+// 2026-10-19 대표이사 템플릿 설계(C-6)에서 제거했다. 부서장에게 견적 작성이 필요하면 템플릿에 sales.edit 를 부여한다.
 
-import { getDb, rowsToObjects } from "@/lib/db";
-import { hasGlobalScope } from "@/lib/auth/rbac";
-
-/** 직책명에 포함되면 작성 허용 (부서장급 이상) */
-const ALLOWED_POSITION_KEYWORDS = ["대표이사", "총괄", "본부장", "부서장", "실장", "소장"];
-/** 부서명에 포함되면 소속 전체 작성 허용 */
-const ALLOWED_DEPT_KEYWORDS = ["영업관리"];
+import { hasPermission } from "@/lib/auth/rbac";
 
 export async function canCreateQuote(userId: string): Promise<boolean> {
-  // 전사 범위 영업 편집(sales.edit scope=all — 영업관리·시스템 관리자)은 항상 허용(role=admin 분기 대체, WP4 2026-10-19).
-  if (await hasGlobalScope(userId, "sales.edit")) return true;
-  const db = await getDb();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT p.position_name, d.dept_name
-         FROM users u
-         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
-         LEFT JOIN positions p ON p.position_id = ep.position_id
-         LEFT JOIN departments d ON d.dept_id = ep.dept_id
-        WHERE u.user_id = $1`,
-      [userId]
-    )
-  );
-  const position = String(rows[0]?.position_name ?? "");
-  const dept = String(rows[0]?.dept_name ?? "");
-  if (ALLOWED_POSITION_KEYWORDS.some((k) => position.includes(k))) return true;
-  if (ALLOWED_DEPT_KEYWORDS.some((k) => dept.includes(k))) return true;
-  return false;
+  return hasPermission(userId, "sales.edit");
 }

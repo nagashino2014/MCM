@@ -33,6 +33,12 @@ export function MobileSchedule() {
     setError(null);
     try {
       const res = await fetch(`/api/sales/schedule?month=${m}`, { cache: "no-store" });
+      // 영업 권한이 없으면 403 — 안내 문구로 대체(298, 2026-10-19)
+      if (res.status === 403) {
+        setActivities([]);
+        setError("영업 일정은 영업 담당자에게만 표시됩니다.");
+        return;
+      }
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `HTTP ${res.status}`);
       const data = await res.json();
       setActivities(Array.isArray(data.activities) ? data.activities : []);

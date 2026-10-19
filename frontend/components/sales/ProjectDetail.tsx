@@ -17,7 +17,7 @@ import { SalesFacilityInfoCard } from "./SalesFacilityInfoCard";
 import { ScheduleModal } from "./ScheduleModal";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
-import { filterAssigneeTree, filterNonAssigneeTree } from "@/lib/sales/org-tree";
+import { filterNonAssigneeTree, filterSalesStaffTree } from "@/lib/sales/org-tree";
 import "@/components/cdash/cdash.css";
 import "./project-detail.css";
 import {
@@ -502,7 +502,9 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
   );
   const [activeRole, setActiveRole] = useState("정");
   const [saving, setSaving] = useState(false);
-  // 영업 담당자 풀(150) — 조직도 모집단 = 직급 규칙 ∪ 수동 등록분(manualIds).
+  // 영업 담당자(150) — 조직도 모집단 = "영업 제설정"에서 지정한 인원(manualIds)만(298, 2026-10-19).
+  const { data: session } = useSession();
+  const canManageStaff = hasPerm(permsOf(session?.user), "sales.staff.manage");
   const [manualIds, setManualIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [newPicks, setNewPicks] = useState<{ employeeId: string; name: string }[]>([]);
@@ -515,7 +517,7 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
       .catch(() => {});
   }, []);
 
-  const treeSnapshot = useMemo(() => filterAssigneeTree(snapshot, manualIds), [snapshot, manualIds]);
+  const treeSnapshot = useMemo(() => filterSalesStaffTree(snapshot, manualIds), [snapshot, manualIds]);
   // 이미 영업 담당인 인원을 뺀 나머지 = '영업 담당 추가' 트리
   const assigneeIds = useMemo(() => (treeSnapshot?.employees ?? []).map((e) => e.employeeId), [treeSnapshot]);
   const addTree = useMemo(() => filterNonAssigneeTree(snapshot, assigneeIds), [snapshot, assigneeIds]);
@@ -620,9 +622,12 @@ function MemberModal({ theme, projectId, snapshot, current, onClose, onSaved }: 
             </div>
             <OrganizationTree snapshot={treeSnapshot} embedded title="조직도" onSelectEmployee={toggle} />
             <div className="flex justify-between items-center gap-2 mt-4">
-              <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setAdding(true)}>
-                <UserPlus className="w-4 h-4" /> 영업 담당 추가
-              </button>
+              {/* 영업 담당 추가 = 영업 메뉴 권한 부여라 대표이사·관리자(sales.staff.manage)만(298) */}
+              {canManageStaff ? (
+                <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setAdding(true)}>
+                  <UserPlus className="w-4 h-4" /> 영업 담당 추가
+                </button>
+              ) : <span />}
               <div className="flex gap-2">
                 <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>
                 <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={save} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>

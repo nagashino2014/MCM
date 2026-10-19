@@ -20,6 +20,7 @@ import {
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
 import { CdIconButton } from "@/components/cdash/CdButton";
+import { BODY_TD_STYLE, HEADER_TD_STYLE, cleanForeignTree } from "@/lib/pasted-html";
 import {
   LIST_LEVEL_MAX,
   LIST_MARKERS,
@@ -29,9 +30,7 @@ import {
   type ListMarkerKey,
 } from "@/lib/letter/list-markers";
 
-// ── 표 스타일 상수(인라인 — 수신측 호환) ─────────────────────────────
-const HEADER_TD_STYLE = "border:1px solid #c8c8cc;padding:6px 10px;font-size:13px;background:#f2f3f6;font-weight:bold;";
-const BODY_TD_STYLE = "border:1px solid #c8c8cc;padding:6px 10px;font-size:13px;";
+// ── 표 스타일 상수(인라인 — 수신측 호환) — 붙여넣은 표 정리(lib/pasted-html)와 공용 ──
 const TABLE_MAX_ROWS = 6;
 const TABLE_MAX_COLS = 8;
 const HR_HTML = `<hr style="border:none;border-top:1px solid #c8c8cc;margin:12px 0">`;
@@ -898,7 +897,20 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // 서버가 못 가져오는 주소(로그인 필요)를 대비해 클립보드의 원본 비트맵을 함께 보관한다.
     pastedImageFiles.current = imageFiles;
     console.info("[mail] paste types:", cd.types.join(", "), "| 이미지 파일:", imageFiles.length);
+    // 붙여넣기 직전 요소를 기억해 두고, 새로 들어온 요소만 원본 사이트의 class·배치 스타일을 정리한다
+    // (2026-10-19 — Claude 대화창에서 복사한 표가 우리 Tailwind class 와 겹쳐 본문 밖으로 밀림).
+    // 오피스(엑셀·워드) HTML 은 <style> 의 class 규칙으로 서식을 싣기 때문에 class 는 남긴다.
+    const editor = innerRef.current;
+    const before = new Set(editor ? Array.from(editor.querySelectorAll("*")) : []);
+    const keepClass = hasHtml && /<style[\s>]/i.test(cd.getData("text/html"));
     setTimeout(() => {
+      if (editor) {
+        const added = new Set(Array.from(editor.querySelectorAll("*")).filter((el) => !before.has(el)));
+        if (added.size) {
+          cleanForeignTree(editor, { keepClass, only: added });
+          onInput();
+        }
+      }
       void absorbExternalImages();
     }, 0);
   };

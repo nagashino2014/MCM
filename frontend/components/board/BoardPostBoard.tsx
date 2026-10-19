@@ -11,6 +11,7 @@ import { CdButton } from "@/components/cdash/CdButton";
 import { CdModal } from "@/components/cdash/CdModal";
 import { useCdToast } from "@/components/cdash/CdToast";
 import type { BoardPost } from "@/lib/board";
+import { cleanForeignHtml } from "@/lib/pasted-html";
 import "@/components/cdash/cdash.css";
 
 interface PostDetail extends BoardPost {
@@ -33,7 +34,8 @@ export function BoardPostBoard({ postId }: { postId: string }) {
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d?.error ?? "공지를 불러오지 못했습니다.");
-        setPost(d.post);
+        // 붙여넣기로 저장된 원본 사이트 class·배치 스타일은 표시 전에 정리한다(표가 본문 밖으로 밀리는 문제).
+        setPost({ ...d.post, bodyHtml: cleanForeignHtml(String(d.post?.bodyHtml ?? "")) });
         setCanEdit(d.canEdit === true);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "오류가 발생했습니다."));
@@ -105,7 +107,7 @@ export function BoardPostBoard({ postId }: { postId: string }) {
 
           {/* 본문 — 메일 본문과 동일하게 흰 배경 고정 */}
           <div
-            className="cd-mail-editor rounded-2xl border cd-border-c bg-white text-black px-5 py-4 text-sm min-h-[420px]"
+            className="cd-mail-editor rounded-2xl border cd-border-c bg-white text-black px-5 py-4 text-sm min-h-[420px] overflow-x-auto"
             style={{ lineHeight: 1.7 }}
             dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
           />

@@ -6,6 +6,7 @@
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getBoardAttachmentStorageKey, putBoardAttachment } from "@/lib/storage/board-attachment-storage";
 
 export type BoardScope = "company" | "dept";
 
@@ -237,6 +238,48 @@ export async function updatePost(postId: string, input: BoardPostInput): Promise
       ]
     );
   });
+}
+
+/**
+ * 첨부 저장(트랜잭션 밖에서 업로드 후 메타만 기록) — 작성·수정 공용.
+ * 글은 이미 저장됐으므로 실패한 파일 이름만 돌려준다(에러로 돌려주면 사용자가 재등록해 글이 중복된다).
+ */
+export async function saveBoardAttachments(postId: string, files: File[], userId: string, maxBytes: number): Promise<string[]> {
+  const attachFailed: string[] = [];
+  for (const f of files) {
+    if (f.size === 0 || f.size > maxBytes) continue;
+    try {
+      const buf = Buffer.from(await f.arrayBuffer());
+      const { storageKey, fileName } = getBoardAttachmentStorageKey({ postId, fileName: f.name || "file" });
+      const stored = await putBoardAttachment(storageKey, buf, f.type || "application/octet-stream");
+      await withDbWrite(async (db) => {
+        await db.run(
+          `INSERT INTO board_attachments
+             (attachment_id, post_id, file_name, content_type, byte_size, sha256,
+              storage_provider, storage_bucket, storage_key, public_path, created_by, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [
+            "batt-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
+            postId,
+            fileName,
+            f.type || null,
+            f.size,
+            crypto.createHash("sha256").update(buf).digest("hex"),
+            stored.storageProvider,
+            stored.storageBucket,
+            stored.storageKey,
+            stored.publicPath,
+            userId,
+            new Date().toISOString(),
+          ]
+        );
+      });
+    } catch (e) {
+      console.error("[board] 첨부 저장 실패:", f.name, e);
+      attachFailed.push(f.name || "파일");
+    }
+  }
+  return attachFailed;
 }
 
 /** 소프트 삭제 — 첨부는 남기고 목록에서만 감춘다. */

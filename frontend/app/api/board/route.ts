@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "node:crypto";
 import { AuthError, authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { getUserDeptId } from "@/lib/approval/docs";
-import { createPost, listNotifyTargets, listNotifyUserIds, listPosts, type BoardScope } from "@/lib/board";
-import { getBoardAttachmentStorageKey, putBoardAttachment } from "@/lib/storage/board-attachment-storage";
-import { withDbWrite } from "@/lib/db";
+import { createPost, listNotifyTargets, listNotifyUserIds, listPosts, saveBoardAttachments, type BoardScope } from "@/lib/board";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 import { sendPush } from "@/lib/notify/push-expo";
 import { plainToHtml } from "@/lib/text-html";
@@ -71,44 +68,9 @@ export async function POST(req: NextRequest) {
       ctx.userId
     );
 
-    // 첨부 저장(트랜잭션 밖에서 업로드 후 메타만 기록).
-    // 글은 이미 저장됐으므로 첨부가 실패해도 등록 자체는 성공으로 응답한다
-    // (실패를 에러로 돌려주면 사용자가 재등록해 글이 중복된다).
+    // 첨부 저장 — 글은 이미 저장됐으므로 첨부가 실패해도 등록 자체는 성공으로 응답한다.
     const files = form.getAll("files").filter((f): f is File => f instanceof File);
-    const attachFailed: string[] = [];
-    for (const f of files) {
-      if (f.size === 0 || f.size > MAX_ATTACH_BYTES) continue;
-      try {
-        const buf = Buffer.from(await f.arrayBuffer());
-        const { storageKey, fileName } = getBoardAttachmentStorageKey({ postId, fileName: f.name || "file" });
-        const stored = await putBoardAttachment(storageKey, buf, f.type || "application/octet-stream");
-        await withDbWrite(async (db) => {
-          await db.run(
-            `INSERT INTO board_attachments
-               (attachment_id, post_id, file_name, content_type, byte_size, sha256,
-                storage_provider, storage_bucket, storage_key, public_path, created_by, created_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-            [
-              "batt-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
-              postId,
-              fileName,
-              f.type || null,
-              f.size,
-              crypto.createHash("sha256").update(buf).digest("hex"),
-              stored.storageProvider,
-              stored.storageBucket,
-              stored.storageKey,
-              stored.publicPath,
-              ctx.userId,
-              new Date().toISOString(),
-            ]
-          );
-        });
-      } catch (e) {
-        console.error("[board] 첨부 저장 실패:", f.name, e);
-        attachFailed.push(f.name || "파일");
-      }
-    }
+    const attachFailed = await saveBoardAttachments(postId, files, ctx.userId, MAX_ATTACH_BYTES);
 
     // 알림은 커밋 후 fire-and-forget(실패해도 글 작성은 성공으로 둔다).
     if (form.get("notifyEmail") === "1") {

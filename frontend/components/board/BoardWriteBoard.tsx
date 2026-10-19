@@ -15,6 +15,7 @@ import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { cleanForeignHtml } from "@/lib/pasted-html";
 import "@/components/cdash/cdash.css";
 
 const MAX_TOTAL_ATTACH_BYTES = 20 * 1024 * 1024;
@@ -25,6 +26,8 @@ export function BoardWriteBoard() {
   const router = useRouter();
   const sp = useSearchParams();
   const initialScope = sp.get("scope") === "company" ? "company" : "dept";
+  // 수정 모드(?edit=<postId>) — 상세 화면의 [수정] 버튼이 이 주소로 온다.
+  const editId = sp.get("edit");
 
   const [scope, setScope] = useState<"company" | "dept">(initialScope);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -38,6 +41,9 @@ export function BoardWriteBoard() {
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifyPush, setNotifyPush] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(!editId);
+  const [existingFiles, setExistingFiles] = useState<{ attachmentId: string; fileName: string; byteSize: number | null }[]>([]);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -49,10 +55,40 @@ export function BoardWriteBoard() {
       // 전사 공지 작성 = board.manage(게시판 운영 권한). 세션의 권한 요약으로 판정한다.
       .then((d) => setIsAdmin(hasPerm(permsOf(d?.user), "board.manage")))
       .catch(() => {});
-    setTimeout(() => {
-      if (editorRef.current) editorRef.current.innerHTML = "<div><br></div>";
-    }, 30);
-  }, []);
+    if (!editId) {
+      setTimeout(() => {
+        if (editorRef.current) editorRef.current.innerHTML = "<div><br></div>";
+      }, 30);
+      return;
+    }
+    // 수정 — 기존 글을 불러와 제목·본문·기간·고정 값을 채운다(이전에는 ?edit 를 읽지 않아 빈 화면이었다).
+    fetch(`/api/board/${encodeURIComponent(editId)}`, { cache: "no-store" })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d?.error ?? "공지를 불러오지 못했습니다.");
+        if (d.canEdit !== true) throw new Error("본인이 작성한 글만 수정할 수 있습니다.");
+        const p = d.post;
+        setScope(p.scope === "company" ? "company" : "dept");
+        setTitle(String(p.title ?? ""));
+        setNoticeFrom(p.noticeFrom ?? "");
+        setNoticeTo(p.noticeTo ?? "");
+        setPinned(p.pinned === true);
+        setPinFrom(p.pinFrom ?? "");
+        setPinTo(p.pinTo ?? "");
+        setNotifyEmail(p.notifyEmail === true);
+        setNotifyPush(p.notifyPush === true);
+        setExistingFiles(Array.isArray(p.attachments) ? p.attachments : []);
+        // 붙여넣기로 들어온 원본 사이트 class·배치 스타일은 정리해서 불러온다 — 저장하면 정리된 본문으로 바뀐다.
+        const html = cleanForeignHtml(String(p.bodyHtml ?? "")) || "<div><br></div>";
+        const fill = (tries: number) => {
+          if (editorRef.current) editorRef.current.innerHTML = html;
+          else if (tries > 0) setTimeout(() => fill(tries - 1), 30);
+        };
+        fill(20);
+        setLoaded(true);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "오류가 발생했습니다."));
+  }, [editId]);
 
   const addFiles = (incoming: File[]) => {
     setFiles((prev) => {
@@ -93,6 +129,20 @@ export function BoardWriteBoard() {
       fd.set("notifyEmail", notifyEmail ? "1" : "0");
       fd.set("notifyPush", notifyPush ? "1" : "0");
       for (const f of files) fd.append("files", f);
+      if (editId) {
+        const r = await fetch(`/api/board/${encodeURIComponent(editId)}`, { method: "PATCH", body: fd });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          toast(String(d.error ?? "수정에 실패했습니다."), "error");
+          return;
+        }
+        toast("공지를 수정했습니다.", "success");
+        if (Array.isArray(d.attachFailed) && d.attachFailed.length) {
+          toast(`첨부 ${d.attachFailed.length}건은 저장하지 못했습니다(${d.attachFailed.join(", ")}).`, "warn");
+        }
+        router.push(`/board/${encodeURIComponent(editId)}`);
+        return;
+      }
       const r = await fetch("/api/board", { method: "POST", body: fd });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -111,24 +161,29 @@ export function BoardWriteBoard() {
   };
 
   const totalKB = Math.ceil(files.reduce((s, f) => s + f.size, 0) / 1024);
+  const backHref = editId ? `/board/${encodeURIComponent(editId)}` : "/board";
+  const submitLabel = editId ? "저장" : "등록";
 
   return (
     <div className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl overflow-y-auto" data-theme={theme}>
       <CdPageHeader
         icon={<Megaphone className="w-5 h-5" />}
-        breadcrumbs={[{ label: "공지·게시판", href: "/board" }, { label: "공지 작성" }]}
-        title="공지 작성"
+        breadcrumbs={[{ label: "공지·게시판", href: "/board" }, { label: editId ? "공지 수정" : "공지 작성" }]}
+        title={editId ? "공지 수정" : "공지 작성"}
         actions={
           <div className="flex items-center gap-2">
-            <CdButton icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.push("/board")}>
-              목록
+            <CdButton icon={<ArrowLeft className="w-4 h-4" />} onClick={() => router.push(backHref)}>
+              {editId ? "돌아가기" : "목록"}
             </CdButton>
-            <CdButton variant="primary" loading={saving} icon={<Send className="w-4 h-4" />} onClick={submit}>
-              등록
+            <CdButton variant="primary" loading={saving} disabled={!loaded} icon={<Send className="w-4 h-4" />} onClick={submit}>
+              {submitLabel}
             </CdButton>
           </div>
         }
       />
+
+      {loadError && <p className="text-sm text-[color:var(--cd-danger,#FA896B)] px-1 pb-2">{loadError}</p>}
+      {!loaded && !loadError && <p className="text-sm cd-text-faint px-1 pb-2">공지를 불러오는 중입니다.</p>}
 
       <div className="flex flex-col gap-3 w-full">
         {/* 게시판 선택 — 전사 공지는 관리자만 */}
@@ -160,6 +215,19 @@ export function BoardWriteBoard() {
             </CdButton>
             {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 20MB</span>}
           </span>
+          {/* 수정 — 이미 올린 첨부는 그대로 유지되고, 여기서 고른 파일은 추가로 붙는다 */}
+          {existingFiles.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] cd-text-faint">기존 첨부 {existingFiles.length}건(유지) — 아래에서 고른 파일은 추가로 첨부됩니다.</span>
+              {existingFiles.map((a) => (
+                <div key={a.attachmentId} className="flex items-center gap-2 rounded-lg border cd-border-c cd-card-bg px-2.5 py-1.5 text-xs cd-text">
+                  <Paperclip className="w-3.5 h-3.5 shrink-0 cd-text-faint" />
+                  <span className="flex-1 truncate">{a.fileName}</span>
+                  {a.byteSize != null && <span className="cd-text-faint shrink-0">{Math.ceil(a.byteSize / 1024)} KB</span>}
+                </div>
+              ))}
+            </div>
+          )}
           <div
             className="rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[6rem] bg-white transition-colors"
             style={{ borderColor: dragging ? "var(--cd-primary)" : "var(--cd-border)", borderStyle: dragging ? "solid" : "dashed" }}
@@ -249,19 +317,21 @@ export function BoardWriteBoard() {
             <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
               <Bell className="w-4 h-4" /> 공지 알림
             </h3>
-            <CdCheckbox label="메일 알림 발송" checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} />
-            <CdCheckbox label="모바일 앱 푸시 알림" checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} />
+            <CdCheckbox label="메일 알림 발송" disabled={!!editId} checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} />
+            <CdCheckbox label="모바일 앱 푸시 알림" disabled={!!editId} checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} />
             <p className="text-[11px] cd-text-faint">
-              {scope === "company" ? "전 임직원" : "소속 부서원"}에게 발송됩니다(작성자 본인 제외). 푸시는 MCM 앱에서 알림을 켠 사람에게만 갑니다.
+              {editId
+                ? "수정할 때는 알림을 다시 보내지 않습니다."
+                : `${scope === "company" ? "전 임직원" : "소속 부서원"}에게 발송됩니다(작성자 본인 제외). 푸시는 MCM 앱에서 알림을 켠 사람에게만 갑니다.`}
             </p>
           </section>
         </div>
 
         <div className="flex items-center gap-2 pb-6">
-          <CdButton variant="primary" loading={saving} icon={<Send className="w-4 h-4" />} onClick={submit}>
-            등록
+          <CdButton variant="primary" loading={saving} disabled={!loaded} icon={<Send className="w-4 h-4" />} onClick={submit}>
+            {submitLabel}
           </CdButton>
-          <CdButton onClick={() => router.push("/board")}>취소</CdButton>
+          <CdButton onClick={() => router.push(backHref)}>취소</CdButton>
         </div>
       </div>
     </div>

@@ -694,3 +694,4 @@ CdPageHeader  제목 "할 일"  · meta "오늘 3 · 지연 1 · 이번 주 8"  
 - 부서장·임원 주간 집계(결정 N 2차 → 구현): `buildDeptSummary` — `isDeptLeadOrExec` + 소속 부서(employee_profiles.dept_id, users.employee_id 조인)의 다른 활성 직원 각자 `buildWeeklySummary` 건수(완료/예정/지연/맡긴 일, **제목 없음**). 인앱 알림 "<부서> 주간 현황 (N명)" 1건 추가 + 메일 하단 표. 본인 0건이어도 부서원 건수가 있으면 발송.
 - 모바일 자동화 UI: `lib/todo-rules.ts`(rules-shared 복제, 상수·설명 문장) + `components/todo/AutomationSheet.tsx`(목록 Switch 켬/끔·삭제 Alert·탭 편집, 칩 빌더: 트리거/상태/행동/담당·템플릿·메신저 방, 인앱 토글, 메시지, 미리보기) — 프로젝트 보드 탭 BoardChips 옆 [자동화] 버튼. 조건(우선순위·접두·관련)은 모바일 빌더에서 생략(웹 전용).
 - **dev 실측(10-19, 297 적용 후)**: 설정 모달에서 주간 요일 1→2→1 즉시 저장. 틱 1회 → 내 알림함에 개인 요약 + "영업관리본부 주간 현황 (3명)" 2건, 메일 본문에 부서원 3명 표(권오종·이도희·테스트관리자, 건수만). 첫 시도는 `departments.name` 참조 오류(실제 컬럼 dept_name)로 부서 섹션이 조용히 빠졌음 → 수정. 스냅샷은 프로젝트 보드가 없어 0행(코드 경로는 리허설로 확인). 테스트 발송 삭제·prefs 원복(weekly_sent_on 오늘).
+- 커밋 5bef413 → OTA 2f9ca351 → m-app 재export e0270a7 → next 배포(10-19). §29 전체 완료(P4 OS 홈 위젯만 스토어 일정 대기).

@@ -163,15 +163,18 @@ export function HomeStats() {
         tint="var(--cd-success-soft)"
         onJump={() => jump("calendar", "/calendar")}
       />
-      <StatCard
-        icon={Clock}
-        label="경과 미입력"
-        value={pending}
-        delta={pending > 0 ? "확인 필요" : null}
-        tone="var(--cd-warning)"
-        tint="var(--cd-warning-soft)"
-        onJump={() => jump("pendingProgress", "/sales")}
-      />
+      {/* 경과 미입력 — 영업 담당자·대표이사·관리자(sales.view)만. 권한이 없으면 API 403 → KPI 자체를 뺀다(298, 2026-10-19). */}
+      {wp.status !== "forbidden" && (
+        <StatCard
+          icon={Clock}
+          label="경과 미입력"
+          value={pending}
+          delta={pending > 0 ? "확인 필요" : null}
+          tone="var(--cd-warning)"
+          tint="var(--cd-warning-soft)"
+          onJump={() => jump("pendingProgress", "/sales")}
+        />
+      )}
       {/* 발행 요청 수신 — billing.receivable.manage 권한이 없으면 API 403 → KPI 자체를 뺀다. */}
       {wi.status !== "forbidden" && (
         <StatCard

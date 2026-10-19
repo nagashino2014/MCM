@@ -89,13 +89,23 @@ export const edgeAuthConfig: NextAuthConfig = {
       // 업로드 같은 multipart POST 가 /login 페이지로 재전송되어 "Failed to find Server Action"
       // 텍스트가 내려오고, 클라이언트 fetch 의 res.json() 이 "is not valid JSON" 으로 깨진다.
       // 401 JSON 이면 각 화면의 기존 오류 처리(alert(data.error))가 만료 안내를 그대로 보여준다.
-      const sessionExpired = () =>
-        path.startsWith("/api/")
-          ? NextResponse.json(
-              { error: "로그인이 만료되었습니다. 페이지를 새로고침해 다시 로그인해 주세요." },
-              { status: 401 }
-            )
-          : false;
+      // 페이지 요청은 false(next-auth 기본 리다이렉트) 대신 직접 로그인 화면으로 보낸다 —
+      // 기본 리다이렉트는 callbackUrl 에 nextUrl.href(ECS 뒤에서는 http://localhost:3000/…)를 넣는다(F-03, 2026-10-19 실측).
+      // origin 은 프록시가 전달한 host(x-forwarded-host/proto) 기준, callbackUrl 은 같은 origin 의 경로만 넘긴다.
+      const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      const forwardedProto = request.headers.get("x-forwarded-proto") ?? nextUrl.protocol.replace(":", "");
+      const publicOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : nextUrl.origin;
+      const sessionExpired = () => {
+        if (path.startsWith("/api/")) {
+          return NextResponse.json(
+            { error: "로그인이 만료되었습니다. 페이지를 새로고침해 다시 로그인해 주세요." },
+            { status: 401 }
+          );
+        }
+        const login = new URL("/login", publicOrigin);
+        login.searchParams.set("callbackUrl", path + nextUrl.search);
+        return NextResponse.redirect(login);
+      };
       if (!session?.user) return sessionExpired();
       const user = session.user as { status?: UserStatus; mustChangePassword?: boolean; perms?: string[] };
       if (user.status && user.status !== "active") return sessionExpired();

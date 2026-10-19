@@ -28,6 +28,12 @@ export interface UserAccess {
   participantContractIds: Set<string>;
   /** 본인(employee)이 관계자로 등록된 영업 프로젝트 id 집합 — sales.* participant scope 평가용. */
   participantProjectIds: Set<string>;
+  /** 부서 범위 grant(self_dept·specific_dept)가 가리키는 부서 id 합집합 — 단건 target 판정용(F-06). */
+  deptIds: Set<string>;
+  /** deptIds 부서가 소유(owning_dept_id)하거나 부서원이 참여한 계약 id 집합 — self_dept + target.contractId 판정용(F-06). */
+  deptContractIds: Set<string>;
+  /** deptIds 부서가 담당(owner_dept_id)하거나 부서원이 관계자인 영업 프로젝트 id 집합 — self_dept + target.projectId 판정용(F-06). */
+  deptProjectIds: Set<string>;
   grants: GrantRow[];
 }
 
@@ -100,7 +106,64 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     effect: (String(row.effect ?? "allow") as "allow" | "deny"),
   }));
 
-  return { userId, role, deptId, employeeId, participantContractIds, participantProjectIds, grants };
+  // 부서 범위 단건 판정용 집합(F-06, 2026-10-19 실측: 부서장이 타 부서 계약·영업건 단건을 전부 200).
+  // self_dept/specific_dept grant 가 하나라도 있을 때만 로드한다. 목록 필터(contract-scope.ts)와 같은 규칙:
+  //   계약 = owning_dept_id ∈ 부서 OR 부서원 참여 / 영업건 = owner_dept_id ∈ 부서 OR 부서원 관계자.
+  const deptIds = new Set<string>();
+  for (const g of grants) {
+    if (g.effect !== "allow") continue;
+    if (g.scopeKind === "self_dept" && deptId) deptIds.add(deptId);
+    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+  }
+  const deptContractIds = new Set<string>();
+  const deptProjectIds = new Set<string>();
+  if (deptIds.size > 0) {
+    const depts = [...deptIds];
+    const cRows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT c.contract_id
+           FROM contracts c
+          WHERE c.owning_dept_id = ANY($1)
+             OR EXISTS (
+               SELECT 1 FROM service_participants sp
+               JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
+               WHERE sp.contract_id = c.contract_id AND ep.dept_id = ANY($1)
+             )`,
+        [depts]
+      )
+    );
+    for (const r of cRows) if (r.contract_id != null) deptContractIds.add(String(r.contract_id));
+    const pRows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT p.project_id
+           FROM sales_projects p
+          WHERE p.owner_dept_id = ANY($1)
+             OR EXISTS (
+               SELECT 1 FROM sales_project_members m
+               JOIN employee_profiles ep ON ep.employee_id = m.employee_id
+               WHERE m.project_id = p.project_id AND ep.dept_id = ANY($1)
+             )`,
+        [depts]
+      )
+    );
+    for (const r of pRows) if (r.project_id != null) deptProjectIds.add(String(r.project_id));
+  }
+
+  return {
+    userId, role, deptId, employeeId,
+    participantContractIds, participantProjectIds,
+    deptIds, deptContractIds, deptProjectIds,
+    grants,
+  };
+}
+
+/** 부서 범위 grant 의 단건 판정 — target 의 계약·영업건·부서 중 주어진 것을 모두 만족해야 한다(F-06). */
+function deptScopeMatches(access: UserAccess, deptIdOfGrant: string | null, target: PermissionTarget): boolean {
+  if (!deptIdOfGrant) return false;
+  if (target.contractId != null && !access.deptContractIds.has(target.contractId)) return false;
+  if (target.projectId != null && !access.deptProjectIds.has(target.projectId)) return false;
+  if (target.deptId != null && target.deptId !== deptIdOfGrant) return false;
+  return true;
 }
 
 function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
@@ -115,9 +178,10 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
       return (target.contractId == null || access.participantContractIds.has(target.contractId))
           && (target.projectId == null || access.participantProjectIds.has(target.projectId));
     case "self_dept":
-      return !target.deptId || target.deptId === access.deptId;
+      // target 이 비어 있으면 통과(목록은 도메인 필터가 처리), 계약·영업건·부서가 오면 그 부서 범위 안이어야 한다(F-06).
+      return deptScopeMatches(access, access.deptId, target);
     case "specific_dept":
-      return !target.deptId || target.deptId === grant.scopeDeptId;
+      return deptScopeMatches(access, grant.scopeDeptId, target);
     default:
       return false;
   }

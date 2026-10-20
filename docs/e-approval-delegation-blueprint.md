@@ -1,6 +1,6 @@
 # 전자결재 대결·전결(부재 결재) 구현 계획
 
-작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0~DA-2 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용 — DA-1 코드는 301 필수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
+작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0~DA-3 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용 — DA-1 코드는 301 필수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
 
 ## 1. 요구(2026-10-20 사용자)
 
@@ -133,6 +133,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 - 알림: `absence_skipped`·`final_absent`(기안자, notifyPendingSteps 끝에서 단계별 1회), `proxy_done`(원결재자, 대결 처리 직후), `final_approved`는 이벤트·설정만(발송은 DA-3 전결). 부재 등록 기간 중인 결재자는 리마인드 보류.
 - 기안 화면 결재선 행 배지 — `/api/approval/absences/lookup`(진행 중·30일 내 예정, 직접 등록 우선 → 승인 휴가, 사유 비노출). 최종 결재자는 경고색.
 - 관리자 대리 등록 — `/approval/absence` 에서 approval.manage 보유자에게 '설정 대상' 선택. API 는 `userId` 지정 시 approval.manage 확인, 등록·취소 시 본인에게 이메일·푸시(문서 무관 알림이라 발송 로그 없음).
+
+### DA-3 구현 메모(2026-10-20)
+- 전결 규정 화면 `/approval/final-rules`(결재 운영 메뉴, approval.manage) + `/api/approval/final-rules`. 규칙 = 양식(또는 전 양식) × (지정 인원 | 기안 부서장). 규칙이 없으면 아무도 전결할 수 없다.
+- 부서장 판정은 `deptHeadUserIds`(보직 표 우선, 없으면 직급 최상위 — 300 미적용 환경 포함). 문서 부서 = `approval_docs.dept_id`, 없으면 기안자 소속.
+- `actOnDoc(action:'final')`: 승인 단계·대결 아님·남은 결재자 있음·규칙 충족 시 내 단계 `act_type=final`, 남은 단계 `skipped(final)` → `finalizeApprovedDoc`. 문서 상세 API `canFinal` 로 [전결] 버튼 노출, 생략 대상 확인 창.
+- 알림 `final_approved`: 기안자(전결 승인 완료) + 생략된 상위 결재자(후열).
+- 모바일 Expo `StepTimeline`: 대결(원결재자 병기)·부재·전결 표기(OTA 필요). 모바일 [전결] 버튼은 미구현(웹 전용).
 
 ## 7. 단계별 진행
 

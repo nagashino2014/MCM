@@ -7,6 +7,8 @@ import { unlinkDocCards } from "@/lib/barobill/classify";
 import { unlinkDocReceipts } from "@/lib/finance/receipts";
 import { resolveDocAccess } from "@/lib/approval/access";
 import { CANCELABLE_FORM_IDS, getOpenCancelRequest } from "@/lib/approval/cancel";
+import { canFinalApprove, docDeptId } from "@/lib/approval/final-rules";
+import { getDb } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +30,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     const myStep =
       doc.steps.find((s) => s.assigneeUserId === ctx.userId && s.status === "pending") ??
       doc.steps.find((s) => s.delegatedFrom === ctx.userId && s.selfActAllowed && s.status === "pending");
+    // 전결 버튼(DA-3) — 내 승인 단계(대결 아님) + 뒤에 남은 결재자 + 전결 규칙 충족. 서버 actOnDoc 판정과 동일.
+    let canFinal = false;
+    if (
+      myStep &&
+      myStep.stepType === "approve" &&
+      !(myStep.assigneeUserId === ctx.userId && myStep.delegatedFrom) &&
+      doc.steps.some((s) => s.stepId !== myStep.stepId && (s.status === "waiting" || s.status === "pending"))
+    ) {
+      const db = await getDb();
+      const meta = await docDeptId(db, docId);
+      canFinal = !!meta && (await canFinalApprove(db, { formId: meta.formId, deptId: meta.deptId, actorUserId: ctx.userId }));
+    }
     // 반려 요청(취소 요청, 124) — 배지 표시·버튼 노출 판정용.
     const cancelRequest = await getOpenCancelRequest(docId);
     const cancelable = (CANCELABLE_FORM_IDS as readonly string[]).includes(doc.formId);
@@ -41,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     // 기안자는 아직 결재가 걸려 있지 않은 본인 문서(작성중·반려)만.
     const canDelete = isManager || isOwnEditable;
     return NextResponse.json({
-      doc: { ...doc, myStepId: myStep?.stepId ?? null, cancelRequest, canRequestCancel, canCancel, canEdit, canDelete },
+      doc: { ...doc, myStepId: myStep?.stepId ?? null, canFinal, cancelRequest, canRequestCancel, canCancel, canEdit, canDelete },
     });
   } catch (err) {
     return authErrorToResponse(err);

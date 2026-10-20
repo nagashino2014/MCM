@@ -54,6 +54,8 @@ export interface DocDetailData {
   fields: ApprovalFieldDef[];
   steps: DocStepRow[];
   myStepId?: string | null;
+  /** 내 단계에서 [전결] 가능(전결 규정 충족, DA-3) */
+  canFinal?: boolean;
   aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
   /** 반려 요청(취소 요청, 124) — 미처리 요청·버튼 노출 판정(서버 계산). */
   cancelRequest?: { requestId: string; reason: string; requestedByName: string | null; requestedAt: string } | null;
@@ -208,11 +210,19 @@ export function ApprovalDocViewer({
     };
   }, [docId]);
 
-  const act = async (action: "approve" | "reject") => {
+  const act = async (action: "approve" | "reject" | "final") => {
     if (!detail?.myStepId) return;
     if (action === "reject" && !comment.trim()) {
       alert("반려 사유를 입력하세요.");
       return;
+    }
+    if (action === "final") {
+      // 전결 — 뒤에 남은 결재자를 생략하고 최종 승인(DA-3). 되돌릴 수 없으므로 생략 대상과 함께 확인한다.
+      const rest = detail.steps.filter((s) => s.stepId !== detail.myStepId && (s.status === "waiting" || s.status === "pending"));
+      const names = rest.map((s) => s.assigneeName ?? s.assigneeUserId).join(", ");
+      if (!confirm(`전결로 최종 승인할까요?
+
+이후 결재자 ${rest.length}명(${names})의 결재가 생략되고, 이분들께 후열 안내가 갑니다.`)) return;
     }
     setActing(true);
     try {
@@ -780,6 +790,17 @@ export function ApprovalDocViewer({
                   <CheckCircle2 className="w-4 h-4" />
                   승인
                 </button>
+                {detail.canFinal && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft px-[18px] py-2.5 text-[13px] disabled:opacity-50"
+                    disabled={acting}
+                    onClick={() => act("final")}
+                    title="뒤에 남은 결재자를 생략하고 최종 승인합니다"
+                  >
+                    전결
+                  </button>
+                )}
               </div>
             )}
 

@@ -388,6 +388,61 @@ async function notifyAbsenceOutcomes(doc: DocHeader): Promise<void> {
   }
 }
 
+/**
+ * 전결 완료 통지(DA-3) — 기안자에게 '전결 승인 완료', 전결로 생략된 상위 결재자에게 후열 안내. 커밋 후 호출.
+ * dedup: final_approved:{docId}(기안자) · final_approved:{docId}:{userId}(생략된 결재자).
+ */
+export async function notifyFinalApproved(docId: string): Promise<void> {
+  try {
+    const doc = await loadDocHeader(docId);
+    if (!doc) return;
+    const db = await getDb();
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT assignee_user_id, assignee_name, status, act_type, skip_reason FROM approval_steps
+          WHERE doc_id = $1 AND ((status = 'approved' AND act_type = 'final') OR (status = 'skipped' AND skip_reason = 'final'))`,
+        [docId]
+      )
+    );
+    const finalizer = rows.find((r) => String(r.status) === "approved");
+    const by = String(finalizer?.assignee_name ?? "결재자");
+    const skipped = rows.filter((r) => String(r.status) === "skipped").map((r) => String(r.assignee_user_id));
+    const contacts = await resolveContacts([...(doc.drafterUserId ? [doc.drafterUserId] : []), ...skipped]);
+    if (doc.drafterUserId) {
+      await deliver({
+        event: "final_approved",
+        docId,
+        stepId: null,
+        dedupKey: `final_approved:${docId}`,
+        userId: doc.drafterUserId,
+        contact: contacts.get(doc.drafterUserId),
+        subject: `[전자결재] 전결 승인 완료: ${doc.title}`,
+        text: `${by}님이 전결로 최종 승인했습니다.
+
+제목: ${doc.title}${commonFooter(doc)}`,
+        pushBody: `${by}님 전결 승인 — ${doc.title}`,
+      });
+    }
+    for (const userId of [...new Set(skipped)]) {
+      await deliver({
+        event: "final_approved",
+        docId,
+        stepId: null,
+        dedupKey: `final_approved:${docId}:${userId}`,
+        userId,
+        contact: contacts.get(userId),
+        subject: `[전자결재] 전결 처리 안내(후열): ${doc.title}`,
+        text: `${by}님이 전결로 최종 승인해 회원님의 결재 단계가 생략되었습니다. 내용은 결재함에서 확인할 수 있습니다.
+
+제목: ${doc.title}${commonFooter(doc)}`,
+        pushBody: `${by}님 전결 — 결재 생략(후열)`,
+      });
+    }
+  } catch (err) {
+    console.error("[approval-notify] notifyFinalApproved 실패", docId, err);
+  }
+}
+
 /** 대결 처리 후열 통지(DA-2) — 대결자가 승인·반려하면 원결재자에게 1회 알린다. 커밋 후 호출. */
 export async function notifyProxyDone(docId: string, stepId: string): Promise<void> {
   try {

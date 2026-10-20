@@ -7,7 +7,8 @@ import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
-import { notifyPendingSteps, notifyDrafterResult, notifyProxyDone } from "@/lib/approval/notify";
+import { notifyPendingSteps, notifyDrafterResult, notifyFinalApproved, notifyProxyDone } from "@/lib/approval/notify";
+import { canFinalApprove, docDeptId } from "@/lib/approval/final-rules";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { assignManualNoticeNo } from "@/lib/notice/store";
@@ -768,6 +769,11 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
 }
 
 /** 승인/반려 — 본인 pending 단계에만. 병렬 합의는 전원 승인 시 다음 order 로. */
+/** 사용자 오류(400·403 등) — authErrorToResponse 가 status 를 그대로 응답한다. */
+function userError(message: string, status = 400): Error {
+  return Object.assign(new Error(message), { status });
+}
+
 /** 대결 중인 단계의 원결재자 처리 허용 여부(D-4) — 직접 등록 부재의 allow_self_act, 휴가 연동(부재 id 없음)은 허용. */
 async function selfActAllowed(txn: PgDatabase, absenceId: string | null): Promise<boolean> {
   if (!absenceId) return true;
@@ -795,12 +801,13 @@ async function finalizeApprovedDoc(txn: PgDatabase, docId: string, now: string):
 export async function actOnDoc(params: {
   docId: string;
   stepId: string;
-  action: "approve" | "reject";
+  action: "approve" | "reject" | "final";
   comment: string | null;
   actorUserId: string;
 }): Promise<{ docStatus: string }> {
   let docStatus = "in_progress";
   let proxyActed = false;
+  let finalActed = false;
   await withDbWrite(async (txn) => {
     // FOR UPDATE — 부재 재라우팅(rerouteAbsentPendingSteps)과 같은 문서 단계를 동시에 바꾸지 않도록 직렬화.
     const steps = rowsToObjects(
@@ -829,6 +836,30 @@ export async function actOnDoc(params: {
     proxyActed = actType === "proxy";
 
     const now = new Date().toISOString();
+    if (params.action === "final") {
+      // 전결(DA-3) — 승인 단계 + 전결 규칙 충족 시 이후 단계를 모두 생략하고 최종 승인. 대결(proxy)로는 전결할 수 없다.
+      if (String(me.step_type) !== "approve") throw userError("합의 단계에서는 전결할 수 없습니다.");
+      if (actType === "proxy") throw userError("대결로 처리하는 결재는 전결할 수 없습니다.");
+      const laterOpen = steps.filter((s) => String(s.step_id) !== params.stepId && ["waiting", "pending"].includes(String(s.status)));
+      if (!laterOpen.length) throw userError("남은 결재자가 없습니다. 승인으로 처리하세요.");
+      const meta = await docDeptId(txn, params.docId);
+      if (!meta || !(await canFinalApprove(txn, { formId: meta.formId, deptId: meta.deptId, actorUserId: params.actorUserId }))) {
+        throw userError("이 양식의 전결 권한이 없습니다.", 403);
+      }
+      await txn.run(`UPDATE approval_steps SET status = 'approved', acted_at = $2, comment = $3, act_type = 'final' WHERE step_id = $1`, [
+        params.stepId,
+        now,
+        params.comment,
+      ]);
+      await txn.run(
+        `UPDATE approval_steps SET status = 'skipped', skip_reason = 'final' WHERE doc_id = $1 AND status IN ('waiting','pending') AND step_id <> $2`,
+        [params.docId, params.stepId]
+      );
+      await finalizeApprovedDoc(txn, params.docId, now);
+      docStatus = "approved";
+      finalActed = true;
+      return;
+    }
     if (params.action === "reject") {
       await txn.run(`UPDATE approval_steps SET status = 'rejected', acted_at = $2, comment = $3, act_type = $4 WHERE step_id = $1`, [
         params.stepId,
@@ -877,7 +908,8 @@ export async function actOnDoc(params: {
   if (docStatus === "approved") await runFormActionsForDoc(params.docId, "approved");
   else if (docStatus === "rejected") await runFormActionsForDoc(params.docId, "rejected");
   // 커밋 후 알림 — 최종 승인/반려는 기안자에게, 진행 중이면 다음 결재자에게(단계별 멱등).
-  if (docStatus === "approved") await notifyDrafterResult(params.docId, "approved");
+  if (finalActed) await notifyFinalApproved(params.docId);
+  else if (docStatus === "approved") await notifyDrafterResult(params.docId, "approved");
   else if (docStatus === "rejected") await notifyDrafterResult(params.docId, "rejected");
   else await notifyPendingSteps(params.docId);
   // 공문 최종 승인 → 산출물 생성·메일 자동 발송(비차단, 실패 시 대장 failed → 재발송 버튼).

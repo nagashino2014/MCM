@@ -357,6 +357,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "데이터 관계 맵", href: "/approval/semantics" },
       { title: "데이터 지표", href: "/approval/metrics" },
       { title: "사전검토 정책", href: "/approval/policies" },
+      { title: "전결 규정", href: "/approval/final-rules" },
       { title: "결재 알림 설정", href: "/approval/settings" },
     ],
     group: "system",

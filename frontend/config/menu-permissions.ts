@@ -40,12 +40,13 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/admin/attachment-policy", keys: ["security.attachment_policy"] },
   { path: "/admin/company-profile", keys: ["org.edit"] },
   { path: "/admin/recruit", keys: ["recruit.view"] },
-  // 결재 운영 설정(양식·의미 사전·관계 맵·지표·정책·알림)
+  // 결재 운영 설정(양식·의미 사전·관계 맵·지표·정책·전결 규정·알림)
   { path: "/approval/forms", keys: ["approval.manage"] },
   { path: "/approval/semantic-concepts", keys: ["approval.manage"] },
   { path: "/approval/semantics", keys: ["approval.manage"] },
   { path: "/approval/metrics", keys: ["approval.manage"] },
   { path: "/approval/policies", keys: ["approval.manage"] },
+  { path: "/approval/final-rules", keys: ["approval.manage"] },
   { path: "/approval/settings", keys: ["approval.manage"] },
   // 근태·휴가 관리 6화면(§6-4: 기존 staffing.edit)
   { path: "/approval/leave", keys: ["staffing.edit"] },

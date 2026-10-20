@@ -14,6 +14,10 @@ export interface Step {
   actedAt: string | null;
   comment: string | null;
   delegatedFrom: string | null;
+  /** 대결 원결재자 이름·처리 유형·생략 사유(서버 301, 웹 DA-2·DA-3 표기와 동일 규칙) */
+  delegatedFromName?: string | null;
+  actType?: string | null;
+  skipReason?: string | null;
 }
 
 const STEP_TYPE_LABEL: Record<string, string> = {
@@ -30,9 +34,23 @@ function icon(status: string): { name: keyof typeof Ionicons.glyphMap; tone: 'su
       return { name: 'close-circle', tone: 'error' };
     case 'pending':
       return { name: 'ellipse-outline', tone: 'primary' };
+    case 'skipped':
+      return { name: 'remove-circle-outline', tone: 'faint' };
     default:
       return { name: 'ellipse-outline', tone: 'faint' };
   }
+}
+
+/** 대결·부재·전결 표기 — 웹 lib/approval/step-display.ts 와 같은 문구. */
+function stepNote(s: Step): { text: string; tone: 'warning' | 'primary' | 'faint' } | null {
+  if (s.delegatedFrom) {
+    const who = s.delegatedFromName ?? '원결재자';
+    return { text: s.status === 'pending' ? `${who} 대결 대기` : `${who} 대결 처리`, tone: 'warning' };
+  }
+  if (s.status === 'approved' && s.actType === 'final') return { text: '전결', tone: 'primary' };
+  if (s.status === 'skipped' && s.skipReason === 'absence') return { text: '부재 — 다음 결재자로 넘어감', tone: 'faint' };
+  if (s.status === 'skipped' && s.skipReason === 'final') return { text: '전결로 생략', tone: 'faint' };
+  return null;
 }
 
 const short = (iso?: string | null) => {
@@ -52,6 +70,7 @@ export function StepTimeline({ steps }: { steps: Step[] }) {
     <View className="gap-0">
       {steps.map((s, i) => {
         const ic = icon(s.status);
+        const note = stepNote(s);
         const last = i === steps.length - 1;
         return (
           <View key={s.stepId} className="flex-row gap-2.5">
@@ -76,8 +95,14 @@ export function StepTimeline({ steps }: { steps: Step[] }) {
                 </Text>
               </View>
 
-              {s.delegatedFrom ? (
-                <Text className="text-[11px] text-cd-warning">대결 처리</Text>
+              {note ? (
+                <Text
+                  className={`text-[11px] ${
+                    note.tone === 'warning' ? 'text-cd-warning' : note.tone === 'primary' ? 'text-cd-primary' : 'text-cd-faint'
+                  }`}
+                >
+                  {note.text}
+                </Text>
               ) : null}
 
               {s.comment ? (

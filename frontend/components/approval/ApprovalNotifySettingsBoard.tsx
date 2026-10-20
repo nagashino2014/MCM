@@ -26,7 +26,7 @@ const EVENT_LABEL: Record<string, { title: string; desc: string }> = {
   absence_skipped: { title: "부재 건너뜀", desc: "결재자 부재로 단계가 생략되면 기안자에게 안내" },
   proxy_done: { title: "대결 처리 후열", desc: "대결자가 처리하면 원결재자에게 안내" },
   final_absent: { title: "최종 결재자 부재", desc: "최종 결재자가 부재 중일 때 기안자에게 복귀 후 결재 안내" },
-  final_approved: { title: "전결 완료", desc: "전결로 결재가 끝나면 기안자에게 안내(전결 기능 도입 후 발송)" },
+  final_approved: { title: "전결 완료", desc: "전결로 결재가 끝나면 기안자와 생략된 상위 결재자(후열)에게 안내" },
 };
 
 export function ApprovalNotifySettingsBoard() {

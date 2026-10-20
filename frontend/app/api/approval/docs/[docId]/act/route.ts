@@ -8,17 +8,17 @@ export const dynamic = "force-dynamic";
 
 interface ActBody {
   stepId?: string;
-  action?: "approve" | "reject";
+  action?: "approve" | "reject" | "final";
   comment?: string | null;
 }
 
-// POST: 승인/반려 — 본인 pending 단계에만 허용(코어에서 검증)
+// POST: 승인/반려/전결 — 본인 pending 단계에만 허용(코어에서 검증, 전결은 전결 규칙 충족 시, DA-3)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
     const ctx = await requirePermission("approval.act", { fallbackRoles: ["viewer", "editor"] });
     const { docId } = await params;
     const body = (await req.json().catch(() => ({}))) as ActBody;
-    if (!body.stepId || !body.action || !["approve", "reject"].includes(body.action)) {
+    if (!body.stepId || !body.action || !["approve", "reject", "final"].includes(body.action)) {
       return NextResponse.json({ error: "stepId/action 이 필요합니다." }, { status: 400 });
     }
     if (body.action === "reject" && !String(body.comment ?? "").trim()) {

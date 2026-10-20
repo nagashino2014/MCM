@@ -94,6 +94,8 @@ export type AuditAction =
   | "approval_absence_create"
   | "approval_absence_cancel"
   | "approval_default_delegate_update"
+  | "approval_final_rule_create"
+  | "approval_final_rule_delete"
   | "approval_doc_delete"
   | "approval_doc_recall"
   | "letter_import"

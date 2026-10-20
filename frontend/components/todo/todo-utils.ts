@@ -93,6 +93,8 @@ export function localToday(): string {
 
 export function addDays(ymd: string, n: number): string {
   const d = new Date(`${ymd}T12:00:00Z`);
+  // 입력 중인 미완성 날짜(예: "2026-10-2")는 Invalid Date — toISOString 이 던지지 않게 그대로 돌려준다(2026-10-20 화면 오류)
+  if (Number.isNaN(d.getTime())) return ymd;
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
@@ -242,14 +244,19 @@ export function defaultRemindAt(
   it: { doDate: string | null; doTime: string | null; dueDate: string | null },
   prefs: Pick<TodoPrefs, "defaultRemindAllDayTime" | "defaultRemindBeforeMin">
 ): string | null {
+  // 2026-10-20 화면 오류: 상세는 렌더마다 이 값을 계산하는데, 날짜 입력 중인 미완성 값(예: "2026-10-2")이 오면
+  // Invalid Date.toISOString() 이 RangeError 를 던져 페이지 전체가 죽었다 — 완성된 날짜·시각만 쓰고 나머지는 null.
+  const okDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const okTime = (v: string | null): v is string => !!v && /^\d{2}:\d{2}$/.test(v);
+  const iso = (d: Date) => (Number.isNaN(d.getTime()) ? null : d.toISOString());
   const kst = (ymd: string, hm: string) => new Date(`${ymd}T${hm}:00+09:00`);
-  if (it.doDate && it.doTime) {
+  if (okDate(it.doDate) && okTime(it.doTime)) {
     const at = kst(it.doDate, it.doTime);
     at.setMinutes(at.getMinutes() - prefs.defaultRemindBeforeMin);
-    return at.toISOString();
+    return iso(at);
   }
-  if (it.doDate) return kst(it.doDate, prefs.defaultRemindAllDayTime).toISOString();
-  if (it.dueDate) return kst(it.dueDate, prefs.defaultRemindAllDayTime).toISOString();
+  if (okDate(it.doDate)) return iso(kst(it.doDate, prefs.defaultRemindAllDayTime));
+  if (okDate(it.dueDate)) return iso(kst(it.dueDate, prefs.defaultRemindAllDayTime));
   return null;
 }
 

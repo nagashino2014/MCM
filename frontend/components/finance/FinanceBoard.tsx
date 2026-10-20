@@ -38,7 +38,6 @@ import { HometaxPanel, VatReturnPanel, WithholdingPanel } from "@/components/fin
 import { FixedAssetPanel, TripLogPanel, BudgetPanel } from "@/components/finance/AssetBudgetPanels";
 import { ReceiptCollectPanel } from "@/components/finance/ReceiptCollectPanel";
 import { BalanceSheetPanel, ClosingPanel } from "@/components/finance/ClosingPanels";
-import { ReimbursePanel } from "@/components/finance/ReimbursePanels";
 import { ExpenseSettlementPanel } from "@/components/finance/ExpenseSettlementPanel";
 import { IncomeLedgerPanel } from "@/components/finance/IncomeLedgerPanel";
 import { SeverancePanel } from "@/components/finance/SeverancePanel";
@@ -57,19 +56,19 @@ const SYNC_LOG_KIND_LABEL: Record<string, string> = { bank: "계좌", card: "카
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
   | "hometax" | "vatreturn" | "vatbasis" | "vatpost" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
-  | "reimburse" | "shopreceipt" | "expsettle" | "incomeledger" | "severance" | "transactionlinks" | "supplyreviews";
+  | "shopreceipt" | "expsettle" | "incomeledger" | "severance" | "transactionlinks" | "supplyreviews";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
   "hometax", "vatreturn", "vatbasis", "vatpost", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
-  "reimburse", "shopreceipt", "expsettle", "incomeledger", "severance", "transactionlinks", "supplyreviews",
+  "shopreceipt", "expsettle", "incomeledger", "severance", "transactionlinks", "supplyreviews",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
 const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "연결 관리", tabs: [["connections", "연결 관리"]] },
-  // 경비 환급(§2) — 개인 지출 환급 이체 목록(불지급 처분 자동 제외). 이체 실행은 수동.
-  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"], ["reimburse", "경비 환급"]] },
+  // 경비 환급 탭은 폐지(G-8, 2026-10-20) — 개인 경비 이체 경로는 '경비 정산 > 개인 경비 정산'(CMS) 하나다.
+  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"], ["transactionlinks", "거래 연결"], ["supplyreviews", "공급 근거 기록"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
   { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatbasis", "신고 근거"], ["vatreturn", "신고서"], ["vatpost", "접수·납부"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
@@ -79,10 +78,12 @@ const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "손익·자금", tabs: [["pnl", "월별 손익"], ["cash", "자금수지"], ["balance", "재무상태표"], ["closing", "결산"]] },
   // 자산·예산(P6) — 고정자산 상각(전표 연동)·운행기록부·연간 예산(기안 사전검토 연동).
   { title: "자산·예산", tabs: [["fixedassets", "고정자산"], ["triplog", "운행기록부"], ["budget", "예산"]] },
-  // 개인카드 경비 정산(FRM-P6, 203)·퇴직 정산(FRM-P5, 207).
-  { title: "경비 정산", tabs: [["expsettle", "개인카드 경비 정산"], ["severance", "퇴직 정산"]] },
+  // 개인 경비 정산(FRM-P6, 203 — 개인카드 영수증·기타 개인 지출증빙)·퇴직 정산(FRM-P5, 207).
+  { title: "경비 정산", tabs: [["expsettle", "개인 경비 정산"], ["severance", "퇴직 정산"]] },
 ];
-const toTab = (raw: string | null): Tab => (TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections");
+const toTab = (raw: string | null): Tab =>
+  // 폐지된 경비 환급 탭(G-8)의 옛 주소는 개인 경비 정산으로 연다.
+  raw === "reimburse" ? "expsettle" : TAB_KEYS.includes(raw as Tab) && raw !== "connections" ? (raw as Tab) : "connections";
 
 interface ConnectionRow {
   id: string;
@@ -324,7 +325,6 @@ export function FinanceBoard() {
         {tab === "connections" && <ConnectionsPanel />}
         {tab === "bank" && <BankLedgerPanel />}
         {tab === "card" && <CardLedgerPanel />}
-        {tab === "reimburse" && <ReimbursePanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "transactionlinks" && <TransactionLinkPanel />}
         {tab === "supplyreviews" && <SupplyReviewPanel />}

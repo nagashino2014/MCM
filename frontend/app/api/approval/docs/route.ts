@@ -7,6 +7,7 @@ import { syncDocCardLinks } from "@/lib/barobill/classify";
 import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
 import { syncCardExpenseTags } from "@/lib/finance/expense-card-tags";
+import { assertExpenseRowSources } from "@/lib/approval/expense-sources-check";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +63,13 @@ export async function POST(req: NextRequest) {
     if (body.manualDocNo !== undefined && !(await hasPermission(ctx.userId, "approval.manage"))) {
       return NextResponse.json({ error: "문서번호를 직접 지정할 권한이 없습니다." }, { status: 403 });
     }
+    // 지출 표 행 출처(G-8) — 직접 입력 행·다른 문서에 쓰인 증빙·원본과 다른 금액을 저장 전에 거부한다.
+    await assertExpenseRowSources({
+      docId: body.docId ?? null,
+      formId: body.formId,
+      fieldValues: body.fieldValues ?? {},
+      drafterUserId: ctx.userId,
+    });
     const docId = await saveDoc({
       docId: body.docId ?? null,
       formId: body.formId,

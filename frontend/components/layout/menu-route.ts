@@ -12,13 +12,14 @@ export interface MenuRouteMatch {
 // FinanceBoard의 소메뉴 내부 탭도 동일한 탐색 문맥을 유지한다. URL 자체는 변경하지 않는다.
 const FINANCE_MENU_TABS: Record<string, string> = {
   connections: "connections",
-  bank: "bank", card: "bank", reimburse: "bank",
+  bank: "bank", card: "bank",
   invoice: "invoice", recon: "invoice", transactionlinks: "invoice", supplyreviews: "invoice",
   vat: "vat", shopreceipt: "vat", hometax: "vat", vatbasis: "vat", vatreturn: "vat", vatpost: "vat", withholding: "vat", incomeledger: "vat",
   journal: "journal", ledger: "journal", trial: "journal",
   pnl: "pnl", cash: "pnl", balance: "pnl", closing: "pnl",
   fixedassets: "fixedassets", triplog: "fixedassets", budget: "fixedassets",
-  expsettle: "expsettle", severance: "expsettle",
+  // reimburse = 폐지된 경비 환급 탭(G-8)의 옛 주소 — FinanceBoard 가 개인 경비 정산으로 연다.
+  expsettle: "expsettle", severance: "expsettle", reimburse: "expsettle",
 };
 
 function normalizePath(pathname: string): string {

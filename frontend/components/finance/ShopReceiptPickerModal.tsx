@@ -146,7 +146,7 @@ export function ShopReceiptPickerModal({
             <RefreshCw className="w-3.5 h-3.5" /> 조회
           </button>
           <span className="text-[11px] cd-text-faint ml-auto">
-            재무 &gt; 쇼핑몰 전표 수집으로 올린 전표만 표시됩니다 — 표에 담긴 카드 승인건과 매칭된 전표는 첨부만 추가됩니다
+            재무 &gt; 쇼핑몰 전표 수집으로 올린 전표 중 법인카드 승인건과 매칭된 것만 담을 수 있습니다 — 표에 담긴 카드 승인건의 전표는 첨부만 추가됩니다
           </span>
         </div>
 
@@ -170,12 +170,15 @@ export function ShopReceiptPickerModal({
                 const used = existing.has(item.receiptId) || (!!item.docId && !existing.has(item.receiptId));
                 const attachOnly = !!item.matchedTxnId && existingCards.has(item.matchedTxnId);
                 const noFile = !item.storageKey;
-                const disabled = used || noFile;
+                // G-8(2026-10-20): 지출결의서(법인카드)는 법인카드 행만 — 카드 승인건과 매칭되지 않은 전표는 담을 수 없다.
+                const unmatched = !item.matchedTxnId;
+                const disabled = used || noFile || unmatched;
                 return (
                   <tr
                     key={item.receiptId}
                     className={`border-t cd-hairline-row-c ${disabled ? "opacity-45" : "cursor-pointer cd-row-hover"}`}
                     onClick={() => !disabled && toggle(item.receiptId)}
+                    title={unmatched ? "법인카드 승인건과 매칭되지 않은 전표 — 재무 > 쇼핑몰 전표에서 카드 매칭을 확인하세요" : undefined}
                   >
                     <td className="py-1.5 px-3">
                       <input type="checkbox" checked={selected.has(item.receiptId)} disabled={disabled} readOnly />
@@ -187,6 +190,7 @@ export function ShopReceiptPickerModal({
                       {existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
                       {item.docId && !existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(다른 문서에 사용)</span>}
                       {attachOnly && !used && <span className="ml-1.5 text-[10px] cd-text-primary">(카드 행에 첨부만)</span>}
+                      {unmatched && !used && <span className="ml-1.5 text-[10px] cd-text-faint">(카드 미매칭)</span>}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.amount.toLocaleString("ko-KR")}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.cardLast4 ? `****${item.cardLast4}` : "-"}</td>

@@ -1,8 +1,10 @@
 "use client";
 
-// 개인카드 경비 정산(FRM-P6, 203) — 승인된 지출결의서(개인카드)·출장보고서 개인카드 행을
+// 개인 경비 정산(FRM-P6, 203) — 승인된 지출결의서(개인)·출장보고서의 개인 증빙 행을
 // 월 1회 일괄 정산한다. 미정산 현황(인별) → [일괄 정산 실행] → 이력에서 CMS 생성·부가세 자료 발송.
 // 이체 실행은 담당자가 KB 기업뱅킹에서 수동(CMS 파일 업로드) — 앱은 파일 생성·이력까지.
+// G-8(2026-10-20): 경비 환급 화면을 폐지하고 개인 경비 이체 경로를 이 정산 하나로 모았다. 불지급 식대 합계·
+// 급여 차감 표시와, 정산 범위 밖 과거 지출(조회 전용)을 함께 보여 준다.
 
 import { useCallback, useEffect, useState } from "react";
 import { Banknote, ChevronDown, ChevronRight, Download, FileSpreadsheet, ListTree, Mail, Play, TriangleAlert } from "lucide-react";
@@ -21,6 +23,19 @@ interface UnsettledItem {
   category: string | null;
   amount: number;
   detail: string | null;
+  /** 식대 급여 차감 처분 — 정산에 포함, 회수는 급여대장 '식대환수' 공제 */
+  mealDeduct?: boolean;
+}
+interface OutOfScopeRow {
+  docId: string;
+  docNo: string | null;
+  formId: string;
+  employeeName: string | null;
+  completedAt: string | null;
+  usedOn: string | null;
+  vendor: string | null;
+  amount: number;
+  kind: "manual" | "shop";
 }
 interface PersonTotal {
   employeeId: string | null;
@@ -52,6 +67,7 @@ interface TrendRow {
 
 const comma = (n: number) => n.toLocaleString("ko-KR");
 const FORM_LABEL: Record<string, string> = {
+  "frm-expense-report": "지출결의서(법인카드)",
   "frm-expense-personal": "지출결의서(개인)",
   "frm-biz-trip-report": "출장보고서",
 };
@@ -61,6 +77,9 @@ export function ExpenseSettlementPanel() {
   const [persons, setPersons] = useState<PersonTotal[]>([]);
   const [settlements, setSettlements] = useState<SettlementRow[]>([]);
   const [trend, setTrend] = useState<TrendRow[]>([]);
+  const [withheld, setWithheld] = useState<{ count: number; amount: number }>({ count: 0, amount: 0 });
+  const [outOfScope, setOutOfScope] = useState<OutOfScopeRow[]>([]);
+  const [outOpen, setOutOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +103,8 @@ export function ExpenseSettlementPanel() {
       if (!unsettledRes.ok) throw new Error(unsettled?.error ?? "조회 실패");
       setItems(unsettled.items ?? []);
       setPersons(unsettled.persons ?? []);
+      setWithheld(unsettled.withheld ?? { count: 0, amount: 0 });
+      setOutOfScope(unsettled.outOfScope ?? []);
       setSettlements(list.settlements ?? []);
       setTrend(trendData.trend ?? []);
       setError(null);
@@ -160,7 +181,7 @@ export function ExpenseSettlementPanel() {
     if (!toEmail?.trim()) return;
     const data = await act({ action: "vat-send", settlementId, toEmail: toEmail.trim() }, `vat-${settlementId}`);
     if (data) {
-      setNotice("부가세 자료(지출결의서·출장보고서 개인카드 내역·영수증 묶음)를 발송했습니다.");
+      setNotice("부가세 자료(지출결의서(개인)·출장보고서 개인 지출 내역·영수증 묶음)를 발송했습니다.");
       await load();
     }
   };
@@ -196,7 +217,7 @@ export function ExpenseSettlementPanel() {
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
-            <Banknote className="w-4 h-4" /> 미정산 개인카드 지출 (인별)<CdHelp topic="finance.expsettle" />
+            <Banknote className="w-4 h-4" /> 미정산 개인 지출 (인별)<CdHelp topic="finance.expsettle" />
           </p>
           <button
             type="button"
@@ -211,6 +232,11 @@ export function ExpenseSettlementPanel() {
           <p className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
             <TriangleAlert className="w-3.5 h-3.5 shrink-0" />
             계좌 미등록: {noAccount.map((p) => p.employeeName).join(", ")} — 사용자 등록/수정의 인사관리 탭에서 은행코드·계좌번호를 등록하면 CMS에 자동 기입됩니다.
+          </p>
+        )}
+        {withheld.count > 0 && (
+          <p className="text-[11.5px] cd-text-muted">
+            근태 관리의 식대 경고에서 불지급 처분한 {withheld.count}건({comma(withheld.amount)}원)은 정산에서 제외됩니다.
           </p>
         )}
         <div className="overflow-x-auto">
@@ -256,6 +282,47 @@ export function ExpenseSettlementPanel() {
         </div>
       </div>
 
+      {/* 정산 범위 밖 과거 지출(G-8) — 직접 입력이 막히기 전 승인분. 조회만, 이체는 은행에서 개별 처리 */}
+      {outOfScope.length > 0 && (
+        <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
+          <button type="button" className="cd-action text-[13px] font-bold cd-text flex items-center gap-1.5 text-left" onClick={() => setOutOpen((v) => !v)}>
+            {outOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <TriangleAlert className="w-4 h-4" style={{ color: "var(--cd-warning,#FFAE1F)" }} /> 정산 범위 밖 과거 지출 {outOfScope.length}건 ·{" "}
+            {comma(outOfScope.reduce((a, r) => a + r.amount, 0))}원
+          </button>
+          <p className="text-[11.5px] cd-text-muted">
+            직접 입력이 막히기 전에 승인된 출장보고서의 수기 행과 지출결의서(법인카드)의 카드 외 행입니다. 일괄 정산에 넣지 않습니다 —
+            법인카드 사용분을 손으로 적은 행일 수 있으니 원본 문서를 확인하고, 개인 지출이 맞으면 은행에서 개별 이체하세요.
+          </p>
+          {outOpen && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr>
+                    {["결재 종결일", "기안자", "문서", "사용일", "상호", "금액", "구분"].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {outOfScope.map((r, i) => (
+                    <tr key={`${r.docId}-${i}`} className="border-b cd-border-c last:border-b-0">
+                      <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{r.completedAt ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text whitespace-nowrap">{r.employeeName ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">{(FORM_LABEL[r.formId] ?? r.formId) + (r.docNo ? ` · ${r.docNo}` : "")}</td>
+                      <td className="px-3 py-2 cd-text whitespace-nowrap">{r.usedOn ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text">{r.vendor ?? "-"}</td>
+                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(r.amount)}원</td>
+                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">{r.kind === "shop" ? "카드 미매칭 전표" : "수기"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 정산 이력 */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
         <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
@@ -294,7 +361,7 @@ export function ExpenseSettlementPanel() {
 
       {/* 월별 추이(정산 완료 기준) */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
-        <p className="text-[13px] font-bold cd-text">{new Date().getFullYear()}년 월별 개인카드 지출 추이</p>
+        <p className="text-[13px] font-bold cd-text">{new Date().getFullYear()}년 월별 개인 지출 추이</p>
         {trend.length === 0 ? (
           <p className="text-[12px] cd-text-faint">정산 완료 데이터가 쌓이면 표시됩니다.</p>
         ) : (
@@ -335,7 +402,14 @@ export function ExpenseSettlementPanel() {
                       <td className="px-3 py-2 cd-text whitespace-nowrap">{i.usedOn ?? "-"}</td>
                       <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.category ?? "-"}</td>
                       <td className="px-3 py-2 cd-text whitespace-nowrap">{i.vendor ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(i.amount)}원</td>
+                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">
+                        {comma(i.amount)}원
+                        {i.mealDeduct && (
+                          <span className="ml-1.5 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning,#FFAE1F)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
+                            급여 차감
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 cd-text-muted">{i.detail ?? "-"}</td>
                       <td className="px-3 py-2 cd-text-faint whitespace-nowrap">
                         {(FORM_LABEL[i.formId] ?? i.formId) + (i.docNo ? ` · ${i.docNo}` : "")}

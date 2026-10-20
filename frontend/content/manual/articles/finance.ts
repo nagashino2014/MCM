@@ -103,13 +103,13 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
   {
     id: "finance.ledger",
     chapter: "finance",
-    title: "계좌·카드 원장 — 조회·계정과목 분류·경비 환급",
-    routes: ["/finance?tab=bank", "/finance?tab=card", "/finance?tab=reimburse"],
+    title: "계좌·카드 원장 — 조회·계정과목 분류",
+    routes: ["/finance?tab=bank", "/finance?tab=card"],
     audience: ["exec", "admin"],
     summary: [
       "[[계좌 원장]]에서 입출금을, [[법인카드 원장]]에서 카드 매입을 기간·금액·키워드로 찾습니다.",
       "카드 매입마다 계정과목을 지정하고, 용도가 늘 같은 가맹점은 [[가맹점 고정 규칙]]으로 한 번에 분류합니다.",
-      "[[경비 환급]]은 결재가 끝난 개인 지출을 사람별 이체액으로 모아 보여 줍니다. 이체는 은행에서 직접 합니다.",
+      "경비 환급 화면은 없어졌습니다. 개인 경비 이체는 경비 정산의 개인 경비 정산(CMS 파일) 한 곳에서 합니다.",
     ],
     sections: [
       {
@@ -179,20 +179,19 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
       },
       {
         id: "reimburse",
-        title: "경비 환급",
+        title: "개인 경비 환급은 경비 정산에서",
         blocks: [
+          { kind: "p", text: "예전 경비 환급 화면(이체 목록만 보여 주던 화면)은 2026-10-20에 없어졌습니다. 같은 지출이 환급 목록과 정산 두 곳에 보여 이중 이체 위험이 있었기 때문입니다. 개인 경비는 경비 정산의 개인 경비 정산에서 일괄 정산하고 CMS 파일로 이체합니다. 예전 주소로 들어오면 그 화면이 열립니다." },
           { kind: "list", items: [
-            "[[결재 종결 월]]을 고르면 그달에 결재가 끝난 개인 지출(지출 결의서·출장보고서의 개인 지출 행)을 사람별로 모아 [[이체액]]을 보여 줍니다. 법인카드 행은 빠집니다.",
-            "근태 관리의 식대 경고에서 불지급 처분한 행은 [[불지급 제외]]로 표시되고 합계에서 빠집니다. [[급여 차감]] 처분 행은 환급에 포함됩니다.",
-            "이 화면은 목록만 보여 줍니다. 실제 이체는 은행에서 직접 합니다.",
+            "식대 불지급 처분 건수와 급여 차감 표시는 개인 경비 정산 화면에서 봅니다.",
+            "직접 입력이 막히기 전에 승인된 출장보고서 수기 행·지출결의서(법인카드)의 카드 외 행은 그 화면의 ‘정산 범위 밖 과거 지출’에 조회로만 나옵니다.",
           ] },
-          { kind: "warn", text: "개인카드 경비 정산에서 일괄 정산한 행은 이 목록에서 빠지지만, 정산 전에는 두 화면에 모두 보입니다. 같은 지출을 두 번 이체하지 않도록 확인하세요." },
-          { kind: "link", article: "finance.expsettle", section: "run", label: "개인카드 경비 일괄 정산" },
+          { kind: "link", article: "finance.expsettle", section: "target", label: "개인 경비 정산 대상 보기" },
         ],
       },
     ],
     keywords: ["계좌 원장", "입출금", "법인카드", "카드 원장", "계정과목", "자동분류", "가맹점 고정", "사업자번호 정정", "경비 환급", "식대 불지급"],
-    sources: ["components/finance/FinanceBoard.tsx", "components/finance/CardMerchantCorrectionPanel.tsx", "components/finance/ReimbursePanels.tsx"],
+    sources: ["components/finance/FinanceBoard.tsx", "components/finance/CardMerchantCorrectionPanel.tsx"],
     reviewedAt: "2026-10-20",
   },
   {
@@ -830,11 +829,11 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
   {
     id: "finance.expsettle",
     chapter: "finance",
-    title: "경비 정산 — 개인카드 경비 일괄 정산·CMS와 퇴직 정산",
+    title: "경비 정산 — 개인 경비 일괄 정산·CMS와 퇴직 정산",
     routes: ["/finance?tab=expsettle", "/finance?tab=severance"],
     audience: ["exec", "admin"],
     summary: [
-      "[[개인카드 경비 정산]]은 결재가 끝난 개인카드 경비를 한 번에 정산하고, 은행 일괄이체용 CMS 파일을 만듭니다.",
+      "[[개인 경비 정산]]은 결재가 끝난 개인 경비(개인카드 영수증·기타 개인 지출증빙)를 한 번에 정산하고, 은행 일괄이체용 CMS 파일을 만듭니다. 개인 경비 이체 경로는 이 화면 하나입니다.",
       "세무사에게 부가세 증빙 묶음을 메일로 보낼 수 있습니다.",
       "[[퇴직 정산]]은 연차수당 지급 신청서가 승인되면 대상자가 자동으로 생기고, 퇴직금은 직접 적습니다.",
     ],
@@ -844,11 +843,13 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
         title: "정산 대상",
         blocks: [
           { kind: "list", items: [
-            "결재가 승인된 지출 결의서(개인카드)의 금액 행 전부",
-            "출장보고서 지출 내역 중 영수증이 연결된 개인카드 행",
+            "결재가 승인된 지출결의서(개인)의 지출 행 전부",
+            "출장보고서 지출 내역 중 개인카드 영수증·기타 개인 지출증빙으로 담은 행",
             "법인카드 행과, 근태 관리에서 불지급 처분한 식대는 빠집니다. 이미 정산한 행도 빠집니다.",
           ] },
-          { kind: "p", text: "[[미정산 개인카드 지출 (인별)]] 표에서 사람별 건수·지급대상액·계좌를 확인합니다. 계좌 미등록 경고가 나오면 사용자 등록의 인사관리 탭에서 계좌를 먼저 등록하세요." },
+          { kind: "p", text: "지출 행은 결재 기안에서 증빙을 불러와서만 만들므로, 개인이 쓴 경비는 모두 이 정산에 잡힙니다." },
+          { kind: "p", text: "[[미정산 개인 지출 (인별)]] 표에서 사람별 건수·지급대상액·계좌를 확인합니다. 계좌 미등록 경고가 나오면 사용자 등록의 인사관리 탭에서 계좌를 먼저 등록하세요. 불지급 처분으로 빠진 식대가 있으면 표 위에 건수와 금액이 나오고, [[상세]]에서는 급여 차감 처분 행에 [[급여 차감]] 표시가 붙습니다(정산에 포함, 회수는 급여대장 식대환수 공제)." },
+          { kind: "link", article: "approval.draft", section: "expense", label: "지출 내역 담는 방법(기안)" },
         ],
       },
       {
@@ -865,9 +866,17 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "CMS 파일은 KB 일괄이체 양식 엑셀입니다(은행코드·계좌·금액·예금주, 적요 ‘성명+직급+경비지급’). 계좌가 없는 사람은 빈칸으로 들어갑니다.",
             "[[재생성]]은 기존 파일을 덮어씁니다. 정산 뒤 원본 문서가 바뀌었거나 불지급 식대가 섞였으면 생성이 막힙니다.",
-            "부가세 자료는 지출결의서·출장보고서 개인카드 집계·영수증 PDF를 압축해 메일로 보냅니다.",
+            "부가세 자료는 지출결의서(개인)·출장보고서 개인 지출 집계와 영수증·증빙 PDF를 압축해 메일로 보냅니다.",
           ] },
           { kind: "warn", text: "일괄 정산은 기간을 고르지 않고 **미정산 전건**을 한 번에 처리하며 취소할 수 없습니다. 부가세 자료 발송도 되돌릴 수 없습니다." },
+        ],
+      },
+      {
+        id: "legacy",
+        title: "정산 범위 밖 과거 지출",
+        blocks: [
+          { kind: "p", text: "직접 입력이 막히기 전(2026-10-20 이전)에 승인된 출장보고서의 수기 행과 지출결의서(법인카드)의 카드 외 행(손으로 적은 행, 카드와 매칭되지 않은 쇼핑몰 전표 행)이 있으면 ‘정산 범위 밖 과거 지출’ 칸에 건수·금액이 나옵니다. 눌러 펼치면 문서·사용일·상호·금액을 봅니다." },
+          { kind: "warn", text: "이 행들은 일괄 정산에 들어가지 않고 조회만 됩니다. 법인카드 사용분을 손으로 적은 행일 수 있으니 원본 문서를 확인하고, 개인 지출이 맞으면 은행에서 개별 이체하세요." },
         ],
       },
       {
@@ -882,7 +891,7 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["경비 정산", "개인카드", "CMS", "일괄이체", "이체 파일", "부가세 자료", "세무사", "퇴직 정산", "퇴직금", "연차수당"],
+    keywords: ["경비 정산", "개인카드", "개인 경비", "경비 환급", "기타 개인 지출증빙", "CMS", "일괄이체", "이체 파일", "부가세 자료", "세무사", "퇴직 정산", "퇴직금", "연차수당"],
     sources: ["components/finance/ExpenseSettlementPanel.tsx", "components/finance/SeverancePanel.tsx", "components/finance/FinanceBoard.tsx"],
     reviewedAt: "2026-10-20",
   },

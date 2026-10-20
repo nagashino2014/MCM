@@ -505,7 +505,7 @@ export async function syncDocReceiptLinks(
                 related_contract_id = CASE WHEN $8 IS NOT NULL OR $9 IS NOT NULL THEN $8 ELSE related_contract_id END,
                 related_facility_id = CASE WHEN $8 IS NOT NULL OR $9 IS NOT NULL THEN $9 ELSE related_facility_id END,
                 updated_at = $5
-          WHERE receipt_id = $1 AND owner_user_id = $6`,
+          WHERE receipt_id = $1 AND owner_user_id = $6 AND (doc_id IS NULL OR doc_id = $2)`, // 1회 연결(G-8): 다른 문서의 영수증을 빼앗지 않는다
         [ref.receiptId, docId, formId, categoryKey, now, actorUserId, ref.purpose, ref.relatedContractId, ref.relatedFacilityId],
       );
       if (categoryKey) {

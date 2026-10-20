@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { missingTableRequirements, parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { checkExpenseRowSources } from "@/lib/approval/expense-sources-check";
 import { getForm } from "@/lib/approval/forms";
 import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
@@ -715,7 +716,7 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
       await txn.exec(
-        `SELECT d.status, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name, f.fields,
+        `SELECT d.status, d.form_id, d.drafter_user_id, d.doc_no, f.doc_no_rule, f.name AS form_name, f.fields,
                 d.field_values, d.field_values->>'service_type' AS quote_service_type
            FROM approval_docs d JOIN approval_forms f ON f.form_id = d.form_id
           WHERE d.doc_id = $1`,
@@ -734,6 +735,15 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
       (doc.field_values as Record<string, unknown> | null) ?? {},
     );
     if (rowMissing.length) throw new Error(`다음 항목을 입력하세요 — ${rowMissing.join(" / ")}`);
+    // 지출 표 행 출처(G-8) — 저장 때 검사했어도 그 뒤 증빙이 다른 문서에 쓰였을 수 있으므로 상신 시점에 다시 본다.
+    const sourceIssues = await checkExpenseRowSources({
+      docId,
+      formId: String(doc.form_id),
+      fieldValues: (doc.field_values as Record<string, unknown> | null) ?? {},
+      drafterUserId: actorUserId,
+      db: txn,
+    });
+    if (sourceIssues.length) throw new Error(`지출 내역은 불러오기로만 담을 수 있습니다 — ${sourceIssues.join(" / ")}`);
 
     const now = new Date().toISOString();
     const year = now.slice(0, 4);

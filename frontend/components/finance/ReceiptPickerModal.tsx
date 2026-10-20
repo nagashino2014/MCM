@@ -4,13 +4,15 @@
 // 지출결의서·출장보고서 기안 화면에서 본인이 촬영해 둔 미사용 영수증을 다중 선택해 지출 내역 표로 넘긴다.
 // CardPickerModal(법인카드)의 형제 — 목록이 "본인 영수증"이라는 점과, 선택 시 증빙 PDF 가
 // 첨부서류에 자동 추가된다는 점만 다르다. 썸네일 클릭으로 원본 이미지를 확인할 수 있다.
-// 탭 2종(2026-09-15 사용자 요청): '모바일앱 첨부'(촬영 스톡) / '직접 첨부'(계좌이체 확인증·수기 전표 등
-// 스캔본을 여러 건 올리며 상호·사용일·금액·지불수단·지출 목적을 직접 입력 — 저장 즉시 표에 담긴다).
+// 모드 2종 — 기안 화면의 버튼이 각각 연다(G-8, 2026-10-20 사용자 확정. 종전 한 창의 탭 2종을 분리):
+//   mobile = [개인카드 영수증 불러오기] — 모바일 앱으로 촬영해 둔 영수증 스톡
+//   manual = [기타 개인 지출증빙] — 계좌이체 확인증·수기 영수증 등 카드 영수증이 아닌 증빙(웹 전용).
+//            스캔본(이미지·PDF)을 올리며 거래처·사용일·금액·지불수단·지출 목적을 입력하면 저장 즉시 표에 담긴다.
+//            등록해 두고 쓰지 않은 증빙은 목록에서 골라 담거나 삭제한다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, AlertTriangle, FileText, Plus, Trash2, Upload, Loader2, HelpCircle } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
-import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { RelatedCellButton } from "@/components/approval/RelatedPicker";
 import { PURPOSE_HINTS, purposeNeedsRelated, type RelatedRef } from "@/lib/approval/expense-purpose";
@@ -56,7 +58,8 @@ interface ManualDraft {
   related: RelatedRef | null;
 }
 
-const PAY_METHODS = ["현금", "계좌이체", "개인카드", "기타"];
+// 개인카드 영수증은 모바일 촬영으로 올린다(G-8) — 기타 증빙의 새 등록에서는 고르지 않는다.
+const PAY_METHODS = ["계좌이체", "현금", "기타"];
 
 /** 입력용 YYYY-MM-DD (KST 기준) — toISOString 은 UTC 라, 오전 9시 이전에는 "오늘"이 하루 밀려
  *  그날 찍은 영수증이 조회 범위에서 빠졌다. 저장 값(KST)과 기준을 맞춘다. */
@@ -75,6 +78,7 @@ const newDraft = (related: RelatedRef | null = null): ManualDraft => ({
 });
 
 export function ReceiptPickerModal({
+  mode,
   open,
   onClose,
   formId,
@@ -85,6 +89,8 @@ export function ReceiptPickerModal({
   lockedPeriod,
   relatedLocked,
 }: {
+  /** mobile = 개인카드 영수증(촬영 스톡) / manual = 기타 개인 지출증빙(웹 등록) */
+  mode: "mobile" | "manual";
   open: boolean;
   onClose: () => void;
   formId: string;
@@ -100,7 +106,7 @@ export function ReceiptPickerModal({
   /** 출장보고서 — 연관 용역/사업장은 문서의 업체·용역(defaultRelated)으로 고정, 행마다 고르지 않는다(2026-10-17 사용자 요청) */
   relatedLocked?: boolean;
 }) {
-  const [tab, setTab] = useState<"mobile" | "manual">("mobile");
+  const tab = mode;
   const [from, setFrom] = useState(() => ymdInput(Date.now() - 90 * 86400000));
   const [to, setTo] = useState(() => ymdInput(Date.now()));
   /** 기간 무시하고 전부 — 사용일이 잘못 인식된 건을 찾을 때 쓴다. */
@@ -155,7 +161,6 @@ export function ReceiptPickerModal({
   // 열 때마다 초기화 — 출장보고서의 용역/사업장이 그 사이 바뀌었을 수 있어 연 시점 값으로 기본값을 잡는다.
   useEffect(() => {
     if (open) {
-      setTab("mobile");
       setDrafts([newDraft(defaultRelated ?? null)]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,9 +232,9 @@ export function ReceiptPickerModal({
   const uploadManual = async () => {
     const rows = activeDrafts;
     if (!rows.length) return;
-    const missing = rows.find((d) => !d.file || !d.storeName.trim() || !(Number(d.totalAmount.replace(/[^\d]/g, "")) > 0));
+    const missing = rows.find((d) => !d.file || !d.storeName.trim() || !d.paidAt || !(Number(d.totalAmount.replace(/[^\d]/g, "")) > 0));
     if (missing) {
-      alert("각 행에 증빙 파일·상호·금액을 입력하세요.");
+      alert("각 행에 증빙 파일·거래처·사용일·금액을 입력하세요.");
       return;
     }
     if (rows.some((d) => !d.purpose)) {
@@ -267,7 +272,7 @@ export function ReceiptPickerModal({
       );
       const res = await fetch("/api/receipts/manual", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "직접 첨부 저장 실패");
+      if (!res.ok) throw new Error((data as { error?: string })?.error ?? "기타 개인 지출증빙 저장 실패");
       const saved = ((data as { items?: ReceiptPickerItem[] }).items ?? []);
       if (saved.length) {
         onPick(saved);
@@ -280,6 +285,23 @@ export function ReceiptPickerModal({
     }
   };
 
+  // 등록해 두고 쓰지 않은 기타 증빙 삭제 — 문서에 담긴 증빙은 서버가 거부한다.
+  const removeManual = async (item: ReceiptPickerItem) => {
+    if (!confirm(`${item.paidDate ?? ""} ${item.storeName ?? ""} ${item.totalAmount.toLocaleString("ko-KR")}원 증빙을 삭제할까요?`)) return;
+    const res = await fetch(`/api/receipts/${item.receiptId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((data as { error?: string })?.error ?? "삭제하지 못했습니다.");
+      return;
+    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(item.receiptId);
+      return next;
+    });
+    await load();
+  };
+
   const fmtAmount = (s: string) => {
     const n = Number(s.replace(/[^\d]/g, ""));
     return n > 0 ? n.toLocaleString("ko-KR") : "";
@@ -289,16 +311,24 @@ export function ReceiptPickerModal({
     <CdModal
       open={open}
       onClose={onClose}
-      title={tab === "manual" ? "영수증 직접 첨부" : "개인카드 영수증 불러오기"}
+      title={tab === "manual" ? "기타 개인 지출증빙" : "개인카드 영수증 불러오기"}
       size="xl"
       footer={
         tab === "manual" ? (
           <>
             <span className="text-xs cd-text-muted mr-auto">
-              {activeDrafts.length}건 입력 — 저장하면 표 행과 첨부서류에 바로 추가됩니다
+              새 증빙 {activeDrafts.length}건 입력 · 목록 {selectedItems.length}건 선택 — 증빙 PDF가 첨부서류에 함께 추가됩니다
+              {incomplete.length > 0 && (
+                <span className="ml-1.5" style={{ color: "var(--cd-error)" }}>
+                  · 입력 필요 {incomplete.length}건
+                </span>
+              )}
             </span>
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>
               취소
+            </button>
+            <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={selectedItems.length === 0} onClick={submit}>
+              선택 건 표에 추가
             </button>
             <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" disabled={uploading || !activeDrafts.length} onClick={() => void uploadManual()}>
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} 저장 후 표에 추가
@@ -325,26 +355,12 @@ export function ReceiptPickerModal({
       }
     >
       <div className="space-y-3">
-        {/* 탭 — 모바일앱 첨부 / 직접 첨부. 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
-        <CdTabs<"mobile" | "manual">
-          active={tab}
-          onChange={(k) => {
-            setTab(k);
-            setSelected(new Set());
-            setPreview(null);
-          }}
-          items={[
-            { key: "mobile", label: "모바일앱 첨부" },
-            { key: "manual", label: "직접 첨부" },
-          ]}
-        />
-
         {tab === "manual" && (
           <div className="rounded-xl border cd-border-c px-3.5 py-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold cd-text">새로 올리기</span>
+              <span className="text-xs font-bold cd-text">새로 등록</span>
               <span className="text-[11px] cd-text-faint">
-                현금 계좌이체 확인증·수기 전표 등의 스캔본(이미지·PDF)을 건별로 올리고 내역을 입력하세요. 여러 건을 한 번에 저장할 수 있습니다.
+                계좌이체 확인증·수기 영수증 등 카드 영수증이 아닌 증빙의 스캔본(이미지·PDF)을 건별로 올리고 내역을 입력하세요. 개인카드 영수증은 모바일 앱으로 촬영합니다.
               </span>
               <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-auto" onClick={() => setDrafts((p) => [...p, newDraft(defaultRelated ?? null)])}>
                 <Plus className="w-3.5 h-3.5" /> 행 추가
@@ -355,8 +371,8 @@ export function ReceiptPickerModal({
                 <thead className="cd-table-head">
                   <tr className="cd-text-muted text-left text-[11px]">
                     <th className="py-1.5 pr-2 font-normal">증빙 파일 *</th>
-                    <th className="py-1.5 pr-2 font-normal">상호 *</th>
-                    <th className="py-1.5 pr-2 font-normal">사용일</th>
+                    <th className="py-1.5 pr-2 font-normal">거래처 *</th>
+                    <th className="py-1.5 pr-2 font-normal">사용일 *</th>
                     <th className="py-1.5 pr-2 font-normal text-right">금액 *</th>
                     <th className="py-1.5 pr-2 font-normal">지불수단</th>
                     <th className="py-1.5 pr-2 font-normal">지출 목적 *</th>
@@ -462,7 +478,7 @@ export function ReceiptPickerModal({
           </button>
           <span className="text-[11px] cd-text-faint ml-auto">
             {tab === "manual"
-              ? "이전에 직접 첨부해 둔 미사용 증빙 — 골라서 표에 추가할 수 있습니다"
+              ? "등록해 두고 아직 쓰지 않은 기타 증빙 — 골라서 표에 추가하거나 삭제할 수 있습니다"
               : lockedPeriod
                 ? '모바일 앱 "영수증 촬영"으로 찍어둔 본인 영수증 중 출장기간에 쓴 건만 표시됩니다'
                 : '모바일 앱 "영수증 촬영"으로 찍어둔 본인 영수증만 표시됩니다 — 안 보이면 [전체 기간]으로 조회하세요'}
@@ -544,6 +560,19 @@ export function ReceiptPickerModal({
                     <td className="py-1.5 pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
                       {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
+                      {tab === "manual" && !used && (
+                        <button
+                          type="button"
+                          className="cd-action ml-1.5 align-[-2px] cd-text-faint hover:text-[color:var(--cd-error)]"
+                          title="이 증빙 삭제"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void removeManual(item);
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </td>
                     <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.totalAmount.toLocaleString("ko-KR")}</td>
                     <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
@@ -604,7 +633,7 @@ export function ReceiptPickerModal({
                 <tr>
                   <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">
                     {tab === "manual"
-                      ? "직접 첨부해 둔 미사용 증빙이 없습니다. 위에서 파일과 내역을 입력해 저장하세요."
+                      ? "등록해 둔 미사용 증빙이 없습니다. 위에서 파일과 내역을 입력해 저장하세요."
                       : lockedPeriod
                         ? "출장기간에 쓴 영수증이 없습니다. 사용일이 잘못 인식된 영수증은 영수증 보관함에서 사용일을 고쳐 주세요."
                         : '선택 가능한 영수증이 없습니다. 모바일 앱 홈의 "영수증 촬영"으로 지류 영수증을 찍어 두면 여기에 표시됩니다.'}

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       ordinaryHourlyWages(),
     ]);
     const byEmployee = [...amounts.entries()]
-      .filter(([, v]) => v.amount > 0 || v.cappedMin > 0)
+      .filter(([, v]) => v.amount > 0 || v.cappedMin > 0 || v.excessDayMin + v.excessNightMin > 0)
       .map(([employeeId, v]) => ({
         employeeId,
         name: rows.find((r) => r.employeeId === employeeId)?.name ?? "",

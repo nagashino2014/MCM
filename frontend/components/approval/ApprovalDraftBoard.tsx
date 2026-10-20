@@ -601,7 +601,7 @@ export function ApprovalDraftBoard() {
     } else if (usedMin + applyMin > otUsage.limitMinutes) {
       setOtHint(
         `⚠ 주 12시간 초과 — 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h = ${fmtH(usedMin + applyMin)}h (한도 ${fmtH(otUsage.limitMinutes)}h). ` +
-          `승인 후 실제 근태와 대조해 초과분이 인정되면 특별휴가(대체휴가)로 산정됩니다.`
+          `승인 후 실제 근태와 대조해 주 12시간을 넘는 인정분은 수당 대신 특별휴가(대체휴가)로 산정됩니다.`
       );
     } else {
       setOtHint(`이번 주 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`);
@@ -1211,7 +1211,7 @@ export function ApprovalDraftBoard() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Draft"
         title={form ? `기안 작성 — ${form.name}` : "기안 작성"}
-        help="결재가 완료된 문서의 입력 항목은 문서 기록에서 조회·집계할 수 있습니다."
+        help="양식 항목을 입력하고 결재선에 합의·승인 결재자를 추가하세요. 상신하면 결재선 위에서 아래 순서로 한 명씩 결재가 진행됩니다. 참조·열람자는 결재하지 않고, 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 작성 내용은 자동 저장되지 않으니 [임시저장]을 눌러 보관하세요."
         actions={
           <div className="flex items-center gap-2">
             <DeleteDraftButton docId={docId} meta={editMeta} />

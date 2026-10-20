@@ -328,7 +328,7 @@ const dailyGrid = { display: "grid", gridTemplateColumns: "1.2fr 0.9fr 0.9fr 1fr
 /* ================= 신청 대조 ================= */
 interface MatchResponse {
   rows: OvertimeMatchRow[];
-  byEmployee: Array<{ employeeId: string; name: string; hourlyWage: number | null; amount: number; dayMin: number; nightMin: number; cappedMin: number; basis: string }>;
+  byEmployee: Array<{ employeeId: string; name: string; hourlyWage: number | null; amount: number; dayMin: number; nightMin: number; cappedMin: number; basis: string; excessDayMin: number; excessNightMin: number }>;
   summary: { docs: number; absent: number; short: number; noRecord: number; requestedHours: number; actualHours: number };
 }
 
@@ -404,6 +404,7 @@ function MatchPanel() {
       <p className="text-[13px] cd-text-muted">
         승인된 <b>초과근무 신청서</b>와 <b>실제 근태 기록</b>을 일자별로 대조합니다. 인정 시간은 개인별 소정근로 종료 시각(산정 정책 탭) 이후의
         실제 재실 시간 중 <b>신청 시간을 상한</b>으로 산정됩니다. 지문 미태그 등 확인된 건은 <b>예외 승인</b>으로 신청 시간을 전량 인정할 수 있습니다.
+        한 주 인정 시간이 <b>주 연장 한도(12시간)</b>를 넘으면 넘는 시간은 수당에서 빼고 <b>대체휴가</b>로 부여합니다.
       </p>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -454,6 +455,11 @@ function MatchPanel() {
                     <span className="cd-text-faint">{toH(e.dayMin + e.nightMin)}h</span>
                     {e.cappedMin > 0 && (
                       <span className="font-mono" style={{ color: "var(--cd-error)" }}>-{toH(e.cappedMin)}h</span>
+                    )}
+                    {e.excessDayMin + e.excessNightMin > 0 && (
+                      <span className="font-mono" style={{ color: "var(--cd-warning)" }} title="주 연장 한도 초과 — 수당 대신 대체휴가로 부여">
+                        휴가 {toH(e.excessDayMin + e.excessNightMin)}h
+                      </span>
                     )}
                   </span>
                 ))}
@@ -938,7 +944,7 @@ function SettingsPanel() {
         <p className="text-[13px] cd-text-muted">사규 기준 자체 산정 정책입니다. 규정 변경 시 여기서 조정하면 다음 재산정부터 반영됩니다.</p>
       <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-2 gap-4">
         {numField("weeklyStandardMinutes", "주 소정근로(분)", "40h = 2400")}
-        {numField("weeklyOvertimeLimitMinutes", "주 연장 한도(분)", "12h = 720, 초과분=특별휴가")}
+        {numField("weeklyOvertimeLimitMinutes", "주 연장 한도(분)", "12h = 720, 초과분=수당 대신 특별휴가")}
         {numField("dailyStandardMinutes", "1일 소정(분)", "참고, 8h = 480")}
         {numField("breakMinutes", "휴게 공제(분)", "재실에서 차감")}
         <label className="flex flex-col gap-1">

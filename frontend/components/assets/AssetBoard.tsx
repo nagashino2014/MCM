@@ -1,17 +1,20 @@
 "use client";
 
-// 자산 관리(/assets, asset.manage) — 예약 가능 자산(법인차량·회의실 등) 마스터 편집.
+// 자산 관리(/assets) — 예약 가능 자산(법인차량·회의실 등) 마스터. 조회는 전 직원(출장신청서 차량 선택·서류 열람),
+// 등록·수정·삭제·서류 업로드는 asset.manage 보유자만(API 와 같은 키, 2026-10-20 F-3).
 // 좌측 종류 카드(법인차량/회의실/기타) + 우측 리스트(휴가 종류 규정 화면과 같은 레이아웃).
 // 회의실·기타는 인라인 편집으로 충분하고, 법인차량은 상세 모달(129 — 차량번호·소유 유형·
 // 취득/반납·계약서/등록증 PDF)로 관리한다. 예약 이력이 있는 자산은 삭제 대신 비활성화된다.
 // 설계: docs/groupware-ux-overhaul-blueprint.md §7 + 차량 상세(129).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { FileText, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import {
   ASSET_KIND_LABELS,
   COMPANY_OWNER_NAME,
@@ -34,6 +37,8 @@ interface SimpleDraft {
 
 export function AssetBoard() {
   const { theme } = useCdashTheme();
+  const { data: session } = useSession();
+  const canManage = hasPerm(permsOf(session?.user), "asset.manage");
   const [assets, setAssets] = useState<ReservableAsset[]>([]);
   const [activeKind, setActiveKind] = useState<AssetKind>("vehicle");
   const [drafts, setDrafts] = useState<Record<string, SimpleDraft>>({});
@@ -151,8 +156,8 @@ export function AssetBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="자산 관리"
-        help="법인차량은 출장신청서에서 선택합니다. 회의실·기타 자산은 이용 현황에서 예약합니다. 차량 서류는 상세 정보에서 등록하고 목록에서 열람할 수 있습니다."
-        meta={`${assets.length}개 자산 · 사용 ${assets.filter((a) => a.active).length}`}
+        help="법인차량은 출장신청서에서 선택합니다. 회의실·기타 자산은 이용 현황에서 예약합니다. 차량 서류는 상세 정보에서 등록하고 목록에서 열람할 수 있습니다. 자산 등록·수정·삭제와 서류 업로드는 자산 관리 권한(asset.manage)이 있어야 합니다."
+        meta={`${assets.length}개 자산 · 사용 ${assets.filter((a) => a.active).length}${canManage ? "" : " · 조회 전용"}`}
       />
       {error && <p className="text-sm cd-error-text">{error}</p>}
 
@@ -263,20 +268,22 @@ export function AssetBoard() {
                             <input
                               type="checkbox"
                               checked={a.active}
-                              disabled={busy === a.assetId}
+                              disabled={!canManage || busy === a.assetId}
                               onChange={(e) => patchAsset(a.assetId, { active: e.target.checked })}
                             />
                           </td>
                           <td className="py-2">
-                            <button
-                              type="button"
-                              className="cd-text-faint hover:cd-error-text disabled:opacity-40"
-                              title="삭제"
-                              disabled={busy === a.assetId}
-                              onClick={() => removeRow(a)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canManage && (
+                              <button
+                                type="button"
+                                className="cd-text-faint hover:cd-error-text disabled:opacity-40"
+                                title="삭제"
+                                disabled={busy === a.assetId}
+                                onClick={() => removeRow(a)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -290,13 +297,15 @@ export function AssetBoard() {
                     </tbody>
                   </table>
                 </div>
-                <button
-                  type="button"
-                  className="cd-btn rounded-xl border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex items-center gap-1.5 self-start"
-                  onClick={() => setVehicleModal("new")}
-                >
-                  <Plus className="w-3.5 h-3.5" /> 차량 추가
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="cd-btn rounded-xl border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex items-center gap-1.5 self-start"
+                    onClick={() => setVehicleModal("new")}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 차량 추가
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -320,6 +329,7 @@ export function AssetBoard() {
                               <input
                                 className="cd-input"
                                 style={{ width: 180 }}
+                                readOnly={!canManage}
                                 value={d.name}
                                 onChange={(e) => setDraft(a.assetId, { name: e.target.value })}
                               />
@@ -327,6 +337,7 @@ export function AssetBoard() {
                             <td className="py-1 pr-2">
                               <input
                                 className="cd-input w-full min-w-[160px]"
+                                readOnly={!canManage}
                                 value={d.description}
                                 onChange={(e) => setDraft(a.assetId, { description: e.target.value })}
                               />
@@ -335,10 +346,12 @@ export function AssetBoard() {
                               <input
                                 type="checkbox"
                                 checked={d.active}
+                                disabled={!canManage}
                                 onChange={(e) => setDraft(a.assetId, { active: e.target.checked })}
                               />
                             </td>
                             <td className="py-1">
+                              {canManage && (
                               <span className="flex items-center gap-1.5">
                                 <button
                                   type="button"
@@ -364,6 +377,7 @@ export function AssetBoard() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -375,7 +389,8 @@ export function AssetBoard() {
                           </td>
                         </tr>
                       )}
-                      {/* 신규 등록 행 */}
+                      {/* 신규 등록 행 — asset.manage 보유자만 */}
+                      {canManage && (
                       <tr className="border-t cd-border-c">
                         <td className="py-2 pr-2">
                           <input
@@ -405,6 +420,7 @@ export function AssetBoard() {
                           </button>
                         </td>
                       </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -421,6 +437,7 @@ export function AssetBoard() {
       {(vehicleModal === "new" || modalAsset != null) && (
         <VehicleDetailModal
           asset={vehicleModal === "new" ? null : modalAsset}
+          canManage={canManage}
           onClose={() => setVehicleModal(null)}
           onSaved={async () => {
             await load();
@@ -468,6 +485,7 @@ function formFromAsset(a: ReservableAsset | null): VehicleForm {
 
 function VehicleDetailModal({
   asset,
+  canManage,
   onClose,
   onSaved,
   onCreated,
@@ -475,6 +493,8 @@ function VehicleDetailModal({
 }: {
   /** null = 신규 등록 모드 */
   asset: ReservableAsset | null;
+  /** false = 조회 전용(asset.manage 없음) — 입력 비활성·저장/업로드 숨김 */
+  canManage: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
   /** 신규 등록 완료 — 부모가 편집 모드로 전환해 서류 업로드를 이어서 할 수 있게 한다. */
@@ -588,19 +608,22 @@ function VehicleDetailModal({
           <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs" onClick={onClose}>
             닫기
           </button>
-          <button
-            type="button"
-            className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
-            disabled={saving}
-            onClick={save}
-          >
-            <Save className="w-3.5 h-3.5 inline mr-1" />
-            {saving ? "저장 중..." : isNew ? "등록" : "저장"}
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50"
+              disabled={saving}
+              onClick={save}
+            >
+              <Save className="w-3.5 h-3.5 inline mr-1" />
+              {saving ? "저장 중..." : isNew ? "등록" : "저장"}
+            </button>
+          )}
         </>
       }
     >
       <div className="flex flex-col gap-3">
+        <fieldset disabled={!canManage} className="min-w-0 border-0 p-0 m-0">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {field(
             "차종",
@@ -687,6 +710,7 @@ function VehicleDetailModal({
             <input className="cd-input" value={form.description} onChange={(e) => set({ description: e.target.value })} />
           )}
         </div>
+        </fieldset>
 
         {/* 서류 등록 — 계약서 / 차량 등록증 */}
         <div className="rounded-xl border border-dashed cd-border-c p-3 flex flex-col gap-2">
@@ -695,6 +719,7 @@ function VehicleDetailModal({
             <p className="text-[11.5px] cd-text-faint">차량을 먼저 등록(저장)한 뒤 서류를 업로드할 수 있습니다.</p>
           ) : (
             <>
+              {canManage && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <select
                   className="cd-select shrink-0"
@@ -721,6 +746,7 @@ function VehicleDetailModal({
                   <Upload className="w-3.5 h-3.5" /> {uploading ? "업로드 중..." : "업로드"}
                 </button>
               </div>
+              )}
               <div className="flex flex-col gap-1">
                 {(["contract", "registration"] as const).map((t) => {
                   const key = t === "contract" ? asset.contractDocKey : asset.registrationDocKey;
@@ -742,7 +768,7 @@ function VehicleDetailModal({
                   );
                 })}
               </div>
-              <p className="text-[10px] cd-text-faint">같은 종류를 다시 업로드하면 기존 파일을 교체합니다.</p>
+              {canManage && <p className="text-[10px] cd-text-faint">같은 종류를 다시 업로드하면 기존 파일을 교체합니다.</p>}
             </>
           )}
         </div>

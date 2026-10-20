@@ -311,8 +311,12 @@ export default function BonusStatementsBoard() {
   const periodLabel = `${year}년 ${half === "H1" ? "상반기" : "하반기"}`;
 
   // 명세서 발송 게이트 — 성과급 기안이 승인된 뒤에만 발송(2026-08-31 사용자 확정).
+  // 기안 후 재산정·배분 조정으로 금액이 바뀌면 승인 상태여도 막는다(F-20) — 기안 금액과 다른 명세 발송 방지.
+  const planStale = plan != null && plan.mismatchCount > 0;
   const sendBlockReason = !plan
     ? "성과급 기안을 먼저 생성·상신하고 승인받아야 발송할 수 있습니다."
+    : planStale
+      ? `기안 금액과 현재 산정 결과가 ${plan.mismatchCount}건 다릅니다. 성과급 재기안·승인 후 발송할 수 있습니다.`
     : plan.status === "approved"
       ? null
       : plan.status === "rejected"
@@ -361,12 +365,19 @@ export default function BonusStatementsBoard() {
                     target="_blank"
                     rel="noreferrer"
                     className="cd-action text-[11px] font-semibold rounded-lg px-2 py-1.5 border cd-border-c inline-flex items-center gap-1 whitespace-nowrap"
-                    style={plan.status === "approved" ? { color: "var(--cd-success)" } : { color: "var(--cd-primary)" }}
-                    title="성과급 기안 문서 열기"
+                    style={
+                      planStale
+                        ? { color: "var(--cd-warning)" }
+                        : plan.status === "approved"
+                          ? { color: "var(--cd-success)" }
+                          : { color: "var(--cd-primary)" }
+                    }
+                    title={planStale ? sendBlockReason ?? undefined : "성과급 기안 문서 열기"}
                   >
                     <ExternalLink className="w-3 h-3" />
                     기안 {PLAN_STATUS_LABELS[plan.status] ?? plan.status}
                     {plan.docNo ? ` · ${plan.docNo}` : ""}
+                    {planStale ? " · 재기안 필요" : ""}
                   </a>
                 )}
               </>

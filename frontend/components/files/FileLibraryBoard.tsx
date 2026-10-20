@@ -79,7 +79,7 @@ function ymNow(): string {
   return ymAgo(0);
 }
 
-/** 저장 정책 기준 보존기간 경과 여부 — 목록의 '경과' 배지용(1차는 표시까지, 자동 삭제는 후속). */
+/** 저장 정책 기준 보존기간 경과 여부 — 목록의 '경과' 배지용(자동 삭제는 /api/internal/file-retention-tick 이 매일 수행). */
 function isExpired(row: FileRow, policies: RetentionPolicies | null): boolean {
   if (!policies || !row.uploadedAt) return false;
   const size = row.byteSize ?? 0;
@@ -482,7 +482,7 @@ export function FileLibraryBoard() {
         )}
       </div>
 
-      {/* 파일 저장 정책 — 크기 구간별 보존기간(설정 저장 + 목록 '경과' 표시. 자동 삭제 배치는 후속) */}
+      {/* 파일 저장 정책 — 크기 구간별 보존기간(설정 저장 + 목록 '경과' 표시 + 매일 자동 삭제 틱) */}
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         <div>
           <div className="flex items-center gap-1 font-semibold">
@@ -490,7 +490,7 @@ export function FileLibraryBoard() {
             <CdHelp topic="files.retention" />
           </div>
           <div className="cd-text-faint text-xs mt-0.5">
-            크기 구간별 보존기간을 설정합니다. 보존기간이 지난 파일은 목록에 &lsquo;보존기간 경과&rsquo;로 표시됩니다.
+            크기 구간별 보존기간을 설정합니다. 보존기간이 지난 파일은 목록에 &lsquo;보존기간 경과&rsquo;로 표시되고, 매일 1회 자동 삭제됩니다(복구 불가, 하루 최대 1,000건).
           </div>
         </div>
         <div className="flex flex-col gap-3">

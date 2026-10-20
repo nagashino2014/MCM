@@ -311,7 +311,7 @@ export default function CardScreen() {
         </Pressable>
         <Text className="text-base font-extrabold text-cd-text">명함 촬영</Text>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
           <View className="rounded-xl bg-cd-error-soft px-4 py-3">
             <Text className="text-sm text-cd-error">{error}</Text>

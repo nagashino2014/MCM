@@ -189,7 +189,7 @@ export function AutomationSheet({ board, visible, onClose }: { board: TodoBoard;
 
   return (
     <Sheet visible={visible} onClose={onClose} title={`자동화 — ${board.name}`} fillHeight={0.9}>
-      <ScrollView className="flex-1" contentContainerStyle={{ gap: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ gap: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         <Text className="text-[12px] text-cd-muted">할 일이 바뀔 때 보드가 대신 처리합니다. 규칙이 일으킨 변경은 다른 규칙을 다시 타지 않습니다.{!canEdit ? ' (보드 관리자만 편집)' : ''}</Text>
 
         <View className="gap-1.5">

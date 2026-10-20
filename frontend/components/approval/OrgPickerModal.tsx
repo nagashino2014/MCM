@@ -1,7 +1,7 @@
 "use client";
 
 // 조직도 인원 선택 모달(공용, G3) — 결재선/참조·열람(기안 작성)과 양식 user_select 필드가 공유한다.
-// 스냅샷(/api/sales/org)은 모듈 캐시로 세션 중 1회만 로드한다(모달을 여러 곳에서 열어도 재요청 없음).
+// 스냅샷(/api/org/snapshot, 전 직원)은 모듈 캐시로 세션 중 1회만 로드한다(모달을 여러 곳에서 열어도 재요청 없음).
 
 import { useEffect, useState, type ReactNode } from "react";
 import { CdModal } from "@/components/cdash/CdModal";
@@ -38,7 +38,7 @@ export function OrgPickerModal({
   useEffect(() => {
     if (!open || snapshotCache) return;
     let cancelled = false;
-    fetch("/api/sales/org", { cache: "no-store" })
+    fetch("/api/org/snapshot", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && !cancelled) {

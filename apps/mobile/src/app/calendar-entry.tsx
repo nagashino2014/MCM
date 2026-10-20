@@ -250,8 +250,8 @@ export default function CalendarEntryScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
       <ScreenHeader title={heading} back variant="sub" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView enabled={false} className="flex-1">
+        <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
           {loading ? (
             <Text className="text-[13px] text-cd-faint">불러오는 중…</Text>
           ) : (

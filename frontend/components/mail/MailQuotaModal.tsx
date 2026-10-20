@@ -36,7 +36,7 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
   const load = useCallback(async () => {
     try {
       const [orgRes, mbRes] = await Promise.all([
-        fetch("/api/sales/org", { cache: "no-store" }),
+        fetch("/api/org/snapshot", { cache: "no-store" }),
         fetch("/api/mail/settings?list=1", { method: "PUT" }),
       ]);
       if (orgRes.ok) setSnapshot((await orgRes.json()) as OrganizationSnapshot);

@@ -474,7 +474,7 @@ export default function DraftScreen() {
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-cd-bg">
         <ScreenHeader title="기안 작성" subtitle="양식을 선택하세요" back />
-        <ScrollView contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}>
           {forms.loading && !all.length ? (
             <SkeletonList count={3} />
           ) : !all.length ? (
@@ -516,7 +516,7 @@ export default function DraftScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
         keyboardVerticalOffset={90}>
-        <ScrollView contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+        <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
           {form.loading && !def ? (
             <SkeletonList count={4} />
           ) : !def ? (

@@ -142,7 +142,7 @@ export default function MailComposeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
         keyboardVerticalOffset={90}>
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
           <RecipientField label="받는 사람" value={to} onChange={setTo} autoFocus={!quoteOf} />
 
           {showCc ? (

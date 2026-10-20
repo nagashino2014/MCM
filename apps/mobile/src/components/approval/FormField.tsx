@@ -530,7 +530,7 @@ export function FormField({
       />
       <Sheet visible={sheet === 'select'} onClose={() => setSheet(null)} title={f.label}>
         {/* 옵션 수는 양식에 따라 무제한 — 휴가 종류 시트와 같은 스크롤 패턴(잘림 방지). */}
-        <ScrollView style={{ maxHeight: 480, flexShrink: 1 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets style={{ maxHeight: 480, flexShrink: 1 }}>
           <View className="gap-1 pb-2">
           {(f.options ?? []).map((o) => (
             <Pressable
@@ -619,7 +619,7 @@ function LeaveTypeField({
       <Sheet visible={open} onClose={onClose} title="휴가 종류">
         {/* 종류가 시트 최대 높이(85%)를 넘으면 잘리므로 스크롤 영역으로 감싼다(2026-08-10 사용자 리포트).
             flexShrink 1 — Sheet 의 shrink 컨테이너 안에서 기기 높이에 맞게 줄어들며 스크롤. */}
-        <ScrollView style={{ maxHeight: 480, flexShrink: 1 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets style={{ maxHeight: 480, flexShrink: 1 }}>
           <View className="gap-1 pb-2">
             {types.map((t) => (
             <Pressable

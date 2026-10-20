@@ -236,7 +236,7 @@ export default function ReceiptsScreen() {
       />
       <SegmentedTabs items={TABS} value={tab} onChange={setTab} />
 
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={<PullRefresh refreshing={list.refreshing} onRefresh={() => void list.reload()} />}>
         {list.loading ? (
@@ -342,7 +342,7 @@ export default function ReceiptsScreen() {
           </>
         }>
         {editing ? (
-          <ScrollView contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+          <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
             <Image
               source={{ uri: `${API_BASE_URL}/api/receipts/${editing.receiptId}/image`, headers: authHeaders }}
               style={{ width: '100%', height: 180, borderRadius: 14, backgroundColor: c.gridLine }}

@@ -16,7 +16,8 @@ import { useTheme } from '@/theme/useTheme';
  * - 지시(directive)는 목록 API 가 부서 id 필수라 제외. 401/403 은 "권한이 없어 검색할 수 없습니다".
  */
 
-export type LinkPickKind = Exclude<TodoLinkKind, 'directive'>;
+// 메일·메신저 연결(286)은 메일·메신저 화면의 [할 일로] 버튼으로만 만든다 — 피커 대상 아님(웹 LinkPickerModal 과 같음)
+export type LinkPickKind = Exclude<TodoLinkKind, 'directive' | 'mail' | 'chat'>;
 const KINDS: LinkPickKind[] = ['contract', 'facility', 'approval_doc', 'sales_project', 'work_task', 'url'];
 const ICON: Record<LinkPickKind, keyof typeof Ionicons.glyphMap> = {
   contract: 'document-text-outline',
@@ -92,7 +93,7 @@ export function LinkPickerSheet({
   if (visible !== prevVisible) {
     setPrevVisible(visible);
     if (visible) {
-      setKind(initialKind && initialKind !== 'directive' ? initialKind : 'contract');
+      setKind(initialKind && initialKind !== 'directive' && initialKind !== 'mail' && initialKind !== 'chat' ? initialKind : 'contract');
       setQ('');
       setHits([]);
       setError(null);
@@ -260,7 +261,7 @@ export function LinkPickerSheet({
             ) : !hits.length ? (
               <EmptyState icon="search-outline" title="검색 결과가 없습니다" />
             ) : (
-              <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" keyboardShouldPersistTaps="handled">
                 {hits.map((h) => (
                   <ListRow
                     key={h.id}

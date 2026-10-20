@@ -90,7 +90,7 @@ export function NewProjectSheet({
         title="신규 영업건"
         footer={<View className="flex-1"><GradientButton label="등록" loading={saving} onPress={submit} /></View>}>
         {/* 영업 일정 등록과 같은 겹침 케이스 — 폼을 스크롤 영역으로. */}
-        <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
+        <ScrollView automaticallyAdjustKeyboardInsets style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
           <View className="gap-3.5 pb-2">
           <View className="gap-1.5">
             <Text className="text-[13px] font-bold text-cd-muted">사업장 *</Text>

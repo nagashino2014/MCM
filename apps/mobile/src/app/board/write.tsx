@@ -87,7 +87,7 @@ export default function BoardWriteScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
         keyboardVerticalOffset={90}>
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
           <View className="gap-1.5">
             <Text className="text-[13px] font-bold text-cd-muted">게시 위치</Text>
             <View className="flex-row gap-2">

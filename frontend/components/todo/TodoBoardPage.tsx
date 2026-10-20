@@ -15,7 +15,7 @@ import "./todo.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AlignHorizontalDistributeStart, ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus, Settings2 } from "lucide-react";
+import { AlignHorizontalDistributeStart, ArrowLeft, Calendar, Check, ChevronDown, Kanban, List, Plus, Settings2, Trash2 } from "lucide-react";
 import { CdButton, CdDropdown, CdEmptyState, CdPageHeader, CdTabs, useCdToast, useCdashTheme, type CdMenuItem } from "@/components/cdash";
 import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs, type TodoStatus } from "@/lib/todo/types";
 import { hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -26,6 +26,7 @@ import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
 import { TodoTimeline } from "./TodoTimeline";
 import { TodoPrefsModal } from "./TodoPrefsModal";
+import { BoardDeleteModal } from "./BoardDeleteModal";
 import { TODO_LIST_QUERY_KEY } from "./TodoDetailPage";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
@@ -110,6 +111,8 @@ export function TodoBoardPage() {
   const [prefs, setPrefs] = useState<TodoPrefs | null>(null);
   // §29-3 2차 설정 모달(알림·표시)
   const [prefsOpen, setPrefsOpen] = useState(false);
+  // 보드 삭제 확인(2026-10-20) — 만든 사람만, 개인 기본 보드 제외
+  const [deleteBoardTarget, setDeleteBoardTarget] = useState<TodoBoard | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("date");
   // 완료 유예(2초) 중인 행 — id → 완료 전 상태(목록에는 그 상태로 되돌려 넘겨 원래 섹션에 남긴다).
   const [justDone, setJustDone] = useState<Map<string, TodoStatus>>(() => new Map());
@@ -459,6 +462,16 @@ export function TodoBoardPage() {
     shared.upsertBoard(b);
     boardData.upsertBoard(b);
   };
+  const canDeleteBoard = (b: TodoBoard | null | undefined) => !!b && b.kind !== "personal" && !b.isDefault && !!myUserId && b.ownerUserId === myUserId;
+  const onBoardDeleted = (boardId: string) => {
+    const name = deleteBoardTarget?.projectName ?? deleteBoardTarget?.name ?? "보드";
+    setDeleteBoardTarget(null);
+    my.setBoards((list) => list.filter((b) => b.boardId !== boardId));
+    shared.setBoards((list) => list.filter((b) => b.boardId !== boardId));
+    if (scopeBoardId === boardId) goScope("my");
+    void my.reload();
+    toast(`'${name}' 보드를 삭제했습니다.`, "success");
+  };
 
   const onMembersChanged = (members: TodoBoardMember[]) => {
     if (!board) return;
@@ -485,6 +498,28 @@ export function TodoBoardPage() {
               <span className="todo-scope-sq" style={tintStyle(b.colorHex)} aria-hidden="true" />
               <span className="truncate">{b.projectName ?? b.name}</span>
               {b.clientName && <span className="cd-text-faint text-[12px] truncate">{b.clientName}</span>}
+              {canDeleteBoard(b) && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="todo-tpl-del ml-auto"
+                  title="보드 삭제"
+                  aria-label={`${b.projectName ?? b.name} 보드 삭제`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteBoardTarget(b);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeleteBoardTarget(b);
+                    }
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                </span>
+              )}
             </span>
           ),
           icon: b.boardId === scopeBoardId ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <span className="inline-block w-3.5" />,
@@ -775,6 +810,7 @@ export function TodoBoardPage() {
                 onCreate={createIn(boardData)}
                 onBoardUpdated={onBoardUpdated}
                 onManageMembers={() => setMembersOpen(true)}
+                onRequestDelete={canDeleteBoard(board) ? () => setDeleteBoardTarget(board) : undefined}
               />
             </>
           )}
@@ -822,6 +858,7 @@ export function TodoBoardPage() {
       <CompleteConfirmModal open={!!confirm} target={confirm?.target ?? null} failure={confirm?.failure} busy={confirmBusy} onConfirm={(note) => void confirmComplete(note)} onClose={cancelConfirm} />
 
       {prefsOpen && prefs && <TodoPrefsModal prefs={prefs} onPatch={patchPrefs} onClose={() => setPrefsOpen(false)} />}
+          <BoardDeleteModal board={deleteBoardTarget} onClose={() => setDeleteBoardTarget(null)} onDeleted={onBoardDeleted} />
 
       <BoardCreateModal
         open={createOpen}

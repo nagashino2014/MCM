@@ -66,7 +66,7 @@ export function OvertimeConsentSheet({
         />
       }>
       <View style={{ maxHeight: 460 }}>
-        <ScrollView className="flex-1">
+        <ScrollView automaticallyAdjustKeyboardInsets className="flex-1">
           <View className="gap-3 pb-2">
             {sections.map((s) => (
               <View key={s.heading} className="gap-1">

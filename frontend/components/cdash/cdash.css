@@ -419,6 +419,20 @@ select.cd-input {
   box-shadow: none !important;
 }
 
+/* 일정 태그 필터 칩(2026-10-20 사용자 요청) — 모바일 일정 필터와 같은 효과.
+   선택 = 카테고리 색 옅은 배경·테두리 없음·카테고리 색 글자(굵게), 비선택 = 카드 배경·회색 글자. 점은 항상 카테고리 색.
+   카테고리 색은 요소 inline 의 --tag-c(TAG_COLOR_STRONG). 위 공통 선택 효과(파란 테두리·글자)를 이 칩에서만 덮는다. */
+.cd-chip.cd-chip-tag { gap: 5px; color: var(--cd-faint); font-weight: 600; }
+.cd-chip.cd-chip-tag:hover { color: var(--cd-muted); }
+.cd-chip.cd-chip-tag .cd-chip-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--tag-c, var(--cd-faint)); flex: none; }
+.cd-chip.cd-chip-tag[data-active="true"] {
+  background: color-mix(in srgb, var(--tag-c, var(--cd-primary)) 15%, var(--cd-card)) !important;
+  border-color: transparent !important;
+  color: color-mix(in srgb, var(--tag-c, var(--cd-primary)) 82%, var(--cd-text)) !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
 /* 기존 테두리가 없는 개별 선택 버튼도 크기 변화 없이 같은 한 줄 경계를 갖는다.
    ⚠ outline 대신 inset box-shadow 를 쓴다(2026-09-11) — outline 은 요소 바깥 레이어라
    부모가 overflow:hidden 인 세그먼트 컨트롤 안에서 첫/끝 버튼의 한쪽이 잘려 보였다. */

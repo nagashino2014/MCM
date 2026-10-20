@@ -254,7 +254,7 @@ export default function WorkReportDetailScreen() {
   return (
     <SafeAreaView className="flex-1 bg-cd-bg">
       <ScreenHeader title="업무보고" subtitle={r?.title || `${r?.periodStart ?? ''} ~ ${r?.periodEnd ?? ''}`} back variant="sub" />
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void reload()} />}>
         {loading && !r ? (

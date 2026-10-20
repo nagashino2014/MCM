@@ -95,7 +95,7 @@ export function RelatedPickerSheet({
         ) : empty ? (
           <EmptyState icon="search-outline" title="결과가 없습니다" />
         ) : (
-          <ScrollView className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
+          <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
             <Text className="pb-1 pt-2 text-[11.5px] font-semibold text-cd-muted">
               {q.trim() ? '용역' : '최근 진행 중 용역'}
             </Text>

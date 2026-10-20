@@ -269,9 +269,10 @@ function CalendarBoardInner() {
                     ? "면접 일정은 참석자·면접 관리자에게만 표시됩니다."
                     : undefined
               }
-              className="cd-chip cd-chip-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              className="cd-chip cd-chip-sm cd-chip-tag disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ "--tag-c": TAG_COLOR_STRONG[key] } as React.CSSProperties}
             >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? "currentColor" : TAG_COLOR_STRONG[key] }} />
+              <span className="cd-chip-dot" aria-hidden="true" />
               {CALENDAR_TAG_LABELS[key]}
             </button>
           );

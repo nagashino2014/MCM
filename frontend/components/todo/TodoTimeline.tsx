@@ -11,9 +11,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Link2 } from "lucide-react";
 import { CdButton } from "@/components/cdash";
-import { TODO_MILESTONE_LABELS, type TodoItem, type TodoItemDetail, type TodoStageRef } from "@/lib/todo/types";
+import { TODO_MILESTONE_LABELS, TODO_STATUS_LABELS, TODO_STATUSES, type TodoItem, type TodoItemDetail, type TodoStageRef } from "@/lib/todo/types";
 import { StatusDot, tintStyle } from "./TodoRow";
-import { addDays, diffDays, md, weekdayKo } from "./todo-utils";
+import { addDays, diffDays, md } from "./todo-utils";
 import { apiCall } from "./useTodoData";
 
 export interface TodoTimelineProps {
@@ -41,14 +41,21 @@ interface Row {
   field: "do" | "due";
   milestone: boolean;
   stageLabel?: string | null;
-  /** 날짜 없는 하위 작업 — 라벨만, 막대 없음 */
+  /** 날짜 없는 하위 작업 — 상위 기간 위에 점선 '날짜 미정' 막대로(드래그 없음) */
   undated?: boolean;
+  /** 하위 행의 상위 id(연계선·보조 행 배경용) */
+  parentId?: string;
 }
 
+type SubCache = Record<string, { subtasks: TodoItem[]; stages: TodoStageRef[] } | "loading">;
+const subPct = (st: TodoItem) => (st.status === "done" ? 100 : (st.progressPct ?? 0));
+/** 하위 보조 행은 복수 일자(할 날~종료일이 이틀 이상)인 상위에만(2026-10-20 사용자 지시). */
+const isMultiDay = (it: Pick<TodoItem, "doDate" | "endDate" | "subtaskTotal">) => !!it.doDate && !!it.endDate && it.endDate > it.doDate && it.subtaskTotal > 0;
+
 const ROW_H = 34;
-const LABEL_W = 272;
+const LABEL_W = 326; // 2026-10-20 사용자 요청 +20%
 const DAYS = 84; // 12주 창
-const DAY_W: Record<"day" | "week", number> = { day: 30, week: 13 };
+const DAY_W: Record<"day" | "week", number> = { day: 28.5, week: 12.4 }; // 2026-10-20 -5%
 
 const mondayOf = (ymd: string): string => {
   const d = new Date(`${ymd}T12:00:00Z`);
@@ -73,7 +80,12 @@ function rowOf(item: TodoItem, depth: 0 | 1, stageLabel?: string | null): Row | 
 export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatch }: TodoTimelineProps) {
   const [scale, setScale] = useState<"day" | "week">("day");
   const [windowStart, setWindowStart] = useState(() => addDays(mondayOf(today), -14));
-  const [expanded, setExpanded] = useState<Record<string, { subtasks: TodoItem[]; stages: TodoStageRef[] } | "loading">>({});
+  // 하위 작업 보조 행(2026-10-20): 기본으로 펼쳐 상위 행 아래에 하위별 일정·상태를 잇는다. 행별 ▸/▾ 는 override, 도구줄 토글은 전체.
+  const [subCache, setSubCache] = useState<SubCache>({});
+  const [showSubs, setShowSubs] = useState(true);
+  const [override, setOverride] = useState<Record<string, boolean>>({});
+  const requested = useRef(new Map<string, string>());
+  const mounted = useRef(true);
   const [edges, setEdges] = useState<DepEdge[]>([]);
   const [undatedOpen, setUndatedOpen] = useState(false);
   const [drag, setDrag] = useState<{ id: string; mode: "move" | "resize"; startX: number; delta: number } | null>(null);
@@ -81,7 +93,56 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
   const trackW = DAYS * dayW;
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── 행 구성: 날짜 있는 상위(시작일 순) + 펼친 하위 ──
+  useEffect(() => {
+    mounted.current = true;
+    try {
+      if (window.localStorage.getItem("todo.tl.subs") === "0") setShowSubs(false);
+    } catch {
+      /* 저장소 없음 — 기본 펼침 */
+    }
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const isOpen = useCallback((id: string) => override[id] ?? showSubs, [override, showSubs]);
+
+  // 펼칠 상위의 하위 작업을 상세 API 로 가져온다(동시 4건). 상위의 하위 수·완료 수·수정 시각이 바뀌면 다시 가져온다.
+  useEffect(() => {
+    const need = items.filter((it) => {
+      if (it.parentItemId || !isMultiDay(it) || !isOpen(it.itemId)) return false;
+      const sig = `${it.subtaskTotal}:${it.subtaskDone}:${it.updatedAt}`;
+      if (requested.current.get(it.itemId) === sig) return false;
+      requested.current.set(it.itemId, sig);
+      return true;
+    });
+    if (!need.length) return;
+    setSubCache((m) => {
+      const n = { ...m };
+      for (const it of need) if (!n[it.itemId]) n[it.itemId] = "loading";
+      return n;
+    });
+    const queue = [...need];
+    const worker = async () => {
+      while (queue.length) {
+        const it = queue.shift()!;
+        try {
+          const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(it.itemId)}`);
+          if (mounted.current) setSubCache((m) => ({ ...m, [it.itemId]: { subtasks: d.item.subtasks, stages: d.item.stages } }));
+        } catch {
+          requested.current.delete(it.itemId);
+          if (mounted.current)
+            setSubCache((m) => {
+              const n = { ...m };
+              delete n[it.itemId];
+              return n;
+            });
+        }
+      }
+    };
+    void Promise.all([worker(), worker(), worker(), worker()]);
+  }, [items, isOpen]);
+
+  // ── 행 구성: 날짜 있는 상위(시작일 순) + 펼친 하위(보조 행) ──
   const { rows, undated } = useMemo(() => {
     const tops = items.filter((it) => !it.parentItemId);
     const dated: Row[] = [];
@@ -95,17 +156,36 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     const rows: Row[] = [];
     for (const r of dated) {
       rows.push(r);
-      const ex = expanded[r.item.itemId];
+      const ex = isMultiDay(r.item) && isOpen(r.item.itemId) ? subCache[r.item.itemId] : undefined;
       if (ex && ex !== "loading") {
         for (const st of ex.subtasks) {
           const stage = st.stageOrder != null ? ex.stages.find((s) => s.stageOrder === st.stageOrder) : null;
           const sub = rowOf(st, 1, stage ? `${stage.stageOrder}. ${stage.stageName}` : null);
-          if (sub) rows.push(sub);
+          if (!sub) continue;
+          sub.parentId = r.item.itemId;
+          // 날짜 없는 하위는 상위 기간 위에 '날짜 미정' 점선 막대로 상태를 보인다
+          if (sub.undated) {
+            sub.start = r.start;
+            sub.end = r.end;
+          }
+          rows.push(sub);
         }
       }
     }
     return { rows, undated };
-  }, [items, expanded]);
+  }, [items, subCache, isOpen]);
+
+  // 상위별 하위 집계(완료 수·평균 진행율) — 상위 막대 하단 진척선·라벨 칩
+  const subAgg = useMemo(() => {
+    const out = new Map<string, { done: number; total: number; avg: number }>();
+    for (const [pid, ex] of Object.entries(subCache)) {
+      if (ex === "loading" || !ex.subtasks.length) continue;
+      const done = ex.subtasks.filter((x) => x.status === "done").length;
+      const avg = Math.round(ex.subtasks.reduce((a, x) => a + subPct(x), 0) / ex.subtasks.length);
+      out.set(pid, { done, total: ex.subtasks.length, avg });
+    }
+    return out;
+  }, [subCache]);
 
   // ── 의존 간선(행에 보이는 항목만) ──
   const rowIds = useMemo(() => rows.map((r) => r.item.itemId), [rows]);
@@ -132,26 +212,36 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     // items 가 갱신되면(상세에서 선행 추가·목록 재조회) 간선도 다시 가져온다
   }, [rowIdsKey, items]);
 
-  const toggleExpand = async (item: TodoItem) => {
-    const cur = expanded[item.itemId];
-    if (cur) {
-      setExpanded((m) => {
-        const n = { ...m };
-        delete n[item.itemId];
-        return n;
-      });
-      return;
-    }
-    setExpanded((m) => ({ ...m, [item.itemId]: "loading" }));
+  const toggleExpand = (item: TodoItem) => setOverride((m) => ({ ...m, [item.itemId]: !isOpen(item.itemId) }));
+  const toggleAllSubs = (on: boolean) => {
+    setShowSubs(on);
+    setOverride({});
     try {
-      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(item.itemId)}`);
-      setExpanded((m) => ({ ...m, [item.itemId]: { subtasks: d.item.subtasks, stages: d.item.stages } }));
+      window.localStorage.setItem("todo.tl.subs", on ? "1" : "0");
     } catch {
-      setExpanded((m) => {
-        const n = { ...m };
-        delete n[item.itemId];
-        return n;
+      /* 저장소 없음 */
+    }
+  };
+
+  // 하위 작업 날짜 이동은 목록(상위만 담음) 대신 직접 PATCH 하고 보조 행 캐시를 갱신한다.
+  const patchRow = async (r: Row, patch: Record<string, unknown>, optimistic: Partial<TodoItem>) => {
+    if (r.depth === 0) return onPatch(r.item.itemId, patch, optimistic);
+    const pid = r.parentId ?? r.item.parentItemId;
+    if (!pid) return;
+    const upd = (fields: Partial<TodoItem>) =>
+      setSubCache((m) => {
+        const ex = m[pid];
+        if (!ex || ex === "loading") return m;
+        return { ...m, [pid]: { ...ex, subtasks: ex.subtasks.map((x) => (x.itemId === r.item.itemId ? { ...x, ...fields } : x)) } };
       });
+    const before = { ...r.item };
+    upd(optimistic);
+    try {
+      const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(r.item.itemId)}`, { method: "PATCH", body: JSON.stringify(patch) });
+      upd(d.item);
+    } catch (e) {
+      console.error("[todo-timeline] 하위 작업 날짜 이동 실패", e);
+      upd(before);
     }
   };
 
@@ -162,7 +252,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
 
   // ── 드래그(포인터) ──
   const onBarPointerDown = (e: ReactPointerEvent<HTMLDivElement>, r: Row) => {
-    if (e.button !== 0 || !r.item.canEdit || r.item.status === "done") return;
+    if (e.button !== 0 || r.undated || !r.item.canEdit || r.item.status === "done") return;
     const rect = e.currentTarget.getBoundingClientRect();
     const mode: "move" | "resize" = !r.milestone && r.field === "do" && rect.right - e.clientX <= 10 ? "resize" : "move";
     try {
@@ -195,23 +285,23 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
       const nextEnd = addDays(r.end, delta);
       if (nextEnd < r.start) return;
       const endDate = nextEnd === r.start ? null : nextEnd;
-      await onPatch(r.item.itemId, { endDate }, { endDate });
+      await patchRow(r, { endDate }, { endDate });
       return;
     }
     if (r.milestone) {
       const field = r.item.actualDate ? "actualDate" : r.field === "do" ? "doDate" : "dueDate";
       const v = addDays(r.start, delta);
-      await onPatch(r.item.itemId, { [field]: v }, { [field]: v } as Partial<TodoItem>);
+      await patchRow(r, { [field]: v }, { [field]: v } as Partial<TodoItem>);
       return;
     }
     if (r.field === "due") {
       const v = addDays(r.start, delta);
-      await onPatch(r.item.itemId, { dueDate: v }, { dueDate: v });
+      await patchRow(r, { dueDate: v }, { dueDate: v });
       return;
     }
     const doDate = addDays(r.start, delta);
     const endDate = r.item.endDate ? addDays(r.item.endDate, delta) : null;
-    await onPatch(r.item.itemId, { doDate, endDate }, { doDate, endDate });
+    await patchRow(r, { doDate, endDate }, { doDate, endDate });
   };
 
   const shift = (weeks: number) => setWindowStart((s) => addDays(s, weeks * 7));
@@ -232,7 +322,8 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     }
     return out;
   }, [dayCells]);
-  const weekendOffset = ((new Date(`${windowStart}T12:00:00Z`).getUTCDay() + 1) % 7) * dayW; // 토요일까지의 거리
+  // 주말 열 배경(2026-10-20): 요일 글자 대신 일요일 옅은 붉은색·토요일 옅은 파란색을 날짜 머리칸·트랙 열 전체에 깐다.
+  const weekendCols = useMemo(() => dayCells.map((d, i) => ({ i, wd: new Date(`${d}T12:00:00Z`).getUTCDay() })).filter((x) => x.wd === 0 || x.wd === 6), [dayCells]);
 
   const barStyle = (r: Row): CSSProperties => {
     const d = drag && drag.id === r.item.itemId ? drag.delta : 0;
@@ -242,8 +333,8 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     const x1 = clampDay(diffDays(end, windowStart));
     return { left: x0 * dayW + 1, width: Math.max(dayW - 2, (x1 - x0 + 1) * dayW - 2), ...tintStyle(r.item.boardColor) };
   };
-  const visible = (r: Row) => !r.undated && diffDays(r.end, windowStart) >= 0 && diffDays(r.start, windowStart) < DAYS;
-  const late = (r: Row) => r.item.status !== "done" && r.end < today;
+  const visible = (r: Row) => !!r.start && diffDays(r.end, windowStart) >= 0 && diffDays(r.start, windowStart) < DAYS;
+  const late = (r: Row) => !r.undated && r.item.status !== "done" && r.end < today;
 
   // ── 의존 화살표(SVG) ──
   const arrows = useMemo(() => {
@@ -268,6 +359,16 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
   }, [edges, rows, rowIndex, windowStart, dayW, today]);
 
   const bodyH = Math.max(rows.length, 1) * ROW_H;
+  const subGroups = useMemo(() => {
+    const out: { pi: number; last: number; x: number; tint: string }[] = [];
+    rows.forEach((r, i) => {
+      if (r.depth !== 0) return;
+      let last = i;
+      while (last + 1 < rows.length && rows[last + 1].depth === 1 && rows[last + 1].parentId === r.item.itemId) last += 1;
+      if (last > i) out.push({ pi: i, last, x: clampDay(diffDays(r.start, windowStart)) * dayW + 5, tint: r.item.boardColor });
+    });
+    return out;
+  }, [rows, windowStart, dayW]);
 
   return (
     <div className="todo-tl" aria-label="타임라인">
@@ -294,8 +395,34 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
             주
           </button>
         </div>
+        <label className="todo-tl-subs" title="여러 날에 걸친(할 날~종료일) 일정의 하위 작업을 상위 행 아래 보조 행으로 펼칩니다. 하루 일정은 하위 완료 수만 표시">
+          <input type="checkbox" checked={showSubs} onChange={(e) => toggleAllSubs(e.target.checked)} />
+          하위 작업 펼치기
+        </label>
         <div className="todo-tl-legend" aria-hidden="true">
-          <span className="todo-tl-lg todo-tl-lg-bar" /> 기간 · <span className="todo-tl-lg todo-tl-lg-ms">◆</span> 마일스톤 · <Link2 className="w-3 h-3 inline" /> 선행→후행(빨강=선행 지연) · 막대 드래그=이동, 오른쪽 끝=종료일
+          <span className="todo-tl-legend-row">
+            <span className="todo-tl-lg-item">
+              <span className="todo-tl-lg todo-tl-lg-bar" /> 기간
+            </span>
+            <span className="todo-tl-lg-item">
+              <span className="todo-tl-lg todo-tl-lg-ms">◆</span> 마일스톤
+            </span>
+            <span className="todo-tl-lg-item">
+              <Link2 className="w-3 h-3" /> 선행 → 후행 <em>(빨강 = 선행 지연)</em>
+            </span>
+          </span>
+          <span className="todo-tl-legend-row">
+            하위 상태
+            {TODO_STATUSES.map((st) => (
+              <span key={st} className="todo-tl-lg-item">
+                <span className="todo-tl-lg-st" data-status={st} /> {TODO_STATUS_LABELS[st]}
+              </span>
+            ))}
+            <span className="todo-tl-lg-item">
+              <span className="todo-tl-lg-st" data-ghost="1" /> 날짜 미정
+            </span>
+          </span>
+          <span className="todo-tl-legend-row todo-tl-legend-hint">막대를 끌면 일정 이동 · 오른쪽 끝을 끌면 종료일 변경</span>
         </div>
       </div>
 
@@ -313,14 +440,16 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                 ))}
               </div>
               <div className="todo-tl-days">
+                {weekendCols.map((w) => (
+                  <span key={`we${w.i}`} className="todo-tl-we" data-we={w.wd === 0 ? "sun" : "sat"} style={{ left: w.i * dayW, width: dayW }} aria-hidden="true" />
+                ))}
                 {dayCells.map((d, i) => {
                   const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
                   const isMon = wd === 1;
                   if (scale === "week" && !isMon) return null;
                   return (
-                    <span key={d} className="todo-tl-day" data-today={d === today ? "1" : undefined} data-weekend={wd === 0 || wd === 6 ? "1" : undefined} style={{ left: i * dayW, width: scale === "week" ? dayW * 7 : dayW }}>
+                    <span key={d} className="todo-tl-day" data-today={d === today ? "1" : undefined} data-we={scale === "day" ? (wd === 0 ? "sun" : wd === 6 ? "sat" : undefined) : undefined} style={{ left: i * dayW, width: scale === "week" ? dayW * 7 : dayW }}>
                       {scale === "week" ? md(d) : Number(d.slice(8, 10))}
-                      {scale === "day" && dayW >= 28 && <small>{weekdayKo(d)}</small>}
                     </span>
                   );
                 })}
@@ -337,13 +466,16 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
             <div className="todo-tl-body" style={{ gridTemplateColumns: `${LABEL_W}px ${trackW}px`, height: bodyH }}>
               <div className="todo-tl-labels">
                 {rows.map((r) => {
-                  const ex = expanded[r.item.itemId];
+                  const multi = r.depth === 0 && isMultiDay(r.item);
+                  const open = multi && isOpen(r.item.itemId);
+                  const loadingSubs = open && subCache[r.item.itemId] === "loading";
+                  const agg = subAgg.get(r.item.itemId);
                   return (
                     <div key={r.item.itemId} className="todo-tl-label" data-depth={r.depth} data-selected={selectedId === r.item.itemId ? "1" : undefined} style={{ height: ROW_H }}>
                       {r.depth === 0 ? (
-                        r.item.subtaskTotal > 0 ? (
-                          <button type="button" className="todo-tl-caret" aria-expanded={!!ex && ex !== "loading"} title={ex ? "하위 접기" : `하위 작업 ${r.item.subtaskTotal}건 펼치기`} onClick={() => void toggleExpand(r.item)}>
-                            {ex && ex !== "loading" ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+                        multi ? (
+                          <button type="button" className="todo-tl-caret" aria-expanded={open} title={open ? "하위 접기" : `하위 작업 ${r.item.subtaskTotal}건 펼치기`} onClick={() => toggleExpand(r.item)}>
+                            {open ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
                           </button>
                         ) : (
                           <span className="todo-tl-caret" aria-hidden="true" />
@@ -361,7 +493,18 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                           ⛓ {r.item.openDeps}
                         </span>
                       )}
-                      {r.undated && <span className="todo-tl-who">날짜 없음</span>}
+                      {r.depth === 1 && (
+                        <span className="todo-tl-st" data-status={r.item.status} title={r.undated ? "날짜 미정 — 상위 기간 위에 점선으로 표시" : undefined}>
+                          {r.undated ? "미정 · " : ""}
+                          {TODO_STATUS_LABELS[r.item.status]}
+                          {r.item.status !== "done" && r.item.progressPct != null ? ` ${r.item.progressPct}%` : ""}
+                        </span>
+                      )}
+                      {r.depth === 0 && r.item.subtaskTotal > 0 && (
+                        <span className="todo-tl-subn" title={agg ? `하위 ${agg.done}/${agg.total} 완료 · 평균 진행 ${agg.avg}%` : `하위 ${r.item.subtaskDone}/${r.item.subtaskTotal} 완료`}>
+                          {loadingSubs ? "…" : `${agg?.done ?? r.item.subtaskDone}/${agg?.total ?? r.item.subtaskTotal}`}
+                        </span>
+                      )}
                       {r.depth === 0 && r.item.assigneeName && <span className="todo-tl-who">{r.item.assigneeName}</span>}
                     </div>
                   );
@@ -369,8 +512,15 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
               </div>
               <div
                 className="todo-tl-track"
-                style={{ width: trackW, backgroundSize: `${dayW * 7}px 100%`, backgroundPosition: `${weekendOffset}px 0`, ["--tl-day" as string]: `${dayW}px`, ["--tl-row" as string]: `${ROW_H}px` } as CSSProperties}
+                style={{ width: trackW, ["--tl-day" as string]: `${dayW}px`, ["--tl-row" as string]: `${ROW_H}px` } as CSSProperties}
               >
+                {weekendCols.map((w) => (
+                  <span key={`we${w.i}`} className="todo-tl-we" data-we={w.wd === 0 ? "sun" : "sat"} style={{ left: w.i * dayW, width: dayW }} aria-hidden="true" />
+                ))}
+                {rows.map((r, i) => (r.depth === 1 ? <span key={`sb${r.item.itemId}`} className="todo-tl-subband" style={{ top: i * ROW_H, height: ROW_H }} aria-hidden="true" /> : null))}
+                {subGroups.map((g) => (
+                  <span key={`lk${g.pi}`} className="todo-tl-link" style={{ left: g.x, top: g.pi * ROW_H + ROW_H - 6, height: (g.last - g.pi) * ROW_H - ROW_H / 2 + 6, ...tintStyle(g.tint) }} aria-hidden="true" />
+                ))}
                 {todayX >= 0 && todayX < trackW && <div className="todo-tl-today" style={{ left: todayX + Math.floor(dayW / 2) }} title={`오늘 ${md(today)}`} />}
                 {rows.map((r, i) =>
                   !visible(r) ? null : r.milestone ? (
@@ -393,20 +543,24 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                       key={r.item.itemId}
                       className="todo-tl-item"
                       data-depth={r.depth}
+                      data-status={r.depth === 1 ? r.item.status : undefined}
+                      data-ghost={r.undated ? "1" : undefined}
                       data-done={r.item.status === "done" ? "1" : undefined}
                       data-late={late(r) ? "1" : undefined}
                       data-field={r.field}
                       data-drag={drag?.id === r.item.itemId ? drag.mode : undefined}
-                      data-editable={r.item.canEdit && r.item.status !== "done" ? "1" : undefined}
+                      data-editable={!r.undated && r.item.canEdit && r.item.status !== "done" ? "1" : undefined}
                       style={{ top: i * ROW_H + 6, height: ROW_H - 12, ...barStyle(r) }}
-                      title={`${r.item.title} · ${r.field === "due" ? `마감 ${md(r.start)}` : r.start === r.end ? md(r.start) : `${md(r.start)} ~ ${md(r.end)}`}${r.item.progressPct != null ? ` · ${r.item.progressPct}%` : ""}`}
+                      title={`${r.item.title} · ${r.undated ? "날짜 미정(상위 기간에 표시)" : r.field === "due" ? `마감 ${md(r.start)}` : r.start === r.end ? md(r.start) : `${md(r.start)} ~ ${md(r.end)}`} · ${TODO_STATUS_LABELS[r.item.status]}${r.item.progressPct != null ? ` ${r.item.progressPct}%` : ""}`}
                       onPointerDown={(e) => onBarPointerDown(e, r)}
                       onPointerMove={onBarPointerMove}
                       onPointerUp={(e) => void onBarPointerUp(e, r)}
                     >
                       {r.depth === 1 && r.item.progressPct != null && r.item.status !== "done" && <span className="todo-tl-prog" style={{ width: `${r.item.progressPct}%` }} />}
-                      <span className="todo-tl-item-ttl">{r.item.title}</span>
-                      {r.field === "do" && !r.milestone && r.item.canEdit && r.item.status !== "done" && <span className="todo-tl-grip" aria-hidden="true" />}
+                      {r.depth === 0 && subAgg.has(r.item.itemId) && <span className="todo-tl-agg" style={{ width: `${subAgg.get(r.item.itemId)!.avg}%` }} title={`하위 평균 진행 ${subAgg.get(r.item.itemId)!.avg}%`} />}
+                      <span className="todo-tl-item-ttl">{r.undated ? `날짜 미정 · ${r.item.title}` : r.item.title}</span>
+                      {r.depth === 1 && <span className="todo-tl-pct">{r.item.status === "done" ? "✓" : r.item.progressPct != null ? `${r.item.progressPct}%` : TODO_STATUS_LABELS[r.item.status]}</span>}
+                      {r.field === "do" && !r.milestone && !r.undated && r.item.canEdit && r.item.status !== "done" && <span className="todo-tl-grip" aria-hidden="true" />}
                     </div>
                   )
                 )}

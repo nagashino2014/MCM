@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlaskConical, Plus, Save, Trash2, Workflow } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { resolveFieldConcept, type ApprovalFieldDef } from "@/lib/approval/fields";
 
 interface SlotDef {
@@ -179,7 +180,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
     <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap">
         <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
-          <Workflow className="w-4 h-4" /> 연계 — 승인/상신 시 자동 처리
+          <Workflow className="w-4 h-4" /> 연계 — 승인/상신 시 자동 처리<CdHelp topic="approval-ops.actions" />
           {actions.length > 0 && <span className="cd-chip">{actions.length}</span>}
         </p>
         <span className="text-[11px] cd-text-faint">

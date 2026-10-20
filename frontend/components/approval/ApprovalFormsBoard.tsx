@@ -41,6 +41,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { FormActionsEditor } from "@/components/approval/FormActionsEditor";
 import {
@@ -886,7 +887,7 @@ function SemanticEditor({
   const current = f.semantic?.concept ?? "";
   return (
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint">데이터 의미 — 분석 지표가 이 태그로 집계</span>
+      <span className="text-[11px] cd-text-faint flex items-center gap-1">데이터 의미 — 분석 지표가 이 태그로 집계<CdHelp topic="approval-ops.field-meaning" /></span>
       <select
         className="cd-select"
         style={{ width: "100%" }}
@@ -936,7 +937,7 @@ function FillMapEditor({
     onChange({ fillMap: rules.map((r, x) => (x === i ? { ...r, ...patch } : r)) });
   return (
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint">자동 채움 — 선택 시 다른 필드에 값 주입</span>
+      <span className="text-[11px] cd-text-faint flex items-center gap-1">자동 채움 — 선택 시 다른 필드에 값 주입<CdHelp topic="approval-ops.autofill" /></span>
       {rules.map((r, i) => (
         <div key={i} className="flex items-center gap-1.5 min-w-0">
           <select className="cd-select shrink-0" style={{ width: 110 }} value={r.source} onChange={(e) => setRule(i, { source: e.target.value })}>

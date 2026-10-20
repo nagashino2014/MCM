@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Download, Lock, RefreshCw, Undo2 } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 const thisYear = () => new Date().getFullYear();
@@ -265,7 +266,7 @@ export function ClosingPanel() {
   return (
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <div className="cd-card-title mr-auto">결산 — 연차 마감·세무조정 후보</div>
+        <div className="cd-card-title mr-auto flex items-center gap-1">결산 — 연차 마감·세무조정 후보<CdHelp topic="finance.closing" /></div>
         <select aria-label="결산 연도" className="cd-select" disabled={busy} value={year} onChange={(e) => { setYear(Number(e.target.value)); setNotice(null); setActionError(null); }}>
           {[thisYear() - 1, thisYear()].map((y) => (
             <option key={y} value={y}>{y}년</option>

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
@@ -437,7 +438,7 @@ function StatementUploadCard({ onImported }: { onImported: () => void }) {
 
   return (
     <div className="cd-card p-4 min-w-0">
-      <div className="cd-card-title mb-1">계좌/카드내역 엑셀 업로드</div>
+      <div className="cd-card-title mb-1 flex items-center gap-1">계좌/카드내역 엑셀 업로드<CdHelp topic="finance.collect-range" /></div>
       <p className="text-xs cd-text-muted mb-3">
         바로빌이 보유하지 않는 과거분(계좌 3개월·카드 2개월 이전)을 은행·카드사에서 내려받은 엑셀로 채웁니다.
         기업은행·국민은행 계좌, 롯데·기업은행 법인카드 양식을 자동 인식하며, 이미 적재된 건은 중복 없이 건너뜁니다.
@@ -1607,7 +1608,7 @@ function CardLedgerPanel() {
       </div>
 
       <div className="cd-card p-4">
-      <div className="cd-card-title mb-2">법인카드 매입 원장</div>
+      <div className="cd-card-title mb-2 flex items-center gap-1">법인카드 매입 원장<CdHelp topic="finance.card-classify" /></div>
       {/* 선택된 카드·필터 기준 요약 — 취소 건은 금액을 왜곡하므로 승인 건만 합산 */}
       <div className="flex items-center gap-4 mb-3 text-sm flex-wrap">
         <span>
@@ -2160,7 +2161,7 @@ function ReconPanel() {
     <div className="space-y-4">
       <div className="cd-card p-4">
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <div className="cd-card-title mr-auto">수금 자동대조</div>
+          <div className="cd-card-title mr-auto flex items-center gap-1">수금 자동대조<CdHelp topic="finance.recon" /></div>
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={runMatching}>
             <RefreshCw className="w-3.5 h-3.5" /> 대조 실행
           </button>
@@ -2671,7 +2672,7 @@ function VatPanel() {
     <div className="space-y-4">
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="cd-card-title mr-auto">부가세 집계 — 계정과목별</div>
+        <div className="cd-card-title mr-auto flex items-center gap-1">부가세 집계 — 계정과목별<CdHelp topic="finance.card-sum" /></div>
         <select className="cd-select" value={year} onChange={(e) => applyQuarter(Number(e.target.value), quarter)}>
           {years.map((y) => (
             <option key={y} value={y}>{y}년</option>
@@ -2964,7 +2965,7 @@ function TaxInvoicePanel() {
   return (
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="cd-card-title mr-auto">전자세금계산서 발행 이력</div>
+        <div className="cd-card-title mr-auto flex items-center gap-1">전자세금계산서 발행 이력<CdHelp topic="finance.tax-invoice" /></div>
         <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void refresh()}>
           <RefreshCw className="w-3.5 h-3.5" /> 상태 갱신
         </button>

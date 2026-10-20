@@ -20,8 +20,10 @@ export const MANUAL_CHAPTERS: ManualChapter[] = [
   { id: "hr", title: "근태 · 휴가", group: "work" },
   { id: "facilities", title: "사업장", group: "main" },
   { id: "contracts", title: "계약", group: "main" },
+  { id: "finance", title: "재무", group: "main" },
   { id: "sales", title: "영업 · 견적", group: "main" },
   { id: "admin", title: "관리", group: "system" },
+  { id: "approval-ops", title: "결재 운영 설정", group: "system" },
   { id: "scenario", title: "업무 시나리오", group: "scenario" },
 ];
 

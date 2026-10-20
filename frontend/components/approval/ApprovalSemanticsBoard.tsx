@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Database, FileText, Link2, RefreshCw } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { ApprovalDocModal } from "@/components/approval/ApprovalDocModal";
 import "@/components/cdash/cdash.css";
 
@@ -145,7 +146,7 @@ export function ApprovalSemanticsBoard() {
           <div className="flex flex-col gap-4 min-w-0 xl:overflow-y-auto">
             <div className="cd-card p-5 gap-3">
               <h3 className="font-bold cd-text text-[13.5px] flex items-center gap-1.5">
-                <Link2 className="w-4 h-4 cd-text-primary" /> 양식 ↔ 마스터 데이터 연결
+                <Link2 className="w-4 h-4 cd-text-primary" /> 양식 ↔ 마스터 데이터 연결<CdHelp topic="approval-ops.semantics-map" />
               </h3>
               <p className="text-[11px] cd-text-faint -mt-1">
                 연결은 양식의 검색 필드(계약·업체·인원)에서 자동으로 도출됩니다. 선을 클릭하면 연결 품질 상세를 확인할 수 있습니다.

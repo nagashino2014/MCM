@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, Download, RefreshCw, Trash2, Upload, Undo2, XCircle } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 import { FinLogo } from "@/components/finance/FinLogo";
 import { PaginationControls } from "@/components/ui/PaginationControls";
@@ -414,7 +415,7 @@ export function JournalPanel() {
   return (
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="cd-card-title mr-auto">분개장 — 자동분개 전표</div>
+        <div className="cd-card-title mr-auto flex items-center gap-1">분개장 — 자동분개 전표<CdHelp topic="finance.journal" /></div>
         <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy} onClick={() => act({ action: "regenerate", from: range.from, to: range.to })}>
           <RefreshCw className="w-3.5 h-3.5" /> 재생성
         </button>

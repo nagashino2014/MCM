@@ -212,7 +212,7 @@ export function MyTodoList({
   const total = items.filter((i) => !i.parentItemId && i.status !== "done").length;
   if (loaded && total === 0 && pendingCount === 0 && (!showApproval || approvalEvents.length === 0)) {
     return (
-      <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+      <div className="todo-canvas-body" data-layout="groups" onKeyDown={rowListKeyNav}>
         <TodoColumnHeader />
         {top}
         <CdEmptyState
@@ -268,7 +268,7 @@ export function MyTodoList({
   };
 
   return (
-    <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+    <div className="todo-canvas-body" data-layout="groups" onKeyDown={rowListKeyNav}>
       <TodoColumnHeader />
       {top}
       {groups.map((g) => (

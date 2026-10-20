@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, ClipboardCheck, FileEdit, FilePen, FileText, FolderOpen,
-  Hourglass, Inbox, Plus, RefreshCw, Sparkles,
+  Hourglass, Inbox, Plus, RefreshCw, Sparkles, Star,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -63,6 +63,23 @@ const BOXES: { key: BoxKey; label: string; icon: typeof Inbox; group: "inbox" | 
   { key: "in_progress", label: "결재 진행", icon: FilePen, group: "mine" },
   { key: "completed", label: "완료", icon: FileText, group: "mine" },
 ];
+
+// 양식 선택 모달 상단 '자주 이용하는 양식' — 표시 순서 그대로(2026-10-20 사용자 지정).
+const FAVORITE_FORM_IDS = [
+  "frm-overtime-request",
+  "frm-leave-request",
+  "frm-biz-trip-request",
+  "frm-biz-trip-report",
+  "frm-expense-report",
+  "frm-expense-personal",
+  "frm-purchase-request",
+  "frm-education-request",
+  "frm-education-report",
+  "frm-certificate-request",
+];
+
+// 양식 선택 모달의 카테고리 순서 — 업무·회계·인사, 그 밖의 폴더는 기존 순서로 뒤에 둔다.
+const FOLDER_ORDER = ["fld-biz", "fld-finance", "fld-hr"];
 
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
 
@@ -355,18 +372,33 @@ export function ApprovalHomeBoard() {
       </div>
 
       {/* 양식 선택 모달(G0 CdModal) */}
-      <CdModal open={formModal} onClose={() => setFormModal(false)} title="결재양식 선택" size="lg">
+      <CdModal open={formModal} onClose={() => setFormModal(false)} title="결재양식 선택" size="lg" maxHeightClass="max-h-[72vh]">
         <div className="flex flex-col gap-3">
-          {[...folders, { folderId: "__none__", name: "미분류" }].map((fold) => {
-            const list = forms.filter((f) => (f.folderId ?? "__none__") === fold.folderId);
-            if (!list.length) return null;
+          {[
+            {
+              key: "__favorite__",
+              name: "자주 이용하는 양식",
+              favorite: true,
+              list: FAVORITE_FORM_IDS.map((id) => forms.find((f) => f.formId === id)).filter((f): f is FormRow => !!f),
+            },
+            ...[...folders, { folderId: "__none__", name: "미분류" }]
+              .map((fold, idx) => ({ fold, rank: FOLDER_ORDER.includes(fold.folderId) ? FOLDER_ORDER.indexOf(fold.folderId) : FOLDER_ORDER.length + idx }))
+              .sort((a, b) => a.rank - b.rank)
+              .map(({ fold }) => ({
+                key: fold.folderId,
+                name: fold.name,
+                favorite: false,
+                list: forms.filter((f) => (f.folderId ?? "__none__") === fold.folderId),
+              })),
+          ].map((sec) => {
+            if (!sec.list.length) return null;
             return (
-              <div key={fold.folderId}>
+              <div key={sec.key}>
                 <div className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint mb-1">
-                  <FolderOpen className="w-3.5 h-3.5" /> {fold.name}
+                  {sec.favorite ? <Star className="w-3.5 h-3.5" /> : <FolderOpen className="w-3.5 h-3.5" />} {sec.name}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 mb-2">
-                  {list.map((f) => (
+                  {sec.list.map((f) => (
                     <button
                       key={f.formId}
                       type="button"

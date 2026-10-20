@@ -1018,7 +1018,7 @@ export function ApprovalLetterBoard() {
         icon={<FileText className="w-5 h-5" />}
         eyebrow="Approval · Official Letter"
         title="공문 작성"
-        subtitle="결재 승인이 완료되면 자동 채번되어 수신처 메일로 PDF 공문이 발송됩니다."
+        subtitle="결재 승인이 완료되면 자동 채번되어 참조 담당자 메일(받는 사람)로 PDF 공문이 발송되고, 외부 참조·사내 참조자는 참조(Cc)로 받습니다."
         actions={
           <div className="flex items-center gap-2">
             <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />

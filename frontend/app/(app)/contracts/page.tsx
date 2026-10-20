@@ -2,6 +2,7 @@
 
 import { Suspense, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Virtuoso } from "react-virtuoso";
 import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import {
@@ -27,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -288,6 +290,9 @@ export default function ContractsPage() {
 
 function ContractsInner() {
   const toast = useToast();
+  // 신규 계약 버튼은 contract.edit 보유자만(서버 POST /api/contracts 와 같은 키, 2026-10-20 F-4).
+  const { data: session } = useSession();
+  const canCreateContract = hasPerm(permsOf(session?.user), "contract.edit");
   const { theme, toggleTheme } = useCdashTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -524,14 +529,16 @@ function ContractsInner() {
         help="용역 분류를 펼쳐 계약을 선택하면 오른쪽에 계약 정보와 청구·수금 단계가 표시됩니다. 검색과 연도 필터로 계약 범위를 좁힐 수 있습니다."
         actions={
           <>
-            <button
-              type="button"
-              onClick={() => setNewContractModal(createEmptyContractState())}
-              className="cd-btn cd-btn-primary cd-btn-sm"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              신규 계약
-            </button>
+            {canCreateContract && (
+              <button
+                type="button"
+                onClick={() => setNewContractModal(createEmptyContractState())}
+                className="cd-btn cd-btn-primary cd-btn-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                신규 계약
+              </button>
+            )}
             <button type="button" onClick={reloadTree} className="cd-btn cd-btn-ghost cd-btn-sm">
               <RefreshCw className={"w-3.5 h-3.5 " + (loading ? "animate-spin" : "")} />
               새로고침
@@ -912,6 +919,11 @@ function ContractDetailPanel({
   onReloadDetail: () => void;
 }) {
   const contract = detail.contract;
+  // 변경계약 입력은 contract.edit, 계약 삭제는 contract.delete 보유자만(서버와 같은 키, F-4). 대상 범위 판정은 서버가 한다.
+  const { data: session } = useSession();
+  const perms = permsOf(session?.user);
+  const canEditContract = hasPerm(perms, "contract.edit");
+  const canDeleteContract = hasPerm(perms, "contract.delete");
   // 용역(계약) 금액은 청구·수금 단계 각 항목 금액의 합을 기준으로 한다.
   // 단계가 하나도 없을 때만 계약에 기록된 금액으로 폴백한다.
   const milestoneAmountSum = detail.milestones.reduce(
@@ -1096,22 +1108,26 @@ function ContractDetailPanel({
             <GitCommitHorizontal className="w-3.5 h-3.5" />
             공정표/수행인력
           </button>
-          <button
-            type="button"
-            onClick={onOpenChange}
-            className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            변경계약 입력
-          </button>
-          <button
-            type="button"
-            onClick={onDeleteContract}
-            className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            계약 삭제
-          </button>
+          {canEditContract && (
+            <button
+              type="button"
+              onClick={onOpenChange}
+              className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              변경계약 입력
+            </button>
+          )}
+          {canDeleteContract && (
+            <button
+              type="button"
+              onClick={onDeleteContract}
+              className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              계약 삭제
+            </button>
+          )}
         </div>
       </div>
 

@@ -214,7 +214,7 @@ export function MailListPane({
           </div>
         ) : isDrafts ? (
           drafts.length === 0 ? (
-            <CdEmptyState title="임시보관함이 비어 있습니다." description="작성 중 자동 저장된 메일이 여기에 보관됩니다." />
+            <CdEmptyState title="임시보관함이 비어 있습니다." description="메일 쓰기에서 [임시 저장]을 누른 메일이 여기에 보관됩니다. 자동 저장되지 않습니다." />
           ) : (
             <ul className="divide-y cd-hairline-row-c">
               {drafts.map((d) => (

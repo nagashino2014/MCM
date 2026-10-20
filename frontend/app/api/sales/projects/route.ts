@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { loadUserAccess } from "@/lib/auth/rbac";
+import { loadUserAccess, grantDeptIds } from "@/lib/auth/rbac";
 import { createSalesProject, listSalesProjects } from "@/lib/sales/queries";
 import type {
   SalesProjectFilter,
@@ -32,8 +32,7 @@ export async function GET(req: NextRequest) {
     if (!grants.some((g) => g.scopeKind === "all")) {
       const deptIds = new Set<string>();
       for (const g of grants) {
-        if (g.scopeKind === "self_dept" && access.deptId) deptIds.add(access.deptId);
-        if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+        for (const d of grantDeptIds(access, g)) deptIds.add(d); // self_dept = 보직 부서 전체(겸직 300)
       }
       projects = projects.filter(
         (p) => (p.ownerDeptId != null && deptIds.has(String(p.ownerDeptId))) || access.participantProjectIds.has(p.projectId)

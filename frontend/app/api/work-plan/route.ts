@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { forcedDeptId, requireReportScope } from "@/lib/auth/scope-guards";
-import { hasGlobalScope } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listOrganizationSnapshot } from "@/lib/admin/organization";
-import { getReporterContext } from "@/lib/work-plan/workspace";
 import {
   listWorkPlanReports,
   listWorkPlanTemplates,
@@ -23,10 +21,8 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     // 전사 범위(work_plan.view scope=all)가 아니면 dept 파라미터를 무시하고 본인 부서로 고정한다
     // (부서장·사원의 self_dept 는 target 없는 가드를 통과하므로 목록에서 직접 거른다 — 2026-10-19 X-01 후속).
-    if (!(await hasGlobalScope(ctx.userId, "work_plan.view"))) {
-      const reporter = await getReporterContext(ctx.userId);
-      deptId = reporter.deptId ?? "__none__";
-    }
+    // 전사면 요청 부서 그대로, 아니면 허용 부서(주 소속 + 겸직, 300) 안의 요청 부서 — 밖이면 주 소속
+    deptId = (await forcedDeptId(ctx.userId, "work_plan.view", deptId)) || null;
     const [reports, templates, organization] = await Promise.all([
       listWorkPlanReports({ deptId, status }),
       listWorkPlanTemplates(),

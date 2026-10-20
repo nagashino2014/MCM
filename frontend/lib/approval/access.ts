@@ -3,7 +3,7 @@
 //       (전사 문서함 지정 양식의 승인 문서는 전 직원, 완료·반려 문서는 같은 부서까지).
 
 import { hasPermission } from "@/lib/auth/rbac";
-import { getUserDeptId, type ApprovalDocDetail } from "@/lib/approval/docs";
+import { getUserDeptIds, type ApprovalDocDetail } from "@/lib/approval/docs";
 
 export interface DocAccess {
   allowed: boolean;
@@ -23,8 +23,8 @@ export async function resolveDocAccess(doc: ApprovalDocDetail, userId: string): 
   let allowed = involved || isWatcher || isReader;
   if (!allowed && doc.status === "approved" && doc.orgFolder) allowed = true;
   if (!allowed && ["approved", "rejected"].includes(doc.status) && doc.deptId) {
-    const myDept = await getUserDeptId(userId);
-    if (myDept && myDept === doc.deptId) allowed = true;
+    // 같은 부서 = 본인 보직 부서(주 소속 + 겸직, 300) 중 하나
+    if ((await getUserDeptIds(userId)).includes(doc.deptId)) allowed = true;
   }
   return { allowed, isWatcher, isManager };
 }

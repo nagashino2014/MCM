@@ -22,8 +22,16 @@ interface GrantRow {
 export interface UserAccess {
   userId: string;
   role: Role;
+  /** 주 소속 부서(employee_profiles.dept_id). 급여·인사·기안 기본 부서. */
   deptId: string | null;
   employeeId: string | null;
+  /**
+   * 활성 보직 부서 — 주 소속(첫 번째) + 겸직(employee_dept_posts, 300). self_dept grant 의 범위 = 이 목록 전체
+   * (2026-10-20 겸직 설계 D-2). 겸직이 없으면 [deptId].
+   */
+  postDeptIds: string[];
+  /** 부서장 보직(post_kind='head') 부서 — 주 소속 부서장 행 포함. */
+  headDeptIds: Set<string>;
   /** 본인(employee)이 참여자로 등록된 계약 id 집합 — participant scope 평가용(종료 포함). */
   participantContractIds: Set<string>;
   /** 본인(employee)이 관계자로 등록된 영업 프로젝트 id 집합 — sales.* participant scope 평가용. */
@@ -34,7 +42,50 @@ export interface UserAccess {
   deptContractIds: Set<string>;
   /** deptIds 부서가 담당(owner_dept_id)하거나 부서원이 관계자인 영업 프로젝트 id 집합 — self_dept + target.projectId 판정용(F-06). */
   deptProjectIds: Set<string>;
+  /** 부서별 계약·영업건 집합 — 부서 범위 단건 판정은 그 grant 가 가리키는 부서의 집합만 본다(겸직 L-1). */
+  deptContractsByDept: Map<string, Set<string>>;
+  deptProjectsByDept: Map<string, Set<string>>;
   grants: GrantRow[];
+}
+
+/** grant 가 가리키는 부서들 — self_dept = 활성 보직 부서 전체, specific_dept = 지정 부서, 그 외 = 없음. */
+export function grantDeptIds(
+  access: Pick<UserAccess, "postDeptIds">,
+  grant: { scopeKind: ScopeKind; scopeDeptId: string | null }
+): string[] {
+  if (grant.scopeKind === "self_dept") return access.postDeptIds;
+  if (grant.scopeKind === "specific_dept") return grant.scopeDeptId ? [grant.scopeDeptId] : [];
+  return [];
+}
+
+/**
+ * 직원의 활성 보직(employee_dept_posts, 300) — 해제(revoked_at)·기간 밖·비활성 부서 행 제외.
+ * 300 적용 전 환경(표 없음, 42P01)에서는 빈 배열 — 권한 판정이 마이그 순서 때문에 멈추지 않게 한다.
+ */
+export async function loadActiveDeptPosts(
+  employeeId: string,
+  today: string
+): Promise<Array<{ deptId: string; postKind: "head" | "member" }>> {
+  const db = await getDb();
+  try {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT p.dept_id, p.post_kind
+           FROM employee_dept_posts p
+           JOIN departments d ON d.dept_id = p.dept_id AND d.is_active = 1
+          WHERE p.employee_id = $1
+            AND p.revoked_at IS NULL
+            AND (p.effective_from IS NULL OR p.effective_from = '' OR left(p.effective_from, 10) <= $2)
+            AND (p.effective_to IS NULL OR p.effective_to = '' OR left(p.effective_to, 10) >= $2)
+          ORDER BY p.is_primary DESC, p.created_at`,
+        [employeeId, today]
+      )
+    );
+    return rows.map((r) => ({ deptId: String(r.dept_id), postKind: r.post_kind === "head" ? "head" : "member" }));
+  } catch (err) {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  }
 }
 
 export interface PermissionTarget {
@@ -106,64 +157,89 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     effect: (String(row.effect ?? "allow") as "allow" | "deny"),
   }));
 
+  // 활성 보직(300) — 주 소속을 첫 번째로 두고 겸직 부서를 잇는다. self_dept 범위 = 이 목록 전체(겸직 D-2).
+  const postDeptIds: string[] = deptId ? [deptId] : [];
+  const headDeptIds = new Set<string>();
+  if (employeeId) {
+    for (const p of await loadActiveDeptPosts(employeeId, today)) {
+      if (!postDeptIds.includes(p.deptId)) postDeptIds.push(p.deptId);
+      if (p.postKind === "head") headDeptIds.add(p.deptId);
+    }
+  }
+
   // 부서 범위 단건 판정용 집합(F-06, 2026-10-19 실측: 부서장이 타 부서 계약·영업건 단건을 전부 200).
   // self_dept/specific_dept grant 가 하나라도 있을 때만 로드한다. 목록 필터(contract-scope.ts)와 같은 규칙:
   //   계약 = owning_dept_id ∈ 부서 OR 부서원 참여 / 영업건 = owner_dept_id ∈ 부서 OR 부서원 관계자.
+  // 부서원 = 주 소속 기준(겸직 D-4). 부서별로 나눠 둔다 — 겸직자의 A부서 grant 가 B부서 계약에 통과하지 않게(L-1).
   const deptIds = new Set<string>();
   for (const g of grants) {
     if (g.effect !== "allow") continue;
-    if (g.scopeKind === "self_dept" && deptId) deptIds.add(deptId);
-    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+    for (const d of grantDeptIds({ postDeptIds }, g)) deptIds.add(d);
   }
   const deptContractIds = new Set<string>();
   const deptProjectIds = new Set<string>();
+  const deptContractsByDept = new Map<string, Set<string>>();
+  const deptProjectsByDept = new Map<string, Set<string>>();
+  const put = (m: Map<string, Set<string>>, all: Set<string>, d: unknown, id: unknown) => {
+    if (d == null || id == null) return;
+    const key = String(d);
+    if (!m.has(key)) m.set(key, new Set());
+    m.get(key)!.add(String(id));
+    all.add(String(id));
+  };
   if (deptIds.size > 0) {
     const depts = [...deptIds];
     const cRows = rowsToObjects(
       await db.exec(
-        `SELECT DISTINCT c.contract_id
+        `SELECT c.owning_dept_id AS dept_id, c.contract_id
            FROM contracts c
           WHERE c.owning_dept_id = ANY($1)
-             OR EXISTS (
-               SELECT 1 FROM service_participants sp
-               JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
-               WHERE sp.contract_id = c.contract_id AND ep.dept_id = ANY($1)
-             )`,
+         UNION
+         SELECT ep.dept_id, sp.contract_id
+           FROM service_participants sp
+           JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
+          WHERE ep.dept_id = ANY($1)`,
         [depts]
       )
     );
-    for (const r of cRows) if (r.contract_id != null) deptContractIds.add(String(r.contract_id));
+    for (const r of cRows) put(deptContractsByDept, deptContractIds, r.dept_id, r.contract_id);
     const pRows = rowsToObjects(
       await db.exec(
-        `SELECT DISTINCT p.project_id
+        `SELECT p.owner_dept_id AS dept_id, p.project_id
            FROM sales_projects p
           WHERE p.owner_dept_id = ANY($1)
-             OR EXISTS (
-               SELECT 1 FROM sales_project_members m
-               JOIN employee_profiles ep ON ep.employee_id = m.employee_id
-               WHERE m.project_id = p.project_id AND ep.dept_id = ANY($1)
-             )`,
+         UNION
+         SELECT ep.dept_id, m.project_id
+           FROM sales_project_members m
+           JOIN employee_profiles ep ON ep.employee_id = m.employee_id
+          WHERE ep.dept_id = ANY($1)`,
         [depts]
       )
     );
-    for (const r of pRows) if (r.project_id != null) deptProjectIds.add(String(r.project_id));
+    for (const r of pRows) put(deptProjectsByDept, deptProjectIds, r.dept_id, r.project_id);
   }
 
   return {
     userId, role, deptId, employeeId,
+    postDeptIds, headDeptIds,
     participantContractIds, participantProjectIds,
     deptIds, deptContractIds, deptProjectIds,
+    deptContractsByDept, deptProjectsByDept,
     grants,
   };
 }
 
-/** 부서 범위 grant 의 단건 판정 — target 의 계약·영업건·부서 중 주어진 것을 모두 만족해야 한다(F-06). */
-function deptScopeMatches(access: UserAccess, deptIdOfGrant: string | null, target: PermissionTarget): boolean {
-  if (!deptIdOfGrant) return false;
-  if (target.contractId != null && !access.deptContractIds.has(target.contractId)) return false;
-  if (target.projectId != null && !access.deptProjectIds.has(target.projectId)) return false;
-  if (target.deptId != null && target.deptId !== deptIdOfGrant) return false;
-  return true;
+/**
+ * 부서 범위 grant 의 단건 판정 — grant 가 가리키는 부서 중 하나가 target 의 계약·영업건·부서(주어진 것)를
+ * 모두 만족해야 한다(F-06). 부서별 집합으로 본다 — 겸직자의 A부서 grant 가 B부서 계약에 통과하지 않는다(L-1).
+ */
+function deptScopeMatches(access: UserAccess, grantDepts: readonly string[], target: PermissionTarget): boolean {
+  return grantDepts.some((d) => {
+    if (target.contractId != null && !access.deptContractsByDept.get(d)?.has(target.contractId)) return false;
+    if (target.projectId != null && !access.deptProjectsByDept.get(d)?.has(target.projectId)) return false;
+    if (target.deptId != null && target.deptId !== d) return false;
+    return true;
+  });
 }
 
 function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
@@ -179,9 +255,10 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
           && (target.projectId == null || access.participantProjectIds.has(target.projectId));
     case "self_dept":
       // target 이 비어 있으면 통과(목록은 도메인 필터가 처리), 계약·영업건·부서가 오면 그 부서 범위 안이어야 한다(F-06).
-      return deptScopeMatches(access, access.deptId, target);
+      // 범위 = 활성 보직 부서 전체(주 소속 + 겸직, 300). 보직이 하나도 없으면 불통과.
+      return deptScopeMatches(access, access.postDeptIds, target);
     case "specific_dept":
-      return deptScopeMatches(access, grant.scopeDeptId, target);
+      return deptScopeMatches(access, grantDeptIds(access, grant), target);
     default:
       return false;
   }
@@ -232,7 +309,7 @@ export type DeptScope =
 /**
  * 권한키의 **부서 범위**를 해석한다 — 부서 차원이 있는 목록(지급 대상·배분 보드·보고서 등)을 거를 때 쓴다.
  * - all: scope=all grant 보유 → 필터 없음
- * - dept: self_dept(본인 소속)·specific_dept(지정 부서) grant 의 부서 합집합 → 그 부서 행만
+ * - dept: self_dept(본인 보직 부서 — 주 소속 + 겸직)·specific_dept(지정 부서) grant 의 부서 합집합 → 그 부서 행만
  * - none: 위 둘이 없음(participant/self 만 있거나 미보유) → 부서 단위 목록은 빈 결과
  * requirePermission(key) 은 target 이 없으면 어떤 scope 든 통과하므로, 목록 라우트는 반드시 이 결과로 행을 걸러야 한다
  * (2026-10-19 사전 점검 F-06·지급 대상 LIST 전사 노출의 후속).
@@ -242,11 +319,20 @@ export function resolveDeptScope(access: UserAccess, permissionKey: string): Dep
   const grants = access.grants.filter((g) => g.permissionKey === permissionKey && g.effect === "allow");
   if (grants.some((g) => g.scopeKind === "all")) return { kind: "all" };
   const deptIds = new Set<string>();
-  for (const g of grants) {
-    if (g.scopeKind === "self_dept" && access.deptId) deptIds.add(access.deptId);
-    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
-  }
+  for (const g of grants) for (const d of grantDeptIds(access, g)) deptIds.add(d);
   return deptIds.size > 0 ? { kind: "dept", deptIds: [...deptIds] } : { kind: "none" };
+}
+
+/**
+ * 권한키로 고를 수 있는 부서 — all = null(전 부서), 아니면 부서 범위 부서 목록(주 소속을 앞에, 겸직 부서 포함 — 300).
+ * 부서 선택 UI(업무추진계획 review-context)와 forcedDeptId 가 같은 목록을 쓴다.
+ */
+export function allowedDeptIds(access: UserAccess, permissionKey: string): string[] | null {
+  const scope = resolveDeptScope(access, permissionKey);
+  if (scope.kind === "all") return null;
+  if (scope.kind === "none") return [];
+  const ids = [...scope.deptIds];
+  return access.deptId && ids.includes(access.deptId) ? [access.deptId, ...ids.filter((d) => d !== access.deptId)] : ids;
 }
 
 /** 부서 범위로 행을 거른다 — all 은 그대로, dept 는 소속 부서가 범위 안인 행만(부서 미지정 행 제외), none 은 빈 배열. */

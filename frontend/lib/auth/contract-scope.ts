@@ -6,7 +6,7 @@
  * 설계: docs/permission-rbac-redesign.md §3.5.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
-import { loadUserAccess } from "./rbac";
+import { loadUserAccess, grantDeptIds } from "./rbac";
 
 export type ContractScope =
   | { kind: "all" } // 전사 — 필터 없음
@@ -34,8 +34,7 @@ export async function resolveContractScope(
 
   const deptIds = new Set<string>();
   for (const g of grants) {
-    if (g.scopeKind === "self_dept" && access.deptId) deptIds.add(access.deptId);
-    if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+    for (const d of grantDeptIds(access, g)) deptIds.add(d); // self_dept = 보직 부서 전체(겸직 300)
   }
   if (deptIds.size > 0) return { kind: "dept", deptIds: [...deptIds] };
 

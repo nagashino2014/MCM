@@ -16,6 +16,7 @@ import { getDb, rowsToObjects } from "@/lib/db";
 import { AuthError, requirePermission, type AuthContext } from "./guards";
 import { resolveVisibleContractIds } from "./contract-scope";
 import {
+  allowedDeptIds,
   checkPermission,
   filterRowsByDeptScope,
   loadUserAccess,
@@ -356,11 +357,18 @@ export async function assertItemsInScope(access: UserAccess, permissionKey: stri
   }
 }
 
-/** 요청한 부서를 범위로 보정 — 전사면 그대로, 아니면 본인 소속 부서(없으면 어떤 행도 맞지 않는 자리표시). */
+export { allowedDeptIds };
+
+/**
+ * 요청한 부서를 범위로 보정 — 전사면 그대로, 요청 부서가 허용 부서(겸직 포함) 안이면 그대로,
+ * 아니면 첫 허용 부서(주 소속 우선, 없으면 어떤 행도 맞지 않는 자리표시).
+ */
 export async function forcedDeptId(userId: string, permissionKey: string, requested: string | null | undefined): Promise<string> {
   const access = await loadUserAccess(userId);
-  if (resolveDeptScope(access, permissionKey).kind === "all") return requested ?? "";
-  return access.deptId ?? NO_DEPT;
+  const allowed = allowedDeptIds(access, permissionKey);
+  if (allowed == null) return requested ?? "";
+  if (requested && allowed.includes(requested)) return requested;
+  return allowed[0] ?? access.deptId ?? NO_DEPT;
 }
 
 /* ── 영업: 가시 프로젝트 집합(sales.view: 전사 / 담당 부서·부서원 관계자 / 본인 관계자) ── */
@@ -369,7 +377,8 @@ export function resolveVisibleProjectSet(access: UserAccess, permissionKey = "sa
   const scope = resolveDeptScope(access, permissionKey);
   if (scope.kind === "all") return null;
   const out = new Set<string>(access.participantProjectIds);
-  if (scope.kind === "dept") for (const id of access.deptProjectIds) out.add(id);
+  // 이 키의 부서 범위 부서만(겸직자의 다른 키 부서 범위가 섞이지 않게 — L-1)
+  if (scope.kind === "dept") for (const d of scope.deptIds) for (const id of access.deptProjectsByDept.get(d) ?? []) out.add(id);
   return out;
 }
 

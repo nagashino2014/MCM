@@ -1,7 +1,7 @@
-import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getReporterContext, listDeptServices } from "@/lib/work-plan/workspace";
+import { forcedDeptId } from "@/lib/auth/scope-guards";
+import { listDeptServices } from "@/lib/work-plan/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,10 +12,8 @@ export async function GET(req: NextRequest) {
     const ctx = await requirePermission("work_plan.view");
     const paramDept = new URL(req.url).searchParams.get("dept") ?? "";
     let deptId = paramDept;
-    if (!(await hasGlobalScope(ctx.userId, "work_plan.view"))) {
-      const reporter = await getReporterContext(ctx.userId);
-      deptId = reporter.deptId ?? "";
-    }
+    // 전사면 요청 부서 그대로, 아니면 허용 부서(주 소속 + 겸직, 300) 안의 요청 부서 — 밖이면 주 소속
+    deptId = await forcedDeptId(ctx.userId, "work_plan.view", deptId);
     if (!deptId) return NextResponse.json({ services: [] });
     return NextResponse.json({ services: await listDeptServices(deptId) });
   } catch (err) {

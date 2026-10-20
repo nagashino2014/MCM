@@ -290,7 +290,8 @@ export default function OversightWorkspace() {
   // Merging 화면에서는 좌측 패널이 사라지므로 그쪽 헤더에도 같은 슬롯을 둔다(토글 해제 경로 유지).
   const panelTools = (
     <>
-      {ctx?.isAdmin && (
+      {/* 전사(관리자) 또는 겸직으로 부서 범위가 2개 이상(300)일 때만 부서 선택 */}
+      {ctx && (ctx.isAdmin || (ctx.departments?.length ?? 0) > 1) && (
         <select className="cd-select text-sm max-w-[160px]" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
           {(ctx.departments ?? []).map((d) => (
             <option key={d.deptId} value={d.deptId}>{d.deptName}</option>

@@ -53,7 +53,8 @@ export default function ExecWorkspace() {
   const [selectedSubject, setSelectedSubject] = useState<ReportSubject | null>(null);
 
   const deptTags: { deptId: string; deptName: string }[] = useMemo(() => {
-    if (ctx?.isAdmin) return ctx.departments ?? [];
+    // 전사(관리자) 또는 겸직으로 부서 범위가 2개 이상(300)이면 그 부서들을 태그로
+    if (ctx?.isAdmin || (ctx?.departments?.length ?? 0) > 1) return ctx?.departments ?? [];
     if (ctx?.deptId) return [{ deptId: ctx.deptId, deptName: ctx.deptName ?? "내 부서" }];
     return [];
   }, [ctx]);

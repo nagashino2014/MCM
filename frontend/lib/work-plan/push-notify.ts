@@ -3,30 +3,17 @@
  * 이벤트 키는 단일 `work.report`(앱 알림 설정에서 한 토글로 켜고 끈다), 제목으로 종류를 구분한다.
  * 실패는 흐름을 막지 않는다 — 모든 함수가 throw 하지 않고 콘솔 경고만 남긴다.
  *
- * "부서장" 판정: departments 에 부서장 컬럼이 없어(012) **부서 소속 중 직급 rank_order 최상위 1인**
- * 으로 근사한다(주소록·검토 화면의 정렬 기준과 동일 축). 잘못 짚어도 같은 부서 최상급자다.
+ * "부서장" 판정: 부서장 보직(employee_dept_posts post_kind='head', 300 — 겸직 부서장 포함). 보직 기록이 없는
+ * 부서는 종전처럼 **부서 소속 재직자 중 직급 rank_order 최상위 1인**으로 근사한다(lib/org/posts.ts).
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import { sendPush } from "@/lib/notify/push-expo";
+import { deptHeadUserIds as resolveDeptHeads } from "@/lib/org/posts";
 
-/** 부서 최상위 직급자의 로그인 계정 — 없거나(미연결) 작성자 본인이면 빈 배열. */
+/** 부서장 로그인 계정 — 없거나(미연결) 작성자 본인이면 빈 배열. 실패는 흐름을 막지 않는다. */
 async function deptHeadUserIds(deptId: string | null, excludeUserId?: string | null): Promise<string[]> {
-  if (!deptId) return [];
   try {
-    const db = await getDb();
-    const rows = rowsToObjects(
-      await db.exec(
-        `SELECT e.user_id
-           FROM employee_profiles e
-           LEFT JOIN positions p ON p.position_id = e.position_id
-          WHERE e.dept_id = $1 AND e.user_id IS NOT NULL
-          ORDER BY COALESCE(p.rank_order, 0) DESC
-          LIMIT 1`,
-        [deptId]
-      )
-    );
-    const id = rows[0]?.user_id ? String(rows[0].user_id) : null;
-    return id && id !== excludeUserId ? [id] : [];
+    return await resolveDeptHeads(deptId, excludeUserId);
   } catch {
     return [];
   }

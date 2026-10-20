@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { BonusPeriod } from "@/lib/bonus/source";
 import { listBonusTargets, getBonusSettings } from "@/lib/bonus/targets";
+import { postsTableExists } from "@/lib/org/posts";
 import {
   GRADE_OPTIONS,
   type BonusEvalEntry,
@@ -211,11 +212,20 @@ export async function setBonusParticipant(
         `DELETE FROM service_participants WHERE contract_id = $1 AND role_label = '관리자'`,
         [contractId]
       );
-      const deptResult = await db.exec(
-        `SELECT dept_id FROM employee_profiles WHERE employee_id = $1`,
-        [employeeId]
-      );
-      const deptId = rowsToObjects(deptResult)[0]?.dept_id;
+      // 겸직자(미해제 보직이 주 소속 외에도 있음, 300)는 어느 본부 계약인지 알 수 없어 자동 채움하지 않는다 —
+      // 수행부서 미지정으로 남겨 화면 경고로 정하게 한다(겸직 설계 L-3).
+      const deptResult = (await postsTableExists(db))
+        ? await db.exec(
+            `SELECT ep.dept_id,
+                    (SELECT count(*) FROM employee_dept_posts p
+                      WHERE p.employee_id = ep.employee_id AND p.revoked_at IS NULL
+                        AND p.dept_id IS DISTINCT FROM ep.dept_id) AS other_posts
+               FROM employee_profiles ep WHERE ep.employee_id = $1`,
+            [employeeId]
+          )
+        : await db.exec(`SELECT dept_id, 0 AS other_posts FROM employee_profiles WHERE employee_id = $1`, [employeeId]);
+      const empRow = rowsToObjects(deptResult)[0];
+      const deptId = Number(empRow?.other_posts ?? 0) > 0 ? null : empRow?.dept_id;
       if (deptId) {
         const updated = await db.exec(
           `UPDATE contracts SET owning_dept_id = $1, updated_at = $2

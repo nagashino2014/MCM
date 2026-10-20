@@ -85,6 +85,7 @@ export interface StoreRulePreview {
   total: number; // 매칭 총 건수
   applicable: number; // 소급 적용 대상(정정 유효·결의서 미귀속·미제외·공제검토 없음)
   lockedByDoc: number; // 결의서 귀속이라 건드리지 않는 건
+  manualKept: number; // 사용자가 직접 지정한 분류라 덮어쓰지 않는 건
   isPg: boolean; // PG 업태 — 일괄 지정 비권장 경고
   distinctStores: number; // 이 사업자번호 아래 서로 다른 상호 수(PG면 다수)
   breakdown: Array<{ categoryKey: string | null; label: string; count: number }>;
@@ -117,7 +118,9 @@ export async function previewStoreRule(cardTxnId: string, matchType: StoreMatchT
       await db.exec(
         `SELECT count(*) AS total,
                 COUNT(*) FILTER (WHERE doc_id IS NULL AND excluded = 0 AND card_txn_id = ANY($2::text[])
+                  AND COALESCE(category_source, '') <> 'manual'
                   AND NOT EXISTS (SELECT 1 FROM card_tax_reviews r WHERE r.card_txn_id = card_transactions.card_txn_id)) AS applicable,
+                COUNT(*) FILTER (WHERE doc_id IS NULL AND excluded = 0 AND category_source = 'manual') AS manual_kept,
                 COUNT(*) FILTER (WHERE doc_id IS NOT NULL) AS locked,
                 COUNT(DISTINCT upper(replace(COALESCE(store_name, ''), ' ', ''))) AS stores
            FROM card_transactions WHERE card_txn_id = ANY($1::text[])`,
@@ -144,6 +147,7 @@ export async function previewStoreRule(cardTxnId: string, matchType: StoreMatchT
     total: Number(stat[0]?.total || 0),
     applicable: Number(stat[0]?.applicable || 0),
     lockedByDoc: Number(stat[0]?.locked || 0),
+    manualKept: Number(stat[0]?.manual_kept || 0),
     isPg: isPgMerchant(storeBizType),
     distinctStores: Number(stat[0]?.stores || 0),
     breakdown: byCategory.map((r) => ({
@@ -176,10 +180,11 @@ export async function saveStoreRule(params: {
     const ids = matchingIds(await loadRuleSources(db), params.matchType, params.matchValue, true);
     const targets = rowsToObjects(await db.exec(`SELECT card_txn_id FROM card_transactions
       WHERE card_txn_id=ANY($1::text[]) AND doc_id IS NULL AND excluded=0
+        AND COALESCE(category_source,'')<>'manual'
         AND NOT EXISTS(SELECT 1 FROM card_tax_reviews r WHERE r.card_txn_id=card_transactions.card_txn_id)
       ORDER BY card_txn_id FOR UPDATE`, [ids])).map(row=>String(row.card_txn_id));
     await assertNewVatFilingCardMutationsAllowed(db,{cardTxnIds:targets});
-    // 결의서 귀속·제외·공제검토 건은 보존한다. 분류만 바꾸고 공제 여부는 재검토한다.
+    // 결의서 귀속·제외·공제검토·직접 지정(manual) 건은 보존한다. 분류만 바꾸고 공제 여부는 재검토한다.
     const res = rowsToObjects(
       await db.exec(
         `UPDATE card_transactions

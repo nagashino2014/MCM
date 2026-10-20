@@ -13,8 +13,8 @@ export interface MenuRouteMatch {
 const FINANCE_MENU_TABS: Record<string, string> = {
   connections: "connections",
   bank: "bank", card: "bank", reimburse: "bank",
-  invoice: "invoice", recon: "invoice",
-  vat: "vat", shopreceipt: "vat", hometax: "vat", vatreturn: "vat", withholding: "vat", incomeledger: "vat",
+  invoice: "invoice", recon: "invoice", transactionlinks: "invoice", supplyreviews: "invoice",
+  vat: "vat", shopreceipt: "vat", hometax: "vat", vatbasis: "vat", vatreturn: "vat", vatpost: "vat", withholding: "vat", incomeledger: "vat",
   journal: "journal", ledger: "journal", trial: "journal",
   pnl: "pnl", cash: "pnl", balance: "pnl", closing: "pnl",
   fixedassets: "fixedassets", triplog: "fixedassets", budget: "fixedassets",

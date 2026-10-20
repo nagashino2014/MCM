@@ -403,7 +403,7 @@ export default function ApprovalFormsBoard() {
         <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 flex flex-col gap-4">
           {!draft ? (
             <p className="text-sm cd-text-faint py-10 text-center">
-              좌측에서 양식을 선택하거나 새 양식을 만드세요. 시드된 5종(출장신청·출장보고·초과근무·지출결의·휴가신청)을 여기서 수정할 수 있습니다.
+              좌측에서 양식을 선택하거나 새 양식을 만드세요. 기본 제공 양식(출장신청·출장보고·초과근무·지출결의·휴가신청 등)도 여기서 수정할 수 있습니다.
             </p>
           ) : (
             <>

@@ -1656,7 +1656,7 @@ function CardLedgerPanel() {
           data-active={ecommerceOnly}
           aria-pressed={ecommerceOnly}
           className={`cd-choice cd-btn cd-btn-sm flex-none ml-auto ${ecommerceOnly ? "cd-btn-primary" : "cd-btn-soft"}`}
-          title="쿠팡·네이버페이 등 전자상거래·결제대행 매입건 — 같은 매입처라도 건마다 계정과목이 달라 자동 분류에서 빼 둔 건들입니다."
+          title="쿠팡·네이버페이 등 전자상거래·결제대행 매입건 — 같은 매입처라도 건마다 계정과목이 달라 자동 분류 결과를 한 번 더 확인해야 하는 건들입니다."
           onClick={() => {
             setEcommerceOnly((v) => !v);
             setPage(0);
@@ -1794,6 +1794,7 @@ interface StoreRulePreview {
   total: number;
   applicable: number;
   lockedByDoc: number;
+  manualKept: number;
   isPg: boolean;
   distinctStores: number;
   breakdown: Array<{ categoryKey: string | null; label: string; count: number }>;
@@ -1958,6 +1959,7 @@ function StoreRuleModal({
             <div>
               매칭 <b>{preview.total}건</b> · 이번에 적용 <b>{preview.applicable}건</b>
               {preview.lockedByDoc > 0 && <span className="cd-text-muted"> (결의서 귀속 {preview.lockedByDoc}건 제외)</span>}
+              {preview.manualKept > 0 && <span className="cd-text-muted"> (직접 지정한 {preview.manualKept}건은 그대로 유지)</span>}
             </div>
             <div className="cd-text-muted">
               현재 분류: {preview.breakdown.map((b) => `${b.label} ${b.count}`).join(" · ") || "—"}
@@ -1989,7 +1991,7 @@ function StoreRuleModal({
 
         {error && <div className="cd-error-text text-xs">{error}</div>}
         <p className="text-[11px] cd-text-faint">
-          ※ 저장 후 새로 수집되는 매입건도 이 규칙으로 자동 분류됩니다. 규칙은 부가세 집계 탭에서 확인·삭제할 수 있습니다.
+          ※ 저장 후 새로 수집된 매입건은 자동분류 재실행 때 이 규칙이 가장 먼저 적용됩니다. 규칙은 카드 매입 집계 탭에서 확인·삭제할 수 있습니다.
         </p>
       </div>
     </CdModal>
@@ -2860,6 +2862,7 @@ interface TaxInvoiceRow {
   amountTotal: number;
   taxTotal: number;
   totalAmount: number;
+  taxType: number; // 1 과세 / 2 영세 / 3 면세
   invoiceeCorpName: string | null;
   invoiceeEmail: string | null;
   barobillState: number | null;
@@ -2973,7 +2976,7 @@ function TaxInvoicePanel() {
       <p className="text-xs cd-text-muted mb-3">
         발행은 계약 상세의 청구·수금 단계에서 <b>전자발행</b> 버튼으로 합니다. 국세청 전송은 발행 다음 날 일괄 처리되므로, 전송 상태는 상태 갱신 후에 반영됩니다.
         <br />
-        발급된 계산서는 취소할 수 없습니다 — 금액·내용을 정정하려면 수정세금계산서를 발행해야 합니다(현재는 바로빌 홈페이지에서 처리).
+        발급된 계산서는 취소할 수 없습니다 — 금액·내용을 정정하려면 국세청 전송완료 건의 <b>수정발행</b>으로 수정세금계산서를 발행합니다.
       </p>
       {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
@@ -3062,7 +3065,7 @@ function TaxInvoicePanel() {
 /** 수정세금계산서 사유(국세청 6종) — lib/barobill/tax-invoice.ts 의 MODIFY_CODES 와 동일. */
 const MODIFY_CODES: Array<{ code: string; label: string; hint: string; negative: boolean }> = [
   { code: "1", label: "기재사항 착오정정", hint: "금액 외 기재사항을 잘못 적은 경우", negative: false },
-  { code: "2", label: "공급가액 변동", hint: "정산·단가 조정 등 — 증감분만 발행(감액이면 음수)", negative: false },
+  { code: "2", label: "공급가액 변동", hint: "정산·단가 조정 등 — 증감분만 발행(증액·감액을 고르면 감액은 음수로 발행)", negative: false },
   { code: "3", label: "환입", hint: "반품 — 환입 금액만큼 음수 발행", negative: true },
   { code: "4", label: "계약의 해제", hint: "당초 발행을 되돌림 — 음수 발행", negative: true },
   { code: "5", label: "내국신용장 사후개설", hint: "내국신용장이 사후 개설된 경우", negative: false },
@@ -3075,6 +3078,7 @@ const MODIFY_CODES: Array<{ code: string; label: string; hint: string; negative:
  */
 function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceRow | null; onClose: () => void; onIssued: () => void }) {
   const [modifyCode, setModifyCode] = useState("2");
+  const [decrease, setDecrease] = useState(false); // 사유 2(공급가액 변동)의 감액 여부
   const [writeDate, setWriteDate] = useState("");
   const [supplyInput, setSupplyInput] = useState("");
   const [itemName, setItemName] = useState("");
@@ -3087,6 +3091,7 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
   useEffect(() => {
     if (!origin) return;
     setModifyCode("2");
+    setDecrease(false);
     setWriteDate(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
     setSupplyInput(String(Math.abs(Math.round(origin.amountTotal))));
     setItemName(`${origin.contractTitle ?? ""} ${origin.stageLabel ?? ""} 수정분`.trim());
@@ -3094,10 +3099,13 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
     setError(null);
   }, [origin]);
 
-  // 음수 사유면 부호를 자동으로 뒤집는다. 입력은 항상 양수로 받는다.
-  const sign = meta.negative ? -1 : 1;
+  // 음수 사유(또는 공급가액 변동의 감액)면 부호를 자동으로 뒤집는다. 입력은 항상 양수로 받는다.
+  const negative = meta.negative || (modifyCode === "2" && decrease);
+  const sign = negative ? -1 : 1;
   const supply = sign * (Number(supplyInput.replace(/[^0-9]/g, "")) || 0);
-  const tax = Math.round(supply * 0.1);
+  // 영세율·면세 원본은 수정분도 세액이 없다.
+  const zeroTax = (origin?.taxType ?? 1) !== 1;
+  const tax = zeroTax ? 0 : Math.round(supply * 0.1);
   const total = supply + tax;
 
   const submit = async () => {
@@ -3164,6 +3172,16 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
             ))}
           </select>
           <p className="text-[11px] cd-text-faint mt-1">{meta.hint}</p>
+          {modifyCode === "2" && (
+            <div className="flex items-center gap-4 mt-1.5 text-xs" role="radiogroup" aria-label="공급가액 변동 방향">
+              <label className="inline-flex items-center gap-1">
+                <input type="radio" name="modify-direction" checked={!decrease} onChange={() => setDecrease(false)} /> 증액
+              </label>
+              <label className="inline-flex items-center gap-1">
+                <input type="radio" name="modify-direction" checked={decrease} onChange={() => setDecrease(true)} /> 감액
+              </label>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label>
@@ -3171,7 +3189,7 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
             <CdDateInput className="mt-0.5" value={writeDate} onChange={setWriteDate} aria-label="작성일자" />
           </label>
           <label>
-            <span className="text-[11px] cd-text-faint">공급가액{meta.negative ? " (음수로 발행됩니다)" : ""}</span>
+            <span className="text-[11px] cd-text-faint">공급가액{negative ? " (음수로 발행됩니다)" : ""}</span>
             <input
               className="cd-input mt-0.5 text-right font-mono"
               inputMode="numeric"
@@ -3190,7 +3208,7 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
         </label>
         <div className="flex items-center gap-4 text-xs">
           <span><span className="cd-text-muted mr-1">공급가액</span><b className="font-mono">{fmtAmount(supply)}</b></span>
-          <span><span className="cd-text-muted mr-1">세액</span><b className="font-mono">{fmtAmount(tax)}</b></span>
+          <span><span className="cd-text-muted mr-1">세액{zeroTax ? "(영세·면세)" : ""}</span><b className="font-mono">{fmtAmount(tax)}</b></span>
           <span><span className="cd-text-muted mr-1">합계</span><b className="font-mono text-[13px]">{fmtAmount(total)}원</b></span>
         </div>
         <p className="text-[11px] cd-text-faint">

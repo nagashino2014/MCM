@@ -3,11 +3,11 @@
 // 자산·예산 패널 3종 (accounting-expansion 블루프린트 §5 P6)
 // - FixedAssetPanel: 고정자산 대장 + 정액/정률 월할 상각 스케줄 — 전표(감가상각 818/누계액)는 재생성이 자동 기표.
 // - TripLogPanel: 운행기록부 — 승인 출장신청서에서 초안 파생 + 거리 수기 보완 + xlsx.
-// - BudgetPanel: 계정과목별 연간 예산 + 전표 기준 집행 현황 — 지출결의 기안 시 사전검토 경고와 연동.
+// - BudgetPanel: 경비 분류별 연간 예산 + 전표 기준 집행 현황 — 지출결의 기안 시 사전검토 경고와 연동.
 // FinanceBoard 의 소메뉴 "자산·예산" 그룹에서 렌더된다(JournalPanels 스타일 관례 동일).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Download, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { Check, Download, Pencil, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
@@ -490,11 +490,13 @@ export function BudgetPanel() {
   };
 
   const unbudgeted = categories.filter((c) => !budgets.some((b) => b.categoryKey === c.key));
+  // 금액 변경 = 같은 분류로 다시 저장(서버 upsert). 연필로 고른 등록 분류는 선택 목록에 함께 보인다.
+  const editing = budgets.find((b) => b.categoryKey === form.categoryKey) ?? null;
 
   return (
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <div className="cd-card-title mr-auto">연간 예산 — 계정과목별</div>
+        <div className="cd-card-title mr-auto">연간 예산 — 경비 분류별</div>
         <select className="cd-select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
           {[thisYear() - 1, thisYear(), thisYear() + 1].map((y) => (
             <option key={y} value={y}>{y}년</option>
@@ -502,7 +504,7 @@ export function BudgetPanel() {
         </select>
       </div>
       <div className="text-xs cd-text-muted mb-3">
-        예산을 등록한 계정과목은 지출결의·출장경비 기안 시 잔액이 표시되고 초과하면 경고합니다(사전검토). 집행액은 전표(자동+확정)
+        예산을 등록한 경비 분류는 지출결의·출장경비 기안 시 잔액이 표시되고 초과하면 경고합니다(사전검토). 집행액은 전표(자동+확정)
         기준이라 법인카드·계좌 지출이 모두 반영됩니다.
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
@@ -511,7 +513,7 @@ export function BudgetPanel() {
         <table className="w-full text-sm max-w-[760px]">
           <thead className="cd-table-head">
             <tr className="cd-text-muted text-left">
-              <th className="py-1.5 pr-3 font-normal">계정과목</th>
+              <th className="py-1.5 pr-3 font-normal">경비 분류</th>
               <th className="py-1.5 pr-3 font-normal text-right">예산</th>
               <th className="py-1.5 pr-3 font-normal text-right">집행</th>
               <th className="py-1.5 pr-3 font-normal text-right">잔액</th>
@@ -540,7 +542,10 @@ export function BudgetPanel() {
                     </div>
                   </td>
                   <td className="py-2 whitespace-nowrap">
-                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void act({ action: "delete", budgetId: b.budgetId }, "예산을 삭제했습니다.")}>
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} title="금액 변경" onClick={() => setForm({ categoryKey: b.categoryKey, amount: String(b.amount) })}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} title="삭제" onClick={() => void act({ action: "delete", budgetId: b.budgetId }, "예산을 삭제했습니다.")}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </td>
@@ -549,7 +554,7 @@ export function BudgetPanel() {
             })}
             {!loading && budgets.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center cd-text-muted text-sm">등록된 예산이 없습니다 — 통제할 계정과목만 아래에서 등록하세요.</td>
+                <td colSpan={6} className="py-6 text-center cd-text-muted text-sm">등록된 예산이 없습니다 — 통제할 경비 분류만 아래에서 등록하세요.</td>
               </tr>
             )}
           </tbody>
@@ -557,7 +562,8 @@ export function BudgetPanel() {
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <select className="cd-select" value={form.categoryKey} onChange={(e) => setForm((p) => ({ ...p, categoryKey: e.target.value }))}>
-          <option value="">계정과목 선택…</option>
+          <option value="">경비 분류 선택…</option>
+          {editing && <option value={editing.categoryKey}>{editing.categoryLabel}</option>}
           {unbudgeted.map((c) => (
             <option key={c.key} value={c.key}>{c.label}</option>
           ))}
@@ -575,13 +581,18 @@ export function BudgetPanel() {
           className="cd-btn cd-btn-primary cd-btn-sm"
           disabled={busy || !form.categoryKey || !form.amount}
           onClick={() =>
-            void act({ action: "save", year, categoryKey: form.categoryKey, amount: Number(form.amount) }, "예산을 등록했습니다.").then((saved) =>
+            void act({ action: "save", year, categoryKey: form.categoryKey, amount: Number(form.amount) }, editing ? "예산 금액을 변경했습니다." : "예산을 등록했습니다.").then((saved) =>
               saved && setForm({ categoryKey: "", amount: "" }),
             )
           }
         >
-          <Check className="w-3.5 h-3.5" /> 등록
+          <Check className="w-3.5 h-3.5" /> {editing ? "변경" : "등록"}
         </button>
+        {editing && (
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => setForm({ categoryKey: "", amount: "" })}>
+            취소
+          </button>
+        )}
       </div>
     </div>
   );

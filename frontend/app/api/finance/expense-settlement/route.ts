@@ -5,8 +5,9 @@ import {
   buildCmsFile,
   groupByPerson,
   listSettlementItems,
+  listOutOfScopeLegacyRows,
   listSettlements,
-  listUnsettledItems,
+  listUnsettledOverview,
   monthlyTrend,
   runSettlement,
 } from "@/lib/finance/expense-settlement";
@@ -37,8 +38,9 @@ export async function GET(req: NextRequest) {
     if (sp.get("view") === "list") {
       return NextResponse.json({ settlements: await listSettlements() });
     }
-    const items = await listUnsettledItems();
-    return NextResponse.json({ items, persons: await groupByPerson(items) });
+    // 미정산 현황 — 불지급 식대 합계와 정산 범위 밖 과거 지출(조회 전용, G-8)을 함께 준다.
+    const { items, withheld } = await listUnsettledOverview();
+    return NextResponse.json({ items, persons: await groupByPerson(items), withheld, outOfScope: await listOutOfScopeLegacyRows() });
   } catch (err) {
     return authErrorToResponse(err);
   }

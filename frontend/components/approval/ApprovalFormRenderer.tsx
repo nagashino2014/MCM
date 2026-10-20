@@ -5,7 +5,7 @@
 // values/onChange 를 주면 제어 입력(기안 화면), 없으면 내부 상태(미리보기)로 동작한다.
 // 설계: docs/e-approval-blueprint.md §3·§5. 표(table) 필드는 행 추가/삭제+합계 자동.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { HelpCircle, Plus, Users, X } from "lucide-react";
 import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
@@ -1128,14 +1128,21 @@ function TableInput({
   readOnly?: boolean;
 }) {
   const cols = f.tableColumns ?? [];
+  // 불러오기 전용 표(G-8 지출 내역) — 행 추가·빈 행 없이 불러온 행만 보여 준다.
+  const importOnly = !readOnly ? f.importOnly : undefined;
   const emptyRow = () => Object.fromEntries(cols.map((c) => [c.key, ""]));
   const rows: Record<string, unknown>[] = useMemo(() => {
     const arr = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
+    if (importOnly) {
+      return arr.filter(
+        (r) => r && typeof r === "object" && Object.entries(r).some(([k, v]) => !k.startsWith("_") && (Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== "")),
+      );
+    }
     const min = Math.max(1, f.minRows ?? 1);
     if (arr.length >= min) return arr;
     return [...arr, ...Array.from({ length: min - arr.length }, emptyRow)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, f.minRows, cols.length]);
+  }, [value, f.minRows, cols.length, !!importOnly]);
 
   const update = (ri: number, key: string, v: unknown) => {
     const next = rows.map((r, i) => (i === ri ? { ...r, [key]: v } : r));
@@ -1187,12 +1194,32 @@ function TableInput({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, ri) => (
-            <tr key={ri}>
+          {importOnly && rows.length === 0 && (
+            <tr>
+              <td colSpan={cols.length + 1} className="border cd-border-c px-2 py-3 text-center text-[12px] cd-text-faint">
+                {importOnly.emptyText}
+              </td>
+            </tr>
+          )}
+          {rows.map((r, ri) => {
+            const rowIssue = importOnly?.rowIssue?.(r) ?? null;
+            return (
+            <Fragment key={ri}>
+            <tr>
               {cols.map((c) => (
                 <td key={c.key} className="border cd-border-c p-0 align-middle">
                   {c.type === "rowno" ? (
                     <div className="px-1.5 py-1.5 text-center cd-text-faint">{ri + 1}</div>
+                  ) : c.locked && !readOnly ? (
+                    // 증빙에서 불러온 값(G-8) — 사용일·상호·금액은 원본 그대로 둔다(서버가 사용일·금액을 원본과 대조).
+                    <div
+                      className={`px-1.5 py-1.5 text-[12px] cd-text whitespace-nowrap ${c.type === "currency" ? "text-right" : "truncate"}`}
+                      title="증빙에서 불러온 값입니다. 고치려면 행을 삭제하고 다시 불러오세요."
+                    >
+                      {c.type === "currency" && String(r[c.key] ?? "").trim() !== ""
+                        ? fmtComma(Number(String(r[c.key]).replace(/[^\d.-]/g, "")))
+                        : String(r[c.key] ?? "")}
+                    </div>
                   ) : c.type === "link" ? (
                     readOnly ? (
                       String(r[c.key] ?? "").trim() ? (
@@ -1363,7 +1390,16 @@ function TableInput({
                 </td>
               )}
             </tr>
-          ))}
+            {rowIssue && (
+              <tr>
+                <td colSpan={cols.length + 1} className="px-2 py-1 text-[11.5px]" style={{ color: "var(--cd-danger,#FA896B)" }}>
+                  {ri + 1}행: {rowIssue} — 행을 삭제하고 불러오기로 다시 담으세요.
+                </td>
+              </tr>
+            )}
+            </Fragment>
+            );
+          })}
           {sum != null && (
             <tr>
               {cols.map((c, ci) => (
@@ -1376,7 +1412,7 @@ function TableInput({
           )}
         </tbody>
       </table>
-      {!readOnly && (
+      {!readOnly && !importOnly && (
         <button
           type="button"
           className="mt-1.5 text-[11.5px] cd-text-primary flex items-center gap-1"

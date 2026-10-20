@@ -29,8 +29,9 @@ export async function PATCH(req: NextRequest) {
     if (!body.settleId) return NextResponse.json({ error: "settleId가 필요합니다." }, { status: 400 });
     await updateSeveranceSettlement({
       settleId: body.settleId,
-      severanceAmount: body.severanceAmount != null ? Math.round(Number(body.severanceAmount)) : null,
-      note: body.note ?? null,
+      // 키가 없으면 유지, null·빈 값이면 비운다.
+      severanceAmount: !("severanceAmount" in body) ? undefined : body.severanceAmount != null ? Math.round(Number(body.severanceAmount)) : null,
+      note: !("note" in body) ? undefined : body.note?.trim() ? body.note : null,
       status: body.status,
       actorUserId: actor.userId,
     });

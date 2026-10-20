@@ -170,8 +170,9 @@ async function runApprovalDocsAggregate(def: AggregateDefinition, label: string,
   const notes: string[] = [];
   const bump = (k: string) => (excluded[k] = (excluded[k] ?? 0) + 1);
 
-  // 대상 양식 해석 — auto 는 measure 태그를 가진 모든 양식(태그가 계약)
-  const formRows = rowsToObjects(await db.exec("SELECT form_id, name, fields FROM approval_forms WHERE use_yn = 1"));
+  // 대상 양식 해석 — auto 는 measure 태그를 가진 모든 양식(태그가 계약).
+  // 사용 해제(use_yn=0) 양식도 포함한다 — 해제 전에 결재된 문서가 집계에서 빠지지 않게.
+  const formRows = rowsToObjects(await db.exec("SELECT form_id, name, fields FROM approval_forms"));
   const formDefs = formRows.map((r) => ({ formId: String(r.form_id), name: String(r.name), fields: parseFields(r.fields) }));
   let targets = formDefs;
   if (Array.isArray(def.source.forms)) {

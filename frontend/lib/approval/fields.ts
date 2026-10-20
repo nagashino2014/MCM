@@ -146,6 +146,8 @@ export interface ApprovalTableColumn {
   semantic?: ApprovalFieldSemantic;
   /** 기안자 편집 잠금 — 자동 채움 전용 열(지출 표의 분류: 자동 분류 실패 건은 재무 카드 원장에서 분류, 2026-08-26) */
   readonly?: boolean;
+  /** 불러온 값 고정(G-8, 화면 전용) — 증빙에서 온 사용일·상호·금액. 값을 그대로 보여 주고 고칠 수 없다 */
+  locked?: boolean;
   /** 열 너비(px) — 화면 표·PDF 의 폭 비중. 없으면 자동(2026-10-16 사용일시·금액 열 축소) */
   width?: number;
   /** select 선택지별 도움말 — 그 값을 고르면 칸에 (?) 가 붙는다(기타 출장 경비·기타 수수료 예시) */
@@ -169,6 +171,8 @@ export interface ApprovalFieldDef {
   /** table 전용 */
   tableColumns?: ApprovalTableColumn[];
   minRows?: number;
+  /** table 전용·화면 전용(G-8) — 행은 불러오기로만 만든다: 행 추가·빈 행 없음, 규칙 위반 행은 사유를 표시 */
+  importOnly?: { emptyText: string; rowIssue?: (row: Record<string, unknown>) => string | null };
   /** table 에서 합계를 자동 계산할 컬럼 key(currency/number) */
   sumColumn?: string;
   /** user_select 전용 — 복수 인원 선택 허용(동행자 등) */

@@ -12,7 +12,7 @@ import { listSettlementItems, listSettlements, type SettlementItemRow } from "@/
 
 /*
  * 부가세 신고 자료 묶음(FRM-P6) — 정산 1건의 개인카드 지출을 세무사 제출 세트로 만든다.
- *  ① 지출결의서(개인카드) 문서 PDF(결재 지면 그대로)
+ *  ① 지출결의서(개인) 문서 PDF(결재 지면 그대로)
  *  ② 출장보고서는 개인카드 행만 추린 별도 집계 PDF(문서별 1장 — 법인카드 행 제외 요건)
  *  ③ 각 행에 매칭된 영수증 증빙 PDF(personal_receipts.pdf_key, 스캔 이미지 포함)
  * zip 으로 묶어 저장하고, 요청 시 세무사 메일로 발송한다(발송 이력은 expense_settlements 에 기록).
@@ -127,7 +127,7 @@ export async function buildVatBundle(settlementId: string): Promise<VatBundleRes
     if (doc.formId === "frm-expense-personal") {
       // 결재 지면 그대로 — 표 전체가 개인카드 내역
       const bytes = await createApprovalDocPdf(doc, []);
-      zip.file(`지출결의서(개인카드)/${base}.pdf`, bytes);
+      zip.file(`지출결의서(개인)/${base}.pdf`, bytes);
     } else {
       // 출장보고서 — 개인카드 행만 추린 별도 집계 지면
       const bytes = await buildTripPersonalPdf(doc, docItems);
@@ -187,7 +187,7 @@ export async function sendVatBundle(params: {
     to: [{ address: params.toEmail, name: params.toName ?? undefined }],
     subject: `[부가세 자료] 개인카드 지출 증빙 — ${label}`,
     bodyHtml: `<p>안녕하세요.</p><p>부가세 신고용 개인카드 지출 자료(${label})를 송부드립니다.<br/>` +
-      `구성: 지출결의서(개인카드)·출장보고서 개인카드 내역·영수증 증빙 ${bundle.receiptCount}건.</p>` +
+      `구성: 지출결의서(개인)·출장보고서 개인 지출 내역·영수증 증빙 ${bundle.receiptCount}건.</p>` +
       (params.message ? `<p>${params.message}</p>` : "") +
       `<p>감사합니다.</p>`,
     attachments: [{ filename: bundle.fileName, contentType: "application/zip", content }],

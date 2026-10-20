@@ -295,7 +295,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(summary);
+    // 적재 후에도 화면의 대상 선택 목록이 유지되도록 미리보기와 같이 대상 목록을 함께 돌려준다.
+    return NextResponse.json({ ...summary, targets: targets.filter((t) => t.kind === parsed.kind) });
   } catch (err) {
     return authErrorToResponse(err);
   }

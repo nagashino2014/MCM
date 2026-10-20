@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard, ShoppingBag, BedDouble } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard, ShoppingBag, BedDouble, FileText } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -27,6 +27,7 @@ import {
 import type { OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { CardPickerModal, type CardPickerItem } from "@/components/finance/CardPickerModal";
 import { ReceiptPickerModal, type ReceiptPickerItem } from "@/components/finance/ReceiptPickerModal";
+import { EXPENSE_SOURCE_FORMS, expenseRowSourceIssue, lockedExpenseColumns } from "@/lib/approval/expense-sources";
 import { ShopReceiptPickerModal, type ShopReceiptPickerItem } from "@/components/finance/ShopReceiptPickerModal";
 import {
   RELATED_CONTRACT_KEY,
@@ -42,11 +43,13 @@ import "@/components/cdash/cdash.css";
 // corporate=법인카드(card_transactions)·personal=개인카드 영수증 스톡(personal_receipts) 버튼 노출.
 // shop=쇼핑몰 전표(shop_receipts, 2026-09-15) — 구매품의 물품의 품목 표기 전표는 법인카드 결의서에서만.
 // 지출결의서는 법인/개인 양식이 분리(202)되어 각자 해당 소스만 불러온다(FRM-P1 확정).
+// evidence=기타 개인 지출증빙(G-8, 2026-10-20 — 계좌이체 확인증·수기 영수증 등, 웹 등록) — 개인카드 영수증 버튼 오른쪽.
+// 지출 행은 이 불러오기로만 만든다(직접 입력 불허, 규칙·서버 검사는 lib/approval/expense-sources*.ts).
 // 설계: docs/barobill-finance-blueprint.md §4 F1/F2.
-const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean; shop?: boolean }> = {
+const CARD_EXPENSE_FORMS: Record<string, { tableKey: string; dateKey: string; corporate: boolean; personal: boolean; evidence?: boolean; shop?: boolean }> = {
   "frm-expense-report": { tableKey: "expenses", dateKey: "used_on", corporate: true, personal: false, shop: true },
-  "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on", corporate: false, personal: true },
-  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on", corporate: true, personal: true },
+  "frm-expense-personal": { tableKey: "expenses", dateKey: "used_on", corporate: false, personal: true, evidence: true },
+  "frm-biz-trip-report": { tableKey: "trip_expenses", dateKey: "spent_on", corporate: true, personal: true, evidence: true },
 };
 
 /** 숙박출장수당 미리보기(224) — 출장보고서 기안 배너. */
@@ -425,6 +428,8 @@ export function ApprovalDraftBoard() {
 
   // 개인카드 영수증 불러오기(accounting-expansion P1) — 법인카드와 같은 표 대상, _receiptId 메타.
   const [receiptPicker, setReceiptPicker] = useState(false);
+  // 기타 개인 지출증빙(G-8) — 같은 영수증 스톡(personal_receipts source='manual')을 별도 창으로 연다.
+  const [evidencePicker, setEvidencePicker] = useState(false);
   const receiptExistingIds = useMemo(() => {
     if (!cardExpenseTarget) return [] as string[];
     const rows = values[cardExpenseTarget.tableKey];
@@ -489,6 +494,7 @@ export function ApprovalDraftBoard() {
 
   // 쇼핑몰 전표 불러오기(2026-09-15) — 지출결의서(법인카드) 한정. 표에 이미 담긴 카드 승인건과 매칭된 전표는
   // 행을 만들지 않고 PDF 첨부만 추가한다(같은 결제의 이중 기입 방지). 나머지는 행 + 첨부.
+  // G-8(2026-10-20): 법인카드 승인건과 매칭된 전표만 담는다 — 새 행은 매칭된 카드 승인건의 사용일·금액으로 만든다.
   const [shopPicker, setShopPicker] = useState(false);
   const shopExistingIds = useMemo(() => {
     if (!cardExpenseTarget) return [] as string[];
@@ -504,8 +510,13 @@ export function ApprovalDraftBoard() {
       if (!cardExpenseTarget || !picked.length) return;
       const { tableKey, dateKey } = cardExpenseTarget;
       const cardIds = new Set(cardExistingIds);
-      const attachOnly = picked.filter((i) => i.matchedTxnId && cardIds.has(i.matchedTxnId));
-      const asRows = picked.filter((i) => !(i.matchedTxnId && cardIds.has(i.matchedTxnId)));
+      const unmatched = picked.filter((i) => !i.matchedTxnId || !i.matchedTxn);
+      if (unmatched.length) {
+        alert(`법인카드 승인건과 매칭되지 않은 전표 ${unmatched.length}건은 담지 않았습니다. 재무 > 쇼핑몰 전표에서 카드 매칭을 먼저 확인하세요.`);
+      }
+      const matched = picked.filter((i) => i.matchedTxnId && i.matchedTxn);
+      const attachOnly = matched.filter((i) => cardIds.has(i.matchedTxnId as string));
+      const asRows = matched.filter((i) => !cardIds.has(i.matchedTxnId as string));
       if (asRows.length) {
         setValues((prev) => {
           const current = Array.isArray(prev[tableKey]) ? ([...(prev[tableKey] as unknown[])] as Record<string, unknown>[]) : [];
@@ -513,13 +524,14 @@ export function ApprovalDraftBoard() {
             row && typeof row === "object" ? Object.values(row).some((v) => String(v ?? "").trim() !== "") : false,
           );
           const added = asRows.map((item) => ({
-            [dateKey]: item.orderDate || (item.matchedTxn?.approvedAt ?? "").slice(0, 10),
+            // 사용일·금액은 매칭된 법인카드 승인건 값(서버가 승인내역과 대조한다)
+            [dateKey]: (item.matchedTxn?.approvedAt ?? "").slice(0, 10),
             category: "", // 자동 분류 없음 — 재무 원장에서 분류
             vendor: item.siteName,
-            amount: String(item.amount),
+            amount: String(item.matchedTxn?.amountTotal ?? item.amount),
             detail: "", // 지출 목적은 목록에서 고른다(2026-10-16) — 품목은 첨부 전표 PDF 로 확인
             _shopReceiptId: item.receiptId,
-            ...(item.matchedTxnId ? { _cardTxnId: item.matchedTxnId } : {}),
+            _cardTxnId: item.matchedTxnId,
           }));
           return { ...prev, [tableKey]: [...nonEmpty, ...added] };
         });
@@ -1028,15 +1040,28 @@ export function ApprovalDraftBoard() {
 
   // 지출 표의 분류 열은 자동 분류 전용(2026-08-26 사용자 확정) — 기안자가 계정과 다른 분류를
   // 고르는 것을 막는다. 자동 분류 실패(빈 값) 건은 재무의 카드 원장에서 수동 분류한다.
+  // G-8(2026-10-20): 지출 행은 불러오기로만 만든다 — 행 추가·빈 행 없음, 사용일·상호·금액은 증빙 값 그대로(잠금).
   const renderFields = useMemo(() => {
     if (!form) return [] as ApprovalFieldDef[];
     if (!cardExpenseTarget) return form.fields;
+    const sourceForm = EXPENSE_SOURCE_FORMS[form.formId];
+    const locked = new Set(sourceForm ? lockedExpenseColumns(sourceForm) : []);
     return form.fields.map((f) =>
       f.type === "table" && f.key === cardExpenseTarget.tableKey && f.tableColumns
         ? {
             ...f,
+            importOnly: sourceForm
+              ? {
+                  emptyText: "위의 불러오기 버튼으로 지출 내역을 담으세요. 직접 입력할 수 없습니다.",
+                  rowIssue: (row: Record<string, unknown>) => expenseRowSourceIssue(form.formId, row),
+                }
+              : undefined,
             tableColumns: f.tableColumns.map((c) =>
-              c.key === "category" || (c.type === "related" && form.formId === "frm-biz-trip-report") ? { ...c, readonly: true } : c
+              c.key === "category" || (c.type === "related" && form.formId === "frm-biz-trip-report")
+                ? { ...c, readonly: true }
+                : locked.has(c.key)
+                  ? { ...c, locked: true }
+                  : c
             ),
           }
         : f
@@ -1056,6 +1081,12 @@ export function ApprovalDraftBoard() {
           typeof r === "object" &&
           Object.entries(r).some(([k, v]) => !k.startsWith("_") && String(v ?? "").trim() !== "")
       );
+      // 불러오기로 만들지 않은 행(직접 입력·매칭 안 된 전표 등, G-8) — 서버도 거부한다.
+      const badSource = active.filter((r) => expenseRowSourceIssue(form.formId, r));
+      if (badSource.length) {
+        alert(`불러오기로 담지 않은 지출 행이 ${badSource.length}건 있습니다.\n표에 빨간 글씨로 표시된 행을 삭제하고 불러오기 버튼으로 다시 담으세요.`);
+        return false;
+      }
       const noDetail = active.filter((r) => !String(r.detail ?? "").trim());
       if (noDetail.length) {
         alert(`지출 내역의 '지출 목적'이 비어 있는 행이 ${noDetail.length}건 있습니다.\n모든 지출 건에 지출 목적을 선택해야 상신할 수 있습니다.`);
@@ -1404,6 +1435,16 @@ export function ApprovalDraftBoard() {
                     <CreditCard className="w-3.5 h-3.5" /> 개인카드 영수증 불러오기
                   </button>
                 )}
+                {cardExpenseTarget.evidence && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-soft cd-btn-sm"
+                    title="계좌이체 확인증·수기 영수증 등 카드 영수증이 아닌 증빙(이미지·PDF)을 올리고 내역을 입력해 담습니다"
+                    onClick={() => openExpensePicker(() => setEvidencePicker(true))}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> 기타 개인 지출증빙
+                  </button>
+                )}
                 {cardExpenseTarget.shop && (
                   <button
                     type="button"
@@ -1415,7 +1456,7 @@ export function ApprovalDraftBoard() {
                   </button>
                 )}
                 <span className="text-[11px] cd-text-faint">
-                  선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
+                  지출 내역은 불러오기로만 담습니다 — 사용일시·상호·금액·분류가 자동 기입되고, 지출 목적만 고르면 됩니다
                 </span>
                 <CdHelp topic="approval.draft-expense" />
               </div>
@@ -1806,8 +1847,25 @@ export function ApprovalDraftBoard() {
       {/* 개인카드 영수증 불러오기 모달(accounting-expansion P1) — 지출결의서(개인)·출장보고서 한정 */}
       {cardExpenseTarget?.personal && form && (
         <ReceiptPickerModal
+          mode="mobile"
           open={receiptPicker}
           onClose={() => setReceiptPicker(false)}
+          formId={form.formId}
+          existingIds={receiptExistingIds}
+          onPick={appendReceiptRows}
+          purposeOptions={purposeOptions}
+          defaultRelated={tripRelated}
+          lockedPeriod={tripPeriod}
+          relatedLocked={form.formId === "frm-biz-trip-report"}
+        />
+      )}
+
+      {/* 기타 개인 지출증빙 모달(G-8) — 지출결의서(개인)·출장보고서 한정, 웹 등록 증빙(source='manual') */}
+      {cardExpenseTarget?.evidence && form && (
+        <ReceiptPickerModal
+          mode="manual"
+          open={evidencePicker}
+          onClose={() => setEvidencePicker(false)}
           formId={form.formId}
           existingIds={receiptExistingIds}
           onPick={appendReceiptRows}

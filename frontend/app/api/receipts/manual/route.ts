@@ -25,8 +25,8 @@ interface ManualEntry {
 }
 
 /**
- * POST: 영수증 직접 첨부(2026-09-15) — multipart `files[]` + `entries`(JSON 배열, 건별 내역·fileIndex).
- * 계좌이체 확인증·수기 전표 등 모바일 촬영 밖의 증빙을 웹 기안 화면에서 여러 건 한 번에 올린다.
+ * POST: 기타 개인 지출증빙 등록(2026-09-15 직접 첨부 → 2026-10-20 G-8 개칭) — multipart `files[]` + `entries`(JSON 배열, 건별 내역·fileIndex).
+ * 계좌이체 확인증·수기 영수증 등 모바일 촬영 밖의 증빙을 웹 기안 화면에서 여러 건 한 번에 올린다(웹 전용, 모바일 진입점 없음).
  * 응답은 기안 피커(ReceiptPickerItem) 형태 — 저장 즉시 표 행·첨부로 담을 수 있게.
  */
 export async function POST(req: NextRequest) {
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
       const file = typeof e.fileIndex === "number" ? files[e.fileIndex] : undefined;
       if (!storeName) return NextResponse.json({ error: `${i + 1}행: 상호를 입력하세요.` }, { status: 400 });
       if (!(amount > 0)) return NextResponse.json({ error: `${i + 1}행: 금액을 입력하세요.` }, { status: 400 });
-      if (paidAt && !DATE_RE.test(paidAt)) return NextResponse.json({ error: `${i + 1}행: 사용일은 YYYY-MM-DD 형식이어야 합니다.` }, { status: 400 });
+      // 기타 개인 지출증빙(G-8) — 사용일은 필수(출장기간 대조·정산 귀속월의 근거)
+      if (!DATE_RE.test(paidAt)) return NextResponse.json({ error: `${i + 1}행: 사용일(YYYY-MM-DD)을 입력하세요.` }, { status: 400 });
       if (!file) return NextResponse.json({ error: `${i + 1}행: 증빙 파일(이미지 또는 PDF)을 첨부하세요.` }, { status: 400 });
       if (file.size > MAX_BYTES) return NextResponse.json({ error: `${i + 1}행: 파일이 너무 큽니다(20MB 이하).` }, { status: 400 });
       const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);

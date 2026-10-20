@@ -6,8 +6,13 @@ import { expenseMealAction, loadExpenseMealActions } from "./expense-meal-action
 import { lockExpenseSettlement } from "./expense-settlement-lock";
 
 /*
- * 개인카드 경비 정산(FRM-P6, 203) — 승인된 지출결의서(개인카드) 전 행 + 출장보고서의
- * 개인카드 행(_receiptId 표식)을 취합해 월 1회 일괄 정산한다.
+ * 개인 경비 정산(FRM-P6, 203) — 승인된 지출결의서(개인) 전 행 + 출장보고서의
+ * 개인 증빙 행(_receiptId 표식)을 취합해 월 1회 일괄 정산한다.
+ *  - G-8(2026-10-20): 지출 행은 증빙 불러오기로만 만들어지므로(직접 입력 불허) 새 문서의 개인 지출은
+ *    전부 _receiptId(모바일 촬영 영수증·기타 개인 지출증빙)를 갖는다 → 정산 대상 = 개인 지출 전부.
+ *    경비 환급 목록(조회 전용)은 폐지하고 이체 경로를 이 정산(CMS) 하나로 일원화했다.
+ *    그 전에 승인된 출장보고서 수기 행·지출결의서(법인카드)의 비카드 행은 정산 범위 밖 과거 지출로
+ *    조회만 한다(listOutOfScopeLegacyRows — 수기로 적은 법인카드 사용분이 섞였을 수 있어 일괄 이체하지 않는다).
  *  - 미정산 판정: expense_settlement_items.row_ref(전역 유니크)에 없는 행.
  *    row_ref = receipt:<receiptId>(영수증 경유 행) | row:<docId>:<rowIdx>(수기 행 — 개인카드 양식만).
  *  - 출장보고서 수기 행은 법인/개인 구분이 불가능하므로 _receiptId 있는 행만 개인카드로 인정한다.
@@ -32,6 +37,8 @@ export interface UnsettledItem {
   category: string | null;
   amount: number;
   detail: string | null;
+  /** 식대 급여 차감 처분(204) — 정산에는 포함, 회수는 급여대장 '식대환수' 공제(화면 표시용) */
+  mealDeduct?: boolean;
 }
 
 export interface PersonTotal {
@@ -109,8 +116,18 @@ function receiptReferenceCounts(docs: Record<string, unknown>[]): Map<string, nu
   return counts;
 }
 
-/** 미정산 개인카드 지출 행 — 승인 문서 전수 스캔 후 정산된 row_ref 제외. */
+/** 미정산 개인 지출 행 — 승인 문서 전수 스캔 후 정산된 row_ref 제외. 불지급 식대는 빠진다. */
 export async function listUnsettledItems(transaction?: PgDatabase): Promise<UnsettledItem[]> {
+  return (await scanUnsettled(transaction)).payable;
+}
+
+/** 정산 탭 현황 — 지급 대상 + 불지급 처분으로 빠진 식대 합계(종전 경비 환급 화면이 보여 주던 정보). */
+export async function listUnsettledOverview(): Promise<{ items: UnsettledItem[]; withheld: { count: number; amount: number } }> {
+  const { payable, withheld } = await scanUnsettled();
+  return { items: payable, withheld: { count: withheld.length, amount: withheld.reduce((a, i) => a + i.amount, 0) } };
+}
+
+async function scanUnsettled(transaction?: PgDatabase): Promise<{ payable: UnsettledItem[]; withheld: UnsettledItem[] }> {
   const db = transaction ?? await getDb();
   const docs = rowsToObjects(
     await db.exec(
@@ -141,14 +158,80 @@ export async function listUnsettledItems(transaction?: PgDatabase): Promise<Unse
     if (refs.has(item.rowRef)) throw Object.assign(new Error("동일 영수증이 여러 지출 행에 연결되어 있습니다. 원본 연결을 정리한 뒤 정산하세요."), { status: 409 });
     refs.add(item.rowRef);
   }
-  return sourceItems.filter(item => {
-    if (settled.has(item.rowRef)) return false;
+  const payable: UnsettledItem[] = [];
+  const withheld: UnsettledItem[] = [];
+  for (const item of sourceItems) {
+    if (settled.has(item.rowRef)) continue;
     const doc = docs.find(doc => String(doc.doc_id) === item.docId)!;
     const values = parseJson(doc.field_values);
     const sourceRows = values[item.formId === PERSONAL_FORM ? "expenses" : "trip_expenses"] as Record<string, unknown>[];
     const idx = item.receiptId ? sourceRows.findIndex(row => row?._receiptId === item.receiptId) : Number(item.rowRef.slice(`row:${item.docId}:`.length));
-    return expenseMealAction(mealActions, item.formId, item.docId, idx + 1) !== "withhold";
-  });
+    const action = expenseMealAction(mealActions, item.formId, item.docId, idx + 1);
+    if (action === "withhold") withheld.push(item);
+    else payable.push(action === "deduct" ? { ...item, mealDeduct: true } : item);
+  }
+  return { payable, withheld };
+}
+
+export interface OutOfScopeRow {
+  docId: string;
+  docNo: string | null;
+  formId: string;
+  employeeName: string | null;
+  completedAt: string | null;
+  usedOn: string | null;
+  vendor: string | null;
+  amount: number;
+  /** manual=수기 행 / shop=카드와 매칭되지 않은 쇼핑몰 전표 행 */
+  kind: "manual" | "shop";
+}
+
+/**
+ * 정산 범위 밖 과거 지출(G-8) — 직접 입력이 막히기 전에 승인된 출장보고서의 수기 행과
+ * 지출결의서(법인카드)의 비카드 행. 경비 환급 목록에만 보이던 행이라 이체 경로가 없었다.
+ * 수기로 적은 법인카드 사용분이 섞였을 수 있으므로 일괄 정산에 넣지 않고 조회만 한다(개인 지출이 맞으면 개별 이체).
+ * 불지급 처분 식대는 뺀다(회사가 지급하지 않는 지출).
+ */
+export async function listOutOfScopeLegacyRows(): Promise<OutOfScopeRow[]> {
+  const db = await getDb();
+  const docs = rowsToObjects(
+    await db.exec(
+      `SELECT doc_id, doc_no, form_id, drafter_name, completed_at, field_values
+         FROM approval_docs WHERE status = 'approved' AND form_id IN ('frm-expense-report', $1)
+        ORDER BY completed_at DESC`,
+      [TRIP_FORM]
+    )
+  );
+  const settled = new Set(rowsToObjects(await db.exec(`SELECT row_ref FROM expense_settlement_items`)).map((r) => String(r.row_ref)));
+  const mealActions = await loadExpenseMealActions(db, docs.map(d => ({ docId: String(d.doc_id), formId: String(d.form_id) })));
+  const out: OutOfScopeRow[] = [];
+  for (const doc of docs) {
+    const formId = String(doc.form_id);
+    const values = parseJson(doc.field_values);
+    const tableKey = formId === TRIP_FORM ? "trip_expenses" : "expenses";
+    const rows = Array.isArray(values[tableKey]) ? (values[tableKey] as Record<string, unknown>[]) : [];
+    rows.forEach((row, idx) => {
+      if (!row || typeof row !== "object") return;
+      if (typeof row._cardTxnId === "string" && row._cardTxnId) return;
+      if (typeof row._receiptId === "string" && row._receiptId) return; // 출장보고서 영수증 행은 정산 대상
+      const amount = amountOf(row.amount);
+      if (amount <= 0 || settled.has(`row:${String(doc.doc_id)}:${idx}`)) return;
+      if (expenseMealAction(mealActions, formId, String(doc.doc_id), idx + 1) === "withhold") return;
+      const usedOn = row[formId === TRIP_FORM ? "spent_on" : "used_on"];
+      out.push({
+        docId: String(doc.doc_id),
+        docNo: doc.doc_no != null ? String(doc.doc_no) : null,
+        formId,
+        employeeName: doc.drafter_name != null ? String(doc.drafter_name) : null,
+        completedAt: doc.completed_at != null ? String(doc.completed_at).slice(0, 10) : null,
+        usedOn: usedOn != null && String(usedOn) !== "" ? String(usedOn) : null,
+        vendor: row.vendor != null && String(row.vendor) !== "" ? String(row.vendor) : null,
+        amount,
+        kind: typeof row._shopReceiptId === "string" && row._shopReceiptId ? "shop" : "manual",
+      });
+    });
+  }
+  return out;
 }
 
 /** 인별 합계(계좌 정보 포함) — 미정산 목록/정산 상세 공용. */

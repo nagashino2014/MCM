@@ -250,7 +250,7 @@ export async function syncDocCardLinks(docId: string, formId: string, fieldValue
                 category_key = COALESCE($4, category_key),
                 category_source = CASE WHEN $4 IS NOT NULL THEN 'manual' ELSE category_source END,
                 updated_at = $5
-          WHERE card_txn_id = $1`,
+          WHERE card_txn_id = $1 AND (doc_id IS NULL OR doc_id = $2)`, // 1회 연결(G-8): 다른 문서의 건을 빼앗지 않는다
         [ref.cardTxnId, docId, formId, categoryKey, now],
       );
       if (categoryKey) {

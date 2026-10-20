@@ -253,7 +253,8 @@ export async function syncDocShopReceiptLinks(docId: string, fieldValues: Record
       keepIds.length ? [docId, keepIds] : [docId]
     );
     if (keepIds.length) {
-      await db.run(`UPDATE shop_receipts SET doc_id = $1 WHERE receipt_id = ANY($2::text[])`, [docId, keepIds]);
+      // 1회 연결(G-8): 다른 문서에 귀속된 전표는 빼앗지 않는다
+      await db.run(`UPDATE shop_receipts SET doc_id = $1 WHERE receipt_id = ANY($2::text[]) AND (doc_id IS NULL OR doc_id = $1)`, [docId, keepIds]);
     }
   });
 }

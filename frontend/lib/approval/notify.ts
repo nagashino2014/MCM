@@ -84,6 +84,8 @@ export interface NotifyEventSetting {
   event: ApprovalNotifyEvent;
   emailEnabled: boolean;
   alimtalkEnabled: boolean;
+  /** 모바일 푸시. 값이 없는(예전 화면) 저장 요청은 켬으로 본다. */
+  pushEnabled?: boolean;
   remindAfterHours: number | null;
 }
 
@@ -102,7 +104,8 @@ const EVENT_ORDER: ApprovalNotifyEvent[] = [
 /** 이벤트별 알림 설정 전체 조회(관리 화면). */
 export async function listNotifySettings(): Promise<NotifyEventSetting[]> {
   const db = await getDb();
-  const rows = rowsToObjects(await db.exec(`SELECT event, email_enabled, alimtalk_enabled, remind_after_hours FROM approval_notify_settings`));
+  // push_enabled(마이그 109) 미적용 DB 에서도 깨지지 않게 `SELECT *` 로 읽는다(getNotifySetting 과 같은 폴백).
+  const rows = rowsToObjects(await db.exec(`SELECT * FROM approval_notify_settings`));
   const map = new Map(rows.map((r) => [String(r.event), r]));
   return EVENT_ORDER.map((event) => {
     const r = map.get(event);
@@ -110,6 +113,7 @@ export async function listNotifySettings(): Promise<NotifyEventSetting[]> {
       event,
       emailEnabled: r ? Number(r.email_enabled ?? 1) === 1 : true,
       alimtalkEnabled: r ? Number(r.alimtalk_enabled ?? 1) === 1 : true,
+      pushEnabled: r ? Number(r.push_enabled ?? 1) === 1 : true,
       remindAfterHours: r && r.remind_after_hours != null ? Number(r.remind_after_hours) : event === "remind" ? 24 : null,
     };
   });
@@ -122,14 +126,16 @@ export async function saveNotifySettings(items: NotifyEventSetting[]): Promise<v
     for (const it of items) {
       if (!EVENT_ORDER.includes(it.event)) continue;
       await db.run(
-        `INSERT INTO approval_notify_settings (event, email_enabled, alimtalk_enabled, remind_after_hours, updated_at)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO approval_notify_settings (event, email_enabled, alimtalk_enabled, push_enabled, remind_after_hours, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (event) DO UPDATE SET email_enabled = EXCLUDED.email_enabled,
-           alimtalk_enabled = EXCLUDED.alimtalk_enabled, remind_after_hours = EXCLUDED.remind_after_hours, updated_at = EXCLUDED.updated_at`,
+           alimtalk_enabled = EXCLUDED.alimtalk_enabled, push_enabled = EXCLUDED.push_enabled,
+           remind_after_hours = EXCLUDED.remind_after_hours, updated_at = EXCLUDED.updated_at`,
         [
           it.event,
           it.emailEnabled ? 1 : 0,
           it.alimtalkEnabled ? 1 : 0,
+          it.pushEnabled === false ? 0 : 1,
           it.event === "remind" ? (it.remindAfterHours != null ? Math.max(1, Math.round(it.remindAfterHours)) : 24) : null,
           now,
         ]
@@ -525,7 +531,7 @@ export async function dispatchDueReminders(now = new Date()): Promise<RemindResu
   // 리마인드가 꺼져 있으면 DB 를 열지 않고 끝낸다 — 유휴 시간대 Aurora auto-pause 유지
   // (배경은 lib/tick-cache.ts). 설정 저장 시 캐시가 무효화되므로 켠 직후부터 바로 돈다.
   const setting = await loadTickCached(TICK_CACHE_APPROVAL_REMIND, () => getNotifySetting("remind"));
-  if (!setting.emailEnabled && !setting.alimtalkEnabled) return { reminded: 0, skipped: "remind-disabled" };
+  if (!setting.emailEnabled && !setting.alimtalkEnabled && !setting.pushEnabled) return { reminded: 0, skipped: "remind-disabled" };
   const hours = setting.remindAfterHours ?? 24;
   const cutoff = new Date(now.getTime() - hours * 3600 * 1000).toISOString();
   const today = kstDate(now);

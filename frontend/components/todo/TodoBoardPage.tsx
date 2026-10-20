@@ -21,7 +21,6 @@ import { CdButton, CdDropdown, CdEmptyState, CdPageHeader, CdTabs, useCdToast, u
 import { DEFAULT_TODO_PREFS, type TodoBoard, type TodoBoardMember, type TodoItem, type TodoItemDetail, type TodoPrefs, type TodoStatus } from "@/lib/todo/types";
 import { hasAnyCompleteRule } from "@/lib/todo/completion";
 import { useTodoData, apiCall, type CompleteRulesFailure } from "./useTodoData";
-import { QuickAddBar } from "./QuickAddBar";
 import { GroupHeader, MyTodoList, rowListKeyNav, type QuickFilter } from "./MyTodoList";
 import { SharedList } from "./SharedList";
 import { KanbanBoard } from "./KanbanBoard";
@@ -103,11 +102,6 @@ export function TodoBoardPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const newParam = sp.get("new");
-  // §26-1 프리필 — 메일/메신저/탑바에서 넘어온 제목·연결. new 를 지울 때 함께 사라지므로 ref 에 잡아 둔다.
-  const prefillRef = useRef<{ title: string | null; linkKind: string | null; linkId: string | null; linkLabel: string | null } | null>(null);
-  if (newParam === "1") {
-    prefillRef.current = { title: sp.get("title"), linkKind: sp.get("linkKind"), linkId: sp.get("linkId"), linkLabel: sp.get("linkLabel") };
-  }
 
   const [prefs, setPrefs] = useState<TodoPrefs | null>(null);
   // §29-3 2차 설정 모달(알림·표시)
@@ -122,7 +116,6 @@ export function TodoBoardPage() {
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
-  const [quickOpen, setQuickOpen] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [membersVersion, setMembersVersion] = useState(0);
@@ -263,15 +256,18 @@ export function TodoBoardPage() {
       if (e.key !== "n" && e.key !== "N") return;
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || itemParamRef.current) return;
       e.preventDefault();
-      setQuickOpen((n) => n + 1);
+      // 2026-10-20: 텍스트 퀵애드 줄 삭제(사용자 요청) — N 키도 새 할 일 작성 드로어로
+      openNewRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const openNewRef = useRef<() => void>(() => {});
   const openNew = () => {
     setQuery({ new: "1", item: null, ...(scope === "shared" || scope === "delegated" ? { scope: "my" } : {}) });
   };
+  openNewRef.current = openNew;
 
   // ── 범위·보기 전환 ──
   const goScope = (kind: "my" | "shared" | "delegated") => {
@@ -471,6 +467,11 @@ export function TodoBoardPage() {
   };
 
   // ── 프로젝트 탭 드롭다운(내 프로젝트 · 부서 · 공유 보드 + 새 보드) ──
+  // 프로젝트 바로가기 아이콘 — ▾ 메뉴와 같은 순서(내 프로젝트 → 부서 → 공유 보드), 보관된 보드 제외
+  const projectChips = useMemo(
+    () => (["project", "dept", "shared"] as const).flatMap((k) => boards.filter((b) => b.kind === k && !b.archivedAt)),
+    [boards]
+  );
   const projectMenu: CdMenuItem[] = useMemo(() => {
     const items: CdMenuItem[] = [];
     const groups: { label: string; list: TodoBoard[] }[] = [
@@ -560,7 +561,6 @@ export function TodoBoardPage() {
   const tabN = (n: number | null) => (n == null ? null : <span className="todo-tab-n" aria-label={`${n}건`}>{n}</span>);
   const scopeTab: ScopeTab = scope === "my" ? "my" : scope === "shared" ? "shared" : scope === "delegated" ? "delegated" : "none";
   const boardLabel = board ? (board.kind === "personal" ? "개인 보드" : (board.projectName ?? board.name)) : null;
-  const quickAddPlaceholder = scope === "board" && board ? `${boardLabel}에 할 일 추가 — #열이름 으로 열 지정` : undefined;
 
   const tagButton = (tone: "today" | "over" | "week" | "shared" | "done", label: string, count: number, pressed: boolean, onClick: () => void) => (
     <button type="button" className="todo-tag" data-tone={tone} aria-pressed={pressed} onClick={onClick}>
@@ -576,10 +576,8 @@ export function TodoBoardPage() {
           help={
             <div className="grid gap-2 text-sm">
               <p>개인 업무·미팅·약속을 한 줄로 적어 관리합니다. 출장·휴가·교육·초과근무 같은 결재 일정은 종류 아이콘이 붙은 읽기 전용 줄로 함께 보여 주며, '문서 열기'로 결재 문서를 엽니다. 출장·초과근무는 To-do 에서 만들지 않고 전자결재에서 기안합니다.</p>
-              <p>
-                입력줄에 <b>내일 오후 3시 ○○사 미팅 !높음 @홍길동 10/30까지</b> 처럼 적으면 날짜·시각·우선순위·담당·마감을 자동으로 알아봅니다. 잘못 알아본 칩은 × 로 해제하면 그 단어가 제목에 남습니다.
-              </p>
-              <p>범위 탭의 '프로젝트 ▾'에서 계약관리 용역을 골라 프로젝트 보드를 만들면 용역명·발주처·색을 할 일이 물려받고, 수행인력이 멤버로 자동 추가됩니다. 할 일은 만든 사람만 봅니다. 담당·참조로 사람을 붙이거나 프로젝트·부서 보드로 옮길 때만 상대에게 보입니다.</p>
+              <p>오른쪽 위 <b>새 할 일</b>을 누르면 상세와 같은 양식이 열립니다. 항목을 채우고 <b>저장</b>하면 만들어집니다.</p>
+              <p>범위 탭 '프로젝트' 오른쪽 색 아이콘을 누르면 그 프로젝트 보드로 바로 갑니다. '프로젝트 ▾'에서 계약관리 용역을 골라 프로젝트 보드를 만들면 용역명·발주처·색을 할 일이 물려받고, 수행인력이 멤버로 자동 추가됩니다. 할 일은 만든 사람만 봅니다. 담당·참조로 사람을 붙이거나 프로젝트·부서 보드로 옮길 때만 상대에게 보입니다.</p>
               <p>
                 완료한 할 일은 목록 맨 아래 <b>완료 N건</b> 묶음에 모이고(헤더의 '완료' 태그로 바로 펼침), 체크를 다시 누르거나 상세의 '되돌리기'로 실수 완료를 복구합니다. 완료 30일이 지나면 보관함으로 내려가며 '보관함 보기'에서 되돌릴 수 있습니다.
                 상세 '부가 설정 › 완료 조건'(하위 작업 모두 완료 · 완료 메모 입력 · 검토 단계 경유)을 켜 두면 완료 전에 확인 창이 뜹니다. 프로젝트·부서 보드는 '기본 완료 조건'을 정해 새 할 일에 물려줍니다.
@@ -626,8 +624,7 @@ export function TodoBoardPage() {
                   menuWidthClass="w-80"
                   trigger={() => (
                     <button type="button" className="cd-tab" role="tab" aria-selected={scope === "board"} aria-label="프로젝트 보드 선택">
-                      {scope === "board" && board && <span className="todo-scope-sq" style={tintStyle(board.colorHex)} aria-hidden="true" />}
-                      {scope === "board" && board ? `프로젝트 · ${boardLabel}` : "프로젝트"}
+                      프로젝트
                       {tabN(projectCount)}
                       <ChevronDown className="todo-scope-caret" aria-hidden="true" />
                     </button>
@@ -635,6 +632,28 @@ export function TodoBoardPage() {
                   items={projectMenu}
                 />
               </div>
+              {/* 프로젝트 바로가기(2026-10-20 사용자 요청) — 보드별 색 아이콘, 마우스를 올리면 이름, 누르면 그 보드로. 만들기·삭제는 왼쪽 ▾ 메뉴. */}
+              {projectChips.length > 0 && (
+                <div className="todo-proj-chips" role="group" aria-label="프로젝트 바로가기">
+                  {projectChips.map((b) => {
+                    const name = b.projectName ?? b.name;
+                    const active = scope === "board" && scopeBoardId === b.boardId;
+                    return (
+                      <button
+                        key={b.boardId}
+                        type="button"
+                        className="todo-proj-chip"
+                        data-tip={name}
+                        aria-label={`${name} 보드 열기`}
+                        aria-pressed={active}
+                        onClick={() => goBoard(b.boardId)}
+                      >
+                        <span className="todo-proj-sq" style={tintStyle(b.colorHex)} aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <span className="inline-flex items-center">
                 <CdHelp topic="todo.scope" />
               </span>
@@ -744,7 +763,6 @@ export function TodoBoardPage() {
                   selectedId={itemParam}
                   loaded={my.loaded}
                   filter={quickFilter}
-                  top={<QuickAddBar boards={boards} currentBoardId={personalBoardId} prefs={prefs} onCreate={createIn(my)} openRequest={quickOpen} prefill={prefillRef.current} />}
                   {...doneListProps(my)}
                   onOpen={openItem}
                   onComplete={completeIn(my)}
@@ -769,7 +787,6 @@ export function TodoBoardPage() {
                   sortMode={sortMode}
                   selectedId={itemParam}
                   loaded={boardData.loaded}
-                  top={<QuickAddBar boards={boards} currentBoardId={activeBoardId} prefs={prefs} onCreate={createIn(boardData)} openRequest={quickOpen} placeholder={quickAddPlaceholder} />}
                   {...doneListProps(boardData)}
                   onOpen={openItem}
                   onComplete={completeIn(boardData)}
@@ -793,7 +810,6 @@ export function TodoBoardPage() {
 
           {!archivedMode && view === "board" && scope !== "shared" && (
             <>
-              <QuickAddBar boards={boards} currentBoardId={activeBoardId} prefs={prefs} onCreate={createIn(boardData)} openRequest={quickOpen} placeholder={quickAddPlaceholder ?? (board ? "개인 보드에 할 일 추가 — #열이름 으로 열 지정" : "할 일 추가")} />
               <KanbanBoard
                 board={board}
                 items={boardItems}

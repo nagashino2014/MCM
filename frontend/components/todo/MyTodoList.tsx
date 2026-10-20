@@ -218,7 +218,7 @@ export function MyTodoList({
         <CdEmptyState
           icon={<ListChecks className="w-6 h-6" />}
           title={emptyTitle ?? "할 일이 없습니다"}
-          description={emptyDescription ?? "위 '할 일 추가' 줄에 한 줄로 적고 Enter 를 누르면 바로 추가됩니다. 날짜·시각·!우선순위·@담당을 같이 적을 수 있습니다."}
+          description={emptyDescription ?? "[새 할 일]을 누르면 상세와 같은 양식에서 항목별로 입력해 추가합니다."}
           action={
             <CdButton variant="primary" size="sm" onClick={onNew}>
               새 할 일

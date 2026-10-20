@@ -121,12 +121,6 @@ export function TodoPrefsModal({ prefs, onPatch, onClose }: { prefs: TodoPrefs; 
               내 할 일에 결재 일정 표시 <small>출장·교육·휴가 등 회색 행</small>
             </span>
           </label>
-          <label className="todo-pf-row">
-            <input type="checkbox" checked={prefs.quickAddParse} onChange={(e) => void onPatch({ quickAddParse: e.target.checked })} />
-            <span className="todo-pf-lb">
-              빠른 입력 자연어 해석 <small>"내일 3시 미팅", "매주 월 보고" 같은 날짜·반복 자동 인식</small>
-            </span>
-          </label>
         </section>
         <section className="todo-pf-sec" aria-label="하위 작업 유형·종류">
           <h4>하위 작업 유형·종류</h4>

@@ -894,8 +894,13 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
    강한 색·굵은 선·볼드 없이: 1px 중립 경계 + 8px 반경, 그룹 머리는 보통 굵기. 보드·타임라인은 대상 아님(data-layout="groups" 목록만). ── */
 .todo-canvas:has(.todo-canvas-body[data-layout="groups"]) > .todo-bar { margin-bottom: 0; }
 .todo-canvas-body[data-layout="groups"] { background: var(--cd-surface); padding: 6px 16px 20px; gap: 12px; }
-/* 열 머리 — 패널 테두리 1px 만큼 안쪽으로 맞춘다(행 좌 24·우 20 + 1) */
-.todo-canvas-body[data-layout="groups"] > .todo-th { margin-top: 0; height: 30px; padding: 0 21px 0 25px; border-bottom: 0; }
+/* 열 머리(2026-10-20 사용자 요청) — 그룹 패널과 같은 흰 띠(1px 경계·8px 반경)로, 글자는 패널 머리와 같은 12px 보통 굵기. 스크롤 중 위에 고정. */
+.todo-canvas-body[data-layout="groups"] > .todo-th {
+  position: sticky; top: 0; z-index: 2; margin-top: 0; height: 36px; padding: 0 20px;
+  background: var(--cd-card); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 8px);
+  font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--cd-muted);
+  box-shadow: 0 -7px 0 var(--cd-surface); /* 고정 시 위쪽 틈(목록 바탕 여백 6px)으로 행이 비치지 않게 */
+}
 .todo-canvas-body[data-layout="groups"] > .todo-ghost,
 .todo-canvas-body[data-layout="groups"] > .todo-qa,
 .todo-canvas-body[data-layout="groups"] > .todo-rows { background: var(--cd-card); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 8px); overflow: hidden; }
@@ -934,3 +939,29 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-drawer .todo-sr-prog { gap: 6px; }
 .todo-drawer .todo-sr-prog input[type="range"] { flex-basis: 112px; }
 .todo-wt-row[data-head="true"] .todo-wt-chk + .todo-mu { margin-left: 8px; }
+/* 타임라인 하위 작업 요약 팝오버(2026-10-20) — 하위 행 클릭 위치 근처, 읽기 전용 */
+.todo-tl-pop { position: fixed; z-index: 60; background: var(--cd-card); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 8px); padding: 10px 12px 12px; box-sizing: border-box; color: var(--cd-text); font-size: 12.5px; box-shadow: var(--cd-shadow-popover); }
+.todo-tl-pop-h { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.todo-tl-pop-h b { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-tl-pop-dl { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 6px 8px; margin: 0; }
+.todo-tl-pop-dl dt { color: var(--cd-faint); }
+.todo-tl-pop-dl dd { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.todo-tl-pop-note { white-space: pre-wrap; word-break: break-word; display: block !important; line-height: 1.5; }
+.todo-tl-pop-bar { width: 72px; height: 6px; border-radius: 3px; background: var(--cd-surface); overflow: hidden; flex: none; }
+.todo-tl-pop-bar i { display: block; height: 100%; background: var(--cd-primary); }
+.todo-tl-pop-f { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--cd-hairline-row, var(--cd-border)); text-align: right; }
+.todo-tl-pop-f .todo-link { color: var(--cd-primary); background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; cursor: pointer; }
+/* 기간 일정 묶음(2026-10-20 사용자 요청) — 묶음 왼쪽 테두리(3px)와 행의 보드 색 세로 바 사이를 벌린다 */
+.todo-period-band .todo-row::before { left: 7px; }
+.todo-period-band .todo-row { padding-left: 27px; }
+/* 프로젝트 바로가기 아이콘(2026-10-20) — 보드 색 사각형, 선택 보드는 주색 링, 마우스를 올리면 프로젝트명 말풍선 */
+.todo-proj-chips { display: flex; align-items: center; gap: 2px; align-self: center; flex-wrap: wrap; }
+.todo-proj-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--mcm-action-radius, 8px); background: transparent; cursor: pointer; }
+.todo-proj-chip:hover { background: var(--cd-hover); }
+.todo-proj-chip:focus-visible { outline: none; box-shadow: var(--cd-focus-ring); }
+.todo-proj-sq { width: 14px; height: 14px; border-radius: 4px; background: var(--todo-tint); display: block; }
+.todo-proj-chip[aria-pressed="true"] .todo-proj-sq { box-shadow: 0 0 0 2px var(--cd-card), 0 0 0 3.5px var(--cd-primary); }
+.todo-proj-chip[data-tip]:hover::after, .todo-proj-chip[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 30; white-space: nowrap;
+  padding: 5px 9px; border-radius: 6px; background: var(--cd-text); color: var(--cd-card); font-size: 12px; font-weight: 500; line-height: 1.3; pointer-events: none;
+}

@@ -9,9 +9,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Link2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
 import { CdButton } from "@/components/cdash";
-import { TODO_MILESTONE_LABELS, TODO_STATUS_LABELS, TODO_STATUSES, type TodoItem, type TodoItemDetail, type TodoStageRef } from "@/lib/todo/types";
+import { TODO_MILESTONE_LABELS, TODO_STATUS_LABELS, TODO_STATUSES, type TodoItem, type TodoItemDetail, type TodoStageRef, type TodoWorkType } from "@/lib/todo/types";
 import { StatusDot, tintStyle } from "./TodoRow";
 import { addDays, diffDays, md } from "./todo-utils";
 import { apiCall } from "./useTodoData";
@@ -47,7 +47,7 @@ interface Row {
   parentId?: string;
 }
 
-type SubCache = Record<string, { subtasks: TodoItem[]; stages: TodoStageRef[] } | "loading">;
+type SubCache = Record<string, { subtasks: TodoItem[]; stages: TodoStageRef[]; workTypeAuto?: string | null } | "loading">;
 const subPct = (st: TodoItem) => (st.status === "done" ? 100 : (st.progressPct ?? 0));
 /** 하위 보조 행은 복수 일자(할 날~종료일이 이틀 이상)인 상위에만(2026-10-20 사용자 지시). */
 const isMultiDay = (it: Pick<TodoItem, "doDate" | "endDate" | "subtaskTotal">) => !!it.doDate && !!it.endDate && it.endDate > it.doDate && it.subtaskTotal > 0;
@@ -65,7 +65,9 @@ const mondayOf = (ymd: string): string => {
 const clampDay = (n: number) => Math.max(0, Math.min(DAYS - 1, n));
 
 function rowOf(item: TodoItem, depth: 0 | 1, stageLabel?: string | null): Row | null {
-  const ms = depth === 1 && !!item.milestoneKind;
+  // 302: 종류가 있어도 기간(종료일 > 시작일)이 있으면 막대. ◆ 마일스톤은 하루짜리 종류 하위 작업만.
+  const period = !!item.doDate && !!item.endDate && item.endDate > item.doDate;
+  const ms = depth === 1 && !!item.milestoneKind && !period;
   if (ms) {
     const d = item.actualDate ?? item.doDate ?? item.dueDate;
     if (!d) return null;
@@ -82,6 +84,32 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
   const [windowStart, setWindowStart] = useState(() => addDays(mondayOf(today), -14));
   // 하위 작업 보조 행(2026-10-20): 기본으로 펼쳐 상위 행 아래에 하위별 일정·상태를 잇는다. 행별 ▸/▾ 는 override, 도구줄 토글은 전체.
   const [subCache, setSubCache] = useState<SubCache>({});
+  // 하위 작업 요약 팝오버(2026-10-20) — 하위 행을 누르면 큰 상세 대신 그 자리 근처에 유형·종류·기간·진행률·진척 내용만
+  const [subPop, setSubPop] = useState<{ item: TodoItem; parentId: string | null; x: number; y: number } | null>(null);
+  const [workTypes, setWorkTypes] = useState<TodoWorkType[] | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const openSubPop = (r: Row, x: number, y: number) => {
+    setSubPop({ item: r.item, parentId: r.parentId ?? r.item.parentItemId, x, y });
+    if (!workTypes)
+      apiCall<{ types: TodoWorkType[] }>("/api/todo/work-types")
+        .then((d) => setWorkTypes(d.types ?? []))
+        .catch(() => setWorkTypes([]));
+  };
+  useEffect(() => {
+    if (!subPop) return;
+    const onDown = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setSubPop(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSubPop(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [subPop]);
   const [showSubs, setShowSubs] = useState(true);
   const [override, setOverride] = useState<Record<string, boolean>>({});
   const requested = useRef(new Map<string, string>());
@@ -127,7 +155,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
         const it = queue.shift()!;
         try {
           const d = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items/${encodeURIComponent(it.itemId)}`);
-          if (mounted.current) setSubCache((m) => ({ ...m, [it.itemId]: { subtasks: d.item.subtasks, stages: d.item.stages } }));
+          if (mounted.current) setSubCache((m) => ({ ...m, [it.itemId]: { subtasks: d.item.subtasks, stages: d.item.stages, workTypeAuto: d.item.workTypeAuto ?? null } }));
         } catch {
           requested.current.delete(it.itemId);
           if (mounted.current)
@@ -278,7 +306,8 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
       /* 캡처가 없었던 경우 */
     }
     if (delta === 0) {
-      onOpen(r.item);
+      if (r.depth === 1) openSubPop(r, e.clientX, e.clientY);
+      else onOpen(r.item);
       return;
     }
     if (drag.mode === "resize") {
@@ -484,7 +513,17 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                         <span className="todo-tl-sub-ln" aria-hidden="true" />
                       )}
                       <StatusDot status={r.item.status} />
-                      <button type="button" className="todo-tl-ttl" title={r.item.title} onClick={() => onOpen(r.item)}>
+                      <button
+                        type="button"
+                        className="todo-tl-ttl"
+                        title={r.item.title}
+                        onClick={(e) => {
+                          if (r.depth === 1) {
+                            const b = e.currentTarget.getBoundingClientRect();
+                            openSubPop(r, b.left + 24, b.bottom);
+                          } else onOpen(r.item);
+                        }}
+                      >
                         {r.stageLabel ? <span className="todo-tl-stage">{r.stageLabel}</span> : null}
                         {r.item.title}
                       </button>
@@ -581,6 +620,74 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
           )}
         </div>
       </div>
+
+      {subPop &&
+        (() => {
+          const it = subPop.item;
+          const ex = subPop.parentId ? subCache[subPop.parentId] : undefined;
+          const auto = ex && ex !== "loading" ? ex.workTypeAuto ?? null : null;
+          const typeKey = auto ?? it.workType ?? null;
+          const typeLabel = typeKey ? workTypes?.find((t) => t.typeKey === typeKey)?.label ?? (workTypes ? typeKey : "…") : "—";
+          let kindLabel = "—";
+          if (it.milestoneKind) {
+            kindLabel = TODO_MILESTONE_LABELS[it.milestoneKind] ?? it.milestoneKind;
+            for (const t of workTypes ?? []) for (const k of t.kinds) if (k.kindKey === it.milestoneKind) kindLabel = k.label;
+          }
+          const pct = it.status === "done" ? 100 : it.progressPct ?? 0;
+          const parent = subPop.parentId ? items.find((x) => x.itemId === subPop.parentId) ?? null : null;
+          const W = 300;
+          const left = Math.max(8, Math.min(subPop.x - 24, (typeof window !== "undefined" ? window.innerWidth : 1920) - W - 8));
+          // 아래 공간이 모자라면 클릭 지점 위로
+          const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
+          const top = subPop.y + 10 + 250 > vh ? Math.max(8, subPop.y - 250) : subPop.y + 10;
+          return (
+            <div ref={popRef} className="todo-vars todo-tl-pop" role="dialog" aria-label={`${it.title} 하위 작업 요약`} style={{ left, top, width: W }}>
+              <div className="todo-tl-pop-h">
+                <StatusDot status={it.status} />
+                <b title={it.title}>{it.title}</b>
+                <button type="button" className="cd-icon-button cd-icon-button-sm" aria-label="닫기" onClick={() => setSubPop(null)}>
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <dl className="todo-tl-pop-dl">
+                <dt>유형</dt>
+                <dd>
+                  {typeLabel}
+                  {auto ? <span className="todo-mu"> · 자동</span> : null}
+                </dd>
+                <dt>종류</dt>
+                <dd>{kindLabel}</dd>
+                <dt>시작일</dt>
+                <dd>{it.doDate ? md(it.doDate) : "—"}</dd>
+                <dt>종료일</dt>
+                <dd>{it.endDate ? md(it.endDate) : "—"}</dd>
+                <dt>진행률</dt>
+                <dd>
+                  <span className="todo-tl-pop-bar" aria-hidden="true">
+                    <i style={{ width: `${pct}%` }} />
+                  </span>
+                  {pct}% · {TODO_STATUS_LABELS[it.status]}
+                </dd>
+                <dt>진척 내용</dt>
+                <dd className="todo-tl-pop-note">{it.progressNote?.trim() || "—"}</dd>
+              </dl>
+              {parent && (
+                <div className="todo-tl-pop-f">
+                  <button
+                    type="button"
+                    className="todo-link"
+                    onClick={() => {
+                      setSubPop(null);
+                      onOpen(parent);
+                    }}
+                  >
+                    상위 할 일에서 편집
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {undated.length > 0 && (
         <div className="todo-tl-undated">

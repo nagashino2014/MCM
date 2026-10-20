@@ -4,6 +4,8 @@
 // 본문은 프레임 섹션(cd-card 12/16, 12px 간격): ① 핵심 2×2(상태 칩+▾ · 담당 아바타+▾ · 수행 예정 · 마감) ② 관련(용역·사업장·연결) ③ 메모 ④ 하위 작업(분절 진행바)
 // ⑤ 댓글(사진 아바타 28px, 입력란 앞에 내 아바타) ⑥ 부가 설정(접힘 요약 = 라벨+값 3열 2행 — 우선순위·알림·반복 / 보드·공유·스누즈) ⑦ 활동(접힘, 요약은 최근 2건 행마다). 하단 바는 "저장됨 · 방금"만.
 // 2026-10-14: 핵심 2×2 네 셀은 클릭 전에도 36px 입력란 박스(날짜가 비면 "YYYYMMDD"+달력 아이콘), 메모 기본 높이 2배.
+// 2026-10-20 새 할 일 작성(draft): itemId 없이 draft 를 받으면 같은 화면을 빈 양식으로 그린다. 값은 화면 안에만 모으고 [저장] 때 POST 한 번 —
+// 하위 작업·의존·댓글·업무 보고·공유·활동은 저장 뒤(할 일 ID 필요)라 안내만 둔다.
 // 자동 저장: 필드 변경 → 600ms 디바운스 PATCH /api/todo/items/[id]. 키보드: Esc 닫기(CdDrawer), Ctrl+Enter 댓글, Alt+1~5 상태. 시각 규칙은 todo.css 의 todo-* 에만 둔다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -63,6 +65,110 @@ export interface TodoDetailDrawerProps {
   onItemCreated: (item: TodoItem) => void;
   onItemDeleted: (itemId: string) => void;
   onOpenItem: (itemId: string) => void;
+  /** 새 할 일 작성(2026-10-20) — itemId 가 없고 이 값이 있으면 빈 양식. 보드 미지정 = 개인 기본 보드. */
+  draft?: TodoDraftInit | null;
+  /** 작성 양식 [저장] 성공 — 상위가 /todo/[id] 로 바꿔 일반 상세(자동 저장)로 이어 간다. */
+  onDraftSaved?: (item: TodoItemDetail) => void;
+}
+
+export interface TodoDraftInit {
+  boardId?: string | null;
+  columnId?: string | null;
+  title?: string | null;
+  linkKind?: string | null;
+  linkId?: string | null;
+  linkLabel?: string | null;
+}
+
+/** 보드·연결에서 파생되는 표시 값(목록 응답의 서버 파생과 같은 규칙) — 작성 양식에서만 쓴다. */
+function draftBoardFields(board: TodoBoard | null, linkKind: string | null, linkId: string | null, linkLabel: string | null) {
+  const personal = !board || board.kind === "personal";
+  return {
+    boardId: board?.boardId ?? "",
+    boardName: board?.name ?? "개인",
+    boardKind: board?.kind ?? ("personal" as TodoBoard["kind"]),
+    boardColor: board?.colorHex ?? "",
+    projectName: board?.projectName ?? (personal && linkKind === "contract" ? linkLabel : null),
+    clientName: board?.clientName ?? null,
+    contractId: board?.contractId ?? (linkKind === "contract" ? linkId : null),
+  };
+}
+
+function makeDraftDetail(board: TodoBoard | null, init: TodoDraftInit, me: { userId: string | null; name: string | null }): TodoItemDetail {
+  const linkKind = (init.linkKind || null) as TodoItemDetail["linkKind"];
+  const linkId = linkKind ? init.linkId || null : null;
+  const linkLabel = linkKind ? init.linkLabel || null : null;
+  return {
+    itemId: "",
+    columnId: init.columnId ?? null,
+    parentItemId: null,
+    title: init.title ?? "",
+    note: null,
+    status: "todo",
+    priority: 0,
+    doDate: null,
+    doTime: null,
+    durationMin: null,
+    dueDate: null,
+    allDay: true,
+    remindAt: null,
+    remindSentAt: null,
+    snoozedUntil: null,
+    recurrence: null,
+    recurrenceParentId: null,
+    position: "",
+    linkKind,
+    linkId,
+    linkLabel,
+    color: null,
+    ownerUserId: me.userId ?? "",
+    ownerName: me.name,
+    ownerPhotoUrl: null,
+    assigneeUserId: me.userId,
+    assigneeName: me.name,
+    assigneePhotoUrl: null,
+    ...draftBoardFields(board, linkKind, linkId, linkLabel),
+    completedAt: null,
+    completedBy: null,
+    completeRules: board?.defaultCompleteRules ?? {},
+    completionNote: null,
+    reviewedAt: null,
+    progressPct: null,
+    progressNote: null,
+    stageOrder: null,
+    progressUpdatedAt: null,
+    endDate: null,
+    actualDate: null,
+    milestoneKind: null,
+    openDeps: 0,
+    archivedAt: null,
+    createdAt: "",
+    createdBy: null,
+    updatedAt: "",
+    updatedBy: null,
+    subtaskTotal: 0,
+    subtaskDone: 0,
+    commentCount: 0,
+    canEdit: true,
+    isOwner: true,
+    subtasks: [],
+    shares: [],
+    comments: [],
+    activity: [],
+    progressAvg: null,
+    stages: [],
+    reportSubject: null,
+  };
+}
+
+/** 작성 양식에서 저장 뒤에만 쓸 수 있는 섹션 자리 — 레이아웃(2열 위치)은 그대로 두고 안내만. */
+function DraftPending({ label, col }: { label: string; col?: "side" }) {
+  return (
+    <section className="cd-card todo-fr" data-col={col} aria-label={label}>
+      <h3>{label}</h3>
+      <p className="todo-mu text-[12.5px]">저장 후 추가할 수 있습니다.</p>
+    </section>
+  );
 }
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -167,7 +273,7 @@ function FoldSection({ label, count, summary, open, onToggle, col, children }: {
   );
 }
 
-export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUserId, myName, myPhotoUrl, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem }: TodoDetailDrawerProps) {
+export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUserId, myName, myPhotoUrl, today, onClose, onItemChanged, onItemCreated, onItemDeleted, onOpenItem, draft, onDraftSaved }: TodoDetailDrawerProps) {
   const { toast } = useCdToast();
   const [detail, setDetail] = useState<TodoItemDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -222,8 +328,20 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   const detailRef = useRef(detail);
   detailRef.current = detail;
   const composing = useRef(false);
+  // 새 할 일 작성(draft) — 손댄 필드(알림·완료 조건 기본값 판단), 미저장 여부, 저장 중
+  const isDraft = !!draft && !itemId;
+  const isDraftRef = useRef(isDraft);
+  isDraftRef.current = isDraft;
+  const draftTouched = useRef<Set<string>>(new Set());
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const boardsRef = useRef(boards);
+  boardsRef.current = boards;
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
 
-  const open = !!itemId;
+  const open = !!itemId || isDraft;
 
   // ── 로드 ──
   const load = useCallback(async () => {
@@ -256,6 +374,32 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
     void load();
   }, [load]);
 
+  // 작성 양식 초기화 — 마운트 때 한 번(상위는 보드 조회가 끝난 뒤 렌더한다). 기본 보드 = 지정 보드 → 개인 기본 보드.
+  // 위 초기화 effect 가 detail 을 비우므로 같은 시점에 다시 채운다(StrictMode 이중 실행에도 같은 결과 — ref 가드 금지).
+  useEffect(() => {
+    if (!isDraft || !draft) return;
+    const b = (draft.boardId ? boards.find((x) => x.boardId === draft.boardId) : null) ?? boards.find((x) => x.kind === "personal" && x.isDefault) ?? null;
+    setDetail(makeDraftDetail(b, draft, { userId: myUserId, name: myName ?? null }));
+    setTitle(draft.title ?? "");
+    setNote("");
+    setTimeDraft("");
+    setExtraOpen(true);
+    draftTouched.current = new Set();
+    window.setTimeout(() => titleRef.current?.focus(), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, isDraft]);
+
+  // 미저장 작성 내용 — 새로고침·탭 닫기 때 브라우저 확인
+  useEffect(() => {
+    if (!isDraft || !draftDirty) return;
+    const onBefore = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBefore);
+    return () => window.removeEventListener("beforeunload", onBefore);
+  }, [isDraft, draftDirty]);
+
   // ── 자동 저장 큐(600ms) ──
   const flush = useCallback(async () => {
     const id = detailRef.current?.itemId;
@@ -285,6 +429,25 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
   const schedule = useCallback(
     (patch: Record<string, unknown>, immediate = false) => {
+      if (isDraftRef.current) {
+        for (const k of Object.keys(patch)) draftTouched.current.add(k);
+        setDraftDirty(true);
+        setDetail((d) => {
+          if (!d) return d;
+          let next = { ...d, ...patch } as TodoItemDetail;
+          if ("boardId" in patch || "linkKind" in patch) {
+            const b = boardsRef.current.find((x) => x.boardId === next.boardId) ?? null;
+            next = { ...next, ...draftBoardFields(b, next.linkKind, next.linkId, next.linkLabel), boardId: next.boardId };
+            if ("boardId" in patch && !draftTouched.current.has("completeRules")) next.completeRules = b?.defaultCompleteRules ?? {};
+          }
+          // 담당 되돌리기(null) = 작성자 — 서버 createItem 기본값과 같다
+          if ("assigneeUserId" in patch && !patch.assigneeUserId) next = { ...next, assigneeUserId: next.ownerUserId || null, assigneeName: next.ownerName };
+          // 알림을 직접 고르지 않았으면 날짜·시각에 따른 기본 알림을 미리 보여 준다(저장 때 서버가 같은 규칙으로 계산)
+          if (!draftTouched.current.has("remindAt") && prefsRef.current) next.remindAt = defaultRemindAt(next, prefsRef.current);
+          return next;
+        });
+        return;
+      }
       Object.assign(queue.current, patch);
       setDetail((d) => (d ? ({ ...d, ...patch } as TodoItemDetail) : d));
       if (timer.current) window.clearTimeout(timer.current);
@@ -294,8 +457,63 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   );
 
   const close = () => {
+    if (isDraftRef.current) {
+      if (draftDirty && !window.confirm("입력한 내용을 저장하지 않고 나갈까요?")) return;
+      onClose();
+      return;
+    }
     if (Object.keys(queue.current).length) void flush();
     onClose();
+  };
+
+  /** 작성 양식 [저장] — 제목 필수, 날짜는 8자리 완성값만. 알림·완료 조건은 직접 고른 경우에만 보내 서버 기본값을 따른다. */
+  const saveDraft = async () => {
+    const d = detailRef.current;
+    if (!d || draftSaving) return;
+    const t = title.trim();
+    if (!t) {
+      toast("제목을 입력하세요.", "warn");
+      titleRef.current?.focus();
+      return;
+    }
+    const partial = (v: string | null) => !!v && !(v.length === 10 && isValidDateString(v));
+    if (partial(d.doDate) || partial(d.endDate) || partial(d.dueDate)) {
+      toast("날짜는 YYYYMMDD 8자리로 입력하세요.", "warn");
+      return;
+    }
+    const touched = draftTouched.current;
+    const body: Record<string, unknown> = {
+      title: t,
+      note: note.trim() ? note : null,
+      status: d.status,
+      priority: d.priority,
+      doDate: d.doDate,
+      doTime: d.doDate ? d.doTime : null,
+      durationMin: d.doDate && d.doTime ? d.durationMin : null,
+      endDate: d.doDate && d.endDate && d.endDate > d.doDate ? d.endDate : null,
+      dueDate: d.dueDate,
+      recurrence: d.recurrence,
+      linkKind: d.linkKind,
+      linkId: d.linkId,
+      linkLabel: d.linkLabel,
+      columnId: d.columnId,
+      assigneeUserId: d.assigneeUserId,
+      ...(d.boardId ? { boardId: d.boardId } : {}),
+      ...(touched.has("remindAt") ? { remindAt: d.remindAt } : {}),
+      ...(touched.has("completeRules") ? { completeRules: d.completeRules } : {}),
+    };
+    setDraftSaving(true);
+    try {
+      const r = await apiCall<{ item: TodoItemDetail }>(`/api/todo/items`, { method: "POST", body: JSON.stringify(body) });
+      setDraftDirty(false);
+      onItemCreated(r.item);
+      toast("할 일을 만들었습니다", "success");
+      onDraftSaved?.(r.item);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setDraftSaving(false);
+    }
   };
 
   useEffect(() => () => {
@@ -352,7 +570,8 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   /** 상태 변경 — 완료는 complete() 경로(조건 검사·모달), 그 외는 자동 저장 PATCH. */
   const changeStatus = (s: TodoStatus) => {
     if (!detail || detail.status === s) return;
-    if (s === "done") void complete(true);
+    if (isDraftRef.current) schedule({ status: s });
+    else if (s === "done") void complete(true);
     else schedule({ status: s }, true);
   };
 
@@ -647,6 +866,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   };
 
   const commitTitle = () => {
+    if (isDraftRef.current) return;
     const t = title.trim();
     if (!detail || !t) {
       setTitle(detail?.title ?? "");
@@ -868,7 +1088,22 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
   const saveLabel = saveState === "saving" ? "저장 중…" : saveState === "error" ? "저장하지 못했습니다" : saveState === "saved" ? `저장됨 · ${savedAt ? relativeTime(new Date(savedAt).toISOString()) : "방금"}` : "변경 시 자동 저장";
 
-  const footer = (
+  const footer = isDraft ? (
+    <div className="todo-df">
+      <span className="todo-save-state" data-state="idle" aria-live="polite">
+        <i aria-hidden="true" />
+        {draftDirty ? "저장 전 — [저장]을 눌러야 만들어집니다" : "새 할 일"}
+      </span>
+      <span className="ml-auto flex items-center gap-2">
+        <CdButton variant="ghost" size="sm" onClick={close}>
+          취소
+        </CdButton>
+        <CdButton variant="primary" size="sm" loading={draftSaving} onClick={() => void saveDraft()}>
+          저장
+        </CdButton>
+      </span>
+    </div>
+  ) : (
     <div className="todo-df">
       <span className="todo-save-state" data-state={saveState} aria-live="polite">
         <i aria-hidden="true" />
@@ -947,15 +1182,20 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
           <>
             {/* 헤더 — 좌측 5px 보드 색 띠 */}
             <div className="todo-dh" style={tintStyle(detail.boardColor)}>
-              <TodoCheck done={detail.status === "done"} size="lg" status={detail.status} onClick={() => void complete(detail.status !== "done")} />
+              {!isDraft && <TodoCheck done={detail.status === "done"} size="lg" status={detail.status} onClick={() => void complete(detail.status !== "done")} />}
               <div className="todo-dh-main">
                 <input
+                  ref={titleRef}
                   className="todo-detail-title"
                   value={title}
                   readOnly={!canEdit}
                   aria-label="제목"
+                  placeholder={isDraft ? "할 일 제목을 입력하세요" : undefined}
                   maxLength={200}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    if (isDraft) setDraftDirty(true);
+                  }}
                   onBlur={commitTitle}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing) {
@@ -968,15 +1208,31 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   <span>{projectLabel}</span>
                 </span>
               </div>
-              <CdDropdown
-                trigger={() => (
-                  <button type="button" className="cd-icon-button cd-icon-button-sm inline-flex items-center justify-center" aria-label="더 보기">
-                    <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+              {!isDraft && (
+                <CdDropdown
+                  trigger={() => (
+                    <button type="button" className="cd-icon-button cd-icon-button-sm inline-flex items-center justify-center" aria-label="더 보기">
+                      <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  )}
+                  items={moreMenu}
+                />
+              )}
+              {mode === "page" && isDraft ? (
+                <>
+                  <span className="todo-page-save todo-save-state" data-state="idle" aria-live="polite">
+                    <i aria-hidden="true" />
+                    {draftDirty ? "저장 전 — [저장]을 눌러야 만들어집니다" : "새 할 일"}
+                  </span>
+                  <CdButton variant="primary" size="sm" loading={draftSaving} onClick={() => void saveDraft()}>
+                    저장
+                  </CdButton>
+                  <button type="button" className="todo-page-back" onClick={close} title="저장하지 않고 목록으로">
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                    취소
                   </button>
-                )}
-                items={moreMenu}
-              />
-              {mode === "page" ? (
+                </>
+              ) : mode === "page" ? (
                 <>
                   <span className="todo-page-save todo-save-state" data-state={saveState} aria-live="polite">
                     <i aria-hidden="true" />
@@ -1284,7 +1540,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 <textarea
                   className="todo-note"
                   aria-label="메모"
-                  placeholder={canEdit ? "메모를 적으면 자동 저장됩니다" : "메모 없음"}
+                  placeholder={isDraft ? "메모를 적어 두세요" : canEdit ? "메모를 적으면 자동 저장됩니다" : "메모 없음"}
                   value={note}
                   readOnly={!canEdit}
                   rows={Math.max(5, Math.min(12, note.split("\n").length + 1))}
@@ -1296,6 +1552,15 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
               </section>
 
               {/* ④ 하위 작업 */}
+              {isDraft ? (
+                <>
+                  <DraftPending label="하위 작업" />
+                  <DraftPending label="의존 관계" />
+                  <DraftPending label="댓글" />
+                  <DraftPending label="업무 보고" col="side" />
+                </>
+              ) : (
+              <>
               <section className="cd-card todo-fr" aria-label="하위 작업">
                 <h3>
                   하위 작업
@@ -1636,6 +1901,8 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   <p className="text-[12px] cd-text-faint">관련 항목을 계약(용역) 또는 업무추진계획으로 연결하면 업무 보고 초안을 만들 수 있습니다.</p>
                 )}
               </section>
+              </>
+              )}
 
               <FoldSection label="부가 설정" col="side" summary={extraSummary} open={extraOpen} onToggle={() => setExtraOpen((v) => !v)}>
                 {/* 우선순위 */}
@@ -1643,7 +1910,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   <span className="todo-pr-label">우선순위</span>
                   <div className="todo-seg" role="radiogroup" aria-label="우선순위">
                     {([0, 1, 2, 3] as TodoPriority[]).map((p) => (
-                      <button key={p} type="button" role="radio" aria-checked={detail.priority === p} className="cd-choice" data-active={detail.priority === p ? "true" : undefined} disabled={!canEdit} onClick={() => schedule({ priority: p }, true)}>
+                      <button key={p} type="button" role="radio" aria-checked={detail.priority === p} className="cd-choice" data-pri={p} data-active={detail.priority === p ? "true" : undefined} disabled={!canEdit} onClick={() => schedule({ priority: p }, true)}>
                         {TODO_PRIORITY_LABELS[p]}
                       </button>
                     ))}
@@ -1684,7 +1951,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                           }}
                         />
                       )}
-                      {detail.remindAt && (
+                      {detail.remindAt && !isDraft && (
                         <span className="todo-snooze" aria-label="스누즈">
                           {TODO_SNOOZE_PRESETS.map((p) => (
                             <button key={p.key} type="button" className="todo-tbtn" onClick={() => void snooze(p.key)}>
@@ -1842,7 +2109,8 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 <div className="todo-pr">
                   <span className="todo-pr-label">공유</span>
                   <div className="todo-pr-val" data-static="true">
-                    {shares.map((s) => (
+                    {isDraft && <span className="todo-mu">저장 후 추가할 수 있습니다</span>}
+                    {!isDraft && shares.map((s) => (
                       <span key={s.userId} className="todo-chip">
                         <CdAvatar name={s.name || "?"} src={s.photoUrl} size="xs" className="todo-av" />
                         {s.name || s.userId}
@@ -1861,7 +2129,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                         )}
                       </span>
                     ))}
-                    {canEdit && (
+                    {canEdit && !isDraft && (
                       <button type="button" className="todo-chip" data-add="true" onClick={() => setPickerRole("watcher")}>
                         + 추가
                       </button>
@@ -1872,6 +2140,9 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
               </FoldSection>
 
               {/* ⑦ 활동(접힘) */}
+              {isDraft ? (
+                <DraftPending label="활동" col="side" />
+              ) : (
               <FoldSection
                 label="활동"
                 col="side"
@@ -1905,6 +2176,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   </div>
                 ))}
               </FoldSection>
+              )}
             </div>
           </>
         )}
@@ -1917,11 +2189,16 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
         withRole={pickerRole !== "assignee"}
         defaultRole={pickerRole ?? "watcher"}
         excludeUserIds={[detail?.ownerUserId ?? "", ...(detail?.shares.map((s) => s.userId) ?? [])].filter(Boolean)}
-        candidates={pickerRole === "assignee" ? assigneeCandidates : undefined}
+        candidates={pickerRole === "assignee" && !(isDraft && detail?.boardKind === "personal") ? assigneeCandidates : undefined}
         currentUserId={detail?.assigneeUserId ?? null}
         busy={busy}
         onClose={() => setPickerRole(null)}
         onPick={async (people, role) => {
+          if (isDraft) {
+            if (pickerRole === "assignee" && people[0]) schedule({ assigneeUserId: people[0].userId, assigneeName: people[0].name, assigneePhotoUrl: null });
+            setPickerRole(null);
+            return;
+          }
           setBusy(true);
           try {
             if (pickerRole === "assignee") {
@@ -2007,7 +2284,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   );
   if (mode === "page") return inner;
   return (
-    <CdDrawer open={open} onClose={close} side="right" widthClass="max-w-[580px]" footer={detail ? footer : undefined} closeOnBackdrop>
+    <CdDrawer open={open} onClose={close} side="right" widthClass="max-w-[720px]" footer={detail ? footer : undefined} closeOnBackdrop={!isDraft}>
       {inner}
     </CdDrawer>
   );

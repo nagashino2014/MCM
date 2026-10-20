@@ -77,6 +77,7 @@ export function StatusDot({ status }: { status: TodoStatus }) {
 /** 우선순위 라벨 — 높음(파스텔 빨강)·낮음(회색)만, 보통·없음은 표시하지 않는다. */
 export function PriorityLabel({ priority }: { priority: TodoPriority }) {
   if (priority === 3) return <span className="todo-lv" data-level="hi">높음</span>;
+  if (priority === 2) return <span className="todo-lv" data-level="mid">보통</span>;
   if (priority === 1) return <span className="todo-lv" data-level="lo">낮음</span>;
   return null;
 }

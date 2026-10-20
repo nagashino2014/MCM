@@ -12,6 +12,9 @@
   --todo-lbl-today-bg: #fdebd3; --todo-lbl-today-fg: #8a4b06;
   --todo-lbl-hi-bg: #fbe3e3; --todo-lbl-hi-fg: #9b2222;
   --todo-lbl-lo-bg: var(--cd-surface); --todo-lbl-lo-fg: var(--cd-muted);
+  /* 우선순위(2026-10-20 사용자 요청) — 단계별 색: 낮음 파랑 · 보통 주황 · 높음 빨강(=--todo-lbl-hi). 부가 설정 버튼·목록/보드 라벨·점이 같은 색을 쓴다. */
+  --todo-pri-1-bg: #d9e8f8; --todo-pri-1-fg: #1a47a8;
+  --todo-pri-2-bg: #fdebd3; --todo-pri-2-fg: #8a4b06;
   --todo-pill-today-bg: #d9e8f8; --todo-pill-today-fg: var(--cd-primary);
   --todo-tag-today-bg: #eef4fc; --todo-tag-today-bd: #b9cfee;
   --todo-tag-over-bg: #fdf1f1; --todo-tag-over-bd: #efbfbf;
@@ -33,6 +36,8 @@
   --todo-lbl-over-bg: color-mix(in srgb, #fbe3e3 25%, var(--cd-card)); --todo-lbl-over-fg: #f0a3a3;
   --todo-lbl-today-bg: color-mix(in srgb, #fdebd3 25%, var(--cd-card)); --todo-lbl-today-fg: #f2c58b;
   --todo-lbl-hi-bg: color-mix(in srgb, #fbe3e3 25%, var(--cd-card)); --todo-lbl-hi-fg: #f0a3a3;
+  --todo-pri-1-bg: color-mix(in srgb, #d9e8f8 25%, var(--cd-card)); --todo-pri-1-fg: #a9b8ff;
+  --todo-pri-2-bg: color-mix(in srgb, #fdebd3 25%, var(--cd-card)); --todo-pri-2-fg: #f2c58b;
   --todo-pill-today-bg: color-mix(in srgb, #d9e8f8 25%, var(--cd-card));
   --todo-tag-today-bg: color-mix(in srgb, #b9cfee 18%, var(--cd-card)); --todo-tag-over-bg: color-mix(in srgb, #efbfbf 18%, var(--cd-card));
   --todo-tag-week-bg: color-mix(in srgb, #bfddae 18%, var(--cd-card)); --todo-tag-shared-bg: color-mix(in srgb, #cfc2ee 18%, var(--cd-card));
@@ -160,9 +165,9 @@
 .todo-qa-preview b { font-weight: 500; color: var(--cd-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .todo-qa-preview .todo-qa-hint { flex: none; color: var(--cd-faint); }
 .todo-pdot { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; box-sizing: border-box; border: 1.5px solid var(--cd-faint); }
-.todo-pdot[data-priority="3"] { background: var(--cd-error); border-color: var(--cd-error); }
-.todo-pdot[data-priority="2"] { background: var(--cd-warning); border-color: var(--cd-warning); }
-.todo-pdot[data-priority="1"] { background: var(--cd-primary); border-color: var(--cd-primary); }
+.todo-pdot[data-priority="3"] { background: var(--todo-lbl-hi-fg); border-color: var(--todo-lbl-hi-fg); }
+.todo-pdot[data-priority="2"] { background: var(--todo-pri-2-fg); border-color: var(--todo-pri-2-fg); }
+.todo-pdot[data-priority="1"] { background: var(--todo-pri-1-fg); border-color: var(--todo-pri-1-fg); }
 
 /* ── 그룹 헤더 + 행 ── */
 .todo-gh { display: flex; align-items: center; gap: 8px; height: 44px; padding: 14px 24px 0; font-size: 12.5px; font-weight: 600; color: var(--cd-text); box-sizing: border-box; }
@@ -195,7 +200,8 @@
 .todo-ttl[data-done="true"] > span:last-child { color: var(--cd-faint); text-decoration: line-through; }
 .todo-lv { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px; flex: none; line-height: 1.5; }
 .todo-lv[data-level="hi"] { background: var(--todo-lbl-hi-bg); color: var(--todo-lbl-hi-fg); }
-.todo-lv[data-level="lo"] { background: var(--todo-lbl-lo-bg); color: var(--todo-lbl-lo-fg); }
+.todo-lv[data-level="mid"] { background: var(--todo-pri-2-bg); color: var(--todo-pri-2-fg); }
+.todo-lv[data-level="lo"] { background: var(--todo-pri-1-bg); color: var(--todo-pri-1-fg); }
 .todo-ctx { font-size: 12.5px; color: var(--cd-muted); margin-top: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
 .todo-ctx > span { flex: none; }
 .todo-ctx > .todo-ctx-txt { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -400,6 +406,11 @@
 }
 .todo-seg .cd-choice:hover { color: var(--cd-text); background: var(--cd-hover); }
 .todo-seg .cd-choice[data-active="true"] { font-weight: 600; }
+/* 우선순위 선택(부가 설정) — 단계별 글자색. 선택 상태는 cdash 공통 규칙의 색 변수(--cd-choice-color)만 단계 색으로 바꾼다. */
+.todo-seg .cd-choice[data-pri="0"] { --cd-choice-color: var(--cd-muted); }
+.todo-seg .cd-choice[data-pri="1"] { --cd-choice-color: var(--todo-pri-1-fg); color: var(--todo-pri-1-fg); }
+.todo-seg .cd-choice[data-pri="2"] { --cd-choice-color: var(--todo-pri-2-fg); color: var(--todo-pri-2-fg); }
+.todo-seg .cd-choice[data-pri="3"] { --cd-choice-color: var(--todo-lbl-hi-fg); color: var(--todo-lbl-hi-fg); }
 .todo-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 3px; border-radius: 13px; border: 1px solid var(--cd-border); font-size: 12px; color: var(--cd-text);
   background: var(--cd-card); font-family: inherit;
@@ -878,3 +889,23 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-tl-lg-st[data-status="done"] { background: var(--todo-sub-done); border-color: var(--todo-seg-done); }
 .todo-tl-lg-st[data-status="hold"] { background: transparent; border-style: dashed; border-color: var(--todo-seg-hold); }
 .todo-tl-lg-st[data-ghost="1"] { background: transparent; border-style: dashed; border-color: var(--cd-muted); }
+
+/* ── 2026-10-20 목록 가독성(사용자 요청) — 메뉴(흰 바) ↔ 목록(옅은 바탕 + 그룹별 흰 패널)을 면의 대비로 구분한다.
+   강한 색·굵은 선·볼드 없이: 1px 중립 경계 + 8px 반경, 그룹 머리는 보통 굵기. 보드·타임라인은 대상 아님(data-layout="groups" 목록만). ── */
+.todo-canvas:has(.todo-canvas-body[data-layout="groups"]) > .todo-bar { margin-bottom: 0; }
+.todo-canvas-body[data-layout="groups"] { background: var(--cd-surface); padding: 6px 16px 20px; gap: 12px; }
+/* 열 머리 — 패널 테두리 1px 만큼 안쪽으로 맞춘다(행 좌 24·우 20 + 1) */
+.todo-canvas-body[data-layout="groups"] > .todo-th { margin-top: 0; height: 30px; padding: 0 21px 0 25px; border-bottom: 0; }
+.todo-canvas-body[data-layout="groups"] > .todo-ghost,
+.todo-canvas-body[data-layout="groups"] > .todo-qa,
+.todo-canvas-body[data-layout="groups"] > .todo-rows { background: var(--cd-card); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 8px); overflow: hidden; }
+/* 세로 flex 안에서 패널이 눌려 행이 잘리지 않게(창 높이가 낮을 때) */
+.todo-canvas-body[data-layout="groups"] > * { flex-shrink: 0; }
+.todo-canvas-body[data-layout="groups"] > .todo-rows > .todo-gh { height: 40px; padding: 0 20px 0 24px; font-weight: 500; border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); }
+.todo-canvas-body[data-layout="groups"] > .todo-rows > .todo-row:last-child { border-bottom: 0; }
+.todo-canvas-body[data-layout="groups"] > .todo-rows > .todo-empty { padding: 12px 24px 14px; }
+.todo-canvas-body[data-layout="groups"] > .todo-done-sec { margin-top: 0; }
+.todo-canvas-body[data-layout="groups"] .todo-period-band { margin: 8px 12px; }
+/* 2026-10-20 드로어 복귀(폭 720) — 핵심 2×2 칸에서 편집을 열면 그 칸만 한 행 전체로 펼쳐 날짜·시각 입력이 줄바꿈되지 않게 한다. */
+.todo-drawer .todo-key > .todo-kv:has(> .todo-pr-edit) { grid-column: 1 / -1; }
+.todo-drawer .todo-key .todo-pr-edit { flex-wrap: nowrap; }

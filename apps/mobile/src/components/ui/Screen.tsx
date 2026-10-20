@@ -21,6 +21,8 @@ export interface ScreenProps {
   subtitle?: string;
   /** 뒤로가기 버튼 표시(스택 화면). 탭 최상위 화면은 false. */
   back?: boolean;
+  /** 뒤로가기 대체 동작(예: 미저장 확인). 없으면 router.back(). */
+  onBack?: () => void;
   /** 헤더 우측 슬롯(아이콘 버튼 등). */
   right?: ReactNode;
   children: ReactNode;
@@ -36,6 +38,7 @@ export function Screen({
   title,
   subtitle,
   back,
+  onBack,
   right,
   children,
   scroll = true,
@@ -59,7 +62,7 @@ export function Screen({
         <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2.5">
           {back ? (
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => (onBack ? onBack() : router.back())}
               hitSlop={10}
               className="h-11 w-11 items-center justify-center rounded-full active:opacity-60">
               <Ionicons name="chevron-back" size={24} color={c.text} />

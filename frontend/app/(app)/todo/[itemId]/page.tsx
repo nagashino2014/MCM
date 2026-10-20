@@ -1,9 +1,9 @@
-import { TodoDetailPage } from "@/components/todo/TodoDetailPage";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-// 할 일 상세(§25-4) — 우측 드로어 대신 별도 페이지. 목록·보드·캘린더·알림함·위젯의 열기 경로가 전부 여기로 온다.
+// 할 일 상세 — 2026-10-20 사용자 요청으로 다시 목록 위 우측 드로어(/todo?item=)로 연다. 캘린더·알림함·위젯·홈의 /todo/<id> 링크 호환.
 export default async function TodoItemPage({ params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = await params;
-  return <TodoDetailPage itemId={decodeURIComponent(itemId)} />;
+  redirect(`/todo?item=${encodeURIComponent(decodeURIComponent(itemId))}`);
 }

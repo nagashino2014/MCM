@@ -62,10 +62,16 @@ export function StatusDot({ status }: { status: TodoStatus }) {
   );
 }
 
-/** 우선순위 라벨(§19-4) — 높음만 파스텔 빨강, 낮음은 회색. 보통·없음은 표시하지 않는다. */
+/** 우선순위 단계별 톤(2026-10-20 사용자 요청, 웹과 같은 색) — 낮음 파랑 · 보통 주황 · 높음 빨강 · 없음 회색. */
+export function priorityTone(priority: TodoPriority): LabelTone {
+  return priority === 3 ? 'over' : priority === 2 ? 'today' : priority === 1 ? 'sky' : 'gray';
+}
+
+/** 우선순위 라벨(§19-4) — 단계별 파스텔(낮음·보통·높음). 없음은 표시하지 않는다. */
 export function PriorityLabel({ priority }: { priority: TodoPriority }) {
   if (priority === 3) return <PastelLabel label="높음" tone="over" bold />;
-  if (priority === 1) return <PastelLabel label="낮음" tone="gray" />;
+  if (priority === 2) return <PastelLabel label="보통" tone="today" />;
+  if (priority === 1) return <PastelLabel label="낮음" tone="sky" />;
   return null;
 }
 
@@ -73,7 +79,7 @@ export function PriorityLabel({ priority }: { priority: TodoPriority }) {
 export function PriorityDot({ priority, size = 8 }: { priority: TodoPriority; size?: number }) {
   const { c, dark } = useTheme();
   const color =
-    priority === 3 ? labelColors('over', dark).fg : priority === 2 ? labelColors('today', dark).fg : priority === 1 ? c.muted : 'transparent';
+    priority === 0 ? 'transparent' : labelColors(priorityTone(priority), dark).fg;
   return (
     <View
       style={{

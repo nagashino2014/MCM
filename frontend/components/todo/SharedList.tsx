@@ -56,7 +56,7 @@ export function SharedList({ items, boards, myUserId, today, density, selectedId
 
   if (loaded && total === 0) {
     return (
-      <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+      <div className="todo-canvas-body" data-layout="groups" onKeyDown={rowListKeyNav}>
         <CdEmptyState icon={<Users className="w-6 h-6" />} title="공유받은 할 일이 없습니다" description="다른 사람이 나를 담당·참조로 지정하거나, 내가 멤버인 보드에 할 일이 생기면 여기에 보입니다." />
         {doneSection}
       </div>
@@ -89,7 +89,7 @@ export function SharedList({ items, boards, myUserId, today, density, selectedId
   };
 
   return (
-    <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+    <div className="todo-canvas-body" data-layout="groups" onKeyDown={rowListKeyNav}>
       <TodoColumnHeader />
       {section("assigned", "나에게 배정", groups.assigned, (it) => (it.ownerName ? `${it.ownerName} 요청` : null))}
       {section("watched", "참조", groups.watched, (it) => (it.ownerName ? `${it.ownerName} 공유` : null))}

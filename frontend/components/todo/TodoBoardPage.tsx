@@ -27,7 +27,7 @@ import { KanbanBoard } from "./KanbanBoard";
 import { TodoTimeline } from "./TodoTimeline";
 import { TodoPrefsModal } from "./TodoPrefsModal";
 import { BoardDeleteModal } from "./BoardDeleteModal";
-import { TODO_LIST_QUERY_KEY } from "./TodoDetailPage";
+import { TodoDetailDrawer, type TodoDraftInit } from "./TodoDetailDrawer";
 import { BoardCreateModal } from "./BoardCreateModal";
 import { BoardMembersModal } from "./BoardMembersModal";
 import { CompleteConfirmModal, type CompleteConfirmTarget } from "./CompleteConfirmModal";
@@ -244,14 +244,16 @@ export function TodoBoardPage() {
     return { overdue, today: td, week, shared: shared.items.filter((i) => !i.parentItemId && i.status !== "done").length, done: doneCount };
   }, [my.items, shared.items, today, weekStart, doneCount]);
 
-  // ── 퀵애드 열기(?new=1 · N 키 · 새 할 일 버튼) ──
-  useEffect(() => {
-    if (newParam === "1") {
-      setQuickOpen((n) => n + 1);
-      setQuery({ new: null, title: null, linkKind: null, linkId: null, linkLabel: null, ...(scope === "shared" || scope === "delegated" ? { scope: "my" } : {}) });
-    }
+  // ── 새 할 일(2026-10-20) — [새 할 일] 버튼·?new=1(메일·메신저·탑바 프리필)은 우측 드로어의 작성 양식으로, N 키는 퀵애드(기호 입력) 그대로 ──
+  // 기본 보드 = 보고 있는 프로젝트 보드 → 개인 기본 보드. 저장하면 같은 드로어가 일반 상세(?item=)로 바뀐다.
+  const draftInit = useMemo<TodoDraftInit | null>(
+    () =>
+      newParam === "1" && !itemParam
+        ? { boardId: scope === "board" ? scopeBoardId : null, title: sp.get("title"), linkKind: sp.get("linkKind"), linkId: sp.get("linkId"), linkLabel: sp.get("linkLabel") }
+        : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newParam]);
+    [newParam, itemParam]
+  );
 
   const itemParamRef = useRef(itemParam);
   itemParamRef.current = itemParam;
@@ -267,8 +269,7 @@ export function TodoBoardPage() {
   }, []);
 
   const openNew = () => {
-    if (scope === "shared") setQuery({ scope: "my" });
-    setQuickOpen((n) => n + 1);
+    setQuery({ new: "1", item: null, ...(scope === "shared" || scope === "delegated" ? { scope: "my" } : {}) });
   };
 
   // ── 범위·보기 전환 ──
@@ -298,20 +299,9 @@ export function TodoBoardPage() {
   // §25-4: 상세는 별도 페이지(/todo/[itemId]). 돌아올 목록 query 를 남기고 이동한다.
   const openItem = (item: TodoItem | string) => {
     const id = typeof item === "string" ? item : item.itemId;
-    try {
-      const q = new URLSearchParams(sp.toString());
-      q.delete("item");
-      q.delete("new");
-      window.sessionStorage.setItem(TODO_LIST_QUERY_KEY, q.toString());
-    } catch {
-      /* 저장 실패는 무시 — 기본 목록으로 돌아간다 */
-    }
-    router.push(`/todo/${encodeURIComponent(id)}`);
+    setQuery({ item: id, new: null, title: null, linkKind: null, linkId: null, linkLabel: null });
   };
-  // 옛 링크 /todo?item=<id> 호환 — 상세 페이지로 넘긴다.
-  useEffect(() => {
-    if (itemParam) router.replace(`/todo/${encodeURIComponent(itemParam)}`);
-  }, [itemParam, router]);
+  const closeItem = () => setQuery({ item: null, new: null, title: null, linkKind: null, linkId: null, linkLabel: null });
 
   const upsertAll = useCallback(
     (item: TodoItemDetail) => {
@@ -698,7 +688,7 @@ export function TodoBoardPage() {
           </div>
 
           {archivedMode && (
-            <div className="todo-canvas-body" onKeyDown={rowListKeyNav}>
+            <div className="todo-canvas-body" data-layout="groups" onKeyDown={rowListKeyNav}>
               <div className="todo-rows" aria-label="보관함">
                 <GroupHeader
                   label="보관함"
@@ -859,6 +849,35 @@ export function TodoBoardPage() {
 
       {prefsOpen && prefs && <TodoPrefsModal prefs={prefs} onPatch={patchPrefs} onClose={() => setPrefsOpen(false)} />}
           <BoardDeleteModal board={deleteBoardTarget} onClose={() => setDeleteBoardTarget(null)} onDeleted={onBoardDeleted} />
+
+      {/* 상세·작성 — 우측 드로어(2026-10-20 사용자 요청으로 페이지 방식에서 복귀, 폭 확대) */}
+      {mounted && (
+        <TodoDetailDrawer
+          itemId={itemParam}
+          draft={draftInit}
+          boards={boards}
+          prefs={prefs}
+          myUserId={myUserId}
+          myName={myName}
+          myPhotoUrl={myPhotoUrl}
+          today={today}
+          onClose={closeItem}
+          onItemChanged={(item) => {
+            upsertAll(item);
+            if (item.status === "done") graceDrop(item.itemId);
+            else if (archivedMode) {
+              // 보관함 항목을 상세에서 되돌리면 보관이 풀려 목록으로 돌아간다 — 목록들을 다시 읽는다.
+              void my.reload();
+              void shared.reload();
+              void boardData.reload();
+            }
+          }}
+          onItemCreated={createdAll}
+          onItemDeleted={removeAll}
+          onOpenItem={(id) => openItem(id)}
+          onDraftSaved={(item) => openItem(item.itemId)}
+        />
+      )}
 
       <BoardCreateModal
         open={createOpen}

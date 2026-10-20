@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Download, ExternalLink, RefreshCw } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { VatFollowupReviewPanel } from "./VatFollowupReviewPanel";
 import { VatSameSupplyPanel } from "./VatSameSupplyPanel";
@@ -1082,7 +1083,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
   return (
     <div className="space-y-4">
       <div className="cd-card p-4 space-y-3">
-        <div className="cd-card-title">신고 근거 · 저장본 선택</div>
+        <div className="cd-card-title flex items-center gap-1">신고 근거 · 저장본 선택<CdHelp topic="finance.vat-stages" /></div>
         <div className="flex flex-wrap gap-3 items-end">
           <label className="text-sm">새 계산의 봉인 근거
             <select className="cd-select block mt-1 max-w-full" aria-label="신고 근거 선택" value={savedId ? "" : basisId} disabled={uncertainRequest || busy || listsLoading} onChange={e => changeSelection(e.target.value, "")}>

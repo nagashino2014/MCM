@@ -150,6 +150,7 @@ export function ApprovalSemanticConceptsBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="데이터 의미 사전"
+        helpTopic="approval-ops.concepts-save"
         help="양식의 금액·날짜·선택 항목에 붙일 데이터 의미를 관리합니다. 같은 의미를 지정하면 양식이 달라도 같은 분석 지표에 집계됩니다. 직원·용역 등 대상 연결은 항목 종류에 따라 자동 지정됩니다."
         meta={`${groups.length}개 그룹 · ${items.length}개 개념`}
         actions={

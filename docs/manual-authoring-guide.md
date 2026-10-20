@@ -51,6 +51,6 @@
 
 ## 5. 검사
 
-`npm run test:manual` — 키 중복·링크·`[[ ]]` 대조·topic 사용처·권한 키·경로 매칭을 확인한다. 커버리지(기사 없는 메뉴·화면)는 `MANUAL_STRICT=1`일 때 실패로 바뀐다. 새 화면은 기사를 쓰거나 `content/manual/index.ts`의 `MANUAL_EXCLUDED_ROUTES`에 사유와 함께 등록한다.
+`npm run test:manual` — 키 중복·링크·`[[ ]]` 대조·topic 사용처·권한 키·경로 매칭을 확인한다. 기사 없는 메뉴·화면이 있으면 **실패**한다(작업 중 임시로 경고만 보려면 `MANUAL_STRICT=0`). 새 화면은 기사를 쓰거나 `content/manual/index.ts`의 `MANUAL_EXCLUDED_ROUTES`에 사유와 함께 등록한다.
 
 `npm run manual:stale` — 기사·도움말의 `sources` 파일이 `reviewedAt` 이후 커밋으로 바뀐 것을 "검토 필요"로 보고한다(실패 아님). 배포 전에 돌려 화면 동작이 바뀐 기사를 고치고, 바뀌지 않았으면 `reviewedAt`만 갱신한다.

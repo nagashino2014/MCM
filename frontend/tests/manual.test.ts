@@ -1,6 +1,7 @@
 // 사용 매뉴얼 정합성 검사(docs/manual-help-blueprint.md §5.2) — npm run test:manual
 //  - 실패: 키·링크·[[화면 문구]]·topic 사용처·권한 키가 어긋남 → 매뉴얼이 화면과 다른 말을 하게 되는 경우
-//  - 경고: 매뉴얼이 아직 없는 메뉴·화면(MANUAL_STRICT=1 이면 실패) — 2차부터 실패로 전환한다
+//  - 실패: 매뉴얼이 없는 메뉴·화면 — 새 화면은 기사를 쓰거나 MANUAL_EXCLUDED_ROUTES 에 사유와 함께 등록한다.
+//    (MANUAL_STRICT=0 이면 경고만 — 작업 중 임시 확인용)
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -13,7 +14,7 @@ import { canSeeArticle, findArticleForLocation, getArticle } from "../lib/manual
 import { searchManual } from "../lib/manual/search";
 
 const ROOT = process.cwd();
-const STRICT = process.env.MANUAL_STRICT === "1";
+const STRICT = process.env.MANUAL_STRICT !== "0";
 
 function walk(dir: string, exts: string[], out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -154,6 +155,14 @@ test("현재 화면 → 기사 매칭과 권한 필터", () => {
   assert.equal(canSeeArticle(lib, ["files.manage@all"]), true);
   assert.equal(findArticleForLocation("/files", "", staff), null);
   assert.equal(findArticleForLocation("/files/personal", "", staff)?.id, "files.personal");
+  // 재무는 한 화면에 tab 쿼리로 나뉜다 — 하위 탭 별칭도 소메뉴 기사로, 쿼리가 없으면 기본 탭(연결 관리)으로.
+  const fin = ["finance.view@all"];
+  assert.equal(findArticleForLocation("/finance", "", fin)?.id, "finance.connections");
+  assert.equal(findArticleForLocation("/finance", "?tab=recon", fin)?.id, "finance.invoice");
+  assert.equal(findArticleForLocation("/finance", "?tab=vatbasis", fin)?.id, "finance.vat-filing");
+  assert.equal(findArticleForLocation("/finance", "?tab=severance", fin)?.id, "finance.expsettle");
+  assert.equal(findArticleForLocation("/finance", "?tab=vat", staff), null);
+  assert.equal(findArticleForLocation("/approval/semantic-concepts", "", ["approval.manage@all"])?.id, "approval-ops.concepts");
 });
 
 test("검색 — 낱말·초성", () => {
@@ -164,7 +173,7 @@ test("검색 — 낱말·초성", () => {
   assert.deepEqual(searchManual("파일 저장 정책", perms).map((h) => h.article.id).includes("files.library"), false);
 });
 
-test("커버리지 — 매뉴얼이 없는 메뉴·화면(1차는 경고)", () => {
+test("커버리지 — 매뉴얼이 없는 메뉴·화면", () => {
   const missingMenus: string[] = [];
   for (const m of MENU_ITEMS)
     for (const entry of [m, ...(m.submenu ?? [])]) {

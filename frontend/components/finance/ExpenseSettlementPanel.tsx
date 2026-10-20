@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Banknote, ChevronDown, ChevronRight, Download, FileSpreadsheet, ListTree, Mail, Play, TriangleAlert } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 
 interface UnsettledItem {
@@ -195,7 +196,7 @@ export function ExpenseSettlementPanel() {
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
-            <Banknote className="w-4 h-4" /> 미정산 개인카드 지출 (인별)
+            <Banknote className="w-4 h-4" /> 미정산 개인카드 지출 (인별)<CdHelp topic="finance.expsettle" />
           </p>
           <button
             type="button"

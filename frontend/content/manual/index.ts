@@ -21,12 +21,16 @@ import { HR_PAYROLL_ADMIN_ARTICLES } from "./articles/hr-payroll-admin";
 import { FACILITIES_CONTRACTS_ARTICLES } from "./articles/facilities-contracts";
 import { SALES_ARTICLES } from "./articles/sales";
 import { ADMIN_ARTICLES } from "./articles/admin";
+import { FINANCE_ARTICLES } from "./articles/finance";
+import { APPROVAL_OPS_ARTICLES } from "./articles/approval-ops";
 import { COLLAB_MORE_HELP } from "./help-topics/collab-more";
 import { WORK_MGMT_HELP } from "./help-topics/work-mgmt";
 import { HR_PAYROLL_ADMIN_HELP } from "./help-topics/hr-payroll-admin";
 import { FACILITIES_CONTRACTS_HELP } from "./help-topics/facilities-contracts";
 import { SALES_HELP } from "./help-topics/sales";
 import { ADMIN_HELP } from "./help-topics/admin";
+import { FINANCE_HELP } from "./help-topics/finance";
+import { APPROVAL_OPS_HELP } from "./help-topics/approval-ops";
 
 export { MANUAL_CHAPTERS, MANUAL_GROUP_LABEL } from "./chapters";
 export { MANUAL_CHANGELOG } from "./changelog";
@@ -48,7 +52,9 @@ export const MANUAL_ARTICLES: ManualArticle[] = [
   ...HR_PAYROLL_ADMIN_ARTICLES,
   ...FACILITIES_CONTRACTS_ARTICLES,
   ...SALES_ARTICLES,
+  ...FINANCE_ARTICLES,
   ...ADMIN_ARTICLES,
+  ...APPROVAL_OPS_ARTICLES,
   ...SCENARIO_ARTICLES,
 ];
 
@@ -56,6 +62,7 @@ export const HELP_TOPICS: Readonly<Record<string, HelpTopic>> = Object.fromEntri
   [
     ...HELP_TOPIC_LIST,
     ...COLLAB_MORE_HELP, ...WORK_MGMT_HELP, ...HR_PAYROLL_ADMIN_HELP, ...FACILITIES_CONTRACTS_HELP, ...SALES_HELP, ...ADMIN_HELP,
+    ...FINANCE_HELP, ...APPROVAL_OPS_HELP,
   ].map((t) => [t.id, t])
 );
 

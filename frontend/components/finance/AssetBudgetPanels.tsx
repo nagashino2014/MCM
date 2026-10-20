@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Download, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 const thisYear = () => new Date().getFullYear();
@@ -125,7 +126,7 @@ export function FixedAssetPanel() {
   return (
     <div className="cd-card p-4">
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <div className="cd-card-title mr-auto">고정자산 대장 — 월할 상각</div>
+        <div className="cd-card-title mr-auto flex items-center gap-1">고정자산 대장 — 월할 상각<CdHelp topic="finance.depreciation" /></div>
         <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={loading} onClick={load}>
           <RefreshCw className="w-3.5 h-3.5" /> 새로고침
         </button>

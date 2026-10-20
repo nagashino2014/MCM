@@ -1,6 +1,6 @@
 # 전자결재 대결·전결(부재 결재) 구현 계획
 
-작성 2026-10-20 · 상태: **계획(미착수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
+작성 2026-10-20 · 상태: **계획 — 결정 D-1~D-5 확정(2026-10-20), 구현 미착수** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
 
 ## 1. 요구(2026-10-20 사용자)
 
@@ -39,8 +39,12 @@
 | **부재 건너뛰기** | 부재 결재자 단계를 생략하고 다음 결재자에게 이관 | 해당 단계 `skipped`(사유 absence) | 해당 칸 “부재” |
 | **전결(專決)** | 결재자가 상위 단계를 생략하고 최종 승인 | 이후 단계 전부 `skipped`(사유 final), 문서 approved | 전결자 칸 “전결”, 생략된 칸 “전결” 사선 |
 
-- 부재 결재자가 **마지막 결재자**이고 방식이 건너뛰기이면 → 직전 승인자의 승인이 최종이 되며 **전결로 기록**한다(“부재 시 직전 결재자 전결”). → **결정 D-2**
-- 합의(agree) 단계도 대결·건너뛰기 대상이다. 전결 버튼은 승인(approve) 단계에만 노출.
+- **최종 결재자 규칙(D-2 확정)**: 결재선의 마지막 순번(최대 `step_order`) 단계에는 부재 설정을 **적용하지 않는다** —
+  대결·건너뛰기·전결 전환 모두 없음. 최종 결재자 **본인이 결재해야만** 결재라인이 종료된다.
+  부재 중이면 문서는 최종 결재자 차례에서 대기하고, 기안자에게 “최종 결재자 부재(~복귀일) — 복귀 후 결재” 안내를 보낸다.
+- 부재 처리(대결·건너뛰기)는 최종 단계를 **제외한** 중간 단계(합의·승인)에만 적용한다.
+- 결재자가 스스로 누르는 [전결](§5-4, D-3 권한자 한정)은 위임전결규정에 따른 별도 행위로 유지한다.
+  부재 설정이 전결을 자동으로 일으키는 경로는 없다.
 
 ## 4. 데이터 모델 — 마이그레이션 301(번호는 착수 직전 `git fetch` 후 원격 전 브랜치 재확인)
 
@@ -77,7 +81,7 @@ CREATE TABLE IF NOT EXISTS approval_final_rules (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rules(form_id, COALESCE(user_id, ''), dept_head);
 ```
 - `approval_delegates` 는 유지(“휴가 승인 시 자동 대결자” 기본값). 판정 순서: ①유효한 `approval_absences` → ②기존 휴가 연동 `approval_delegates`.
-- 알림 이벤트 시드 추가: `absence_skipped`(기안자에게 “○○ 부재로 다음 결재자에게 넘어감”), `proxy_done`(원결재자 후열 통지), `final_approved`.
+- 알림 이벤트 시드 추가: `absence_skipped`(기안자에게 “○○ 부재로 다음 결재자에게 넘어감”), `proxy_done`(원결재자 후열 통지), `final_absent`(기안자에게 “최종 결재자 부재 — 복귀 후 결재”), `final_approved`([전결] 종결 통지).
 - 기존 파일은 수정하지 않는다. 멱등(`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`).
 
 ## 5. 서버 로직(`lib/approval/`)
@@ -87,11 +91,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
    - `resolveAbsence(db, userId, date)` → `{ mode:'delegate', delegateUserId, absenceId } | { mode:'skip', absenceId } | null`.
    - 대리인 연쇄: 대리인도 부재(delegate)면 최대 3단계까지 따라가고, 순환·미해결이면 원결재자 유지 + 관리자 알림.
    - 대리인이 기안자 본인이면 지정 불가(자기 결재 방지, `094` self_approval 정책과 일치).
-2. **`finalizeApprovedDoc(txn, docId, now)` 추출** — `actOnDoc` 의 최종 승인 블록(문서 approved + 연차 차감·공문/견적 대장·계약서 마킹)을 함수로 분리. 일반 승인·전결·건너뛰기 종결이 모두 이 함수를 쓴다(동작 변경 없음 리팩터, 회귀 확인 필수).
+2. **`finalizeApprovedDoc(txn, docId, now)` 추출** — `actOnDoc` 의 최종 승인 블록(문서 approved + 연차 차감·공문/견적 대장·계약서 마킹)을 함수로 분리. 일반 최종 승인과 [전결]이 이 함수를 쓴다(동작 변경 없음 리팩터, 회귀 확인 필수). 부재 처리 경로는 이 함수를 호출하지 않는다(D-2).
 3. **`activateOrder` 확장**
-   - delegate → 기존처럼 `assignee` 교체 + `delegated_from`·`act_type='proxy'`·`absence_id` 기록.
-   - skip → 해당 단계 `skipped`(`skip_reason='absence'`) 후 같은 order 잔여가 없으면 다음 order 활성화를 **반복**. 남은 단계가 없으면 직전 승인 단계를 `act_type='final'` 로 표시하고 `finalizeApprovedDoc`.
-   - 1차 결재자 단계에서 바로 종결되는 경우(상신 직후 전원 건너뛰기)는 상신을 막고 “결재 가능한 결재자가 없습니다” 오류(→ D-2).
+   - **최종 단계 판정**: 문서의 최대 `step_order` 에 속한 단계 = 최종 단계. 최종 단계에는 부재 판정을 하지 않고 원결재자에게 그대로 활성화한다(기존 휴가 연동 `resolveDelegate` 도 최종 단계에서는 적용 중지).
+     최종 결재자가 부재 중이면 기안자에게 `final_absent` 안내(부재 기간·복귀일)를 보내고, 리마인드(`dispatchDueReminders`)는 부재 종료 다음 날부터 재개한다.
+   - (중간 단계) delegate → 기존처럼 `assignee` 교체 + `delegated_from`·`act_type='proxy'`·`absence_id` 기록.
+   - (중간 단계) skip → 해당 단계 `skipped`(`skip_reason='absence'`) 후 같은 order 잔여가 없으면 다음 order 활성화를 **반복**. 반복은 최종 단계에서 반드시 멈추므로 부재로 문서가 종결되는 경로는 없다.
 4. **`actOnDoc` 확장**
    - 권한: `assignee == actor` **또는** (`delegated_from == actor` 이고 해당 부재의 `allow_self_act=1`) — 원결재자가 일찍 복귀해 직접 처리 가능. 이때 `act_type='normal'`, 처리자는 원결재자로 되돌려 기록.
    - `action: 'final'`(전결) 신설 — 승인 단계 + `approval_final_rules` 충족 시에만. 이후 단계 전부 `skipped`(`skip_reason='final'`) → `finalizeApprovedDoc`.
@@ -99,7 +104,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 5. **이미 대기 중인 문서 재라우팅** — `rerouteForAbsence(userId)`
    - 부재 등록·수정 시 시작일이 오늘 이전이면 즉시 실행.
    - 미래 시작분은 기존 주기 작업 `/api/internal/approval-remind-tick` 에서 “오늘 시작하는 부재”를 찾아 실행(새 스케줄 리소스 불필요 — Terraform 변경 없음).
-   - 대상: 해당 사용자가 `assignee` 인 `pending` 단계(그리고 `in_progress` 문서). delegate 면 교체, skip 이면 생략 후 다음 활성화.
+   - 대상: 해당 사용자가 `assignee` 인 `pending` **중간** 단계(그리고 `in_progress` 문서). delegate 면 교체, skip 이면 생략 후 다음 활성화. 최종 단계는 대상에서 제외하고 기안자 `final_absent` 안내만 보낸다.
    - 부재 종료·취소 시 이미 넘어간 단계는 **되돌리지 않는다**(대리인이 처리 중일 수 있음). 원결재자는 `allow_self_act` 로 직접 처리 가능.
 6. **결재함·배지** — `listActedDocs` 에 `delegated_from = me` 문서를 “대결 처리됨” 표시로 포함(후열). 대기·예정·내비 배지·To-do 이벤트는 `assignee` 기준이라 변경 없음.
 
@@ -108,9 +113,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 1. **결재 설정 > 부재·대결 설정**(`/approval/settings`, 기존 알림 설정 옆 탭)
    - 기간(`CdDateInput` YYYYMMDD)·사유·방식(대결자 지정 / 다음 결재자로 넘기기)·대결자(기존 `OrgPickerModal`)·“부재 중 본인 처리 허용”.
    - 현재·예정 부재 목록, 취소. 저장 시 “지금 대기 중인 결재 N건이 ○○에게 넘어갑니다” 영향 안내.
+   - 고정 안내 문구: “최종 결재자로 지정된 문서는 대결·건너뛰기 없이 복귀 후 직접 결재해야 합니다.” 저장 시 최종 단계로 대기 중인 문서 수도 함께 표시.
    - 휴가 연동 자동 대결자(기존 `approval_delegates`)도 같은 화면에서 지정.
 2. **관리자 대리 등록** — 결재 관리(approval.manage) 권한자가 갑작스러운 부재자 대신 등록(`created_by` 기록, 본인에게 통지).
-3. **기안 화면 결재선** — 부재 예정 결재자에 “부재 10/21~10/30 · 대결 김○○” 배지(차단 없음, 안내만).
+3. **기안 화면 결재선** — 부재 예정 결재자에 “부재 10/21~10/30 · 대결 김○○” 배지(차단 없음, 안내만). 최종 결재자가 부재면 “최종 결재자 부재 — 10/30 복귀 후 결재 완료” 경고.
 4. **문서 뷰어 결재선 스텝퍼·도장란(`ApprovalDocHead`)·PDF(`doc-pdf.ts`)** — 대결/부재/전결 표기(§3 표).
 5. **결재 처리 바** — 전결 권한이 있으면 [승인] 옆에 [전결] 버튼(확인 모달: “이후 결재자 N명을 생략하고 최종 승인합니다”).
 6. **모바일** — Expo 앱 `StepTimeline` 라벨(부재·전결), 상세 화면 [전결] 버튼(OTA). 웹 `/m` 결재 화면 동일.
@@ -122,7 +128,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 |---|---|---|
 | **DA-0** | 마이그 301, `absence.ts`(KST·판정·연쇄), `finalizeApprovedDoc` 추출(동작 동일) | 회귀: 기존 승인·반려·연차 차감 그대로 |
 | **DA-1** | 부재 설정 API·화면, `activateOrder` delegate/skip, `actOnDoc` 원결재자 처리, 재라우팅(즉시+tick) | 대결·건너뛰기 실동작 |
-| **DA-2** | 표기(스텝퍼·도장란·PDF·결재한 문서 후열), 알림 이벤트 3종, 기안 화면 부재 배지, 관리자 대리 등록 | 사후 추적 가능 |
+| **DA-2** | 표기(스텝퍼·도장란·PDF·결재한 문서 후열), 알림 이벤트 4종, 기안 화면 부재 배지, 관리자 대리 등록 | 사후 추적 가능 |
 | **DA-3** | 전결 규칙 표·[전결] 버튼·API, 모바일(Expo OTA + /m) | 전결 실동작 |
 | **DA-4(선택)** | 금액·직급 기반 위임전결규정, 전결 규정 관리 화면 | 규정 자동화 |
 
@@ -132,17 +138,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 
 1. A(1차)·B(2차)·C(최종) 결재선 / B가 대결(→D) 설정 → A 승인 시 D에게 “대결 결재 요청”, D 승인 → C 차례, 문서에 “B 대결 D”.
 2. B 건너뛰기 → A 승인 시 C에게 바로 이관, 기안자에게 부재 통지, B 칸 “부재”.
-3. C(최종) 건너뛰기 → B 승인으로 종결, B 칸 “전결”, 연차 차감 등 최종 후크 1회 실행.
+3. C(최종)가 대결·건너뛰기 어느 방식으로 부재여도 → B 승인 후 문서는 C 차례에서 대기(대결자에게 넘어가지 않음), 기안자에게 `final_absent` 안내, 부재 중 리마인드 없음. C 복귀 후 승인 시 종결·최종 후크 1회 실행.
 4. B 차례로 대기 중인 문서가 있는 상태에서 B 부재 등록 → 즉시 D에게 이동. 미래 시작 부재는 시작일 tick 후 이동.
 5. 대리인 D도 부재(→E) → E에게 연쇄, A→B→A 순환 설정은 원결재자 유지 + 관리자 알림.
 6. 부재 중 B가 직접 처리(`allow_self_act`) → 정상 처리로 기록.
 7. 전결 권한자가 [전결] → 이후 단계 skipped, 문서 approved, 양식 액션·발송 대장 정상.
 8. KST 00~09시 경계에서 부재 시작/종료 판정 정확.
 
-## 9. 사용자 결정 필요
+## 9. 사용자 결정(2026-10-20 확정)
 
-- **D-1 부재 판정 범위**: 직접 등록한 부재만 쓸지, 기존처럼 **승인된 휴가신청서도 자동 부재로 인정**할지(권고: 둘 다 — 휴가는 기본 대결자가 있을 때만).
-- **D-2 최종 결재자 건너뛰기**: 최종 결재자가 “건너뛰기”로 부재일 때 직전 결재자 **전결로 종결**할지(권고), 아니면 대결자 지정만 허용할지.
-- **D-3 전결 권한 범위**: 1단계에서 누가 [전결] 버튼을 쓸 수 있는지 — 양식별 지정 인원/부서장(권고) vs 모든 승인 단계 결재자.
-- **D-4 원결재자 조기 복귀**: 이미 대결자에게 넘어간 문서를 원결재자도 처리할 수 있게 할지(권고: 허용, 설정에서 끌 수 있음).
-- **D-5 출장 부재**: 블루프린트는 출장을 대결 대상에서 제외했으나, 직접 등록한 부재는 사유와 무관하게 적용(권고).
+| 번호 | 결정 |
+|---|---|
+| **D-1 부재 판정 범위** | 직접 등록한 부재 + 승인된 휴가신청서 둘 다 인정. 휴가는 기본 대결자(`approval_delegates`)가 지정된 경우에만 대결. |
+| **D-2 최종 결재자** | 최종 결재자는 부재여도 **대결·건너뛰기·전결 전환 모두 없음**. 최종 결재자 본인이 결재해야만 결재라인이 종료된다(추가 질의에서 “본인만 종료” 선택). |
+| **D-3 전결 권한** | [전결] 버튼은 양식별 지정 인원·부서장(`approval_final_rules`)에게만. |
+| **D-4 원결재자 조기 복귀** | 대결자에게 넘어간 문서도 원결재자가 처리 가능(`allow_self_act` 기본 1, 부재 설정에서 끌 수 있음). |
+| **D-5 출장 부재** | 직접 등록한 부재는 사유(출장 포함)와 무관하게 적용. |

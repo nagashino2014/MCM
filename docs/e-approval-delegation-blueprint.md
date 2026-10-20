@@ -1,6 +1,6 @@
 # 전자결재 대결·전결(부재 결재) 구현 계획
 
-작성 2026-10-20 · 상태: **계획 — 결정 D-1~D-5 확정(2026-10-20), 구현 미착수** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
+작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
 
 ## 1. 요구(2026-10-20 사용자)
 
@@ -86,7 +86,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 
 ## 5. 서버 로직(`lib/approval/`)
 
-1. **`absence.ts` 신설**
+1. **`absence-routing.ts` 신설**(기존 `absence.ts` 는 결근사유서 모듈)
    - `kstToday()` — KST 기준 날짜(기존 UTC 버그 수정).
    - `resolveAbsence(db, userId, date)` → `{ mode:'delegate', delegateUserId, absenceId } | { mode:'skip', absenceId } | null`.
    - 대리인 연쇄: 대리인도 부재(delegate)면 최대 3단계까지 따라가고, 순환·미해결이면 원결재자 유지 + 관리자 알림.
@@ -126,7 +126,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 
 | 단계 | 내용 | 산출 |
 |---|---|---|
-| **DA-0** | 마이그 301, `absence.ts`(KST·판정·연쇄), `finalizeApprovedDoc` 추출(동작 동일) | 회귀: 기존 승인·반려·연차 차감 그대로 |
+| **DA-0** | 마이그 301, `absence-routing.ts`(KST·판정·연쇄), `finalizeApprovedDoc` 추출(동작 동일) | 회귀: 기존 승인·반려·연차 차감 그대로 |
 | **DA-1** | 부재 설정 API·화면, `activateOrder` delegate/skip, `actOnDoc` 원결재자 처리, 재라우팅(즉시+tick) | 대결·건너뛰기 실동작 |
 | **DA-2** | 표기(스텝퍼·도장란·PDF·결재한 문서 후열), 알림 이벤트 4종, 기안 화면 부재 배지, 관리자 대리 등록 | 사후 추적 가능 |
 | **DA-3** | 전결 규칙 표·[전결] 버튼·API, 모바일(Expo OTA + /m) | 전결 실동작 |

@@ -14,6 +14,7 @@ import { assignManualNoticeNo } from "@/lib/notice/store";
 import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
+import { kstToday } from "@/lib/approval/absence-routing";
 import { userPostDeptIds } from "@/lib/org/posts";
 
 /*
@@ -265,7 +266,8 @@ async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Pr
  * 대결자가 지정돼 있으면 대결자로 교체한다(delegated_from 기록). 출장은 대상이 아니다.
  */
 async function resolveDelegate(db: PgDatabase, assigneeUserId: string): Promise<string | null> {
-  const today = new Date().toISOString().slice(0, 10);
+  // KST 기준(기존 UTC 는 00~09시에 하루 어긋남). DA-1 에서 absence-routing.ts resolveAbsence 로 대체 예정.
+  const today = kstToday();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT ad.delegate_user_id
@@ -605,6 +607,23 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
 }
 
 /** 승인/반려 — 본인 pending 단계에만. 병렬 합의는 전원 승인 시 다음 order 로. */
+/**
+ * 문서 최종 승인 처리(트랜잭션 안) — 문서 approved + 승인 완료 후크. 일반 최종 승인과 [전결](DA-3)이 공용으로 쓴다.
+ * 커밋 후 작업(양식 액션·기안자 알림·공문/견적 발송)은 호출부가 docStatus 로 판단해 실행한다.
+ * 부재 처리 경로는 이 함수를 부르지 않는다 — 최종 결재자 본인 결재로만 결재라인 종료(D-2).
+ */
+async function finalizeApprovedDoc(txn: PgDatabase, docId: string, now: string): Promise<void> {
+  await txn.run(`UPDATE approval_docs SET status = 'approved', completed_at = $2, updated_at = $2 WHERE doc_id = $1`, [docId, now]);
+  // 휴가신청 승인 완료 → 연차 대장 use 적재(연차·반차만, doc당 1회)
+  await recordLeaveUsageOnApproval(txn, docId);
+  // 공문(135) 승인 완료 → 발송 대장 pending 등록(발송 자체는 커밋 후 비동기)
+  await markLetterPendingOnApproval(txn, docId);
+  // 견적(136) 승인 완료 → 발송 대장 pending 등록(산출물 생성·발송은 커밋 후 비동기)
+  await markQuotePendingOnApproval(txn, docId);
+  // 계약서(147) 승인 완료 → 대장 approved 마킹만 — 자동 발송 없음(수동 발송, 2026-08-10 확정)
+  await markAgreementApproved(txn, docId);
+}
+
 export async function actOnDoc(params: {
   docId: string;
   stepId: string;
@@ -655,19 +674,8 @@ export async function actOnDoc(params: {
     if (sameOrderPending.length === 0) {
       const nextOrders = steps.filter((s) => Number(s.step_order) > myOrder).map((s) => Number(s.step_order));
       if (nextOrders.length === 0) {
-        await txn.run(`UPDATE approval_docs SET status = 'approved', completed_at = $2, updated_at = $2 WHERE doc_id = $1`, [
-          params.docId,
-          now,
-        ]);
+        await finalizeApprovedDoc(txn, params.docId, now);
         docStatus = "approved";
-        // 휴가신청 승인 완료 → 연차 대장 use 적재(연차·반차만, doc당 1회)
-        await recordLeaveUsageOnApproval(txn, params.docId);
-        // 공문(135) 승인 완료 → 발송 대장 pending 등록(발송 자체는 커밋 후 비동기)
-        await markLetterPendingOnApproval(txn, params.docId);
-        // 견적(136) 승인 완료 → 발송 대장 pending 등록(산출물 생성·발송은 커밋 후 비동기)
-        await markQuotePendingOnApproval(txn, params.docId);
-        // 계약서(147) 승인 완료 → 대장 approved 마킹만 — 자동 발송 없음(수동 발송, 2026-08-10 확정)
-        await markAgreementApproved(txn, params.docId);
       } else {
         await activateOrder(txn, params.docId, Math.min(...nextOrders));
         await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [params.docId, now]);

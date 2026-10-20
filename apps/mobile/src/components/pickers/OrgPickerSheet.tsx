@@ -10,10 +10,9 @@ import { useTheme } from '@/theme/useTheme';
  * 조직도 인원 선택 시트 — 결재선·참조자·양식의 `user_select`/`dept_select` 가 공유한다.
  * 웹 `components/approval/OrgPickerModal.tsx` 대응.
  *
- * ⚠ 데이터원이 `/api/sales/org`(조직도 스냅샷)인 이유: 결재선에는 **userId** 가 필요한데
- *   주소록(`/api/directory`)은 employeeId 까지만 준다. 웹도 같은 이유로 이 엔드포인트를 쓴다.
- *   다만 이 API 는 `sales.view` 권한이라, 영업 권한이 없는 사용자는 조직도를 못 받는다
- *   (웹과 동일한 제약 — 실사용에서 문제가 되면 /api/directory 응답에 userId 를 더한다).
+ * ⚠ 데이터원이 `/api/org/snapshot`(전 직원용 조직도 스냅샷)인 이유: 결재선에는 **userId** 가 필요한데
+ *   주소록(`/api/directory`)은 employeeId 까지만 준다. 웹도 같은 엔드포인트를 쓴다.
+ *   (예전 `/api/sales/org` 는 sales.view 권한이라 298 이후 일반 직원이 조직도를 못 받았다.)
  */
 
 export interface OrgEmployee {
@@ -41,7 +40,7 @@ export interface OrgSnapshot {
 }
 
 export function useOrgSnapshot(skip?: boolean) {
-  return useApi<OrgSnapshot>('/api/sales/org', { cache: true, skip });
+  return useApi<OrgSnapshot>('/api/org/snapshot', { cache: true, skip });
 }
 
 export function OrgPickerSheet({
@@ -68,7 +67,7 @@ export function OrgPickerSheet({
   onDone?: () => void;
   onClose: () => void;
   /**
-   * 조직도 데이터 주입 — 기본은 `/api/sales/org`(sales.view 권한)를 스스로 부른다.
+   * 조직도 데이터 주입 — 기본은 `/api/org/snapshot`(로그인 전원)를 스스로 부른다.
    * 메신저처럼 전 직원이 써야 하는 화면은 `/api/directory` 응답을 이 shape 로 매핑해 넘긴다.
    */
   snapshot?: OrgSnapshot;

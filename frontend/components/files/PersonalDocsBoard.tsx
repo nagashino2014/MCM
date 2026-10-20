@@ -306,7 +306,7 @@ function SendModal({ open, onClose, docs }: { open: boolean; onClose: () => void
       setContacts([]);
       return;
     }
-    fetch("/api/sales/org", { cache: "no-store" })
+    fetch("/api/org/snapshot", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data && setSnapshot(data as OrganizationSnapshot))
       .catch(() => {});

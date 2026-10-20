@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { CdButton, CdModal } from "@/components/cdash";
 import { TODO_DEFAULT_DIGEST_TIME, TODO_DEFAULT_WEEKLY_TIME, type TodoPrefs } from "@/lib/todo/types";
+import { WorkTypeSettings } from "./WorkTypeSettings";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -126,6 +127,10 @@ export function TodoPrefsModal({ prefs, onPatch, onClose }: { prefs: TodoPrefs; 
               빠른 입력 자연어 해석 <small>"내일 3시 미팅", "매주 월 보고" 같은 날짜·반복 자동 인식</small>
             </span>
           </label>
+        </section>
+        <section className="todo-pf-sec" aria-label="하위 작업 유형·종류">
+          <h4>하위 작업 유형·종류</h4>
+          <WorkTypeSettings />
         </section>
       </div>
     </CdModal>

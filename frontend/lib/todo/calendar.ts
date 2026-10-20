@@ -44,7 +44,8 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
   // 287 하위 작업 마일스톤(종류가 있는 것) — "상위 제목 · 종류" 로 그 날(실제 일자 우선, 없으면 예정일)에 표시
   const msRows = rowsToObjects(
     await db.exec(
-      `SELECT s.item_id, s.title, s.milestone_kind, s.actual_date, s.do_date, s.status, p.item_id AS parent_id, p.title AS parent_title, p.link_kind, p.link_id
+      `SELECT s.item_id, s.title, s.milestone_kind, s.actual_date, s.do_date, s.end_date, s.status, p.item_id AS parent_id, p.title AS parent_title, p.link_kind, p.link_id,
+              (SELECT mk.label FROM todo_milestone_kinds mk WHERE mk.kind_key = s.milestone_kind ORDER BY mk.is_active DESC LIMIT 1) AS kind_label
          FROM todo_items s
          JOIN todo_items p ON p.item_id = s.parent_item_id
         WHERE s.milestone_kind IS NOT NULL AND s.archived_at IS NULL AND p.archived_at IS NULL
@@ -57,7 +58,7 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
   const milestones: CalendarEvent[] = msRows.map((r) => {
     const date = String(r.actual_date ?? r.do_date);
     const kind = String(r.milestone_kind) as TodoMilestoneKind;
-    const kindLabel = TODO_MILESTONE_LABELS[kind] ?? kind;
+    const kindLabel = (r.kind_label != null ? String(r.kind_label) : null) ?? TODO_MILESTONE_LABELS[kind] ?? kind;
     const subTitle = String(r.title ?? "").trim();
     // 하위 제목이 종류 라벨과 같으면 한 번만
     const label = kind === "other" ? subTitle : subTitle && subTitle !== kindLabel ? `${kindLabel} · ${subTitle}` : kindLabel;
@@ -67,7 +68,8 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
       kind: "todo",
       title: `${r.actual_date != null ? "◆ " : "◇ "}${String(r.parent_title)} · ${label}`,
       startDate: date,
-      endDate: date,
+      // 302: 시작일~종료일(실제 일자가 있으면 그 하루)
+      endDate: r.actual_date == null && r.end_date != null && String(r.end_date) > date ? String(r.end_date) : date,
       startTime: null,
       endTime: null,
       location: null,

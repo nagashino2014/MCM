@@ -147,8 +147,10 @@ export const TODO_LINK_KIND_LABELS: Record<TodoLinkKind, string> = {
 
 // ── 하위 작업 마일스톤 종류(287, §27-1) — 통합허가 업무의 제출·수령·회의·보고 일자. other 는 제목이 라벨. ──
 export const TODO_MILESTONE_KINDS = ["pre_consult", "main_consult", "review_received", "meeting", "kickoff_report", "completion_report", "submit", "other"] as const;
-export type TodoMilestoneKind = (typeof TODO_MILESTONE_KINDS)[number];
-export const TODO_MILESTONE_LABELS: Record<TodoMilestoneKind, string> = {
+// 302(2026-10-20): 종류는 유형별 설정 목록(todo_milestone_kinds)으로 바뀌었다 — 관리자가 만든 키(mk_...)도 오므로 string.
+// 아래 8개는 기본 키와 기본 라벨(설정 목록을 못 읽을 때의 폴백).
+export type TodoMilestoneKind = string;
+export const TODO_MILESTONE_LABELS: Record<string, string> = {
   pre_consult: "사전협의 제출",
   main_consult: "본협의 제출",
   review_received: "검토결과서 수령",
@@ -159,7 +161,7 @@ export const TODO_MILESTONE_LABELS: Record<TodoMilestoneKind, string> = {
   other: "기타",
 };
 /** 종류 → 공정 단계명 유사 매칭 키워드(stage_order 자동 제안). */
-export const TODO_MILESTONE_STAGE_HINTS: Partial<Record<TodoMilestoneKind, string[]>> = {
+export const TODO_MILESTONE_STAGE_HINTS: Partial<Record<string, string[]>> = {
   pre_consult: ["사전협의", "사전 협의"],
   main_consult: ["본협의", "본 협의"],
   review_received: ["검토", "보완"],
@@ -349,6 +351,8 @@ export interface TodoItem {
   /** 하위 작업 마일스톤(287, §27-1) — 실제 일자·종류. 상위 작업은 NULL. */
   actualDate: string | null;
   milestoneKind: TodoMilestoneKind | null;
+  /** 302 하위 작업 유형(직접 선택) — 상위 '관련'이 계약·영업·업무추진계획이면 상세의 workTypeAuto 가 우선. */
+  workType: string | null;
   /** 미완료 선행 작업 수(288 의존) — 0 이면 대기 아님. */
   openDeps: number;
   archivedAt: string | null;
@@ -385,6 +389,21 @@ export interface TodoItemDetail extends TodoItem {
   stages: TodoStageRef[];
   /** 업무 보고 대상 종류 — contract(계약) | task(업무추진계획 Task) | null(보고 불가). */
   reportSubject: "contract" | "task" | null;
+  /** 관련 용역(보드 계약 또는 link 계약)의 대상 사업장 — 통합허가는 허가 대상 사업장(contracts.facility_id). 2026-10-20 */
+  siteFacilityId?: string | null;
+  siteName?: string | null;
+  /** 302 상위 '관련'으로 정해지는 하위 작업 유형(계약 대분류·영업·업무추진계획 Task). null = 하위 작업마다 직접 선택. */
+  workTypeAuto?: string | null;
+}
+
+/** 302 하위 작업 유형과 그 유형의 종류 목록(GET /api/todo/work-types). */
+export interface TodoWorkType {
+  typeKey: string;
+  label: string;
+  builtin: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  kinds: { kindKey: string; label: string; sortOrder: number; isActive: boolean }[];
 }
 
 // ── 선행·후행 의존(288, §28-3) — item_id=후행, depends_on_item_id=선행. 응답은 /api/todo/items/:id/deps ──

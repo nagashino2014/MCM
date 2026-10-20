@@ -88,7 +88,9 @@ function stageDelta(detail: TodoItemDetail): ReportStageInput[] {
     const cur = byOrder.get(s.stageOrder) ?? { pct: 0, planned: null, actual: null };
     cur.pct = Math.max(cur.pct, pct);
     if (s.doDate && (!cur.planned || s.doDate < cur.planned)) cur.planned = s.doDate;
-    if (s.actualDate && (!cur.actual || s.actualDate > cur.actual)) cur.actual = s.actualDate;
+    // 302: 실제 일자(공정표 역동기화)가 없으면 완료된 하위 작업의 종료일(없으면 시작일)
+    const act = s.actualDate ?? (s.status === "done" ? s.endDate ?? s.doDate : null);
+    if (act && (!cur.actual || act > cur.actual)) cur.actual = act;
     byOrder.set(s.stageOrder, cur);
   }
   const out: ReportStageInput[] = [];
@@ -117,9 +119,9 @@ export function serializeDraft(detail: TodoItemDetail, today = kstToday()): { pr
     const pct = s.status === "done" ? 100 : s.progressPct ?? 0;
     const parts = [`${s.title} — ${pct}%`];
     // 287 마일스톤 종류·실제/예정 일자
-    if (s.milestoneKind && s.milestoneKind !== "other") parts.push(TODO_MILESTONE_LABELS[s.milestoneKind]);
+    if (s.milestoneKind && s.milestoneKind !== "other" && TODO_MILESTONE_LABELS[s.milestoneKind]) parts.push(TODO_MILESTONE_LABELS[s.milestoneKind]);
     if (s.actualDate) parts.push(`실제 ${md(s.actualDate)}`);
-    else if (s.doDate) parts.push(`예정 ${md(s.doDate)}`);
+    else if (s.doDate) parts.push(s.endDate && s.endDate > s.doDate ? `${md(s.doDate)}~${md(s.endDate)}` : `예정 ${md(s.doDate)}`);
     const sn = stageName(s);
     if (sn) parts.push(sn);
     if (s.progressNote?.trim()) parts.push(s.progressNote.trim());

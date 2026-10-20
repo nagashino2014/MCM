@@ -188,6 +188,21 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
   },
   // ── 할 일·일정 ──
   {
+    id: "todo.scope",
+    label: "할 일 범위·공유 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "**내 할 일**: 내가 만들었거나 내가 담당인 할 일.",
+        "**공유받음**: 다른 사람이 만들고 나를 담당·공유로 넣었거나, 내가 멤버인 보드의 할 일.",
+        "**맡긴 일**: 내가 만들어 다른 사람에게 담당을 맡긴 할 일.",
+        "개인 할 일은 만든 사람만 봅니다. 함께 보려면 담당을 지정하거나 상세의 ‘공유’에 사람을 넣거나 프로젝트 보드로 옮기세요.",
+      ] },
+    ],
+    more: { article: "todo.main", section: "scope" },
+    sources: ["components/todo/TodoBoardPage.tsx", "lib/todo/visibility.ts"],
+    reviewedAt: "2026-10-20",
+  },
+  {
     id: "todo.quick-add",
     label: "빠른 입력 도움말",
     blocks: [

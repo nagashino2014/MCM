@@ -122,7 +122,7 @@ function TagButton({
 
 export default function TodoScreen() {
   const router = useRouter();
-  // §26-1 메일·메신저 [할 일로] — /todo?new=1&linkKind=&linkId=&linkLabel=&title= 로 들어오면 퀵애드를 채운다.
+  // §26-1 메일·메신저 [할 일로] — /todo?new=1&linkKind=&linkId=&linkLabel=&title= 로 들어오면 2026-10-20부터 작성 화면(/todo/new)으로 넘긴다.
   const params = useLocalSearchParams<{ new?: string; linkKind?: string; linkId?: string; linkLabel?: string; title?: string }>();
   const prefill = useMemo(() => {
     if (params.new !== '1') return null;
@@ -139,6 +139,13 @@ export default function TodoScreen() {
   const [filter, setFilter] = useState<Filter>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const quickRef = useRef<TextInput | null>(null);
+  useEffect(() => {
+    if (params.new !== '1') return;
+    const p: { itemId: string } & Record<string, string> = { itemId: 'new' };
+    for (const k of ['title', 'linkKind', 'linkId', 'linkLabel'] as const) if (params[k]) p[k] = params[k] as string;
+    router.replace({ pathname: '/todo/[itemId]', params: p });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.new]);
 
   const today = todayLocal();
   const tomorrow = addDays(today, 1);
@@ -670,7 +677,7 @@ export default function TodoScreen() {
             ) : null}
           </Pressable>
           <Pressable
-            onPress={() => quickRef.current?.focus()}
+            onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: 'new', ...(scope === 'project' && selectedProjectId ? { board: selectedProjectId } : {}) } })}
             accessibilityLabel="새 할 일"
             hitSlop={8}
             className="mr-2 h-9 w-9 items-center justify-center overflow-hidden rounded-lg active:opacity-70">

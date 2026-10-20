@@ -20,7 +20,7 @@ import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPicker
 import { MoveSheet } from '@/components/todo/BoardSections';
 import { CompleteConfirmSheet, CompleteRulesChecks, asCompleteRulesFailure, type CompleteRulesFailure } from '@/components/todo/CompleteConfirmSheet';
 import { LinkPickerSheet } from '@/components/todo/LinkPickerSheet';
-import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDot, SegBar, StatusDot } from '@/components/todo/parts';
+import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDot, SegBar, StatusDot, priorityTone } from '@/components/todo/parts';
 import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { completeRulesSummary, hasAnyCompleteRule } from '@/lib/todo-completion';
@@ -36,6 +36,8 @@ import { useTheme } from '@/theme/useTheme';
  * 댓글(사진 아바타, 입력란 앞에 내 아바타) → 부가 설정(접힘 요약 = 라벨+값 3열 2행: 우선순위·알림·반복 / 보드·공유·스누즈) → 활동(접힘, 요약은 최근 2건 행마다).
  * 2026-10-14: 핵심 4속성 셀은 클릭 전에도 36px 테두리 박스(날짜가 비면 "YYYYMMDD" + 달력 아이콘, 시트가 열리면 primary 테두리), 메모 기본 높이 2배.
  * 보조 행동(메신저 공유·복제·삭제)은 헤더 ⋯ 시트. 필드마다 바로 저장(PATCH)하고 상단 부제에 저장 상태를 남긴다.
+ * 2026-10-20 /todo/new — 같은 화면을 빈 양식으로 그린다(itemId='new'). 값은 화면 안에만 모으고 헤더 [저장]에 POST 한 번 →
+ * 일반 상세로 교체. 하위 작업·의존·댓글·공유·활동은 저장 뒤(할 일 ID 필요)라 안내만 둔다.
  *
  * - 제목·메모·시각은 로컬 버퍼(useState)에 두고 blur/유효값일 때만 커밋한다(AGENTS.md 규칙).
  * - 응답 { item } 으로 화면 상태를 통째로 바꾼다(서버가 열↔상태·알림 재계산을 한다).
@@ -345,8 +347,96 @@ interface ChatRoom {
   peerPhotoPath: string | null;
 }
 
+/** 작성 양식의 보드·연결 파생 값(서버 목록 응답과 같은 규칙). */
+function draftBoardFields(board: TodoBoard | null, linkKind: string | null, linkId: string | null, linkLabel: string | null) {
+  const personal = !board || board.kind === 'personal';
+  return {
+    boardId: board?.boardId ?? '',
+    boardName: board?.name ?? '개인',
+    boardKind: board?.kind ?? ('personal' as TodoBoard['kind']),
+    boardColor: board?.colorHex ?? '#9aa3ae',
+    projectName: board?.projectName ?? (personal && linkKind === 'contract' ? linkLabel : null),
+    clientName: board?.clientName ?? null,
+    contractId: board?.contractId ?? (linkKind === 'contract' ? linkId : null),
+  };
+}
+
+function makeDraftItem(
+  board: TodoBoard | null,
+  init: { title?: string | null; linkKind?: string | null; linkId?: string | null; linkLabel?: string | null },
+  me: { userId: string; name: string | null }
+): TodoItemDetail {
+  const linkKind = (init.linkKind || null) as TodoItemDetail['linkKind'];
+  const linkId = linkKind ? init.linkId || null : null;
+  const linkLabel = linkKind ? init.linkLabel || null : null;
+  return {
+    itemId: '',
+    columnId: null,
+    parentItemId: null,
+    title: init.title ?? '',
+    note: null,
+    status: 'todo',
+    priority: 0,
+    doDate: null,
+    doTime: null,
+    durationMin: null,
+    dueDate: null,
+    allDay: true,
+    remindAt: null,
+    remindSentAt: null,
+    snoozedUntil: null,
+    recurrence: null,
+    recurrenceParentId: null,
+    position: '',
+    linkKind,
+    linkId,
+    linkLabel,
+    color: null,
+    ownerUserId: me.userId,
+    ownerName: me.name,
+    ownerPhotoUrl: null,
+    assigneeUserId: me.userId || null,
+    assigneeName: me.name,
+    assigneePhotoUrl: null,
+    ...draftBoardFields(board, linkKind, linkId, linkLabel),
+    completedAt: null,
+    completedBy: null,
+    completeRules: board?.defaultCompleteRules ?? {},
+    completionNote: null,
+    reviewedAt: null,
+    progressPct: null,
+    progressNote: null,
+    stageOrder: null,
+    progressUpdatedAt: null,
+    endDate: null,
+    actualDate: null,
+    milestoneKind: null,
+    openDeps: 0,
+    archivedAt: null,
+    createdAt: '',
+    createdBy: null,
+    updatedAt: '',
+    updatedBy: null,
+    subtaskTotal: 0,
+    subtaskDone: 0,
+    commentCount: 0,
+    canEdit: true,
+    isOwner: true,
+    subtasks: [],
+    shares: [],
+    comments: [],
+    activity: [],
+    progressAvg: null,
+    stages: [],
+    reportSubject: null,
+  };
+}
+
 export default function TodoDetailScreen() {
-  const { itemId } = useLocalSearchParams<{ itemId: string }>();
+  const params = useLocalSearchParams<{ itemId: string; board?: string; title?: string; linkKind?: string; linkId?: string; linkLabel?: string }>();
+  const { itemId } = params;
+  // 새 할 일 작성(2026-10-20) — /todo/new
+  const isDraft = itemId === 'new';
   const router = useRouter();
   const toast = useToast();
   const { c, dark } = useTheme();
@@ -354,7 +444,7 @@ export default function TodoDetailScreen() {
   const me = user?.id ?? '';
   const today = todayLocal();
 
-  const { data, loading, error, reload } = useApi<{ item: TodoItemDetail }>(`/api/todo/items/${itemId}`);
+  const { data, loading, error, reload } = useApi<{ item: TodoItemDetail }>(`/api/todo/items/${itemId}`, { skip: isDraft });
   const boardsApi = useApi<{ boards: TodoBoard[] }>('/api/todo/boards', { cache: true });
   const prefsApi = useApi<{ prefs: { defaultRemindAllDayTime: string; defaultRemindBeforeMin: number } }>('/api/todo/prefs', { cache: true });
 
@@ -365,7 +455,17 @@ export default function TodoDetailScreen() {
     setAccepted(data.item);
     setItem(data.item);
   }
+  // 작성 양식 — 보드 목록이 오면(실패해도) 한 번 만든다. 기본 보드 = ?board= → 개인 기본 보드.
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const draftTouched = useRef<Set<string>>(new Set());
+  if (isDraft && !item && (boardsApi.data || boardsApi.error)) {
+    const list = boardsApi.data?.boards ?? [];
+    const b = (params.board ? list.find((x) => x.boardId === params.board) : null) ?? list.find((x) => x.isDefault) ?? null;
+    setItem(makeDraftItem(b, params, { userId: user?.id ?? '', name: user?.name ?? null }));
+  }
 
+  const boards = useMemo(() => boardsApi.data?.boards ?? [], [boardsApi.data]);
   const [save, setSave] = useState<SaveState>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mark = useCallback((s: SaveState) => {
@@ -377,6 +477,21 @@ export default function TodoDetailScreen() {
   /** 부분 수정 — 응답 item 으로 교체. 실패 시 입력은 보존하고 상태 문구만 바꾼다(메모는 React Compiler 에 맡긴다). */
   const patch = async (body: Record<string, unknown>) => {
     if (!item) return;
+    if (isDraft) {
+      // 작성 중 — 화면 값만 바꾼다(보드·연결 파생, 담당 되돌리기=작성자, 직접 고르지 않은 알림은 기본값 미리보기)
+      for (const k of Object.keys(body)) draftTouched.current.add(k);
+      setDraftDirty(true);
+      let next = { ...item, ...body } as TodoItemDetail;
+      if ('boardId' in body || 'linkKind' in body) {
+        const b = boards.find((x) => x.boardId === next.boardId) ?? null;
+        next = { ...next, ...draftBoardFields(b, next.linkKind, next.linkId, next.linkLabel), boardId: next.boardId };
+        if ('boardId' in body && !draftTouched.current.has('completeRules')) next.completeRules = b?.defaultCompleteRules ?? {};
+      }
+      if ('assigneeUserId' in body && !body.assigneeUserId) next = { ...next, assigneeUserId: next.ownerUserId || null, assigneeName: next.ownerName };
+      if (!draftTouched.current.has('remindAt')) next.remindAt = computeDefaultRemindAt(next, prefsApi.data?.prefs);
+      setItem(next);
+      return;
+    }
     mark('saving');
     try {
       const r = await apiJson<{ item: TodoItemDetail }>(`/api/todo/items/${item.itemId}`, {
@@ -477,7 +592,6 @@ export default function TodoDetailScreen() {
 
   const canEdit = !!item?.canEdit;
   const isOwner = !!item?.isOwner;
-  const boards = useMemo(() => boardsApi.data?.boards ?? [], [boardsApi.data]);
   const board = useMemo(() => boards.find((b) => b.boardId === item?.boardId) ?? null, [boards, item?.boardId]);
   const column = board?.columns.find((col) => col.columnId === item?.columnId) ?? null;
 
@@ -497,6 +611,10 @@ export default function TodoDetailScreen() {
   // ── 완료/되돌리기(276) — 완료는 완료 조건이 있으면 시트 먼저, 없으면 즉시. 서버 409(code complete_rules)도 시트로. 되돌리기는 제한 없음. ──
   const completeFlow = async (done: boolean, completionNote?: string | null): Promise<boolean> => {
     if (!item || !canEdit || completing) return false;
+    if (isDraft) {
+      void patch({ status: done ? 'done' : 'todo' });
+      return true;
+    }
     if (done && completionNote === undefined && hasAnyCompleteRule(item.completeRules)) {
       setConfirmFailure(null);
       setConfirmOpen(true);
@@ -887,6 +1005,63 @@ export default function TodoDetailScreen() {
     }
   };
 
+  // ── 작성 양식 저장·나가기 ──
+  const saveDraft = async () => {
+    if (!item || draftSaving) return;
+    const t = title.trim();
+    if (!t) {
+      toast.show('제목을 입력하세요.', 'error');
+      return;
+    }
+    const touched = draftTouched.current;
+    const body: Record<string, unknown> = {
+      title: t,
+      note: note.trim() || null,
+      status: item.status,
+      priority: item.priority,
+      doDate: item.doDate,
+      doTime: item.doDate ? item.doTime : null,
+      durationMin: item.doDate && item.doTime ? item.durationMin : null,
+      endDate: item.doDate && item.endDate && item.endDate > item.doDate ? item.endDate : null,
+      dueDate: item.dueDate,
+      recurrence: item.recurrence,
+      linkKind: item.linkKind,
+      linkId: item.linkId,
+      linkLabel: item.linkLabel,
+      columnId: item.columnId,
+      assigneeUserId: item.assigneeUserId,
+      ...(item.boardId ? { boardId: item.boardId } : {}),
+      ...(touched.has('remindAt') ? { remindAt: item.remindAt } : {}),
+      ...(touched.has('completeRules') ? { completeRules: item.completeRules } : {}),
+    };
+    setDraftSaving(true);
+    try {
+      const r = await apiJson<{ item: TodoItemDetail }>('/api/todo/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setDraftDirty(false);
+      toast.show('할 일을 만들었습니다', 'success');
+      router.replace({ pathname: '/todo/[itemId]', params: { itemId: r.item.itemId } });
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+  const leaveDraft = () => {
+    const dirty = draftDirty || !!title.trim() || !!note.trim();
+    if (!dirty) {
+      router.back();
+      return;
+    }
+    Alert.alert('저장하지 않고 나갈까요?', '입력한 내용은 사라집니다.', [
+      { text: '계속 작성', style: 'cancel' },
+      { text: '나가기', style: 'destructive', onPress: () => router.back() },
+    ]);
+  };
+
   // ── 연결 열기(앱 라우트가 있는 종류만) ──
   const openLink = () => {
     if (!item?.linkKind || !item.linkId) return;
@@ -908,9 +1083,9 @@ export default function TodoDetailScreen() {
   const defaultRemind = item ? computeDefaultRemindAt(item, prefsApi.data?.prefs) : null;
   const isDefaultRemind = !!item && item.remindAt === defaultRemind && !item.snoozedUntil;
 
-  if (loading && !item) {
+  if ((loading || isDraft) && !item) {
     return (
-      <Screen title="할 일 상세" back>
+      <Screen title={isDraft ? '새 할 일' : '할 일 상세'} back>
         <SkeletonList />
       </Screen>
     );
@@ -950,12 +1125,18 @@ export default function TodoDetailScreen() {
 
   return (
     <Screen
-      title="할 일 상세"
-      subtitle={SAVE_LABEL[save] || (canEdit ? '바로 저장됩니다' : '열람 전용')}
+      title={isDraft ? '새 할 일' : '할 일 상세'}
+      subtitle={isDraft ? (draftDirty || title.trim() ? '저장 전 — [저장]을 눌러야 만들어집니다' : '항목을 입력하고 저장하세요') : SAVE_LABEL[save] || (canEdit ? '바로 저장됩니다' : '열람 전용')}
       back
+      onBack={isDraft ? leaveDraft : undefined}
       scroll={false}
       padded={false}
       right={
+        isDraft ? (
+          <View className="mr-3">
+            <Button label="저장" size="sm" loading={draftSaving} onPress={() => void saveDraft()} />
+          </View>
+        ) : (
         <View className="flex-row items-center">
           <IconButton
             icon={item.status === 'done' ? 'checkmark-circle' : 'checkmark-circle-outline'}
@@ -964,6 +1145,7 @@ export default function TodoDetailScreen() {
           />
           <IconButton icon="ellipsis-horizontal" onPress={() => setActionsOpen(true)} />
         </View>
+        )
       }>
       <KeyboardAvoidingView className="flex-1" enabled={false}>
         {/* 2026-10-20 키보드 가림 전수 조치: KAV(padding)는 화면만 줄이고 포커스 입력란까지 스크롤하지 않음 → iOS ScrollView 자동 인셋으로 */}
@@ -977,10 +1159,13 @@ export default function TodoDetailScreen() {
               onChangeText={setTitle}
               onBlur={() => {
                 const t = title.trim();
-                if (!t) setTitle(item.title);
+                if (isDraft) {
+                  if (t !== item.title) void patch({ title: t });
+                } else if (!t) setTitle(item.title);
                 else if (t !== item.title) void patch({ title: t });
               }}
-              placeholder="제목"
+              autoFocus={isDraft}
+              placeholder={isDraft ? '할 일 제목을 입력하세요' : '제목'}
               placeholderTextColor={c.faint}
               multiline
               className={`text-[18px] font-semibold leading-[25px] ${item.status === 'done' ? 'text-cd-muted line-through' : 'text-cd-text'}`}
@@ -1184,7 +1369,7 @@ export default function TodoDetailScreen() {
               onBlur={() => {
                 if ((note.trim() || null) !== (item.note ?? null)) void patch({ note: note.trim() || null });
               }}
-              placeholder={canEdit ? '메모를 적으면 자동 저장됩니다' : '메모 없음'}
+              placeholder={isDraft ? '메모를 적어 두세요' : canEdit ? '메모를 적으면 자동 저장됩니다' : '메모 없음'}
               placeholderTextColor={c.faint}
               multiline
               textAlignVertical="top"
@@ -1208,6 +1393,16 @@ export default function TodoDetailScreen() {
           ) : null}
 
           {/* 하위 작업 */}
+          {isDraft ? (
+            <>
+              {['하위 작업', '의존 관계', '댓글'].map((lb) => (
+                <Frame key={lb} title={lb}>
+                  <Text className="text-[13px] text-cd-faint">저장 후 추가할 수 있습니다.</Text>
+                </Frame>
+              ))}
+            </>
+          ) : (
+          <>
           <Frame
             title="하위 작업"
             head={
@@ -1439,6 +1634,8 @@ export default function TodoDetailScreen() {
               </Pressable>
             </View>
           </Frame>
+          </>
+          )}
 
           {/* 부가 설정(접힘 — 한 줄 요약) */}
           <Frame title="부가 설정" onToggle={() => setExtraOpen((v) => !v)} open={extraOpen}>
@@ -1460,16 +1657,19 @@ export default function TodoDetailScreen() {
                   <Text className="mr-1 w-[56px] text-[13px] font-bold text-cd-muted">우선순위</Text>
                   {([0, 1, 2, 3] as TodoPriority[]).map((p) => {
                     const active = item.priority === p;
+                    // 단계별 색(2026-10-20) — 글자는 단계 색, 선택되면 같은 계열 파스텔 면 + 테두리(없음은 회색)
+                    const pc = labelColors(priorityTone(p), dark);
                     return (
                       <Pressable
                         key={p}
                         disabled={!canEdit || active}
                         onPress={() => void patch({ priority: p })}
-                        className={`h-8 flex-row items-center gap-1.5 rounded-lg border px-2.5 active:opacity-70 ${
-                          active ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
-                        }`}>
+                        style={{ borderColor: active ? withAlpha(pc.fg, 0.45) : c.border, backgroundColor: active ? pc.bg : c.card }}
+                        className="h-8 flex-row items-center gap-1.5 rounded-lg border px-2.5 active:opacity-70">
                         <PriorityDot priority={p} />
-                        <Text className={`text-[12px] ${active ? 'font-semibold text-cd-primary' : 'text-cd-muted'}`}>{TODO_PRIORITY_LABELS[p]}</Text>
+                        <Text style={{ color: p === 0 ? (active ? c.text : c.muted) : pc.fg }} className={`text-[12px] ${active ? 'font-semibold' : ''}`}>
+                          {TODO_PRIORITY_LABELS[p]}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -1485,7 +1685,7 @@ export default function TodoDetailScreen() {
                   <View className="flex-row gap-1.5 pl-[72px]">
                     <Button label="기본" size="sm" variant={isDefaultRemind ? 'soft' : 'ghost'} disabled={!defaultRemind || isDefaultRemind} onPress={() => void patch({ remindAt: defaultRemind })} />
                     <Button label="끔" size="sm" variant={!item.remindAt ? 'soft' : 'ghost'} disabled={!item.remindAt} onPress={() => void patch({ remindAt: null })} />
-                    <Button label="스누즈" size="sm" variant="ghost" icon="alarm-outline" onPress={() => setSnoozeOpen(true)} />
+                    {!isDraft ? <Button label="스누즈" size="sm" variant="ghost" icon="alarm-outline" onPress={() => setSnoozeOpen(true)} /> : null}
                   </View>
                 ) : null}
                 <PickRow
@@ -1528,7 +1728,8 @@ export default function TodoDetailScreen() {
                         ) : null}
                       </View>
                     ))}
-                    {canEdit ? (
+                    {isDraft ? <Text className="pt-2 text-[13px] text-cd-faint">저장 후 추가할 수 있습니다</Text> : null}
+                    {canEdit && !isDraft ? (
                       <Pressable
                         onPress={() => setPersonOpen(true)}
                         className="h-8 flex-row items-center gap-1 rounded-lg border border-dashed border-cd-border px-2.5 active:opacity-70">
@@ -1544,6 +1745,7 @@ export default function TodoDetailScreen() {
           </Frame>
 
           {/* 활동(접힘) */}
+          {isDraft ? null : (
           <Frame title="활동" head={<Text className="text-[12px] text-cd-faint">{item.activity.length}</Text>} onToggle={() => setLogOpen((v) => !v)} open={logOpen}>
             {logOpen ? (
               <View>
@@ -1575,9 +1777,12 @@ export default function TodoDetailScreen() {
               <Text className="text-[12.5px] text-cd-faint">기록 없음</Text>
             )}
           </Frame>
-          <Text className="px-1 text-[11px] text-cd-faint">
-            만든 사람 {item.ownerName ?? '-'} · {fmtIsoShort(item.createdAt)}
-          </Text>
+          )}
+          {isDraft ? null : (
+            <Text className="px-1 text-[11px] text-cd-faint">
+              만든 사람 {item.ownerName ?? '-'} · {fmtIsoShort(item.createdAt)}
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1858,6 +2063,7 @@ export default function TodoDetailScreen() {
                 onPress={() => {
                   setAssignOpen(false);
                   if (isOwner) void patch({ assigneeUserId: null });
+                  else if (isDraft) void patch({ assigneeUserId: p.userId, assigneeName: p.name, assigneePhotoUrl: null });
                   else void share({ userId: p.userId, name: p.name } as OrgEmployee, 'assignee');
                 }}
                 className="h-12 flex-row items-center gap-2.5 rounded-lg border border-cd-border bg-cd-card px-3 active:opacity-70"
@@ -1872,6 +2078,18 @@ export default function TodoDetailScreen() {
             );
           })}
           {assignMembers === null && item?.boardKind !== 'personal' ? <Text className="text-[12px] text-cd-faint">보드 멤버 불러오는 중…</Text> : null}
+          {isDraft ? (
+            <Button
+              label="다른 직원에서 고르기"
+              size="sm"
+              variant="ghost"
+              icon="people-outline"
+              onPress={() => {
+                setAssignOpen(false);
+                setPersonOpen(true);
+              }}
+            />
+          ) : null}
         </View>
       </Sheet>
       <OrgPickerSheet
@@ -1883,6 +2101,11 @@ export default function TodoDetailScreen() {
         onSelect={(emp) => {
           if (!emp.userId) {
             toast.show('계정이 없는 직원은 공유할 수 없습니다.', 'error');
+            return;
+          }
+          if (isDraft) {
+            setPersonOpen(false);
+            void patch({ assigneeUserId: emp.userId, assigneeName: emp.name, assigneePhotoUrl: emp.photoPath ?? null });
             return;
           }
           setRolePick(emp);

@@ -1,6 +1,6 @@
 "use client";
 
-// 부재·대결 설정(DA-1, 본인) — 부재 기간 동안 내 차례 결재를 대결자에게 넘기거나 다음 결재자로 건너뛴다.
+// 부재·대결 설정(DA-1 본인, DA-2 결재 관리자 대리 등록) — 부재 기간 동안 내 차례 결재를 대결자에게 넘기거나 다음 결재자로 건너뛴다.
 // 최종 결재자 단계에는 적용하지 않는다(D-2). 승인된 휴가에는 '휴가 연동 기본 대결자'가 적용된다(D-1).
 // 설계: docs/e-approval-delegation-blueprint.md §3·§6-1.
 
@@ -39,7 +39,7 @@ const STATE_LABEL: Record<Absence["state"], { label: string; tone: CdBadgeTone }
   canceled: { label: "취소", tone: "idle" },
 };
 
-type PickerTarget = "absence" | "default" | null;
+type PickerTarget = "absence" | "default" | "target" | null;
 
 export function ApprovalAbsenceBoard() {
   const { theme } = useCdashTheme();
@@ -52,6 +52,10 @@ export function ApprovalAbsenceBoard() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [picker, setPicker] = useState<PickerTarget>(null);
+  // 결재 관리자(approval.manage)는 다른 직원의 부재를 대신 등록·취소할 수 있다(DA-2). null = 본인.
+  const [canManage, setCanManage] = useState(false);
+  const [target, setTarget] = useState<{ userId: string; name: string } | null>(null);
+  const targetQuery = target ? `userId=${encodeURIComponent(target.userId)}` : "";
 
   // 등록 폼
   const [startDate, setStartDate] = useState("");
@@ -63,10 +67,11 @@ export function ApprovalAbsenceBoard() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/approval/absences", { cache: "no-store" });
+      const res = await fetch(`/api/approval/absences${targetQuery ? `?${targetQuery}` : ""}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "불러오지 못했습니다.");
       setToday(String(data.today ?? ""));
+      setCanManage(!!data.canManage);
       setAbsences(Array.isArray(data.absences) ? data.absences : []);
       if (data.defaultDelegate) setDefaultDelegate(data.defaultDelegate);
       if (data.pending) setPending(data.pending);
@@ -75,7 +80,7 @@ export function ApprovalAbsenceBoard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [targetQuery]);
 
   useEffect(() => {
     load();
@@ -101,6 +106,8 @@ export function ApprovalAbsenceBoard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: target?.userId ?? null,
+          delegateName: mode === "delegate" ? delegate?.name ?? null : null,
           startDate,
           endDate,
           mode,
@@ -132,7 +139,9 @@ export function ApprovalAbsenceBoard() {
     setMsg(null);
     setError(null);
     try {
-      const res = await fetch(`/api/approval/absences?absenceId=${encodeURIComponent(a.absenceId)}`, { method: "DELETE" });
+      const res = await fetch(`/api/approval/absences?absenceId=${encodeURIComponent(a.absenceId)}${targetQuery ? `&${targetQuery}` : ""}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "취소하지 못했습니다.");
       setMsg("부재를 취소했습니다.");
@@ -149,7 +158,7 @@ export function ApprovalAbsenceBoard() {
       const res = await fetch("/api/approval/absences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ delegateUserId: userId }),
+        body: JSON.stringify({ userId: target?.userId ?? null, delegateUserId: userId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "저장하지 못했습니다.");
@@ -169,9 +178,27 @@ export function ApprovalAbsenceBoard() {
         help="출장·휴가 등으로 결재할 수 없는 기간을 미리 등록하면, 그 기간에 내 차례가 된 결재가 대결자에게 넘어가거나 다음 결재자로 건너뜁니다. 최종 결재자로 지정된 결재는 넘어가지 않고 복귀 후 직접 결재해야 결재가 끝납니다."
       />
 
+      {canManage && (
+        <div className="cd-card rounded-3xl p-5 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-semibold cd-text">설정 대상</span>
+            <span className="text-[12.5px] cd-text">{target ? `${target.name} (대리 설정)` : "본인"}</span>
+            <CdButton size="sm" onClick={() => setPicker("target")}>
+              다른 직원 선택
+            </CdButton>
+            {target && (
+              <CdButton size="sm" variant="ghost" onClick={() => setTarget(null)}>
+                본인으로
+              </CdButton>
+            )}
+          </div>
+          <p className="text-[11px] cd-text-faint">결재 관리자는 갑작스러운 부재자를 대신해 등록·취소할 수 있습니다. 등록·취소하면 본인에게 알림이 갑니다.</p>
+        </div>
+      )}
+
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-2">
         <p className="text-[12.5px] cd-text">
-          지금 내 차례로 대기 중인 결재: <b>{pending.middle + pending.final}건</b>
+          {target ? `${target.name}님 차례로` : "지금 내 차례로"} 대기 중인 결재: <b>{pending.middle + pending.final}건</b>
           {pending.final > 0 && <span className="cd-text-faint"> (그중 최종 결재 {pending.final}건은 부재 중에도 넘어가지 않습니다)</span>}
         </p>
         <p className="text-[11.5px] cd-text-faint">최종 결재자로 지정된 문서는 대결·건너뛰기 없이 복귀 후 직접 결재해야 합니다.</p>
@@ -232,7 +259,7 @@ export function ApprovalAbsenceBoard() {
       </div>
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
-        <h2 className="text-[14px] font-semibold cd-text">내 부재 기간</h2>
+        <h2 className="text-[14px] font-semibold cd-text">{target ? `${target.name}님의 부재 기간` : "내 부재 기간"}</h2>
         {loading ? (
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : absences.length === 0 ? (
@@ -300,15 +327,20 @@ export function ApprovalAbsenceBoard() {
 
       <OrgPickerModal
         open={picker != null}
-        title="대결자 선택 — 조직도에서 선택"
-        hint="인원을 클릭하면 대결자로 지정됩니다."
+        title={picker === "target" ? "설정 대상 선택 — 조직도에서 선택" : "대결자 선택 — 조직도에서 선택"}
+        hint={picker === "target" ? "인원을 클릭하면 그 직원의 부재를 대신 설정합니다." : "인원을 클릭하면 대결자로 지정됩니다."}
         onClose={() => setPicker(null)}
         onSelect={(emp) => {
           if (!emp.userId) {
             alert(`${emp.name} 님은 아직 계정이 연결되지 않아 지정할 수 없습니다.`);
             return;
           }
-          if (picker === "absence") setDelegate({ userId: emp.userId, name: emp.name });
+          if (picker === "target") {
+            setTarget({ userId: emp.userId, name: emp.name });
+            setDelegate(null);
+            setMsg(null);
+            setError(null);
+          } else if (picker === "absence") setDelegate({ userId: emp.userId, name: emp.name });
           else if (picker === "default") void saveDefault(emp.userId);
           setPicker(null);
         }}

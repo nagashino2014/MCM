@@ -148,6 +148,25 @@ export function ApprovalDraftBoard() {
   const [urgent, setUrgent] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [line, setLine] = useState<LineStep[]>([]);
+  // 결재자 부재(진행 중·30일 내 예정) — 결재선 행 배지(DA-2). 키 = userId.
+  const [lineAbsences, setLineAbsences] = useState<Record<string, LineAbsence>>({});
+  const lineUserKey = line.map((s) => s.assigneeUserId).join(",");
+  useEffect(() => {
+    if (!lineUserKey) {
+      setLineAbsences({});
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/approval/absences/lookup?userIds=${encodeURIComponent(lineUserKey)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.absences) setLineAbsences(d.absences);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [lineUserKey]);
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1518,6 +1537,9 @@ export function ApprovalDraftBoard() {
                   <span className="text-[12.5px] cd-text truncate flex-1">
                     {s.assigneeName}
                     {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
+                    {lineAbsences[s.assigneeUserId] && (
+                      <LineAbsenceBadge absence={lineAbsences[s.assigneeUserId]} isFinal={i === line.length - 1} />
+                    )}
                   </span>
                   <button
                     type="button"
@@ -1544,7 +1566,7 @@ export function ApprovalDraftBoard() {
               </button>
             </div>
             <p className="text-[10.5px] cd-text-faint">
-              결재자가 승인된 휴가 기간 중이면 지정된 대결자에게 자동 위임됩니다(대결 표기).
+              결재자가 부재 중이면 본인이 정해 둔 대결자에게 넘어가거나 다음 결재자로 건너뜁니다(대결·부재 표기). 최종 결재자는 복귀 후 직접 결재해야 결재가 끝납니다.
             </p>
 
             {/* 참조/열람자 */}
@@ -1834,4 +1856,35 @@ export function ApprovalDraftBoard() {
       />
     </div>
   );
+}
+
+interface LineAbsence {
+  startDate: string;
+  endDate: string;
+  mode: "delegate" | "skip" | "leave";
+  delegateName: string | null;
+  active: boolean;
+}
+
+/** 결재선 행 부재 배지(DA-2) — 중간 결재자는 처리 방식, 최종 결재자는 복귀 후 결재 경고(D-2). */
+function LineAbsenceBadge({ absence, isFinal }: { absence: LineAbsence; isFinal: boolean }) {
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  const period = `${absence.active ? "부재 중" : "부재 예정"} ${md(absence.startDate)}~${md(absence.endDate)}`;
+  if (isFinal) {
+    return (
+      <span className="block text-[10.5px] font-semibold whitespace-normal" style={{ color: "var(--cd-warning)" }}>
+        {period} · 최종 결재자라 넘어가지 않습니다 —{" "}
+        {absence.active ? `${md(absence.endDate)} 복귀 후 결재가 끝납니다` : "이 기간에 차례가 오면 복귀 후 결재합니다"}
+      </span>
+    );
+  }
+  const how =
+    absence.mode === "skip"
+      ? "다음 결재자로 건너뜀"
+      : absence.delegateName
+        ? `대결 ${absence.delegateName}`
+        : absence.mode === "leave"
+          ? "휴가(대결자 미지정 — 넘어가지 않음)"
+          : "대결";
+  return <span className="block text-[10.5px] cd-text-faint whitespace-normal">{period} · {how}</span>;
 }

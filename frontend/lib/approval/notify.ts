@@ -1,6 +1,8 @@
 /**
  * 전자결재 알림 디스패처(AX-P0) — 결재 이벤트를 이메일(SES)+알림톡(솔라피)로 발송.
- * 이벤트: step_pending(내 차례 도래)·delegated(대결 위임)·approved(최종 승인)·rejected(반려)·remind(리마인드, AX-P1).
+ * 이벤트: step_pending(내 차례 도래)·delegated(대결 위임)·approved(최종 승인)·rejected(반려)·remind(리마인드, AX-P1)
+ *        ·absence_skipped(부재 건너뜀)·proxy_done(대결 처리 후열)·final_absent(최종 결재자 부재)·final_approved(전결, DA-3 발송).
+ * 부재·대결 설계: docs/e-approval-delegation-blueprint.md §5·§6.
  * ★결재 트랜잭션 커밋 이후(fire-and-forget) 호출한다 — 발송 실패가 결재 진행을 막지 않도록 항상 try/catch 로 격리.
  * 멱등: approval_notify_log.dedup_key UNIQUE 로 재활성/재호출 시 중복 발송을 방지한다.
  * 설계: docs/e-approval-differentiation-blueprint.md §9-1.
@@ -19,7 +21,11 @@ export type ApprovalNotifyEvent =
   | "rejected"
   | "remind"
   | "cancel_requested"
-  | "canceled";
+  | "canceled"
+  | "absence_skipped"
+  | "proxy_done"
+  | "final_absent"
+  | "final_approved";
 
 /** 결재 이벤트 → 모바일 푸시 이벤트 키(앱 알림 설정에서 사용자가 켜고 끄는 단위).
  *  cancel_requested/canceled 는 기존 키를 재사용한다 — 모바일 알림 설정 화면 무변경. */
@@ -31,6 +37,11 @@ const PUSH_EVENT_BY_APPROVAL: Record<ApprovalNotifyEvent, PushEventKey> = {
   remind: "approval.remind",
   cancel_requested: "approval.step_pending",
   canceled: "approval.result",
+  // 부재·대결 안내(301·DA-2) — 진행 상황 통지라 결과 알림 키를 재사용(모바일 알림 설정 화면 무변경).
+  absence_skipped: "approval.result",
+  proxy_done: "approval.result",
+  final_absent: "approval.result",
+  final_approved: "approval.result",
 };
 
 interface NotifySettingRow {
@@ -76,7 +87,17 @@ export interface NotifyEventSetting {
   remindAfterHours: number | null;
 }
 
-const EVENT_ORDER: ApprovalNotifyEvent[] = ["step_pending", "delegated", "approved", "rejected", "remind"];
+const EVENT_ORDER: ApprovalNotifyEvent[] = [
+  "step_pending",
+  "delegated",
+  "approved",
+  "rejected",
+  "remind",
+  "absence_skipped",
+  "proxy_done",
+  "final_absent",
+  "final_approved",
+];
 
 /** 이벤트별 알림 설정 전체 조회(관리 화면). */
 export async function listNotifySettings(): Promise<NotifyEventSetting[]> {
@@ -301,8 +322,132 @@ export async function notifyPendingSteps(docId: string): Promise<void> {
         pushBody: doc.title,
       });
     }
+    await notifyAbsenceOutcomes(doc);
   } catch (err) {
     console.error("[approval-notify] notifyPendingSteps 실패", docId, err);
+  }
+}
+
+/**
+ * 부재 처리 결과를 기안자에게 안내(DA-2) — notifyPendingSteps 끝에서 호출(상신·결재·재라우팅 공통 경로).
+ *  - absence_skipped: 부재(건너뛰기)로 생략된 단계 — 단계별 1회.
+ *  - final_absent: 최종 결재자가 지금 부재 중인데 그 차례가 됨 — 대결·건너뛰기 없이 복귀 후 결재(D-2). 단계별 1회.
+ */
+async function notifyAbsenceOutcomes(doc: DocHeader): Promise<void> {
+  if (!doc.drafterUserId) return;
+  const db = await getDb();
+  const today = kstDate();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT s.step_id, s.status, s.skip_reason, s.assignee_user_id, s.assignee_name,
+              s.step_order >= (SELECT max(x.step_order) FROM approval_steps x WHERE x.doc_id = s.doc_id) AS is_final,
+              (SELECT max(a.end_date) FROM approval_absences a
+                WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $2 AND a.end_date >= $2) AS absent_until,
+              (SELECT max(ld.field_values->'leave_period'->>'to') FROM approval_docs ld
+                WHERE ld.form_id = 'frm-leave-request' AND ld.status = 'approved' AND ld.drafter_user_id = s.assignee_user_id
+                  AND ld.field_values->'leave_period'->>'from' <= $2 AND ld.field_values->'leave_period'->>'to' >= $2) AS leave_until
+         FROM approval_steps s
+        WHERE s.doc_id = $1 AND ((s.status = 'skipped' AND s.skip_reason = 'absence') OR s.status = 'pending')`,
+      [doc.docId, today]
+    )
+  );
+  if (!rows.length) return;
+  const contacts = await resolveContacts([doc.drafterUserId]);
+  for (const r of rows) {
+    const stepId = String(r.step_id);
+    const name = String(r.assignee_name ?? r.assignee_user_id ?? "-");
+    if (String(r.status) === "skipped") {
+      await deliver({
+        event: "absence_skipped",
+        docId: doc.docId,
+        stepId,
+        dedupKey: `absence_skipped:${stepId}`,
+        userId: doc.drafterUserId,
+        contact: contacts.get(doc.drafterUserId),
+        subject: `[전자결재] 결재자 부재로 다음 단계 진행: ${doc.title}`,
+        text: `${name}님이 부재 중이라 해당 결재 단계를 건너뛰고 다음 결재자에게 넘어갔습니다.\n\n제목: ${doc.title}${commonFooter(doc)}`,
+        pushBody: `${name}님 부재 — 다음 결재자로 넘어감`,
+      });
+      continue;
+    }
+    const until = r.absent_until != null ? String(r.absent_until) : r.leave_until != null ? String(r.leave_until) : null;
+    if (!r.is_final || !until) continue;
+    await deliver({
+      event: "final_absent",
+      docId: doc.docId,
+      stepId,
+      dedupKey: `final_absent:${stepId}`,
+      userId: doc.drafterUserId,
+      contact: contacts.get(doc.drafterUserId),
+      subject: `[전자결재] 최종 결재자 부재 안내: ${doc.title}`,
+      text:
+        `최종 결재자 ${name}님이 ${until}까지 부재 중입니다. 최종 결재는 대결·건너뛰기 없이 복귀 후 직접 처리되며, 그때 결재가 완료됩니다.` +
+        `\n\n제목: ${doc.title}${commonFooter(doc)}`,
+      pushBody: `최종 결재자 ${name}님 부재(~${until}) — 복귀 후 결재`,
+    });
+  }
+}
+
+/** 대결 처리 후열 통지(DA-2) — 대결자가 승인·반려하면 원결재자에게 1회 알린다. 커밋 후 호출. */
+export async function notifyProxyDone(docId: string, stepId: string): Promise<void> {
+  try {
+    const doc = await loadDocHeader(docId);
+    if (!doc) return;
+    const db = await getDb();
+    const rows = rowsToObjects(
+      await db.exec(`SELECT delegated_from, assignee_name, status, comment, act_type FROM approval_steps WHERE step_id = $1`, [stepId])
+    );
+    const r = rows[0];
+    if (!r || String(r.act_type ?? "") !== "proxy" || r.delegated_from == null) return;
+    const original = String(r.delegated_from);
+    const contacts = await resolveContacts([original]);
+    const verb = String(r.status) === "rejected" ? "반려" : "승인";
+    const note = String(r.comment ?? "").trim() ? `\n의견: ${String(r.comment).trim()}` : "";
+    await deliver({
+      event: "proxy_done",
+      docId,
+      stepId,
+      dedupKey: `proxy_done:${stepId}`,
+      userId: original,
+      contact: contacts.get(original),
+      subject: `[전자결재] 대결 처리 안내: ${doc.title}`,
+      text: `부재 중 대결자 ${r.assignee_name ?? "-"}님이 회원님 대신 ${verb}했습니다.${note}\n\n제목: ${doc.title}${commonFooter(doc)}`,
+      pushBody: `${r.assignee_name ?? "대결자"}님이 대결 ${verb}`,
+    });
+  } catch (err) {
+    console.error("[approval-notify] notifyProxyDone 실패", docId, err);
+  }
+}
+
+/**
+ * 다른 사람(결재 관리자)이 내 부재를 등록·취소했을 때 본인에게 알린다(DA-2 관리자 대리 등록).
+ * 문서와 무관한 알림이라 발송 로그(approval_notify_log, doc_id 필수) 없이 이메일·푸시만 보낸다.
+ */
+export async function notifyAbsenceChangedByOther(params: {
+  userId: string;
+  actorName: string;
+  action: "created" | "canceled";
+  startDate: string;
+  endDate: string;
+  modeLabel: string;
+}): Promise<void> {
+  try {
+    const contacts = await resolveContacts([params.userId]);
+    const contact = contacts.get(params.userId);
+    const verb = params.action === "created" ? "등록" : "취소";
+    const subject = `[전자결재] 부재 설정 ${verb} 안내`;
+    const text =
+      `${params.actorName}님이 회원님의 결재 부재 설정을 ${verb}했습니다.\n\n기간: ${params.startDate} ~ ${params.endDate}\n처리 방식: ${params.modeLabel}` +
+      `\n\n▶ 부재·대결 설정에서 확인: ${appLink("/approval/absence")}`;
+    if (contact?.email) await sendNotifyEmail({ to: [contact.email], subject, text });
+    await sendPush([params.userId], {
+      event: "approval.delegated",
+      title: `전자결재 · 부재 설정 ${verb}`,
+      body: `${params.startDate} ~ ${params.endDate} · ${params.modeLabel}`,
+      link: "/approval/absence",
+    });
+  } catch (err) {
+    console.error("[approval-notify] notifyAbsenceChangedByOther 실패", params.userId, err);
   }
 }
 
@@ -338,6 +483,11 @@ export async function dispatchDueReminders(now = new Date()): Promise<RemindResu
           AND s.activated_at IS NOT NULL AND s.activated_at < $1
           AND NOT EXISTS (
             SELECT 1 FROM approval_notify_log l WHERE l.dedup_key = 'remind:' || s.step_id || ':' || $2
+          )
+          -- 부재 등록 기간 중인 결재자(주로 부재와 무관하게 남는 최종 결재자, D-2)는 리마인드 보류(DA-2).
+          AND NOT EXISTS (
+            SELECT 1 FROM approval_absences a
+             WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $2 AND a.end_date >= $2
           )
         LIMIT 500`,
       [cutoff, today]

@@ -73,7 +73,10 @@ export async function listMyAbsences(userId: string): Promise<ApprovalAbsence[]>
     };
     return { ...base, state: stateOf(base, today) };
   });
-  const open = list.filter((a) => a.state === "active" || a.state === "upcoming");
+  // 진행 중·예정은 시작일 순(가까운 것부터), 종료·취소는 최근 것부터.
+  const open = list
+    .filter((a) => a.state === "active" || a.state === "upcoming")
+    .sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0));
   const closed = list.filter((a) => a.state === "ended" || a.state === "canceled").slice(0, 10);
   return [...open, ...closed];
 }
@@ -131,17 +134,46 @@ export async function createAbsence(params: {
   return absenceId;
 }
 
-/** 부재 취소 — 본인 것만. 이미 대결자에게 넘어간 단계는 되돌리지 않는다(설계 §5-5, 원결재자는 D-4 로 직접 처리 가능). */
-export async function cancelAbsence(userId: string, absenceId: string): Promise<void> {
+/**
+ * 부재 취소 — 대상자(userId)의 부재만. 본인 또는 결재 관리자(호출부 판정)가 호출한다.
+ * 이미 대결자에게 넘어간 단계는 되돌리지 않는다(설계 §5-5, 원결재자는 D-4 로 직접 처리 가능).
+ * 반환: 취소한 부재의 기간·방식(이미 취소돼 있었으면 null) — 대리 취소 알림용.
+ */
+export async function cancelAbsence(
+  userId: string,
+  absenceId: string
+): Promise<{ startDate: string; endDate: string; mode: "delegate" | "skip" } | null> {
+  let canceled: { startDate: string; endDate: string; mode: "delegate" | "skip" } | null = null;
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(
-      await txn.exec(`SELECT user_id, canceled_at FROM approval_absences WHERE absence_id = $1 FOR UPDATE`, [absenceId])
+      await txn.exec(`SELECT user_id, canceled_at, start_date, end_date, mode FROM approval_absences WHERE absence_id = $1 FOR UPDATE`, [
+        absenceId,
+      ])
     );
     if (!rows.length || String(rows[0].user_id) !== userId) throw userError("부재 설정을 찾을 수 없습니다.", 404);
     if (rows[0].canceled_at != null) return;
     const now = new Date().toISOString();
     await txn.run(`UPDATE approval_absences SET canceled_at = $2, updated_at = $2 WHERE absence_id = $1`, [absenceId, now]);
+    canceled = {
+      startDate: String(rows[0].start_date),
+      endDate: String(rows[0].end_date),
+      mode: String(rows[0].mode) === "skip" ? "skip" : "delegate",
+    };
   });
+  return canceled;
+}
+
+/** 표시용 이름(직원 프로필 이름, 없으면 이메일) — 대리 등록 알림·화면 대상자 표기용. */
+export async function userDisplayName(userId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT COALESCE(ep.name, u.email) AS name FROM users u LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE u.user_id = $1`,
+      [userId]
+    )
+  );
+  return rows.length && rows[0].name != null ? String(rows[0].name) : null;
 }
 
 /** 휴가 연동 기본 대결자(approval_delegates) — 승인된 휴가 기간에만 적용(D-1). */
@@ -198,4 +230,79 @@ export async function myPendingSplit(userId: string): Promise<{ middle: number; 
     )
   );
   return { middle: Number(rows[0]?.middle ?? 0), final: Number(rows[0]?.final ?? 0) };
+}
+
+export interface AbsenceBadge {
+  userId: string;
+  startDate: string;
+  endDate: string;
+  /** delegate=대결, skip=다음 결재자로 넘김, leave=승인된 휴가(기본 대결자 있을 때만 대결) */
+  mode: "delegate" | "skip" | "leave";
+  delegateName: string | null;
+  active: boolean;
+}
+
+/**
+ * 결재자 부재 조회(기안 화면 배지, DA-2) — 오늘 진행 중이거나 days 일 안에 시작하는 부재 1건(가장 이른 것).
+ * 직접 등록한 부재를 우선하고, 없으면 승인된 휴가신청서(기본 대결자 이름 병기). 사유는 노출하지 않는다.
+ */
+export async function lookupAbsences(userIds: string[], days = 30): Promise<Record<string, AbsenceBadge>> {
+  const ids = [...new Set(userIds.map((u) => u.trim()).filter(Boolean))].slice(0, 50);
+  const out: Record<string, AbsenceBadge> = {};
+  if (!ids.length) return out;
+  const today = kstToday();
+  const horizon = new Date(Date.parse(`${today}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+  const db = await getDb();
+  const direct = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (a.user_id) a.user_id, a.start_date, a.end_date, a.mode, COALESCE(ep.name, u.email) AS delegate_name
+         FROM approval_absences a
+         LEFT JOIN users u ON u.user_id = a.delegate_user_id
+         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE a.user_id = ANY($1::text[]) AND a.canceled_at IS NULL AND a.end_date >= $2 AND a.start_date <= $3
+        ORDER BY a.user_id, a.start_date, a.created_at DESC`,
+      [ids, today, horizon]
+    )
+  );
+  for (const r of direct) {
+    const start = String(r.start_date);
+    out[String(r.user_id)] = {
+      userId: String(r.user_id),
+      startDate: start,
+      endDate: String(r.end_date),
+      mode: String(r.mode) === "skip" ? "skip" : "delegate",
+      delegateName: r.delegate_name != null ? String(r.delegate_name) : null,
+      active: start <= today,
+    };
+  }
+  const rest = ids.filter((id) => !out[id]);
+  if (!rest.length) return out;
+  const leaves = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (ld.drafter_user_id) ld.drafter_user_id AS user_id,
+              ld.field_values->'leave_period'->>'from' AS start_date, ld.field_values->'leave_period'->>'to' AS end_date,
+              CASE WHEN ad.enabled = 1 THEN COALESCE(ep.name, u.email) END AS delegate_name
+         FROM approval_docs ld
+         LEFT JOIN approval_delegates ad ON ad.user_id = ld.drafter_user_id
+         LEFT JOIN users u ON u.user_id = ad.delegate_user_id
+         LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
+        WHERE ld.form_id = 'frm-leave-request' AND ld.status = 'approved' AND ld.drafter_user_id = ANY($1::text[])
+          AND ld.field_values->'leave_period'->>'to' >= $2 AND ld.field_values->'leave_period'->>'from' <= $3
+        ORDER BY ld.drafter_user_id, ld.field_values->'leave_period'->>'from'`,
+      [rest, today, horizon]
+    )
+  );
+  for (const r of leaves) {
+    const start = String(r.start_date ?? "");
+    if (!start) continue;
+    out[String(r.user_id)] = {
+      userId: String(r.user_id),
+      startDate: start,
+      endDate: String(r.end_date ?? start),
+      mode: "leave",
+      delegateName: r.delegate_name != null ? String(r.delegate_name) : null,
+      active: start <= today,
+    };
+  }
+  return out;
 }

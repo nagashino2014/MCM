@@ -5,6 +5,8 @@
 // 승인 도장은 원형 2px --cd-stamp 보더에 '승인' -8deg, 내 차례 셀은 프라이머리 틴트.
 // steps 가 없으면(기안 작성 화면) 승인란은 렌더하지 않는다.
 
+import { stepDisplay } from "@/lib/approval/step-display";
+
 export interface DocHeadStep {
   stepId: string;
   stepType: string;
@@ -13,6 +15,12 @@ export interface DocHeadStep {
   assigneePosition: string | null;
   status: string;
   actedAt: string | null;
+  /** 대결·부재·전결 표기(301, DA-2) — 없으면 기존 표기 */
+  delegatedFrom?: string | null;
+  delegatedFromName?: string | null;
+  delegatedFromPosition?: string | null;
+  actType?: string | null;
+  skipReason?: string | null;
 }
 
 export interface DocHeadInfo {
@@ -59,6 +67,8 @@ function SignBox({ label, cells }: { label: string; cells: DocHeadStep[] }) {
         const approved = s.status === "approved";
         const rejected = s.status === "rejected";
         const mine = s.status === "pending";
+        // 대결은 원결재자 칸(직위)에 '대결' 도장 + 대결자 이름, 부재 건너뛰기는 '부재' 표기(DA-2).
+        const disp = stepDisplay(s);
         return (
           <div
             key={s.stepId}
@@ -72,17 +82,20 @@ function SignBox({ label, cells }: { label: string; cells: DocHeadStep[] }) {
               className="py-[5px] text-[11px] text-center"
               style={{ color: "var(--cd-body)", borderBottom: `1px solid ${LINE}` }}
             >
-              {s.assigneePosition || (s.stepType === "agree" ? "합의" : "승인")}
+              {disp.position || (s.stepType === "agree" ? "합의" : "승인")}
             </span>
             <span
               className="h-[58px] flex flex-col items-center justify-center gap-0.5"
               style={{ borderBottom: `1px solid ${LINE}` }}
             >
-              {approved && <Stamp />}
-              {rejected && <Stamp label="반려" />}
+              {(approved || rejected) && <Stamp label={disp.stamp ?? undefined} />}
+              {s.status === "skipped" && disp.statusLabel !== "생략" && (
+                <span className="text-[10px] font-bold cd-text-faint">{disp.statusLabel}</span>
+              )}
               <span className="text-[10.5px] font-bold" style={{ color: approved || rejected ? "var(--cd-text)" : "var(--cd-faint)" }}>
                 {s.assigneeName ?? s.assigneeUserId}
               </span>
+              {disp.proxyOf && <span className="text-[9px] cd-text-faint whitespace-nowrap">{disp.proxyOf} 대결</span>}
               {mine && <span className="text-[9px] font-extrabold cd-text-primary">내 차례</span>}
             </span>
             <span

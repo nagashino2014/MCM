@@ -19,10 +19,14 @@ interface NotifySetting {
 
 const EVENT_LABEL: Record<string, { title: string; desc: string }> = {
   step_pending: { title: "결재 요청(내 차례)", desc: "결재 차례가 도래한 결재자에게 발송" },
-  delegated: { title: "대결 위임", desc: "휴가 중 결재자를 대신하는 대결자에게 발송" },
+  delegated: { title: "대결 위임", desc: "부재·휴가 중 결재자를 대신하는 대결자에게 발송" },
   approved: { title: "최종 승인", desc: "기안자에게 승인 완료를 통보" },
   rejected: { title: "반려", desc: "기안자에게 반려 사유와 함께 통보" },
-  remind: { title: "미결재 리마인드", desc: "지정 시간 이상 대기 중인 결재를 재알림(배치)" },
+  remind: { title: "미결재 리마인드", desc: "지정 시간 이상 대기 중인 결재를 재알림(배치, 부재 등록 기간 중인 결재자는 보류)" },
+  absence_skipped: { title: "부재 건너뜀", desc: "결재자 부재로 단계가 생략되면 기안자에게 안내" },
+  proxy_done: { title: "대결 처리 후열", desc: "대결자가 처리하면 원결재자에게 안내" },
+  final_absent: { title: "최종 결재자 부재", desc: "최종 결재자가 부재 중일 때 기안자에게 복귀 후 결재 안내" },
+  final_approved: { title: "전결 완료", desc: "전결로 결재가 끝나면 기안자에게 안내(전결 기능 도입 후 발송)" },
 };
 
 export function ApprovalNotifySettingsBoard() {

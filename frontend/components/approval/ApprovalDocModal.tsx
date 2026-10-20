@@ -17,6 +17,7 @@ import { NOTICE_FORM_ID } from "@/lib/notice/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { stepDisplay } from "@/lib/approval/step-display";
 
 export interface DocStepRow {
   stepId: string;
@@ -29,6 +30,11 @@ export interface DocStepRow {
   actedAt: string | null;
   comment: string | null;
   delegatedFrom: string | null;
+  /** 대결 원결재자 이름·직급, 처리 유형·생략 사유(301, DA-2 표기) */
+  delegatedFromName?: string | null;
+  delegatedFromPosition?: string | null;
+  actType?: string | null;
+  skipReason?: string | null;
 }
 
 export interface DocDetailData {
@@ -398,13 +404,17 @@ export function ApprovalDocViewer({
                   status: "approved",
                   comment: null as string | null,
                 },
-                ...detail.steps.map((s) => ({
-                  key: s.stepId,
-                  name: `${s.assigneeName ?? s.assigneeUserId}${s.delegatedFrom ? "(대결)" : ""}`,
-                  label: `${s.stepType === "agree" ? "합의" : "승인"} · ${STEP_STATUS_LABEL[s.status] ?? s.status}`,
-                  status: s.status,
-                  comment: s.comment,
-                })),
+                ...detail.steps.map((s) => {
+                  // 대결·부재·전결 표기(DA-2) — 대결은 '대결자(원결재자 대결)', 부재 건너뛰기는 '부재'.
+                  const disp = stepDisplay(s);
+                  return {
+                    key: s.stepId,
+                    name: `${s.assigneeName ?? s.assigneeUserId}${disp.proxyOf ? `(${disp.proxyOf} 대결)` : ""}`,
+                    label: `${s.stepType === "agree" ? "합의" : "승인"} · ${disp.statusLabel}`,
+                    status: s.status,
+                    comment: s.comment,
+                  };
+                }),
               ].map((st, i, arr) => {
                 const tone =
                   st.status === "approved"
@@ -738,7 +748,7 @@ export function ApprovalDocViewer({
                   .map((s) => (
                     <p key={s.stepId} className="text-[12px] cd-text">
                       <span className="font-semibold">{s.assigneeName}</span>{" "}
-                      <span className="cd-text-faint">({STEP_STATUS_LABEL[s.status]})</span> {s.comment}
+                      <span className="cd-text-faint">({stepDisplay(s).statusLabel})</span> {s.comment}
                     </p>
                   ))}
               </div>

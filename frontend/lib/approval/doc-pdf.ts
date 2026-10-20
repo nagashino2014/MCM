@@ -12,6 +12,7 @@ import { letterHtmlToPlainText } from "@/lib/letter/html-parse";
 import { timeRangeText, type ApprovalFieldDef, type ApprovalTableColumn } from "@/lib/approval/fields";
 import type { LeaveTypeItem } from "@/lib/approval/leave-types";
 import { findInCatalog } from "@/lib/approval/leave-types";
+import { stepDisplay } from "@/lib/approval/step-display";
 import type { ApprovalDocDetail } from "@/lib/approval/docs";
 
 const PAGE_W = 595.28;
@@ -205,14 +206,28 @@ export async function createApprovalDocPdf(doc: ApprovalDocDetail, leaveCatalog:
 
     // 결재란 — 기안 + 각 단계(승인 스텝 순). 칸: 직위/구분 → 상태 → 이름 → 처리일
     const cells = [
-      { role: "기안", name: doc.drafterName ?? "-", position: doc.drafterPosition ?? "", status: "approved", date: (doc.submittedAt ?? "").slice(0, 10) },
-      ...doc.steps.map((s) => ({
-        role: s.stepType === "agree" ? "합의" : "승인",
-        name: s.assigneeName ?? "-",
-        position: s.assigneePosition ?? "",
-        status: s.status,
-        date: (s.actedAt ?? "").slice(0, 10),
-      })),
+      {
+        role: "기안",
+        name: doc.drafterName ?? "-",
+        position: doc.drafterPosition ?? "",
+        status: "approved",
+        date: (doc.submittedAt ?? "").slice(0, 10),
+        label: "승인",
+        proxyOf: null as string | null,
+      },
+      ...doc.steps.map((s) => {
+        // 대결은 원결재자 직위 칸에 '대결' 도장 + 대결자 이름(원결재자 병기), 부재 건너뛰기는 '부재'(DA-2).
+        const disp = stepDisplay(s);
+        return {
+          role: s.stepType === "agree" ? "합의" : "승인",
+          name: s.assigneeName ?? "-",
+          position: disp.position ?? "",
+          status: s.status,
+          date: (s.actedAt ?? "").slice(0, 10),
+          label: disp.stamp ?? disp.statusLabel,
+          proxyOf: disp.proxyOf,
+        };
+      }),
     ];
     const cellW = 64;
     const cellH = 78;
@@ -227,7 +242,7 @@ export async function createApprovalDocPdf(doc: ApprovalDocDetail, leaveCatalog:
       const rw = fonts.bold.widthOfTextAtSize(roleText, 7.5);
       w.page.drawText(roleText, { x: x + (cellW - rw) / 2, y: yTop - 12, size: 7.5, font: fonts.bold, color: MUTED });
       // 상태(승인 도장 재현 — 원 + 상태 문자)
-      const label = STEP_STATUS_LABEL[c.status] ?? c.status;
+      const label = c.label || STEP_STATUS_LABEL[c.status] || c.status;
       const isActed = c.status === "approved" || c.status === "rejected";
       const cy = yTop - 38;
       if (isActed) {
@@ -239,10 +254,15 @@ export async function createApprovalDocPdf(doc: ApprovalDocDetail, leaveCatalog:
         w.page.drawText(label, { x: x + (cellW - lw) / 2, y: cy - 3.5, size: 8.5, font: fonts.regular, color: MUTED });
       }
       const nw = fonts.regular.widthOfTextAtSize(c.name, 8.5);
-      w.page.drawText(c.name, { x: x + (cellW - nw) / 2, y: yTop - 62, size: 8.5, font: fonts.regular, color: INK });
+      w.page.drawText(c.name, { x: x + (cellW - nw) / 2, y: yTop - (c.proxyOf ? 59 : 62), size: 8.5, font: fonts.regular, color: INK });
+      if (c.proxyOf) {
+        const pt = wrapText(`${c.proxyOf} 대결`, fonts.regular, 6.5, cellW - 4)[0];
+        const pw = fonts.regular.widthOfTextAtSize(pt, 6.5);
+        w.page.drawText(pt, { x: x + (cellW - pw) / 2, y: yTop - 67, size: 6.5, font: fonts.regular, color: MUTED });
+      }
       if (c.date) {
         const dw = fonts.regular.widthOfTextAtSize(c.date, 7);
-        w.page.drawText(c.date, { x: x + (cellW - dw) / 2, y: yTop - 73, size: 7, font: fonts.regular, color: MUTED });
+        w.page.drawText(c.date, { x: x + (cellW - dw) / 2, y: yTop - (c.proxyOf ? 75 : 73), size: 7, font: fonts.regular, color: MUTED });
       }
     });
 
@@ -329,7 +349,7 @@ export async function createApprovalDocPdf(doc: ApprovalDocDetail, leaveCatalog:
     w.page.drawText("결재 의견", { x: MARGIN_X, y: w.y - 10, size: 9.5, font: fonts.bold, color: INK });
     w.y -= 18;
     for (const s of comments) {
-      const head = `${s.assigneeName ?? "-"}${s.assigneePosition ? ` ${s.assigneePosition}` : ""} · ${STEP_STATUS_LABEL[s.status] ?? s.status} · ${(s.actedAt ?? "").slice(0, 16).replace("T", " ")}`;
+      const head = `${s.assigneeName ?? "-"}${s.assigneePosition ? ` ${s.assigneePosition}` : ""} · ${stepDisplay(s).statusLabel} · ${(s.actedAt ?? "").slice(0, 16).replace("T", " ")}`;
       w.ensure(26);
       w.page.drawText(head, { x: MARGIN_X, y: w.y - 9, size: 8, font: fonts.bold, color: MUTED });
       w.y -= 12;

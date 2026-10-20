@@ -7,7 +7,7 @@ import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
-import { notifyPendingSteps, notifyDrafterResult } from "@/lib/approval/notify";
+import { notifyPendingSteps, notifyDrafterResult, notifyProxyDone } from "@/lib/approval/notify";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { assignManualNoticeNo } from "@/lib/notice/store";
@@ -800,6 +800,7 @@ export async function actOnDoc(params: {
   actorUserId: string;
 }): Promise<{ docStatus: string }> {
   let docStatus = "in_progress";
+  let proxyActed = false;
   await withDbWrite(async (txn) => {
     // FOR UPDATE — 부재 재라우팅(rerouteAbsentPendingSteps)과 같은 문서 단계를 동시에 바꾸지 않도록 직렬화.
     const steps = rowsToObjects(
@@ -825,6 +826,7 @@ export async function actOnDoc(params: {
       );
     }
     const actType = isAssignee && me.delegated_from != null ? "proxy" : "normal";
+    proxyActed = actType === "proxy";
 
     const now = new Date().toISOString();
     if (params.action === "reject") {
@@ -870,6 +872,8 @@ export async function actOnDoc(params: {
     }
   });
   // 커밋 후 — 등록 액션 실행(201 레지스트리, 실패해도 결재는 유효·재실행 가능. 내부에서 실패 격리)
+  // 대결 처리 후열 통지 — 원결재자에게 1회(DA-2).
+  if (proxyActed) await notifyProxyDone(params.docId, params.stepId);
   if (docStatus === "approved") await runFormActionsForDoc(params.docId, "approved");
   else if (docStatus === "rejected") await runFormActionsForDoc(params.docId, "rejected");
   // 커밋 후 알림 — 최종 승인/반려는 기안자에게, 진행 중이면 다음 결재자에게(단계별 멱등).

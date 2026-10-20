@@ -1,6 +1,6 @@
 # 전자결재 대결·전결(부재 결재) 구현 계획
 
-작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0·DA-1 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용 — DA-1 코드는 301 필수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
+작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0~DA-2 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용 — DA-1 코드는 301 필수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
 
 ## 1. 요구(2026-10-20 사용자)
 
@@ -127,6 +127,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 - 대결 알림 dedup 키에 수신자를 넣었다(`delegated:<step>:<user>`) — 연쇄 재라우팅 시 새 대결자에게도 발송.
 - 재기안 화면은 대결로 바뀐 단계를 원결재자로 복원하고, 재상신 시 서버도 `restoreDelegatedAssignees` 로 복원한다.
 - ⚠ 대결자 선택에 쓰는 공용 `OrgPickerModal` 의 `/api/sales/org` 가 `sales.view` 를 요구한다 — 298 이후 일반 직원은 403(기안 결재선 조직도 선택도 동일 영향 추정). 별도 수정 필요.
+
+### DA-2 구현 메모(2026-10-20)
+- 표기 공용 규칙 `lib/approval/step-display.ts` — 스텝퍼·도장란(`ApprovalDocHead`)·PDF·결재 의견 목록이 함께 쓴다. 대결 = 원결재자 직위 칸에 '대결' 도장 + 대결자 이름 + '원결재자 대결' 병기, 부재 건너뛰기 = '부재', 전결 = '전결'(DA-3).
+- 알림: `absence_skipped`·`final_absent`(기안자, notifyPendingSteps 끝에서 단계별 1회), `proxy_done`(원결재자, 대결 처리 직후), `final_approved`는 이벤트·설정만(발송은 DA-3 전결). 부재 등록 기간 중인 결재자는 리마인드 보류.
+- 기안 화면 결재선 행 배지 — `/api/approval/absences/lookup`(진행 중·30일 내 예정, 직접 등록 우선 → 승인 휴가, 사유 비노출). 최종 결재자는 경고색.
+- 관리자 대리 등록 — `/approval/absence` 에서 approval.manage 보유자에게 '설정 대상' 선택. API 는 `userId` 지정 시 approval.manage 확인, 등록·취소 시 본인에게 이메일·푸시(문서 무관 알림이라 발송 로그 없음).
 
 ## 7. 단계별 진행
 

@@ -170,7 +170,8 @@ export async function cashFlow(): Promise<CashFlowResult> {
     }));
   const totalBalance = balances.reduce((s, b) => s + b.balance, 0);
 
-  // 월별 입출 실적 — 전표 기준(계좌간 이체(excluded) 제외, 확정 여부 무관: pending도 실제 입출금이다)
+  // 월별 입출 실적 — 전표 기준(계좌간 이체(excluded) 제외, 확정 여부 무관: pending도 실제 입출금이다).
+  // 급여 이체 출금도 전표상 excluded(급여 분개가 커버)지만 실제 현금 유출이라 유출에 넣는다(journal.ts 의 '급여 이체'·'급여 대량이체').
   const from6 = `${addMonths(thisMonth, -5)}-01`;
   const monthlyRows = rowsToObjects(
     await db.exec(
@@ -182,7 +183,8 @@ export async function cashFlow(): Promise<CashFlowResult> {
                     (SELECT l.credit FROM journal_lines l WHERE l.entry_id = e.entry_id AND l.account_code = '103' LIMIT 1)
                   ELSE 0 END) AS outflow
          FROM journal_entries e
-        WHERE e.source_kind IN ('bank_in', 'bank_out') AND e.status <> 'excluded'
+        WHERE e.source_kind IN ('bank_in', 'bank_out')
+          AND (e.status <> 'excluded' OR (e.source_kind = 'bank_out' AND e.description LIKE '급여%'))
           AND e.entry_date >= $1 AND e.entry_date <= $2
         GROUP BY substr(e.entry_date, 1, 7) ORDER BY 1`,
       [from6, today],

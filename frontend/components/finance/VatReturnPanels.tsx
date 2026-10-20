@@ -714,7 +714,12 @@ interface CardReviewRow {
 }
 
 /** 수집 시 자동분류와 증빙 확인을 구별하며, 검토 후에도 신고서 초안은 다시 저장한다. */
-export function CardTaxReviewPanel({ from, to, onSaved, canManage = false }: { from: string; to: string; onSaved: () => void; canManage?: boolean }) {
+/**
+ * 카드 공제 증빙 검토. 봉인된 기간은 서버가 판정 변경을 막으므로(vat-filing-protection) 신고 근거 탭에서
+ * 봉인 전에 판정하고, 신고서 탭(봉인 근거 기준)에서는 sealed 로 읽기 전용으로 보여 준다.
+ */
+export function CardTaxReviewPanel({ from, to, onSaved, canManage: canManageProp = false, sealed = false, savedNotice = "검토를 저장했습니다. 신고서 초안을 다시 저장한 뒤 확정하세요." }: { from: string; to: string; onSaved: () => void; canManage?: boolean; sealed?: boolean; savedNotice?: string }) {
+  const canManage = canManageProp && !sealed;
   const [rows, setRows] = useState<CardReviewRow[]>([]);
   const [selected, setSelected] = useState<CardReviewRow | null>(null);
   const [decision, setDecision] = useState("");
@@ -759,13 +764,14 @@ export function CardTaxReviewPanel({ from, to, onSaved, canManage = false }: { f
       }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      if (requestedRange === currentRange.current) { setSelected(null); setNotice("검토를 저장했습니다. 신고서 초안을 다시 저장한 뒤 확정하세요."); await load(); onSaved(); }
+      if (requestedRange === currentRange.current) { setSelected(null); setNotice(savedNotice); await load(); onSaved(); }
     } catch (err) { if (requestedRange === currentRange.current) setError(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); }
   };
   return <section className="cd-card p-4 space-y-3" aria-label="카드 공제 증빙 검토">
     <h3 className="cd-card-title">카드 공제 증빙 검토</h3>
     <p className="text-xs cd-text-muted">공제·불공제는 사유와 증빙을 확인하여 선택하세요. 과거 자동분류만 있는 건은 미판정입니다. 취소는 원승인 ID와 취소 사유, 증빙에 따른 신고 귀속일이 필요합니다. 거래처가 같다는 이유만으로 계산서와 카드를 중복으로 보지 않습니다.</p>
+    {sealed && <p role="note" className="text-xs cd-warn-text">봉인된 신고 근거의 기간이라 판정을 바꿀 수 없습니다(조회 전용). 판정은 봉인 전에 신고 근거 탭에서 합니다.</p>}
     {error && <div role="alert" className="cd-error-text text-sm">{error}</div>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead><tr><th>거래일 / ID</th><th>가맹점 / 유형</th><th>금액 / 세액</th><th>공제 판정 / 보류 사유</th><th>검토</th></tr></thead><tbody>
@@ -1106,7 +1112,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
       </div>
       <VatFollowupReviewPanel application={followupApplication} selection={followup} onSelectionChange={changeFollowup} onOpenBasis={id => changeSelection(id, "")} calculationEnabled={!savedId && basis?.kind === "final" && canManage} locked={busy || uncertainRequest} />
       <VatSameSupplyPanel basis={basis} selection={sameSupply} onSelectionChange={changeSameSupply} calculation={form?.sameSupplyConsumption} archive={savedForCurrent} canManage={canManage} locked={busy || uncertainRequest} onOpenReturn={id => changeSelection("", id)} />
-      {!savedId && current && <CardTaxReviewPanel key={`${basisId}:${current.from}:${current.to}`} from={current.from} to={current.to} onSaved={compute} canManage={canManage && !uncertainRequest} />}
+      {!savedId && current && <CardTaxReviewPanel key={`${basisId}:${current.from}:${current.to}`} from={current.from} to={current.to} onSaved={compute} canManage={canManage && !uncertainRequest} sealed />}
       <div className="cd-card p-4">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <div className="cd-card-title mr-auto">부가가치세 신고서 (일반과세자)</div>
@@ -1444,7 +1450,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
               </table>
             </div>
           )}
-          <div className="text-xs cd-text-muted mt-2">규정 위반 판정이 아니라 점검 후보 목록입니다 — 필요한 건은 부가세 집계 탭에서 제외·불공제 처리하세요.</div>
+          <div className="text-xs cd-text-muted mt-2">규정 위반 판정이 아니라 점검 후보 목록입니다 — 필요한 건은 봉인 전에 신고 근거 탭의 카드 공제 증빙 검토에서 불공제로 판정하세요.</div>
         </div>
       )}
     </div>

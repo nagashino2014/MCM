@@ -32,13 +32,20 @@ export async function listSemanticConcepts(activeOnly = false): Promise<Semantic
 
 /** 카탈로그 전체 교체 저장(admin) — 받은 목록으로 upsert 후 빠진 key 삭제. */
 export async function saveSemanticConcepts(items: SemanticConceptItem[], _actorUserId: string): Promise<number> {
+  // 부적격 항목을 조용히 버리면 아래 '목록 밖 key 삭제'가 그 개념을 지운다 — 하나라도 있으면 저장 전체를 거부한다.
   const seen = new Set<string>();
-  const valid = items.filter((it) => {
+  const problems: string[] = [];
+  items.forEach((it, i) => {
     const k = it.key.trim();
-    if (!k || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$/.test(k) || seen.has(k) || !it.label.trim() || !it.group.trim()) return false;
-    seen.add(k);
-    return true;
+    const label = `${i + 1}번째 항목${k ? `(${k})` : ""}`;
+    if (!k || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$/.test(k)) problems.push(`${label}: 키는 영문 소문자로 시작하는 소문자·숫자·_ (그룹.이름 가능)`);
+    else if (seen.has(k)) problems.push(`${label}: 키 중복`);
+    if (!it.label.trim()) problems.push(`${label}: 라벨 없음`);
+    if (!it.group.trim()) problems.push(`${label}: 그룹 없음`);
+    if (k) seen.add(k);
   });
+  if (problems.length) throw Object.assign(new Error(`저장하지 않았습니다 — ${problems.slice(0, 5).join(" / ")}${problems.length > 5 ? ` 외 ${problems.length - 5}건` : ""}`), { status: 400 });
+  const valid = items;
   if (!valid.length) throw new Error("저장할 유효한 항목이 없습니다.");
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {

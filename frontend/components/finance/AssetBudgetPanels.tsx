@@ -90,7 +90,7 @@ export function FixedAssetPanel() {
   }, []);
   useEffect(load, [load]);
 
-  const act = async (body: Record<string, unknown>, ok: string) => {
+  const act = async (body: Record<string, unknown>, ok: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -98,8 +98,10 @@ export function FixedAssetPanel() {
       await post("/api/finance/fixed-assets", body);
       setNotice(ok);
       load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -121,7 +123,7 @@ export function FixedAssetPanel() {
         },
       },
       "자산을 등록했습니다 — 전표·장부에서 재생성하면 월할 상각이 기표됩니다.",
-    ).then(() => setForm({ name: "", category: "fixture", acquisitionDate: "", acquisitionCost: "", method: "straight", usefulLifeYears: "5", openingAccum: "", openingAsOf: "" }));
+    ).then((saved) => saved && setForm({ name: "", category: "fixture", acquisitionDate: "", acquisitionCost: "", method: "straight", usefulLifeYears: "5", openingAccum: "", openingAsOf: "" }));
 
   return (
     <div className="cd-card p-4">
@@ -175,7 +177,7 @@ export function FixedAssetPanel() {
                         type="button"
                         className="cd-btn cd-btn-ghost cd-btn-sm"
                         disabled={busy}
-                        title="처분(매각·폐기) — 처분월부터 상각 중단. 처분 손익 분개는 확정 큐에서 수동 처리"
+                        title="처분(매각·폐기) — 처분월부터 상각 중단. 처분 손익 분개는 앱에서 만들지 않으니 결산 때 별도 반영"
                         onClick={() => {
                           const d = prompt("처분일 (YYYY-MM-DD)");
                           if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) void act({ action: "dispose", faId: a.faId, disposedAt: d }, "처분 처리했습니다.");
@@ -470,7 +472,7 @@ export function BudgetPanel() {
   }, [year]);
   useEffect(load, [load]);
 
-  const act = async (body: Record<string, unknown>, ok: string) => {
+  const act = async (body: Record<string, unknown>, ok: string): Promise<boolean> => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -478,8 +480,10 @@ export function BudgetPanel() {
       await post("/api/finance/budget", body);
       setNotice(ok);
       load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -571,8 +575,8 @@ export function BudgetPanel() {
           className="cd-btn cd-btn-primary cd-btn-sm"
           disabled={busy || !form.categoryKey || !form.amount}
           onClick={() =>
-            void act({ action: "save", year, categoryKey: form.categoryKey, amount: Number(form.amount) }, "예산을 등록했습니다.").then(() =>
-              setForm({ categoryKey: "", amount: "" }),
+            void act({ action: "save", year, categoryKey: form.categoryKey, amount: Number(form.amount) }, "예산을 등록했습니다.").then((saved) =>
+              saved && setForm({ categoryKey: "", amount: "" }),
             )
           }
         >

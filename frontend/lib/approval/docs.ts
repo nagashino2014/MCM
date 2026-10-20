@@ -6,6 +6,7 @@ import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
+import { runRuleChecks } from "@/lib/approval/precheck";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { notifyPendingSteps, notifyDrafterResult, notifyFinalApproved, notifyProxyDone } from "@/lib/approval/notify";
 import { canFinalApprove, docDeptId } from "@/lib/approval/final-rules";
@@ -707,6 +708,9 @@ export async function rerouteAbsentPendingSteps(opts: { userId?: string } = {}):
 
 /** 상신 — 채번 + 첫 단계 활성화. draft/rejected 상태에서만 가능(본인 기안). */
 export async function submitDoc(docId: string, actorUserId: string): Promise<{ docNo: string }> {
+  // 사전검토 '차단' 규칙 — 기안 화면만 막으면 API 직접 호출(모바일 등)로 우회되므로 서버에서도 검사한다.
+  const blocks = (await runRuleChecks(docId)).filter((f) => f.level === "block");
+  if (blocks.length) throw new Error(`상신할 수 없습니다 — ${blocks.map((b) => b.message).join(" / ")}`);
   let docNo = "";
   await withDbWrite(async (txn) => {
     const rows = rowsToObjects(

@@ -8,6 +8,7 @@ import type React from "react";
 import { BriefcaseBusiness, FileUp, GraduationCap, History, Home, Plus, Save, Trash2, UserRoundCog, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import type {
   DepartmentRow,
   OrganizationEmployeeRow,
@@ -839,7 +840,7 @@ function UploadRow({
 interface HrEventRow {
   eventId: string;
   employeeId: string;
-  eventType: "promotion" | "transfer" | "resignation" | "leave_start" | "leave_end";
+  eventType: "promotion" | "transfer" | "resignation" | "leave_start" | "leave_end" | "concurrent_start" | "concurrent_end";
   eventDate: string;
   positionId: string | null;
   positionName: string | null;
@@ -849,6 +850,156 @@ interface HrEventRow {
   toDeptName: string | null;
   note: string | null;
   createdAt: string;
+}
+
+interface DeptPostRow {
+  postId: string;
+  deptId: string;
+  deptName: string | null;
+  postKind: "head" | "member";
+  title: string | null;
+  isPrimary: boolean;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  note: string | null;
+}
+
+/**
+ * 겸직·부서장 보직(300) — 주 소속(부서 이동 이력)과 별개로 부서 보직을 더한다.
+ * 부서장 보직은 업무보고 알림·성과급 본부장 몫의 부서장 판정 근거이고, 겸직 부서는 부서 범위 권한(self_dept)에 포함된다.
+ */
+function DeptPostsSection({
+  employee,
+  departments,
+  toast,
+  onChanged,
+}: {
+  employee: EmployeeDetail;
+  departments: DepartmentRow[];
+  toast: (message: string, type?: "success" | "error") => void;
+  onChanged: () => void;
+}) {
+  const employeeId = employee.employeeId;
+  const primaryDeptId = employee.deptId ?? null;
+  const [posts, setPosts] = useState<DeptPostRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const empty = { deptId: "", postKind: "head" as "head" | "member", title: "", effectiveFrom: "", effectiveTo: "", note: "" };
+  const [form, setForm] = useState(empty);
+
+  const reload = async () => {
+    if (!employeeId) return;
+    const r = await fetch("/api/admin/dept-posts?employeeId=" + encodeURIComponent(employeeId), { cache: "no-store" });
+    setPosts(r.ok ? (((await r.json()).posts ?? []) as DeptPostRow[]) : []);
+  };
+  useEffect(() => {
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId]);
+
+  const isPrimarySelected = !!form.deptId && form.deptId === primaryDeptId;
+  const submit = async () => {
+    if (form.effectiveFrom && !isValidDateString(form.effectiveFrom)) return toast("발령일을 8자리(YYYYMMDD)로 정확히 입력하세요.", "error");
+    if (form.effectiveTo && !isValidDateString(form.effectiveTo)) return toast("해제일을 8자리(YYYYMMDD)로 정확히 입력하세요.", "error");
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/dept-posts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ employeeId, ...form, postKind: isPrimarySelected ? "head" : form.postKind }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "등록 실패");
+      setForm(empty);
+      await reload();
+      onChanged();
+      toast("보직을 등록했습니다. 대상자는 다음 요청부터 반영되며, 메뉴 변화가 있으면 재로그인이 필요합니다.");
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const revoke = async (p: DeptPostRow) => {
+    if (!confirm(`${p.deptName ?? p.deptId} ${p.postKind === "head" ? "부서장" : "겸직"} 보직을 오늘 날짜로 해제할까요?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/dept-posts?postId=" + encodeURIComponent(p.postId), { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "해제 실패");
+      await reload();
+      onChanged();
+      toast("보직을 해제했습니다.");
+    } catch (e) {
+      toast("실패: " + (e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
+      <h3 className="font-bold cd-text mb-1 flex items-center gap-1">
+        겸직·부서장 보직
+        <CdHelp label="겸직·부서장 보직 도움말">
+          주 소속은 위 부서 이동 이력으로 관리하고, 여기서는 부서장 지정과 겸직 부서를 더합니다. 겸직 부서는 부서 범위
+          권한(업무추진계획 검토·부서 수주·수금 현황·부서 문서함 등)에 포함되고, 부서장 보직은 업무보고 알림과 성과급
+          본부장 몫의 부서장 판정 근거가 됩니다. 부서장 보직이 있으면 부서장 권한 템플릿이 자동 부여되고, 모든 부서장
+          보직이 해제되면 자동 부여분만 회수됩니다.
+        </CdHelp>
+      </h3>
+      <p className="text-xs cd-text-muted mb-3">주 소속 부서를 고르면 부서장 지정, 다른 부서를 고르면 겸직으로 기록됩니다.</p>
+      <div className="grid md:grid-cols-[1fr_120px_1fr_150px_150px_auto] gap-2 items-end mb-3">
+        <Field label="부서">
+          <select className="cd-select" value={form.deptId} onChange={(e) => setForm((f) => ({ ...f, deptId: e.target.value }))}>
+            <option value="">선택</option>
+            {departments.map((d) => (
+              <option key={d.deptId} value={d.deptId}>
+                {d.deptName}{d.deptId === primaryDeptId ? " (주 소속)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="구분">
+          <select
+            className="cd-select"
+            value={isPrimarySelected ? "head" : form.postKind}
+            disabled={isPrimarySelected}
+            onChange={(e) => setForm((f) => ({ ...f, postKind: e.target.value as "head" | "member" }))}
+          >
+            <option value="head">부서장</option>
+            <option value="member">부서원</option>
+          </select>
+        </Field>
+        <Field label="직책">
+          <input className="cd-input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="예: 본부장(선택)" />
+        </Field>
+        <Field label="발령일">
+          <CdDateInput value={form.effectiveFrom} onChange={(v) => setForm((f) => ({ ...f, effectiveFrom: v }))} aria-label="발령일" />
+        </Field>
+        <Field label="해제일(선택)">
+          <CdDateInput value={form.effectiveTo} onChange={(v) => setForm((f) => ({ ...f, effectiveTo: v }))} aria-label="해제일" />
+        </Field>
+        <button type="button" disabled={busy || !form.deptId} onClick={submit} className="cd-btn cd-btn-primary cd-btn-sm">
+          <Plus className="w-3.5 h-3.5" /> 등록
+        </button>
+      </div>
+      <div className="flex flex-col gap-2">
+        {posts.map((p) => (
+          <div key={p.postId} className="rounded-xl cd-card-bg border cd-border-c p-3 flex items-center justify-between gap-3">
+            <div className="text-sm cd-text">
+              <b className="cd-text-primary">{p.deptName ?? p.deptId}</b>{" "}
+              {p.postKind === "head" ? "부서장" : "부서원"}
+              {p.title && <span> · {p.title}</span>}
+              <span className={`cd-pill ${p.isPrimary ? "cd-pill-info" : "cd-pill-warn"} ml-2 align-middle`}>{p.isPrimary ? "주 소속" : "겸직"}</span>
+              <span className="cd-text-muted"> · {p.effectiveFrom ?? "—"} ~ {p.effectiveTo ?? ""}</span>
+              {p.note && <span className="cd-text-muted"> · {p.note}</span>}
+            </div>
+            <button type="button" disabled={busy} onClick={() => revoke(p)} className="cd-btn cd-btn-danger cd-btn-sm">해제</button>
+          </div>
+        ))}
+        {posts.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">등록된 보직이 없습니다.</div>}
+      </div>
+    </section>
+  );
 }
 
 function HrTab({
@@ -1110,6 +1261,9 @@ function HrTab({
           {transfers.length === 0 && <div className="text-xs cd-text-faint py-2 text-center">부서 이동 이력이 없습니다.</div>}
         </div>
       </section>
+
+      {/* 겸직·부서장 보직(300) */}
+      <DeptPostsSection employee={employee} departments={departments} toast={toast} onChanged={() => void reloadEvents()} />
 
       {/* 휴직/복직(206) — 휴직원 승인 시 자동 기록되고, 여기서 수기 기록·복직 처리한다 */}
       <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">

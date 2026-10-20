@@ -96,6 +96,16 @@ export default function OrganizationTree({
     return map;
   }, [departments]);
 
+  // 부서장 보직(300) — 겸직 부서장은 "(겸)" 표시
+  const headsByDept = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const h of snapshot?.deptHeads ?? []) {
+      const label = h.isPrimary ? h.name : `${h.name}(겸)`;
+      map.set(h.deptId, map.has(h.deptId) ? `${map.get(h.deptId)}, ${label}` : label);
+    }
+    return map;
+  }, [snapshot]);
+
   const employeesByDept = useMemo(() => {
     const map = new Map<string, OrganizationEmployeeRow[]>();
     for (const employee of employees) {
@@ -179,6 +189,11 @@ export default function OrganizationTree({
           </span>
           <Network className="w-4 h-4" fill="currentColor" style={{ color: accent }} />
           <span className="text-sm font-semibold truncate">{dept.deptName}</span>
+          {headsByDept.get(dept.deptId) && (
+            <span className="text-[11px] cd-text-faint truncate" title="부서장(겸직 포함)">
+              {headsByDept.get(dept.deptId)}
+            </span>
+          )}
           {!hideDeptCount && (
             <span className="ml-auto mr-1 text-[10px] font-bold cd-text-faint">{childEmployees.length}</span>
           )}

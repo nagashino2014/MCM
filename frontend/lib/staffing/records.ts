@@ -1,5 +1,5 @@
 import { getDb, rowsToObjects } from "@/lib/db";
-import { hasGlobalScope, loadUserAccess } from "@/lib/auth/rbac";
+import { hasGlobalScope, loadUserAccess, grantDeptIds } from "@/lib/auth/rbac";
 
 /*
  * 수행인력 실적 — 인력별 수행 용역 이력(/staffing/records).
@@ -372,8 +372,7 @@ export async function resolveRecordScope(userId: string): Promise<RecordScope> {
   const roots = new Set<string>();
   for (const g of grants) {
     if (g.effect !== "allow") continue;
-    if (g.scopeKind === "self_dept" && access.deptId) roots.add(access.deptId);
-    if (g.scopeKind === "specific_dept" && g.scopeDeptId) roots.add(g.scopeDeptId);
+    for (const d of grantDeptIds(access, g)) roots.add(d); // self_dept = 보직 부서 전체(겸직 300)
   }
   if (roots.size === 0) return { kind: "none" };
 

@@ -155,7 +155,9 @@ export type AuditAction =
   | "internal_rule_create"
   | "internal_rule_update"
   | "internal_rule_delete"
-  | "internal_rule_revise";
+  | "internal_rule_revise"
+  | "dept_post_create"
+  | "dept_post_revoke";
 
 export interface AuditEntry {
   actorUserId: string | null;

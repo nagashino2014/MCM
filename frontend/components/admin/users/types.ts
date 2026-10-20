@@ -43,6 +43,8 @@ export interface OrganizationSnapshot {
   positions: PositionRow[];
   departmentPositions: DepartmentPositionRow[];
   employees: OrganizationEmployeeRow[];
+  /** 부서장 보직(300, 겸직 포함) — 부서 노드 표시용 */
+  deptHeads?: Array<{ deptId: string; employeeId: string; name: string; isPrimary: boolean }>;
 }
 
 export interface UserRow {

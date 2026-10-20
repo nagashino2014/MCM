@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
+import { checkPermission, loadUserAccess, grantDeptIds } from "@/lib/auth/rbac";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { parsePeriod } from "@/lib/bonus/source";
 import { getStatementDetail, listStatementsOverview } from "@/lib/bonus/statements";
@@ -45,8 +45,7 @@ export async function GET(req: NextRequest) {
     if (!global) {
       const deptIds = new Set<string>();
       for (const g of grants) {
-        if (g.scopeKind === "self_dept" && access.deptId) deptIds.add(access.deptId);
-        if (g.scopeKind === "specific_dept" && g.scopeDeptId) deptIds.add(g.scopeDeptId);
+        for (const d of grantDeptIds(access, g)) deptIds.add(d); // self_dept = 보직 부서 전체(겸직 300)
       }
       const db = await getDb();
       const rows = rowsToObjects(

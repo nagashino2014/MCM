@@ -4,6 +4,7 @@ import type { BonusPeriod } from "@/lib/bonus/source";
 import { getBonusSettings, listBonusTargets } from "@/lib/bonus/targets";
 import { EXEC_RANK_CUTOFF, GRADE_WEIGHTS } from "@/lib/bonus/shared";
 import { listHalfLaborCosts, type HalfLaborCost } from "@/lib/bonus/salary";
+import { deptHeadEmployeeIds } from "@/lib/org/posts";
 
 /**
  * 성과급 산정 엔진 + 지급 명세 조회 (docs/bonus-calculation-blueprint.md §6)
@@ -206,6 +207,12 @@ export async function calculateBonus(
     if (votes && votes.size) {
       headId = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
     } else {
+      // 관리자 지정이 없으면 부서장 보직(300 — 겸직 부서장 포함) → 그것도 없으면 부서 최상위 직급자
+      const heads = await deptHeadEmployeeIds(deptId, db);
+      if (heads.length) {
+        deptHeadStatements.push({ deptId, employeeId: heads[0], amount });
+        continue;
+      }
       const fallback = rowsToObjects(
         await db.exec(
           `SELECT e.employee_id FROM employee_profiles e

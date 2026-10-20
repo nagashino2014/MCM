@@ -1,10 +1,8 @@
-import { hasGlobalScope } from "@/lib/auth/rbac";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
-import { assertReportsInScope } from "@/lib/auth/scope-guards";
+import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { assertReportsInScope, forcedDeptId } from "@/lib/auth/scope-guards";
 import { loadUserAccess } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { getReporterContext } from "@/lib/work-plan/workspace";
 import { mergeConfirmedReports } from "@/lib/work-plan/merge";
 
 export const runtime = "nodejs";
@@ -19,11 +17,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "통합할 보고를 선택하세요." }, { status: 400 });
     }
     let deptId = body.deptId ?? "";
-    if (!(await hasGlobalScope(actor.userId, "work_plan.view"))) {
-      const session = await requireSession();
-      const reporter = await getReporterContext(session.userId);
-      deptId = reporter.deptId ?? "";
-    }
+    // 전사면 요청 부서 그대로, 아니면 허용 부서(주 소속 + 겸직, 300) 안의 요청 부서 — 밖이면 주 소속
+    deptId = await forcedDeptId(actor.userId, "work_plan.view", deptId);
     if (!deptId) return NextResponse.json({ error: "부서를 확인할 수 없습니다." }, { status: 400 });
     await assertReportsInScope(await loadUserAccess(actor.userId), "work_plan.merge", body.reportIds); // 타 부서 보고서 혼입 차단(2026-10-19 §7.7)
     const reportId = await mergeConfirmedReports(actor.userId, deptId, body.reportIds);

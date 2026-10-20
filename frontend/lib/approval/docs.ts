@@ -14,6 +14,7 @@ import { assignManualNoticeNo } from "@/lib/notice/store";
 import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
+import { userPostDeptIds } from "@/lib/org/posts";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -787,18 +788,23 @@ export async function getUserDeptId(userId: string): Promise<string | null> {
   return rows.length && rows[0].dept_id != null ? String(rows[0].dept_id) : null;
 }
 
-/** 부서 문서함 — 본인 부서의 완료 문서(기안 완료함). */
+/** 뷰어의 보직 부서 전체(주 소속 + 겸직, 300) — 부서 문서함·완료 문서 열람 범위. */
+export async function getUserDeptIds(userId: string): Promise<string[]> {
+  return userPostDeptIds(userId);
+}
+
+/** 부서 문서함 — 본인 보직 부서(주 소속 + 겸직)의 완료 문서(기안 완료함). */
 export async function listDeptDocs(userId: string, limit = 50): Promise<ArchiveDocRow[]> {
-  const deptId = await getUserDeptId(userId);
-  if (!deptId) return [];
+  const deptIds = await getUserDeptIds(userId);
+  if (!deptIds.length) return [];
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT d.*, f.name AS form_name, f.retention_years, f.org_folder FROM approval_docs d
          JOIN approval_forms f ON f.form_id = d.form_id
-        WHERE d.dept_id = $1 AND d.status IN ('approved','rejected')
+        WHERE d.dept_id = ANY($1::text[]) AND d.status IN ('approved','rejected')
         ORDER BY d.completed_at DESC NULLS LAST LIMIT $2`,
-      [deptId, limit]
+      [deptIds, limit]
     )
   );
   return rows.map(mapArchive);

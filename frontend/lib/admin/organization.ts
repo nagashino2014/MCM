@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { listDeptPosts } from "@/lib/org/posts";
 
 export interface DepartmentRow {
   deptId: string;
@@ -35,6 +36,8 @@ export interface OrganizationSnapshot {
   positions: PositionRow[];
   departmentPositions: Array<{ deptId: string; positionId: string; displayOrder: number }>;
   employees: OrganizationEmployeeRow[];
+  /** 부서장 보직(300, 겸직 포함) — 조직도 부서 노드 표시용. 300 적용 전이면 빈 배열. */
+  deptHeads: Array<{ deptId: string; employeeId: string; name: string; isPrimary: boolean }>;
 }
 
 export interface DepartmentInput {
@@ -83,8 +86,10 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
           ORDER BY p.rank_order DESC NULLS LAST, e.name ASC`
       ),
     ]);
+  const heads = (await listDeptPosts()).filter((p) => p.postKind === "head");
 
   return {
+    deptHeads: heads.map((p) => ({ deptId: p.deptId, employeeId: p.employeeId, name: p.employeeName ?? "", isPrimary: p.isPrimary })),
     departments: rowsToObjects(departmentsResult).map((row) => ({
       deptId: String(row.dept_id ?? ""),
       deptName: String(row.dept_name ?? ""),

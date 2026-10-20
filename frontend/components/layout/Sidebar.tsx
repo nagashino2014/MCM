@@ -15,7 +15,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/cdash/BrandMark";
 import { CdIconButton } from "@/components/cdash/CdButton";
-import { MENU_ITEMS, isMenuVisible, visibleSubmenu, type MenuItem } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisible, menuEntryHref, visibleSubmenu, type MenuItem } from "@/config/menu";
 import { resolveMenuRoute, type MenuRouteMatch } from "./menu-route";
 import type { NavBadges } from "@/components/layout/useNavBadges";
 
@@ -113,7 +113,7 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
   };
 
   const visible = MENU_ITEMS.filter((m) => isMenuVisible(m, perms)).map((m) =>
-    m.submenu ? { ...m, submenu: visibleSubmenu(m, perms) } : m
+    m.submenu ? { ...m, href: menuEntryHref(m, perms), submenu: visibleSubmenu(m, perms) } : m
   );
   const groups: Array<{ key: string; items: MenuItem[] }> = ["home", "collab", "work", "main", "system"]
     .map((key) => ({ key, items: visible.filter((m) => (m.group ?? "main") === key) }))

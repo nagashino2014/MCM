@@ -48,6 +48,9 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/approval/policies", keys: ["approval.manage"] },
   { path: "/approval/final-rules", keys: ["approval.manage"] },
   { path: "/approval/settings", keys: ["approval.manage"] },
+  // 양식별 문서 조회·결재 인사이트 — 전자결재 메뉴 하위지만 API(query·insights)가 approval.manage(2026-10-20 F-1)
+  { path: "/approval/records", keys: ["approval.manage"] },
+  { path: "/approval/insights", keys: ["approval.manage"] },
   // 근태·휴가 관리 6화면(§6-4: 기존 staffing.edit)
   { path: "/approval/leave", keys: ["staffing.edit"] },
   { path: "/approval/attendance", keys: ["staffing.edit"] },
@@ -69,6 +72,10 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/rules/admin", keys: ["rules.manage"] },
   { path: "/rules/internal/edit", keys: ["rules.manage"] },
   { path: "/survey/external", keys: ["survey.manage"] },
+  // 파일함(전사 첨부 통합 조회·삭제·저장 정책)은 files.manage(F-2). 개인문서함은 본인 화면이라 세션만.
+  //   자산 관리(/assets)는 조회가 전원 필요해 표에 두지 않고 편집 버튼만 asset.manage 로 가린다(F-3).
+  { path: "/files", keys: ["files.manage"] },
+  { path: "/files/personal", keys: [] },
   // ── 사업 운영 ──
   { path: "/facilities", keys: ["facility.view"] },
   { path: "/contracts", keys: ["contract.view"] },

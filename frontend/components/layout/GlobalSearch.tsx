@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft } from "lucide-react";
-import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "@/config/menu";
+import { MENU_ITEMS, isMenuVisible, menuEntryHref, visibleSubmenu } from "@/config/menu";
 import { CdModal } from "@/components/cdash/CdModal";
 import { cn } from "@/lib/utils";
 import { useManual } from "@/components/manual/ManualContext";
@@ -35,7 +35,7 @@ export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[
     const out: Entry[] = [];
     // 사이드바와 같은 권한 요약(perms) 기준 — 숨겨진 메뉴·서브메뉴는 검색 후보에도 나오지 않는다(M-41).
     for (const m of MENU_ITEMS.filter((m) => isMenuVisible(m, perms))) {
-      out.push({ title: m.title, section: m.title, href: m.href, comingSoon: m.comingSoon });
+      out.push({ title: m.title, section: m.title, href: menuEntryHref(m, perms), comingSoon: m.comingSoon });
       for (const s of visibleSubmenu(m, perms)) out.push({ title: s.title, section: m.title, href: s.href });
     }
     return out;

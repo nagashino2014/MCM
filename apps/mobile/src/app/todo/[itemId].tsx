@@ -24,7 +24,7 @@ import { BoardStripe, CheckCircle, DueBadge, MiniAvatar, PastelLabel, PriorityDo
 import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { completeRulesSummary, hasAnyCompleteRule } from '@/lib/todo-completion';
-import { TODO_ACTIVITY_ACTIONS, TODO_LINK_KIND_LABELS, TODO_PRIORITY_LABELS, TODO_RECURRENCE_PRESETS, TODO_SHARE_ROLE_LABELS, TODO_SNOOZE_PRESETS, TODO_STATUSES, TODO_STATUS_LABELS, TODO_WEEKDAY_CODES, type TodoActivity, type TodoBoard, type TodoComment, type TodoItem, type TodoItemDetail, type TodoPriority, type TodoShareRole, type TodoStatus, TODO_MILESTONE_KINDS, TODO_MILESTONE_LABELS, type TodoDepRef, type TodoDeps } from '@/lib/todo-types';
+import { TODO_ACTIVITY_ACTIONS, TODO_LINK_KIND_LABELS, TODO_PRIORITY_LABELS, TODO_RECURRENCE_PRESETS, TODO_SHARE_ROLE_LABELS, TODO_SNOOZE_PRESETS, TODO_STATUSES, TODO_STATUS_LABELS, TODO_WEEKDAY_CODES, type TodoActivity, type TodoBoard, type TodoComment, type TodoItem, type TodoItemDetail, type TodoPriority, type TodoShareRole, type TodoStatus, TODO_MILESTONE_LABELS, type TodoDepRef, type TodoDeps, type TodoWorkType } from '@/lib/todo-types';
 import { computeDefaultRemindAt, describeRecurrence, dueBadge, fmtIsoShort, fmtMd, fmtMdWd, fmtRelative, labelColors, statusTone, todayLocal, withAlpha } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
@@ -411,6 +411,7 @@ function makeDraftItem(
     endDate: null,
     actualDate: null,
     milestoneKind: null,
+    workType: null,
     openDeps: 0,
     archivedAt: null,
     createdAt: '',
@@ -547,7 +548,21 @@ export default function TodoDetailScreen() {
   // §27 기간 종료일 · 하위 마일스톤(종류·예정일·실제일)
   const [endDateOpen, setEndDateOpen] = useState(false);
   const [msKindFor, setMsKindFor] = useState<TodoItem | null>(null);
-  const [subDateFor, setSubDateFor] = useState<{ sub: TodoItem; field: 'doDate' | 'actualDate' } | null>(null);
+  const [subDateFor, setSubDateFor] = useState<{ sub: TodoItem; field: 'doDate' | 'endDate' } | null>(null);
+  // 302 하위 작업 유형·종류(전사 설정)
+  const [wtFor, setWtFor] = useState<TodoItem | null>(null);
+  const workTypesApi = useApi<{ types: TodoWorkType[] }>('/api/todo/work-types', { cache: true });
+  const workTypes = workTypesApi.data?.types ?? [];
+  const kindLabel = (key: string) => {
+    for (const t of workTypes) for (const k of t.kinds) if (k.kindKey === key) return k.label;
+    return TODO_MILESTONE_LABELS[key] ?? key;
+  };
+  /** 유형의 종류(숨김 제외) — 유형이 없으면 '기타' 유형 목록. */
+  const kindOptions = (typeKey: string | null) => {
+    const t = workTypes.find((x) => x.typeKey === (typeKey ?? 'etc')) ?? workTypes.find((x) => x.typeKey === 'etc');
+    return (t?.kinds ?? []).filter((k) => k.isActive).map((k) => ({ key: k.kindKey, label: k.label }));
+  };
+  const typeLabel = (key: string | null) => (key ? workTypes.find((t) => t.typeKey === key)?.label ?? key : null);
   // §25-1 담당 후보 = 작성자 + 공유 대상 + 보드 멤버(개인 보드는 멤버 없음) — 시트를 열 때 한 번 읽는다.
   const [assignMembers, setAssignMembers] = useState<{ userId: string; name: string }[] | null>(null);
   const [doDateOpen, setDoDateOpen] = useState(false);
@@ -1319,11 +1334,28 @@ export default function TodoDetailScreen() {
                     <View className="flex-1" style={{ minWidth: 0 }}>
                       <Text className="text-[11.5px] text-cd-faint">용역{item.contractId ? ' · 계약' : ''}</Text>
                       <Text numberOfLines={1} className="text-[13.5px] font-medium text-cd-text">
-                        {[item.projectName, item.clientName ? `발주처 ${item.clientName}` : null].filter(Boolean).join(' · ')}
+                        {item.projectName ?? item.linkLabel ?? '계약'}
                       </Text>
                     </View>
                     {item.contractId ? <Text className="text-[11px] text-cd-faint">웹에서 열기</Text> : null}
                   </View>
+                ) : null}
+                {/* 관련 용역의 대상 사업장(2026-10-20) — 통합허가는 허가 대상 사업장 */}
+                {item.linkKind !== 'facility' && item.siteFacilityId ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/facility/[facilityId]', params: { facilityId: item.siteFacilityId as string } })}
+                    className="flex-row items-center gap-2.5 active:opacity-70">
+                    <View className="h-7 w-7 items-center justify-center rounded-md bg-cd-surface">
+                      <Ionicons name="business-outline" size={15} color={c.muted} />
+                    </View>
+                    <View className="flex-1" style={{ minWidth: 0 }}>
+                      <Text className="text-[11.5px] text-cd-faint">사업장 · 용역 대상</Text>
+                      <Text numberOfLines={1} className="text-[13.5px] font-medium text-cd-text">
+                        {item.siteName ?? '대상 사업장'}
+                      </Text>
+                    </View>
+                    <Text className="text-[12.5px] text-cd-primary">사업장 열기</Text>
+                  </Pressable>
                 ) : null}
                 {item.linkKind ? (
                   <Pressable onPress={openLink} disabled={!linkOpenable} className="flex-row items-center gap-2.5 active:opacity-70">
@@ -1446,26 +1478,24 @@ export default function TodoDetailScreen() {
                 {s.status !== 'done' ? (
                   <View className="mb-1 gap-1.5 pl-7">
                     <View className="flex-row items-center gap-1.5">
+                      {/* 302 유형 — 상위 '관련'으로 자동이면 잠금 */}
+                      <Pressable
+                        onPress={() => (canEdit && !item.workTypeAuto ? setWtFor(s) : undefined)}
+                        style={{ minWidth: 0, opacity: item.workTypeAuto ? 0.75 : 1 }}
+                        className="h-8 flex-1 flex-row items-center justify-center gap-1 rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
+                        <Ionicons name={item.workTypeAuto ? 'lock-closed-outline' : 'pricetag-outline'} size={12} color={c.muted} />
+                        <Text className={`text-[11.5px] ${item.workTypeAuto ?? s.workType ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
+                          {typeLabel(item.workTypeAuto ?? s.workType) ?? '유형'}
+                        </Text>
+                      </Pressable>
                       <Pressable
                         onPress={() => (canEdit ? setMsKindFor(s) : undefined)}
                         style={{ minWidth: 0 }}
                         className="h-8 flex-1 flex-row items-center justify-center gap-1 rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
                         <Ionicons name="flag-outline" size={12} color={s.milestoneKind ? c.primary : c.muted} />
                         <Text className={`text-[11.5px] ${s.milestoneKind ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
-                          {s.milestoneKind ? TODO_MILESTONE_LABELS[s.milestoneKind] : '종류'}
+                          {s.milestoneKind ? kindLabel(s.milestoneKind) : '종류'}
                         </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'doDate' }) : undefined)}
-                        style={{ minWidth: 0 }}
-                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
-                        <Text numberOfLines={1} className={`text-[11.5px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `예정 ${fmtMd(s.doDate)}` : '예정일'}</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'actualDate' }) : undefined)}
-                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70"
-                        style={s.actualDate ? { borderColor: c.success, minWidth: 0 } : { minWidth: 0 }}>
-                        <Text numberOfLines={1} className={`text-[11.5px] ${s.actualDate ? 'font-semibold text-cd-success' : 'text-cd-muted'}`}>{s.actualDate ? `실제 ${fmtMd(s.actualDate)}` : '실제일'}</Text>
                       </Pressable>
                       <View className="h-8 flex-row items-center rounded-md border border-cd-border bg-cd-card">
                         <Pressable onPress={() => stepSub(s, -1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 내리기" className="h-8 w-7 items-center justify-center active:opacity-60">
@@ -1476,6 +1506,30 @@ export default function TodoDetailScreen() {
                           <Ionicons name="add" size={14} color={c.muted} />
                         </Pressable>
                       </View>
+                    </View>
+                    {/* 302 시작일 ~ 종료일(기간) */}
+                    <View className="flex-row items-center gap-1.5">
+                      <Pressable
+                        onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'doDate' }) : undefined)}
+                        style={{ minWidth: 0 }}
+                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
+                        <Text numberOfLines={1} className={`text-[11.5px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `시작 ${fmtMd(s.doDate)}` : '시작일'}</Text>
+                      </Pressable>
+                      <Text className="text-[12px] text-cd-faint">~</Text>
+                      <Pressable
+                        onPress={() => {
+                          if (!canEdit) return;
+                          if (!s.doDate) {
+                            toast.show('시작일을 먼저 입력하세요.', 'error');
+                            return;
+                          }
+                          setSubDateFor({ sub: s, field: 'endDate' });
+                        }}
+                        onLongPress={() => (canEdit && s.endDate ? void patchSub(s, { endDate: null }) : undefined)}
+                        style={{ minWidth: 0 }}
+                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
+                        <Text numberOfLines={1} className={`text-[11.5px] ${s.endDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.endDate ? `종료 ${fmtMd(s.endDate)}` : '종료일'}</Text>
+                      </Pressable>
                     </View>
                     <View className="flex-row items-center gap-1.5">
                       {item.stages.length ? (
@@ -1979,31 +2033,53 @@ export default function TodoDetailScreen() {
         }}
         onClose={() => setEndDateOpen(false)}
       />
-      {/* 287 하위 작업 예정일·실제일 */}
+      {/* 302 하위 작업 시작일·종료일(기간) */}
       <DatePickerSheet
         visible={!!subDateFor}
-        title={subDateFor ? `${subDateFor.sub.title} · ${subDateFor.field === 'doDate' ? '예정일' : '실제 일자'}` : '날짜'}
-        value={subDateFor ? (subDateFor.field === 'doDate' ? subDateFor.sub.doDate : subDateFor.sub.actualDate) : null}
+        title={subDateFor ? `${subDateFor.sub.title} · ${subDateFor.field === 'doDate' ? '시작일' : '종료일'}` : '날짜'}
+        value={subDateFor ? (subDateFor.field === 'doDate' ? subDateFor.sub.doDate : subDateFor.sub.endDate) : null}
         onConfirm={(d) => {
           const t = subDateFor;
           setSubDateFor(null);
           if (!t) return;
-          void patchSub(t.sub, { [t.field]: d }).then(() => {
-            // 결정 C: 실제일을 넣으면 완료를 제안(자동 완료 없음)
-            if (t.field === 'actualDate' && t.sub.status !== 'done') {
-              Alert.alert('완료로 표시할까요?', `"${t.sub.title}" 실제 일자를 ${d} 로 기록했습니다.`, [
-                { text: '아니요', style: 'cancel' },
-                { text: '완료', onPress: () => void toggleSub(t.sub) },
-              ]);
-            }
-          });
+          if (t.field === 'endDate' && d && t.sub.doDate && d < t.sub.doDate) {
+            toast.show('종료일은 시작일 이후여야 합니다.', 'error');
+            return;
+          }
+          void patchSub(t.sub, { [t.field]: d });
         }}
         onClose={() => setSubDateFor(null)}
       />
+      {/* 302 하위 작업 유형(직접 선택 — 자동 유형이면 열리지 않음) */}
+      <Sheet visible={!!wtFor} onClose={() => setWtFor(null)} title={wtFor ? `${wtFor.title} · 유형` : '유형'}>
+        <View className="gap-2">
+          {[null, ...workTypes.filter((t) => t.isActive).map((t) => t.typeKey)].map((k) => {
+            const cur = (wtFor?.workType ?? null) === k;
+            return (
+              <Pressable
+                key={String(k)}
+                onPress={() => {
+                  const target = wtFor;
+                  setWtFor(null);
+                  if (!target) return;
+                  const body: Record<string, unknown> = { workType: k };
+                  // 새 유형에 없는 종류는 비운다
+                  if (target.milestoneKind && !kindOptions(k).some((o) => o.key === target.milestoneKind)) body.milestoneKind = null;
+                  void patchSub(target, body);
+                }}
+                className="h-11 flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3 active:opacity-70"
+                style={cur ? { borderColor: c.primary, backgroundColor: c.primarySoft } : undefined}>
+                <Text className="flex-1 text-[14px] text-cd-text">{k ? typeLabel(k) : '유형 없음'}</Text>
+                {cur ? <Ionicons name="checkmark" size={16} color={c.primary} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
       {/* 287 마일스톤 종류 */}
       <Sheet visible={!!msKindFor} onClose={() => setMsKindFor(null)} title={msKindFor ? `${msKindFor.title} · 종류` : '종류'}>
         <View className="gap-2">
-          {[null, ...TODO_MILESTONE_KINDS].map((k) => {
+          {[null, ...kindOptions(msKindFor ? item.workTypeAuto ?? msKindFor.workType : null).map((o) => o.key)].map((k) => {
             const cur = (msKindFor?.milestoneKind ?? null) === k;
             return (
               <Pressable
@@ -2015,7 +2091,7 @@ export default function TodoDetailScreen() {
                 }}
                 className="h-11 flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3 active:opacity-70"
                 style={cur ? { borderColor: c.primary, backgroundColor: c.primarySoft } : undefined}>
-                <Text className="flex-1 text-[14px] text-cd-text">{k ? TODO_MILESTONE_LABELS[k] : '종류 없음'}</Text>
+                <Text className="flex-1 text-[14px] text-cd-text">{k ? kindLabel(k) : '종류 없음'}</Text>
                 {cur ? <Ionicons name="checkmark" size={16} color={c.primary} /> : null}
               </Pressable>
             );

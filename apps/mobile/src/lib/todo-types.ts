@@ -176,8 +176,9 @@ export const TODO_COMPLETE_RULE_SHORT_LABELS: Record<TodoCompleteRuleKey, string
 };
 
 export const TODO_MILESTONE_KINDS = ["pre_consult", "main_consult", "review_received", "meeting", "kickoff_report", "completion_report", "submit", "other"] as const;
-export type TodoMilestoneKind = (typeof TODO_MILESTONE_KINDS)[number];
-export const TODO_MILESTONE_LABELS: Record<TodoMilestoneKind, string> = {
+// 302(2026-10-20): 종류는 유형별 설정 목록 — 관리자가 만든 키(mk_...)도 오므로 string. 아래 8개는 기본 라벨(폴백).
+export type TodoMilestoneKind = string;
+export const TODO_MILESTONE_LABELS: Record<string, string> = {
   pre_consult: "사전협의 제출",
   main_consult: "본협의 제출",
   review_received: "검토결과서 수령",
@@ -335,6 +336,8 @@ export interface TodoItem {
   endDate: string | null;
   actualDate: string | null;
   milestoneKind: TodoMilestoneKind | null;
+  /** 302 하위 작업 유형(직접 선택) — 상위 '관련'이 계약·영업·업무추진계획이면 상세의 workTypeAuto 가 우선. */
+  workType: string | null;
   /** 미완료 선행 작업 수(288 의존) — 0 이면 대기 아님. */
   openDeps: number;
   archivedAt: string | null;
@@ -369,6 +372,21 @@ export interface TodoItemDetail extends TodoItem {
   progressAvg: number | null;
   stages: TodoStageRef[];
   reportSubject: "contract" | "task" | null;
+  /** 관련 용역(보드 계약 또는 link 계약)의 대상 사업장 — 통합허가는 허가 대상 사업장(contracts.facility_id). 2026-10-20 */
+  siteFacilityId?: string | null;
+  siteName?: string | null;
+  /** 302 상위 '관련'으로 정해지는 하위 작업 유형. null = 하위 작업마다 직접 선택. */
+  workTypeAuto?: string | null;
+}
+
+/** 302 하위 작업 유형과 그 유형의 종류 목록(GET /api/todo/work-types). */
+export interface TodoWorkType {
+  typeKey: string;
+  label: string;
+  builtin: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  kinds: { kindKey: string; label: string; sortOrder: number; isActive: boolean }[];
 }
 
 // ── 선행·후행 의존(288, §28-3) — item_id=후행, depends_on_item_id=선행. 응답은 /api/todo/items/:id/deps ──

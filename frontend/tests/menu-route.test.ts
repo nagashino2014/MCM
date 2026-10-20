@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "../config/menu";
+import { MENU_ITEMS, isMenuVisible, menuEntryHref, visibleSubmenu } from "../config/menu";
+import { requiredPermissionsForPath } from "../config/menu-permissions";
 import { resolveMenuRoute } from "../components/layout/menu-route";
 
 // 역할별 권한 요약(테스트용) — docs/open-test-permission-plan-2026-10-19.md §1.3·§4.1 의 템플릿 grant 를 요약 형식으로 옮긴 것.
@@ -143,4 +144,28 @@ test("영업/마케팅 메뉴는 지정된 영업 담당자·대표이사·관�
   assert.equal(isMenuVisible(sales, CEO_PERMS), true);
   assert.deepEqual(visibleSubmenu(sales, SALES_STAFF_PERMS).map((s) => s.href),
     ["/sales", "/sales/contacts", "/sales/intel", "/sales/rag", "/sales/bids", "/approval/quote"]);
+});
+
+test("API 가 관리 권한을 요구하는 화면은 메뉴·URL 도 같은 키로 가린다(2026-10-20 F-1~F-3)", () => {
+  const approval = MENU_ITEMS.find((item) => item.title === "전자결재")!;
+  // 양식별 문서 조회·결재 인사이트는 approval.manage(관리자·인사 템플릿)만
+  for (const perms of [STAFF_PERMS, LEAD_PERMS, EXEC_PERMS, CEO_PERMS]) {
+    const hrefs = visibleSubmenu(approval, perms).map((s) => s.href);
+    assert.equal(hrefs.includes("/approval/records"), false);
+    assert.equal(hrefs.includes("/approval/insights"), false);
+  }
+  // 전자결재 홈·공문·내부고시·양식별 문서 조회·데이터 분석·결재 인사이트·부재·대결 설정(main 의 대결 메뉴 포함 7개)
+  assert.equal(visibleSubmenu(approval, [...STAFF_PERMS, "approval.manage@all"]).length, 7);
+  assert.deepEqual(requiredPermissionsForPath("/approval/records/42"), ["approval.manage"]);
+  // 파일함은 files.manage, 문서함·개인문서함은 전원 — 상위 메뉴는 남고 대표 경로는 보이는 첫 서브로
+  const files = MENU_ITEMS.find((item) => item.title === "파일 · 문서함")!;
+  assert.deepEqual(visibleSubmenu(files, STAFF_PERMS).map((s) => s.href), ["/approval/archive", "/files/personal"]);
+  assert.equal(menuEntryHref(files, STAFF_PERMS), "/approval/archive");
+  assert.equal(menuEntryHref(files, ["files.manage@all"]), "/files");
+  assert.deepEqual(requiredPermissionsForPath("/files"), ["files.manage"]);
+  assert.equal(requiredPermissionsForPath("/files/personal/42"), null);
+  // 자산 관리는 조회 전원 — 메뉴는 유지하고 편집 버튼만 asset.manage 로 가린다
+  const assets = MENU_ITEMS.find((item) => item.title === "자산 예약")!;
+  assert.deepEqual(visibleSubmenu(assets, STAFF_PERMS).map((s) => s.href), ["/assets/reservations", "/assets"]);
+  assert.equal(requiredPermissionsForPath("/assets"), null);
 });

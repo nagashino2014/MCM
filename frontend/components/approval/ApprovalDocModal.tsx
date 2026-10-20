@@ -576,7 +576,7 @@ export function ApprovalDocViewer({
                     ⚠ 주 12시간 초과 신청 — {ol.weekStart} 주 합계 {h(total)}h (기존 신청 {h(ol.priorRequestedMinutes)}h + 이 문서 {h(ol.applyMinutes)}h · 한도 {h(ol.limitMinutes)}h)
                   </span>
                   <span className="text-[10.5px] cd-text-faint">
-                    승인 시 실제 근태 기록과 대조해 초과분이 인정되면 특별휴가(초과근무 대체휴가)로 가산율(1.5·야간 2.0배)을 반영해 시간 단위 자동 산정됩니다.
+                    승인 시 실제 근태 기록과 대조해 주 12시간을 넘는 인정분은 수당 대신 특별휴가(초과근무 대체휴가)로 가산율(1.5·야간 2.0배)을 반영해 시간 단위 자동 산정됩니다.
                   </span>
                   {ol.consent?.agreedAt && (
                     <span className="text-[10.5px] font-semibold" style={{ color: "var(--cd-success)" }}>

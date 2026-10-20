@@ -1,5 +1,9 @@
 import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { offDaySet } from "@/lib/hr/holidays";
+import { DEFAULT_ATTENDANCE_SETTINGS, loadAttendanceSettings } from "@/lib/adt/settings";
+import { weekStartOf } from "@/lib/adt/overtime";
+import type { AttendanceSettings } from "@/lib/adt/types";
+import { capWeeklyOvertime, payPeriodOf, splitDayNightRange } from "@/lib/payroll/weekly-cap";
 
 /**
  * 초과근무수당 산정 공용 모듈 (블루프린트 §6)
@@ -82,6 +86,9 @@ export interface OvertimeAmount {
   basis: "requested" | "matched" | "attendance";
   /** 근태가 신청보다 적어 깎인 분(대조 차이) */
   cappedMin: number;
+  /** 주 연장 한도(12h) 초과로 수당에서 빼고 대체휴가로 넘긴 분(F-21) */
+  excessDayMin: number;
+  excessNightMin: number;
 }
 
 /**
@@ -92,6 +99,8 @@ export interface OvertimeAmount {
  *   ② 같은 구간 근태(ADT) 기록이 있으면 **실제 인정 시간을 상한으로 캡**한다(신청만 하고 미수행 방지).
  *   ③ 근태가 아직 적재되지 않은 기간은 대조를 건너뛰고 신청 시간으로 산정한다(basis=requested).
  *   ④ 22:00~06:00 은 야간 가산(2.0배) — 실측에서 확인된 사규.
+ *   ⑤ 주 연장 한도(근태 설정, 기본 12h)까지만 수당 — 같은 주 인정분을 시간순으로 쌓아 넘는 몫은
+ *      대체휴가로만 부여한다(F-21, 동의서 '임금 지급에 갈음'). 구간 첫 주가 전월에 걸치면 전월 귀속분도 한도에 누적한다.
  * 주(week_start+6=토)의 종료일이 구간 내면 그 주 전체를 해당 월에 귀속시킨다.
  */
 export async function overtimeAmounts(
@@ -117,13 +126,31 @@ export async function overtimeAmounts(
   const attendanceEmps = new Set(attRows.map((r) => String(r.employee_id)));
   const matches = await matchOvertimeRequests(payYear, payMonth, db);
   const hourly = await ordinaryHourlyWages(rates.divisorHours, db);
+  const settings = await attendanceSettingsOrDefault(db);
+  const firstWeekStart = weekStartOf(from, settings.weekStartDow);
+  const carried = firstWeekStart < from
+    ? await matchesBetween(firstWeekStart, addDaysYmd(from, -1), db)
+    : [];
+  const shares = capWeeklyOvertime(
+    [...carried, ...matches],
+    settings.weeklyOvertimeLimitMinutes,
+    (d) => weekStartOf(d, settings.weekStartDow)
+  );
 
   // 인원별 집계 — 일자별 대조 결과를 그대로 합산한다(주 합계 min 은 일자 간 상쇄가 생겨 쓰지 않는다).
-  const agg = new Map<string, { dayMin: number; nightMin: number; reqMin: number; actualMin: number; noRecord: boolean }>();
+  const agg = new Map<string, {
+    dayMin: number; nightMin: number; reqMin: number; actualMin: number; noRecord: boolean;
+    excessDayMin: number; excessNightMin: number;
+  }>();
   for (const m of matches) {
-    const cur = agg.get(m.employeeId) ?? { dayMin: 0, nightMin: 0, reqMin: 0, actualMin: 0, noRecord: false };
-    cur.dayMin += m.dayMin;
-    cur.nightMin += m.nightMin;
+    const cur = agg.get(m.employeeId) ?? {
+      dayMin: 0, nightMin: 0, reqMin: 0, actualMin: 0, noRecord: false, excessDayMin: 0, excessNightMin: 0,
+    };
+    const share = shares.get(m.docId);
+    cur.dayMin += share ? share.paidDay : m.dayMin;
+    cur.nightMin += share ? share.paidNight : m.nightMin;
+    cur.excessDayMin += share?.excessDay ?? 0;
+    cur.excessNightMin += share?.excessNight ?? 0;
     cur.reqMin += m.reqMin;
     cur.actualMin += m.actualMin;
     if (m.verdict === "no-record") cur.noRecord = true;
@@ -140,12 +167,14 @@ export async function overtimeAmounts(
       nightMin: a.nightMin,
       basis: a.noRecord ? "requested" : "matched",
       cappedMin: Math.max(0, a.reqMin - a.actualMin),
+      excessDayMin: a.excessDayMin,
+      excessNightMin: a.excessNightMin,
     });
   }
   // 신청서 없이 근태만 있는 인원 — 사전 승인이 없어 수당 대상이 아니다(기록만 남긴다).
   for (const empId of attendanceEmps) {
     if (!agg.has(empId) && hourly.has(empId)) {
-      map.set(empId, { amount: 0, dayMin: 0, nightMin: 0, basis: "attendance", cappedMin: 0 });
+      map.set(empId, { amount: 0, dayMin: 0, nightMin: 0, basis: "attendance", cappedMin: 0, excessDayMin: 0, excessNightMin: 0 });
     }
   }
   return map;
@@ -193,16 +222,7 @@ function minutesFromBase(iso: string, baseDate: string): number | null {
 }
 
 /** 분 구간을 주간/야간(22:00~06:00)으로 쪼갠다. */
-function splitRange(startMin: number, endMin: number): { dayMin: number; nightMin: number } {
-  let dayMin = 0;
-  let nightMin = 0;
-  for (let t = Math.floor(startMin); t < Math.ceil(endMin); t += 1) {
-    const mod = ((t % 1440) + 1440) % 1440;
-    if (mod >= NIGHT_START_MIN || mod < NIGHT_END_MIN) nightMin += 1;
-    else dayMin += 1;
-  }
-  return { dayMin, nightMin };
-}
+const splitRange = splitDayNightRange;
 
 /** 직원별 소정근로 시각(분). 미설정은 조기출근(08:00~17:00). */
 export interface WorkScheduleMin {
@@ -278,6 +298,8 @@ export interface OvertimeMatchRow {
   actualMin: number;
   dayMin: number;
   nightMin: number;
+  /** 인정 구간(근무일 00:00 기준 분) — 주 연장 한도 배분(weekly-cap)의 입력 */
+  segs: Array<[number, number]>;
   /** 소정근로 종료(= 초과근무 시작) 시각 'HH:MM' */
   otStartAt: string;
   /** 실제 출·퇴근 'HH:MM' (기록 없으면 null) */
@@ -427,6 +449,7 @@ export async function matchOvertimeRequests(
       actualMin,
       dayMin: split.dayMin,
       nightMin: split.nightMin,
+      segs,
       otStartAt: isOffDay ? "휴일" : clock(sch.endMin),
       inAt: inMin != null ? clock(inMin) : null,
       outAt: outMin != null ? clock(outMin) : null,
@@ -518,4 +541,91 @@ export async function weeklyOvertimeEstimates(weekStart: string): Promise<Map<st
     });
   }
   return map;
+}
+
+async function attendanceSettingsOrDefault(db: PgDatabase): Promise<AttendanceSettings> {
+  try {
+    return await loadAttendanceSettings(db);
+  } catch {
+    return DEFAULT_ATTENDANCE_SETTINGS; // 사규 기본값(주 12h)
+  }
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  return new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+/** 근무일 범위(수 일)의 대조 결과 — 각 근무일이 속한 귀속 구간의 대조를 그대로 쓴다(급여 산정과 같은 결과). */
+async function matchesBetween(
+  from: string,
+  to: string,
+  db: PgDatabase,
+  cache?: Map<string, Promise<OvertimeMatchRow[]>>
+): Promise<OvertimeMatchRow[]> {
+  const periods = new Map<string, { year: number; month: number }>();
+  for (let d = from; d <= to; d = addDaysYmd(d, 1)) {
+    const p = payPeriodOf(d);
+    periods.set(`${p.year}-${p.month}`, p);
+  }
+  const out: OvertimeMatchRow[] = [];
+  for (const [key, p] of periods) {
+    let pending = cache?.get(key);
+    if (!pending) {
+      pending = matchOvertimeRequests(p.year, p.month, db);
+      cache?.set(key, pending);
+    }
+    out.push(...(await pending).filter((r) => r.workDate >= from && r.workDate <= to));
+  }
+  return out;
+}
+
+export interface WeeklyOvertimeExcess {
+  /** 그 주 인정 초과근무 합(분) */
+  recognizedMin: number;
+  excessDayMin: number;
+  excessNightMin: number;
+}
+
+/**
+ * 직원·주별 한도 초과분 — 대체휴가 자동 적재(lib/approval/overtime.ts)의 근거.
+ * 급여 산정(overtimeAmounts)과 같은 대조·배분 규칙이라 수당에서 빠진 시간과 휴가로 주는 시간이 일치한다.
+ */
+export async function weeklyOvertimeExcess(
+  db: PgDatabase,
+  employeeId: string,
+  weekStart: string,
+  limitMinutes: number,
+  cache?: Map<string, Promise<OvertimeMatchRow[]>>
+): Promise<WeeklyOvertimeExcess> {
+  const rows = (await matchesBetween(weekStart, addDaysYmd(weekStart, 6), db, cache)).filter(
+    (r) => r.employeeId === employeeId
+  );
+  const shares = capWeeklyOvertime(rows, limitMinutes, () => weekStart);
+  let excessDayMin = 0;
+  let excessNightMin = 0;
+  for (const share of shares.values()) {
+    excessDayMin += share.excessDay;
+    excessNightMin += share.excessNight;
+  }
+  return { recognizedMin: rows.reduce((a, r) => a + r.actualMin, 0), excessDayMin, excessNightMin };
+}
+
+/** 귀속 구간의 대조 결과가 걸친 (직원, 주) 목록 — 급여대장 생성 시 대체휴가 재동기화 대상. */
+export async function overtimeWeeksInPeriod(
+  payYear: number,
+  payMonth: number,
+  db: PgDatabase
+): Promise<{ weeks: Array<{ employeeId: string; weekStart: string }>; limitMinutes: number }> {
+  const settings = await attendanceSettingsOrDefault(db);
+  const seen = new Set<string>();
+  for (const r of await matchOvertimeRequests(payYear, payMonth, db)) {
+    seen.add(`${r.employeeId}|${weekStartOf(r.workDate, settings.weekStartDow)}`);
+  }
+  return {
+    weeks: [...seen].map((k) => {
+      const [employeeId, weekStart] = k.split("|");
+      return { employeeId, weekStart };
+    }),
+    limitMinutes: settings.weeklyOvertimeLimitMinutes,
+  };
 }

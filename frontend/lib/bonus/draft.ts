@@ -2,6 +2,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { BonusPeriod } from "@/lib/bonus/source";
 import { listStatementsOverview } from "@/lib/bonus/statements";
 import { saveDoc } from "@/lib/approval/docs";
+import { countPlanMismatch } from "@/lib/bonus/plan-check";
 
 /**
  * 성과급 지급 계획 기안 (블루프린트 §6)
@@ -97,6 +98,8 @@ export interface BonusPlanApproval {
   title: string;
   submittedAt: string | null;
   completedAt: string | null;
+  /** 기안 표(이름·금액)와 현재 산정 명세가 다른 인원 수 — 0 이 아니면 재기안·승인 전 발송 불가(F-20). */
+  mismatchCount: number;
 }
 
 /** 반기 성과급 기안 문서의 현재 상태(없으면 null) — 명세서 발송 게이트·화면 배지의 근거. */
@@ -104,7 +107,8 @@ export async function getBonusPlanApproval(p: BonusPeriod): Promise<BonusPlanApp
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.doc_id, d.doc_no, d.status, d.title, d.submitted_at, d.completed_at
+      `SELECT d.doc_id, d.doc_no, d.status, d.title, d.submitted_at, d.completed_at,
+              d.field_values->'rows' AS plan_rows
          FROM bonus_period_settings s
          JOIN approval_docs d ON d.doc_id = s.plan_doc_id
         WHERE s.period_year = $1 AND s.period_half = $2`,
@@ -113,6 +117,8 @@ export async function getBonusPlanApproval(p: BonusPeriod): Promise<BonusPlanApp
   );
   const row = rows[0];
   if (!row) return null;
+  const planRows = Array.isArray(row.plan_rows) ? (row.plan_rows as Array<{ name?: unknown; amount?: unknown }>) : [];
+  const mismatchCount = countPlanMismatch(planRows, await listStatementsOverview(p));
   return {
     docId: String(row.doc_id),
     docNo: row.doc_no != null ? String(row.doc_no) : null,
@@ -120,5 +126,6 @@ export async function getBonusPlanApproval(p: BonusPeriod): Promise<BonusPlanApp
     title: String(row.title ?? ""),
     submittedAt: row.submitted_at != null ? String(row.submitted_at) : null,
     completedAt: row.completed_at != null ? String(row.completed_at) : null,
+    mismatchCount,
   };
 }

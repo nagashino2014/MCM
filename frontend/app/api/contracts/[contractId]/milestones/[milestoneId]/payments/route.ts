@@ -1,9 +1,9 @@
 import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
-import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { applyMilestoneCollection, type CollectionPlan } from "@/lib/contracts/milestone-collection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,16 +12,7 @@ interface RouteContext {
   params: Promise<{ contractId: string; milestoneId: string }>;
 }
 
-interface PartialPaymentEntry {
-  id: string;
-  collectedAt: string;
-  amount: number;
-  ratio: number;
-  memo: string | null;
-  recordedBy: string | null;
-  recordedAt: string;
-}
-
+// 부분입금 1건 추가 — 누적·완료 판정은 lib/contracts/milestone-collection.ts(자동대조와 같은 규칙).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
     const { contractId, milestoneId } = await ctx.params;
@@ -37,92 +28,42 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "수금금액 또는 수금비율 중 하나는 필요합니다." }, { status: 400 });
     }
 
-    let entry: PartialPaymentEntry | null = null;
-    let updatedTotalRatio = 0;
-    let updatedTotalAmount = 0;
-    let baseAmount = 0;
-
+    let result: (CollectionPlan & { baseAmount: number }) | null = null;
     await withContractTransactionWrite(contractId, milestoneId, async (db) => {
-      const rows = rowsToObjects(
-        await db.exec(
-          "SELECT amount, partial_payments_json, collection_ratio, collected_amount FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
-          [milestoneId, contractId]
-        )
-      );
-      if (rows.length === 0) throw new Error("단계를 찾을 수 없습니다.");
-      baseAmount = Number(rows[0].amount ?? 0);
-      const existingRaw = rows[0].partial_payments_json;
-      const existing: PartialPaymentEntry[] = Array.isArray(existingRaw)
-        ? (existingRaw as PartialPaymentEntry[])
-        : typeof existingRaw === "string" && existingRaw.length > 0
-          ? (JSON.parse(existingRaw) as PartialPaymentEntry[])
-          : [];
-
-      const ratio = ratioInput != null
-        ? ratioInput
-        : baseAmount > 0 && amount != null
-          ? amount / baseAmount
-          : 0;
-      const computedAmount = amount != null
-        ? amount
-        : baseAmount > 0 && ratioInput != null
-          ? Math.round(baseAmount * ratioInput)
-          : 0;
-
-      entry = {
-        id: "pp_" + crypto.randomUUID().replace(/-/g, "").slice(0, 12),
-        collectedAt,
+      // 비율만 들어오면 발행금액(없으면 단계 금액) 기준으로 금액을 환산한다.
+      let computedAmount = amount;
+      if (computedAmount == null) {
+        const rows = rowsToObjects(
+          await db.exec(
+            "SELECT amount, invoice_amount FROM contract_payment_milestones WHERE milestone_id = $1 AND contract_id = $2",
+            [milestoneId, contractId]
+          )
+        );
+        const baseAmount = Number(rows[0]?.invoice_amount ?? rows[0]?.amount ?? 0);
+        computedAmount = baseAmount > 0 && ratioInput != null ? Math.round(baseAmount * ratioInput) : 0;
+      }
+      result = await applyMilestoneCollection(db, contractId, milestoneId, {
+        mode: "add",
         amount: computedAmount,
-        ratio,
+        collectedAt,
         memo,
-        recordedBy: actor.userId,
-        recordedAt: new Date().toISOString(),
-      };
-
-      const next = [...existing, entry];
-      updatedTotalAmount = next.reduce((acc, item) => acc + Number(item.amount ?? 0), 0);
-      updatedTotalRatio = baseAmount > 0
-        ? Math.round((updatedTotalAmount / baseAmount) * 1000) / 1000
-        : next.reduce((acc, item) => acc + Number(item.ratio ?? 0), 0);
-
-      const isCollected = baseAmount > 0
-        ? updatedTotalAmount >= baseAmount - 1
-        : updatedTotalRatio >= 1;
-      const now = new Date().toISOString();
-      await db.run(
-        `UPDATE contract_payment_milestones
-         SET partial_payments_json = $1::jsonb,
-             collected_amount = $2,
-             collection_ratio = $3,
-             payment_collected = $4,
-             payment_collected_at = COALESCE(payment_collected_at, $5),
-             updated_at = $6
-         WHERE milestone_id = $7 AND contract_id = $8`,
-        [
-          JSON.stringify(next),
-          updatedTotalAmount,
-          updatedTotalRatio,
-          isCollected ? 1 : 0,
-          collectedAt,
-          now,
-          milestoneId,
-          contractId,
-        ]
-      );
+        actorUserId: actor.userId,
+      });
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "contract_payment_update",
         targetTable: "contract_payment_milestones",
         targetId: milestoneId,
-        after: { partialPayment: entry, totalAmount: updatedTotalAmount, totalRatio: updatedTotalRatio },
+        after: { partialPayment: result.added, totalAmount: result.totalAmount, totalRatio: result.totalRatio },
       });
     });
 
+    const r = result as (CollectionPlan & { baseAmount: number }) | null;
     return NextResponse.json({
-      entry,
-      totalAmount: updatedTotalAmount,
-      totalRatio: updatedTotalRatio,
-      baseAmount,
+      entry: r?.added ?? null,
+      totalAmount: r?.totalAmount ?? 0,
+      totalRatio: r?.totalRatio ?? 0,
+      baseAmount: r?.baseAmount ?? 0,
     });
   } catch (err) {
     return authErrorToResponse(err);

@@ -397,3 +397,12 @@ export function isMenuVisible(item: MenuItem, perms: readonly string[]): boolean
   if (item.submenu && item.submenu.length > 0) return visibleSubmenu(item, perms).length > 0;
   return hasAnyPerm(perms, menuRequiredKeys(item));
 }
+
+/**
+ * 상위 메뉴의 대표 이동 경로 — 레일 클릭·전역 검색이 쓴다. 상위 href 를 열 권한이 없으면
+ * 보이는 첫 서브메뉴로 보낸다(예: 파일함(files.manage) 없는 직원의 "파일 · 문서함" → 문서함).
+ */
+export function menuEntryHref(item: MenuItem, perms: readonly string[]): string {
+  if (!item.submenu?.length || hasAnyPerm(perms, menuRequiredKeys(item))) return item.href;
+  return visibleSubmenu(item, perms)[0]?.href ?? item.href;
+}

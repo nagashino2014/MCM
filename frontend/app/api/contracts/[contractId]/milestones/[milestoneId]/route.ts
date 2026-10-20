@@ -6,6 +6,7 @@ import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { buildInvoiceFileName, deleteContractDocument } from "@/lib/storage/contract-document-storage";
 import { checkDateFields } from "@/lib/contracts/date-field";
+import { applyMilestoneCollection, type CollectionInput } from "@/lib/contracts/milestone-collection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,13 +81,23 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       );
     }
 
-    if (setClauses.length === 0) {
+    // 수금 입력(미수금 수금 등록·발행/수금 모달) — 부분입금을 누적하고 완료 여부는 금액으로 판정한다.
+    // collectedAmount/paymentCollected 를 직접 덮어쓰는 위 경로는 단계 수정 화면 전용으로 남긴다.
+    const collection = parseCollectionEntry(body.collectionEntry, actor.userId);
+    if (collection instanceof Error) return NextResponse.json({ error: collection.message }, { status: 400 });
+    if (collection?.collectedAt) {
+      const collectionDateError = checkDateFields({ 수금일: collection.collectedAt });
+      if (collectionDateError) return NextResponse.json({ error: collectionDateError }, { status: 400 });
+    }
+
+    if (setClauses.length === 0 && !collection) {
       return NextResponse.json({ error: "수정할 항목이 없습니다." }, { status: 400 });
     }
     pushSet("updated_at", new Date().toISOString());
     values.push(milestoneId, contractId);
     const sql = `UPDATE contract_payment_milestones SET ${setClauses.join(", ")} WHERE milestone_id = $${values.length - 1} AND contract_id = $${values.length}`;
 
+    let collectionResult: Awaited<ReturnType<typeof applyMilestoneCollection>> | null = null;
     await withContractTransactionWrite(contractId, milestoneId, async (db) => {
       const exists = rowsToObjects(
         await db.exec(
@@ -96,6 +107,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       );
       if (exists.length === 0) throw new Error("단계를 찾을 수 없습니다.");
       await db.run(sql, values);
+      // 발행금액을 같은 요청에서 바꿨을 수 있으므로 UPDATE 뒤에 수금을 반영한다.
+      if (collection) collectionResult = await applyMilestoneCollection(db, contractId, milestoneId, collection);
       // 금액을 바꿨으면 계약금액 = 단계 합으로 맞춘다(대시보드 수주 집계가 current_amount 를 본다).
       if (body.amount !== undefined) await syncContractAmountToMilestones(db, contractId);
 
@@ -181,11 +194,20 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         action: "contract_payment_update",
         targetTable: "contract_payment_milestones",
         targetId: milestoneId,
-        after: body,
+        after: collectionResult
+          ? { ...body, collection: { added: collectionResult.added, totalAmount: collectionResult.totalAmount, isCollected: collectionResult.isCollected } }
+          : body,
       });
     });
 
-    return NextResponse.json({ ok: true });
+    // 콜백 안에서 대입한 값이라 TS 흐름 분석이 null 로 좁히지 않도록 다시 타입을 붙인다.
+    const applied = collectionResult as Awaited<ReturnType<typeof applyMilestoneCollection>> | null;
+    return NextResponse.json({
+      ok: true,
+      ...(applied
+        ? { collection: { totalAmount: applied.totalAmount, baseAmount: applied.baseAmount, isCollected: applied.isCollected } }
+        : {}),
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }
@@ -261,4 +283,23 @@ function toNullableNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function parseCollectionEntry(raw: unknown, actorUserId: string): CollectionInput | Error | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const mode = o.mode === "total" ? "total" : o.mode === "add" ? "add" : null;
+  if (!mode) return new Error("수금 입력 방식(add/total)이 올바르지 않습니다.");
+  const amount = toNullableNumber(o.amount);
+  if (amount == null || amount < 0 || (mode === "add" && amount === 0)) return new Error("수금금액을 입력해 주세요.");
+  const collectedAt = String(o.collectedAt ?? "").trim() || null;
+  if (mode === "add" && !collectedAt) return new Error("수금일을 입력해 주세요.");
+  return {
+    mode,
+    amount,
+    collectedAt,
+    memo: o.memo != null ? String(o.memo).trim() || null : null,
+    markCollected: o.markCollected === true,
+    actorUserId,
+  };
 }

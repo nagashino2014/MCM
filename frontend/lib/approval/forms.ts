@@ -165,7 +165,7 @@ export async function saveForm(params: {
         params.deptFolder,
         params.useYn ? 1 : 0,
         nextVersion,
-        params.refFormId ?? null,
+        params.refFormId === undefined ? prior?.refFormId ?? null : params.refFormId, // 미지정이면 기존 선행 양식 유지(설정 가져오기 등)
         params.actorUserId,
         now,
       ]

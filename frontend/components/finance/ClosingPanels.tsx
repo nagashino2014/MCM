@@ -108,13 +108,21 @@ export function BalanceSheetPanel() {
   const [busy, setBusy] = useState(false);
   const [editCode, setEditCode] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [openingError, setOpeningError] = useState<string | null>(null);
 
   const bs = data?.status === "closed" ? data.snapshotBalanceSheet ?? data.balanceSheet : data?.balanceSheet ?? null;
 
-  const saveOpening = async (accountCode: string, amountText: string) => {
+  // 화면 값은 구역 부호(자산 +, 부채·자본 대변 +)로 보이고, 저장은 차변+ 이다 — 부호를 되돌려 보낸다.
+  const saveOpening = async (line: BalanceLine, sign: 1 | -1, amountText: string) => {
+    const accountCode = line.accountCode;
+    const amount = sign * Number(amountText.replace(/[^0-9-]/g, "") || 0);
+    if (amount === line.opening) {
+      setEditCode(null);
+      return;
+    }
     setBusy(true);
+    setOpeningError(null);
     try {
-      const amount = Number(amountText.replace(/[^0-9-]/g, "") || 0);
       const res = await fetch("/api/finance/closing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,8 +132,8 @@ export function BalanceSheetPanel() {
       if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
       setEditCode(null);
       load();
-    } catch {
-      // 오류는 상태 패널에서 확인
+    } catch (err) {
+      setOpeningError(`기초 잔액을 저장하지 못했습니다 — ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -147,11 +155,11 @@ export function BalanceSheetPanel() {
                     autoFocus
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value.replace(/[^0-9-]/g, ""))}
-                    onBlur={() => void saveOpening(l.accountCode, editValue)}
-                    onKeyDown={(e) => e.key === "Enter" && void saveOpening(l.accountCode, editValue)}
+                    onBlur={() => void saveOpening(l, sign, editValue)}
+                    onKeyDown={(e) => e.key === "Enter" && void saveOpening(l, sign, editValue)}
                   />
                 ) : (
-                  <button type="button" className="underline-offset-2 hover:underline" disabled={busy} title="기초 잔액 수정(차변+/대변-)" onClick={() => { setEditCode(l.accountCode); setEditValue(String(sign * l.opening || "")); }}>
+                  <button type="button" className="underline-offset-2 hover:underline" disabled={busy} title={sign === 1 ? "기초 잔액 수정(차변 잔액을 양수로)" : "기초 잔액 수정(대변 잔액을 양수로)"} onClick={() => { setEditCode(l.accountCode); setEditValue(String(sign * l.opening || "")); }}>
                     기초 {won(sign * l.opening)}
                   </button>
                 )}
@@ -188,6 +196,7 @@ export function BalanceSheetPanel() {
         </div>
       )}
       {error && <div role="alert" className="cd-error-text text-sm mb-2">{error}</div>}
+      {openingError && <div role="alert" className="cd-error-text text-sm mb-2">{openingError}</div>}
       {data && <CompletenessNotice data={data} />}
       {data?.status === "closed" && <p className="text-sm mb-2">{data.snapshotBalanceSheet ? "재무상태표는 마감 당시 저장본입니다." : "마감 당시 재무상태표 저장본을 확인할 수 없어 현재 장부를 표시합니다."}</p>}
       {bs && (

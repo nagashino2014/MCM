@@ -673,6 +673,8 @@ function buildCandidate(
     const partials = scoped.filter((r) => withVat(r.remaining) > txn.amount).sort((a, b) => a.remaining - b.remaining);
     if (partials.length) {
       const top = partials[0];
+      // 단계 잔액은 공급가액 기준 — VAT 포함 입금을 공급가액으로 환산해 배분한다(그대로 넣으면 수금액이 10% 부풀려진다).
+      const allocated = Math.min(top.remaining, Math.round(txn.amount / 1.1));
       return {
         matchType: "partial",
         confidence: score({
@@ -685,8 +687,8 @@ function buildCandidate(
         facilityId: facility.facilityId,
         matchedAmount: txn.amount,
         residualAmount: 0,
-        lines: [{ milestoneId: top.milestoneId, allocatedAmount: txn.amount }],
-        reason: { rule: "부분입금(잔액 미달)", remaining: top.remaining - txn.amount, facilityStrength: facilityScore },
+        lines: [{ milestoneId: top.milestoneId, allocatedAmount: allocated }],
+        reason: { rule: "부분입금(잔액 미달) — 입금액을 VAT 포함액으로 보고 공급가액으로 환산해 배분", remaining: top.remaining - allocated, facilityStrength: facilityScore },
       };
     }
     // ④ 과대입금 — 미수 합보다 큰 입금
@@ -697,9 +699,10 @@ function buildCandidate(
         confidence: score({ facility: facilityScore, amount: 50, timing: 70, terms: 60, ambiguous: false }),
         facilityId: facility.facilityId,
         matchedAmount: totalDue,
-        residualAmount: txn.amount - totalDue,
+        // 배분은 공급가액, 입금은 VAT 포함 — 남는 금액도 VAT 포함 미수 합계와 비교해 낸다.
+        residualAmount: txn.amount - withVat(totalDue),
         lines: scoped.map((r) => ({ milestoneId: r.milestoneId, allocatedAmount: r.remaining })),
-        reason: { rule: "미수 합계 초과 입금", residual: txn.amount - totalDue, facilityStrength: facilityScore },
+        reason: { rule: "미수 합계 초과 입금", residual: txn.amount - withVat(totalDue), facilityStrength: facilityScore },
       };
     }
   }
@@ -1158,12 +1161,10 @@ export async function unconfirmMatch(matchId: string): Promise<void> {
       const entries = previous.filter((e) => e.reconMatchId !== matchId);
       await applyToMilestone(db, milestoneId, entries);
     }
-    await db.run(`UPDATE recon_matches SET status = 'rejected', confirmed_at = NULL WHERE match_id = $1`, [matchId]);
-    await db.run(
-      `UPDATE bank_transactions SET recon_status = 'unprocessed'
-        WHERE txn_id = (SELECT txn_id FROM recon_matches WHERE match_id = $1)`,
-      [matchId],
-    );
+    // 되돌린 대조는 지운다 — 'rejected'로 남기면 '제외됨'에 사유 없이 남고, 다음 대조 실행이 같은 입금을
+    // 새로 제안해 한 입금이 두 곳에 보인다(되돌리기 기록은 감사 로그에 남는다). 줄은 ON DELETE CASCADE.
+    await db.run(`UPDATE bank_transactions SET recon_status = 'unprocessed' WHERE txn_id = $1`, [String(match.txn_id)]);
+    await db.run(`DELETE FROM recon_matches WHERE match_id = $1`, [matchId]);
   });
 }
 
@@ -1210,9 +1211,12 @@ export async function unrejectMatch(matchId: string): Promise<void> {
     if(!match)return;
     await assertNoActiveBankTransactionLinks(db,[String(match.txn_id)]);
     if(match.status!=='rejected')throw Object.assign(new Error("제외 상태의 대조만 복원할 수 있습니다."),{status:409});
+    // 같은 입금이 이미 다른 대조로 확정돼 있으면 입금 상태는 그대로 둔다(제외 기록만 지운다).
     await db.run(
-      `UPDATE bank_transactions SET recon_status = 'unprocessed' WHERE txn_id = (SELECT txn_id FROM recon_matches WHERE match_id = $1)`,
-      [matchId],
+      `UPDATE bank_transactions SET recon_status = 'unprocessed'
+        WHERE txn_id = $1
+          AND NOT EXISTS (SELECT 1 FROM recon_matches m WHERE m.txn_id = $1 AND m.status = 'confirmed')`,
+      [String(match.txn_id)],
     );
     await db.run(`DELETE FROM recon_matches WHERE match_id = $1`, [matchId]);
   });

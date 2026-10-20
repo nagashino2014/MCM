@@ -51,6 +51,7 @@ const SOURCE_LABEL: Record<string, string> = {
   invoice_manual: "계산서(수기)",
   hometax_invoice: "계산서(수집·연결)",
   expense_doc: "지출결의",
+  income_doc: "소득대장",
   depreciation: "감가상각",
   payroll: "급여",
   manual: "수동",
@@ -356,7 +357,9 @@ export function JournalPanel() {
       credit: l.credit,
       memo: l.memo,
     }));
-    void act({ action: "confirm", entryId: entry.entryId, lines }, "확정했습니다 — 같은 거래상대는 다음부터 자동 분개됩니다.");
+    // 거래상대 학습은 계좌 입출금 전표만 한다(journal.ts) — 그 외 원천에는 학습 안내를 붙이지 않는다.
+    const learns = entry.sourceKind === "bank_in" || entry.sourceKind === "bank_out";
+    void act({ action: "confirm", entryId: entry.entryId, lines }, learns ? "확정했습니다 — 같은 거래상대의 계좌 입출금은 다음부터 자동 분개됩니다." : "확정했습니다.");
   };
 
   /** 확정 버튼 — 적요의 입금/출금처가 완전히 같은 미확정 건이 더 있으면 일괄 확정 여부를 먼저 묻는다. */
@@ -384,7 +387,9 @@ export function JournalPanel() {
     setBulk(null);
     void act(
       { action: "confirm_bulk", entryIds: ids, accountCode },
-      `${ids.length}건을 확정했습니다 — 같은 거래상대는 다음부터 자동 분개됩니다.`,
+      bulk.base.sourceKind === "bank_in" || bulk.base.sourceKind === "bank_out"
+        ? `${ids.length}건을 확정했습니다 — 같은 거래상대의 계좌 입출금은 다음부터 자동 분개됩니다.`
+        : `${ids.length}건을 확정했습니다.`,
     );
   };
 

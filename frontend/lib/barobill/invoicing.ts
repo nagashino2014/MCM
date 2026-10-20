@@ -76,6 +76,7 @@ export interface TaxInvoiceRow {
   amountTotal: number;
   taxTotal: number;
   totalAmount: number;
+  taxType: number; // 1 과세 / 2 영세 / 3 면세 — 수정발행 세액 계산에 쓴다
   invoiceeCorpName: string | null;
   invoiceeEmail: string | null;
   barobillState: number | null;
@@ -94,6 +95,7 @@ function mapInvoice(r: Record<string, unknown>): TaxInvoiceRow {
     amountTotal: Number(r.amount_total || 0),
     taxTotal: Number(r.tax_total || 0),
     totalAmount: Number(r.total_amount || 0),
+    taxType: r.tax_type == null ? 1 : Number(r.tax_type),
     invoiceeCorpName: r.invoicee_corp_name ? String(r.invoicee_corp_name) : null,
     invoiceeEmail: r.invoicee_email ? String(r.invoicee_email) : null,
     barobillState: r.barobill_state == null ? null : Number(r.barobill_state),
@@ -108,7 +110,7 @@ export async function listContractInvoices(contractId: string): Promise<TaxInvoi
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT invoice_id, mgt_key, milestone_id, write_date, amount_total, tax_total, total_amount,
+      `SELECT invoice_id, mgt_key, milestone_id, write_date, amount_total, tax_total, total_amount, tax_type,
               invoicee_corp_name, invoicee_email, barobill_state, nts_send_state, nts_send_key, issued_at, canceled_at
          FROM tax_invoices WHERE contract_id = $1 ORDER BY created_at DESC`,
       [contractId],
@@ -128,7 +130,7 @@ export async function listRecentInvoices(limit = 100): Promise<TaxInvoiceListRow
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT t.invoice_id, t.mgt_key, t.milestone_id, t.write_date, t.amount_total, t.tax_total, t.total_amount,
+      `SELECT t.invoice_id, t.mgt_key, t.milestone_id, t.write_date, t.amount_total, t.tax_total, t.total_amount, t.tax_type,
               t.invoicee_corp_name, t.invoicee_email, t.barobill_state, t.nts_send_state, t.nts_send_key,
               t.issued_at, t.canceled_at, t.contract_id,
               c.contract_title, m.stage_label
@@ -683,6 +685,14 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
   if (Math.round(params.amountTotal + params.taxTotal) !== Math.round(params.totalAmount)) {
     throw Object.assign(new Error("공급가액 + 세액이 합계금액과 맞지 않습니다."), { status: 400 });
   }
+  // 환입·계약해제·이중발급은 음수 발행이 원칙 — 부호가 틀린 수정분은 그대로 국세청에 전송되므로 여기서 막는다.
+  if (["3", "4", "6"].includes(params.modifyCode) && params.amountTotal >= 0) {
+    throw Object.assign(new Error("환입·계약의 해제·착오에 의한 이중발급은 음수 금액으로 발행해야 합니다."), { status: 400 });
+  }
+  // 영세율·면세 원본의 수정분은 세액이 없다(원본 과세유형을 그대로 싣는다).
+  if (origin.tax_type != null && Number(origin.tax_type) !== 1 && Math.round(params.taxTotal) !== 0) {
+    throw Object.assign(new Error("영세율·면세 계산서의 수정분은 세액이 0원이어야 합니다."), { status: 400 });
+  }
 
   const profile = await getCompanyProfile();
   const cfg = getBarobillConfig();
@@ -810,7 +820,7 @@ export async function cancelTaxInvoice(invoiceId: string): Promise<void> {
   if (!rows.length) throw Object.assign(new Error("계산서를 찾을 수 없습니다."), { status: 404 });
   if (Number(rows[0].barobill_state ?? 0) >= 3000) {
     throw Object.assign(
-      new Error("이미 발급된 계산서는 삭제할 수 없습니다. 정정이 필요하면 수정세금계산서를 발행해야 합니다(바로빌 홈페이지 또는 후속 기능)."),
+      new Error("이미 발급된 계산서는 삭제할 수 없습니다. 정정이 필요하면 재무 > 세금계산서 탭의 [수정발행]으로 수정세금계산서를 발행하세요."),
       { status: 400 },
     );
   }

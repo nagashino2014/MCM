@@ -638,7 +638,7 @@ export async function buildVatReturn(
   // 경고 (T3 — 확정 전 반드시 해소해야 할 항목)
   if (!ledger.lastSyncedAt) form.warnings.push("홈택스 수집 이력이 없습니다. 수집 서비스 신청·수집 실행 후 작성하세요.");
   if (sales.length === 0 && purchases.length === 0) form.warnings.push("기간 내 수집된 전자(세금)계산서가 없습니다.");
-  if (form.cardUnclassified > 0) form.warnings.push(`미분류 법인카드 매입 ${form.cardUnclassified}건 — 부가세 집계 탭에서 분류를 확정하세요.`);
+  if (form.cardUnclassified > 0) form.warnings.push(`미분류 법인카드 매입 ${form.cardUnclassified}건 — 법인카드 원장에서 계정과목을 지정하세요.`);
   if (form.purchases.cardUndecided.count) form.warnings.push(`공제 여부 미판정 카드 ${form.purchases.cardUndecided.count}건 — 공제에서 보류됩니다.`);
   if (form.purchases.invoiceUndecided.count) form.warnings.push(`공제 여부 미판정 매입 계산서 ${form.purchases.invoiceUndecided.count}건 — 공제에서 보류됩니다.`);
   // Supplier overlap is a review requirement, never a same-supply finding or an amount adjustment.

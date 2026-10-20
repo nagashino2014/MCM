@@ -28,6 +28,7 @@ export interface ConfigPackage {
     orgFolder: string | null;
     deptFolder: string | null;
     useYn: boolean;
+    refFormId?: string | null; // 선행 양식 — 없던 옛 패키지는 기존 값을 유지한다
   }[];
   concepts: SemanticConceptItem[];
   metrics: Omit<MetricItem, "version" | "updatedAt" | "createdBy">[];
@@ -55,6 +56,7 @@ export async function exportConfigPackage(): Promise<ConfigPackage> {
       orgFolder: f.orgFolder,
       deptFolder: f.deptFolder,
       useYn: f.useYn,
+      refFormId: f.refFormId,
     })),
     concepts,
     metrics: metrics.map((m) => ({
@@ -102,6 +104,7 @@ export async function importConfigPackage(pkg: ConfigPackage, actorUserId: strin
         orgFolder: f.orgFolder,
         deptFolder: f.deptFolder,
         useYn: f.useYn,
+        refFormId: f.refFormId,
         actorUserId,
       });
       summary.forms++;

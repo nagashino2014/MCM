@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Download, FileCheck2, History, RefreshCw, Upload } from "lucide-react";
 import { CdDateInput, CdInput, CdSelect, CdTextarea, isValidDateString } from "@/components/cdash/CdField";
 import type { FactRevision, SourceCoverage, SubjectRevision, VatFilingScopeResult } from "@/lib/finance/vat-filing-scope";
+import { CardTaxReviewPanel } from "./VatReturnPanels";
 
 const ENDPOINT = "/api/finance/vat-filing-basis";
 const DOCUMENT_ENDPOINT = "/api/finance/vat-filing-documents";
@@ -329,7 +330,7 @@ export function VatFilingBasisPanel({ onOpenBasis }: { onOpenBasis: (snapshotId:
         {factForm.kind === "no_notice" && <div className="grid sm:grid-cols-2 gap-3"><CdSelect aria-label="미징수 사유" label="미징수 사유" value={factForm.noNoticeReason} onChange={e => updateFact("noNoticeReason", e.target.value as FactForm["noNoticeReason"])}><option value="below_minimum">기준금액 미만</option><option value="official_other">기타 공식 사유 · 별도 검토</option></CdSelect><AmountField label="직전 조정 납부세액" value={factForm.previousAdjustedTax} onChange={v => updateFact("previousAdjustedTax", v)} nullable /><CdTextarea aria-label="미징수 확인 내용" label="미징수 확인 내용" value={factForm.reasonDetail} onChange={e => updateFact("reasonDetail", e.target.value)} className="sm:col-span-2" /></div>}
         {factForm.kind === "filing" && <div className="space-y-4 rounded-xl border cd-border-c p-4">
           <div className="grid sm:grid-cols-2 gap-3"><CdSelect aria-label="과거 접수 신고유형" label="과거 접수 신고유형" value={factForm.filingType} onChange={e => updateFact("filingType", e.target.value as FactForm["filingType"])}><option value="preliminary">예정신고</option><option value="final">과거 확정신고 · 범위 확인</option><option value="late">기한후 신고</option><option value="amended">수정신고</option><option value="early_refund">조기환급 · 계산 미지원</option><option value="correction_claim">경정청구 · 계산 미지원</option></CdSelect>{["late", "amended", "correction_claim"].includes(factForm.filingType) && <CdSelect aria-label="본래 신고유형" label="본래 신고유형" value={factForm.returnType} onChange={e => updateFact("returnType", e.target.value as FactForm["returnType"])}><option value="preliminary">예정신고</option><option value="final">확정신고</option><option value="early_refund">조기환급</option></CdSelect>}<CdSelect aria-label="기신고 원천 대사 상태" label="기신고 원천 대사 상태" value={factForm.sourceReconciliation} onChange={e => updateFact("sourceReconciliation", e.target.value as FactForm["sourceReconciliation"])}><option value="unknown">명세 미확인</option><option value="partial">일부 대사</option><option value="complete">원문 전체 명세 대사 완료</option></CdSelect></div>
-          {factPeriods && <p className="text-xs cd-text-muted">보관된 신고 명세 범위: {factPeriods.map(p => `${p.from} ~ ${p.to}`).join(", ") || "범위 없음"}. 기존 범위를 그대로 대조합니다.</p>}<p className="text-xs cd-text-muted">현재 내부 확정판의 실제 접수 결과를 이 과거 사실로 추가하지 마세요. 신고 후 접수·납부 관리는 아직 제공되지 않습니다. 원천 지문은 현재 목록 또는 파일 명세에서만 가져오며 서버가 다시 검증합니다.</p>
+          {factPeriods && <p className="text-xs cd-text-muted">보관된 신고 명세 범위: {factPeriods.map(p => `${p.from} ~ ${p.to}`).join(", ") || "범위 없음"}. 기존 범위를 그대로 대조합니다.</p>}<p className="text-xs cd-text-muted">현재 내부 확정판의 실제 접수 결과를 이 과거 사실로 추가하지 마세요. 이번 신고의 접수·납부 결과는 접수·납부 탭에 기록합니다. 원천 지문은 현재 목록 또는 파일 명세에서만 가져오며 서버가 다시 검증합니다.</p>
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{([['salesSupply','접수 명세 매출 공급가액'],['salesTax','접수 명세 매출세액'],['purchaseSupply','접수 명세 매입 공급가액'],['purchaseTax','접수 명세 매입세액'],['claimedTax','접수 명세 실제 공제세액']] as const).map(([key,label]) => <AmountField key={key} label={label} value={factForm[key]} onChange={v => updateFact(key, v)} />)}</div>
           <label className="flex gap-2 items-start text-sm"><input type="checkbox" checked={factForm.isNilReturn} onChange={e => updateFact("isNilReturn", e.target.checked)} />실제 무실적 신고 근거가 있습니다 · 원천 수집0건과 다름</label>{factForm.isNilReturn && docSelect("무실적 신고 증빙", factForm.nilEvidenceDocumentId, v => updateFact("nilEvidenceDocumentId", v))}
           <div className="flex flex-wrap items-end gap-3"><button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => void loadSources()}>현재 원천 후보 조회</button><label className="flex flex-col gap-1 text-sm">기신고 원천 명세 JSON<input aria-label="기신고 원천 명세 JSON" type="file" accept=".json,application/json" onChange={e => void importCoverage(e.target.files?.[0])} /></label></div>
@@ -346,6 +347,9 @@ export function VatFilingBasisPanel({ onOpenBasis }: { onOpenBasis: (snapshotId:
         </div>}
       </fieldset>}
     </Section>
+
+    {/* 카드 공제 판정은 봉인 전에만 저장할 수 있다(봉인 기간은 서버가 409로 막음) — 봉인 직전 단계에서 판정한다. */}
+    {selectedScope && <CardTaxReviewPanel key={`${selectedScope.dateFrom}:${selectedScope.dateTo}`} from={selectedScope.dateFrom} to={selectedScope.dateTo} onSaved={() => {}} canManage={canManage} savedNotice="검토를 저장했습니다. 판정을 모두 마친 뒤 근거를 봉인하세요." />}
 
     <Section title="현재 근거 점검과 봉인" hint="저장된 근거 기준의 기간·고지 차감·소비 계획입니다. 저장하지 않은 입력·미리보기는 봉인에 포함되지 않습니다. 실제 세액·원천 대사는 신고서 계산에서 확인합니다.">
       {overview?.scopeError && <p role="alert" className="text-sm cd-error-text">{overview.scopeError.error}</p>}

@@ -2,7 +2,8 @@ import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
 import { entryTaxBasis, markEntryTaxReview, withPayrollWrite, type PayrollTaxReview } from "@/lib/payroll/integrity";
 import { mealClawbackAmounts } from "@/lib/approval/overtime-meal";
 import { getEdiAmounts } from "@/lib/payroll/edi";
-import { overtimeAmounts } from "@/lib/payroll/overtime";
+import { overtimeAmounts, overtimeWeeksInPeriod } from "@/lib/payroll/overtime";
+import { syncOvertimeCompForEmployeeWeeks } from "@/lib/approval/overtime";
 import { activeRulesFor } from "@/lib/payroll/rules";
 import { grantLongevityLeaveForLedger, longevityDueFor } from "@/lib/payroll/longevity";
 import { tripLodgingAmounts } from "@/lib/payroll/trip-allowance";
@@ -208,6 +209,11 @@ export async function buildLedger(payYear: number, payMonth: number, database?: 
     } else if (ot && ot.basis === "attendance") {
       warnings.push("초과근무: 근태 기록은 있으나 승인된 신청서가 없어 미산정");
     }
+    if (ot && ot.excessDayMin + ot.excessNightMin > 0) {
+      warnings.push(
+        `초과근무: 주 연장 한도 초과 ${Math.round((ot.excessDayMin + ot.excessNightMin) / 60 * 10) / 10}h는 수당 제외 — 대체휴가로 부여`
+      );
+    }
 
     // 3-0) 숙박출장수당 자동 — 승인된 출장보고서 × 선행 출장신청서(숙박 출장) 일수 × 직급 단가(마이그 224)
     const lodging = tripLodging.get(empId);
@@ -332,6 +338,9 @@ export async function createDraftLedger(
     );
   }
   const built = await buildLedger(payYear, payMonth, db);
+  // 수당에서 뺀 주 한도 초과분을 대체휴가로 맞춘다(F-21) — 근태 업로드 뒤 승인·예외 처리된 신청도 반영.
+  const otWeeks = await overtimeWeeksInPeriod(payYear, payMonth, db);
+  await syncOvertimeCompForEmployeeWeeks(db, otWeeks.weeks, otWeeks.limitMinutes);
   const ledgerId = newId("pled");
   const now = new Date().toISOString();
   const txn = db;

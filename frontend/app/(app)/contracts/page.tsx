@@ -1915,12 +1915,14 @@ function InvoiceUploadModal({
               invoiceIssued: Boolean(state.issueDate || state.invoiceAmount),
               invoiceIssuedAt: state.issueDate || null,
               invoiceAmount: state.invoiceAmount || null,
-              paymentCollected: true,
-              paymentCollectedAt: state.paymentCollectedAt || null,
-              collectionRatio: state.collectionRatio || null,
-              collectedAmount: state.collectedAmount || null,
+              // 수금금액 = 단계 누적 합계. 발행금액에 못 미치면 부분입금으로 남는다(완료 여부는 서버가 금액으로 판정).
+              collectionEntry: {
+                mode: "total",
+                amount: Number(state.collectedAmount || state.invoiceAmount || 0),
+                collectedAt: state.paymentCollectedAt || null,
+                memo: state.partialPaymentMemo || null,
+              },
               paymentTerms: state.paymentTerms || null,
-              partialPaymentMemo: state.partialPaymentMemo || "",
               ...(state.settlementEligible ? { settlementAmount: state.settlementAmount || null } : {}),
             }),
           }
@@ -2142,7 +2144,7 @@ function InvoiceUploadModal({
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">수금금액</span>
+              <span className="font-bold cd-text-muted">누적 수금금액</span>
               <input
                 type="text"
                 inputMode="numeric"

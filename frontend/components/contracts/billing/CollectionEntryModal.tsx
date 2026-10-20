@@ -37,13 +37,18 @@ export function CollectionEntryModal({
   const [collectedAmount, setCollectedAmount] = useState(
     String(initial?.collectedAmount ?? row.outstandingAmount)
   );
-  const [markCollected, setMarkCollected] = useState(true);
+  // 잔액이 남아도 완료로 닫는 경우(할인·대손 등)만 사용자가 명시적으로 체크한다. 전액이면 자동 완료.
+  const [forceCollected, setForceCollected] = useState(false);
   const [partialMemo, setPartialMemo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 미수금에서 열면 이번 입금액을 기존 수금에 더하고(add), 수금내역 수정(initial)은 단계 누적 합계를 고친다(total).
+  const mode: "add" | "total" = initial ? "total" : "add";
   const collectedNum = Number(stripDigits(collectedAmount) || "0");
-  const isPartial = collectedNum > 0 && collectedNum < row.invoiceAmount;
+  const remaining = mode === "add" ? row.outstandingAmount : row.invoiceAmount;
+  const isPartial = collectedNum > 0 && collectedNum < remaining;
+  const markCollected = !isPartial || forceCollected;
 
   const submit = async () => {
     if (!collectedAt) {
@@ -57,17 +62,15 @@ export function CollectionEntryModal({
     setSaving(true);
     setError(null);
     try {
-      const ratio =
-        row.invoiceAmount > 0
-          ? Math.min(1, Math.max(0, Math.round((collectedNum / row.invoiceAmount) * 10000) / 10000))
-          : 0;
       const body: Record<string, unknown> = {
-        paymentCollected: markCollected,
-        paymentCollectedAt: collectedAt,
-        collectedAmount: String(collectedNum),
-        collectionRatio: String(ratio),
+        collectionEntry: {
+          mode,
+          amount: collectedNum,
+          collectedAt,
+          memo: isPartial ? partialMemo.trim() || null : null,
+          markCollected: isPartial && forceCollected,
+        },
       };
-      if (partialMemo.trim()) body.partialPaymentMemo = partialMemo.trim();
       const res = await fetch(
         `/api/contracts/${encodeURIComponent(row.contractId)}/milestones/${encodeURIComponent(row.milestoneId)}`,
         {
@@ -170,9 +173,10 @@ export function CollectionEntryModal({
             <input
               type="checkbox"
               checked={markCollected}
-              onChange={(e) => setMarkCollected(e.target.checked)}
+              disabled={!isPartial}
+              onChange={(e) => setForceCollected(e.target.checked)}
             />
-            수금 완료 처리
+            {isPartial ? "잔액이 남아도 수금 완료 처리(할인·대손 등)" : "수금 완료 처리"}
           </label>
           {isPartial && (
             <label className="col-span-2 grid gap-1">

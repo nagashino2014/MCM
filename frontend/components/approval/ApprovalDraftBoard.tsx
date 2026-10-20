@@ -601,7 +601,7 @@ export function ApprovalDraftBoard() {
     } else if (usedMin + applyMin > otUsage.limitMinutes) {
       setOtHint(
         `⚠ 주 12시간 초과 — 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h = ${fmtH(usedMin + applyMin)}h (한도 ${fmtH(otUsage.limitMinutes)}h). ` +
-          `승인 후 실제 근태와 대조해 초과분이 인정되면 특별휴가(대체휴가)로 산정됩니다.`
+          `승인 후 실제 근태와 대조해 주 12시간을 넘는 인정분은 수당 대신 특별휴가(대체휴가)로 산정됩니다.`
       );
     } else {
       setOtHint(`이번 주 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`);

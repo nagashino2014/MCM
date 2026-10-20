@@ -677,7 +677,7 @@ function SpecialLeaveSection({
         </button>
       </div>
       <p className="text-[10px] cd-text-faint mt-2">
-        홈 &apos;내 연차·초과근무&apos; 카드에 본인 잔여가 표시됩니다. 초과근무 대체휴가는 승인된 12h 초과 신청이 실제 근태와 대조되면
+        홈 &apos;내 연차·초과근무&apos; 카드에 본인 잔여가 표시됩니다. 초과근무 대체휴가는 근태와 대조해 인정된 주 12h 초과분(수당 제외분)에 대해
         시간 단위로 자동 부여됩니다(자동 표시 — 근태 재산정 시 갱신·회수). 사용(소진)은 &apos;사용&apos;으로 직접 기록하세요.
       </p>
     </div>

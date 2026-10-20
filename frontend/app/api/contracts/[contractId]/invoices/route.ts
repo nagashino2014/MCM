@@ -10,6 +10,7 @@ import {
   sanitizeFilename,
 } from "@/lib/storage/contract-document-storage";
 import { getDb, rowsToObjects } from "@/lib/db";
+import { applyMilestoneCollection } from "@/lib/contracts/milestone-collection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,6 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const vatAmount = toNullableNumber(form.get("vatAmount"));
     const paymentCollected = String(form.get("paymentCollected") ?? "0") === "1";
     const paymentCollectedAt = String(form.get("paymentCollectedAt") ?? "").trim() || null;
-    const collectionRatio = toNullableNumber(form.get("collectionRatio"));
     const collectedAmount = toNullableNumber(form.get("collectedAmount"));
     const paymentTerms = String(form.get("paymentTerms") ?? "").trim() || null;
     const partialPaymentMemo = String(form.get("partialPaymentMemo") ?? "").trim() || null;
@@ -141,20 +141,6 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         const date = new Date(issueDate + "T00:00:00");
         const fiscalYear = date.getFullYear();
         const fiscalQuarter = Math.floor(date.getMonth() / 3) + 1;
-        const partialPaymentJson = applyCollection
-          ? JSON.stringify([
-              {
-                id: "invoice_" + invoiceId.slice(-12),
-                collectedAt: paymentCollectedAt,
-                amount: collectedAmount ?? targetInvoiceAmount ?? 0,
-                ratio: collectionRatio ?? null,
-                memo: partialPaymentMemo,
-                recordedBy: actor.userId,
-                recordedAt: now,
-              },
-            ])
-          : null;
-
         const db2 = db;
         // 같은 대금지급단위의 기존 계산서(인보이스+문서)는 삭제 후 새 파일로 교체
         if (targetMilestoneId) {
@@ -232,29 +218,18 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
              SET invoice_issued = 1,
                  invoice_issued_at = $1,
                  invoice_amount = COALESCE($2, invoice_amount, amount),
-                 payment_collected = $3,
-                 payment_collected_at = COALESCE($4, payment_collected_at),
-                 collection_ratio = CASE WHEN $3 = 1 THEN COALESCE($5, collection_ratio, 1.0) ELSE collection_ratio END,
-                 collected_amount = CASE WHEN $3 = 1 THEN COALESCE($6, $2, collected_amount, amount) ELSE collected_amount END,
-                payment_terms = COALESCE($7, payment_terms),
-                partial_payments_json = CASE
-                  WHEN $3 = 1 AND $8::jsonb IS NOT NULL
-                    THEN COALESCE(partial_payments_json, '[]'::jsonb) || $8::jsonb
-                  ELSE partial_payments_json
-                END,
-                settlement_amount = CASE WHEN $12::boolean THEN $13 ELSE settlement_amount END,
-                updated_at = $9
-             WHERE milestone_id = $10
-               AND contract_id = $11`,
+                 payment_collected = CASE WHEN $3::boolean THEN 0 ELSE payment_collected END,
+                 payment_terms = COALESCE($4, payment_terms),
+                 settlement_amount = CASE WHEN $8::boolean THEN $9 ELSE settlement_amount END,
+                 updated_at = $5
+             WHERE milestone_id = $6
+               AND contract_id = $7`,
             [
               issueDate,
               targetInvoiceAmount,
-              applyCollection ? 1 : 0,
-              applyCollection ? paymentCollectedAt : null,
-              applyCollection ? collectionRatio : null,
-              applyCollection ? collectedAmount : null,
+              // 대표 단계에서 '수금 정보 등록'을 끈 경우만 미수로 되돌린다(함께 등록하는 단계의 수금 상태는 건드리지 않는다).
+              target.isPrimary && !paymentCollected,
               paymentTerms,
-              partialPaymentJson,
               now,
               targetMilestoneId,
               contractId,
@@ -262,6 +237,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
               settlementAmount ?? null,
             ]
           );
+          // 수금 금액은 단계의 누적 합계 — 발행금액에 못 미치면 부분입금으로 남아 미수금 현황에 잔액이 보인다.
+          if (applyCollection) {
+            await applyMilestoneCollection(db2, contractId, targetMilestoneId, {
+              mode: "total",
+              amount: collectedAmount ?? targetInvoiceAmount ?? 0,
+              collectedAt: paymentCollectedAt,
+              memo: partialPaymentMemo,
+              actorUserId: actor.userId,
+            });
+          }
         }
         await recordAuditLogInline(db2, {
           actorUserId: actor.userId,

@@ -88,6 +88,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "양식별 문서 조회", href: "/approval/records" },
       { title: "데이터 분석", href: "/approval/analytics" },
       { title: "결재 인사이트", href: "/approval/insights" },
+      { title: "부재·대결 설정", href: "/approval/absence" },
     ],
     group: "collab",
     badgeKey: "approvalPending",

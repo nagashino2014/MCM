@@ -14,7 +14,7 @@ import { assignManualNoticeNo } from "@/lib/notice/store";
 import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
-import { kstToday } from "@/lib/approval/absence-routing";
+import { kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
 import { userPostDeptIds } from "@/lib/org/posts";
 
 /*
@@ -53,6 +53,16 @@ export interface ApprovalStep {
   actedAt: string | null;
   comment: string | null;
   delegatedFrom: string | null;
+  /** 대결 원결재자 이름·직급(조회 시 조인 — 재기안 결재선 복원·표기용) */
+  delegatedFromName: string | null;
+  delegatedFromPosition: string | null;
+  /** 처리 유형(301): normal | proxy(대결) | final(전결). null = 301 이전 처리분 */
+  actType: string | null;
+  /** 생략 사유(301): rejected | absence | final */
+  skipReason: string | null;
+  absenceId: string | null;
+  /** 대결 중인 단계를 원결재자도 처리할 수 있는지(부재 설정 allow_self_act, 휴가 연동은 허용) */
+  selfActAllowed: boolean;
 }
 
 export interface ApprovalDocSummary {
@@ -150,6 +160,12 @@ function mapStep(r: Record<string, unknown>): ApprovalStep {
     actedAt: r.acted_at != null ? String(r.acted_at) : null,
     comment: r.comment != null ? String(r.comment) : null,
     delegatedFrom: r.delegated_from != null ? String(r.delegated_from) : null,
+    delegatedFromName: r.delegated_from_name != null ? String(r.delegated_from_name) : null,
+    delegatedFromPosition: r.delegated_from_position != null ? String(r.delegated_from_position) : null,
+    actType: r.act_type != null ? String(r.act_type) : null,
+    skipReason: r.skip_reason != null ? String(r.skip_reason) : null,
+    absenceId: r.absence_id != null ? String(r.absence_id) : null,
+    selfActAllowed: r.self_act_allowed == null ? true : Number(r.self_act_allowed) === 1,
   };
 }
 
@@ -259,31 +275,6 @@ async function allocateDocNo(txn: PgDatabase, ruleKey: string, year: string): Pr
   if (isNotice) return `${ruleKey}-${String(seq).padStart(4, "0")}호`;
   if (isQuote) return `${year}-${ruleKey.slice(QUOTE_RULE_PREFIX.length)}-${String(seq).padStart(4, "0")}`;
   return `${ruleKey}-${year}-${String(seq).padStart(4, "0")}`;
-}
-
-/**
- * 대결 라우팅(§8-4) — 결재 차례가 도래한 시점에 결재자가 '승인된 휴가' 기간 중이고
- * 대결자가 지정돼 있으면 대결자로 교체한다(delegated_from 기록). 출장은 대상이 아니다.
- */
-async function resolveDelegate(db: PgDatabase, assigneeUserId: string): Promise<string | null> {
-  // KST 기준(기존 UTC 는 00~09시에 하루 어긋남). DA-1 에서 absence-routing.ts resolveAbsence 로 대체 예정.
-  const today = kstToday();
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT ad.delegate_user_id
-         FROM approval_delegates ad
-        WHERE ad.user_id = $1 AND ad.enabled = 1
-          AND EXISTS (
-            SELECT 1 FROM approval_docs ld
-             WHERE ld.form_id = 'frm-leave-request' AND ld.status = 'approved'
-               AND ld.drafter_user_id = $1
-               AND ld.field_values->'leave_period'->>'from' <= $2
-               AND ld.field_values->'leave_period'->>'to' >= $2
-          )`,
-      [assigneeUserId, today]
-    )
-  );
-  return rows.length ? String(rows[0].delegate_user_id) : null;
 }
 
 /** 결재자 이름·직급 로드(스냅샷 저장용) */
@@ -523,29 +514,194 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
   return { docNo, title };
 }
 
-/** 특정 order 의 waiting 단계를 pending 으로 — 대결 라우팅을 여기서 적용한다. activated_at 기록(체류시간 산출용). */
+/** 라우팅 기준 — 기안자(대결자 제외 대상)와 최종 순번(최대 step_order, 부재 미적용 단계·D-2). */
+async function loadRoutingMeta(txn: PgDatabase, docId: string): Promise<{ drafterUserId: string; finalOrder: number }> {
+  const rows = rowsToObjects(
+    await txn.exec(
+      `SELECT d.drafter_user_id, (SELECT max(x.step_order) FROM approval_steps x WHERE x.doc_id = d.doc_id) AS final_order
+         FROM approval_docs d WHERE d.doc_id = $1`,
+      [docId]
+    )
+  );
+  return { drafterUserId: String(rows[0]?.drafter_user_id ?? ""), finalOrder: Number(rows[0]?.final_order ?? 0) };
+}
+
+/**
+ * 중간 단계 1건에 부재 라우팅 적용(설계 §5-3). 최종 순번 단계에는 호출하지 않는다(D-2).
+ * - delegate: pending + 처리자를 대결자로 교체. delegated_from·absence_id 는 최초 원결재자 기준을 유지(연쇄 재라우팅 대비).
+ * - skip: skipped(skip_reason=absence). 이미 대결 중인 단계는 대결자가 건너뛰기 부재여도 생략하지 않는다(원결재자 단계이므로).
+ * - none·unresolved: 현 처리자 유지. unresolved(순환·연쇄 초과·자기 결재)는 관리자 알림 대상(DA-2) — 지금은 로그만.
+ */
+async function routeStepForAbsence(
+  txn: PgDatabase,
+  step: { stepId: string; assigneeUserId: string; delegatedFrom: string | null },
+  drafterUserId: string,
+  now: string
+): Promise<"delegate" | "skip" | "none"> {
+  const res = await resolveAbsence(txn, step.assigneeUserId, { excludeUserIds: [drafterUserId] });
+  if (res.kind === "delegate" && res.delegateUserId !== step.assigneeUserId) {
+    const snap = await loadAssigneeSnapshots([res.delegateUserId]);
+    await txn.run(
+      `UPDATE approval_steps
+          SET status = 'pending', activated_at = $6, assignee_user_id = $2, assignee_name = $3, assignee_position = $4,
+              delegated_from = COALESCE(delegated_from, $5),
+              absence_id = CASE WHEN delegated_from IS NULL THEN $7 ELSE absence_id END
+        WHERE step_id = $1`,
+      [
+        step.stepId,
+        res.delegateUserId,
+        snap.get(res.delegateUserId)?.name ?? null,
+        snap.get(res.delegateUserId)?.position ?? null,
+        step.assigneeUserId,
+        now,
+        res.absenceId,
+      ]
+    );
+    return "delegate";
+  }
+  if (res.kind === "skip" && !step.delegatedFrom) {
+    await txn.run(
+      `UPDATE approval_steps SET status = 'skipped', skip_reason = 'absence', absence_id = $2, activated_at = $3 WHERE step_id = $1`,
+      [step.stepId, res.absenceId, now]
+    );
+    return "skip";
+  }
+  if (res.kind === "unresolved") {
+    console.warn(`[approval-absence] 대결 미해결(${res.reason}) — 처리자 유지: ${res.chain.join(" → ")} (step ${step.stepId})`);
+  }
+  await txn.run(`UPDATE approval_steps SET status = 'pending', activated_at = $2 WHERE step_id = $1 AND status = 'waiting'`, [
+    step.stepId,
+    now,
+  ]);
+  return "none";
+}
+
+/** 해당 order 에 처리할 단계가 남지 않았으면(전원 건너뛰기) 다음 order — 최종 순번은 건너뛰지 않으므로 반드시 멈춘다. */
+async function nextOrderIfCleared(txn: PgDatabase, docId: string, order: number): Promise<number | null> {
+  const rows = rowsToObjects(
+    await txn.exec(
+      `SELECT (SELECT count(*) FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status IN ('waiting','pending')) AS open_count,
+              (SELECT min(step_order) FROM approval_steps WHERE doc_id = $1 AND step_order > $2) AS next_order`,
+      [docId, order]
+    )
+  );
+  if (Number(rows[0]?.open_count ?? 0) > 0) return null;
+  return rows[0]?.next_order != null ? Number(rows[0].next_order) : null;
+}
+
+/**
+ * 특정 order 의 waiting 단계를 pending 으로 — 부재 라우팅(대결·건너뛰기)을 여기서 적용한다. activated_at 기록(체류시간 산출용).
+ * 건너뛰기로 order 가 비면 다음 order 로 이어 활성화한다. 최종 순번 단계는 부재와 무관하게 원결재자에게 활성화(D-2).
+ */
 async function activateOrder(txn: PgDatabase, docId: string, order: number): Promise<void> {
   const now = new Date().toISOString();
-  const steps = rowsToObjects(
-    await txn.exec(`SELECT step_id, assignee_user_id FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status = 'waiting'`, [
-      docId,
-      order,
-    ])
-  );
-  for (const s of steps) {
-    const assignee = String(s.assignee_user_id);
-    const delegate = await resolveDelegate(txn, assignee);
-    if (delegate && delegate !== assignee) {
-      const snap = await loadAssigneeSnapshots([delegate]);
-      await txn.run(
-        `UPDATE approval_steps SET status = 'pending', activated_at = $6, assignee_user_id = $2, assignee_name = $3, assignee_position = $4, delegated_from = $5
-          WHERE step_id = $1`,
-        [String(s.step_id), delegate, snap.get(delegate)?.name ?? null, snap.get(delegate)?.position ?? null, assignee, now]
+  const { drafterUserId, finalOrder } = await loadRoutingMeta(txn, docId);
+  let current: number | null = order;
+  while (current != null) {
+    const steps = rowsToObjects(
+      await txn.exec(
+        `SELECT step_id, assignee_user_id, delegated_from FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status = 'waiting'`,
+        [docId, current]
+      )
+    );
+    for (const s of steps) {
+      if (current >= finalOrder) {
+        await txn.run(`UPDATE approval_steps SET status = 'pending', activated_at = $2 WHERE step_id = $1`, [String(s.step_id), now]);
+        continue;
+      }
+      await routeStepForAbsence(
+        txn,
+        {
+          stepId: String(s.step_id),
+          assigneeUserId: String(s.assignee_user_id),
+          delegatedFrom: s.delegated_from != null ? String(s.delegated_from) : null,
+        },
+        drafterUserId,
+        now
       );
-    } else {
-      await txn.run(`UPDATE approval_steps SET status = 'pending', activated_at = $2 WHERE step_id = $1`, [String(s.step_id), now]);
     }
+    current = current >= finalOrder ? null : await nextOrderIfCleared(txn, docId, current);
   }
+}
+
+/** 재상신 대비 — 이전 회차에 대결로 바뀐 처리자를 원결재자로 되돌린다(처리 유형·생략 사유 초기화는 호출부). */
+async function restoreDelegatedAssignees(txn: PgDatabase, docId: string): Promise<void> {
+  const rows = rowsToObjects(
+    await txn.exec(`SELECT step_id, delegated_from FROM approval_steps WHERE doc_id = $1 AND delegated_from IS NOT NULL`, [docId])
+  );
+  if (!rows.length) return;
+  const snaps = await loadAssigneeSnapshots(rows.map((r) => String(r.delegated_from)));
+  for (const r of rows) {
+    const original = String(r.delegated_from);
+    await txn.run(
+      `UPDATE approval_steps SET assignee_user_id = $2, assignee_name = $3, assignee_position = $4, delegated_from = NULL WHERE step_id = $1`,
+      [String(r.step_id), original, snaps.get(original)?.name ?? null, snaps.get(original)?.position ?? null]
+    );
+  }
+}
+
+/**
+ * 이미 내 차례(pending)로 대기 중인 중간 단계의 부재 재라우팅(설계 §5-5).
+ * 부재 저장 직후(userId 지정)와 리마인드 틱(전체, 30분)에서 호출 — 미래 시작 부재는 시작일 첫 틱에 반영된다.
+ * 최종 순번 단계는 제외(D-2). 처리자가 바뀐 문서는 커밋 후 결재 요청 알림을 보낸다.
+ */
+export async function rerouteAbsentPendingSteps(opts: { userId?: string } = {}): Promise<{ rerouted: number }> {
+  const db = await getDb();
+  const today = kstToday();
+  const cands = rowsToObjects(
+    await db.exec(
+      `SELECT s.step_id, s.doc_id
+         FROM approval_steps s JOIN approval_docs d ON d.doc_id = s.doc_id
+        WHERE s.status = 'pending' AND d.status = 'in_progress'
+          AND ($2::text IS NULL OR s.assignee_user_id = $2)
+          AND s.step_order < (SELECT max(x.step_order) FROM approval_steps x WHERE x.doc_id = s.doc_id)
+          AND (EXISTS (SELECT 1 FROM approval_absences a
+                        WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $1 AND a.end_date >= $1)
+               OR EXISTS (SELECT 1 FROM approval_delegates ad WHERE ad.user_id = s.assignee_user_id AND ad.enabled = 1))`,
+      [today, opts.userId ?? null]
+    )
+  );
+  const changedDocs = new Set<string>();
+  for (const c of cands) {
+    const docId = String(c.doc_id);
+    const stepId = String(c.step_id);
+    let changed = false;
+    await withDbWrite(async (txn) => {
+      // 같은 문서의 결재 처리(actOnDoc)와 직렬화 — 단계 전체 잠금 후 상태 재확인.
+      const rows = rowsToObjects(
+        await txn.exec(
+          `SELECT step_id, step_order, assignee_user_id, delegated_from, status FROM approval_steps WHERE doc_id = $1 FOR UPDATE`,
+          [docId]
+        )
+      );
+      const step = rows.find((r) => String(r.step_id) === stepId);
+      if (!step || String(step.status) !== "pending") return;
+      const { drafterUserId, finalOrder } = await loadRoutingMeta(txn, docId);
+      const order = Number(step.step_order);
+      if (order >= finalOrder) return;
+      const now = new Date().toISOString();
+      const result = await routeStepForAbsence(
+        txn,
+        {
+          stepId,
+          assigneeUserId: String(step.assignee_user_id),
+          delegatedFrom: step.delegated_from != null ? String(step.delegated_from) : null,
+        },
+        drafterUserId,
+        now
+      );
+      if (result === "none") return;
+      changed = true;
+      if (result === "skip") {
+        const next = await nextOrderIfCleared(txn, docId, order);
+        if (next != null) await activateOrder(txn, docId, next);
+      }
+      await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [docId, now]);
+    });
+    if (changed) changedDocs.add(docId);
+  }
+  for (const docId of changedDocs) await notifyPendingSteps(docId);
+  return { rerouted: changedDocs.size };
 }
 
 /** 상신 — 채번 + 첫 단계 활성화. draft/rejected 상태에서만 가능(본인 기안). */
@@ -586,8 +742,13 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
       `UPDATE approval_docs SET status = 'in_progress', doc_no = $2, submitted_at = $3, completed_at = NULL, updated_at = $3 WHERE doc_id = $1`,
       [docId, docNo, now]
     );
-    // 재상신 대비 — 모든 단계를 waiting 초기화 후 1차 활성화
-    await txn.run(`UPDATE approval_steps SET status = 'waiting', acted_at = NULL, comment = NULL WHERE doc_id = $1`, [docId]);
+    // 재상신 대비 — 대결로 바뀐 처리자를 원결재자로 되돌리고 모든 단계를 waiting 초기화 후 1차 활성화
+    await restoreDelegatedAssignees(txn, docId);
+    await txn.run(
+      `UPDATE approval_steps SET status = 'waiting', acted_at = NULL, comment = NULL, act_type = NULL, skip_reason = NULL, absence_id = NULL
+        WHERE doc_id = $1`,
+      [docId]
+    );
     await activateOrder(txn, docId, 1);
     // 초과근무 신청 — 주 12h 초과 판정을 상신 시점에 고정 저장(결재 화면 경고 배너의 근거).
     await assessOverLimitOnSubmit(txn, docId);
@@ -607,6 +768,13 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
 }
 
 /** 승인/반려 — 본인 pending 단계에만. 병렬 합의는 전원 승인 시 다음 order 로. */
+/** 대결 중인 단계의 원결재자 처리 허용 여부(D-4) — 직접 등록 부재의 allow_self_act, 휴가 연동(부재 id 없음)은 허용. */
+async function selfActAllowed(txn: PgDatabase, absenceId: string | null): Promise<boolean> {
+  if (!absenceId) return true;
+  const rows = rowsToObjects(await txn.exec(`SELECT allow_self_act FROM approval_absences WHERE absence_id = $1`, [absenceId]));
+  return rows.length ? Number(rows[0].allow_self_act) === 1 : true;
+}
+
 /**
  * 문서 최종 승인 처리(트랜잭션 안) — 문서 approved + 승인 완료 후크. 일반 최종 승인과 [전결](DA-3)이 공용으로 쓴다.
  * 커밋 후 작업(양식 액션·기안자 알림·공문/견적 발송)은 호출부가 docStatus 로 판단해 실행한다.
@@ -633,25 +801,43 @@ export async function actOnDoc(params: {
 }): Promise<{ docStatus: string }> {
   let docStatus = "in_progress";
   await withDbWrite(async (txn) => {
+    // FOR UPDATE — 부재 재라우팅(rerouteAbsentPendingSteps)과 같은 문서 단계를 동시에 바꾸지 않도록 직렬화.
     const steps = rowsToObjects(
-      await txn.exec(`SELECT * FROM approval_steps WHERE doc_id = $1 ORDER BY step_order, created_at`, [params.docId])
+      await txn.exec(`SELECT * FROM approval_steps WHERE doc_id = $1 ORDER BY step_order, created_at FOR UPDATE`, [params.docId])
     );
     const me = steps.find((s) => String(s.step_id) === params.stepId);
     if (!me) throw new Error("결재 단계를 찾을 수 없습니다.");
-    if (String(me.assignee_user_id) !== params.actorUserId) throw new Error("본인에게 배정된 결재만 처리할 수 있습니다.");
+    const isAssignee = String(me.assignee_user_id) === params.actorUserId;
+    // 대결 중인 단계는 원결재자도 처리할 수 있다(D-4, 부재 설정에서 끈 경우 제외). 처리자는 원결재자로 되돌려 기록.
+    const isOriginal =
+      !isAssignee &&
+      me.delegated_from != null &&
+      String(me.delegated_from) === params.actorUserId &&
+      (await selfActAllowed(txn, me.absence_id != null ? String(me.absence_id) : null));
+    if (!isAssignee && !isOriginal) throw new Error("본인에게 배정된 결재만 처리할 수 있습니다.");
     if (String(me.status) !== "pending") throw new Error("현재 결재 차례가 아닙니다.");
+    if (isOriginal) {
+      const snap = await loadAssigneeSnapshots([params.actorUserId]);
+      await txn.run(
+        `UPDATE approval_steps SET assignee_user_id = $2, assignee_name = $3, assignee_position = $4, delegated_from = NULL, absence_id = NULL
+          WHERE step_id = $1`,
+        [params.stepId, params.actorUserId, snap.get(params.actorUserId)?.name ?? null, snap.get(params.actorUserId)?.position ?? null]
+      );
+    }
+    const actType = isAssignee && me.delegated_from != null ? "proxy" : "normal";
 
     const now = new Date().toISOString();
     if (params.action === "reject") {
-      await txn.run(`UPDATE approval_steps SET status = 'rejected', acted_at = $2, comment = $3 WHERE step_id = $1`, [
+      await txn.run(`UPDATE approval_steps SET status = 'rejected', acted_at = $2, comment = $3, act_type = $4 WHERE step_id = $1`, [
         params.stepId,
         now,
         params.comment,
+        actType,
       ]);
-      await txn.run(`UPDATE approval_steps SET status = 'skipped' WHERE doc_id = $1 AND status IN ('waiting','pending') AND step_id <> $2`, [
-        params.docId,
-        params.stepId,
-      ]);
+      await txn.run(
+        `UPDATE approval_steps SET status = 'skipped', skip_reason = 'rejected' WHERE doc_id = $1 AND status IN ('waiting','pending') AND step_id <> $2`,
+        [params.docId, params.stepId]
+      );
       await txn.run(`UPDATE approval_docs SET status = 'rejected', completed_at = $2, updated_at = $2 WHERE doc_id = $1`, [
         params.docId,
         now,
@@ -662,10 +848,11 @@ export async function actOnDoc(params: {
       return;
     }
 
-    await txn.run(`UPDATE approval_steps SET status = 'approved', acted_at = $2, comment = $3 WHERE step_id = $1`, [
+    await txn.run(`UPDATE approval_steps SET status = 'approved', acted_at = $2, comment = $3, act_type = $4 WHERE step_id = $1`, [
       params.stepId,
       now,
       params.comment,
+      actType,
     ]);
     const myOrder = Number(me.step_order);
     const sameOrderPending = steps.filter(
@@ -729,7 +916,10 @@ export async function listInbox(userId: string, kind: "pending" | "upcoming", li
       `SELECT d.*, f.name AS form_name, f.folder_id, s.step_id AS my_step_id FROM approval_steps s
          JOIN approval_docs d ON d.doc_id = s.doc_id
          JOIN approval_forms f ON f.form_id = d.form_id
-        WHERE s.assignee_user_id = $1 AND s.status = $2 AND d.status = 'in_progress'
+         LEFT JOIN approval_absences ab ON ab.absence_id = s.absence_id
+        WHERE (s.assignee_user_id = $1
+               OR ($2 = 'pending' AND s.delegated_from = $1 AND COALESCE(ab.allow_self_act, 1) = 1))
+          AND s.status = $2 AND d.status = 'in_progress'
         ORDER BY d.urgent DESC, d.submitted_at ASC LIMIT $3`,
       [userId, status, limit]
     )
@@ -981,7 +1171,17 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   if (!rows.length) return null;
   const r = rows[0];
   const stepRows = rowsToObjects(
-    await db.exec(`SELECT * FROM approval_steps WHERE doc_id = $1 ORDER BY step_order, created_at`, [docId])
+    await db.exec(
+      `SELECT s.*, COALESCE(oep.name, ou.email) AS delegated_from_name, op.position_name AS delegated_from_position,
+              COALESCE(ab.allow_self_act, 1) AS self_act_allowed
+         FROM approval_steps s
+         LEFT JOIN users ou ON ou.user_id = s.delegated_from
+         LEFT JOIN employee_profiles oep ON oep.employee_id = ou.employee_id
+         LEFT JOIN positions op ON op.position_id = oep.position_id
+         LEFT JOIN approval_absences ab ON ab.absence_id = s.absence_id
+        WHERE s.doc_id = $1 ORDER BY s.step_order, s.created_at`,
+      [docId]
+    )
   );
   const watcherRows = rowsToObjects(
     await db.exec(

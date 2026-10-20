@@ -743,12 +743,23 @@ export function ApprovalDraftBoard() {
           setFileAttachments(Array.isArray(d.fieldValues?.file_attachments) ? d.fieldValues.file_attachments : []);
           if (d.refDoc) setRefDoc(d.refDoc as RefDocInfo);
           setLine(
-            (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
-              stepType: s.stepType === "agree" ? "agree" : "approve",
-              assigneeUserId: s.assigneeUserId,
-              assigneeName: s.assigneeName ?? "",
-              assigneePosition: s.assigneePosition,
-            }))
+            // 대결로 처리자가 바뀐 단계는 원결재자로 복원(재기안 결재선은 원래 지정한 사람 기준).
+            (d.steps ?? []).map(
+              (s: {
+                stepType: string;
+                assigneeUserId: string;
+                assigneeName: string | null;
+                assigneePosition: string | null;
+                delegatedFrom?: string | null;
+                delegatedFromName?: string | null;
+                delegatedFromPosition?: string | null;
+              }) => ({
+                stepType: s.stepType === "agree" ? "agree" : "approve",
+                assigneeUserId: s.delegatedFrom || s.assigneeUserId,
+                assigneeName: (s.delegatedFrom ? s.delegatedFromName : s.assigneeName) ?? "",
+                assigneePosition: s.delegatedFrom ? s.delegatedFromPosition ?? null : s.assigneePosition,
+              })
+            )
           );
           setWatchers(
             (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({

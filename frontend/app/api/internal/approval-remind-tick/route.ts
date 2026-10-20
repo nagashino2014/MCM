@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dispatchDueReminders } from "@/lib/approval/notify";
+import { rerouteAbsentPendingSteps } from "@/lib/approval/docs";
 import { applyDueResignations } from "@/lib/approval/hr-actions";
 import { dispatchFilingDueReminders } from "@/lib/filings/notify";
 
@@ -18,12 +19,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   try {
+    // 부재 재라우팅(DA-1) — 오늘 시작한 부재·휴가 연동 대결을 이미 대기 중인 중간 단계에 반영(리마인드보다 먼저, 실패해도 계속).
+    const absence = await rerouteAbsentPendingSteps().catch((e) => {
+      console.error("[approval-absence] reroute error", e);
+      return { rerouted: 0 };
+    });
     const result = await dispatchDueReminders();
     // 퇴사일 도래 비활성(FRM-P3, 206) — 같은 틱에 얹는다(멱등, 실패해도 리마인드 결과는 반환).
     const resignations = await applyDueResignations().catch(() => ({ deactivated: 0 }));
     // 대외 신고 기한 알림(213) — 대기열 재파생 + 임박·초과 푸시(일자 dedup, 실패해도 무시).
     const filings = await dispatchFilingDueReminders();
-    return NextResponse.json({ ...result, resignationsDeactivated: resignations.deactivated, filingsNotified: filings.notified });
+    return NextResponse.json({ ...result, absenceRerouted: absence.rerouted, resignationsDeactivated: resignations.deactivated, filingsNotified: filings.notified });
   } catch (err) {
     console.error("[approval-remind] tick error", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

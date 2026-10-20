@@ -24,7 +24,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
       return NextResponse.json({ error: "이 문서를 열람할 권한이 없습니다." }, { status: 403 });
     }
     if (isWatcher) await markWatcherRead(docId, ctx.userId);
-    const myStep = doc.steps.find((s) => s.assigneeUserId === ctx.userId && s.status === "pending");
+    // 대결 중인 단계는 원결재자도 처리 가능(D-4, 부재 설정에서 끈 경우 제외) — 서버 actOnDoc 판정과 동일.
+    const myStep =
+      doc.steps.find((s) => s.assigneeUserId === ctx.userId && s.status === "pending") ??
+      doc.steps.find((s) => s.delegatedFrom === ctx.userId && s.selfActAllowed && s.status === "pending");
     // 반려 요청(취소 요청, 124) — 배지 표시·버튼 노출 판정용.
     const cancelRequest = await getOpenCancelRequest(docId);
     const cancelable = (CANCELABLE_FORM_IDS as readonly string[]).includes(doc.formId);

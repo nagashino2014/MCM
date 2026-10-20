@@ -292,7 +292,8 @@ export async function notifyPendingSteps(docId: string): Promise<void> {
         event,
         docId,
         stepId,
-        dedupKey: `${event}:${stepId}`,
+        // 대결은 연쇄 재라우팅으로 같은 단계의 수신자가 바뀔 수 있어 수신자까지 키에 넣는다(DA-1).
+        dedupKey: delegated ? `${event}:${stepId}:${userId}` : `${event}:${stepId}`,
         userId,
         contact: contacts.get(userId),
         subject,

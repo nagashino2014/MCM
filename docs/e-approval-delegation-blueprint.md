@@ -1,6 +1,6 @@
 # 전자결재 대결·전결(부재 결재) 구현 계획
 
-작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
+작성 2026-10-20 · 상태: **결정 D-1~D-5 확정(2026-10-20) · DA-0·DA-1 구현(브랜치 `claude/approval-absence`, 마이그 301 미적용 — DA-1 코드는 301 필수)** · 상위 문서: [e-approval-blueprint.md](e-approval-blueprint.md) §8-4
 
 ## 1. 요구(2026-10-20 사용자)
 
@@ -110,7 +110,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 
 ## 6. 화면
 
-1. **결재 설정 > 부재·대결 설정**(`/approval/settings`, 기존 알림 설정 옆 탭)
+1. **부재·대결 설정**(`/approval/absence`, 전자결재 메뉴 하위 — 구현 시 변경: 기존 `/approval/settings` 는 approval.manage 전용이라 전 직원용 화면을 따로 둠)
    - 기간(`CdDateInput` YYYYMMDD)·사유·방식(대결자 지정 / 다음 결재자로 넘기기)·대결자(기존 `OrgPickerModal`)·“부재 중 본인 처리 허용”.
    - 현재·예정 부재 목록, 취소. 저장 시 “지금 대기 중인 결재 N건이 ○○에게 넘어갑니다” 영향 안내.
    - 고정 안내 문구: “최종 결재자로 지정된 문서는 대결·건너뛰기 없이 복귀 후 직접 결재해야 합니다.” 저장 시 최종 단계로 대기 중인 문서 수도 함께 표시.
@@ -121,6 +121,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_approval_final_rules ON approval_final_rule
 5. **결재 처리 바** — 전결 권한이 있으면 [승인] 옆에 [전결] 버튼(확인 모달: “이후 결재자 N명을 생략하고 최종 승인합니다”).
 6. **모바일** — Expo 앱 `StepTimeline` 라벨(부재·전결), 상세 화면 [전결] 버튼(OTA). 웹 `/m` 결재 화면 동일.
 - UI는 Precision 기준(8px 반경·`--cd-*` 토큰), 라이트/다크·좁은 화면·키보드로 검증.
+
+### DA-1 구현 메모(2026-10-20)
+- 결재 대기함(`listInbox` pending)에 대결 중인 내 원 단계(`delegated_from = 나`, 본인 처리 허용)를 함께 보인다(D-4). 내비 배지·To-do 건수는 기존대로 처리자 기준.
+- 대결 알림 dedup 키에 수신자를 넣었다(`delegated:<step>:<user>`) — 연쇄 재라우팅 시 새 대결자에게도 발송.
+- 재기안 화면은 대결로 바뀐 단계를 원결재자로 복원하고, 재상신 시 서버도 `restoreDelegatedAssignees` 로 복원한다.
+- ⚠ 대결자 선택에 쓰는 공용 `OrgPickerModal` 의 `/api/sales/org` 가 `sales.view` 를 요구한다 — 298 이후 일반 직원은 403(기안 결재선 조직도 선택도 동일 영향 추정). 별도 수정 필요.
 
 ## 7. 단계별 진행
 

@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check } from "lucide-react";
 import { CdButton, CdModal } from "@/components/cdash";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { TODO_COMPLETE_RULE_LABELS, type TodoCompleteRuleKey, type TodoCompleteRules } from "@/lib/todo/types";
 import { activeCompleteRuleKeys, checkCompletion, describeMissingRule } from "@/lib/todo/completion";
 import type { CompleteRulesFailure } from "./useTodoData";
@@ -67,7 +68,12 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
     <CdModal
       open={open && !!target}
       onClose={onClose}
-      title="완료 확인"
+      title={
+        <span className="inline-flex items-center gap-1">
+          완료 확인
+          <CdHelp topic="todo.complete-rules" />
+        </span>
+      }
       size="sm"
       closeOnBackdrop={!busy}
       footer={

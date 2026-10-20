@@ -9,6 +9,7 @@
     "test:approval-absence": "node scripts/test-approval-absence.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",
     "test:todo": "node scripts/test-todo.mjs",
+    "test:manual": "node scripts/test-manual.mjs",
     "dev": "next dev",
     "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",
     "build": "next build",

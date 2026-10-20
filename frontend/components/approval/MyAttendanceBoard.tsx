@@ -12,6 +12,7 @@ import type { ApexOptions } from "apexcharts";
 import { AlertTriangle, Banknote, ChevronLeft, ChevronRight, Clock3, FileWarning, Flame, MoonStar, Timer } from "lucide-react";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
 import { chartPalette, type CdTheme } from "@/components/contracts/dashboard/types";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 interface WeekRow {
   weekStart: string;
@@ -235,7 +236,10 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
     <div className="flex flex-col gap-4 min-w-0 2xl:h-full 2xl:min-h-0">
       {/* 섹션 타이틀 + 연·월 탐색 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-[15px] font-extrabold cd-text">내 근태·초과근무</div>
+        <div className="flex items-center gap-1">
+          <div className="text-[15px] font-extrabold cd-text">내 근태·초과근무</div>
+          <CdHelp topic="hr.my-attendance" />
+        </div>
         <div className="flex items-center gap-1">
           <select
             className="cd-select"

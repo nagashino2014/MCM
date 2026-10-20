@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronDown, FolderOpen, HardDrive, Mail, Paperclip, PenLine, Save, Send, Settings2, UploadCloud, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdInput } from "@/components/cdash/CdField";
@@ -562,6 +563,7 @@ export function MailComposePage() {
         subtitle={myAddress ? `보낸 사람: ${displayName ? `${displayName} <${myAddress}>` : myAddress}` : undefined}
         actions={
           <div className="flex items-center gap-2">
+            <CdHelp topic="mail.draft-save" />
             <span className="text-[11px] cd-text-faint">
               {draftState === "saving" ? "저장 중…" : draftState === "saved" ? "임시저장됨" : ""}
             </span>
@@ -716,7 +718,10 @@ export function MailComposePage() {
               드롭존·버튼은 불투명 흰 배경 + 윤곽선으로 페이지 배경과 구분. */}
           <div className="flex flex-col gap-1.5">
             <span className="cd-label flex items-center gap-2">
-              <span className="mr-3">파일첨부</span>
+              <span>파일첨부</span>
+              <span className="mr-3 inline-flex">
+                <CdHelp topic="mail.attach" />
+              </span>
               <CdButton size="sm" className="cd-card-bg" icon={<HardDrive className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
                 내 PC
               </CdButton>

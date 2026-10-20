@@ -1,6 +1,6 @@
 "use client";
 
-// 전역 탑바(G1) — 가로 메뉴 nav 폐지, 글로벌 액션만: 검색(⌘K)·+새로작성·알림·테마·계정.
+// 전역 탑바(G1) — 가로 메뉴 nav 폐지, 글로벌 액션만: 검색(⌘K)·+새로작성·매뉴얼(F1)·알림·테마·계정.
 // <lg 에서는 좌측 햄버거로 사이드바 드로어를 연다(네비 소실 방지 — §3.0).
 // 설계: docs/groupware-ux-overhaul-blueprint.md §2.2.
 
@@ -16,6 +16,7 @@ import { CdIconButton } from "@/components/cdash/CdButton";
 import { AlertBell } from "@/components/dashboard/AlertBell";
 import { TodoNotifyBell } from "@/components/todo/TodoNotifyBell";
 import { GlobalSearch } from "@/components/layout/GlobalSearch";
+import { ManualButton } from "@/components/manual/ManualButton";
 
 interface TopBarProps {
   userName: string | null;
@@ -34,12 +35,12 @@ const SALES_NON_PROJECT = new Set(["bids", "contacts", "intel", "rag"]);
 
 /**
  * "새 할 일" 진입 URL(docs/todo-kanban-blueprint.md §7.1 Autofill) — 계약·사업장·영업·결재 상세를 보고 있으면
- * 그 링크(linkKind/linkId/linkLabel)를 덧붙여 /todo 퀵애드 모달이 연결을 자동 첨부하게 한다.
+ * 그 링크(linkKind/linkId/linkLabel)를 덧붙여 새 할 일 작성 화면(/todo/new, 2026-10-20)이 연결을 자동 첨부하게 한다.
  * 클릭 시점에 window.location 을 읽는다(useSearchParams 는 Suspense 경계를 요구해 전역 탑바에 두지 않는다).
  */
 function todoNewHref(): string {
-  const params = new URLSearchParams({ new: "1" });
-  if (typeof window === "undefined") return `/todo?${params.toString()}`;
+  const params = new URLSearchParams();
+  if (typeof window === "undefined") return "/todo/new";
   const { pathname } = window.location;
   const query = new URLSearchParams(window.location.search);
   let linkKind: string | null = null;
@@ -67,7 +68,8 @@ function todoNewHref(): string {
     const label = (heading || document.title).trim().slice(0, 80);
     if (label) params.set("linkLabel", label);
   }
-  return `/todo?${params.toString()}`;
+  const qs = params.toString();
+  return `/todo/new${qs ? `?${qs}` : ""}`;
 }
 
 export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpenNav, navOpen = false }: TopBarProps) {
@@ -131,7 +133,7 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
         className="flex h-9 min-w-9 items-center gap-2 flex-1 max-w-md rounded-md border cd-border-c cd-surface-bg px-2.5 sm:px-3 py-2 text-[13px] cd-text-muted hover:bg-[color:var(--cd-hover)] transition-colors"
       >
         <Search className="w-4 h-4 shrink-0" />
-        <span className="flex-1 text-left">검색</span>
+        <span className="hidden flex-1 text-left min-[420px]:inline">검색</span>
         <kbd className="hidden sm:inline text-[10px] border cd-line-c rounded px-1.5 py-0.5">Ctrl K</kbd>
       </button>
 
@@ -158,6 +160,9 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
           { key: "todo", label: "새 할 일", icon: <ListChecks className="w-4 h-4" />, onSelect: () => router.push(todoNewHref()) },
         ]}
       />
+
+      {/* 사용 매뉴얼 — [새로 작성] 바로 오른쪽(docs/manual-help-blueprint.md §1.1) */}
+      <ManualButton />
 
       {/* 할 일 알림함(277) — 배정·댓글·완료·리마인드·아침 요약. 운영 알람과 별개 */}
       <TodoNotifyBell />

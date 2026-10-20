@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { formatBytes } from "@/lib/approval/attachments";
 import "@/components/cdash/cdash.css";
@@ -364,6 +365,7 @@ export function FileLibraryBoard() {
           )}
           {/* 삭제 액션 — 목록 상단 우측 */}
           <div className="ml-auto flex items-center gap-1.5">
+            <CdHelp topic="files.delete" />
             <button
               type="button"
               className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
@@ -483,7 +485,10 @@ export function FileLibraryBoard() {
       {/* 파일 저장 정책 — 크기 구간별 보존기간(설정 저장 + 목록 '경과' 표시. 자동 삭제 배치는 후속) */}
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         <div>
-          <div className="font-semibold">파일 저장 정책</div>
+          <div className="flex items-center gap-1 font-semibold">
+            파일 저장 정책
+            <CdHelp topic="files.retention" />
+          </div>
           <div className="cd-text-faint text-xs mt-0.5">
             크기 구간별 보존기간을 설정합니다. 보존기간이 지난 파일은 목록에 &lsquo;보존기간 경과&rsquo;로 표시됩니다.
           </div>

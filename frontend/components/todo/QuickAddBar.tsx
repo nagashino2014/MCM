@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import Link from "next/link";
 import { CalendarDays, Clock3, Flag, LayoutGrid, Plus, Repeat, StickyNote, User, X } from "lucide-react";
 import { useCdToast } from "@/components/cdash";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useOrgSnapshot } from "@/components/calendar/AttendeePicker";
 import { parseQuickAdd, type QuickParseResult, type QuickToken } from "@/lib/todo/quick-parse";
 import { describeRecurrence } from "@/lib/todo/recurrence";
@@ -373,6 +374,7 @@ export function QuickAddBar({ boards, currentBoardId, currentColumnId, prefs, on
           <span>제목</span>
           <b>{parsed.title || "(비어 있음)"}</b>
           <span className="todo-qa-hint">칩 × 로 해제하면 그 단어는 제목에 남습니다 · Esc 취소</span>
+          <CdHelp topic="todo.quick-add" />
         </div>
       )}
     </div>

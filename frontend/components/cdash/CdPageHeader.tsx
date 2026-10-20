@@ -17,6 +17,7 @@ export function CdPageHeader({
   subtitle,
   help,
   helpLabel,
+  helpTopic,
   breadcrumbs,
   title,
   titleSuffix,
@@ -36,6 +37,8 @@ export function CdPageHeader({
   /** 사용법·배경 설명. 제목 옆 ? 버튼으로 연다. */
   help?: ReactNode;
   helpLabel?: string;
+  /** 매뉴얼 도움말 키(content/manual/help-topics). help 와 함께 주면 help 가 topic 본문 뒤에 붙는다. */
+  helpTopic?: string;
   /** 현재 개수·범위 같은 짧은 업무 요약. */
   meta?: ReactNode;
   actions?: ReactNode;
@@ -70,7 +73,11 @@ export function CdPageHeader({
               </span>
             )}
           </h1>
-          {help && <CdHelp label={helpLabel ?? (typeof title === "string" ? `${title} 도움말` : "페이지 도움말")}>{help}</CdHelp>}
+          {helpTopic ? (
+            <CdHelp topic={helpTopic} label={helpLabel}>{help}</CdHelp>
+          ) : (
+            help && <CdHelp label={helpLabel ?? (typeof title === "string" ? `${title} 도움말` : "페이지 도움말")}>{help}</CdHelp>
+          )}
           {meta && <span className="cd-page-meta text-[13px] font-normal cd-text-muted min-w-0">{meta}</span>}
         </div>
         {subtitle && <div className="cd-page-subtitle mt-1 text-[13px] leading-relaxed cd-text-muted">{subtitle}</div>}

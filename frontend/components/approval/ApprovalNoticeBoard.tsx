@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BookmarkPlus, Eye, FileDown, FileText, GripVertical, Megaphone, Plus, Save, Send, Stamp, Trash2, Users, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
@@ -566,6 +567,7 @@ export function ApprovalNoticeBoard() {
                   문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
                 </span>
               )}
+              <CdHelp topic="notice.number" />
               {!docNo && !manualOn && (
                 <span className="text-[10.5px] cd-text-faint" title="먼저 상신되는 문서가 이 번호를 가져갈 수 있습니다">채번 예정 · 상신 시 확정</span>
               )}

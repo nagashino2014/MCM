@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarCheck2, CalendarPlus, ChevronLeft, ChevronRight, Gauge, HeartHandshake, Sparkles } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 interface EntryRow {
   entryId: string;
@@ -191,7 +192,10 @@ export function MyLeaveSection() {
     <div className="flex flex-col gap-4 min-w-0 2xl:h-full 2xl:min-h-0">
       {/* 섹션 타이틀 + 연도 탐색 */}
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[15px] font-extrabold cd-text">내 휴가</div>
+        <div className="flex items-center gap-1">
+          <div className="text-[15px] font-extrabold cd-text">내 휴가</div>
+          <CdHelp topic="hr.my-leave" />
+        </div>
         <div className="flex items-center gap-1">
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setYear((y) => String(Number(y) - 1))}>
             <ChevronLeft className="w-4 h-4" />

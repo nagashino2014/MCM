@@ -414,7 +414,10 @@ export default function EmployeeRegistryPanel({
             </Field>
           </div>
           <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
-            <h3 className="font-semibold cd-text mb-3">사용 가능 직급</h3>
+            <h3 className="font-semibold cd-text mb-3 flex items-center gap-1">
+              사용 가능 직급
+              <CdHelp topic="admin.positions" />
+            </h3>
             <PositionTagEditor
               positions={positions}
               activeIds={departmentDraft.positionIds}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Calculator, ExternalLink, FileText, Save, Send } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -322,6 +323,7 @@ export default function BonusStatementsBoard() {
     <>
       <CdPageHeader
         title="지급 명세서 생성"
+        helpTopic="bonus.statements"
         actions={
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>
@@ -395,7 +397,10 @@ export default function BonusStatementsBoard() {
           </section>
 
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-2 flex flex-col gap-2.5 grow">
-            <h3 className="text-xs font-bold cd-text-faint">산정방식 옵션</h3>
+            <div className="flex items-center gap-1">
+              <h3 className="text-xs font-bold cd-text-faint">산정방식 옵션</h3>
+              <CdHelp topic="bonus.calc-method" />
+            </div>
             <label className={`flex items-start gap-2 text-sm ${isAdmin ? "cd-text" : "cd-text-faint"}`}>
               <input
                 type="checkbox"

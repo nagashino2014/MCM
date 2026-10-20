@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { ScheduleCalendar } from "@/components/calendar/ScheduleCalendar";
@@ -234,6 +235,7 @@ export function AssetCalendarBoard() {
             <span className="flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" style={{ color: "var(--cd-warning)" }} /> 이중 배정 경고
             </span>
+            <CdHelp topic="assets.legend" />
           </div>
 
           {/* 이용 목록 */}

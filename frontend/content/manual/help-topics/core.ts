@@ -1,4 +1,4 @@
-import type { HelpTopic } from "./types";
+import type { HelpTopic } from "../types";
 
 /**
  * 화면 안 ? 도움말(<CdHelp topic="id" />). 3~6줄로 짧게 쓰고 자세한 설명은 more 로 매뉴얼에 연결한다.
@@ -311,6 +311,7 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
         "발행 전에 공급받는자·금액·작성일자·수신 메일을 꼭 확인하세요.",
       ] },
     ],
+    more: { article: "contracts.manage", section: "e-invoice" },
     sources: ["components/contracts/TaxInvoiceIssueModal.tsx"],
     reviewedAt: "2026-10-20",
   },

@@ -16,6 +16,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import type { RuleArticle, RuleBody, RuleVersionRow } from "@/lib/rules/types";
@@ -470,6 +471,7 @@ export function RuleAdminBoard() {
                       <button className="cd-btn" onClick={() => void handleDelete()} disabled={!!busy}>
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      <CdHelp topic="rules.publish" />
                     </div>
                   )}
                 </div>

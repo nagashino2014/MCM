@@ -27,6 +27,7 @@ import {
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { AbsenceRequestPanel } from "@/components/approval/AbsenceRequestPanel";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
@@ -71,6 +72,7 @@ export function AttendanceBoard() {
         <CdPageHeader
           icon={<CalendarClock className="w-5 h-5" />}
           title="근태 · 초과근무 관리"
+          helpTopic="hr.attendance"
         />
 
         {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4). 미매칭 건수는 경고색 배지 유지 */}
@@ -415,6 +417,7 @@ function MatchPanel() {
         <span className="text-[11.5px] cd-text-faint">
           귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
         </span>
+        <CdHelp topic="hr.attendance-match" />
       </div>
 
       {s && (

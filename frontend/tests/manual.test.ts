@@ -123,7 +123,8 @@ test("도움말 topic 은 레지스트리와 화면 코드가 서로 일치한�
   for (const [id, files] of used) assert.ok(HELP_TOPICS[id], `레지스트리에 없는 도움말 topic="${id}" (${files.join(", ")})`);
   for (const t of Object.values(HELP_TOPICS)) {
     assert.ok(used.has(t.id), `어디서도 쓰지 않는 도움말: ${t.id}`);
-    assert.ok(read(t.sources[0]).includes(`topic="${t.id}"`), `도움말 ${t.id}: sources[0] (${t.sources[0]}) 에 topic 사용처가 없음`);
+    const src = read(t.sources[0]);
+    assert.ok(src.includes(`topic="${t.id}"`) || src.includes(`helpTopic="${t.id}"`), `도움말 ${t.id}: sources[0] (${t.sources[0]}) 에 topic 사용처가 없음`);
   }
 });
 

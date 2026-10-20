@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { CdButton, CdModal } from "@/components/cdash";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import type { AccountPurgePreview, PurgeCount } from "@/lib/auth/account-purge";
 import type { UserRow } from "./types";
 
@@ -90,7 +91,7 @@ export function AccountPurgeModal({ user, onClose, onPurged }: { user: UserRow |
     <CdModal
       open={open}
       onClose={() => (busy ? undefined : onClose())}
-      title="계정 영구 삭제"
+      title={<span className="inline-flex items-center gap-1">계정 영구 삭제<CdHelp topic="admin.account-purge" /></span>}
       size="md"
       footer={
         <div className="flex items-center justify-end gap-2">

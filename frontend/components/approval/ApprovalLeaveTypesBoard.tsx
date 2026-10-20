@@ -121,6 +121,7 @@ export function ApprovalLeaveTypesBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="휴가 종류 규정"
+        helpTopic="hr.leave-types"
         meta={`${groups.length}개 그룹 · ${items.length}개 항목`}
         actions={
           <div className="flex items-center gap-2">

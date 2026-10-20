@@ -60,6 +60,7 @@ export function BoardListBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="공지 · 게시판"
+        helpTopic="board.page"
         meta={`${scope === "company" ? "전사 공지" : "부서 게시판"}${unreadCount > 0 ? ` · 안읽음 ${unreadCount}건` : ""}`}
         actions={
           <CdButton variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => router.push(`/board/write?scope=${scope}`)}>

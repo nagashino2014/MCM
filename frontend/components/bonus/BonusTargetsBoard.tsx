@@ -181,6 +181,7 @@ export default function BonusTargetsBoard() {
     <>
       <CdPageHeader
         title="지급 대상 LIST"
+        helpTopic="bonus.targets"
         actions={
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>

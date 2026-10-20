@@ -97,6 +97,7 @@ export default function ExecWorkspace() {
         icon={<ShieldCheck className="w-5 h-5" />}
         eyebrow="Work · Executive"
         title="임원 검토·지시"
+        helpTopic="work-plan.exec-directive"
         help="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
       />
 

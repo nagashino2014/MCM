@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardCheck, GitMerge, Layers } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { cn } from "@/lib/utils";
 import ServiceListPanel, { type LeftTab } from "@/components/work-plan/ServiceListPanel";
 import ReportEditor, { type ReportSubject } from "@/components/work-plan/ReportEditor";
@@ -320,6 +321,7 @@ export default function OversightWorkspace() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Work · Oversight"
         title="부서장 감독"
+        helpTopic="work-plan.oversight-review"
         help="부서원이 보고한 용역·Task를 검토·첨삭하고 부서장 의견·이슈를 기재합니다."
       />
 
@@ -329,6 +331,7 @@ export default function OversightWorkspace() {
             <h2 className="font-bold cd-text flex items-center gap-2">
               <Layers className="w-4 h-4 cd-text-primary" /> Merging 대상 (확인 완료)
               <span className="text-xs cd-text-faint font-normal">{confirmed.length}건</span>
+              <CdHelp topic="work-plan.merge" />
             </h2>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <button

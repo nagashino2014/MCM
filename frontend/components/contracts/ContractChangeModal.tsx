@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, X } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
@@ -784,7 +785,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
         {/* 변경 구분(278) — 차수 = 변경계약서 단위. 정보 정정은 차수·대행 실적 변경 보고에 들어가지 않는다 */}
         <div className="px-5 pt-3 grid gap-1 text-xs">
-          <span className="font-bold cd-text-faint">변경 구분</span>
+          <span className="font-bold cd-text-faint flex items-center gap-1">
+            변경 구분
+            <CdHelp topic="contracts.change-mode" />
+          </span>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="inline-flex items-center gap-1.5 cd-text cursor-pointer">
               <input type="radio" name="change-mode" checked={changeMode === "new"} onChange={() => setChangeMode("new")} />

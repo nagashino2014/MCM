@@ -33,6 +33,7 @@ import {
   useCdashTheme,
   useCdToast,
 } from "@/components/cdash";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { DEFAULT_SCALE } from "@/lib/survey/defaults";
 import { buildFormScript, scriptFileName } from "@/lib/survey/gas";
 import { STATUS_LABELS, STATUS_TONES } from "@/lib/survey/display";
@@ -397,11 +398,14 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
             <span className="self-end pb-2 text-xs cd-text-faint">비우면 상시 접수</span>
           </div>
 
-          <CdCheckbox
-            label={isInternal ? "익명 설문 (집계에서 응답자를 표시하지 않음)" : "익명 설문 (구글 폼에서 이메일 수집 안 함)"}
-            checked={isAnonymous}
-            onChange={(e) => setIsAnonymous(e.target.checked)}
-          />
+          <div className="flex items-center gap-1">
+            <CdCheckbox
+              label={isInternal ? "익명 설문 (집계에서 응답자를 표시하지 않음)" : "익명 설문 (구글 폼에서 이메일 수집 안 함)"}
+              checked={isAnonymous}
+              onChange={(e) => setIsAnonymous(e.target.checked)}
+            />
+            <CdHelp topic="survey.anonymous" />
+          </div>
           {isInternal && isAnonymous && (
             <p className="text-xs cd-text-faint -mt-3">
               중복 응답을 막기 위해 “누가 응답했는지”는 시스템에 남지만, 집계 화면과 다운로드에는 응답자가 나오지 않습니다.
@@ -465,7 +469,8 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
         <div className="flex flex-col gap-4" style={{ maxWidth: 900 }}>
           {locked && (
             <div className="rounded-2xl border cd-border-c cd-soft-warn px-5 py-3 text-sm cd-text">
-              응답 {survey.responseCount}건이 접수되어 문항을 수정할 수 없습니다. 문항을 바꾸려면 목록에서 이 설문을 복제하세요.
+              응답 {survey.responseCount}건이 접수되어 문항을 수정할 수 없습니다. 문항을 바꾸려면 목록에서 이 설문을 복제하세요.{" "}
+              <CdHelp topic="survey.questions" />
             </div>
           )}
           {questions.map((q, i) => (
@@ -504,6 +509,7 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
                 척도 문항 추가
               </CdButton>
               <div className="flex-1" />
+              <CdHelp topic="survey.questions" />
               <CdButton variant="primary" disabled={!questionsDirty || savingQuestions} onClick={() => void saveQuestions()}>
                 {savingQuestions ? "저장 중…" : questionsDirty ? "문항 저장" : "저장됨"}
               </CdButton>

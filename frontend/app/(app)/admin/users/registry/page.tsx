@@ -15,6 +15,7 @@ import type {
 } from "@/components/admin/users/types";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 
@@ -227,7 +228,10 @@ function AccountProvisionBar({
         <div className="flex items-center gap-3">
           <span className="cd-title-icon"><KeyRound className="w-4 h-4" /></span>
           <div>
-            <h3 className="font-extrabold cd-text">{employee.name} · 계정</h3>
+            <h3 className="font-extrabold cd-text flex items-center gap-1">
+              {employee.name} · 계정
+              <CdHelp topic="admin.provision" />
+            </h3>
             {provisioned ? (
               <p className="text-xs cd-text-muted">
                 사번 <b className="cd-text">{employee.employeeNo}</b> · 발급됨. 초기 비밀번호는 사번과 동일하며 최초 로그인 시 변경합니다.

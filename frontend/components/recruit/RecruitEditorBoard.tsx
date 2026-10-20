@@ -20,6 +20,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { CdBadge, CdButton, CdDateInput, CdModal, CdPageHeader, isValidDateString, useCdashTheme, useCdToast } from "@/components/cdash";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import {
   DIVISION_PRESETS,
   EMPTY_META,
@@ -406,6 +407,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
             <CdButton size="sm" variant="primary" icon={<History className="w-4 h-4" />} onClick={() => void save({ snapshot: true })}>
               버전 저장
             </CdButton>
+            <CdHelp topic="admin.recruit-save" />
           </div>
         }
       />

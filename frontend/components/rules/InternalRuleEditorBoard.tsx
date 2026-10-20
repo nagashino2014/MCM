@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput, CdInput, CdSelect } from "@/components/cdash/CdField";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { InternalRuleView } from "@/components/rules/InternalRuleView";
@@ -874,6 +875,7 @@ export function InternalRuleEditorBoard() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               )}
+              {!isNew && <CdHelp topic="rules.internal-enact" />}
             </div>
             {!editable && versionRow && (
               <div className="text-xs flex items-center gap-2 cd-text-faint">

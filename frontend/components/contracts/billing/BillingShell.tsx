@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { OrdersStatusSection } from "./OrdersStatusSection";
 import { ReceivablesSection } from "./ReceivablesSection";
 import { UnbilledSection } from "./UnbilledSection";
@@ -66,11 +67,12 @@ export function BillingShell() {
             >
               Orders · Collections · Invoicing
             </p>
-            <h1 className="text-xl font-extrabold tracking-tight" style={{ color: "var(--cd-text)" }}>
+            <h1 className="text-xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: "var(--cd-text)" }}>
               수주/수금/발행 현황
-              <span className="ml-2 text-sm font-bold" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-sm font-bold" style={{ color: "var(--cd-faint)" }}>
                 {activeMeta.label}
               </span>
+              <CdHelp topic="contracts.billing" />
             </h1>
           </div>
         </div>

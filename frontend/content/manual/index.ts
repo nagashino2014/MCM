@@ -14,7 +14,19 @@ import { WORK_PLAN_ARTICLES } from "./articles/work-plan";
 import { PAYROLL_ARTICLES } from "./articles/payroll";
 import { HR_ARTICLES } from "./articles/hr";
 import { SCENARIO_ARTICLES } from "./articles/scenarios";
-import { HELP_TOPIC_LIST } from "./help-topics";
+import { HELP_TOPIC_LIST } from "./help-topics/core";
+import { COLLAB_MORE_ARTICLES } from "./articles/collab-more";
+import { WORK_MGMT_ARTICLES } from "./articles/work-mgmt";
+import { HR_PAYROLL_ADMIN_ARTICLES } from "./articles/hr-payroll-admin";
+import { FACILITIES_CONTRACTS_ARTICLES } from "./articles/facilities-contracts";
+import { SALES_ARTICLES } from "./articles/sales";
+import { ADMIN_ARTICLES } from "./articles/admin";
+import { COLLAB_MORE_HELP } from "./help-topics/collab-more";
+import { WORK_MGMT_HELP } from "./help-topics/work-mgmt";
+import { HR_PAYROLL_ADMIN_HELP } from "./help-topics/hr-payroll-admin";
+import { FACILITIES_CONTRACTS_HELP } from "./help-topics/facilities-contracts";
+import { SALES_HELP } from "./help-topics/sales";
+import { ADMIN_HELP } from "./help-topics/admin";
 
 export { MANUAL_CHAPTERS, MANUAL_GROUP_LABEL } from "./chapters";
 export { MANUAL_CHANGELOG } from "./changelog";
@@ -31,10 +43,21 @@ export const MANUAL_ARTICLES: ManualArticle[] = [
   ...WORK_PLAN_ARTICLES,
   ...PAYROLL_ARTICLES,
   ...HR_ARTICLES,
+  ...COLLAB_MORE_ARTICLES,
+  ...WORK_MGMT_ARTICLES,
+  ...HR_PAYROLL_ADMIN_ARTICLES,
+  ...FACILITIES_CONTRACTS_ARTICLES,
+  ...SALES_ARTICLES,
+  ...ADMIN_ARTICLES,
   ...SCENARIO_ARTICLES,
 ];
 
-export const HELP_TOPICS: Readonly<Record<string, HelpTopic>> = Object.fromEntries(HELP_TOPIC_LIST.map((t) => [t.id, t]));
+export const HELP_TOPICS: Readonly<Record<string, HelpTopic>> = Object.fromEntries(
+  [
+    ...HELP_TOPIC_LIST,
+    ...COLLAB_MORE_HELP, ...WORK_MGMT_HELP, ...HR_PAYROLL_ADMIN_HELP, ...FACILITIES_CONTRACTS_HELP, ...SALES_HELP, ...ADMIN_HELP,
+  ].map((t) => [t.id, t])
+);
 
 /**
  * 매뉴얼 기사를 두지 않는 화면 — test:manual 의 화면 커버리지 검사에서 제외한다. 사유를 반드시 적는다.

@@ -102,6 +102,7 @@ export default function PayrollSettingsBoard() {
     <>
       <CdPageHeader
         title="급여 항목·설정"
+        helpTopic="payroll.settings"
         meta={`지급 ${drafts.filter((d) => d.kind === "pay").length}종 · 공제 ${drafts.filter((d) => d.kind === "deduction").length}종`}
         actions={
           topTab === "items" ? (

@@ -30,6 +30,7 @@ import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { FormProfilePanel } from "@/components/sales/bid/FormProfilePanel";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationSnapshot } from "@/components/admin/users/types";
@@ -1011,6 +1012,7 @@ export function BidPackageBoard() {
         actions={
           <div className="flex items-center gap-2">
             {savedAt && <span className="text-[11px] cd-text-faint">저장됨 {savedAt}</span>}
+            <CdHelp topic="bid.package-save" />
             <button
               type="button"
               onClick={save}

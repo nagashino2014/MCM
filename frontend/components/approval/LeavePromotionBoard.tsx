@@ -154,6 +154,7 @@ export function LeavePromotionBoard() {
         icon={<BellRing className="w-5 h-5" />}
         eyebrow="Approval · Leave Promotion"
         title="연차촉진제도 관리"
+        helpTopic="hr.leave-promotion"
         help="근로기준법 연차사용촉진 — 잔여 연차가 있는 직원에게 1·2차 사용 촉구 고지를 발송하고 회신을 관리합니다."
         actions={
           <div className="flex items-center gap-2">

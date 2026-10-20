@@ -29,6 +29,7 @@ import {
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
@@ -519,6 +520,7 @@ function ContractsInner() {
         icon={<FileSignature className="w-5 h-5" />}
         eyebrow="Contract · Ledger"
         title="계약 관리"
+        helpTopic="contracts.ledger"
         help="용역 분류를 펼쳐 계약을 선택하면 오른쪽에 계약 정보와 청구·수금 단계가 표시됩니다. 검색과 연도 필터로 계약 범위를 좁힐 수 있습니다."
         actions={
           <>
@@ -1259,7 +1261,10 @@ function ContractDetailPanel({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-baseline gap-2">
-            <h3 className="font-bold cd-text">청구·수금 단계</h3>
+            <h3 className="font-bold cd-text flex items-center gap-1">
+              청구·수금 단계
+              <CdHelp topic="contracts.stages" />
+            </h3>
             <span className="text-[11px] cd-text-faint">행을 드래그해 순서 변경</span>
           </div>
           <button
@@ -1952,7 +1957,15 @@ function InvoiceUploadModal({
   };
 
   return (
-    <ModalShell title={`${state.stageLabel} 발행/수금 정보 입력`} onClose={onClose}>
+    <ModalShell
+      title={
+        <span className="inline-flex items-center gap-1">
+          {`${state.stageLabel} 발행/수금 정보 입력`}
+          <CdHelp topic="contracts.invoice-entry" />
+        </span>
+      }
+      onClose={onClose}
+    >
       <div className="p-5 grid gap-3 grid-cols-2">
         <div className="col-span-2 flex items-end gap-3 flex-wrap">
           <label className="grid gap-1 text-sm" style={{ width: 220 }}>
@@ -3674,7 +3687,7 @@ function ContractDeleteModal({
   );
 }
 
-function ModalShell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function ModalShell({ title, onClose, children, wide }: { title: React.ReactNode; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
       <div className={"cd-card rounded-3xl max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>

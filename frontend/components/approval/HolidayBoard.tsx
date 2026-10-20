@@ -80,7 +80,7 @@ export function HolidayBoard() {
 
   return (
     <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
-      <CdPageHeader icon={<CalendarOff className="w-5 h-5" />} title="휴무일 지정" />
+      <CdPageHeader icon={<CalendarOff className="w-5 h-5" />} title="휴무일 지정" helpTopic="hr.holidays" />
 
       <p className="text-[13px] cd-text-muted mb-4 flex items-start gap-1.5">
         <Info className="w-4 h-4 shrink-0 mt-[1px]" style={{ color: "var(--cd-primary)" }} />

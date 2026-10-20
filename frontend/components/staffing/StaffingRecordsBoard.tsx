@@ -5,6 +5,7 @@ import type { ApexOptions } from "apexcharts";
 import { Banknote, CalendarRange, Download, Gauge, ListChecks, Percent, Trophy } from "lucide-react";
 import { CdBadge } from "@/components/cdash/CdBadge";
 import { CdButton } from "@/components/cdash/CdButton";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -619,7 +620,10 @@ export default function StaffingRecordsBoard() {
 
               {/* 다운로드 옵션 */}
               <section className="cd-card rounded-lg p-4 min-w-0" aria-label="증빙 다운로드 옵션">
-                <h2 className="text-base font-semibold cd-text mb-3">증빙 다운로드</h2>
+                <div className="flex items-center gap-1 mb-3">
+                  <h2 className="text-base font-semibold cd-text">증빙 다운로드</h2>
+                  <CdHelp topic="staffing.records-download" />
+                </div>
                 <div className="grid grid-cols-1 gap-5">
                   <fieldset>
                     <legend className="text-xs font-semibold cd-text-muted mb-2">포함할 서류</legend>

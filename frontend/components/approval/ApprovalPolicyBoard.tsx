@@ -28,10 +28,14 @@ interface Policy {
 const KIND_OPTIONS = [
   ["amount_limit", "금액 상한"],
   ["leave_balance", "연차 잔여 초과"],
+  ["budget_limit", "연간 예산 초과"],
   ["required_field", "필수 필드"],
-  ["overtime_limit", "초과근무 한도(P4 연동)"],
-  ["self_approval", "본인 결재 경고"],
+  ["overtime_limit", "초과근무 한도(미평가)"],
+  ["self_approval", "본인 결재"],
 ] as const;
+
+// 엔진이 아직 평가하지 않는 규칙 — 새로 고를 수 없게 하고, 기존 행은 표시만 유지한다.
+const UNEVALUATED = new Set(["overtime_limit"]);
 
 const NEEDS_FIELD = new Set(["amount_limit", "required_field"]);
 
@@ -143,7 +147,7 @@ export function ApprovalPolicyBoard() {
               <div key={i} className="rounded-xl border cd-border-c p-3 flex flex-wrap items-center gap-2">
                 <select className="cd-select" style={{ width: 180 }} value={p.kind} onChange={(e) => update(i, { kind: e.target.value, fieldKey: NEEDS_FIELD.has(e.target.value) ? p.fieldKey : null })}>
                   {KIND_OPTIONS.map(([k, l]) => (
-                    <option key={k} value={k}>
+                    <option key={k} value={k} disabled={UNEVALUATED.has(k) && p.kind !== k}>
                       {l}
                     </option>
                   ))}
@@ -198,7 +202,7 @@ export function ApprovalPolicyBoard() {
         )}
         {msg && <p className="text-[12px] cd-text-faint">{msg}</p>}
         <p className="text-[10.5px] cd-text-faint">
-          연차 잔여·본인 결재 규칙은 정책이 없어도 기본 경고로 동작합니다. 여기서 등록하면 수준(경고/차단)을 지정할 수 있습니다. 초과근무 한도는 근태 연동(AX-P4) 후 값이 평가됩니다.
+          연차 잔여·연간 예산·본인 결재 규칙은 정책이 없어도 기본 경고로 동작합니다. 여기서 등록하면 수준(경고/차단)을 지정할 수 있습니다. 초과근무 한도는 아직 평가하지 않아 새로 고를 수 없습니다.
         </p>
       </div>
     </div>

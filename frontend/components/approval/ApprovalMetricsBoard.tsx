@@ -78,12 +78,13 @@ export function ApprovalMetricsBoard() {
     }
   };
 
-  const save = async () => {
-    if (!editMeta) return;
+  // 저장 성공 여부를 돌려준다 — '저장 후 실행'은 실패하면 실행하지 않는다.
+  const save = async (): Promise<boolean> => {
+    if (!editMeta) return false;
     const def = parseMetricDefinition(editJson);
     if (!def) {
       alert("정의 JSON 이 올바르지 않습니다.");
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -105,8 +106,10 @@ export function ApprovalMetricsBoard() {
       if (!res.ok) throw new Error(body?.error ?? "저장 실패");
       await load();
       setSelectedKey(editMeta.metricKey.trim());
+      return true;
     } catch (err) {
       alert((err as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -216,13 +219,16 @@ export function ApprovalMetricsBoard() {
                         className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
                         disabled={running}
                         onClick={() => {
-                          save().then(() => run(editMeta.metricKey.trim()));
+                          const key = editMeta.metricKey.trim();
+                          void save().then((ok) => {
+                            if (ok) void run(key);
+                          });
                         }}
                       >
                         <Play className="w-3.5 h-3.5 inline mr-1" />
                         {running ? "실행 중..." : "저장 후 실행"}
                       </button>
-                      <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs disabled:opacity-50" disabled={saving} onClick={save}>
+                      <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs disabled:opacity-50" disabled={saving} onClick={() => void save()}>
                         <Save className="w-3.5 h-3.5 inline mr-1" /> 저장
                       </button>
                       {selected && (

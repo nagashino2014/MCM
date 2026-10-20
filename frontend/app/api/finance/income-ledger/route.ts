@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
     await requirePermission("finance.view");
     const kind = sp.get("kind");
     const rows = await listIncomeLedger(year, kind === "business" || kind === "other" ? (kind as IncomeKind) : undefined);
-    return NextResponse.json({ rows });
+    // 대장 엑셀(주민번호 전체)은 finance.manage 만 — 화면이 버튼 표시를 정하도록 함께 돌려준다.
+    let canManage = false;
+    try { await requirePermission("finance.manage"); canManage = true; } catch (e) { if ((e as { status?: number }).status !== 403) throw e; }
+    return NextResponse.json({ rows, canManage });
   } catch (err) {
     return authErrorToResponse(err);
   }

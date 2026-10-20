@@ -121,7 +121,12 @@ function refFieldsOf(fields: ApprovalFieldDef[]): { field: ApprovalFieldDef; con
 export async function getSemanticsOverview(): Promise<SemanticsOverview> {
   const db = await getDb();
   const formRows = rowsToObjects(
-    await db.exec("SELECT form_id, name, version, fields FROM approval_forms WHERE use_yn = 1 ORDER BY sort_order, name")
+    // 사용 해제 양식도 제출 문서가 있으면 포함한다(과거 문서의 연결 진단이 빠지지 않게).
+    await db.exec(
+      `SELECT f.form_id, f.name, f.version, f.fields FROM approval_forms f
+        WHERE f.use_yn = 1 OR EXISTS (SELECT 1 FROM approval_docs d WHERE d.form_id = f.form_id AND d.status <> 'draft')
+        ORDER BY f.sort_order, f.name`
+    )
   );
 
   const forms: SemanticsOverview["forms"] = [];

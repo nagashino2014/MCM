@@ -25,6 +25,8 @@ export function normalizeCardTransaction(row: Record<string, unknown>): CardNorm
   const [total, supply, tax, service] = raw.map(Math.abs);
   let issue: string | null = null;
   if (kind === "unknown") issue = "승인 유형을 확인할 수 없습니다.";
+  // 엑셀 업로드분은 공급가액·세액을 비워 적재한다(면세 가맹점 역산 오류 방지) — 정수 오류와 구분해 안내한다.
+  else if (Number.isSafeInteger(raw[0]) && (Number.isNaN(raw[1]) || Number.isNaN(raw[2]))) issue = "공급가액·세액이 없습니다(엑셀 업로드분). 바로빌 수집분이나 카드 매출전표로 확인해 주세요.";
   else if (!raw.every(Number.isSafeInteger)) issue = "거래 금액이 원 단위 정수가 아닙니다.";
   else if (total !== supply + tax + service) issue = "합계·공급가액·세액·봉사료가 일치하지 않습니다.";
   else if (kind === "purchase" && raw.some(n => n < 0)) issue = "승인 거래의 음수 금액은 원천 확인이 필요합니다.";

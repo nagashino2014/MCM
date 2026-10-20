@@ -1,6 +1,6 @@
 "use client";
 
-// 전자결재 알림 설정(AX-P0, admin) — 이벤트별 이메일(SES)·알림톡(솔라피) 채널 on/off.
+// 전자결재 알림 설정(AX-P0, admin) — 이벤트별 이메일(SES)·알림톡(솔라피)·모바일 푸시 채널 on/off.
 // remind 이벤트는 리마인드 대기시간(시간)도 편집(AX-P1 배치가 사용).
 // 설계: docs/e-approval-differentiation-blueprint.md §9-1.
 
@@ -14,6 +14,7 @@ interface NotifySetting {
   event: string;
   emailEnabled: boolean;
   alimtalkEnabled: boolean;
+  pushEnabled: boolean;
   remindAfterHours: number | null;
 }
 
@@ -40,7 +41,7 @@ export function ApprovalNotifySettingsBoard() {
     fetch("/api/approval/notify-settings", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (Array.isArray(d?.settings)) setRows(d.settings);
+        if (Array.isArray(d?.settings)) setRows(d.settings.map((r: NotifySetting) => ({ ...r, pushEnabled: r.pushEnabled !== false })));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -76,7 +77,7 @@ export function ApprovalNotifySettingsBoard() {
         eyebrow="Approval · Settings"
         title="결재 알림 설정"
         helpTopic="approval-ops.notify-channels"
-        help="결재 단계별로 이메일·카카오 알림톡을 보낼지 설정합니다."
+        help="결재 단계별로 이메일·카카오 알림톡·모바일 푸시를 보낼지 설정합니다."
         actions={
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving || loading} onClick={save}>
             {saving ? "저장 중..." : "저장"}
@@ -95,6 +96,7 @@ export function ApprovalNotifySettingsBoard() {
                   <th className="py-1.5 pr-3 font-semibold">이벤트</th>
                   <th className="py-1.5 pr-3 font-semibold text-center">이메일</th>
                   <th className="py-1.5 pr-3 font-semibold text-center">알림톡</th>
+                  <th className="py-1.5 pr-3 font-semibold text-center">모바일 푸시</th>
                   <th className="py-1.5 font-semibold">비고</th>
                 </tr>
               </thead>
@@ -112,6 +114,9 @@ export function ApprovalNotifySettingsBoard() {
                       </td>
                       <td className="py-2.5 pr-3 text-center">
                         <input type="checkbox" checked={r.alimtalkEnabled} onChange={(e) => update(r.event, { alimtalkEnabled: e.target.checked })} />
+                      </td>
+                      <td className="py-2.5 pr-3 text-center">
+                        <input type="checkbox" checked={r.pushEnabled} onChange={(e) => update(r.event, { pushEnabled: e.target.checked })} />
                       </td>
                       <td className="py-2.5">
                         {r.event === "remind" ? (

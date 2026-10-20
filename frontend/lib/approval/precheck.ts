@@ -1,6 +1,6 @@
 /**
  * 상신 전 사전검토 — 결정적 규칙 엔진(AX-P3, 서버). LLM 없이 확실히 잡을 수 있는 것은 여기서.
- * 규칙: 본인 결재(self_approval)·연차 잔여(leave_balance)·금액 상한(amount_limit)·필수 필드(required_field).
+ * 규칙: 본인 결재(self_approval)·연차 잔여(leave_balance)·예산(budget_limit)·금액 상한(amount_limit)·필수 필드(required_field).
  * 결과 level: block(상신 불가)·warn(경고 후 상신 허용)·info(참고). 기본 warn, 정책에서 block 승격(§8-3).
  * overtime_limit 규칙은 AX-P4(근태 연동)에서 값 계산을 연결한다(여기서는 미평가).
  * 설계: docs/e-approval-differentiation-blueprint.md §9-4.
@@ -114,14 +114,16 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
   const drafterUserId = r.drafter_user_id != null ? String(r.drafter_user_id) : null;
 
   const findings: PrecheckFinding[] = [];
+  const policies = await listFormPolicies(formId);
 
-  // 규칙 1: 본인 결재(기안자가 결재선에 포함) — 항상 검사
+  // 규칙 1: 본인 결재(기안자가 결재선에 포함) — 항상 검사(정책 있으면 severity 적용)
   if (drafterUserId) {
     const selfStep = rowsToObjects(
       await db.exec(`SELECT count(*) AS c FROM approval_steps WHERE doc_id = $1 AND assignee_user_id = $2`, [docId, drafterUserId])
     );
     if (Number(selfStep[0]?.c ?? 0) > 0) {
-      findings.push({ level: "warn", message: "기안자 본인이 결재선에 포함되어 있습니다. 결재선을 확인하세요.", source: "self_approval" });
+      const pol = policies.find((p) => p.kind === "self_approval");
+      findings.push({ level: pol?.severity ?? "warn", message: "기안자 본인이 결재선에 포함되어 있습니다. 결재선을 확인하세요.", source: "self_approval" });
     }
   }
 
@@ -132,7 +134,7 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
       const year = new Date().toISOString().slice(0, 4);
       const rem = await getMyLeaveRemaining(drafterUserId, year);
       if (rem && useDays > rem.remaining) {
-        const pol = (await listFormPolicies(formId)).find((p) => p.kind === "leave_balance");
+        const pol = policies.find((p) => p.kind === "leave_balance");
         findings.push({
           level: pol?.severity ?? "warn",
           message: `신청 일수(${useDays}일)가 잔여 연차(${rem.remaining}일)를 초과합니다.`,
@@ -143,13 +145,13 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
   }
 
   // 규칙 3: 연간 예산(지출결의류 — 예산이 등록된 카테고리만, P6-C). 정책 없이도 warn, 정책으로 block 승격.
-  if (formId === "frm-expense-report" || formId === "frm-biz-trip-report") {
+  if (formId === "frm-expense-report" || formId === "frm-expense-personal" || formId === "frm-biz-trip-report") {
     try {
       const { checkBudgetForExpenseValues } = await import("@/lib/finance/budget");
       const year = Number(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 4));
       const budgetFindings = await checkBudgetForExpenseValues(values, year);
       if (budgetFindings.length) {
-        const pol = (await listFormPolicies(formId)).find((p) => p.kind === "budget_limit");
+        const pol = policies.find((p) => p.kind === "budget_limit");
         for (const f of budgetFindings) {
           const fmt = (n: number) => n.toLocaleString("ko-KR");
           findings.push({
@@ -167,7 +169,6 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
   }
 
   // 정책 기반 규칙(금액 상한·필수 필드)
-  const policies = await listFormPolicies(formId);
   for (const p of policies) {
     if (p.kind === "amount_limit" && p.fieldKey) {
       const max = toNumber(p.config.max);

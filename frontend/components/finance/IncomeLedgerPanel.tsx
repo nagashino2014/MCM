@@ -32,6 +32,7 @@ export function IncomeLedgerPanel() {
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [canManage, setCanManage] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -43,6 +44,7 @@ export function IncomeLedgerPanel() {
         if (d.error) setError(String(d.error));
         else {
           setRows(Array.isArray(d.rows) ? d.rows : []);
+          setCanManage(d.canManage === true);
           setError(null);
         }
       })
@@ -75,9 +77,11 @@ export function IncomeLedgerPanel() {
             <option key={y} value={y}>{y}년</option>
           ))}
         </select>
-        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => window.open(`/api/finance/income-ledger?year=${year}&format=xlsx`, "_blank")}>
-          <Download className="w-3.5 h-3.5" /> 대장 엑셀
-        </button>
+        {canManage && (
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => window.open(`/api/finance/income-ledger?year=${year}&format=xlsx`, "_blank")}>
+            <Download className="w-3.5 h-3.5" /> 대장 엑셀
+          </button>
+        )}
       </div>
       <div className="text-xs cd-text-muted mb-3">
         전문가활용비 지급 신청서 승인 건이 자동 적재됩니다. {isOther ? "기타소득: 필요경비 80% 공제 후 소득세 20%·지방세 10% (과세소득 5만원 이하 징수 없음)." : "사업소득: 소득세 3%·지방세 10% (소득세 1,000원 미만 징수 없음)."}

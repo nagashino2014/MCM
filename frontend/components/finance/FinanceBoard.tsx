@@ -51,6 +51,8 @@ import "@/components/cdash/cdash.css";
 
 /** 최근 수집 로그 카드에 한 번에 보여줄 줄 수. */
 const LOG_PAGE_SIZE = 10;
+// 수집 로그 종류(finance_sync_logs.kind) 표시명 — 엑셀 업로드분은 바로빌 수집과 구분한다.
+const SYNC_LOG_KIND_LABEL: Record<string, string> = { bank: "계좌", card: "카드", "excel-bank": "계좌 엑셀", "excel-card": "카드 엑셀", hometax: "홈택스" };
 
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
@@ -913,7 +915,7 @@ function ConnectionsPanel() {
                   {logs.slice(logOffset, logOffset + LOG_PAGE_SIZE).map((l) => (
                     <tr key={l.syncId} className="border-t cd-hairline-row-c">
                       <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.startedAt}</td>
-                      <td className="py-1.5 pr-3">{l.kind === "bank" ? "계좌" : l.kind === "card" ? "카드" : l.kind}</td>
+                      <td className="py-1.5 pr-3">{SYNC_LOG_KIND_LABEL[l.kind] ?? l.kind}</td>
                       <td className="py-1.5 pr-3">
                         <span className={`cd-pill ${l.status === "ok" ? "cd-pill-success" : l.status === "error" ? "cd-pill-error" : "cd-pill-idle"}`}>
                           {l.status === "ok" ? "성공" : l.status === "error" ? "실패" : "진행중"}

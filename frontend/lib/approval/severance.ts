@@ -53,7 +53,8 @@ export async function listSeveranceSettlements(): Promise<SeveranceRow[]> {
   return rows.map(mapRow);
 }
 
-/** 퇴직금 수기 입력·정산 상태 갱신 — 재무 퇴직 정산 화면. */
+/** 퇴직금 수기 입력·정산 상태 갱신 — 재무 퇴직 정산 화면.
+ *  severanceAmount·note 는 undefined 면 유지, null 이면 비운다(빈 칸으로 지우기). */
 export async function updateSeveranceSettlement(params: {
   settleId: string;
   severanceAmount?: number | null;
@@ -64,12 +65,21 @@ export async function updateSeveranceSettlement(params: {
   await withDbWrite(async (txn) => {
     await txn.run(
       `UPDATE severance_settlements
-          SET severance_amount = COALESCE($2, severance_amount),
-              note = COALESCE($3, note),
+          SET severance_amount = CASE WHEN $7::boolean THEN $2 ELSE severance_amount END,
+              note = CASE WHEN $8::boolean THEN $3 ELSE note END,
               status = COALESCE($4, status),
               updated_by = $5, updated_at = $6
         WHERE settle_id = $1`,
-      [params.settleId, params.severanceAmount ?? null, params.note ?? null, params.status ?? null, params.actorUserId, new Date().toISOString()]
+      [
+        params.settleId,
+        params.severanceAmount ?? null,
+        params.note ?? null,
+        params.status ?? null,
+        params.actorUserId,
+        new Date().toISOString(),
+        params.severanceAmount !== undefined,
+        params.note !== undefined,
+      ]
     );
   });
 }

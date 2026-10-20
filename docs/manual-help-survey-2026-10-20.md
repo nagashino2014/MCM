@@ -217,20 +217,22 @@
 
 매뉴얼이 "화면과 다른 설명"을 하지 않으려면 아래를 먼저 정하거나 매뉴얼에 그대로 적어야 한다.
 
+> 2026-10-20 F-1~F-8·F-12(권한·문구)와 F-18~F-21(금액)을 수정하고 매뉴얼 기사·도움말을 수정 후 동작에 맞췄다(브랜치 `claude/manual-defect-fixes`). 나머지는 미해결.
+
 | # | 구분 | 내용 | 근거 |
 |---|---|---|---|
-| F-1 | 권한 불일치 | 양식별 문서 조회·결재 인사이트는 메뉴가 전원에게 보이나 API는 `approval.manage` → 직원은 "조회 실패" | `app/api/approval/query/route.ts:12`, `insights/route.ts:11` |
-| F-2 | 권한 불일치 | 파일함 메뉴 전원 노출, API `files.manage` | `app/api/files/route.ts:31,45` |
-| F-3 | 권한 불일치 | 자산 관리 메뉴 전원 노출, 등록·수정 API `asset.manage` | `components/assets/AssetBoard.tsx` |
-| F-4 | 권한 불일치 | 계약 `신규 계약`·`변경계약 입력`·`계약 삭제` 버튼이 권한 없이도 보임(서버 403) | `app/(app)/contracts/page.tsx` |
-| F-5 | 문구 오류 | 공문 부제 "수신처 메일로 발송" — 실제는 참조 담당자 To | `ApprovalLetterBoard.tsx:1017` |
-| F-6 | 문구 오류 | 메일 임시보관함 빈 화면 "자동 저장된 메일" — 메일은 자동 저장 없음 | `components/mail/*` |
-| F-7 | 문구 오류 | 외부 설문 권한 안내 "survey.view 권한" — 실제 `survey.manage` | `SurveyListBoard.tsx:341` |
-| F-8 | 문구 누락 | 파일 저장 정책이 "경과로 표시"만 안내 — 실제 매일 자동 삭제 | `file-retention-tick/route.ts:16-19` |
+| F-1 | 권한 불일치 | 양식별 문서 조회·결재 인사이트는 메뉴가 전원에게 보이나 API는 `approval.manage` → 직원은 "조회 실패" — ✅ **해결(2026-10-20)** | `app/api/approval/query/route.ts:12`, `insights/route.ts:11` |
+| F-2 | 권한 불일치 | 파일함 메뉴 전원 노출, API `files.manage` — ✅ **해결(2026-10-20)** | `app/api/files/route.ts:31,45` |
+| F-3 | 권한 불일치 | 자산 관리 메뉴 전원 노출, 등록·수정 API `asset.manage` — ✅ **해결(2026-10-20, 조회 전원 유지, 편집 UI만 asset.manage)** | `components/assets/AssetBoard.tsx` |
+| F-4 | 권한 불일치 | 계약 `신규 계약`·`변경계약 입력`·`계약 삭제` 버튼이 권한 없이도 보임(서버 403) — ✅ **해결(2026-10-20, 전자발행 버튼은 그대로(발행 시 서버 판정))** | `app/(app)/contracts/page.tsx` |
+| F-5 | 문구 오류 | 공문 부제 "수신처 메일로 발송" — 실제는 참조 담당자 To — ✅ **해결(2026-10-20)** | `ApprovalLetterBoard.tsx:1017` |
+| F-6 | 문구 오류 | 메일 임시보관함 빈 화면 "자동 저장된 메일" — 메일은 자동 저장 없음 — ✅ **해결(2026-10-20)** | `components/mail/*` |
+| F-7 | 문구 오류 | 외부 설문 권한 안내 "survey.view 권한" — 실제 `survey.manage` — ✅ **해결(2026-10-20)** | `SurveyListBoard.tsx:341` |
+| F-8 | 문구 누락 | 파일 저장 정책이 "경과로 표시"만 안내 — 실제 매일 자동 삭제 — ✅ **해결(2026-10-20)** | `file-retention-tick/route.ts:16-19` |
 | F-9 | 기능 공백 | 로그인 후 본인 비밀번호 변경 메뉴 없음(최초 변경·재설정 링크만) | 계정 메뉴 |
 | F-10 | 이름 불일치 | "사용자 등록·삭제" 화면에 삭제 기능 없음(영구 삭제는 계정·권한 관리) | `registry/page.tsx` |
 | F-11 | 기능 공백 | 휴지통에 복원 버튼 없음 | `app/(app)/trash/page.tsx` |
-| F-12 | 도움말 오류 | 기안 화면 help가 작성법과 무관("문서 기록에서 조회·집계") | `ApprovalDraftBoard.tsx:1183` |
+| F-12 | 도움말 오류 | 기안 화면 help가 작성법과 무관("문서 기록에서 조회·집계") — ✅ **해결(2026-10-20)** | `ApprovalDraftBoard.tsx:1183` |
 | F-13 | 준비 중 | 메일 쓰기 [문서함] 첨부, 외부 메일 클라이언트(POP3/IMAP), 검색의 콘텐츠 검색 | — |
 | F-14 | 문구 오류 | 기안 화면 참조·열람 안내 "참조=완료 통보 · 열람=진행 중 열람" — 실제로는 권한·알림이 같고 표기만 다름 | `ApprovalDraftBoard.tsx` 참조·열람 제목, `lib/approval/access.ts` |
 | F-15 | 문구 오류 | 전자세금계산서 발행 모달 "전송 전에는 취소" — 즉시발행이라 발급 후 취소 불가, 수정세금계산서는 국세청 전송 완료 후만 | `TaxInvoiceIssueModal.tsx` 안내문, `lib/barobill/invoicing.ts` |
@@ -243,10 +245,10 @@
 
 | # | 영역 | 내용 | 근거 |
 |---|---|---|---|
-| F-18 | 계약 | [발행/수금]에서 '수금 정보 등록'을 켜면 금액과 무관하게 수금 완료로 저장되어 부분입금 잔액이 미수금에서 빠짐 | `app/(app)/contracts/page.tsx` InvoiceUploadModal, `api/contracts/[contractId]/invoices/route.ts:221` |
-| F-19 | 계약 | 미수금 수금 등록 두 번째 부분입금이 누적되지 않고 덮어씀(입력 기본값은 잔액) | `CollectionEntryModal.tsx:38`, `milestones/[milestoneId]/route.ts:49` |
-| F-20 | 성과급 | 성과급 기안 승인 뒤 일괄산정을 다시 해도 승인 상태가 남아 기안과 다른 명세가 발송될 수 있음 | `BonusStatementsBoard` plan_doc_id |
-| F-21 | 근태·급여 | 주 한도 초과 시간이 초과근무수당과 대체휴가로 이중 산정될 가능성(동의서는 "임금 지급에 갈음") — 사용자 확인 필요 | `lib/payroll/overtime.ts` overtimeAmounts, `lib/approval/overtime.ts` syncOvertimeCompForWeeks |
+| F-18 | 계약 | [발행/수금]에서 '수금 정보 등록'을 켜면 금액과 무관하게 수금 완료로 저장되어 부분입금 잔액이 미수금에서 빠짐 — ✅ **해결(2026-10-20)** | `app/(app)/contracts/page.tsx` InvoiceUploadModal, `api/contracts/[contractId]/invoices/route.ts:221` |
+| F-19 | 계약 | 미수금 수금 등록 두 번째 부분입금이 누적되지 않고 덮어씀(입력 기본값은 잔액) — ✅ **해결(2026-10-20)** | `CollectionEntryModal.tsx:38`, `milestones/[milestoneId]/route.ts:49` |
+| F-20 | 성과급 | 성과급 기안 승인 뒤 일괄산정을 다시 해도 승인 상태가 남아 기안과 다른 명세가 발송될 수 있음 — ✅ **해결(2026-10-20)** | `BonusStatementsBoard` plan_doc_id |
+| F-21 | 근태·급여 | 주 한도 초과 시간이 초과근무수당과 대체휴가로 이중 산정될 가능성(동의서는 "임금 지급에 갈음") — 사용자 확인 필요 — ✅ **해결(2026-10-20, 주 12h까지만 수당, 초과분은 수당 제외·대체휴가(사용자 결정 2026-10-20))** | `lib/payroll/overtime.ts` overtimeAmounts, `lib/approval/overtime.ts` syncOvertimeCompForWeeks |
 
 **권한·노출 불일치**
 

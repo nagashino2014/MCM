@@ -62,7 +62,8 @@ import { notifyTodoAssigned, notifyTodoComment, notifyTodoStatus } from "./notif
 import { listContractStages } from "@/lib/contracts/process-stages";
 import { listTaskStages } from "@/lib/work-plan/task-stages";
 import type { TodoStageRef } from "./types";
-import { TODO_MILESTONE_KINDS, type TodoMilestoneKind } from "./types";
+import { type TodoMilestoneKind } from "./types";
+import { deriveWorkType } from "./work-types";
 import { notifyDependentsUnblocked, openDepCount } from "./deps";
 import type { TodoRuleEvent } from "./rules";
 
@@ -997,6 +998,7 @@ function mapItem(r: Record<string, unknown>, userId: string, canEdit: boolean, p
     endDate: r.end_date != null ? String(r.end_date) : null,
     actualDate: r.actual_date != null ? String(r.actual_date) : null,
     milestoneKind: r.milestone_kind != null ? (String(r.milestone_kind) as TodoMilestoneKind) : null,
+    workType: r.work_type != null ? String(r.work_type) : null,
     openDeps: r.open_deps != null ? Number(r.open_deps) : 0,
     archivedAt: r.archived_at != null ? String(r.archived_at) : null,
     createdAt: String(r.created_at ?? ""),
@@ -1238,7 +1240,29 @@ export async function getItemDetail(userId: string, itemId: string): Promise<Tod
       console.error("[todo] 공정표 조회 실패", base.linkKind, base.linkId, e);
     }
   }
-  return { ...base, subtasks, shares, comments, activity, progressAvg, stages, reportSubject };
+  // 관련 용역의 대상 사업장(2026-10-20) — 발주처(계약상대)가 아니라 contracts.facility_id(통합허가 대상 사업장)
+  let siteFacilityId: string | null = null;
+  let siteName: string | null = null;
+  if (base.contractId) {
+    const site = rowsToObjects(
+      await db.exec(
+        `SELECT c.facility_id, f.company_name FROM contracts c LEFT JOIN facilities f ON f.facility_id = c.facility_id WHERE c.contract_id = $1`,
+        [base.contractId]
+      )
+    )[0];
+    if (site?.facility_id != null) {
+      siteFacilityId = String(site.facility_id);
+      siteName = site.company_name != null ? String(site.company_name) : null;
+    }
+  }
+  // 302 하위 작업 자동 유형(상위 '관련' 기준) — 실패해도 상세는 연다
+  let workTypeAuto: string | null = null;
+  try {
+    workTypeAuto = await deriveWorkType(db, base);
+  } catch (e) {
+    console.error("[todo] 자동 유형 판정 실패", itemId, e);
+  }
+  return { ...base, subtasks, shares, comments, activity, progressAvg, stages, reportSubject, siteFacilityId, siteName, workTypeAuto };
 }
 
 async function logActivity(db: PgDatabase, itemId: string, userId: string | null, action: TodoActivityAction, detail: Record<string, unknown> = {}) {
@@ -1355,6 +1379,8 @@ interface NormalizedItemInput {
   /** 287 하위 작업 마일스톤 — 실제 일자·종류(상위에서는 무시) */
   actualDate: string | null;
   milestoneKind: TodoMilestoneKind | null;
+  /** 302 하위 작업 유형(직접 선택) */
+  workType: string | null;
 }
 
 function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unknown>): NormalizedItemInput {
@@ -1397,9 +1423,12 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
   const endDate = doDate ? endDateRaw : null;
   // 287 하위 작업 마일스톤
   const actualDate = dateOrNull(pick("actualDate", "actual_date"), "실제 일자");
-  const mkRaw = str(pick("milestoneKind", "milestone_kind"), 30);
-  if (mkRaw && !(TODO_MILESTONE_KINDS as readonly string[]).includes(mkRaw)) throw fail("마일스톤 종류가 올바르지 않습니다.");
+  // 302: 종류는 유형별 설정 목록의 키(기본 8종 + 관리자 추가 mk_...)
+  const mkRaw = str(pick("milestoneKind", "milestone_kind"), 40);
+  if (mkRaw && !/^[a-z][a-z0-9_]{0,39}$/.test(mkRaw)) throw fail("마일스톤 종류가 올바르지 않습니다.");
   const milestoneKind = (mkRaw as TodoMilestoneKind | null) ?? null;
+  const wtRaw = str(pick("workType", "work_type"), 40);
+  if (wtRaw && !/^[a-z][a-z0-9_]{0,39}$/.test(wtRaw)) throw fail("유형 값이 올바르지 않습니다.");
   const stageRaw = pick("stageOrder", "stage_order");
   const stageOrder = stageRaw == null || stageRaw === "" ? null : Number(stageRaw);
   if (stageOrder != null && (!Number.isInteger(stageOrder) || stageOrder < 1)) throw fail("공정 단계 번호가 올바르지 않습니다.");
@@ -1423,6 +1452,7 @@ function normalizeItem(input: Record<string, unknown>, cur?: Record<string, unkn
     endDate,
     actualDate,
     milestoneKind,
+    workType: wtRaw,
   };
 }
 
@@ -1525,10 +1555,10 @@ export async function createItem(userId: string, input: Record<string, unknown>)
     );
     // 285·287 진척·기간·마일스톤 — INSERT 컬럼 목록을 늘리지 않고 보조 UPDATE 로(없으면 건너뜀). 진척 3종은 하위 작업만.
     const hasProgress = !!parentItemId && (v.progressPct != null || !!v.progressNote || v.stageOrder != null);
-    if (v.endDate || v.actualDate || v.milestoneKind || hasProgress) {
+    if (v.endDate || v.actualDate || v.milestoneKind || v.workType || hasProgress) {
       await db.run(
         `UPDATE todo_items SET end_date = $2, actual_date = $3, milestone_kind = $4, progress_pct = $5, progress_note = $6, stage_order = $7,
-                progress_updated_at = CASE WHEN $8 THEN $9 ELSE progress_updated_at END WHERE item_id = $1`,
+                progress_updated_at = CASE WHEN $8 THEN $9 ELSE progress_updated_at END, work_type = $10 WHERE item_id = $1`,
         [
           itemId,
           v.endDate,
@@ -1539,6 +1569,7 @@ export async function createItem(userId: string, input: Record<string, unknown>)
           hasProgress ? v.stageOrder : null,
           hasProgress && (v.progressPct != null || !!v.progressNote),
           now,
+          parentItemId ? v.workType : null,
         ]
       );
     }
@@ -1658,6 +1689,8 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
     const endDate = v.endDate;
     const actualDate = isSub ? v.actualDate : null;
     const milestoneKind = isSub ? v.milestoneKind : null;
+    const workType = isSub ? v.workType : null;
+    note("workType", cur.work_type ?? null, workType);
     note("endDate", cur.end_date ?? null, endDate);
     note("actualDate", cur.actual_date ?? null, actualDate);
     note("milestoneKind", cur.milestone_kind ?? null, milestoneKind);
@@ -1760,7 +1793,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
          completed_at = $23, completed_by = $24, updated_at = $25, updated_by = $26,
          complete_rules = $27::jsonb, completion_note = $28, reviewed_at = $29,
          progress_pct = $30, progress_note = $31, stage_order = $32, progress_updated_at = $33,
-         end_date = $34, actual_date = $35, milestone_kind = $36
+         end_date = $34, actual_date = $35, milestone_kind = $36, work_type = $37
        WHERE item_id = $1`,
       [
         itemId,
@@ -1799,6 +1832,7 @@ export async function updateItem(userId: string, itemId: string, patch: Record<s
         endDate,
         actualDate,
         milestoneKind,
+        workType,
       ]
     );
 

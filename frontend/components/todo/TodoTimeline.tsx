@@ -531,7 +531,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                       data-late={late(r) ? "1" : undefined}
                       data-drag={drag?.id === r.item.itemId ? "1" : undefined}
                       style={{ top: i * ROW_H + ROW_H / 2, left: clampDay(diffDays(addDays(r.start, drag?.id === r.item.itemId ? drag.delta : 0), windowStart)) * dayW + dayW / 2, ...tintStyle(r.item.boardColor) }}
-                      title={`${r.item.milestoneKind ? TODO_MILESTONE_LABELS[r.item.milestoneKind] : "마일스톤"} · ${r.item.actualDate ? `실제 ${md(r.item.actualDate)}` : `예정 ${md(r.start)}`}`}
+                      title={`${r.item.milestoneKind ? TODO_MILESTONE_LABELS[r.item.milestoneKind] ?? r.item.title : "마일스톤"} · ${r.item.actualDate ? `실제 ${md(r.item.actualDate)}` : `예정 ${md(r.start)}`}`}
                       onPointerDown={(e) => onBarPointerDown(e, r)}
                       onPointerMove={onBarPointerMove}
                       onPointerUp={(e) => void onBarPointerUp(e, r)}

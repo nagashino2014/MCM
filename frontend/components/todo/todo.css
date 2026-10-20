@@ -906,6 +906,31 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-canvas-body[data-layout="groups"] > .todo-rows > .todo-empty { padding: 12px 24px 14px; }
 .todo-canvas-body[data-layout="groups"] > .todo-done-sec { margin-top: 0; }
 .todo-canvas-body[data-layout="groups"] .todo-period-band { margin: 8px 12px; }
-/* 2026-10-20 드로어 복귀(폭 720) — 핵심 2×2 칸에서 편집을 열면 그 칸만 한 행 전체로 펼쳐 날짜·시각 입력이 줄바꿈되지 않게 한다. */
-.todo-drawer .todo-key > .todo-kv:has(> .todo-pr-edit) { grid-column: 1 / -1; }
-.todo-drawer .todo-key .todo-pr-edit { flex-wrap: nowrap; }
+/* 2026-10-20 드로어(폭 720) — 핵심 2×2 편집은 칸(절반 폭) 안에서: 날짜 132px 로 '시작 ~ 종료'가 한 줄, 시각·소요·지우기는 다음 줄. 입력란은 잘리지 않는다. */
+.todo-drawer .todo-key .todo-pr-edit { row-gap: 6px; }
+.todo-drawer .todo-key .todo-pr-edit .todo-w-date { width: 132px; }
+/* 범위 탭 개수 — 원문자(원 안 숫자, 세 자리는 알약형). 글자색을 따라 선택 탭은 진하게. */
+.todo-tab-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 10px; border: 1px solid currentColor; font-size: 11.5px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; opacity: 0.8; }
+/* 302 설정 › 하위 작업 유형·종류 — 유형 탭(버튼형, 8px) + 종류 목록 */
+.todo-wt { display: flex; flex-direction: column; gap: 10px; }
+.todo-wt-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.todo-wt-tab { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px; border: 1px solid var(--cd-border); border-radius: var(--mcm-action-radius, 8px); background: var(--cd-card); color: var(--cd-muted); font: inherit; font-size: 13px; cursor: pointer; }
+.todo-wt-tab svg { width: 13px; height: 13px; }
+.todo-wt-tab:hover { color: var(--cd-text); }
+.todo-wt-tab[aria-selected="true"] { color: var(--cd-primary); border-color: var(--cd-primary); background: var(--cd-primary-soft); font-weight: 600; }
+.todo-wt-tab[data-hidden="true"] { opacity: 0.55; text-decoration: line-through; }
+.todo-wt-tab[data-add="true"] { border-style: dashed; }
+.todo-wt-panel { border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 8px); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.todo-wt-kinds { display: flex; flex-direction: column; gap: 6px; }
+.todo-wt-row { display: flex; align-items: center; gap: 8px; }
+.todo-wt-row[data-head="true"] { padding-bottom: 8px; border-bottom: 1px solid var(--cd-hairline-row, var(--cd-border)); }
+.todo-wt-row[data-hidden="true"] .todo-wt-in { color: var(--cd-faint); text-decoration: line-through; }
+.todo-wt-lb { font-size: 12.5px; color: var(--cd-muted); width: 64px; flex: none; }
+.todo-wt-no { width: 20px; flex: none; text-align: right; font-size: 12px; color: var(--cd-faint); font-variant-numeric: tabular-nums; }
+.todo-wt .todo-wt-in { flex: none; width: 220px; height: 30px; font-size: 13px; }
+.todo-wt-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cd-muted); white-space: nowrap; }
+.todo-wt-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+/* 302 하위 작업 행 — 유형 칸이 늘어 진행 막대를 줄여 '유형·종류·시작~종료·진행율'이 한 줄에 들어가게 */
+.todo-drawer .todo-sr-prog { gap: 6px; }
+.todo-drawer .todo-sr-prog input[type="range"] { flex-basis: 112px; }
+.todo-wt-row[data-head="true"] .todo-wt-chk + .todo-mu { margin-left: 8px; }

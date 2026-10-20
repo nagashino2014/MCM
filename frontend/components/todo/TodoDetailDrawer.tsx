@@ -33,10 +33,10 @@ import {
   type TodoShareRole,
   type TodoStatus,
   type TodoDeps,
-  TODO_MILESTONE_KINDS,
   TODO_MILESTONE_LABELS,
   TODO_MILESTONE_STAGE_HINTS,
   type TodoMilestoneKind,
+  type TodoWorkType,
 } from "@/lib/todo/types";
 import { describeRecurrence, parseRecurrence } from "@/lib/todo/recurrence";
 import { completeRulesSummary, hasAnyCompleteRule } from "@/lib/todo/completion";
@@ -140,6 +140,7 @@ function makeDraftDetail(board: TodoBoard | null, init: TodoDraftInit, me: { use
     endDate: null,
     actualDate: null,
     milestoneKind: null,
+    workType: null,
     openDeps: 0,
     archivedAt: null,
     createdAt: "",
@@ -657,7 +658,29 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
   // 하위 작업 진척(285, §25-2) — 진행율·진척 내용·공정 단계. 슬라이더는 400ms, 내용은 800ms 디바운스로 PATCH, 같은 하위의 보류 값은 합친다.
   const subTimers = useRef<Record<string, number>>({});
   const subPending = useRef<Record<string, Record<string, unknown>>>({});
-  const [subDraft, setSubDraft] = useState<Record<string, { pct?: number; note?: string; doDate?: string; actualDate?: string }>>({});
+  const [subDraft, setSubDraft] = useState<Record<string, { pct?: number; note?: string; doDate?: string; endDate?: string }>>({});
+  // 302 하위 작업 유형·종류 목록(전사 설정) — 상세를 처음 열 때 한 번
+  const [workTypes, setWorkTypes] = useState<TodoWorkType[]>([]);
+  useEffect(() => {
+    let alive = true;
+    apiCall<{ types: TodoWorkType[] }>("/api/todo/work-types")
+      .then((d) => alive && setWorkTypes(d.types ?? []))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const kindLabel = (key: string) => {
+    for (const t of workTypes) for (const k of t.kinds) if (k.kindKey === key) return k.label;
+    return TODO_MILESTONE_LABELS[key] ?? key;
+  };
+  /** 유형의 종류 목록(숨김 제외) — 유형이 없으면 '기타' 유형 목록. 현재 값이 목록에 없으면 맨 뒤에 둔다. */
+  const kindOptions = (typeKey: string | null, current: string | null) => {
+    const t = workTypes.find((x) => x.typeKey === (typeKey ?? "etc")) ?? workTypes.find((x) => x.typeKey === "etc");
+    const opts = (t?.kinds ?? []).filter((k) => k.isActive).map((k) => ({ key: k.kindKey, label: k.label }));
+    if (current && !opts.some((o) => o.key === current)) opts.push({ key: current, label: kindLabel(current) });
+    return opts;
+  };
   const patchSubtask = async (sub: TodoItem, body: Record<string, unknown>) => {
     try {
       await apiCall(`/api/todo/items/${encodeURIComponent(sub.itemId)}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -1470,10 +1493,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                       </span>
                       <div className="todo-rel-tx">
                         <div className="todo-rel-k">용역{detail.contractId ? ` · 계약 ${contractShort(detail.contractId)}` : ""}</div>
-                        <div className="todo-rel-n">
-                          {detail.projectName ?? detail.linkLabel ?? "계약"}
-                          {detail.clientName ? ` · 발주처 ${detail.clientName}` : ""}
-                        </div>
+                        <div className="todo-rel-n">{detail.projectName ?? detail.linkLabel ?? "계약"}</div>
                       </div>
                       {detail.contractId && <a href={`/contracts?focus=${encodeURIComponent(detail.contractId)}`}>계약 열기</a>}
                     </div>
@@ -1490,7 +1510,20 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                       {linkHref("facility", detail.linkId) && <a href={linkHref("facility", detail.linkId) ?? "#"}>사업장 열기</a>}
                     </div>
                   )}
-                  {detail.linkKind !== "facility" && board?.facilityId && (
+                  {/* 관련 용역의 대상 사업장(통합허가 = 허가 대상 사업장, 발주처와 다를 수 있음) */}
+                  {detail.linkKind !== "facility" && detail.siteFacilityId && (
+                    <div className="todo-rel-it">
+                      <span className="todo-rel-ic" aria-hidden="true">
+                        <Building2 />
+                      </span>
+                      <div className="todo-rel-tx">
+                        <div className="todo-rel-k">사업장 · 용역 대상</div>
+                        <div className="todo-rel-n">{detail.siteName ?? "대상 사업장"}</div>
+                      </div>
+                      <a href={`/facilities?focus=${encodeURIComponent(detail.siteFacilityId)}`}>사업장 열기</a>
+                    </div>
+                  )}
+                  {detail.linkKind !== "facility" && !detail.siteFacilityId && board?.facilityId && (
                     <div className="todo-rel-it">
                       <span className="todo-rel-ic" aria-hidden="true">
                         <Building2 />
@@ -1654,8 +1687,11 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                   const draftPct = subDraft[s.itemId]?.pct ?? s.progressPct ?? 0;
                   const draftNote = subDraft[s.itemId]?.note ?? s.progressNote ?? "";
                   const draftDo = subDraft[s.itemId]?.doDate ?? s.doDate ?? "";
-                  const draftActual = subDraft[s.itemId]?.actualDate ?? s.actualDate ?? "";
-                  const setSubDate = (field: "doDate" | "actualDate", v: string) => setSubDraft((d) => ({ ...d, [s.itemId]: { ...d[s.itemId], [field]: v } }));
+                  const draftEnd = subDraft[s.itemId]?.endDate ?? s.endDate ?? "";
+                  const setSubDate = (field: "doDate" | "endDate", v: string) => setSubDraft((d) => ({ ...d, [s.itemId]: { ...d[s.itemId], [field]: v } }));
+                  // 302 유형 — 상위 '관련'으로 정해지면(계약·영업·업무추진계획) 그 값으로 잠그고, 아니면 하위 작업마다 선택
+                  const effType = detail.workTypeAuto ?? s.workType ?? null;
+                  const typeOpts = workTypes.filter((t) => t.isActive || t.typeKey === effType);
                   return (
                     <div key={s.itemId} className="todo-sr-wrap">
                     <div className="todo-sr" data-done={s.status === "done" ? "true" : undefined}>
@@ -1687,6 +1723,26 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                     {s.status !== "done" && (
                       <div className="todo-sr-prog" data-readonly={!canEdit ? "true" : undefined}>
                         <select
+                          value={effType ?? ""}
+                          disabled={!canEdit || !!detail.workTypeAuto}
+                          aria-label={`${s.title} 유형`}
+                          title={detail.workTypeAuto ? "관련 항목(계약·영업·업무추진계획)으로 자동 지정된 유형" : "하위 작업 유형 — 고를 수 있는 종류가 달라집니다"}
+                          onChange={(e) => {
+                            const wt = e.target.value || null;
+                            const body: Record<string, unknown> = { workType: wt };
+                            // 새 유형에 없는 종류는 비운다
+                            if (s.milestoneKind && !kindOptions(wt, null).some((o) => o.key === s.milestoneKind)) body.milestoneKind = null;
+                            void patchSubtask(s, body);
+                          }}
+                        >
+                          <option value="">유형</option>
+                          {typeOpts.map((t) => (
+                            <option key={t.typeKey} value={t.typeKey}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
                           value={s.milestoneKind ?? ""}
                           disabled={!canEdit}
                           aria-label={`${s.title} 마일스톤 종류`}
@@ -1704,16 +1760,16 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                           }}
                         >
                           <option value="">종류 없음</option>
-                          {TODO_MILESTONE_KINDS.map((k) => (
-                            <option key={k} value={k}>
-                              {TODO_MILESTONE_LABELS[k]}
+                          {kindOptions(effType, s.milestoneKind).map((o) => (
+                            <option key={o.key} value={o.key}>
+                              {o.label}
                             </option>
                           ))}
                         </select>
                         <CdDateInput
                           className="todo-sr-date"
-                          aria-label={`${s.title} 예정일`}
-                          placeholder="예정일"
+                          aria-label={`${s.title} 시작일`}
+                          placeholder="시작일"
                           value={draftDo}
                           disabled={!canEdit}
                           onChange={(v) => {
@@ -1723,18 +1779,18 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                         />
                         <CdDateInput
                           className="todo-sr-date"
-                          aria-label={`${s.title} 실제 일자`}
-                          placeholder="실제일"
-                          value={draftActual}
+                          aria-label={`${s.title} 종료일`}
+                          placeholder="종료일"
+                          value={draftEnd}
                           disabled={!canEdit}
                           onChange={(v) => {
-                            setSubDate("actualDate", v);
-                            if (v === "") void patchSubtask(s, { actualDate: null });
+                            setSubDate("endDate", v);
+                            if (v === "") void patchSubtask(s, { endDate: null });
                             else if (v.length === 10 && isValidDateString(v)) {
-                              void patchSubtask(s, { actualDate: v }).then(() => {
-                                // 결정 C: 실제일을 넣으면 완료를 제안(자동 완료 없음)
-                                if (s.status !== "done" && window.confirm(`"${s.title}" 실제 일자를 ${v} 로 기록했습니다. 완료로 표시할까요?`)) void toggleSubtask(s);
-                              });
+                              // 302: 종료일 = 기간 종료(시작일 필요, 시작일 이후)
+                              if (!draftDo || draftDo.length !== 10) toast("시작일을 먼저 입력하세요.", "warn");
+                              else if (v < draftDo) toast("종료일은 시작일 이후여야 합니다.", "warn");
+                              else void patchSubtask(s, { endDate: v });
                             }
                           }}
                         />

@@ -194,14 +194,18 @@ export function computeDefaultRemindAt(
 ): string | null {
   const allDay = prefs?.defaultRemindAllDayTime ?? TODO_DEFAULT_REMIND_ALL_DAY_TIME;
   const before = prefs?.defaultRemindBeforeMin ?? TODO_DEFAULT_REMIND_BEFORE_MIN;
+  // 미완성·잘못된 날짜는 Invalid Date.toISOString() 이 던지므로(웹 2026-10-20 화면 오류와 같은 원인) 완성 값만 쓴다.
+  const okDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const okTime = (v: string | null): v is string => !!v && /^\d{2}:\d{2}$/.test(v);
+  const iso = (d: Date) => (Number.isNaN(d.getTime()) ? null : d.toISOString());
   const kst = (date: string, time: string) => new Date(`${date}T${time}:00+09:00`);
-  if (it.doDate && it.doTime) {
+  if (okDate(it.doDate) && okTime(it.doTime)) {
     const at = kst(it.doDate, it.doTime);
     at.setUTCMinutes(at.getUTCMinutes() - before);
-    return at.toISOString();
+    return iso(at);
   }
-  if (it.doDate) return kst(it.doDate, allDay).toISOString();
-  if (it.dueDate) return kst(it.dueDate, allDay).toISOString();
+  if (okDate(it.doDate)) return iso(kst(it.doDate, allDay));
+  if (okDate(it.dueDate)) return iso(kst(it.dueDate, allDay));
   return null;
 }
 

@@ -338,7 +338,7 @@ export function SurveyListBoard({ kind }: { kind: SurveyKind }) {
         <CdEmptyState
           icon={<ClipboardList className="w-6 h-6" />}
           title="외부 설문을 볼 권한이 없습니다"
-          description="외부 설문 작성·열람은 survey.view 권한이 필요합니다. 관리자에게 문의하세요."
+          description="외부 설문 작성·열람은 survey.manage 권한이 필요합니다. 관리자에게 문의하세요."
         />
       )}
 

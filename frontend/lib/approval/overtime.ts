@@ -5,14 +5,16 @@ import { CONSENT_VERSION, type OvertimeConsent } from "@/lib/approval/overtime-c
 import { getAttendanceSettings } from "@/lib/adt/queries";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
 import { weekStartOf } from "@/lib/adt/overtime";
+import { getOvertimeRates, weeklyOvertimeExcess, type OvertimeMatchRow } from "@/lib/payroll/overtime";
 
 /*
  * 초과근무 신청(frm-overtime-request) ↔ 근태 연동.
  * ① 기안 화면: 신청 주의 기존 신청·근태 실적을 합산해 주 12h 초과 경고(getWeeklyOvertimeUsage).
  * ② 상신 시: 12h 초과 판정을 field_values._over_limit 로 고정 저장(assessOverLimitOnSubmit)
  *    — 결재 화면이 이 스냅샷으로 경고 배너를 띄운다(나중에 다른 신청이 승인돼도 판정이 흔들리지 않는다).
- * ③ 근태 인제스트 후: 승인된 12h 초과 신청이 있는 주의 실제 초과분(excess_minutes)을
+ * ③ 근태 인제스트·급여대장 생성 시: 주 연장 한도(12h)를 넘어 급여 수당에서 빠진 인정 시간을
  *    특별휴가(초과근무 대체휴가, 시간 단위)로 자동 적재(syncOvertimeCompForWeeks — ref_key 멱등).
+ *    수당과 같은 대조·배분(lib/payroll/overtime.ts weeklyOvertimeExcess)을 써서 이중 산정이 없다(F-21).
  */
 
 export const OVERTIME_FORM_ID = "frm-overtime-request";
@@ -281,14 +283,35 @@ export async function assessOverLimitOnSubmit(txn: PgDatabase, docId: string): P
 }
 
 /**
- * 근태 인제스트 후 — 갱신된 주들에 대해 초과근무 대체휴가(시간)를 자동 적재한다.
- * 조건: 그 주에 최종 승인된 초과근무 신청 합이 주 한도(12h)를 넘겼고, 실제 근태 초과분(excess)이 있을 것.
- * 부여량 = excess_minutes(시간 환산, 소수 1자리). ref_key('ot-<weekStart>') UPSERT 로 재산정에도 멱등,
- * 조건이 사라지면(재업로드로 excess=0 등) 자동 적재분을 회수한다(수기 입력은 건드리지 않는다).
+ * 근태 인제스트 후 — 갱신된 주들에 대해 초과근무 대체휴가(시간)를 자동 적재한다(근태 단말 사번 기준 래퍼).
  */
 export async function syncOvertimeCompForWeeks(
   db: PgDatabase,
   weeks: Array<{ adtEmpNo: string; weekStart: string }>,
+  limitMinutes: number
+): Promise<number> {
+  const items: Array<{ employeeId: string; weekStart: string }> = [];
+  for (const { adtEmpNo, weekStart } of weeks) {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT employee_id FROM attendance_weekly WHERE adt_emp_no = $1 AND week_start = $2`,
+        [adtEmpNo, weekStart]
+      )
+    );
+    if (rows.length && rows[0].employee_id != null) items.push({ employeeId: String(rows[0].employee_id), weekStart });
+  }
+  return syncOvertimeCompForEmployeeWeeks(db, items, limitMinutes);
+}
+
+/**
+ * 직원·주별 초과근무 대체휴가 자동 적재(F-21, 2026-10-20 사용자 확정).
+ * 부여량 = 그 주 인정 초과근무를 시간순으로 쌓아 한도(12h)를 넘긴 몫 — 급여 수당에서 빠진 바로 그 시간 —
+ * 에 가산율(연장·야간 배수, 근태 설정)을 곱한 시간(소수 1자리). 급여는 한도까지만 수당을 준다.
+ * ref_key('ot-<weekStart>') UPSERT 로 재산정에도 멱등, 초과분이 사라지면 자동 적재분을 회수한다(수기 입력은 건드리지 않는다).
+ */
+export async function syncOvertimeCompForEmployeeWeeks(
+  db: PgDatabase,
+  weeks: Array<{ employeeId: string; weekStart: string }>,
   limitMinutes: number
 ): Promise<number> {
   // 특별휴가 원장(133)+단위 확장(134) 미적용 환경이면 조용히 건너뛴다
@@ -301,27 +324,21 @@ export async function syncOvertimeCompForWeeks(
   );
   if (Number(schema[0]?.c ?? 0) === 0) return 0;
 
+  const rates = await getOvertimeRates(db);
+  const cache = new Map<string, Promise<OvertimeMatchRow[]>>();
   let synced = 0;
-  for (const { adtEmpNo, weekStart } of weeks) {
-    const rows = rowsToObjects(
-      await db.exec(
-        `SELECT employee_id, excess_minutes, overtime_minutes, night_minutes
-           FROM attendance_weekly WHERE adt_emp_no = $1 AND week_start = $2`,
-        [adtEmpNo, weekStart]
-      )
-    );
-    if (!rows.length || rows[0].employee_id == null) continue;
-    const employeeId = String(rows[0].employee_id);
-    const excessMinutes = Number(rows[0].excess_minutes ?? 0);
-    const overtimeMinutes = Number(rows[0].overtime_minutes ?? 0);
-    const nightMinutes = Number(rows[0].night_minutes ?? 0);
+  for (const { employeeId, weekStart } of weeks) {
     const refKey = `ot-${weekStart}`;
-    const weekEnd = addDaysYmd(weekStart, 6);
+    const { recognizedMin, excessDayMin, excessNightMin } = await weeklyOvertimeExcess(
+      db,
+      employeeId,
+      weekStart,
+      limitMinutes,
+      cache
+    );
+    const excessMinutes = excessDayMin + excessNightMin;
 
-    const approvedMin = await sumRequestedMinutes(db, employeeId, weekStart, weekEnd, { approvedOnly: true });
-    const eligible = approvedMin > limitMinutes && excessMinutes > 0;
-
-    if (!eligible) {
+    if (excessMinutes <= 0) {
       // 조건 미충족 — 이 주의 자동 적재분만 회수(멱등).
       await db.run(
         `DELETE FROM special_leave_ledger
@@ -331,11 +348,8 @@ export async function syncOvertimeCompForWeeks(
       continue;
     }
 
-    // 보상휴가는 임금과 동등해야 하므로 가산율을 반영한다(근로기준법 56·57조, 사규와 동일):
-    // 초과분 중 야간 몫 = 주 야간 재실에서 인정연장에 이미 배분된 몫을 뺀 나머지 → 2.0배, 그 외 1.5배.
-    const excessNight = Math.min(excessMinutes, Math.max(0, nightMinutes - overtimeMinutes));
-    const excessDay = excessMinutes - excessNight;
-    const grantMinutes = excessDay * 1.5 + excessNight * 2.0;
+    // 보상휴가는 임금과 동등해야 하므로 수당과 같은 가산율을 반영한다(근로기준법 56·57조, 사규와 동일).
+    const grantMinutes = excessDayMin * rates.rateDay + excessNightMin * rates.rateNight;
     const h1 = (min: number) => Math.round((min / 60) * 10) / 10;
     const hours = h1(grantMinutes);
 
@@ -350,8 +364,8 @@ export async function syncOvertimeCompForWeeks(
         employeeId,
         hours,
         weekStart,
-        `근태 대조 자동 산정 — ${weekStart} 주 12h 초과 ${h1(excessMinutes)}h → 가산 환산 ${hours}h` +
-          `(주간 ${h1(excessDay)}h×1.5${excessNight > 0 ? ` + 야간 ${h1(excessNight)}h×2.0` : ""}, 승인 신청 ${h1(approvedMin)}h)`,
+        `근태 대조 자동 산정 — ${weekStart} 주 인정 ${h1(recognizedMin)}h 중 ${h1(limitMinutes)}h 초과 ${h1(excessMinutes)}h(수당 제외) → 가산 환산 ${hours}h` +
+          `(주간 ${h1(excessDayMin)}h×${rates.rateDay}${excessNightMin > 0 ? ` + 야간 ${h1(excessNightMin)}h×${rates.rateNight}` : ""})`,
         refKey,
         new Date().toISOString(),
       ]

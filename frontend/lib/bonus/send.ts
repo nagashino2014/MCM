@@ -128,6 +128,15 @@ export async function sendStatementEmails(
       { status: 400 }
     );
   }
+  // 승인 후 [일괄산정]·배분 조정으로 명세 금액이 바뀌면 승인된 기안과 다른 금액이 나간다(F-20) — 재기안을 요구한다.
+  if (plan.mismatchCount > 0) {
+    throw Object.assign(
+      new Error(
+        `승인된 성과급 기안과 현재 산정 결과가 ${plan.mismatchCount}건 다릅니다. 재기안·승인 후 발송할 수 있습니다.`
+      ),
+      { status: 400 }
+    );
+  }
   const overview = await listStatementsOverview(p);
   const wanted = new Set(employeeIds ?? []);
   const rows = overview.filter(

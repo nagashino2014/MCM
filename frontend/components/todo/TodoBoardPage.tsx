@@ -554,6 +554,10 @@ export function TodoBoardPage() {
 
   const sharedCount = sharedItems.filter((i) => !i.parentItemId && i.status !== "done").length;
   const delegatedCount = delegatedItems.filter((i) => !i.parentItemId && i.status !== "done").length;
+  // 범위 탭 개수(2026-10-20) — 미완료 상위 할 일 수를 원문자(원 안 숫자)로. 프로젝트는 선택된 프로젝트 보드 기준.
+  const myCount = myItems.filter((i) => !i.parentItemId && i.status !== "done").length;
+  const projectCount = scope === "board" && board && board.kind !== "personal" ? boardData.items.filter((i) => !i.parentItemId && i.status !== "done").length : null;
+  const tabN = (n: number | null) => (n == null ? null : <span className="todo-tab-n" aria-label={`${n}건`}>{n}</span>);
   const scopeTab: ScopeTab = scope === "my" ? "my" : scope === "shared" ? "shared" : scope === "delegated" ? "delegated" : "none";
   const boardLabel = board ? (board.kind === "personal" ? "개인 보드" : (board.projectName ?? board.name)) : null;
   const quickAddPlaceholder = scope === "board" && board ? `${boardLabel}에 할 일 추가 — #열이름 으로 열 지정` : undefined;
@@ -611,9 +615,9 @@ export function TodoBoardPage() {
                   if (k === "my" || k === "shared" || k === "delegated") goScope(k);
                 }}
                 items={[
-                  { key: "my", label: "내 할 일" },
-                  { key: "shared", label: "공유받음", count: sharedCount || undefined },
-                  { key: "delegated", label: "맡긴 일", count: delegatedCount || undefined },
+                  { key: "my", label: <>내 할 일{tabN(myCount)}</> },
+                  { key: "shared", label: <>공유받음{tabN(sharedCount)}</> },
+                  { key: "delegated", label: <>맡긴 일{tabN(delegatedCount)}</> },
                 ]}
               />
               <div className="cd-tabs" data-variant="underline" role="presentation">
@@ -624,6 +628,7 @@ export function TodoBoardPage() {
                     <button type="button" className="cd-tab" role="tab" aria-selected={scope === "board"} aria-label="프로젝트 보드 선택">
                       {scope === "board" && board && <span className="todo-scope-sq" style={tintStyle(board.colorHex)} aria-hidden="true" />}
                       {scope === "board" && board ? `프로젝트 · ${boardLabel}` : "프로젝트"}
+                      {tabN(projectCount)}
                       <ChevronDown className="todo-scope-caret" aria-hidden="true" />
                     </button>
                   )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,7 +8,6 @@ import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSec
 import { TimelineView } from '@/components/todo/TimelineView';
 import { AutomationSheet } from '@/components/todo/AutomationSheet';
 import { DateGroupHeader } from '@/components/todo/parts';
-import { QuickAddBar } from '@/components/todo/QuickAddBar';
 import { ApprovalEventRow, TodoRow } from '@/components/todo/TodoRow';
 import { CompleteConfirmSheet, asCompleteRulesFailure, type CompleteRulesFailure } from '@/components/todo/CompleteConfirmSheet';
 import { apiJson } from '@/lib/api';
@@ -17,7 +16,6 @@ import { hasAnyCompleteRule } from '@/lib/todo-completion';
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoBoard, type TodoColumn, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
 import { TODO_UI, addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, isPeriodItem, keyDate, periodCovers, statusTone, todayLocal, weekEnd, withAlpha } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
-import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
 import { useTheme } from '@/theme/useTheme';
 
 /**
@@ -124,10 +122,6 @@ export default function TodoScreen() {
   const router = useRouter();
   // §26-1 메일·메신저 [할 일로] — /todo?new=1&linkKind=&linkId=&linkLabel=&title= 로 들어오면 2026-10-20부터 작성 화면(/todo/new)으로 넘긴다.
   const params = useLocalSearchParams<{ new?: string; linkKind?: string; linkId?: string; linkLabel?: string; title?: string }>();
-  const prefill = useMemo(() => {
-    if (params.new !== '1') return null;
-    return { key: `${params.linkKind ?? ''}:${params.linkId ?? ''}:${params.title ?? ''}`, title: params.title ?? null, linkKind: params.linkKind ?? null, linkId: params.linkId ?? null, linkLabel: params.linkLabel ?? null };
-  }, [params.new, params.linkKind, params.linkId, params.linkLabel, params.title]);
   const toast = useToast();
   const { c } = useTheme();
   const { user } = useAuth();
@@ -138,7 +132,6 @@ export default function TodoScreen() {
   const [autoOpen, setAutoOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const quickRef = useRef<TextInput | null>(null);
   useEffect(() => {
     if (params.new !== '1') return;
     const p: { itemId: string } & Record<string, string> = { itemId: 'new' };
@@ -450,14 +443,6 @@ export default function TodoScreen() {
     }
   };
 
-  // ── 퀵애드의 @이름 · #보드 해석 ──
-  const org = useDirectorySnapshot();
-  const resolveAssignee = (name: string) => {
-    const emps = org?.employees ?? [];
-    const hit = emps.find((e) => e.name === name && e.userId) ?? emps.find((e) => e.name.includes(name) && e.userId);
-    return hit?.userId ? { userId: hit.userId, name: hit.name } : null;
-  };
-  const resolveBoard = (name: string) => boards.find((b) => b.name === name || (name === '개인' && b.isDefault))?.boardId ?? null;
 
   const refreshing = myApi.refreshing || sharedApi.refreshing || boardApi.refreshing;
 
@@ -737,17 +722,7 @@ export default function TodoScreen() {
           refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadCurrent} />}>
           {content.nodes}
         </ScrollView>
-        <QuickAddBar
-          inputRef={quickRef}
-          prefill={prefill}
-          boardId={scope === 'project' ? selectedProjectId : null}
-          resolveAssignee={resolveAssignee}
-          resolveBoard={resolveBoard}
-          onCreated={(item) => {
-            toast.show(`"${item.title}" 추가됨`, 'success');
-            reloadCurrent();
-          }}
-        />
+        {/* 2026-10-20 하단 텍스트 퀵애드 줄 삭제(사용자 요청) — 새 할 일은 헤더 [+] 작성 화면 */}
       </KeyboardAvoidingView>
 
       {/* 완료 확인(276) — 완료 조건이 있거나 서버가 거절했을 때 */}

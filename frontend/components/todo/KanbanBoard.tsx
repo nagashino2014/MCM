@@ -6,7 +6,7 @@
 // 완료·보류 열은 보드 아래 가로 접힘 행("완료 7 · 최근 ○○ '제목' 시각" / "보류 0" / "완료 펼치기") — 펼치면 열로 전개.
 // 키보드 대체 경로 = 카드 ⋯ 메뉴(왼쪽/오른쪽 열·맨 위/맨 아래) + aria-live 공지. 시각 규칙은 todo.css 의 todo-* 클래스에만 둔다.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { ChevronRight, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { CdButton, CdCheckbox, CdDropdown, CdEmptyState, CdIconButton, CdInput, CdModal, CdSelect, useCdToast, type CdMenuItem } from "@/components/cdash";
@@ -38,7 +38,8 @@ export interface KanbanBoardProps {
    * 취소·미충족이면 false → 카드는 원위치.
    */
   onCompleteRequest: (item: TodoItem) => Promise<boolean>;
-  onCreate: (input: Record<string, unknown>) => Promise<TodoItemDetail | null>;
+  /** 2026-10-20 열 아래 '+ 할 일 추가'(제목 인라인 입력) 삭제 — 새 할 일은 [새 할 일] 드로어. 호환용으로 prop 만 남긴다. */
+  onCreate?: (input: Record<string, unknown>) => Promise<TodoItemDetail | null>;
   onBoardUpdated: (board: TodoBoard) => void;
   onManageMembers: () => void;
   /** 보드 삭제 요청(만든 사람·개인 기본 보드 아님일 때만 상위가 넘긴다) */
@@ -91,15 +92,13 @@ function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string
   );
 }
 
-export function KanbanBoard({ board, items, today, density, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCompleteRequest, onCreate, onBoardUpdated, onManageMembers, onRequestDelete }: KanbanBoardProps) {
+export function KanbanBoard({ board, items, today, density, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCompleteRequest, onBoardUpdated, onManageMembers, onRequestDelete }: KanbanBoardProps) {
   const { toast } = useCdToast();
   const [members, setMembers] = useState<TodoBoardMember[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
   // 296 자동화 규칙 모달
   const [automationOpen, setAutomationOpen] = useState(false);
   const [colOrder, setColOrder] = useState<string[] | null>(null);
-  const [addingIn, setAddingIn] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState("");
   const [addingCol, setAddingCol] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [colEdit, setColEdit] = useState<TodoColumn | null>(null);
@@ -107,7 +106,6 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
   const [live, setLive] = useState("");
   const [busy, setBusy] = useState(false);
-  const composing = useRef(false);
 
   const boardId = board?.boardId ?? null;
   const boardKind = board?.kind ?? null;
@@ -116,8 +114,6 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
 
   useEffect(() => {
     setColOrder(null);
-    setAddingIn(null);
-    setNewTitle("");
     setUnfolded(new Set());
   }, [boardId]);
 
@@ -263,15 +259,6 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
     }
   };
 
-  const submitNewCard = async (columnId: string | null) => {
-    const title = newTitle.trim();
-    if (!title || !boardId) return;
-    setBusy(true);
-    const created = await onCreate({ title, boardId, columnId: columnId ?? undefined });
-    setBusy(false);
-    if (created) setNewTitle("");
-  };
-
   const submitNewCol = async () => {
     const name = newColName.trim();
     if (!name) return;
@@ -279,16 +266,6 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
     if (b) {
       setAddingCol(false);
       setNewColName("");
-    }
-  };
-
-  const onNewCardKey = (e: KeyboardEvent<HTMLInputElement>, columnId: string | null) => {
-    if (e.key === "Enter" && !composing.current && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      void submitNewCard(columnId);
-    } else if (e.key === "Escape") {
-      setAddingIn(null);
-      setNewTitle("");
     }
   };
 
@@ -355,61 +332,6 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
           </div>
         )}
       </Droppable>
-    );
-  };
-
-  const renderAdd = (columnId: string | null) => {
-    const key = columnId ?? NONE_COL;
-    if (!canWrite) return null;
-    if (addingIn === key) {
-      return (
-        <div className="todo-col-addform">
-          <input
-            autoFocus
-            className="cd-input"
-            value={newTitle}
-            placeholder="할 일 제목 — Enter 생성 · Esc 취소"
-            aria-label="새 할 일 제목"
-            disabled={busy}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onCompositionStart={() => {
-              composing.current = true;
-            }}
-            onCompositionEnd={() => {
-              composing.current = false;
-            }}
-            onKeyDown={(e) => onNewCardKey(e, columnId)}
-          />
-          <div className="todo-actions">
-            <CdButton variant="primary" size="sm" loading={busy} onClick={() => void submitNewCard(columnId)}>
-              추가
-            </CdButton>
-            <CdButton
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setAddingIn(null);
-                setNewTitle("");
-              }}
-            >
-              취소
-            </CdButton>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <button
-        type="button"
-        className="todo-col-add"
-        onClick={() => {
-          setAddingIn(key);
-          setNewTitle("");
-        }}
-      >
-        <Plus className="w-3.5 h-3.5" strokeWidth={2.2} aria-hidden="true" />
-        할 일 추가
-      </button>
     );
   };
 
@@ -487,7 +409,7 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
                       <span className="todo-col-n">{cardsByCol.get(NONE_COL)?.length ?? 0}</span>
                     </div>
                     {renderCards(null, NONE_COL)}
-                    {renderAdd(null)}
+                    
                   </section>
                 )}
                 {columns.map((col, idx) => {
@@ -536,7 +458,7 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
                                 </span>
                               </div>
                               {renderCards(col.columnId, col.columnId)}
-                              {renderAdd(col.columnId)}
+                              
                             </>
                           )}
                         </section>

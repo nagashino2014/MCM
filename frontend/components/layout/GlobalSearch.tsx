@@ -1,6 +1,6 @@
 "use client";
 
-// 전역 검색(⌘K 커맨드 팔레트, G1) — 1차 범위는 메뉴·화면 바로가기 네비게이션.
+// 전역 검색(⌘K 커맨드 팔레트, G1) — 1차 범위는 메뉴·화면 바로가기 네비게이션 + 사용 매뉴얼 기사(docs/manual-help-blueprint.md §1.1).
 // 콘텐츠 검색(메일·문서·연락처)은 G2+ 에서 스코프 탭으로 확장한다(§2.2).
 // Ctrl/⌘+K 오픈, ↑↓ 이동, Enter 이동. CdModal 재사용.
 
@@ -10,16 +10,22 @@ import { Search, CornerDownLeft } from "lucide-react";
 import { MENU_ITEMS, isMenuVisible, visibleSubmenu } from "@/config/menu";
 import { CdModal } from "@/components/cdash/CdModal";
 import { cn } from "@/lib/utils";
+import { useManual } from "@/components/manual/ManualContext";
+import { articleHref } from "@/lib/manual/match";
+import { searchManual } from "@/lib/manual/search";
 
 interface Entry {
   title: string;
   section: string;
   href: string;
   comingSoon?: boolean;
+  /** 매뉴얼 기사 — 고르면 매뉴얼 드로어로 연다. */
+  manual?: { article: string; section?: string };
 }
 
 export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[]; open: boolean; onClose: () => void }) {
   const router = useRouter();
+  const manual = useManual();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,8 +44,15 @@ export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return entries.slice(0, 12);
-    return entries.filter((e) => e.title.toLowerCase().includes(q) || e.section.toLowerCase().includes(q)).slice(0, 12);
-  }, [entries, query]);
+    const menus = entries.filter((e) => e.title.toLowerCase().includes(q) || e.section.toLowerCase().includes(q)).slice(0, 8);
+    const docs: Entry[] = searchManual(q, perms, 5).map((h) => ({
+      title: h.article.title,
+      section: "매뉴얼",
+      href: articleHref(h.article.id, h.section),
+      manual: { article: h.article.id, section: h.section },
+    }));
+    return [...menus, ...docs];
+  }, [entries, query, perms]);
 
   useEffect(() => {
     if (open) {
@@ -54,9 +67,10 @@ export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[
     (e: Entry) => {
       if (e.comingSoon) return;
       onClose();
-      router.push(e.href);
+      if (e.manual && manual) manual.open(e.manual);
+      else router.push(e.href);
     },
-    [onClose, router]
+    [onClose, router, manual]
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -85,7 +99,7 @@ export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[
               setCursor(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="메뉴·화면 검색… (콘텐츠 검색은 준비 중)"
+            placeholder="메뉴·화면·매뉴얼 검색…"
             className="flex-1 bg-transparent outline-none text-sm cd-text placeholder:cd-text-faint"
           />
           <kbd className="text-[10px] cd-text-faint border cd-border-c rounded px-1.5 py-0.5">ESC</kbd>
@@ -96,7 +110,7 @@ export function GlobalSearch({ perms, open, onClose }: { perms: readonly string[
           ) : (
             filtered.map((e, i) => (
               <button
-                key={`${e.href}-${e.title}`}
+                key={`${e.section}-${e.href}-${e.title}`}
                 onClick={() => go(e)}
                 onMouseEnter={() => setCursor(i)}
                 className={cn(

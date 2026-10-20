@@ -41,6 +41,13 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 - **DB 변경**은 `infra/aws/NNN_*.sql` 멱등 마이그레이션으로 추가(기존 파일 수정 금지, 다음 번호로 신규 작성).
 - **수정 범위 최소화**: 요청과 무관한 리팩터링·포맷팅을 끼워 넣지 않는다.
 
+## 사용 매뉴얼 동기화 (2026-10-20 사용자 요청) ★
+앱의 사용 매뉴얼·`?` 도움말은 `frontend/content/manual/`의 데이터가 단일 원천이다(작성법: [docs/manual-authoring-guide.md](docs/manual-authoring-guide.md)).
+- 화면·버튼·흐름을 추가·변경하는 커밋은 **같은 커밋에서** 해당 기사·도움말을 고치고 `reviewedAt`을 갱신한다. 사용자에게 보이는 변화는 `content/manual/changelog.ts`에 한 줄을 남긴다.
+- 새 화면은 기사를 쓰거나 `content/manual/index.ts`의 `MANUAL_EXCLUDED_ROUTES`에 사유와 함께 등록한다.
+- 커밋 전 `cd frontend && npm run test:manual`이 통과해야 한다. 버튼 이름을 바꾸면 매뉴얼의 `[[버튼 이름]]` 대조가 실패하므로 매뉴얼도 함께 고친다.
+- 화면 코드에는 도움말 문장을 직접 쓰지 않고 `<CdHelp topic="…" />` 키만 둔다.
+
 ## UI 규칙 — Precision (2026-09-10 사용자 요청)
 
 이 앱의 UI는 [docs/ui-precision-standard.md](docs/ui-precision-standard.md)를 따른다. 이전 Modernize/Soft Glass Ink의 충돌하는 시각 규칙을 대체한다.

@@ -12,6 +12,7 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { Gavel, Search, ExternalLink, Wand2, SlidersHorizontal, Tags, X, Link2, Plus, Trash2, Columns3, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ChevronUp, ChevronDown, Paperclip, BellRing, Pencil, ListOrdered, FileStack, Download } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationEmployeeRow, OrganizationSnapshot } from "@/components/admin/users/types";
@@ -1545,6 +1546,7 @@ export function BidBoard() {
             <div className="flex items-center gap-2">
               <h3 className="text-[14px] font-bold cd-text flex items-center gap-1.5 flex-1">
                 <BellRing className="w-4 h-4" /> 사업분야 매칭 알림 설정
+                <CdHelp topic="bid.notify" />
               </h3>
               <button type="button" className="cd-btn cd-btn-soft text-[12px]" onClick={() => setNotifyModal(false)}>
                 <X className="w-4 h-4" />

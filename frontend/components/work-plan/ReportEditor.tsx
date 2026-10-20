@@ -12,6 +12,7 @@ import HistoryModal, { type HistoryTab } from "@/components/work-plan/HistoryMod
 import { MEETING_LABELS, REVIEW_COMMENT_KINDS, REJECTABLE_KINDS, EXEC_DIRECTIVE_KINDS, EXEC_DIRECTIVE_ACTIONABLE } from "@/lib/work-plan/constants";
 import type { ContractStageRow } from "@/lib/contracts/process-stages";
 import type { ReporterContext, ReportStageRow, ServiceReportDetail } from "@/lib/work-plan/workspace";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 type StageStatus = "pending" | "in_progress" | "done";
 
@@ -456,6 +457,7 @@ export default function ReportEditor({
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold cd-text flex items-center gap-2">
               <GitCommitHorizontal className="w-4 h-4 cd-text-primary" /> 공정표
+              <CdHelp topic="work-plan.stages" />
             </h3>
             {!locked && (
               <button
@@ -776,6 +778,7 @@ export default function ReportEditor({
               <span className="w-px h-5 self-center" style={{ background: "var(--cd-border)" }} />
             </>
           )}
+          {!exec && <CdHelp topic="work-plan.report-lock" />}
           {exec ? null : locked ? (
             <button type="button" onClick={() => setUnlocked(true)} className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5">
               <Pencil className="w-4 h-4" /> 수정

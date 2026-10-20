@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 /**
  * 근로계약서 작성/갱신 패널 (PL-P3, UI 컨셉 PDF §1-3)
@@ -176,7 +177,11 @@ export default function ContractRoundPanel({
   return (
     <section className="cd-card rounded-3xl p-4 cd-reveal delay-2 flex flex-col gap-3" style={{ minHeight: 240 }}>
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-[15px] font-extrabold tracking-tight cd-text">근로계약서 작성/갱신</h2>
+        <h2 className="text-[15px] font-extrabold tracking-tight cd-text flex items-center gap-1">
+          근로계약서 작성/갱신
+          {tab === "annual" && <CdHelp topic="payroll.contract-annual" />}
+          {tab === "rounds" && <CdHelp topic="payroll.contract-rounds" />}
+        </h2>
         {/* 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
         <CdTabs<"annual" | "promotion" | "rounds">
           active={tab}

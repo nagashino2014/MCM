@@ -153,6 +153,7 @@ export default function LaborContractBoard() {
     <>
       <CdPageHeader
         title="직원별 연봉·근로계약"
+        helpTopic="payroll.contracts"
         meta={selected ? `${selected.name} · 계약 ${contracts.length}건${reviewCount ? ` · 검수 필요 ${reviewCount}` : ""}` : undefined}
       />
 

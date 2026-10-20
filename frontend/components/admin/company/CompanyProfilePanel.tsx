@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import "@/components/cdash/cdash.css";
 
 interface FinanceRow {
@@ -372,6 +373,7 @@ export function CompanyProfilePanel() {
               <Save className="w-3.5 h-3.5" />
               {savingProfile ? "저장 중..." : "일반현황 저장"}
             </button>
+            <CdHelp topic="admin.company-save" />
           </div>
         }
       />

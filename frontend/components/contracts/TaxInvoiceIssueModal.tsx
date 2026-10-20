@@ -6,6 +6,7 @@
 // - 금액은 단계 금액이 공급가액인지 합계인지 사용자가 고른다(계약 데이터 관례가 섞여 있어 자동 판정하지 않음).
 
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ExternalLink, FileText, ListPlus, Loader2, Plus, Trash2, X } from "lucide-react";
 
@@ -370,6 +371,7 @@ export default function TaxInvoiceIssueModal({
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b cd-border-c">
           <h3 className="font-bold cd-text flex items-center gap-2">
             <FileText className="w-4 h-4" /> 전자세금계산서 발행
+            <CdHelp topic="contracts.tax-invoice" />
           </h3>
           <button type="button" onClick={onClose} className="cd-text-muted hover:cd-text">
             <X className="w-4 h-4" />

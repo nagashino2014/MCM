@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import {
   type RateCardData,
@@ -130,7 +131,10 @@ export function RateCardEditor({
 
       {/* ① 단가 기준표 — 항목·단가만 */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold cd-text-muted">① 단가 기준표 (항목·단가)</span>
+        <span className="text-xs font-bold cd-text-muted flex items-center gap-1">
+          ① 단가 기준표 (항목·단가)
+          <CdHelp topic="contracts.rate-card" />
+        </span>
         <label className="inline-flex items-center gap-1.5 text-[11px] cd-text-muted select-none">
           <input type="checkbox" checked={dual} onChange={(e) => onChange({ ...data, dualPrice: e.target.checked })} />
           허가/신고 단가 구분(단가 2종)

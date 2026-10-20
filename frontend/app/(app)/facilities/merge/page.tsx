@@ -16,6 +16,7 @@ import {
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import "@/components/cdash/cdash.css";
 import { cn } from "@/lib/utils";
 import { formatCompanyName } from "@/lib/ieps/formatters";
@@ -595,8 +596,9 @@ function Inner() {
             <div className="flex flex-col gap-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-bold cd-text-muted">
+                  <h3 className="font-bold cd-text-muted flex items-center gap-1">
                     병합 대상 선택 ({activeFacilities.length}건)
+                    <CdHelp topic="facilities.merge" />
                   </h3>
                   <p className="text-xs cd-text-faint mt-0.5">
                     {active?.kind === "manual"

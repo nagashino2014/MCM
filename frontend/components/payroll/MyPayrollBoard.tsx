@@ -14,6 +14,7 @@ import { Banknote, ChevronLeft, ChevronRight, MinusCircle, PiggyBank, Printer, R
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
 import { chartPalette } from "@/components/contracts/dashboard/types";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
 import css from "./MyPayrollBoard.module.css";
@@ -261,7 +262,7 @@ export function MyPayrollBoard() {
                 <Kpi icon={<TrendingUp className="w-4 h-4" />} label="월평균 실지급" value={t && t.months ? `${won(avg)}원` : "—"} sub={t ? `${t.months}개월 평균` : ""} />
               </div>
 
-              <Card className={css.monthlyCard} title="월별 명세서" subtitle="행을 누르면 뷰어가 바뀝니다" icon={<ReceiptText className="w-4 h-4" />}>
+              <Card className={css.monthlyCard} title="월별 명세서" subtitle="행을 누르면 뷰어가 바뀝니다" icon={<ReceiptText className="w-4 h-4" />} right={<CdHelp topic="payroll.my-monthly" />}>
                 <div className="overflow-x-auto">
                   <table className="w-full" style={{ fontSize: 14, borderCollapse: "collapse" }}>
                     <thead>

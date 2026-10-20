@@ -12,6 +12,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
@@ -316,6 +317,7 @@ export function BoardWriteBoard() {
           <section className="rounded-xl border cd-border-c cd-card-bg p-4 flex flex-col gap-2">
             <h3 className="text-sm font-bold cd-text flex items-center gap-1.5">
               <Bell className="w-4 h-4" /> 공지 알림
+              <CdHelp topic="board.notify" />
             </h3>
             <CdCheckbox label="메일 알림 발송" disabled={!!editId} checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} />
             <CdCheckbox label="모바일 앱 푸시 알림" disabled={!!editId} checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} />

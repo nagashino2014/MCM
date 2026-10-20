@@ -10,6 +10,7 @@
 //   완료 행 체크 해제·토스트·상세의 "되돌리기" = done=false. 보관함(?archived=1)은 30일 지난 완료만 보이고 거기서도 되돌릴 수 있다.
 
 import "@/components/cdash/cdash.css";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import "./todo.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -629,6 +630,9 @@ export function TodoBoardPage() {
                   items={projectMenu}
                 />
               </div>
+              <span className="inline-flex items-center">
+                <CdHelp topic="todo.scope" />
+              </span>
             </div>
             <div className="todo-views">
               <div className="todo-flt">

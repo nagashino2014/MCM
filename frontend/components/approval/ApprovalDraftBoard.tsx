@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardCheck, GripVertical, Paperclip, Send, Save, Trash2, Users, Eye, BookmarkPlus, ShieldCheck, AlertTriangle, Info, Ban, Link2, CreditCard, ShoppingBag, BedDouble } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
@@ -1269,6 +1270,11 @@ export function ApprovalDraftBoard() {
                   {otHint}
                 </span>
               )}
+              {isOvertimeForm && (
+                <span className="mt-4">
+                  <CdHelp topic="approval.draft-overtime" />
+                </span>
+              )}
               {/* 같은 날 추가 신청(2026-08-28) — 원 신청에 자동 연동, 시간대 겹침은 상신 불가 */}
               {isOvertimeForm && (otUsage?.sameDay?.length ?? 0) > 0 && (
                 <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]">
@@ -1411,6 +1417,7 @@ export function ApprovalDraftBoard() {
                 <span className="text-[11px] cd-text-faint">
                   선택하면 사용일시·상호·금액·분류가 자동 기입됩니다 — 지출 목적만 입력하세요
                 </span>
+                <CdHelp topic="approval.draft-expense" />
               </div>
             )}
             <ApprovalFormRenderer
@@ -1498,6 +1505,7 @@ export function ApprovalDraftBoard() {
           <div className="cd-card rounded-3xl p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
             <h3 className="font-bold cd-text text-sm flex items-center gap-2">
               <Users className="w-4 h-4 cd-text-primary" /> 결재선
+              <CdHelp topic="approval.draft-line" />
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
 
@@ -1573,6 +1581,7 @@ export function ApprovalDraftBoard() {
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
               <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
+                <CdHelp topic="approval.draft-watchers" />
                 <span className="ml-auto text-[10px] font-normal cd-text-faint">참조=완료 통보 · 열람=진행 중 열람</span>
               </h4>
               {watchers.length === 0 ? (
@@ -1606,6 +1615,7 @@ export function ApprovalDraftBoard() {
               </button>
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <CdHelp topic="approval.draft-save" />
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50"

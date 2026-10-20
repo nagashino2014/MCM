@@ -7,6 +7,7 @@ import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, Clip
 import { cn } from "@/lib/utils";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import "@/components/cdash/cdash.css";
 import type { AnnualReportSnapshot, FacilityDetail, PermitDetail, ProductOutput } from "@/lib/ieps/types-facility";
 import { cleanProductName, dedupeIndustries, formatAddress, formatBusinessRegistrationNo, formatCompanyName, formatNumber, parseIndustriesFromValue } from "@/lib/ieps/formatters";
@@ -1563,7 +1564,10 @@ function FacilityContactsModal({
       <div className="cd-card rounded-3xl p-5 w-[min(1120px,calc(100vw-32px))] max-h-[min(840px,calc(100vh-32px))] overflow-y-auto scrollbar-hide shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-xl font-bold cd-text">연락처/담당자 관리</h3>
+            <h3 className="text-xl font-bold cd-text flex items-center gap-1">
+              연락처/담당자 관리
+              <CdHelp topic="facilities.contacts" />
+            </h3>
             <p className="text-xs cd-text-faint mt-1">
               {formatCompanyName(facility.companyName)} · 기존 파싱 전화번호: {facility.phoneNumber ?? "—"}
             </p>
@@ -2366,6 +2370,7 @@ function BusinessCertificatesSection({
           <h3 className="text-sm font-black cd-text flex items-center gap-2">
             <FileText className="w-4 h-4 cd-text-primary" />
             사업자등록증
+            <CdHelp topic="facilities.bizcert" />
           </h3>
           <p className="text-xs cd-text-faint mt-1">
             현재본의 업로드·재분석 결과를 사업장 정보에 반영합니다. 과거 업로드본은 개별 삭제할 수 있습니다.

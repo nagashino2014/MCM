@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
@@ -1049,6 +1050,7 @@ export function QuoteBoard() {
       <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader
           title="견적서 작성"
+          helpTopic="quote.write-page"
           actions={
             <div className="flex items-center gap-2">
               {/* 중간 저장(2026-10-01) — 결재선 카드 하단의 임시저장과 같은 동작. 화면 상단에서도 바로 저장 */}
@@ -1175,6 +1177,7 @@ export function QuoteBoard() {
                   >
                     <Settings2 className="w-3.5 h-3.5" /> 기준 관리
                   </a>
+                  <CdHelp topic="quote.rate-set" />
                 </div>
                 {/* 건명·용역 분류·세분류·견적일 한 줄 — 분류 두 칸은 종전(1/4 열) 대비 75%, 견적일은 60% 고정폭 */}
                 <div className="flex flex-col md:flex-row gap-2.5">
@@ -1540,6 +1543,7 @@ export function QuoteBoard() {
                                 return p > 0 ? `${won(p)}원 · 스냅 ${mdSnapUnit(p)}MD · 초과폭 상한 ${won(sumOverCap(p))}원` : "";
                               })()}
                             </span>
+                            <CdHelp topic="quote.price" />
                             {tier === "calc" ? (
                               <span className="ml-auto flex items-center gap-2 flex-wrap justify-end">
                                 {/* 복수 업무 — 항목 트리에 MD 가 이미 정해져 있으면(엑셀 자동 입력 등) 그 MD 로 견적가를 정한다 */}
@@ -1644,7 +1648,10 @@ export function QuoteBoard() {
                               // 구분선은 별도 좁은 열(row-span-2)로 두어 5개 입력칸 트랙이 전부 같은 폭(1fr)을 갖게 한다
                               <div className="rounded-lg border cd-border-c p-2.5 grid grid-cols-[1fr_1fr_1fr_1px_1fr_1fr] gap-x-2 gap-y-1.5">
                                 <div className="col-span-3 flex items-center justify-between text-[12px]">
-                                  <span className="font-semibold cd-text">출장비</span>
+                                  <span className="flex items-center gap-1">
+                                    <span className="font-semibold cd-text">출장비</span>
+                                    <CdHelp topic="quote.direct-cost" />
+                                  </span>
                                   <span className="cd-text tabular-nums">{won(travelCostOf(site.directCosts))}원</span>
                                 </div>
                                 <div className="row-span-2 border-l cd-border-c" aria-hidden="true" />

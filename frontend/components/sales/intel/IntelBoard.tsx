@@ -12,6 +12,7 @@ import { useSession } from "next-auth/react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
 import type { DeleteReasonCode, IntelSignal } from "./intel-shared";
@@ -324,6 +325,7 @@ export function IntelBoard() {
                 <option value="low">낮음</option>
                 <option value="none">무관</option>
               </select>
+              <CdHelp topic="intel.grade" />
               <label className="inline-flex items-center gap-1.5 cd-text-muted text-xs cursor-pointer" title="같은 사건의 변형 기사(중복 병합 마킹)도 표시">
                 <input type="checkbox" checked={includeDup} onChange={(e) => setIncludeDup(e.target.checked)} />
                 중복 포함
@@ -442,7 +444,10 @@ export function IntelBoard() {
         <div className="cd-modal-overlay cdash cd-fields-white" data-theme={theme} onClick={() => !deleteBusy && setDeleteTarget(null)}>
           <div className="cd-modal cd-card-bg w-full" style={{ maxWidth: 420, padding: "1.25rem" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-1">
-              <h3 className="cd-text text-base font-extrabold">삭제 사유 선택</h3>
+              <div className="flex items-center gap-1">
+                <h3 className="cd-text text-base font-extrabold">삭제 사유 선택</h3>
+                <CdHelp topic="intel.delete" />
+              </div>
               <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
                 <X className="w-4 h-4" />
               </button>

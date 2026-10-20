@@ -1,15 +1,64 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { CircleHelp, X } from "lucide-react";
+import { ArrowRight, CircleHelp, X } from "lucide-react";
+import { HELP_TOPICS } from "@/content/manual";
+import { ManualBlocks } from "@/components/manual/ManualBlocks";
+import { useManual } from "@/components/manual/ManualContext";
 
-export interface CdHelpProps {
-  label: string;
-  children: ReactNode;
-}
+/**
+ * label+children 로 직접 쓰거나, topic 키로 매뉴얼 레지스트리(content/manual/help-topics)의 도움말을 쓴다.
+ * topic 도움말은 끝에 "매뉴얼에서 자세히" 링크가 붙는다(docs/manual-help-blueprint.md §1.4).
+ */
+export type CdHelpProps =
+  | { label: string; children: ReactNode; topic?: undefined }
+  | { topic: string; label?: string; children?: ReactNode };
 
 /** 선택해서 읽는 설명. 오류·필수 조건·작업 결과는 도움말 밖에 표시한다. */
-export function CdHelp({ label, children }: CdHelpProps) {
+export function CdHelp(props: CdHelpProps) {
+  const topic = props.topic ? HELP_TOPICS[props.topic] : undefined;
+  const manual = useManual();
+  if (props.topic && !topic) return null;
+  const label = props.label ?? topic?.label ?? "도움말";
+  const more = topic?.more;
+  return (
+    <CdHelpPopover label={label}>
+      {topic ? (
+        <>
+          <ManualBlocks blocks={topic.blocks} compact />
+          {props.children}
+          {more && (
+            <div className="mt-3 border-t cd-border-c pt-2">
+              {manual ? (
+                <button
+                  type="button"
+                  data-manual-more
+                  onClick={() => manual.open({ article: more.article, section: more.section })}
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-[color:var(--cd-primary)] hover:underline"
+                >
+                  매뉴얼에서 자세히
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ) : (
+                <a
+                  href={`/manual/${encodeURIComponent(more.article)}${more.section ? `#${more.section}` : ""}`}
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-[color:var(--cd-primary)] hover:underline"
+                >
+                  매뉴얼에서 자세히
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        props.children
+      )}
+    </CdHelpPopover>
+  );
+}
+
+function CdHelpPopover({ label, children }: { label: string; children: ReactNode }) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -107,6 +156,10 @@ export function CdHelp({ label, children }: CdHelpProps) {
           background: "var(--cd-popover, var(--cd-card-solid))",
           boxShadow: "var(--cd-shadow-popover)",
           overflowWrap: "anywhere",
+        }}
+        // "매뉴얼에서 자세히" — 드로어가 열리기 전에 팝업을 닫는다(top layer 팝업이 드로어를 가리지 않게).
+        onClickCapture={(event) => {
+          if ((event.target as HTMLElement).closest("[data-manual-more]")) close(false);
         }}
         onToggle={(event) => {
           const isOpen = event.newState === "open";

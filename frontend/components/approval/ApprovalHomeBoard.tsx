@@ -13,6 +13,7 @@ import {
   Hourglass, Inbox, Plus, RefreshCw, Sparkles, Star,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCount } from "@/components/cdash/CdBadge";
@@ -244,6 +245,7 @@ export function ApprovalHomeBoard() {
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex items-center gap-2 px-3 py-2 border-b cd-hairline-c shrink-0">
         <span className="text-[13px] font-bold cd-text">{boxLabel}</span>
+        {(box === "pending" || box === "upcoming") && <CdHelp topic="approval.inbox-boxes" />}
         <span className="text-[11px] cd-text-faint">{docs.length}건</span>
         <button type="button" className="ml-auto cd-btn cd-btn-soft rounded-lg p-1.5" title="새로고침" onClick={refreshAll}>
           <RefreshCw className="w-3.5 h-3.5" />

@@ -271,7 +271,7 @@ export default function YearendBoard() {
 
   return (
     <>
-      <CdPageHeader title="연말정산" />
+      <CdPageHeader title="연말정산" helpTopic="payroll.yearend" />
       <div className="cd-card p-4">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <div className="cd-card-title mr-auto">귀속 {year}년 — 직원별 정산</div>

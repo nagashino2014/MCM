@@ -17,6 +17,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdInput, CdSelect } from "@/components/cdash/CdField";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -350,7 +351,12 @@ export function DirectoryBoard() {
                       <th>이름</th>
                       <th>직급</th>
                       <th>기관·업체</th>
-                      <th>연락처 구분</th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          연락처 구분
+                          <CdHelp topic="directory.org-category" />
+                        </span>
+                      </th>
                       <th>부서</th>
                       <th>휴대폰</th>
                       <th>사무실</th>

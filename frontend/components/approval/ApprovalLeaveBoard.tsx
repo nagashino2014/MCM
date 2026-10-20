@@ -195,6 +195,7 @@ export function ApprovalLeaveBoard() {
         icon={<CalendarCheck2 className="w-5 h-5" />}
         eyebrow="Approval · Leave"
         title="직원별 휴가 관리"
+        helpTopic="hr.leave-admin"
         help="직원 행을 열고 월을 선택하면 연차·기타 휴가의 일별 내역을 확인하고 보정할 수 있습니다. 휴가신청이 승인되면 사용 내역이 자동 반영됩니다."
         actions={
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5" onClick={() => router.push("/approval/leave-promotion")}>

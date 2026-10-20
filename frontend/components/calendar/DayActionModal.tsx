@@ -6,6 +6,7 @@
 import { useRouter } from "next/navigation";
 import { Briefcase, ChevronRight, GraduationCap, Handshake, Palmtree, UserCheck, Users } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import type { CalendarAccess, CalendarEntryKind } from "@/lib/calendar/types";
 
 /** 기안으로 만드는 일정 — 모바일 SCHEDULE_FORMS 와 동일. */
@@ -37,7 +38,12 @@ export function DayActionModal({
   const rowCls = "w-full flex items-center gap-3 rounded-xl border cd-line-c px-3.5 py-2.5 text-left transition cd-row-hover disabled:opacity-40 disabled:cursor-not-allowed";
 
   return (
-    <CdModal open={open} onClose={onClose} title={`${date ?? ""} 일정 추가`} size="sm">
+    <CdModal open={open} onClose={onClose} title={
+        <span className="inline-flex items-center gap-1">
+          {`${date ?? ""} 일정 추가`}
+          <CdHelp topic="calendar.day-action" />
+        </span>
+      } size="sm">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
           <p className="text-[11.5px] cd-text-faint">출장·휴가·교육은 결재 문서에서 만들어집니다. 양식을 고르면 날짜가 채워집니다.</p>

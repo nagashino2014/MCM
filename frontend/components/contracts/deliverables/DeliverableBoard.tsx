@@ -531,6 +531,7 @@ export function DeliverableBoard() {
       <CdPageHeader
         breadcrumbs={[{ label: "계약", href: "/contracts" }, { label: "착수계·준공계" }]}
         title="착수계·준공계 작성"
+        helpTopic="contracts.deliverables"
         meta={contract ? `${contract.counterpartyName || "발주처 미상"} · ${DELIVERABLE_KIND_LABEL[kind]}` : "계약을 선택하세요"}
         actions={
           <>

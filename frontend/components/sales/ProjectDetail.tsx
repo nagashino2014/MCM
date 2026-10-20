@@ -11,6 +11,7 @@ import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import { useSession } from "next-auth/react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { SalesCalendar } from "./SalesCalendar";
 import { SalesProgressCard } from "./SalesProgressCard";
 import { SalesFacilityInfoCard } from "./SalesFacilityInfoCard";
@@ -204,6 +205,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`cd-pill ${STAGE_PILL[project.stage] ?? "cd-pill-idle"}`} title="진행 단계(자동 분류)">{SALES_STAGE_LABELS[project.stage]}</span>
+          <CdHelp topic="sales.stage" />
         </div>
       </div>
 

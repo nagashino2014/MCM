@@ -15,6 +15,7 @@ import {
   ArrowLeft, BookmarkPlus, Eye, FileText, GripVertical, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput } from "@/components/cdash/CdField";
@@ -129,7 +130,10 @@ export function FacilityRecipientPicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint">수신처 <span className="cd-text-faint">— 업체/기관명 표기(공문 수신란). 실제 메일 발송은 참조 담당자에게 갑니다</span></span>
+      <span className="flex items-center gap-1 text-[11px] cd-text-faint">
+        <span>수신처 <span className="cd-text-faint">— 업체/기관명 표기(공문 수신란). 실제 메일 발송은 참조 담당자에게 갑니다</span></span>
+        <CdHelp topic="letter.recipients" />
+      </span>
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
@@ -1129,6 +1133,7 @@ export function ApprovalLetterBoard() {
                   문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
                 </span>
               )}
+              <CdHelp topic="letter.number" />
               {!docNo && !manualOn && (
                 <span className="text-[10.5px] cd-text-faint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>
               )}

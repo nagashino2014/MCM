@@ -783,6 +783,7 @@ export function AgreementBoard() {
       <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
         <CdPageHeader
           title="계약서 작성"
+          helpTopic="contracts.agreements"
           actions={
             <div className="flex items-center gap-2">
               <a href="/contracts/agreements/templates" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5">

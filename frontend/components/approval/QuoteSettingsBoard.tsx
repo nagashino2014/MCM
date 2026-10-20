@@ -484,6 +484,7 @@ export function QuoteSettingsBoard() {
       <div className="flex flex-col gap-5 min-h-0 w-full max-w-[1032px]">
         <CdPageHeader
           title="견적 기준 관리"
+          helpTopic="quote.settings-page"
           actions={
             <Link
               href="/approval/quote"

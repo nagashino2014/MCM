@@ -17,6 +17,7 @@ import { NOTICE_FORM_ID } from "@/lib/notice/types";
 import { QUOTE_FORM_ID } from "@/lib/quote/types";
 import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { stepDisplay } from "@/lib/approval/step-display";
 
 export interface DocStepRow {
@@ -400,6 +401,7 @@ export function ApprovalDocViewer({
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>
               )}
+              {(detail.canEdit || detail.canDelete) && <CdHelp topic="approval.delete-resubmit" />}
               {headerRight}
             </div>
 
@@ -856,13 +858,16 @@ export function ApprovalDocViewer({
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] self-start cd-text-muted hover:cd-error-text"
-                    onClick={() => setCancelReasonOpen(true)}
-                  >
-                    반려 요청 — {detail.status === "approved" ? "승인 건 취소를 관리자에게 요청" : "결재자에게 반려를 요청"}
-                  </button>
+                  <div className="flex items-center gap-1 self-start">
+                    <button
+                      type="button"
+                      className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] cd-text-muted hover:cd-error-text"
+                      onClick={() => setCancelReasonOpen(true)}
+                    >
+                      반려 요청 — {detail.status === "approved" ? "승인 건 취소를 관리자에게 요청" : "결재자에게 반려를 요청"}
+                    </button>
+                    <CdHelp topic="approval.cancel-request" />
+                  </div>
                 )}
               </div>
             )}

@@ -271,6 +271,7 @@ export default function BonusEvaluationsBoard() {
     <>
       <CdPageHeader
         title="참여도·평점"
+        helpTopic="bonus.evaluations"
         actions={
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>

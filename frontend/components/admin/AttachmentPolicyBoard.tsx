@@ -11,6 +11,7 @@ import { Loader2, Plus, RotateCcw, Search, ShieldAlert, Trash2 } from "lucide-re
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdToast } from "@/components/cdash/CdToast";
 import "@/components/cdash/cdash.css";
 
@@ -557,7 +558,8 @@ function UsersTab({
                 {multi && <span className="text-xs cd-text-faint">체크한 인원 전체에 같은 설정이 적용됩니다.</span>}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs cd-text-faint mr-1">모드</span>
+                <span className="text-xs cd-text-faint">모드</span>
+                <CdHelp topic="admin.attach-user-mode" />
                 {(Object.keys(MODE_LABEL) as Mode[]).map((m) => {
                   const on = !multi && (checked.size ? users.find((u) => u.userId === [...checked][0]) : focus)?.mode === m;
                   return (

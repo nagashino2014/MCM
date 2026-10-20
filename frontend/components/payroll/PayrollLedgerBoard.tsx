@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileSpreadsheet, Gift, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
@@ -254,6 +255,7 @@ export default function PayrollLedgerBoard() {
     <>
       <CdPageHeader
         title="급여대장"
+        helpTopic="payroll.ledger"
         meta={current ? `${current.title ?? `${year}년 ${month}월분`} · ${kpi.count}명` : undefined}
         actions={
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -602,7 +604,7 @@ export default function PayrollLedgerBoard() {
             })}
             {isDraft && (
               <section className="border cd-border-c rounded-2xl p-3.5 flex flex-col gap-2">
-                <h4 className="text-sm font-bold cd-text">소득세·지방세 확인</h4>
+                <h4 className="text-sm font-bold cd-text flex items-center gap-1">소득세·지방세 확인<CdHelp topic="payroll.ledger-tax" /></h4>
                 <p className="text-xs cd-text-faint">
                   {selected.taxReview?.status === "manual" && selected.taxReview.basisHash === selected.taxBasisHash ? "수기 근거 확인 완료" : selected.taxReview?.status === "automatic" && selected.taxReview.basisHash === selected.taxBasisHash ? "세액 계산 완료" : "미산정 또는 입력 변경 — 확인 전에는 확정할 수 없습니다."}
                 </p>

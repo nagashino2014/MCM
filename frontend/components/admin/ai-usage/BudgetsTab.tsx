@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BellRing, Loader2, Pencil, Plus, ShieldAlert, Trash2, UserPlus, X } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdModal } from "@/components/cdash/CdModal";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { AI_FEATURES } from "@/lib/ai/features";
 import type { AiBudgetAlertRow, AiBudgetStatus, BudgetAction } from "@/lib/ai/budget";
@@ -146,6 +147,7 @@ export function BudgetsTab({ data, canManage, onChanged }: Props) {
 
       <div className="flex items-center gap-3 flex-wrap">
         <h3 className="cd-card-title">예산</h3>
+        <CdHelp topic="admin.ai-budget" />
         <span className="text-[11px] cd-text-faint">
           USD 기준 · 당월({data.asOf.slice(0, 7)}) 누계 대비 · 임계 통과 시 홈 알림벨·푸시·메일(수신자 비면 시스템 관리자) · 최대 {MAX_BUDGETS}개
         </span>

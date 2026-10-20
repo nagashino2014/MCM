@@ -20,6 +20,7 @@ import type { ContractReceivableRow, ReceivableAction, ReceivableActionType } fr
 import { DEBT_COLLECTION_STAGES } from "@/lib/ieps/receivables-types";
 import { CATEGORY_META } from "@/components/contracts/dashboard/types";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 const ACTION_META: Record<
   ReceivableActionType,
@@ -350,12 +351,13 @@ export function ReceivableActionsCard({
   return (
     <div className="cdb-box p-4">
       <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-        <p className="cd-card-title">
+        <div className="cd-card-title">
           <span className="cd-title-icon">
             <ShieldAlert className="w-4 h-4" />
           </span>
           장기 미수금 대응 조치
-        </p>
+          <CdHelp topic="contracts.receivable-actions" />
+        </div>
         {selected && (
           <span className="text-[11px] font-bold truncate max-w-[55%]" style={{ color: "var(--cd-faint)" }}>
             <span

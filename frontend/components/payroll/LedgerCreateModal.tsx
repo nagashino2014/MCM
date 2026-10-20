@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileUp, X } from "lucide-react";
+import { CdHelp } from "@/components/cdash/CdHelp";
 
 /**
  * 신규 급여대장 생성 모달 (PL-P4, §4-1·§6-2 C)
@@ -139,7 +140,7 @@ export default function LedgerCreateModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <h3 className="text-base font-extrabold cd-text">새 급여대장 생성</h3>
+          <h3 className="text-base font-extrabold cd-text inline-flex items-center gap-1">새 급여대장 생성<CdHelp topic="payroll.ledger-create" /></h3>
           <button type="button" className="cd-btn rounded-xl p-1.5" onClick={onClose} aria-label="닫기">
             <X className="w-4 h-4" />
           </button>

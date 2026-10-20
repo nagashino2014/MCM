@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CdHelp } from "@/components/cdash/CdHelp";
 import type {
   DepartmentRow,
   PermissionRow,
@@ -510,7 +511,10 @@ function CreateTemplateModal({
 
         {/* 권한 선택: 좌측 카테고리 트리 + 우측 선택된 권한(권한별 적용 범위) */}
         <div className="mt-4">
-          <span className="cd-label">권한 선택</span>
+          <div className="flex items-center gap-1">
+            <span className="cd-label">권한 선택</span>
+            <CdHelp topic="admin.template-perms" />
+          </div>
           <p className="text-xs cd-text-muted mb-3">좌측 트리에서 세부 권한을 클릭하면 우측에 추가됩니다. 적용 범위는 권한별 지원 범위 내에서만 설정할 수 있습니다.</p>
           <div className="grid md:grid-cols-2 gap-3">
             {/* 카테고리 트리 */}
@@ -818,6 +822,7 @@ function AccountDetailPanel({
             <span className="text-xs cd-text-faint" title="메뉴·화면 노출은 다시 로그인해야 반영됩니다. API 권한은 즉시 반영됩니다.">
               권한 변경은 재로그인 후 메뉴에 반영
             </span>
+            <CdHelp topic="admin.account-header" />
             <button
               type="button"
               disabled={isSelf}
@@ -866,6 +871,7 @@ function AccountDetailPanel({
       <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-1 flex items-center gap-2">
           <Plus className="w-4 h-4 text-[color:var(--cd-primary)]" /> 권한 부여
+          <CdHelp topic="admin.assign-scope" />
         </h3>
         <p className="text-xs cd-text-muted mb-3">여러 템플릿을 함께 선택해 적용할 수 있습니다. 이미 부여된 템플릿은 자동 제외됩니다.</p>
         <div className="flex flex-wrap gap-2 mb-3">

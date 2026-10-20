@@ -384,13 +384,11 @@ export function ScheduleCalendarCard() {
               disabled={disabled}
               onClick={() => pickTag(t.key)}
               data-active={active || undefined}
-              className="cd-chip cd-chip-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              className="cd-chip cd-chip-sm cd-chip-tag disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ "--tag-c": TAG_COLOR_STRONG[t.key] } as React.CSSProperties}
               title={t.key === "vehicle" ? "법인차량 이용 현황 — 출장신청서 상신·직접 예약 기준" : undefined}
             >
-              <span
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: active ? "currentColor" : TAG_COLOR_STRONG[t.key] }}
-              />
+              <span className="cd-chip-dot" aria-hidden="true" />
               {t.label}
             </button>
           );

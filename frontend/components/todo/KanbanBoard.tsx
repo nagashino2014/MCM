@@ -41,6 +41,8 @@ export interface KanbanBoardProps {
   onCreate: (input: Record<string, unknown>) => Promise<TodoItemDetail | null>;
   onBoardUpdated: (board: TodoBoard) => void;
   onManageMembers: () => void;
+  /** 보드 삭제 요청(만든 사람·개인 기본 보드 아님일 때만 상위가 넘긴다) */
+  onRequestDelete?: () => void;
 }
 
 function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string; menu: CdMenuItem[]; onOpen: (item: TodoItem) => void }) {
@@ -89,7 +91,7 @@ function CardBody({ item, today, menu, onOpen }: { item: TodoItem; today: string
   );
 }
 
-export function KanbanBoard({ board, items, today, density, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCompleteRequest, onCreate, onBoardUpdated, onManageMembers }: KanbanBoardProps) {
+export function KanbanBoard({ board, items, today, density, selectedId, loading, loaded, membersVersion = 0, onOpen, onMove, onCompleteRequest, onCreate, onBoardUpdated, onManageMembers, onRequestDelete }: KanbanBoardProps) {
   const { toast } = useCdToast();
   const [members, setMembers] = useState<TodoBoardMember[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -460,6 +462,7 @@ export function KanbanBoard({ board, items, today, density, selectedId, loading,
                 { key: "rules", label: "기본 완료 조건…", onSelect: () => setRulesOpen(true) },
                 { key: "automation", label: "자동화…", onSelect: () => setAutomationOpen(true) },
                 ...(board.kind !== "personal" ? [{ key: "members", label: "멤버 관리", onSelect: onManageMembers }] : []),
+                ...(onRequestDelete ? [{ key: "delete", label: <span style={{ color: "var(--cd-error)" }}>보드 삭제…</span>, onSelect: onRequestDelete }] : []),
               ]}
             />
           )}

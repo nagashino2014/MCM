@@ -42,7 +42,7 @@ export function TodoPrefsModal({ prefs, onPatch, onClose }: { prefs: TodoPrefs; 
       open
       onClose={onClose}
       title="할 일 설정"
-      size="md"
+      size="lg"
       footer={
         <CdButton variant="primary" size="sm" onClick={onClose}>
           닫기
@@ -73,7 +73,7 @@ export function TodoPrefsModal({ prefs, onPatch, onClose }: { prefs: TodoPrefs; 
             </select>
             <TimeField value={prefs.weeklyDigestTime ?? TODO_DEFAULT_WEEKLY_TIME} disabled={!weeklyOn} onCommit={(v) => void onPatch({ weeklyDigestTime: v })} />
           </label>
-          <label className="todo-pf-row todo-pf-sub">
+          <label className="todo-pf-row">
             <input type="checkbox" checked={prefs.weeklyDigestMail} disabled={!weeklyOn} onChange={(e) => void onPatch({ weeklyDigestMail: e.target.checked })} />
             <span className="todo-pf-lb">
               주간 요약을 사내 메일함에도 받기 <small>noreply 발신, 받은편지함</small>

@@ -174,7 +174,7 @@ export default function WorkReportDraftScreen() {
           <SkeletonList count={3} />
         </View>
       ) : (
-        <ScrollView
+        <ScrollView automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 14, paddingBottom: 32 }}
           keyboardShouldPersistTaps="handled">
           <View className="gap-1.5">

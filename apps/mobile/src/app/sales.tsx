@@ -127,7 +127,7 @@ export default function SalesScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
       <ScreenHeader title="영업" subtitle={`${cur.y}년 ${cur.m + 1}월`} back variant="sub" />
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         {canEdit ? (
@@ -274,7 +274,7 @@ export default function SalesScreen() {
           ) : undefined
         }>
         {detail ? (
-          <ScrollView
+          <ScrollView automaticallyAdjustKeyboardInsets
             className="flex-1"
             contentContainerStyle={{ gap: 12, paddingBottom: 8 }}
             showsVerticalScrollIndicator={false}>

@@ -86,6 +86,9 @@ export function Screen({
           className="flex-1"
           contentContainerStyle={{ paddingBottom: 32 }}
           keyboardShouldPersistTaps="handled"
+          // 2026-10-20: iOS 키보드가 입력란을 가리지 않도록 — 키보드 높이만큼 인셋 + 포커스된 입력란을 키보드 위로 스크롤(RN 0.86)
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
           refreshControl={
             onRefresh ? (
               <PullRefresh

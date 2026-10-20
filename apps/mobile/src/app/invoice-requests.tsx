@@ -224,7 +224,7 @@ export default function InvoiceRequestsScreen() {
       <ScreenHeader title="발행 요청" subtitle="세금계산서 발행 요청·수신함" back variant="sub" />
       {inbox.allowed === true ? <SegmentedTabs items={tabs} value={tab} onChange={setUserTab} /> : null}
 
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => void reloadAll()} />}>
         {inbox.allowed === true && tab === 'inbox' ? (
@@ -339,7 +339,7 @@ export default function InvoiceRequestsScreen() {
           </View>
         }>
         {requestFor ? (
-          <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
+          <ScrollView automaticallyAdjustKeyboardInsets style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
             <View className="gap-3 pb-2">
               <View className="gap-1 rounded-xl border border-cd-border p-3">
                 <Text numberOfLines={1} className="text-[13.5px] font-bold text-cd-text">

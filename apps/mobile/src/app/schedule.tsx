@@ -25,6 +25,8 @@ import {
   type CalendarPrefs,
   type CalendarRefs,
   type CalendarTagKey,
+  tagTint,
+  TAG_LIST_ORDER,
 } from '@/lib/calendar/types';
 
 /**
@@ -138,8 +140,8 @@ export default function ScheduleScreen() {
         startDate: e.startDate,
         endDate: e.endDate,
         title: e.title,
-        color: TAG_TINT[e.tag].pillBg,
-        ink: TAG_TINT[e.tag].text,
+        color: tagTint(e.tag).pillBg,
+        ink: tagTint(e.tag).text,
       })),
     [events]
   );
@@ -155,7 +157,7 @@ export default function ScheduleScreen() {
     for (const arr of map.values()) {
       arr.sort((a, b) => a.startDate.localeCompare(b.startDate) || (a.startTime ?? '').localeCompare(b.startTime ?? ''));
     }
-    return TAG_ORDER.filter((t) => tags.includes(t) && map.has(t)).map((t) => ({ tag: t, list: map.get(t)! }));
+    return TAG_LIST_ORDER.filter((t) => tags.includes(t) && map.has(t)).map((t) => ({ tag: t, list: map.get(t)! }));
   }, [events, tags]);
 
   const toggleTag = (t: CalendarTagKey) => {
@@ -251,14 +253,14 @@ export default function ScheduleScreen() {
                   </Text>
                 </View>
               }
-              icon={<View style={{ backgroundColor: TAG_TINT[tag].dot }} className="h-2 w-2 rounded-full" />}>
+              icon={<View style={{ backgroundColor: tagTint(tag).dot }} className="h-2 w-2 rounded-full" />}>
               <View className="mt-1">
                 {list.map((e, i) => (
                   <CardRow
                     key={e.id}
                     first={i === 0}
                     title={e.title}
-                    meta={`${CALENDAR_KIND_LABELS[e.kind]} · ${period(e)}`}
+                    meta={`${CALENDAR_KIND_LABELS[e.kind] ?? '일정'} · ${period(e)}`}
                     onPress={() => setDetail(e)}
                   />
                 ))}
@@ -408,7 +410,7 @@ function DetailBody({ ev, entry }: { ev: CalendarEvent; entry: CalendarEntry | n
   return (
     <ScrollView style={{ height: fixedH }} contentContainerStyle={{ gap: 14, paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
       <View className="flex-row items-center gap-2">
-        <Badge label={CALENDAR_KIND_LABELS[ev.kind]} tone="neutral" />
+        <Badge label={CALENDAR_KIND_LABELS[ev.kind] ?? '일정'} tone="neutral" />
         <Text className="text-[14px] font-semibold text-cd-text">{period}</Text>
         {ev.canceled ? <Badge label="미시행" tone="neutral" /> : null}
       </View>

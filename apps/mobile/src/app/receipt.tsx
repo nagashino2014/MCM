@@ -346,7 +346,7 @@ export default function ReceiptScreen() {
           <Ionicons name="file-tray-full-outline" size={21} color={PRIMARY} />
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
           <View className="rounded-xl bg-cd-error-soft px-4 py-3">
             <Text className="text-sm text-cd-error">{error}</Text>

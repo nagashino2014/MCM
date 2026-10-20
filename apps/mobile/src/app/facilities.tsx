@@ -190,7 +190,7 @@ export default function FacilitiesScreen() {
         ) : null}
       </View>
 
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 18, paddingTop: 4, gap: 14, paddingBottom: 40 }}
         refreshControl={
           <PullRefresh
@@ -290,7 +290,7 @@ export default function FacilitiesScreen() {
       {/* 필터 시트 */}
       <Sheet visible={sheet === 'industry'} onClose={() => setSheet(null)} title="업종 선택">
         <View style={{ maxHeight: 420 }}>
-          <ScrollView>
+          <ScrollView automaticallyAdjustKeyboardInsets>
             {industryOptions.map((it) => (
               <CheckRow
                 key={it.id}
@@ -304,7 +304,7 @@ export default function FacilitiesScreen() {
       </Sheet>
       <Sheet visible={sheet === 'sido'} onClose={() => setSheet(null)} title="지역 선택">
         <View style={{ maxHeight: 420 }}>
-          <ScrollView>
+          <ScrollView automaticallyAdjustKeyboardInsets>
             {sidoOptions.map((s) => (
               <CheckRow
                 key={s.value}

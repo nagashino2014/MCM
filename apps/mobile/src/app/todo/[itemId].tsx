@@ -88,6 +88,33 @@ function TimeField({
     setPrev(value);
     setText(value);
   }
+  const { c } = useTheme();
+  if (compact) {
+    // 2026-10-20: 공통 Input 의 min-h-[46px] 가 compact 높이를 덮어 같은 줄 날짜 칸까지 커지던 문제 — 다른 칸과 같은 36px 로 고정
+    return (
+      <TextInput
+        value={text}
+        editable={!disabled}
+        keyboardType="numeric"
+        placeholder="HH:mm"
+        placeholderTextColor={c.faint}
+        style={{ height: 36, borderRadius: 8, borderWidth: 1, borderColor: c.border, backgroundColor: c.card, color: disabled ? c.faint : c.text, fontSize: 13, textAlign: 'center', paddingHorizontal: 4, paddingVertical: 0 }}
+        onChangeText={(t: string) => {
+          const d = t.replace(/[^\d]/g, '').slice(0, 4);
+          setText(d.length > 2 ? `${d.slice(0, 2)}:${d.slice(2)}` : d);
+        }}
+        onBlur={() => {
+          if (text === '') {
+            if (value !== '') onCommit('');
+            return;
+          }
+          if (HHMM_OK.test(text)) {
+            if (text !== value) onCommit(text);
+          } else setText(value);
+        }}
+      />
+    );
+  }
   return (
     <Input
       value={text}
@@ -938,8 +965,9 @@ export default function TodoDetailScreen() {
           <IconButton icon="ellipsis-horizontal" onPress={() => setActionsOpen(true)} />
         </View>
       }>
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 12 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView className="flex-1" enabled={false}>
+        {/* 2026-10-20 키보드 가림 전수 조치: KAV(padding)는 화면만 줄이고 포커스 입력란까지 스크롤하지 않음 → iOS ScrollView 자동 인셋으로 */}
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 12 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive">
           {/* 헤더 — 보드 색 띠 + 제목 + 프로젝트 칩 */}
           <View style={{ borderRadius: 8, paddingLeft: 18, paddingRight: 14, paddingVertical: 14 }} className="overflow-hidden border border-cd-border bg-cd-card">
             <BoardStripe color={item.boardColor} width={5} inset={0} />
@@ -1011,42 +1039,66 @@ export default function TodoDetailScreen() {
                   <Text className="text-[14px] text-cd-faint">담당 없음</Text>
                 )}
               </KeyCell>
-              <KeyCell
-                label="수행 예정"
-                onPress={() => setDoDateOpen(true)}
-                disabled={!canEdit}
-                active={doDateOpen}
-                chevron={false}
-                trailing={
-                  <View style={{ width: 66 }}>
-                    <TimeField compact value={item.doTime ?? ''} disabled={!canEdit || !item.doDate} onCommit={(v) => void patch({ doTime: v || null })} />
-                  </View>
-                }>
-                {item.doDate ? (
-                  <>
-                    <Text numberOfLines={1} className="shrink text-[14px] text-cd-text">
-                      {fmtMdWd(item.doDate)}
-                    </Text>
-                    {/* 287 기간 — 종료일 설정/해제 */}
-                    <Pressable
-                      onPress={() => (canEdit ? setEndDateOpen(true) : undefined)}
-                      onLongPress={() => (canEdit && item.endDate ? void patch({ endDate: null }) : undefined)}
-                      hitSlop={6}
-                      accessibilityLabel={item.endDate ? `종료일 ${item.endDate} (길게 눌러 해제)` : '종료일 설정'}
-                      className="ml-1 shrink-0 rounded-md px-1 active:opacity-60"
-                      style={item.endDate && item.endDate > item.doDate ? { backgroundColor: c.primarySoft } : undefined}>
-                      <Text className={`text-[12px] ${item.endDate && item.endDate > item.doDate ? 'font-semibold text-cd-primary' : 'text-cd-faint'}`}>
-                        {item.endDate && item.endDate > item.doDate ? `~ ${fmtMd(item.endDate)}` : '~ 종료일'}
-                      </Text>
+              {/* 수행 예정(2026-10-20): 한 칸에 시작~종료가 좁아 위=시작일·아래=종료일, 오른쪽 위=시각·아래=[지우기](시각 칸과 같은 폭) */}
+              <View style={{ width: '48%' }} className="gap-[3px]">
+                <Text className="text-[11.5px] text-cd-faint">수행 예정</Text>
+                <View className="gap-1.5">
+                  <View className="flex-row items-center gap-1.5">
+                    <Pressable onPress={() => setDoDateOpen(true)} disabled={!canEdit} className="flex-1 active:opacity-60">
+                      <View style={{ height: 36, borderRadius: 8, borderWidth: 1, borderColor: doDateOpen ? c.primary : c.border, paddingHorizontal: 8 }} className="flex-row items-center bg-cd-card">
+                        {/* 칸이 좁아(약 77px) 요일 괄호 앞 공백을 없앤 짧은 표기 */}
+                        <Text numberOfLines={1} className={`shrink text-[13.5px] ${item.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>
+                          {item.doDate ? fmtMdWd(item.doDate).replace(' ', '') : '시작일'}
+                        </Text>
+                      </View>
                     </Pressable>
-                  </>
-                ) : (
-                  <>
-                    <Text className="text-[14px] text-cd-muted">YYYYMMDD</Text>
-                    <Ionicons name="calendar-outline" size={14} color={c.muted} style={{ marginLeft: 'auto' }} />
-                  </>
-                )}
-              </KeyCell>
+                    <View style={{ width: 66 }}>
+                      <TimeField compact value={item.doTime ?? ''} disabled={!canEdit || !item.doDate} onCommit={(v) => void patch({ doTime: v || null })} />
+                    </View>
+                  </View>
+                  <View className="flex-row items-center gap-1.5">
+                    {/* 287 기간 — 종료일 설정(길게 누르거나 × 로 해제) */}
+                    <Pressable
+                      onPress={() => (canEdit && item.doDate ? setEndDateOpen(true) : undefined)}
+                      onLongPress={() => (canEdit && item.endDate ? void patch({ endDate: null }) : undefined)}
+                      disabled={!canEdit || !item.doDate}
+                      accessibilityLabel={item.endDate ? `종료일 ${item.endDate} (길게 눌러 해제)` : '종료일 설정'}
+                      className="flex-1 active:opacity-60">
+                      <View
+                        style={{ height: 36, borderRadius: 8, borderWidth: 1, borderColor: endDateOpen ? c.primary : c.border, paddingHorizontal: 8, opacity: item.doDate ? 1 : 0.5 }}
+                        className="flex-row items-center gap-1 bg-cd-card">
+                        {item.endDate && item.doDate && item.endDate > item.doDate ? (
+                          <>
+                            <Text numberOfLines={1} className="shrink text-[13.5px] font-semibold text-cd-primary">
+                              ~{fmtMd(item.endDate)}
+                            </Text>
+                            {canEdit ? (
+                              <Pressable onPress={() => void patch({ endDate: null })} hitSlop={8} accessibilityLabel="종료일 해제" style={{ marginLeft: 'auto' }} className="active:opacity-60">
+                                <Ionicons name="close-circle" size={15} color={c.faint} />
+                              </Pressable>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Text numberOfLines={1} className="text-[13.5px] text-cd-muted">
+                            종료일
+                          </Text>
+                        )}
+                      </View>
+                    </Pressable>
+                    <View style={{ width: 66 }}>
+                      {canEdit && item.doDate ? (
+                        <Pressable
+                          onPress={() => void patch({ doDate: null, doTime: null, endDate: null })}
+                          accessibilityLabel="수행 예정 지우기"
+                          style={{ height: 36, borderRadius: 8, borderWidth: 1, borderColor: c.border }}
+                          className="items-center justify-center bg-cd-card active:opacity-60">
+                          <Text className="text-[13px] font-semibold text-cd-muted">지우기</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              </View>
               <KeyCell label="마감" onPress={() => setDueOpen(true)} disabled={!canEdit} active={dueOpen} chevron={false}>
                 {item.dueDate ? (
                   <>
@@ -1063,10 +1115,9 @@ export default function TodoDetailScreen() {
                 )}
               </KeyCell>
             </View>
-            {canEdit && (item.doDate || item.dueDate) ? (
+            {canEdit && item.dueDate ? (
               <View className="flex-row gap-1.5">
-                {item.doDate ? <Button label="예정 지우기" size="sm" variant="ghost" onPress={() => void patch({ doDate: null, doTime: null })} /> : null}
-                {item.dueDate ? <Button label="마감 지우기" size="sm" variant="ghost" onPress={() => void patch({ dueDate: null })} /> : null}
+                <Button label="마감 지우기" size="sm" variant="ghost" onPress={() => void patch({ dueDate: null })} />
               </View>
             ) : null}
           </Frame>
@@ -1198,62 +1249,70 @@ export default function TodoDetailScreen() {
                   ) : null}
                 </View>
                 {s.status !== 'done' ? (
-                  <View className="mb-1 flex-row flex-wrap items-center gap-2 pl-7">
-                    <Pressable
-                      onPress={() => (canEdit ? setMsKindFor(s) : undefined)}
-                      className="h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
-                      <Ionicons name="flag-outline" size={12} color={s.milestoneKind ? c.primary : c.muted} />
-                      <Text className={`text-[11.5px] ${s.milestoneKind ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
-                        {s.milestoneKind ? TODO_MILESTONE_LABELS[s.milestoneKind] : '종류'}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'doDate' }) : undefined)}
-                      className="h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
-                      <Text className={`text-[11.5px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `예정 ${fmtMd(s.doDate)}` : '예정일'}</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'actualDate' }) : undefined)}
-                      className="h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70"
-                      style={s.actualDate ? { borderColor: c.success } : undefined}>
-                      <Text className={`text-[11.5px] ${s.actualDate ? 'font-semibold text-cd-success' : 'text-cd-muted'}`}>{s.actualDate ? `실제 ${fmtMd(s.actualDate)}` : '실제일'}</Text>
-                    </Pressable>
-                    {item.stages.length ? (
+                  <View className="mb-1 gap-1.5 pl-7">
+                    <View className="flex-row items-center gap-1.5">
                       <Pressable
-                        onPress={() => (canEdit ? setStagePickFor(s) : undefined)}
-                        className="h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
-                        <Ionicons name="git-branch-outline" size={12} color={c.muted} />
-                        <Text className="text-[11.5px] text-cd-muted" numberOfLines={1}>
-                          {s.stageOrder != null ? `${s.stageOrder}. ${item.stages.find((st) => st.stageOrder === s.stageOrder)?.stageName ?? ''}` : '단계 없음'}
+                        onPress={() => (canEdit ? setMsKindFor(s) : undefined)}
+                        style={{ minWidth: 0 }}
+                        className="h-8 flex-1 flex-row items-center justify-center gap-1 rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
+                        <Ionicons name="flag-outline" size={12} color={s.milestoneKind ? c.primary : c.muted} />
+                        <Text className={`text-[11.5px] ${s.milestoneKind ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
+                          {s.milestoneKind ? TODO_MILESTONE_LABELS[s.milestoneKind] : '종류'}
                         </Text>
                       </Pressable>
-                    ) : null}
-                    <View className="h-7 flex-row items-center rounded-md border border-cd-border bg-cd-card">
-                      <Pressable onPress={() => stepSub(s, -1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 내리기" className="h-7 w-7 items-center justify-center active:opacity-60">
-                        <Ionicons name="remove" size={14} color={c.muted} />
+                      <Pressable
+                        onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'doDate' }) : undefined)}
+                        style={{ minWidth: 0 }}
+                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
+                        <Text numberOfLines={1} className={`text-[11.5px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `예정 ${fmtMd(s.doDate)}` : '예정일'}</Text>
                       </Pressable>
-                      <Text className="min-w-[40px] text-center text-[12.5px] font-semibold text-cd-text">{s.progressPct ?? 0}%</Text>
-                      <Pressable onPress={() => stepSub(s, 1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 올리기" className="h-7 w-7 items-center justify-center active:opacity-60">
-                        <Ionicons name="add" size={14} color={c.muted} />
+                      <Pressable
+                        onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'actualDate' }) : undefined)}
+                        className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70"
+                        style={s.actualDate ? { borderColor: c.success, minWidth: 0 } : { minWidth: 0 }}>
+                        <Text numberOfLines={1} className={`text-[11.5px] ${s.actualDate ? 'font-semibold text-cd-success' : 'text-cd-muted'}`}>{s.actualDate ? `실제 ${fmtMd(s.actualDate)}` : '실제일'}</Text>
                       </Pressable>
+                      <View className="h-8 flex-row items-center rounded-md border border-cd-border bg-cd-card">
+                        <Pressable onPress={() => stepSub(s, -1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 내리기" className="h-8 w-7 items-center justify-center active:opacity-60">
+                          <Ionicons name="remove" size={14} color={c.muted} />
+                        </Pressable>
+                        <Text className="min-w-[40px] text-center text-[12.5px] font-semibold text-cd-text">{s.progressPct ?? 0}%</Text>
+                        <Pressable onPress={() => stepSub(s, 1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 올리기" className="h-8 w-7 items-center justify-center active:opacity-60">
+                          <Ionicons name="add" size={14} color={c.muted} />
+                        </Pressable>
+                      </View>
                     </View>
-                    <TextInput
-                      value={subNoteDraft[s.itemId] ?? s.progressNote ?? ''}
-                      onChangeText={(t) => setSubNoteDraft((d) => ({ ...d, [s.itemId]: t }))}
-                      onBlur={() => {
-                        const v = subNoteDraft[s.itemId];
-                        if (v !== undefined && v !== (s.progressNote ?? '')) void patchSub(s, { progressNote: v || null });
-                        setSubNoteDraft((d) => {
-                          const n = { ...d };
-                          delete n[s.itemId];
-                          return n;
-                        });
-                      }}
-                      editable={canEdit}
-                      placeholder="진척 내용"
-                      placeholderTextColor={c.faint}
-                      className="h-7 min-w-[120px] flex-1 rounded-md border border-cd-border bg-cd-card px-2 text-[12.5px] text-cd-text"
-                    />
+                    <View className="flex-row items-center gap-1.5">
+                      {item.stages.length ? (
+                        <Pressable
+                          onPress={() => (canEdit ? setStagePickFor(s) : undefined)}
+                          style={{ maxWidth: '42%' }}
+                          className="h-8 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+                          <Ionicons name="git-branch-outline" size={12} color={c.muted} />
+                          <Text className="text-[11.5px] text-cd-muted" numberOfLines={1}>
+                            {s.stageOrder != null ? `${s.stageOrder}. ${item.stages.find((st) => st.stageOrder === s.stageOrder)?.stageName ?? ''}` : '단계 없음'}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      <TextInput
+                        value={subNoteDraft[s.itemId] ?? s.progressNote ?? ''}
+                        onChangeText={(t) => setSubNoteDraft((d) => ({ ...d, [s.itemId]: t }))}
+                        onBlur={() => {
+                          const v = subNoteDraft[s.itemId];
+                          if (v !== undefined && v !== (s.progressNote ?? '')) void patchSub(s, { progressNote: v || null });
+                          setSubNoteDraft((d) => {
+                            const n = { ...d };
+                            delete n[s.itemId];
+                            return n;
+                          });
+                        }}
+                        editable={canEdit}
+                        placeholder="진척 내용"
+                        placeholderTextColor={c.faint}
+                        style={{ height: 32, paddingVertical: 0 }}
+                        className="flex-1 rounded-md border border-cd-border bg-cd-card px-2 text-[12.5px] text-cd-text"
+                      />
+                    </View>
                   </View>
                 ) : null}
                 </View>
@@ -1624,7 +1683,7 @@ export default function TodoDetailScreen() {
           />
           <Text className="text-[11.5px] text-cd-faint">내가 볼 수 있는 미완료 할 일 중에서 고릅니다(자기 자신·이미 선행인 것 제외). 순환이 되는 연결은 거절됩니다.</Text>
         </View>
-        <ScrollView className="mt-2 flex-1" contentContainerStyle={{ gap: 6, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+        <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" contentContainerStyle={{ gap: 6, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
           {depLoading ? (
             <Text className="text-[13px] text-cd-faint">검색 중…</Text>
           ) : depResults && !depResults.length ? (
@@ -1652,7 +1711,7 @@ export default function TodoDetailScreen() {
 
       {/* 체크리스트 템플릿(286, §26-3) */}
       <Sheet visible={tplOpen} onClose={() => setTplOpen(false)} title="체크리스트 템플릿" fillHeight={0.7}>
-        <ScrollView className="flex-1" contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
           <Text className="text-[12px] text-cd-muted">템플릿을 고르면 하위 작업을 뒤에 추가합니다(마감 오프셋은 할 날 기준, 공정 단계는 관련 공정표에 있을 때만).</Text>
           {item?.stages.length ? (
             <Pressable onPress={() => void fromStages()} disabled={tplBusy} className="flex-row items-center gap-2 rounded-lg border border-cd-primary/40 bg-cd-card px-3 py-2 active:opacity-70">
@@ -1849,7 +1908,7 @@ export default function TodoDetailScreen() {
       </Sheet>
 
       <Sheet visible={boardOpen} onClose={() => setBoardOpen(false)} title="보드·열" fillHeight={0.6}>
-        <ScrollView className="flex-1" contentContainerStyle={{ gap: 8 }}>
+        <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ gap: 8 }}>
           <Text className="text-[12px] text-cd-muted">보드</Text>
           {boards.map((b) => {
             const cur = boardPick?.boardId === b.boardId;
@@ -1942,7 +2001,7 @@ export default function TodoDetailScreen() {
         ) : !rooms.data?.rooms?.length ? (
           <EmptyState icon="chatbubbles-outline" title="대화방이 없습니다" />
         ) : (
-          <ScrollView className="flex-1">
+          <ScrollView automaticallyAdjustKeyboardInsets className="flex-1">
             {rooms.data.rooms.map((r) => (
               <Pressable
                 key={r.roomId}

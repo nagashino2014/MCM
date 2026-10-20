@@ -110,7 +110,7 @@ export default function ApprovalDocScreen() {
   return (
     // 상단은 네비게이터 헤더가 처리하고, 하단 액션 바는 자체 padding 으로 안전영역을 확보한다.
     <SafeAreaView edges={[]} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
-      <ScrollView
+      <ScrollView automaticallyAdjustKeyboardInsets
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>
         {/* 헤더 */}

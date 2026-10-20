@@ -206,7 +206,7 @@ export function EntityPickerSheet({
             title={src.minChars > 0 && q.trim().length < src.minChars ? `${src.minChars}자 이상 입력하세요` : '결과가 없습니다'}
           />
         ) : (
-          <ScrollView className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
+          <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
             {shown.map((o) => (
               <Pressable
                 key={o.id}

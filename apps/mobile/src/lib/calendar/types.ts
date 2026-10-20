@@ -3,7 +3,9 @@
  * ⚠ 태그 키·색이 갈라지면 같은 일정이 두 화면에서 다른 색으로 보인다. 웹이 바뀌면 함께 바꾼다.
  */
 
-export const CALENDAR_TAG_KEYS = ['self', 'dept', 'sales', 'refs', 'vehicle', 'meeting', 'interview'] as const;
+// todo(할 일)는 웹 10-14 추가 — 일정 설정(태그)을 웹과 공유하므로 모바일도 키를 알아야 한다(2026-10-20: 웹에서 켠 todo 로 이벤트가 오면
+// TAG_TINT[todo] 가 없어 렌더 예외 → 릴리스 앱 종료(일정 메뉴 튕김)).
+export const CALENDAR_TAG_KEYS = ['self', 'dept', 'sales', 'refs', 'vehicle', 'meeting', 'interview', 'todo'] as const;
 export type CalendarTagKey = (typeof CALENDAR_TAG_KEYS)[number];
 
 export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
@@ -14,6 +16,7 @@ export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
   vehicle: '차량',
   meeting: '회의',
   interview: '면접',
+  todo: '할 일',
 };
 
 /** 태그별 파스텔 배경 — 홈 위젯·일정·자산 캘린더 공용(단일 소스). */
@@ -25,6 +28,7 @@ export const TAG_COLOR: Record<CalendarTagKey, string> = {
   vehicle: '#FFE699',
   meeting: '#B9E4DC',
   interview: '#F9C9D9',
+  todo: '#D9D4F0',
 };
 
 /** 파스텔 배경 위 글자색. */
@@ -45,10 +49,17 @@ export const TAG_TINT: Record<CalendarTagKey, { bg: string; text: string; dot: s
   // 회의·면접(219) — 웹 TAG_COLOR 민트/핑크 계열을 모바일 틴트 규칙(파스텔 배경 + 컬러 텍스트)으로.
   meeting: { bg: '#dff3ef', text: '#1f8a78', dot: '#2e9e8c', pillBg: '#dff3ef' },
   interview: { bg: '#fde6ee', text: '#b5406f', dot: '#d6548a', pillBg: '#fde6ee' },
+  todo: { bg: '#ece9f8', text: '#6a5fc0', dot: '#7b6fd0', pillBg: '#e6e2f6' },
 };
+
+/** 알 수 없는 태그(서버가 새 태그를 추가했는데 앱이 아직 모를 때)에도 죽지 않도록 — 회색 틴트. */
+export const TAG_TINT_FALLBACK = { bg: '#eef0f3', text: '#565e82', dot: '#a6acc4', pillBg: '#eef0f3' };
+export const tagTint = (t: string) => (TAG_TINT as Record<string, typeof TAG_TINT_FALLBACK>)[t] ?? TAG_TINT_FALLBACK;
 
 /** 칩·목록 표시 순서 — 핸드오프 3a(본인·영업·부서·선택·차량). */
 export const TAG_ORDER: CalendarTagKey[] = ['self', 'sales', 'dept', 'refs', 'vehicle', 'meeting', 'interview'];
+/** 목록 묶음 순서 — 필터 칩(TAG_ORDER, 375 폭 1행 7개)에는 없지만 웹에서 켠 '할 일'도 목록에 보인다. */
+export const TAG_LIST_ORDER: CalendarTagKey[] = [...TAG_ORDER, 'todo'];
 
 /** 캘린더 muted 색(핸드오프 3a) — 전/익월·요일 라벨·주말. */
 export const CAL_MUTED = {
@@ -69,9 +80,10 @@ export const TAG_COLOR_STRONG: Record<CalendarTagKey, string> = {
   vehicle: '#D4A017',
   meeting: '#2E9E8C',
   interview: '#D6548A',
+  todo: '#7B6FD0',
 };
 
-export type CalendarKind = 'leave' | 'trip' | 'education' | 'sales' | 'vehicle' | 'meeting' | 'interview' | 'visit';
+export type CalendarKind = 'leave' | 'trip' | 'education' | 'sales' | 'vehicle' | 'meeting' | 'interview' | 'visit' | 'todo';
 
 export const CALENDAR_KIND_LABELS: Record<CalendarKind, string> = {
   leave: '휴가',
@@ -82,6 +94,7 @@ export const CALENDAR_KIND_LABELS: Record<CalendarKind, string> = {
   meeting: '회의',
   interview: '면접',
   visit: '미팅',
+  todo: '할 일',
 };
 
 export interface CalendarPerson {

@@ -247,7 +247,7 @@ export function OrgPickerSheet({
         ) : !data?.employees?.length ? (
           <EmptyState icon="git-network-outline" title="조직 정보를 불러오지 못했습니다" />
         ) : (
-          <ScrollView className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
+          <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
             {q.trim() ? (
               hits.length ? (
                 hits.map((e) => <Person key={e.employeeId} e={e} />)

@@ -129,6 +129,24 @@ export async function listOrganizationSnapshot(): Promise<OrganizationSnapshot> 
   };
 }
 
+/**
+ * 전 직원용 조직도(인원 선택 모달·공유 대상 지정) — 부서·직급·이름·메일·사진(주소록 /api/directory 와 같은 범위)만 남기고
+ * 사번·입사일·성별·생년월일 보유는 비운다(형태는 OrganizationSnapshot 그대로).
+ */
+export async function listOrganizationDirectory(): Promise<OrganizationSnapshot> {
+  const snapshot = await listOrganizationSnapshot();
+  return {
+    ...snapshot,
+    employees: snapshot.employees.map((e) => ({
+      ...e,
+      employeeNo: null,
+      hiredAt: null,
+      gender: null,
+      hasBirthDate: false,
+    })),
+  };
+}
+
 export async function saveDepartment(input: DepartmentInput): Promise<DepartmentRow> {
   const deptName = input.deptName.trim();
   if (!deptName) throw new Error("부서명이 필요합니다.");

@@ -154,7 +154,8 @@ test("API 가 관리 권한을 요구하는 화면은 메뉴·URL 도 같은 키
     assert.equal(hrefs.includes("/approval/records"), false);
     assert.equal(hrefs.includes("/approval/insights"), false);
   }
-  assert.equal(visibleSubmenu(approval, [...STAFF_PERMS, "approval.manage@all"]).length, 6);
+  // 전자결재 홈·공문·내부고시·양식별 문서 조회·데이터 분석·결재 인사이트·부재·대결 설정(main 의 대결 메뉴 포함 7개)
+  assert.equal(visibleSubmenu(approval, [...STAFF_PERMS, "approval.manage@all"]).length, 7);
   assert.deepEqual(requiredPermissionsForPath("/approval/records/42"), ["approval.manage"]);
   // 파일함은 files.manage, 문서함·개인문서함은 전원 — 상위 메뉴는 남고 대표 경로는 보이는 첫 서브로
   const files = MENU_ITEMS.find((item) => item.title === "파일 · 문서함")!;

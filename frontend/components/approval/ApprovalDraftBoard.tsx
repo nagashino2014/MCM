@@ -1211,7 +1211,7 @@ export function ApprovalDraftBoard() {
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Draft"
         title={form ? `기안 작성 — ${form.name}` : "기안 작성"}
-        help="양식 항목을 입력하고 결재선에 합의·승인 결재자를 추가하세요. 상신하면 결재선 위에서 아래 순서로 한 명씩 결재가 진행됩니다. 참조자는 결재 완료 시 통보를 받고, 열람자는 진행 중에도 문서를 볼 수 있습니다. 작성 내용은 자동 저장되지 않으니 [임시저장]을 눌러 보관하세요."
+        help="양식 항목을 입력하고 결재선에 합의·승인 결재자를 추가하세요. 상신하면 결재선 위에서 아래 순서로 한 명씩 결재가 진행됩니다. 참조·열람자는 결재하지 않고, 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 작성 내용은 자동 저장되지 않으니 [임시저장]을 눌러 보관하세요."
         actions={
           <div className="flex items-center gap-2">
             <DeleteDraftButton docId={docId} meta={editMeta} />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { resolveVisibleContractIds } from "@/lib/auth/contract-scope";
+import { OPEN_CONTRACT_DOCUMENT_TYPES } from "@/lib/auth/scope-guards";
 import { getDb, rowsToObjects } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -15,21 +16,19 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 // GET /api/contracts/documents/list?from=YYYYMM&to=YYYYMM&q= — 문서함 '계약 문서' 탭 목록.
-// 스코프: contract.view + resolveVisibleContractIds(참여 계약 제한 사용자는 해당 계약만).
-// 열람은 기존 GET /api/contracts/documents?key= 스트리밍을 재사용한다.
+// 스코프: contract.view + 계약서·변경계약서는 모든 계약(전 직원 열람, 2026-10-21 사용자 결정),
+//   그 외 종류(세금계산서 등)는 resolveVisibleContractIds(참여 계약 제한 사용자는 해당 계약만).
+// 열람은 기존 GET /api/contracts/documents?key= 스트리밍을 재사용한다(같은 규칙).
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("contract.view");
     const visibleIds = await resolveVisibleContractIds(ctx.userId, "contract.view");
-    if (visibleIds !== null && visibleIds.length === 0) {
-      return NextResponse.json({ documents: [] });
-    }
 
     const params: unknown[] = [];
     const conds: string[] = [];
     if (visibleIds !== null) {
-      params.push(visibleIds);
-      conds.push(`d.contract_id = ANY($${params.length}::text[])`);
+      params.push(visibleIds, [...OPEN_CONTRACT_DOCUMENT_TYPES]);
+      conds.push(`(d.contract_id = ANY($${params.length - 1}::text[]) OR d.document_type = ANY($${params.length}::text[]))`);
     }
     const ym = (v: string | null) => {
       const m = /^(\d{4})(\d{2})$/.exec((v ?? "").trim());

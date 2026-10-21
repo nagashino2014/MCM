@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { hasPermission } from "@/lib/auth/rbac";
 import { listActedDocs, listDeptDocs, listMyDocs, listOrgFolderDocs, listOrgFolders, listWatchedDocs } from "@/lib/approval/docs";
 
 export const runtime = "nodejs";
@@ -16,8 +17,12 @@ export async function GET(req: NextRequest) {
     if (tab === "watched") return NextResponse.json({ docs: await listWatchedDocs(ctx.userId) });
     if (tab === "dept") return NextResponse.json({ docs: await listDeptDocs(ctx.userId) });
     if (tab === "org") {
-      const folders = await listOrgFolders();
-      const folder = sp.get("folder") ?? folders[0] ?? null;
+      // 인사·회계·성과급·근태 폴더(304)는 관리자·인사/회계(approval.manage)·대표이사(approval.read_all)만(2026-10-21)
+      const privileged =
+        (await hasPermission(ctx.userId, "approval.manage")) || (await hasPermission(ctx.userId, "approval.read_all"));
+      const folders = await listOrgFolders({ includeRestricted: privileged });
+      const requested = sp.get("folder");
+      const folder = requested && folders.includes(requested) ? requested : folders[0] ?? null;
       return NextResponse.json({ folders, folder, docs: folder ? await listOrgFolderDocs(folder) : [] });
     }
     return NextResponse.json({ error: "tab 파라미터가 올바르지 않습니다." }, { status: 400 });

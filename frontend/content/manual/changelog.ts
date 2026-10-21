@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-21",
+    kind: "변경",
+    title: "문서함 열람 범위 — 발송공문·계약서 전 직원 공개, 인사·회계 폴더 제한",
+    body: "문서함의 [발송공문] 탭을 전 직원이 볼 수 있습니다(재발송·수신처 편집·이관 등록 삭제는 결재 운영 담당만). [계약 문서] 탭의 계약서·변경계약서는 모든 계약의 것을 전 직원이 봅니다. 전사 문서함의 인사·회계·성과급·근태 폴더는 관리자·인사/회계 담당·대표이사에게만 보입니다.",
+    articles: ["files.archive"],
+  },
+  {
     date: "2026-10-20",
     kind: "변경",
     title: "지출 내역은 불러오기로만 — 기타 개인 지출증빙·경비 환급 화면 폐지",

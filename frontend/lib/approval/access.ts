@@ -1,9 +1,9 @@
 // 문서 열람 범위 판정 — 문서 상세(GET)와 첨부 미리보기가 같은 규칙을 써야 하므로 분리했다.
 // 규칙: 기안자·결재선 관계자·참조/열람자·결재 운영 권한자·전 문서 열람 권한자(approval.read_all, 298) + 문서함 공개 범위
-//       (전사 문서함 지정 양식의 승인 문서는 전 직원, 완료·반려 문서는 같은 부서까지).
+//       (전사 문서함 지정 양식의 승인 문서는 전 직원 — 인사·회계·성과급·근태 폴더(304)는 제외, 완료·반려 문서는 같은 부서까지).
 
 import { hasPermission } from "@/lib/auth/rbac";
-import { getUserDeptIds, type ApprovalDocDetail } from "@/lib/approval/docs";
+import { getUserDeptIds, listRestrictedOrgFolders, type ApprovalDocDetail } from "@/lib/approval/docs";
 
 export interface DocAccess {
   allowed: boolean;
@@ -21,7 +21,8 @@ export async function resolveDocAccess(doc: ApprovalDocDetail, userId: string): 
   // 전 문서 열람(approval.read_all) — 대표이사 등 운영 권한 없이 열람만 허용(2026-10-19 C-1)
   const isReader = isManager || (await hasPermission(userId, "approval.read_all"));
   let allowed = involved || isWatcher || isReader;
-  if (!allowed && doc.status === "approved" && doc.orgFolder) allowed = true;
+  // 전사 문서함 공개 — 열람 제한 폴더(인사·회계·성과급·근태, 304)는 제외(isReader 가 관리자·인사/회계·대표이사를 이미 허용)
+  if (!allowed && doc.status === "approved" && doc.orgFolder && !(await listRestrictedOrgFolders()).has(doc.orgFolder)) allowed = true;
   if (!allowed && ["approved", "rejected"].includes(doc.status) && doc.deptId) {
     // 같은 부서 = 본인 보직 부서(주 소속 + 겸직, 300) 중 하나
     if ((await getUserDeptIds(userId)).includes(doc.deptId)) allowed = true;

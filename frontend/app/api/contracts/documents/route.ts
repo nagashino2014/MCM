@@ -3,7 +3,7 @@ import path from "node:path";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { resolveContractIdByDocumentKey } from "@/lib/auth/scope-guards";
+import { OPEN_CONTRACT_DOCUMENT_TYPES, resolveContractDocumentByKey } from "@/lib/auth/scope-guards";
 import { checkPermission, loadUserAccess, resolveDeptScope } from "@/lib/auth/rbac";
 import { getS3Client } from "@/lib/storage/logo-storage";
 
@@ -32,10 +32,12 @@ export async function GET(req: NextRequest) {
     }
     // 키 → 계약(contract_documents) → 가시 범위 재판정. 등록되지 않은 키는 전사 범위(contract.view scope=all)만 읽는다
     // (같은 버킷에 인사 문서가 있어 임의 키 읽기를 막는다 — 2026-10-19 §7.7).
+    // 계약서·변경계약서는 전 직원 열람(2026-10-21 사용자 결정) — 그 외 종류는 계약 열람 범위.
     const access = await loadUserAccess(ctx.userId);
     if (resolveDeptScope(access, "contract.view").kind !== "all") {
-      const contractId = await resolveContractIdByDocumentKey(key);
-      if (!contractId || !checkPermission(access, "contract.view", { contractId })) {
+      const doc = await resolveContractDocumentByKey(key);
+      const open = !!doc && (OPEN_CONTRACT_DOCUMENT_TYPES as readonly string[]).includes(doc.documentType);
+      if (!doc || (!open && !checkPermission(access, "contract.view", { contractId: doc.contractId }))) {
         return NextResponse.json({ error: "이 작업을 수행할 권한이 없습니다." }, { status: 403 });
       }
     }

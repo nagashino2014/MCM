@@ -504,7 +504,7 @@ function Kpi({ icon, label, value, sub, strong }: { icon: React.ReactNode; label
       <span className="cd-title-icon shrink-0">{icon}</span>
       <div className="min-w-0">
         <div style={{ fontSize: 13, color: C.label }}>{label}</div>
-        <div className="font-bold tabular-nums truncate" style={{ fontSize: 24, letterSpacing: "-0.02em", color: strong ? C.accent : C.ink }}>{value}</div>
+        <div className={`font-bold tabular-nums truncate ${css.kpiValue}`} style={{ letterSpacing: "-0.02em", color: strong ? C.accent : C.ink }}>{value}</div>
         {sub && <div style={{ fontSize: 12, color: C.sub }}>{sub}</div>}
       </div>
     </div>
@@ -516,11 +516,11 @@ function ItemList({ title, items }: { title: string; items: Array<{ itemId: stri
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between pb-2 mb-1" style={{ borderBottom: `2px solid ${C.ink}` }}>
-        <span className="font-bold" style={{ fontSize: 14, color: C.ink }}>{title}</span>
-        <span className="font-bold tabular-nums" style={{ fontSize: 20, color: C.ink }}>{won(total)}</span>
+        <span className={`font-bold ${css.itemTitle}`} style={{ color: C.ink }}>{title}</span>
+        <span className={`font-bold tabular-nums ${css.itemTotal}`} style={{ color: C.ink }}>{won(total)}</span>
       </div>
       {items.map((i) => (
-        <div key={i.itemId} className="flex items-center justify-between gap-2" style={{ fontSize: 14, padding: "9px 0", borderBottom: `1px solid ${C.hairline}` }}>
+        <div key={i.itemId} className={`flex items-center justify-between gap-2 ${css.itemRow}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.hairline}` }}>
           <span className="truncate" style={{ color: C.body }}>{i.name}</span>
           <span className="tabular-nums whitespace-nowrap" style={{ color: C.ink }}>{won(i.amount)}</span>
         </div>

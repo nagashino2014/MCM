@@ -189,12 +189,26 @@ export async function loadHrEventEmployeeId(eventId: string): Promise<string | n
 
 /** 계약 문서 저장소 키(contract_documents.storage_key) → 계약 id. 등록되지 않은 키는 null. */
 export async function resolveContractIdByDocumentKey(storageKey: string): Promise<string | null> {
+  return (await resolveContractDocumentByKey(storageKey))?.contractId ?? null;
+}
+
+/**
+ * 전 직원 열람 계약 문서 종류 — 계약서·변경계약서는 과거 계약 확인용으로 계약 열람 범위와 무관하게 전 직원이 본다
+ * (문서함 '계약 문서' 탭, 2026-10-21 사용자 결정). 세금계산서·외주계약서·실적증명서 등은 계약 열람 범위를 따른다.
+ */
+export const OPEN_CONTRACT_DOCUMENT_TYPES = ["contract", "amendment"] as const;
+
+/** 계약 문서 저장소 키 → {계약 id, 문서 종류}. 등록되지 않은 키는 null. */
+export async function resolveContractDocumentByKey(
+  storageKey: string
+): Promise<{ contractId: string; documentType: string } | null> {
   if (!storageKey) return null;
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec("SELECT contract_id FROM contract_documents WHERE storage_key = $1 LIMIT 1", [storageKey])
+    await db.exec("SELECT contract_id, document_type FROM contract_documents WHERE storage_key = $1 LIMIT 1", [storageKey])
   );
-  return rows[0]?.contract_id != null ? String(rows[0].contract_id) : null;
+  if (rows[0]?.contract_id == null) return null;
+  return { contractId: String(rows[0].contract_id), documentType: String(rows[0].document_type ?? "") };
 }
 
 /**

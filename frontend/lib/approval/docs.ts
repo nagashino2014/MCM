@@ -1091,16 +1091,30 @@ export async function listDeptDocs(userId: string, limit = 50): Promise<ArchiveD
   return rows.map(mapArchive);
 }
 
-/** 전사 문서함 폴더 목록(양식별 org_folder 지정값) */
-export async function listOrgFolders(): Promise<string[]> {
+/**
+ * 열람 제한 전사 문서함 폴더(304 approval_org_folder_policies.restricted=1) — 인사·회계·성과급·근태.
+ * 관리자·인사/회계(approval.manage)·대표이사(approval.read_all)만 전사 문서함에서 보고 연다(2026-10-21 사용자 결정).
+ * 304 적용 전(표 없음)에는 빈 집합 = 종전처럼 전 폴더 공개.
+ */
+export async function listRestrictedOrgFolders(): Promise<Set<string>> {
+  const db = await getDb();
+  const ok = rowsToObjects(await db.exec("SELECT to_regclass('approval_org_folder_policies') IS NOT NULL AS ok"))[0]?.ok;
+  if (!(ok === true || ok === "t" || ok === 1)) return new Set();
+  const rows = rowsToObjects(await db.exec("SELECT org_folder FROM approval_org_folder_policies WHERE restricted = 1"));
+  return new Set(rows.map((r) => String(r.org_folder)));
+}
+
+/** 전사 문서함 폴더 목록(양식별 org_folder 지정값). includeRestricted=false 면 열람 제한 폴더(304)를 뺀다. */
+export async function listOrgFolders(opts: { includeRestricted: boolean } = { includeRestricted: true }): Promise<string[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(`SELECT DISTINCT org_folder FROM approval_forms WHERE org_folder IS NOT NULL AND org_folder <> '' ORDER BY org_folder`)
   );
-  return rows.map((r) => String(r.org_folder));
+  const restricted = opts.includeRestricted ? new Set<string>() : await listRestrictedOrgFolders();
+  return rows.map((r) => String(r.org_folder)).filter((f) => !restricted.has(f));
 }
 
-/** 전사 문서함 — 폴더별 승인 완료 문서(전 직원 열람). */
+/** 전사 문서함 — 폴더별 승인 완료 문서. 열람 제한 폴더(304) 판정은 호출부(archive 라우트)가 한다. */
 export async function listOrgFolderDocs(folder: string, limit = 50): Promise<ArchiveDocRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(

@@ -132,7 +132,7 @@ export function ManualPage({ perms, articleId }: { perms: readonly string[]; art
             <div className="flex flex-col gap-6">
               <section>
                 <h2 className="mb-2 text-base font-semibold cd-text">이렇게 찾아보세요</h2>
-                <ul className="list-disc space-y-1 pl-5 text-[13px] leading-relaxed cd-text">
+                <ul className="list-disc space-y-1 pl-5 text-[13px] leading-[calc(1.625em+3px)] cd-text">
                   <li>어느 화면에서든 상단의 <ManualInline text="[[매뉴얼]]" /> 버튼이나 <strong>F1</strong> 키를 누르면 지금 보고 있는 화면의 설명이 열립니다.</li>
                   <li>제목이나 입력란 옆의 <strong>?</strong> 버튼은 그 항목만 짧게 설명합니다. 끝의 &lsquo;매뉴얼에서 자세히&rsquo;로 이어서 읽을 수 있습니다.</li>
                   <li>상단 검색(Ctrl K)에서도 매뉴얼을 찾을 수 있습니다. 초성(예: ㅇㅊ)으로도 찾습니다.</li>
@@ -144,7 +144,7 @@ export function ManualPage({ perms, articleId }: { perms: readonly string[]; art
                   <h2 id="mpg-news" className="mb-2 text-base font-semibold cd-text">새로 바뀐 것</h2>
                   <ul className="flex flex-col divide-y cd-border-c rounded-lg border cd-border-c">
                     {news.map((n, i) => (
-                      <li key={i} className="px-3 py-2 text-[13px] leading-relaxed cd-text">
+                      <li key={i} className="px-3 py-2 text-[13px] leading-[calc(1.625em+3px)] cd-text">
                         <span className="mr-2 cd-text-muted">{n.date}</span>
                         <span className="mr-1.5 font-medium">[{n.kind}]</span>
                         {n.articles[0] ? (

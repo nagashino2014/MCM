@@ -20,18 +20,18 @@ interface RuleDoc {
 
 function ArticleView({ article }: { article: RuleArticle }) {
   return (
-    <div className="mb-6" id={article.key}>
+    <div className="mt-5 mb-6" id={article.key}>
       <div className="text-sm font-bold mb-2">
         제{article.no}조 【{article.title}】
       </div>
       {article.clauses.map((c, i) => (
         <div key={i} className="mb-2">
-          <div className="text-sm leading-relaxed" style={{ color: "var(--cd-body)" }}>
+          <div className="text-sm leading-[calc(1.625em+7px)]" style={{ color: "var(--cd-body)" }}>
             {c.label ? `${c.label} ` : ""}
             {c.text}
           </div>
           {c.items.map((it, j) => (
-            <div key={j} className="text-sm leading-relaxed pl-5 mt-1" style={{ color: "var(--cd-muted)" }}>
+            <div key={j} className="text-sm leading-[calc(1.625em+7px)] pl-5 mt-1" style={{ color: "var(--cd-muted)" }}>
               {it}
             </div>
           ))}
@@ -56,7 +56,7 @@ function TableView({ rows }: { rows: RuleAppendix["tables"][number]["rows"] }) {
                   key={ci}
                   colSpan={cell.colSpan}
                   rowSpan={cell.rowSpan}
-                  className="border px-2 py-1 align-top"
+                  className="border px-2 py-1 align-top leading-[23px]"
                   style={{ borderColor: "var(--cd-border)", background: ri === 0 ? "var(--cd-hover)" : undefined }}
                 >
                   {cell.text}
@@ -185,7 +185,7 @@ export function RuleReaderBoard() {
           {/* 목차 */}
           <div className="cd-card p-4 overflow-auto self-start" style={{ maxHeight: "78vh" }}>
             {body.chapters.map((ch) => (
-              <div key={ch.no} className="mb-3">
+              <div key={ch.no} className="mt-[15px] mb-3">
                 <a href={`#chapter-${ch.no}`} className="block text-xs font-bold mb-1">
                   제{ch.no}장 {ch.title}
                 </a>
@@ -193,7 +193,7 @@ export function RuleReaderBoard() {
                   <a
                     key={a.key}
                     href={`#${a.key}`}
-                    className="block px-2 py-0.5 rounded text-xs truncate hover:underline"
+                    className="block px-2 py-[7px] rounded text-xs truncate hover:underline"
                     style={{ color: "var(--cd-muted)" }}
                   >
                     제{a.no}조 {a.title}
@@ -202,12 +202,12 @@ export function RuleReaderBoard() {
               </div>
             ))}
             {body.addendum.length > 0 && (
-              <a href="#addendum" className="block text-xs font-bold mb-1">
+              <a href="#addendum" className="block text-xs font-bold mt-[15px] mb-1">
                 부칙
               </a>
             )}
             {body.appendices.length > 0 && (
-              <a href="#appendices" className="block text-xs font-bold mt-2">
+              <a href="#appendices" className="block text-xs font-bold mt-[23px]">
                 별표
               </a>
             )}
@@ -238,7 +238,7 @@ export function RuleReaderBoard() {
                   <div className="mt-4">
                     <div className="text-sm font-bold mb-2">개정</div>
                     {body.history.map((h, i) => (
-                      <div key={i} className="text-sm mb-1" style={{ color: "var(--cd-muted)" }}>
+                      <div key={i} className="text-sm leading-[27px] mb-1" style={{ color: "var(--cd-muted)" }}>
                         {h.text}
                         {h.details.map((d, j) => (
                           <div key={j} className="pl-4 text-xs">
@@ -263,7 +263,7 @@ export function RuleReaderBoard() {
                       [별표 {ap.no}. {ap.title}]
                     </div>
                     {ap.paras.map((p, i) => (
-                      <div key={i} className="text-sm leading-relaxed" style={{ color: "var(--cd-body)" }}>
+                      <div key={i} className="text-sm leading-[calc(1.625em+7px)]" style={{ color: "var(--cd-body)" }}>
                         {p}
                       </div>
                     ))}

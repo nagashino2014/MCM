@@ -20,6 +20,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
         id: "find",
         title: "찾기와 내보내기",
         blocks: [
+          { kind: "image", src: "/manual/shots/facilities.webp", alt: "사업장 화면 — 검색과 목록" },
           { kind: "list", items: [
             "검색창은 상호·사업자등록번호·주소로 찾습니다.",
             "[[지역]]·[[업종]]·[[대기 종]]·[[수질 종]]·[[출처]] 필터를 함께 걸 수 있습니다. 출처는 IEPS 수집·수동 등록·계약현황으로 나뉩니다.",
@@ -308,6 +309,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
         id: "ledger",
         title: "계약 원장 보기",
         blocks: [
+          { kind: "image", src: "/manual/shots/contracts.webp", alt: "계약 화면 — 용역 종류별로 묶인 계약 원장" },
           { kind: "list", items: [
             "용역 분류를 펼쳐 계약을 고릅니다. 검색은 계약명·거래처·세분류로, 연도 선택은 계약일 기준입니다.",
             "목록의 [[계약해지]]·[[계약중지]] 배지와 수금 완료 점으로 상태를 구분합니다. 아래 줄에 계약 건수·수행·완료(중지·해지) 건수가 나옵니다.",

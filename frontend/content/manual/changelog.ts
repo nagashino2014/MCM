@@ -7,6 +7,13 @@ import type { ChangelogEntry } from "./types";
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
+    kind: "개선",
+    title: "매뉴얼에 화면 그림 추가",
+    body: "홈·메일·전자결재·할 일·일정·주소록·사업장·계약·재무 등 주요 기사에 실제 화면 그림을 넣었습니다. 이름·금액·연락처는 흐리게 처리했습니다.",
+    articles: ["start.manual"],
+  },
+  {
+    date: "2026-10-21",
     kind: "신규",
     title: "상단 검색에서 메일·문서·사람 찾기",
     body: "상단 검색(Ctrl K)에 두 글자 이상 넣으면 메뉴·매뉴얼과 함께 메일·결재 문서·주소록·계약·사업장·할 일도 찾습니다. 결과는 각 화면에서 볼 수 있는 것만 보입니다.",

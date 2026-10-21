@@ -18,6 +18,7 @@ export const HOME_ARTICLES: ManualArticle[] = [
         id: "cards",
         title: "카드 읽기",
         blocks: [
+          { kind: "image", src: "/manual/shots/home.webp", alt: "홈 화면 — 위젯 카드 배치", caption: "이름·금액 등 실제 데이터는 흐리게 처리했습니다." },
           { kind: "list", items: [
             "맨 위 숫자 카드(결재 대기, 안읽은 메일, 오늘 일정 등)를 누르면 아래 해당 카드로 이동하고, 카드가 꺼져 있으면 그 화면으로 이동합니다.",
             "권한이 없는 카드는 목록에 나오지 않습니다. 예를 들어 영업 카드는 영업 담당자에게만 보입니다.",

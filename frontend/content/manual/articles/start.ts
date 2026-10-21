@@ -85,6 +85,7 @@ export const START_ARTICLES: ManualArticle[] = [
         id: "topbar",
         title: "위쪽 막대",
         blocks: [
+          { kind: "image", src: "/manual/shots/topbar.webp", alt: "위쪽 막대 — 검색, 새로 작성, 매뉴얼, 알림, 테마, 내 이름" },
           {
             kind: "table",
             head: ["버튼", "하는 일"],
@@ -197,6 +198,7 @@ export const START_ARTICLES: ManualArticle[] = [
         id: "open",
         title: "여는 방법",
         blocks: [
+          { kind: "image", src: "/manual/shots/manual-drawer.webp", alt: "매뉴얼 버튼을 눌러 오른쪽에 열린 매뉴얼 창", caption: "지금 보고 있는 화면의 기사가 바로 열립니다." },
           { kind: "list", items: [
             "[[매뉴얼]] 버튼 또는 F1: 지금 보고 있는 화면의 설명이 오른쪽에 열립니다. 입력하던 내용은 그대로 남습니다.",
             "? 버튼: 그 항목의 짧은 설명. 끝의 [[매뉴얼에서 자세히]]를 누르면 매뉴얼의 해당 부분이 열립니다.",

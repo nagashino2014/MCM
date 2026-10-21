@@ -35,6 +35,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         id: "boxes",
         title: "결재함·기안함 상자",
         blocks: [
+          { kind: "image", src: "/manual/shots/approval-home.webp", alt: "전자결재 홈 — 결재함 목록" },
           {
             kind: "table",
             head: ["상자", "들어 있는 문서"],
@@ -131,6 +132,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         id: "start",
         title: "양식 고르기",
         blocks: [
+          { kind: "image", src: "/manual/shots/approval-draft.webp", alt: "새 기안 — 양식 고르기" },
           { kind: "p", text: "[[결재양식 선택]] 창에서 [[자주 이용하는 양식]]이나 폴더별 목록에서 고릅니다. 공문·내부고시·견적서 양식은 각각 전용 작성 화면으로 열립니다." },
           { kind: "list", items: [
             "급한 문서는 제목 옆 [[긴급]]을 켭니다. 결재함에 긴급 표시가 붙습니다.",

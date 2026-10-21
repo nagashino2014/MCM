@@ -18,6 +18,7 @@ export const HR_ARTICLES: ManualArticle[] = [
         id: "leave",
         title: "내 휴가",
         blocks: [
+          { kind: "image", src: "/manual/shots/my-hr.webp", alt: "내 휴가·근태 화면" },
           {
             kind: "table",
             head: ["항목", "뜻"],

@@ -19,6 +19,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         id: "read",
         title: "읽고 정리하기",
         blocks: [
+          { kind: "image", src: "/manual/shots/mail-list.webp", alt: "메일 화면 — 왼쪽 편지함과 가운데 메일 목록" },
           { kind: "p", text: "넓은 화면은 기본이 목록형입니다. 왼쪽 폴더 옆에 목록이 한 줄씩 보이고, 메일을 누르면 그 자리에 본문이 열립니다([[목록]]으로 복귀). 목록 위 보기 버튼으로 좌우 분할(가운데 목록·오른쪽 본문)로 바꿀 수 있습니다. 좁은 화면에서는 폴더가 위쪽 탭으로 바뀝니다." },
           { kind: "p", text: "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩을 고르고 쪽 번호로 넘깁니다. 읽지 않은 메일은 보낸 사람·제목이 굵게 표시됩니다." },
           {
@@ -80,6 +81,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         id: "write",
         title: "쓰고 보내기",
         blocks: [
+          { kind: "image", src: "/manual/shots/mail-compose.webp", alt: "메일 쓰기 화면" },
           { kind: "steps", items: [
             "[[새로 작성]] → [[새 메일]] 또는 메일함의 [[메일 쓰기]]를 누릅니다.",
             "[[받는 사람]]을 입력합니다. 필요하면 [[참조(CC)]]·[[숨은 참조(BCC)]] 입력란을 엽니다.",

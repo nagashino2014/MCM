@@ -18,6 +18,7 @@ export const CALENDAR_ARTICLES: ManualArticle[] = [
         id: "tags",
         title: "보이는 일정 고르기",
         blocks: [
+          { kind: "image", src: "/manual/shots/calendar.webp", alt: "일정 화면 — 월 달력과 태그" },
           { kind: "p", text: "달력 위 태그(본인·부서·영업·선택·차량·회의·면접·할 일)를 눌러 켜고 끕니다. 고른 상태는 저장되어 다음에도 유지됩니다." },
           { kind: "list", items: [
             "‘선택’은 내가 지정한 사람·부서의 일정입니다. 부서 단위로 지정하면 인사이동이 자동 반영되고, [[전사 전체]]를 켜면 개별 선택은 무시됩니다.",

@@ -73,6 +73,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
         id: "use",
         title: "올리고 보내기",
         blocks: [
+          { kind: "image", src: "/manual/shots/files-personal.webp", alt: "개인 문서함" },
           { kind: "steps", items: [
             "업로드 버튼을 누르거나 파일을 끌어다 놓습니다.",
             "보낼 파일을 체크하고 전송 버튼을 누릅니다.",

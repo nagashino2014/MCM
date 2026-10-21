@@ -210,6 +210,7 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
         id: "history",
         title: "전자세금계산서 발행 이력",
         blocks: [
+          { kind: "image", src: "/manual/shots/finance-invoice.webp", alt: "재무 — 계산서·수금 탭" },
           { kind: "p", text: "발행은 계약 상세의 청구·수금 단계에서 전자발행으로 합니다. 이 탭은 최근 100건의 이력과 국세청 전송 상태를 보여 줍니다." },
           {
             kind: "table",

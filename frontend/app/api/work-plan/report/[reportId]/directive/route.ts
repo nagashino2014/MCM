@@ -11,7 +11,7 @@ interface RouteContext {
   params: Promise<{ reportId: string }>;
 }
 
-// 임원 지시 하달.
+// 임원 지시 하달 — ‘의견’ 포함 전 분류(의견은 부서장 답변 선택, F-32).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requirePermission("work_plan.directive", { fallbackRoles: ["editor"] });
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const body = (await req.json()) as { kind: string; message?: string | null; contractId?: string | null };
     if (!body.kind) return NextResponse.json({ error: "지시 분류가 필요합니다." }, { status: 400 });
     await setExecDirective(actor.userId, reportId, body);
-    void pushDirectiveIssued(reportId, actor.userId); // 부서장 앱 푸시(work.report)
+    void pushDirectiveIssued(reportId, actor.userId, body.kind); // 부서장 앱 푸시(work.report)
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "work_plan_save",

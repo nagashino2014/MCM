@@ -15,11 +15,12 @@ export function MyHrBoard() {
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader title="내 휴가·근태" />
+      {/* 2xl 미만(1열)에서는 행이 내용 높이를 갖도록 min-h-0 을 2xl 에만 둔다 — 행이 눌려 달력·근태가 겹치던 문제(F-17). */}
       <div className="grid grid-cols-1 2xl:grid-cols-5 gap-5 flex-1 min-h-0 overflow-y-auto">
-        <div className="2xl:col-span-2 min-w-0 min-h-0">
+        <div className="2xl:col-span-2 min-w-0 2xl:min-h-0">
           <MyLeaveSection />
         </div>
-        <div className="2xl:col-span-3 min-w-0 min-h-0">
+        <div className="2xl:col-span-3 min-w-0 2xl:min-h-0">
           <MyAttendanceSection theme={theme} />
         </div>
       </div>

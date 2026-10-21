@@ -289,9 +289,26 @@ export async function deletePost(postId: string): Promise<void> {
   });
 }
 
-/** 알림 수신자 — 전사는 전 재직자, 부서는 해당 부서원(회사 메일 보유자). */
-export async function listNotifyTargets(scope: BoardScope, deptId: string | null): Promise<{ name: string; email: string }[]> {
+/**
+ * 알림 수신자 — 전사는 전 재직자, 부서는 해당 부서원(회사 메일 보유자).
+ * 작성자 본인은 제외한다(화면 안내 "본인 제외"·푸시 listNotifyUserIds 와 일관, F-31 2026-10-21).
+ */
+export async function listNotifyTargets(
+  scope: BoardScope,
+  deptId: string | null,
+  excludeUserId?: string | null
+): Promise<{ name: string; email: string }[]> {
   const db = await getDb();
+  const params: unknown[] = [];
+  const cond: string[] = [];
+  if (scope === "dept") {
+    params.push(deptId ?? "");
+    cond.push(`AND ep.dept_id = $${params.length}`);
+  }
+  if (excludeUserId) {
+    params.push(excludeUserId);
+    cond.push(`AND ep.user_id <> $${params.length}`);
+  }
   const rows = rowsToObjects(
     await db.exec(
       `SELECT ep.name, COALESCE(mb.address, ep.email) AS email
@@ -300,8 +317,8 @@ export async function listNotifyTargets(scope: BoardScope, deptId: string | null
          LEFT JOIN mailboxes mb ON mb.user_id = ep.user_id AND mb.status = 'active'
         WHERE ep.status = 'active'
           AND COALESCE(mb.address, ep.email) IS NOT NULL
-          ${scope === "dept" ? "AND ep.dept_id = $1" : ""}`,
-      scope === "dept" ? [deptId ?? ""] : []
+          ${cond.join(" ")}`,
+      params
     )
   );
   return rows.map((r) => ({ name: String(r.name ?? ""), email: String(r.email) }));

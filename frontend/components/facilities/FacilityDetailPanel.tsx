@@ -73,6 +73,8 @@ const HISTORY_TYPE_CHECKBOX_OPTIONS: FacilityHistoryEventType[] = [
 interface Props {
   facilityId: string | null;
   canEdit: boolean;
+  /** 사업장 삭제(휴지통) 버튼 — 삭제 API 와 같은 facility.delete 로 노출(F-24). */
+  canDelete?: boolean;
   onUpdated: () => void;
   onDeleted: () => void;
 }
@@ -157,7 +159,7 @@ interface FacilityContactMainNumber {
   updatedAt?: string;
 }
 
-export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted }: Props) {
+export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, onUpdated, onDeleted }: Props) {
   const [detail, setDetail] = useState<FacilityDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -287,15 +289,17 @@ export function FacilityDetailPanel({ facilityId, canEdit, onUpdated, onDeleted 
                 >
                   <Pencil className="w-3.5 h-3.5" /> 편집
                 </button>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border flex items-center gap-1 disabled:opacity-60"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> 삭제
-                </button>
               </>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border flex items-center gap-1 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> 삭제
+              </button>
             )}
           </div>
         )}

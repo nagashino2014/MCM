@@ -19,7 +19,7 @@ const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{
 /** GET ?year= — 그 해 휴무일 전체(법정 + 사내 지정). 휴무일 지정 화면의 캘린더가 쓴다. */
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const yearRaw = Number(req.nextUrl.searchParams.get("year"));
     const year = Number.isInteger(yearRaw) && yearRaw >= 2000 && yearRaw <= 2100 ? yearRaw : new Date().getFullYear();
     const [holidays, annual] = await Promise.all([listOffDays(year), listAnnualHolidays()]);
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as {
       date?: string; name?: string; reason?: string; note?: string | null;
       annual?: { month?: number; day?: number; name?: string; reason?: string };
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 /** DELETE ?date= (특정일) 또는 ?month=&day= (매년 반복 규칙) — 사내 휴무일 해제. */
 export async function DELETE(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const sp = req.nextUrl.searchParams;
     const month = Number(sp.get("month"));
     const day = Number(sp.get("day"));

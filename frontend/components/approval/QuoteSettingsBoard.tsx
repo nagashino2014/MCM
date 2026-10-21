@@ -349,7 +349,7 @@ export function QuoteSettingsBoard() {
       rates: {
         overheadRate: detail.overheadRate,
         techFeeRate: detail.techFeeRate,
-        directExpenseRate: detail.directExpenseRate,
+        directExpenseRate: 0, // 실제 견적(QuoteBoard)과 같게 세트 직접경비 요율은 쓰지 않는다(F-34)
         laborRates,
         laborYear: "",
       },
@@ -708,18 +708,31 @@ export function QuoteSettingsBoard() {
                           ["시장 보정계수", "marketAdjust", false, detail.marketAdjust],
                         ] as const
                       ).map(([label, key, isPct, value]) => (
-                        <label key={key} className="flex items-center justify-between gap-3" title={key === "marketAdjust" ? "정방향 표준가 가이드에 적용되는 시장 보정계수" : undefined}>
+                        <label
+                          key={key}
+                          className="flex items-center justify-between gap-3"
+                          title={
+                            key === "marketAdjust"
+                              ? "정방향 표준가 가이드에 적용되는 시장 보정계수"
+                              : key === "directExpenseRate"
+                              ? "새 견적에는 적용되지 않습니다. 직접경비는 견적서에서 출장비·인쇄비로 계산합니다."
+                              : undefined
+                          }
+                        >
                           <span className="whitespace-nowrap cd-text">{label}</span>
                           <span className="flex items-center gap-1 shrink-0">
+                            {/* 직접경비 요율은 2026-09-30 입력 폐지 — 견적서가 0 고정이라 편집을 막는다(옛 문서 재현용 값만 남음, F-34) */}
                             <input
-                              className="cd-input w-20 text-right px-1.5"
+                              className="cd-input w-20 text-right px-1.5 disabled:opacity-60"
                               value={String(value)}
+                              disabled={key === "directExpenseRate"}
                               onChange={(e) => editRate(key, isPct, e.target.value)}
                             />
                             <span className="w-3 text-left cd-text-faint">{isPct ? "%" : ""}</span>
                           </span>
                         </label>
                       ))}
+                      <p className="sm:col-span-2 text-[11px] cd-text-faint">직접경비 요율은 새 견적에 적용되지 않습니다. 직접경비는 견적서에서 출장비·인쇄비로 계산합니다.</p>
                     </div>
 
                     {/* 항목 트리(base_md) */}

@@ -10,7 +10,7 @@ export const START_ARTICLES: ManualArticle[] = [
     audience: ["staff", "head", "exec", "admin"],
     summary: [
       "사번과 비밀번호로 로그인합니다. 초기 비밀번호는 사번입니다.",
-      "처음 로그인하면 비밀번호를 바꿔야 다음 화면으로 넘어갑니다.",
+      "처음 로그인하면 비밀번호를 바꿔야 다음 화면으로 넘어갑니다. 그 뒤에도 계정 메뉴의 [[비밀번호 변경]]에서 언제든 바꿀 수 있습니다.",
       "사번이나 비밀번호를 잊으면 [[아이디·비밀번호 찾기]]에서 등록된 이메일로 안내를 받습니다.",
     ],
     sections: [
@@ -39,6 +39,14 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "change",
+        title: "로그인한 상태에서 비밀번호 바꾸기",
+        blocks: [
+          { kind: "steps", items: ["오른쪽 위 이름(계정 메뉴)을 누르고 [[비밀번호 변경]]을 누릅니다.", "현재 비밀번호와 새 비밀번호(두 번)를 입력하고 [[비밀번호 변경]]을 누릅니다."] },
+          { kind: "list", items: ["새 비밀번호는 8자 이상이며, 지금 비밀번호와 달라야 합니다.", "바꾼 뒤에는 로그아웃되고 새 비밀번호로 다시 로그인합니다.", "바꾸지 않으려면 [[변경하지 않고 돌아가기]]를 누릅니다."] },
+        ],
+      },
+      {
         id: "find",
         title: "사번·비밀번호를 잊었을 때",
         blocks: [
@@ -52,13 +60,13 @@ export const START_ARTICLES: ManualArticle[] = [
             ],
           },
           { kind: "list", items: ["재설정 링크는 30분 동안 1회만 쓸 수 있습니다.", "정보가 틀려도 화면에는 같은 안내가 나옵니다. 메일이 오지 않으면 담당자에게 문의하세요."] },
-          { kind: "tip", text: "로그인한 상태에서 비밀번호를 바꾸는 메뉴는 아직 없습니다. 바꾸고 싶으면 로그아웃한 뒤 [[비밀번호 재설정]]을 이용하세요." },
+          { kind: "tip", text: "비밀번호를 기억한다면 로그인한 상태에서 바꾸는 편이 빠릅니다. 아래 '로그인한 상태에서 비밀번호 바꾸기'를 참고하세요." },
         ],
       },
     ],
     keywords: ["로그인", "비밀번호", "사번", "초기 비밀번호", "재설정", "로그아웃", "아이디 찾기"],
-    sources: ["app/(auth)/login/page.tsx", "app/(auth)/login/find/page.tsx", "app/(auth)/account/change-password/page.tsx"],
-    reviewedAt: "2026-10-20",
+    sources: ["app/(auth)/login/page.tsx", "app/(auth)/login/find/page.tsx", "app/(auth)/account/change-password/page.tsx", "components/layout/TopBar.tsx"],
+    reviewedAt: "2026-10-21",
   },
   {
     id: "start.screen",
@@ -86,7 +94,7 @@ export const START_ARTICLES: ManualArticle[] = [
               ["[[매뉴얼]] (F1)", "지금 보고 있는 화면의 사용법을 오른쪽에 엽니다."],
               ["할 일 알림 / 운영 알림", "나에게 배정된 할 일·댓글과 시스템 알림을 모아 봅니다."],
               ["해·달 아이콘", "밝은 화면과 어두운 화면을 바꿉니다."],
-              ["내 이름", "계정 정보와 로그아웃."],
+              ["내 이름", "계정 정보, 비밀번호 변경, 로그아웃."],
             ],
           },
           { kind: "tip", text: "계약·사업장·영업·결재 상세를 보고 있을 때 [[새 할 일]]을 누르면, 보고 있던 항목이 할 일에 자동으로 연결됩니다." },
@@ -107,7 +115,7 @@ export const START_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["화면", "메뉴", "상단바", "검색", "새로 작성", "다크 모드", "알림", "단축키"],
     sources: ["components/layout/TopBar.tsx", "components/layout/Sidebar.tsx", "components/manual/ManualButton.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "start.permissions",

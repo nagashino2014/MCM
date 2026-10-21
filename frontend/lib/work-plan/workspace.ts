@@ -3,6 +3,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { normalizeReport } from "@/lib/work-plan/normalize";
 import { summarizeProgress } from "@/lib/ai/summarize";
 import { syncTodoSubtasksFromStages } from "@/lib/todo/stage-sync";
+import { EXEC_DIRECTIVE_ACTIONABLE } from "@/lib/work-plan/constants";
 
 export interface MyServiceRow {
   contractId: string;
@@ -74,9 +75,11 @@ export interface ServiceReportDetail {
   reviewStatus: string | null;    // pending|rejected|confirmed|merged
   execStatus: string | null;      // null|directed|re_reported
   directorResponse: string | null; // 임원 지시에 대한 부서장 답변
-  reReportCount: number;          // 재보고 횟수(1 제한)
+  reReportCount: number;          // 재보고(답변) 누적 횟수 — 제한은 지시 건마다 1회(execDirectivePending)
   summaryText: string | null;     // AI 추진내역 요약
   execDirective: { kind: string; message: string | null } | null; // 최신 임원 지시
+  execDirectivePending: boolean;  // 아직 답하지 않은(open) 임원 지시가 있음 — 재보고 가능
+  execReplyRequired: boolean;     // open 지시 중 답변이 필요한 분류(의견 외)가 있음
   meetingSeq: number | null;      // 같은 subject·회의종류에서 이 보고의 회차
   currentStageName: string | null;
   currentStagePct: number | null;
@@ -424,6 +427,14 @@ export async function getServiceReport(reportId: string): Promise<ServiceReportD
   );
   const dirRow = rowsToObjects(dirResult)[0];
   const execDirective = dirRow ? { kind: String(dirRow.kind ?? ""), message: str(dirRow.message) } : null;
+  // 답하지 않은 지시 — 재보고는 지시 건마다 1회(재보고 시 open 지시가 모두 acknowledged 로 닫힌다, F-32).
+  const openDirResult = await db.exec(
+    `SELECT kind FROM work_plan_directives WHERE report_id = $1 AND level = 'exec' AND status = 'open'`,
+    [reportId]
+  );
+  const openKinds = rowsToObjects(openDirResult).map((d) => String(d.kind ?? ""));
+  const execDirectivePending = openKinds.length > 0;
+  const execReplyRequired = openKinds.some((k) => EXEC_DIRECTIVE_ACTIONABLE.includes(k));
 
   return {
     reportId: String(row.report_id ?? ""),
@@ -449,6 +460,8 @@ export async function getServiceReport(reportId: string): Promise<ServiceReportD
     reReportCount: Number(row.re_report_count ?? 0),
     summaryText: str(row.summary_text),
     execDirective,
+    execDirectivePending,
+    execReplyRequired,
     meetingSeq,
     currentStageName: str(item.progress_stage),
     currentStagePct: item.progress_pct != null ? Number(item.progress_pct) : null,
@@ -801,7 +814,10 @@ export async function setReportReview(
   });
 }
 
-/** 임원 지시 하달 — work_plan_directives(level=exec) 기록 + exec_status='directed'. */
+/**
+ * 임원 지시 하달 — work_plan_directives(level=exec) 기록 + exec_status='directed'.
+ * ‘의견’도 같은 경로로 기록·하달된다(부서장 임원지시 목록에 보이고 알림이 가며, 답변은 선택 — F-32).
+ */
 export async function setExecDirective(
   actorUserId: string,
   reportId: string,
@@ -821,13 +837,21 @@ export async function setExecDirective(
   });
 }
 
-/** 부서장 재보고 — 임원 지시에 대한 답변 저장 + exec_status='re_reported'(재보고 1회 제한). */
+/**
+ * 부서장 재보고 — 임원 지시에 대한 답변 저장 + exec_status='re_reported'.
+ * 재보고는 **지시 건마다 1회**: 답하지 않은(open) 임원 지시가 있어야 하고, 재보고하면 open 지시가 모두 닫힌다.
+ * 재보고 뒤 임원이 다시 지시하면 새 open 지시가 생겨 다시 답할 수 있다(2026-10-21 F-32, 이전에는 보고당 1회).
+ */
 export async function submitReReport(reportId: string, directorResponse: string | null): Promise<void> {
   if (!reportId) throw new Error("reportId가 필요합니다.");
   const db = await getDb();
-  const r = await db.exec("SELECT re_report_count FROM work_plan_reports WHERE report_id = $1 LIMIT 1", [reportId]);
-  const count = Number(rowsToObjects(r)[0]?.re_report_count ?? 0);
-  if (count >= 1) throw new Error("재보고는 1회만 가능합니다.");
+  const r = await db.exec(
+    "SELECT count(*)::int AS n FROM work_plan_directives WHERE report_id = $1 AND level = 'exec' AND status = 'open'",
+    [reportId]
+  );
+  if (Number(rowsToObjects(r)[0]?.n ?? 0) === 0) {
+    throw new Error("답변할 임원 지시가 없습니다. 재보고는 지시 건마다 1회입니다.");
+  }
   const now = new Date().toISOString();
   await withDbWrite(async (wdb) => {
     await wdb.run(

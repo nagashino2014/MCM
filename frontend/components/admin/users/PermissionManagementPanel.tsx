@@ -37,6 +37,14 @@ import type {
 interface PermissionManagementPanelProps {
   users: UserRow[];
   permissions: PermissionsSnapshot | null;
+  /** 권한 템플릿 API 403 — 템플릿 목록·부여 현황 영역 대신 안내(F-27). */
+  permissionsDenied?: boolean;
+  /** 계정 목록 API 403(account.manage 없음) — 활성/비활성·삭제 대신 안내(F-27). */
+  usersDenied?: boolean;
+  /** 템플릿 생성·수정 버튼 노출(rbac.template.manage). */
+  canManageTemplates?: boolean;
+  /** 권한 부여·회수 노출(rbac.assignment.manage). */
+  canAssign?: boolean;
   selectedDept: DepartmentRow | null;
   selectedAccount: SelectedAccount | null;
   currentUserId?: string;
@@ -127,9 +135,16 @@ const MODULE_META: Record<string, { label: string; order: number; color: string 
 };
 const DEFAULT_MODULE_COLOR = "#5D87FF";
 
+/** 시스템 관리자 템플릿 — 비활성 불가(관리자 잠금 방지, F-29). 서버 savePermissionTemplate 도 같은 규칙. */
+const SYSTEM_ADMIN_TEMPLATE_ID = "tpl-system-admin";
+
 export default function PermissionManagementPanel({
   users,
   permissions,
+  permissionsDenied = false,
+  usersDenied = false,
+  canManageTemplates = true,
+  canAssign = true,
   selectedDept,
   selectedAccount,
   currentUserId,
@@ -145,6 +160,8 @@ export default function PermissionManagementPanel({
     <div className="grid xl:grid-cols-[2fr_1fr] gap-5 h-full min-h-0">
       <TemplateListCard
         permissions={permissions}
+        permissionsDenied={permissionsDenied}
+        canManageTemplates={canManageTemplates}
         permissionLabel={permissionLabel}
         selectedDept={selectedDept}
         onReload={onReload}
@@ -155,6 +172,9 @@ export default function PermissionManagementPanel({
         <AccountDetailPanel
           users={users}
           permissions={permissions}
+          permissionsDenied={permissionsDenied}
+          usersDenied={usersDenied}
+          canAssign={canAssign}
           selectedAccount={selectedAccount}
           selectedDept={selectedDept}
           currentUserId={currentUserId}
@@ -174,12 +194,16 @@ export default function PermissionManagementPanel({
 
 function TemplateListCard({
   permissions,
+  permissionsDenied,
+  canManageTemplates,
   permissionLabel,
   selectedDept,
   onReload,
   toast,
 }: {
   permissions: PermissionsSnapshot | null;
+  permissionsDenied: boolean;
+  canManageTemplates: boolean;
   permissionLabel: (key: string) => string;
   selectedDept: DepartmentRow | null;
   onReload: () => void;
@@ -222,9 +246,11 @@ function TemplateListCard({
             <p className="text-sm cd-text-muted mt-1">계정 유형별 권한 템플릿을 관리하고 빠르게 적용할 수 있습니다.</p>
           </div>
         </div>
-        <button type="button" onClick={openCreate} className="cd-btn cd-btn-primary cd-btn-sm shrink-0">
-          <Plus className="w-4 h-4" /> 템플릿 생성
-        </button>
+        {canManageTemplates && !permissionsDenied && (
+          <button type="button" onClick={openCreate} className="cd-btn cd-btn-primary cd-btn-sm shrink-0">
+            <Plus className="w-4 h-4" /> 템플릿 생성
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-5 shrink-0">
@@ -249,12 +275,21 @@ function TemplateListCard({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pr-1">
-        {filtered.length === 0 ? (
+        {permissionsDenied ? (
+          <div className="text-sm cd-text-faint py-10 text-center">
+            권한 템플릿을 볼 권한이 없습니다. 템플릿 관리(rbac.template.manage) 또는 권한 부여(rbac.assignment.manage) 권한이 필요합니다.
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="text-sm cd-text-faint py-10 text-center">표시할 템플릿이 없습니다.</div>
         ) : (
           <div className="grid xl:grid-cols-2 gap-4 items-start">
             {filtered.map((template) => (
-              <TemplateCard key={template.templateId} template={template} permissionLabel={permissionLabel} onEdit={openEdit} />
+              <TemplateCard
+                key={template.templateId}
+                template={template}
+                permissionLabel={permissionLabel}
+                onEdit={canManageTemplates ? openEdit : undefined}
+              />
             ))}
           </div>
         )}
@@ -285,7 +320,8 @@ function TemplateCard({
 }: {
   template: PermissionTemplateRow;
   permissionLabel: (key: string) => string;
-  onEdit: (template: PermissionTemplateRow) => void;
+  /** 없으면(템플릿 관리 권한 없음) ⋮ 수정 버튼을 숨긴다. */
+  onEdit?: (template: PermissionTemplateRow) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const visual = TEMPLATE_VISUALS[template.templateId] ?? DEFAULT_VISUAL;
@@ -307,14 +343,16 @@ function TemplateCard({
           <h4 className="font-bold cd-text truncate">{template.templateName}</h4>
           {template.isSystem && <span className="cd-pill cd-pill-idle shrink-0">SYSTEM</span>}
         </div>
-        <button
-          type="button"
-          onClick={() => onEdit(template)}
-          className="p-1 rounded-lg cd-text-faint hover:text-[color:var(--cd-text)] shrink-0"
-          title="템플릿 수정"
-        >
-          <MoreVertical className="w-4 h-4" />
-        </button>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(template)}
+            className="p-1 rounded-lg cd-text-faint hover:text-[color:var(--cd-text)] shrink-0"
+            title="템플릿 수정"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <p className="text-xs cd-text-muted mt-2 line-clamp-2 min-h-[2.5rem]">{template.description || "설명 없음"}</p>
@@ -460,7 +498,29 @@ function CreateTemplateModal({
     return order.map((key) => ({ key, scopes: byKey.get(key)! }));
   }, [draftGrants]);
 
+  // 비활성 템플릿은 이미 부여된 계정에도 즉시 적용되지 않는다(F-29) — 끄기 전에 영향 계정 수를 확인받는다.
+  const isSystemAdminTemplate = editing?.templateId === SYSTEM_ADMIN_TEMPLATE_ID;
+  const affectedUserCount = useMemo(() => {
+    if (!editing) return 0;
+    return new Set(
+      (permissions?.assignments ?? [])
+        .filter((a) => a.templateId === editing.templateId && !a.revokedAt)
+        .map((a) => a.userId)
+    ).size;
+  }, [editing, permissions]);
+
   const save = async () => {
+    if (editing?.isActive && !isActive) {
+      if (isSystemAdminTemplate) {
+        toast("시스템 관리자 템플릿은 비활성으로 바꿀 수 없습니다.", "error");
+        return;
+      }
+      const message =
+        affectedUserCount > 0
+          ? `'${editing.templateName}' 템플릿을 비활성으로 바꾸면 이 템플릿을 받은 계정 ${affectedUserCount}명의 권한이 저장 즉시 빠집니다.\n(메뉴는 다시 로그인해야 바뀝니다.) 계속할까요?`
+          : `'${editing.templateName}' 템플릿을 비활성으로 바꿉니다. 권한 부여 목록에서 빠집니다. 계속할까요?`;
+      if (!confirm(message)) return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/admin/permissions", {
@@ -659,9 +719,18 @@ function CreateTemplateModal({
 
         <div className="flex items-center justify-between mt-4">
           {editing ? (
-            <label className="flex items-center gap-2 text-sm cd-text-muted">
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <label
+              className="flex items-center gap-2 text-sm cd-text-muted"
+              title={isSystemAdminTemplate ? "관리자 잠금을 막기 위해 시스템 관리자 템플릿은 비활성으로 바꿀 수 없습니다." : undefined}
+            >
+              <input
+                type="checkbox"
+                checked={isActive}
+                disabled={isSystemAdminTemplate && isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
               활성 상태
+              {!isActive && <span className="text-xs cd-text-faint">— 부여된 계정에도 적용되지 않음</span>}
             </label>
           ) : (
             <span />
@@ -685,6 +754,9 @@ function CreateTemplateModal({
 function AccountDetailPanel({
   users,
   permissions,
+  permissionsDenied,
+  usersDenied,
+  canAssign,
   selectedAccount,
   selectedDept,
   currentUserId,
@@ -695,6 +767,9 @@ function AccountDetailPanel({
 }: {
   users: UserRow[];
   permissions: PermissionsSnapshot | null;
+  permissionsDenied: boolean;
+  usersDenied: boolean;
+  canAssign: boolean;
   selectedAccount: SelectedAccount;
   selectedDept: DepartmentRow | null;
   currentUserId?: string;
@@ -732,6 +807,8 @@ function AccountDetailPanel({
 
   const isSelf = currentUserId === selectedAccount.userId;
   const activeTemplates = (permissions?.templates ?? []).filter((t) => t.isActive);
+  // 비활성 템플릿 부여는 기록만 남고 권한은 적용되지 않는다(F-29).
+  const inactiveTemplateIds = new Set((permissions?.templates ?? []).filter((t) => !t.isActive).map((t) => t.templateId));
 
   if (!selectedAccount.userId) {
     return (
@@ -740,7 +817,7 @@ function AccountDetailPanel({
         <div className="rounded-2xl cd-surface-bg border cd-border-c p-6 text-sm cd-text-muted text-center">
           이 인원은 <b className="cd-text">계정 미발급</b> 상태입니다.
           <br />
-          <b className="cd-text">사용자 등록·삭제</b> 화면의 조직도에서 계정을 발급한 뒤 권한을 부여할 수 있습니다.
+          <b className="cd-text">사용자 등록</b> 화면의 조직도에서 계정을 발급한 뒤 권한을 부여할 수 있습니다.
         </div>
       </section>
     );
@@ -814,6 +891,9 @@ function AccountDetailPanel({
               {isSelf && <span className="ml-2 text-[10px] cd-text-primary align-middle">YOU</span>}
             </h2>
             <p className="text-sm cd-text-muted mt-0.5">{selectedAccount.loginId ?? selectedAccount.email ?? "—"}</p>
+            {usersDenied && (
+              <p className="text-xs cd-text-faint mt-1">계정 활성·비활성 전환과 삭제는 계정 관리(account.manage) 권한이 있어야 보입니다.</p>
+            )}
           </div>
         </div>
         {user && (
@@ -845,6 +925,12 @@ function AccountDetailPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-4">
+      {permissionsDenied ? (
+        <div className="rounded-2xl cd-surface-bg border cd-border-c p-6 text-sm cd-text-muted text-center">
+          권한 템플릿 부여 현황을 볼 권한이 없습니다. 권한 부여(rbac.assignment.manage) 권한이 필요합니다.
+        </div>
+      ) : (
+      <>
       {/* 부여된 권한 템플릿 현황 */}
       <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-3">부여된 권한 템플릿 ({accountAssignments.length})</h3>
@@ -854,20 +940,30 @@ function AccountDetailPanel({
           <div className="flex flex-col gap-2">
             {accountAssignments.map((assignment) => (
               <div key={assignment.assignmentId} className="grid grid-cols-[1.2fr_1fr_auto] gap-3 items-center rounded-xl cd-card-bg border cd-border-c p-3">
-                <div className="text-sm font-bold cd-text-primary truncate">{assignment.templateName}</div>
+                <div className="text-sm font-bold cd-text-primary truncate">
+                  {assignment.templateName}
+                  {inactiveTemplateIds.has(assignment.templateId) && (
+                    <span className="ml-1.5 text-[11px] font-semibold cd-text-faint">비활성 · 적용 안 됨</span>
+                  )}
+                </div>
                 <div className="text-xs cd-text-muted truncate">
                   {assignment.scopeOverrideKind ? scopeLabel(assignment.scopeOverrideKind) : "템플릿 기본"} · {assignment.effectiveFrom}
                 </div>
-                <button type="button" disabled={saving} onClick={() => revoke(assignment.assignmentId)} className="cd-btn cd-btn-danger cd-btn-sm">
-                  취소
-                </button>
+                {canAssign ? (
+                  <button type="button" disabled={saving} onClick={() => revoke(assignment.assignmentId)} className="cd-btn cd-btn-danger cd-btn-sm">
+                    취소
+                  </button>
+                ) : (
+                  <span />
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* 권한 부여(복수 선택) */}
+      {/* 권한 부여(복수 선택) — rbac.assignment.manage 보유자만 */}
+      {canAssign && (
       <div className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-1 flex items-center gap-2">
           <Plus className="w-4 h-4 text-[color:var(--cd-primary)]" /> 권한 부여
@@ -924,6 +1020,9 @@ function AccountDetailPanel({
           </button>
         </div>
       </div>
+      )}
+      </>
+      )}
       </div>
     </section>
   );

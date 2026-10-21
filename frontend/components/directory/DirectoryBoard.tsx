@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   Beaker, Building2, Landmark, Mail, Network, Pencil, Phone, Search, Smartphone,
   Trash2, Users, X,
@@ -22,6 +23,7 @@ import { CdInput, CdSelect } from "@/components/cdash/CdField";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
 import "@/components/cdash/cdash.css";
@@ -55,6 +57,9 @@ function mailToken(name: string, title: string | null | undefined, address: stri
 export function DirectoryBoard() {
   const { theme } = useCdashTheme();
   const { toast } = useCdToast();
+  const { data: session } = useSession();
+  // 외부 연락처 수정·삭제 API 는 facility.edit — 같은 키 보유자에게만 관리 아이콘을 보인다(F-25).
+  const canEditContacts = hasPerm(permsOf(session?.user), "facility.edit");
   const [tab, setTab] = useState<Tab>("staff");
 
   // 임직원
@@ -300,7 +305,7 @@ export function DirectoryBoard() {
           <CdEmptyState
             icon={<Building2 className="w-7 h-7" />}
             title="열람 권한이 없습니다"
-            description="외부 연락처는 영업 조회 권한이 있는 계정만 볼 수 있습니다."
+            description="외부 연락처는 연락처 조회 권한이 있는 계정만 볼 수 있습니다."
           />
         ) : contacts == null ? (
           <p className="text-sm cd-text-faint p-4">불러오는 중입니다.</p>
@@ -398,24 +403,26 @@ export function DirectoryBoard() {
                           )}
                         </td>
                         <td>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="p-1 rounded-md cd-text-faint hover:cd-text-primary"
-                              title="수정"
-                              onClick={() => setEditing(c)}
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 rounded-md cd-text-faint hover:cd-error-text"
-                              title="삭제"
-                              onClick={() => setDeleting(c)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {canEditContacts && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="p-1 rounded-md cd-text-faint hover:cd-text-primary"
+                                title="수정"
+                                onClick={() => setEditing(c)}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1 rounded-md cd-text-faint hover:cd-error-text"
+                                title="삭제"
+                                onClick={() => setDeleting(c)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

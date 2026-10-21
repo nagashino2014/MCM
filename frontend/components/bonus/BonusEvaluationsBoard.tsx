@@ -225,7 +225,27 @@ export default function BonusEvaluationsBoard() {
     }
   };
 
-  const removeParticipant = async (participationId: string) => {
+  /** 평점 상한 입력은 화면에만 반영하고, 입력을 마칠 때(포커스 이탈·Enter) 한 번 저장한다(F-39). */
+  const [capsDirty, setCapsDirty] = useState(false);
+  const editGradeCap = (grade: string, value: number) => {
+    setSettingsFull((prev) => (prev ? { ...prev, gradeCaps: { ...(prev.gradeCaps ?? {}), [grade]: value } } : prev));
+    setCapsDirty(true);
+  };
+  const commitGradeCaps = () => {
+    if (!capsDirty) return;
+    setCapsDirty(false);
+    void saveAbsoluteSettings({});
+  };
+
+  const removeParticipant = async (participationId: string, employeeName: string, contractTitle: string) => {
+    // 이 표의 참여자는 계약 수행인력(service_participants) 그 자체라 제거하면 계약 화면에서도 빠진다(F-39).
+    if (
+      !window.confirm(
+        `${employeeName} 님을 '${contractTitle}' 참여자에서 제거합니다.\n\n` +
+          "계약 상세의 수행인력에서도 함께 삭제되어 이 용역의 성과급 산정에서 빠집니다. 되돌리려면 다시 추가해야 합니다. 진행할까요?"
+      )
+    )
+      return;
     try {
       const res = await fetch(`/api/bonus/participants?participationId=${encodeURIComponent(participationId)}`, {
         method: "DELETE",
@@ -355,11 +375,11 @@ export default function BonusEvaluationsBoard() {
                         className="cd-input text-sm text-right" style={{ width: 56 }}
                         disabled={!isAdmin || !(settingsFull?.absoluteGrading ?? false)}
                         value={cap}
-                        onChange={(e) =>
-                          saveAbsoluteSettings({
-                            gradeCaps: { ...(settingsFull?.gradeCaps ?? {}), [g]: Number(e.target.value) },
-                          })
-                        }
+                        onChange={(e) => editGradeCap(g, Number(e.target.value))}
+                        onBlur={commitGradeCaps}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
                       />
                       <span className="text-xs cd-text-faint">%</span>
                     </span>
@@ -532,7 +552,7 @@ export default function BonusEvaluationsBoard() {
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => removeParticipant(p.participationId)}
+                                  onClick={() => removeParticipant(p.participationId, p.employeeName, r.contractTitle)}
                                   className="cd-text-faint hover:opacity-70 shrink-0"
                                   title="참여자 제거"
                                 >

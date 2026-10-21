@@ -3,8 +3,8 @@
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import { sanitizeTree, sanitizeTheme } from "./sanitize";
-import type { DocNode, DocTheme, RecruitPostingRow, RecruitTemplateRow } from "./types";
-import { normalizeMeta, type PostingMeta } from "./meta";
+import type { DocNode, DocTheme, RecruitPostingRow, RecruitPostingVersionRow, RecruitTemplateRow } from "./types";
+import { normalizeMeta, TEMPLATE_EDIT_TITLE_SUFFIX, type PostingMeta } from "./meta";
 
 const nowIso = () => new Date().toISOString();
 
@@ -163,6 +163,8 @@ export interface PostingFilter {
   platform?: string | null;
   /** 제목 부분 일치(대소문자 무시) */
   q?: string | null;
+  /** 템플릿 [내용 편집]용 공고도 포함(기본 제외 — F-40) */
+  includeTemplateEdit?: boolean;
 }
 
 /** 공고 목록 — 부문·구분·플랫폼은 정확히 일치, q 는 제목 부분 일치. 콘텐츠 트리는 제외. */
@@ -182,6 +184,10 @@ export async function listPostings(filter: PostingFilter = {}): Promise<RecruitP
   if (filter.q?.trim()) {
     params.push(`%${filter.q.trim()}%`);
     where.push(`p.title ILIKE $${params.length}`);
+  }
+  if (!filter.includeTemplateEdit) {
+    params.push(`%${TEMPLATE_EDIT_TITLE_SUFFIX.trim()}`);
+    where.push(`p.title NOT LIKE $${params.length}`);
   }
   const rows = rowsToObjects(
     await db.exec(
@@ -233,6 +239,29 @@ export async function createPosting(input: {
     theme: template.theme,
     meta: normalizeMeta(input.meta),
     createdBy: input.createdBy,
+  });
+}
+
+/**
+ * 템플릿 [내용 편집]용 공고 — 같은 템플릿의 이전 편집용 공고(목록에 안 보임)를 삭제 처리한 뒤 새로 만든다(F-40).
+ * 편집 결과는 편집기의 [부문 템플릿으로 저장]으로 템플릿에 반영하므로 편집용 공고는 한 템플릿에 하나만 남긴다.
+ */
+export async function createTemplateEditPosting(templateId: string, createdBy: string): Promise<RecruitPostingRow> {
+  const template = await getTemplate(templateId);
+  if (!template) throw Object.assign(new Error("템플릿을 찾을 수 없습니다."), { status: 404 });
+  const db = await getDb();
+  await db.exec(
+    `UPDATE recruit_postings SET deleted_at = $2, updated_by = $3
+      WHERE template_id = $1 AND deleted_at IS NULL AND title LIKE $4`,
+    [templateId, nowIso(), createdBy, `%${TEMPLATE_EDIT_TITLE_SUFFIX.trim()}`]
+  );
+  return insertPosting({
+    templateId: template.templateId,
+    title: `${template.name}${TEMPLATE_EDIT_TITLE_SUFFIX}`,
+    contentTree: template.designTree,
+    theme: template.theme,
+    meta: normalizeMeta(null),
+    createdBy,
   });
 }
 
@@ -327,6 +356,50 @@ export async function savePosting(input: {
     );
   }
   return (await getPosting(input.postingId))!;
+}
+
+/** [버전 저장] 목록 — 최신 버전부터. 트리·테마는 싣지 않는다(F-40 편집기 '버전 목록'). */
+export async function listPostingVersions(postingId: string): Promise<RecruitPostingVersionRow[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT v.version, v.saved_at, u.name AS saved_by_name
+         FROM recruit_posting_versions v
+         LEFT JOIN users u ON u.user_id = v.saved_by
+        WHERE v.posting_id = $1
+        ORDER BY v.version DESC`,
+      [postingId]
+    )
+  );
+  return rows.map((r) => ({
+    version: Number(r.version),
+    savedAt: String(r.saved_at ?? ""),
+    savedByName: r.saved_by_name != null ? String(r.saved_by_name) : null,
+  }));
+}
+
+/** 버전 하나의 콘텐츠·테마 — [이 버전으로 복원]이 편집기에 불러온다(저장은 편집기 자동 저장이 한다). */
+export async function getPostingVersion(postingId: string, version: number): Promise<RecruitPostingVersionRow | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT v.version, v.saved_at, u.name AS saved_by_name, v.content_tree, v.theme
+         FROM recruit_posting_versions v
+         LEFT JOIN users u ON u.user_id = v.saved_by
+        WHERE v.posting_id = $1 AND v.version = $2
+        LIMIT 1`,
+      [postingId, version]
+    )
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    version: Number(r.version),
+    savedAt: String(r.saved_at ?? ""),
+    savedByName: r.saved_by_name != null ? String(r.saved_by_name) : null,
+    contentTree: parseJson<DocNode>(r.content_tree, { id: "root", tag: "div" }),
+    theme: parseJson<DocTheme>(r.theme, {}),
+  };
 }
 
 export async function deletePosting(postingId: string, deletedBy: string): Promise<void> {

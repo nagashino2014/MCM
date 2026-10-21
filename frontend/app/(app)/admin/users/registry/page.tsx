@@ -133,6 +133,13 @@ function Inner() {
     if (sessionStatus === "authenticated") void reload();
   }, [reload, sessionStatus]);
 
+  // 계정 영역은 조직도 스냅샷의 최신 행으로 그린다(F-37) — 선택 시점에 복사한 행을 쓰면
+  // 인사카드 저장·[새로고침] 뒤에도 입사일·성별·생년월일 부족 표시가 남았다.
+  // selectedEmployee 자체는 바꾸지 않는다(인사카드 패널이 그 값으로 상세를 다시 불러 편집 중 내용을 덮지 않도록).
+  const accountEmployee = selectedEmployee
+    ? organization?.employees.find((item) => item.employeeId === selectedEmployee.employeeId) ?? selectedEmployee
+    : null;
+
   if (sessionStatus === "loading") {
     return <div className="p-8 cd-text-faint text-sm">세션 확인 중…</div>;
   }
@@ -148,8 +155,8 @@ function Inner() {
       <CdPageHeader
         icon={<UserRoundPlus className="w-5 h-5" />}
         eyebrow="시스템"
-        title="사용자 등록·삭제"
-        help="조직도 기반으로 부서 위계와 직급 사용 범위를 관리하고, 직원의 기본 정보·학력·자격·증빙을 등록합니다."
+        title="사용자 등록"
+        help="조직도 기반으로 부서 위계와 직급 사용 범위를 관리하고, 직원의 기본 정보·학력·자격·증빙을 등록합니다. 퇴사자는 인사관리 탭에서 퇴사를 기록하고, 테스트·잘못 발급한 계정의 영구 삭제는 계정·권한 관리에서 합니다."
         actions={
           <>
             <button type="button" onClick={addDepartment} className="cd-btn cd-btn-ghost cd-btn-sm">
@@ -182,9 +189,9 @@ function Inner() {
           }}
         />
         <div className="flex flex-col gap-5">
-          {selectedEmployee && (
+          {accountEmployee && (
             <AccountProvisionBar
-              employee={selectedEmployee}
+              employee={accountEmployee}
               busy={provisioning}
               onProvision={provisionAccount}
               onResetPassword={resetPassword}
@@ -242,7 +249,7 @@ function AccountProvisionBar({
               </p>
             ) : (
               <p className="text-xs" style={{ color: "var(--cd-error)" }}>
-                발급 전 필수정보 부족: {missing.join(", ")} — 아래 기본정보에서 입력 후 새로고침하세요.
+                발급 전 필수정보 부족: {missing.join(", ")} — 아래 기본 정보에 입력하고 저장하세요.
               </p>
             )}
           </div>

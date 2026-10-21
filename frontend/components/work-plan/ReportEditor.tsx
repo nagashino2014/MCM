@@ -9,7 +9,7 @@ import StaffingSettingModal from "@/components/work-plan/StaffingSettingModal";
 import StructuredNoteEditor from "@/components/work-plan/StructuredNoteEditor";
 import IssuePanel from "@/components/work-plan/IssuePanel";
 import HistoryModal, { type HistoryTab } from "@/components/work-plan/HistoryModal";
-import { MEETING_LABELS, REVIEW_COMMENT_KINDS, REJECTABLE_KINDS, EXEC_DIRECTIVE_KINDS, EXEC_DIRECTIVE_ACTIONABLE } from "@/lib/work-plan/constants";
+import { MEETING_LABELS, REVIEW_COMMENT_KINDS, REJECTABLE_KINDS, EXEC_DIRECTIVE_KINDS } from "@/lib/work-plan/constants";
 import type { ContractStageRow } from "@/lib/contracts/process-stages";
 import type { ReporterContext, ReportStageRow, ServiceReportDetail } from "@/lib/work-plan/workspace";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -110,7 +110,9 @@ export default function ReportEditor({
   const [execMessage, setExecMessage] = useState("");
   const [directorResponse, setDirectorResponse] = useState("");
   const [execDirective, setExecDirective] = useState<{ kind: string; message: string | null } | null>(null);
-  const [reReportCount, setReReportCount] = useState(0);
+  // 재보고는 지시 건마다 1회 — 답하지 않은 지시가 있을 때만 가능, '의견'만 남았으면 답변 선택(F-32).
+  const [execPending, setExecPending] = useState(false);
+  const [execReplyRequired, setExecReplyRequired] = useState(false);
   const [execBusy, setExecBusy] = useState(false);
 
   // 제출(기존) 보고는 기본 잠금 → [수정] 클릭 시 편집. 신규는 항상 편집 가능.
@@ -163,7 +165,8 @@ export default function ReportEditor({
         setReviewKind(rep.reviewerCommentKind ?? "amend");
         setDirectorResponse(rep.directorResponse ?? "");
         setExecDirective(rep.execDirective ?? null);
-        setReReportCount(rep.reReportCount ?? 0);
+        setExecPending(Boolean(rep.execDirectivePending));
+        setExecReplyRequired(Boolean(rep.execReplyRequired));
         setLoadedSeq(rep.meetingSeq ?? null);
         setLoadedReporter([rep.deptName, rep.authorName].filter(Boolean).join(" ") || null);
         setReportStages(rep.stages ?? []);
@@ -349,7 +352,11 @@ export default function ReportEditor({
         body: JSON.stringify({ kind: execKind, message: execMessage, contractId: subject.kind === "contract" ? subject.id : null }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.error ?? "지시 하달 실패"); }
-      setMsg("지시를 하달했습니다. (부서장 임원지시 목록으로 전달)");
+      setMsg(
+        execKind === "opinion"
+          ? "의견을 전달했습니다. (부서장 임원지시 목록으로 전달 · 답변 선택)"
+          : "지시를 하달했습니다. (부서장 임원지시 목록으로 전달)"
+      );
       onSaved();
     } catch (err) { setMsg((err as Error).message); } finally { setExecBusy(false); }
   };
@@ -366,7 +373,7 @@ export default function ReportEditor({
         body: JSON.stringify({ directorResponse }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.error ?? "재보고 실패"); }
-      setMsg("재보고했습니다. (임원 재보고 목록으로 전달)");
+      setMsg(execReplyRequired ? "재보고했습니다. (임원 재보고 목록으로 전달)" : "의견을 확인했습니다. (답변은 임원 재보고 목록으로 전달)");
       onSaved();
     } catch (err) { setMsg((err as Error).message); } finally { setExecBusy(false); }
   };
@@ -668,7 +675,11 @@ export default function ReportEditor({
             </h3>
             <textarea
               className="cd-input text-sm w-full min-h-[96px] leading-relaxed"
-              placeholder="임원 지시에 대한 시정조치·답변을 기재하고 재보고하세요."
+              placeholder={
+                execPending && !execReplyRequired
+                  ? "임원 의견에 대한 답변은 선택입니다. 기재하지 않고 [의견 확인]만 눌러도 됩니다."
+                  : "임원 지시에 대한 시정조치·답변을 기재하고 재보고하세요."
+              }
               value={directorResponse}
               onChange={(e) => setDirectorResponse(e.target.value)}
             />
@@ -735,7 +746,7 @@ export default function ReportEditor({
           {exec && reportId && (
             <button
               type="button"
-              disabled={execBusy || !EXEC_DIRECTIVE_ACTIONABLE.includes(execKind) || !execMessage.trim()}
+              disabled={execBusy || !execMessage.trim()}
               onClick={submitDirective}
               className="rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
             >
@@ -745,13 +756,13 @@ export default function ReportEditor({
           {execResponse && reportId && (
             <button
               type="button"
-              disabled={execBusy || reReportCount >= 1}
+              disabled={execBusy || !execPending}
               onClick={submitReReport}
-              title={reReportCount >= 1 ? "재보고는 1회만 가능합니다." : undefined}
+              title={!execPending ? "재보고는 지시 건마다 1회입니다. 임원이 다시 지시하면 다시 답할 수 있습니다." : undefined}
               className="rounded-xl px-4 py-2 text-sm text-white inline-flex items-center gap-1.5 disabled:opacity-50"
               style={{ background: "var(--cd-success)" }}
             >
-              <Send className="w-4 h-4" /> {execBusy ? "전송 중…" : reReportCount >= 1 ? "재보고 완료" : "재보고"}
+              <Send className="w-4 h-4" /> {execBusy ? "전송 중…" : !execPending ? "재보고 완료" : execReplyRequired ? "재보고" : "의견 확인"}
             </button>
           )}
           {review && reportId && (

@@ -30,5 +30,8 @@ export const EXEC_DIRECTIVE_KINDS: { value: string; label: string }[] = [
   { value: "opinion", label: "의견" },
 ];
 
-/** 지시하달이 활성화되는 분류(‘의견’은 기록만, 하달 비활성). */
+/**
+ * 부서장 재보고(답변)가 필요한 분류. ‘의견’도 하달·기록·알림되지만 답변은 선택이다(2026-10-21 F-32).
+ * 하달 자체는 모든 분류에서 가능하다.
+ */
 export const EXEC_DIRECTIVE_ACTIONABLE = ["supplement_request", "expedite", "additional_report"];

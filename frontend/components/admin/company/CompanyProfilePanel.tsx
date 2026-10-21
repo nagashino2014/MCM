@@ -579,7 +579,7 @@ export function CompanyProfilePanel() {
                 <Users className="w-4 h-4 cd-text-primary" /> 인적구성
               </h3>
               <p className="text-[11px] cd-text-faint mb-3">
-                통합허가 대행업 기준 — 사용자 등록·삭제의 인원 상세 <b>환경부 등급(대행업)</b> 값으로 자동
+                통합허가 대행업 기준 — 사용자 등록의 인원 상세 <b>환경부 등급(대행업)</b> 값으로 자동
                 집계됩니다(재직자 기준).
               </p>
               <div className="rounded-xl border cd-border-c divide-y cd-border-c">
@@ -595,7 +595,7 @@ export function CompanyProfilePanel() {
                 ))}
               </div>
               <Link href="/admin/users/registry" className="mt-3 text-[11px] cd-text-primary self-start">
-                인원별 등급은 사용자 등록·삭제에서 관리 →
+                인원별 등급은 사용자 등록에서 관리 →
               </Link>
             </section>
 

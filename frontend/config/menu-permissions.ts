@@ -51,7 +51,8 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   // 양식별 문서 조회·결재 인사이트 — 전자결재 메뉴 하위지만 API(query·insights)가 approval.manage(2026-10-20 F-1)
   { path: "/approval/records", keys: ["approval.manage"] },
   { path: "/approval/insights", keys: ["approval.manage"] },
-  // 근태·휴가 관리 6화면(§6-4: 기존 staffing.edit)
+  // 근태·휴가 관리 6화면(§6-4: 기존 staffing.edit) — 화면 API(/api/approval/leave·attendance·certificates·
+  //   leave-promotion·holidays·leave-types 쓰기)도 같은 키(2026-10-21 F-22, 이전 approval.manage)
   { path: "/approval/leave", keys: ["staffing.edit"] },
   { path: "/approval/attendance", keys: ["staffing.edit"] },
   { path: "/approval/certificates", keys: ["staffing.edit"] },

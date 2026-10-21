@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // 잔여>0·1차 미발송 직원 전원에게 leave_notices(round=1) 생성. { year }
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as { year?: string; round?: number };
     const year = String(body.year ?? new Date().getFullYear());
     const round = Number(body.round ?? 1);

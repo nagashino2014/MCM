@@ -2,8 +2,9 @@
 
 // 최초 로그인 비밀번호 변경 — 로그인 화면과 동일한 cdash(Soft Glass Ink) 결.
 // 인증/변경 로직은 무변경, 표면만 교체(레거시 glass-panel·stone·그린 primary 폐기).
+// 상단바 계정 메뉴 [비밀번호 변경](?from=menu, F-9)에서도 같은 화면·API 를 쓴다 — 문구만 일반 변경용으로 바꾼다.
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { KeyRound, ShieldAlert } from "lucide-react";
@@ -12,6 +13,11 @@ import { CdInput } from "@/components/cdash/CdField";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  // 계정 메뉴에서 연 경우(최초 변경이 아님). useSearchParams 는 Suspense 경계를 요구해 마운트 후 location 을 읽는다.
+  const [fromMenu, setFromMenu] = useState(false);
+  useEffect(() => {
+    setFromMenu(new URLSearchParams(window.location.search).get("from") === "menu");
+  }, []);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -55,11 +61,15 @@ export default function ChangePasswordPage() {
           </span>
           <div className="flex flex-col leading-tight">
             <span className="text-[19px] font-extrabold tracking-tight cd-text">비밀번호 변경</span>
-            <span className="text-[11px] font-semibold cd-text-faint">최초 로그인 — 초기 비밀번호를 변경하세요.</span>
+            <span className="text-[11px] font-semibold cd-text-faint">
+              {fromMenu ? "현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다." : "최초 로그인 — 초기 비밀번호를 변경하세요."}
+            </span>
           </div>
         </div>
         <p className="text-xs cd-text-faint leading-relaxed">
-          초기 비밀번호(= 사번)를 새 비밀번호로 변경해야 계속 진행할 수 있습니다.
+          {fromMenu
+            ? "지금 쓰는 비밀번호와 새 비밀번호를 입력하세요."
+            : "초기 비밀번호(= 사번)를 새 비밀번호로 변경해야 계속 진행할 수 있습니다."}
         </p>
       </div>
 
@@ -71,7 +81,7 @@ export default function ChangePasswordPage() {
           required
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
-          placeholder="초기 비밀번호(= 사번)"
+          placeholder={fromMenu ? "지금 쓰는 비밀번호" : "초기 비밀번호(= 사번)"}
           autoFocus
         />
         <CdInput
@@ -108,6 +118,11 @@ export default function ChangePasswordPage() {
       <p className="text-[11px] cd-text-faint text-center leading-relaxed">
         변경 후에는 새 비밀번호로 다시 로그인해야 합니다.
       </p>
+      {fromMenu && (
+        <CdButton type="button" variant="ghost" block onClick={() => (window.history.length > 1 ? router.back() : router.push("/"))}>
+          변경하지 않고 돌아가기
+        </CdButton>
+      )}
     </div>
   );
 }

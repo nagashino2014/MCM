@@ -1623,7 +1623,7 @@ export function ApprovalDraftBoard() {
               <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                 <CdHelp topic="approval.draft-watchers" />
-                <span className="ml-auto text-[10px] font-normal cd-text-faint">참조=완료 통보 · 열람=진행 중 열람</span>
+                <span className="ml-auto text-[10px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
               </h4>
               {watchers.length === 0 ? (
                 <p className="text-[11px] cd-text-faint">필요 시 참조/열람자를 지정하세요(선택).</p>
@@ -1896,7 +1896,7 @@ export function ApprovalDraftBoard() {
         title={orgModal === "ref" || orgModal === "view" ? "참조/열람자 추가 — 조직도에서 선택" : "결재자 추가 — 조직도에서 선택"}
         hint={
           orgModal === "ref" || orgModal === "view"
-            ? "인원을 클릭하면 참조/열람자로 추가됩니다. 참조=완료 통보, 열람=진행 중 열람."
+            ? "인원을 클릭하면 참조/열람자로 추가됩니다. 참조·열람 모두 상신 후 진행 중에도 문서를 볼 수 있고 표시만 다릅니다."
             : "인원을 클릭하면 결재선 맨 뒤에 추가됩니다. 타입(합의/승인)은 목록에서 변경하세요."
         }
         onClose={() => setOrgModal(null)}

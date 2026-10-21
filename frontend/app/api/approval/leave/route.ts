@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       const special = await getMySpecialLeaveRemaining(ctx.userId).catch(() => []);
       return NextResponse.json({ summary: await getMyLeaveRemaining(ctx.userId, year), special });
     }
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     if (sp.get("settings") === "1") {
       return NextResponse.json({ settings: await getLeaveSettings() });
     }
@@ -76,7 +76,7 @@ interface PostBody {
 // POST: 부여/조정·사용 이력 추가/수정·삭제·발생기준 설정 — admin 전용
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as PostBody;
 
     if (body.accrualBasis) {

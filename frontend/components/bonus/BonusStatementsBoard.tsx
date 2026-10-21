@@ -63,6 +63,9 @@ export default function BonusStatementsBoard() {
   const [view, setView] = useState<"all" | "individual">("all");
   const [overview, setOverview] = useState<StatementOverviewRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  // 버튼 노출은 각 API 요구 키와 맞춘다(F-23) — 명세서 PDF·발송 = bonus.send, 산정방식 저장 = bonus.confirm.
+  const [canSend, setCanSend] = useState(false);
+  const [canEditSettings, setCanEditSettings] = useState(false);
   const [detail, setDetail] = useState<StatementDetail | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployeeRow | null>(null);
   const [board, setBoard] = useState<AllocationBoard | null>(null);
@@ -92,6 +95,8 @@ export default function BonusStatementsBoard() {
       ]);
       setOverview(ov.overview ?? []);
       setIsAdmin(Boolean(ov.isAdmin));
+      setCanSend(Boolean(ov.canSend));
+      setCanEditSettings(Boolean(st.canEdit));
       setBoard(al.board ?? null);
       setBoardScope(al.scope === "dept" ? "dept" : "all");
       setAllocDraft({});
@@ -412,11 +417,11 @@ export default function BonusStatementsBoard() {
               <h3 className="text-xs font-bold cd-text-faint">산정방식 옵션</h3>
               <CdHelp topic="bonus.calc-method" />
             </div>
-            <label className={`flex items-start gap-2 text-sm ${isAdmin ? "cd-text" : "cd-text-faint"}`}>
+            <label className={`flex items-start gap-2 text-sm ${canEditSettings ? "cd-text" : "cd-text-faint"}`}>
               <input
                 type="checkbox"
                 className="mt-0.5"
-                disabled={!isAdmin}
+                disabled={!canEditSettings}
                 checked={calcMethod === "base"}
                 onChange={() => setCalcMethod("base")}
               />
@@ -425,11 +430,11 @@ export default function BonusStatementsBoard() {
                 <span className="block text-[10px] cd-text-faint">지급대상 총액 규모를 매출액의 3.5~5% 적용</span>
               </span>
             </label>
-            <label className={`flex items-start gap-2 text-sm ${isAdmin ? "cd-text" : "cd-text-faint"}`}>
+            <label className={`flex items-start gap-2 text-sm ${canEditSettings ? "cd-text" : "cd-text-faint"}`}>
               <input
                 type="checkbox"
                 className="mt-0.5"
-                disabled={!isAdmin}
+                disabled={!canEditSettings}
                 checked={calcMethod === "salary"}
                 onChange={() => setCalcMethod("salary")}
               />
@@ -459,7 +464,7 @@ export default function BonusStatementsBoard() {
                   step="0.1"
                   className="cd-input text-sm text-right"
                   style={{ width: 64 }}
-                  disabled={!isAdmin || calcMethod !== "salary"}
+                  disabled={!canEditSettings || calcMethod !== "salary"}
                   value={salaryRate}
                   placeholder={String(settings?.applyRate ?? 4)}
                   onChange={(e) => setSalaryRate(e.target.value)}
@@ -478,7 +483,7 @@ export default function BonusStatementsBoard() {
                   step="0.1"
                   className="cd-input text-sm text-right"
                   style={{ width: 64 }}
-                  disabled={!isAdmin || calcMethod !== "salary"}
+                  disabled={!canEditSettings || calcMethod !== "salary"}
                   value={salaryMultiplier}
                   onChange={(e) => setSalaryMultiplier(e.target.value)}
                 />
@@ -492,7 +497,7 @@ export default function BonusStatementsBoard() {
                 <span className="text-xs">%</span>
               </span>
             </label>
-            {isAdmin && (
+            {canEditSettings && (
               <button
                 type="button"
                 disabled={busy}
@@ -543,7 +548,7 @@ export default function BonusStatementsBoard() {
             <span className="text-xs cd-text-faint">{periodLabel}</span>
             <div className="ml-auto flex items-center gap-2">
               {msg && <span className="text-[11px] cd-text-faint max-w-[420px] truncate" title={msg}>{msg}</span>}
-              {tab === "statements" && view === "all" && isAdmin && overview.length > 0 && (
+              {tab === "statements" && view === "all" && canSend && overview.length > 0 && (
                 <button
                   type="button"
                   disabled={busy || sendBlockReason != null}
@@ -554,7 +559,7 @@ export default function BonusStatementsBoard() {
                   <Send className="w-4 h-4" /> 명세서 일괄 발송
                 </button>
               )}
-              {tab === "statements" && view === "individual" && isAdmin && detail && selectedEmployee && (
+              {tab === "statements" && view === "individual" && canSend && detail && selectedEmployee && (
                 <button
                   type="button"
                   disabled={busy || sendBlockReason != null || (detail.bucket !== "participant" && detail.bucket !== "dept_head")}
@@ -626,7 +631,7 @@ export default function BonusStatementsBoard() {
                         <td className="p-2.5">
                           {row.bucket === "participant" || row.bucket === "dept_head" ? (
                             <span className="flex items-center gap-1.5 whitespace-nowrap">
-                              {isAdmin && (
+                              {canSend && (
                                 <>
                                   <a
                                     href={`/api/bonus/statements/pdf?period=${period}&employeeId=${encodeURIComponent(row.employeeId)}`}

@@ -29,6 +29,16 @@ export interface PostingMeta {
   postingUrl: string | null;
 }
 
+/**
+ * 템플릿 [내용 편집]이 만드는 편집용 공고의 제목 꼬리표(TemplateBoard). 이 꼬리표가 붙은 공고는 공고 목록에서 빼고(F-40),
+ * 같은 템플릿을 다시 [내용 편집]하면 이전 편집용 공고를 정리한 뒤 새로 만든다. 별도 컬럼 없이 제목으로 구분한다.
+ */
+export const TEMPLATE_EDIT_TITLE_SUFFIX = " — 템플릿 편집용";
+
+export function isTemplateEditTitle(title: string | null | undefined): boolean {
+  return !!title && title.trimEnd().endsWith(TEMPLATE_EDIT_TITLE_SUFFIX.trim());
+}
+
 export const EMPTY_META: PostingMeta = {
   division: null, hireType: null, platform: null, periodStart: null, periodEnd: null, workLocation: null, postingUrl: null,
 };

@@ -409,7 +409,7 @@ export default function TaxInvoiceIssueModal({
                       </button>
                     </div>
                   ))}
-                  <p className="text-[11px] cd-text-faint mt-1">중복 발행에 주의하세요. 정정이 필요하면 전송 전에는 취소, 전송 후에는 수정세금계산서로 처리합니다.</p>
+                  <p className="text-[11px] cd-text-faint mt-1">중복 발행에 주의하세요. 발급된 계산서는 취소할 수 없습니다. 정정은 국세청 전송이 완료(승인번호 부여)된 뒤 재무 &gt; 세금계산서의 수정발행으로 수정세금계산서를 발행합니다.</p>
                 </div>
               )}
 

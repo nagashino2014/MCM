@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ClipboardCheck, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
+import { ClipboardCheck, KeyRound, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
 import { hasPerm, isSystemAdminPerms } from "@/lib/auth/perms";
 import type { CdTheme } from "@/components/cdash/useCdashTheme";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
@@ -209,6 +209,18 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
                   {roleLabel}
                 </div>
               </div>
+              {/* 본인 비밀번호 변경(F-9) — 최초 변경 화면을 재사용, 현재 비밀번호 확인 후 변경·재로그인 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  router.push("/account/change-password?from=menu");
+                }}
+                className="w-full px-4 py-3 text-sm font-bold cd-text cd-row-hover flex items-center gap-2 border-b cd-hairline-c"
+              >
+                <KeyRound className="w-4 h-4" />
+                비밀번호 변경
+              </button>
               <button
                 type="button"
                 onClick={async () => {

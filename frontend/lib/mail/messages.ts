@@ -61,6 +61,53 @@ export async function listFolders(userId: string): Promise<{ folders: MailFolder
   };
 }
 
+export interface MailboxUsage {
+  /** 메일 크기 합계(바이트) — 원문 크기, 없으면(수신 메일) 본문 + 첨부 크기로 어림. */
+  usedBytes: number;
+  /** 관리자가 할당한 총용량(바이트). null = 미설정. */
+  quotaBytes: number | null;
+  /** 메일함의 전체 메일 수(폴더 중복 제외, 삭제 제외). */
+  totalCount: number;
+  /** 안읽음 수 — 보낸편지함·스팸함·휴지통 제외. */
+  unreadCount: number;
+}
+
+/** 메일함 사용량·건수(좌측 [메일 설정] 아래 게이지, 10-21). mailboxes.used_bytes 는 갱신 경로가 없어 직접 계산한다. */
+export async function getMailboxUsage(userId: string): Promise<MailboxUsage | null> {
+  const mailbox = await getMailboxByUser(userId);
+  if (!mailbox) return null;
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `WITH live AS (
+         SELECT DISTINCT s.message_id FROM mail_message_state s WHERE s.mailbox_id = $1 AND s.is_deleted = 0
+       ), att AS (
+         SELECT a.message_id, SUM(a.size_bytes) AS bytes
+           FROM mail_attachments a JOIN live l ON l.message_id = a.message_id GROUP BY a.message_id
+       )
+       SELECT
+         (SELECT COALESCE(SUM(COALESCE(m.size_bytes,
+                   octet_length(COALESCE(m.body_text, '')) + octet_length(COALESCE(m.body_html, '')) + COALESCE(att.bytes, 0))), 0)::bigint
+            FROM live l JOIN mail_messages m ON m.message_id = l.message_id
+            LEFT JOIN att ON att.message_id = l.message_id) AS used_bytes,
+         (SELECT COUNT(*)::int FROM live) AS total_count,
+         (SELECT COUNT(DISTINCT s.message_id)::int
+            FROM mail_message_state s JOIN mail_folders f ON f.folder_id = s.folder_id
+           WHERE s.mailbox_id = $1 AND s.is_deleted = 0 AND s.is_read = 0
+             AND COALESCE(f.system_kind, '') NOT IN ('sent', 'spam', 'trash')) AS unread_count,
+         (SELECT quota_bytes FROM mailboxes WHERE mailbox_id = $1) AS quota_bytes`,
+      [mailbox.mailboxId]
+    )
+  );
+  const r = rows[0] ?? {};
+  return {
+    usedBytes: Number(r.used_bytes ?? 0),
+    quotaBytes: r.quota_bytes != null ? Number(r.quota_bytes) : null,
+    totalCount: Number(r.total_count ?? 0),
+    unreadCount: Number(r.unread_count ?? 0),
+  };
+}
+
 export type MailBulkAction =
   | "read" | "unread" | "star" | "unstar" | "trash" | "restore" | "move" | "delete"
   | "category" | "archive"

@@ -18,8 +18,9 @@ import { MailListPane, type BulkAction } from "@/components/mail/MailListPane";
 import { MailViewerPane } from "@/components/mail/MailViewerPane";
 import { MailReceiptsPane } from "@/components/mail/MailReceiptsPane";
 import { MailSettingsPane } from "@/components/mail/MailSettingsPane";
+import { MailSenderMenu, type MailSenderMenuState } from "@/components/mail/MailSenderMenu";
 import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
-import type { MailFolderInfo, MailListItem, MailMessageDetail } from "@/lib/mail/messages";
+import type { MailboxUsage, MailFolderInfo, MailListItem, MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
 import "@/components/cdash/cdash.css";
@@ -33,6 +34,10 @@ export function MailBoard() {
   const [address, setAddress] = useState("");
   const [folders, setFolders] = useState<MailFolderInfo[]>([]);
   const [categories, setCategories] = useState<MailCategory[]>([]);
+  const [usage, setUsage] = useState<MailboxUsage | null>(null);
+  // 보낸 사람 팝업(10-21) — 열린 주소·위치, 발신자별 자동 분류 규칙(주소 → 분류 폴더 id).
+  const [senderMenu, setSenderMenu] = useState<MailSenderMenuState | null>(null);
+  const [senderRules, setSenderRules] = useState<Record<string, string>>({});
   const [folder, setFolder] = useState("inbox");
   const [activeCategory, setActiveCategory] = useState(""); // 받은편지함 카테고리 필터
   const [items, setItems] = useState<MailListItem[]>([]);
@@ -89,6 +94,7 @@ export function MailBoard() {
         const all = Array.isArray(d.folders) ? (d.folders as MailFolderInfo[]) : [];
         setFolders(all.filter((f) => f.systemKind));
         if (d.address) setAddress(String(d.address));
+        setUsage(d.usage ?? null);
       }
       const c = await fetch("/api/mail/categories");
       if (c.ok) {
@@ -97,6 +103,19 @@ export function MailBoard() {
       }
     } catch {
       /* noop */
+    }
+  }, []);
+
+  const loadSenderRules = useCallback(async () => {
+    try {
+      const r = await fetch("/api/mail/sender-rules");
+      if (!r.ok) return;
+      const d = await r.json();
+      const map: Record<string, string> = {};
+      for (const x of Array.isArray(d.rules) ? d.rules : []) map[String(x.sender)] = String(x.categoryId);
+      setSenderRules(map);
+    } catch {
+      /* noop — 규칙 표시만 빠진다 */
     }
   }, []);
 
@@ -148,7 +167,8 @@ export function MailBoard() {
   useEffect(() => {
     loadMailbox();
     loadFolders();
-  }, [loadMailbox, loadFolders]);
+    loadSenderRules();
+  }, [loadMailbox, loadFolders, loadSenderRules]);
   // 폴더·검색·카테고리가 바뀌면 첫 쪽부터.
   useEffect(() => {
     setOffset(0);
@@ -305,6 +325,61 @@ export function MailBoard() {
     }).catch(() => toast("별표 변경 실패", "error"));
   };
 
+  // ── 보낸 사람 팝업(10-21) ─────────────────────────
+  const closeSenderMenu = useCallback(() => setSenderMenu(null), []);
+  const addContact = async (addr: string) => {
+    const name = window.prompt(`주소록에 저장할 이름을 입력하세요.
+(${addr} — 비워 두면 주소만 저장합니다)`, "");
+    if (name == null) return;
+    const r = await fetch("/api/mail/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: addr, name }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) toast("내 메일 주소록에 추가했습니다. 메일 쓰기에서 받는 사람으로 바로 찾을 수 있습니다.", "success");
+    else toast(String(d.error ?? "주소록에 추가하지 못했습니다."), "error");
+  };
+  const blockSenderAddr = async (addr: string) => {
+    if (!window.confirm(`${addr} 를 차단할까요?
+받은편지함의 이 주소 메일을 스팸함으로 옮기고, 이후 받는 메일도 스팸함으로 들어갑니다.`)) return;
+    const r = await fetch("/api/mail/spam-block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sender: addr, retroactive: true }),
+    });
+    if (r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast(`차단했습니다. 기존 메일 ${Number(d.moved ?? 0)}건을 스팸함으로 옮겼습니다.`, "success");
+      if (detail && detail.fromAddr?.toLowerCase() === addr.toLowerCase()) {
+        setDetail(null);
+        setMobileView("list");
+      }
+      refreshAll();
+    } else toast("차단하지 못했습니다.", "error");
+  };
+  const assignSenderCategory = async (addr: string, categoryId: string | null) => {
+    const r = await fetch("/api/mail/sender-rules", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sender: addr, categoryId }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      toast(String(d.error ?? "분류를 지정하지 못했습니다."), "error");
+      return;
+    }
+    const name = categories.find((c) => c.folderId === categoryId)?.name;
+    toast(
+      categoryId
+        ? `'${name ?? "분류"}'로 지정했습니다. 받은편지함 메일 ${Number(d.applied ?? 0)}건을 분류했고, 앞으로 받는 메일도 자동 분류됩니다.`
+        : "자동 분류를 해제했습니다. 이미 분류된 메일은 그대로 둡니다.",
+      "success"
+    );
+    loadSenderRules();
+    refreshAll();
+  };
+
   // ── 작성 — 별도 페이지(/mail/compose)로 이동(G2-8) ──
   const openNew = () => router.push("/mail/compose");
   const openReply = (all: boolean) => {
@@ -388,6 +463,7 @@ export function MailBoard() {
       onDeleteDraft={deleteDraft}
       onBulk={runBulk}
       onToggleStar={toggleStar}
+      onSenderClick={(addr, rect) => setSenderMenu({ address: addr, anchor: { left: rect.left, top: rect.top, bottom: rect.bottom } })}
     />
   );
 
@@ -420,6 +496,7 @@ export function MailBoard() {
                 activeCategory={activeCategory}
                 draftCount={drafts.length}
                 address={address}
+                usage={usage}
                 onSelect={(k) => {
                   setFolder(k);
                   setQ("");
@@ -506,6 +583,21 @@ export function MailBoard() {
         )}
       </div>
 
+      <MailSenderMenu
+        state={senderMenu}
+        categories={categories}
+        currentCategoryId={senderMenu ? senderRules[senderMenu.address.toLowerCase()] ?? null : null}
+        onClose={closeSenderMenu}
+        onCompose={(addr) => router.push(`/mail/compose?to=${encodeURIComponent(addr)}`)}
+        onAddContact={(addr) => void addContact(addr)}
+        onBlock={(addr) => void blockSenderAddr(addr)}
+        onSearch={(addr) => {
+          setQ(addr);
+          setDetail(null);
+          setMobileView("list");
+        }}
+        onAssignCategory={(addr, id) => void assignSenderCategory(addr, id)}
+      />
     </div>
   );
 }

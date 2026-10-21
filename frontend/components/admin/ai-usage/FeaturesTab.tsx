@@ -305,7 +305,7 @@ function GroupRows({
                   <div className="flex items-center gap-1">
                     <select
                       className="cd-select"
-                      style={{ width: 150 }}
+                      style={{ width: 200 }}
                       value={cur}
                       onChange={(e) => onPick(f, e.target.value)}
                       title={overridden ? "관리 화면 오버라이드 적용 중" : "기본값(코드·env)"}
@@ -328,7 +328,7 @@ function GroupRows({
                       {caps.adaptiveThinking && (
                         <select
                           className="cd-select text-[11px]"
-                          style={{ width: 88, padding: "3px 6px" }}
+                          style={{ width: 104, padding: "3px 6px" }}
                           value={ts.thinking ?? ""}
                           title={`thinking — 미설정이면 모델 기본(${caps.thinkingDefaultOn ? "켜짐" : "꺼짐"}). 구조 추출류는 off 로 출력 토큰 절감`}
                           onChange={(e) => onThinking(f, { thinking: (e.target.value || null) as ThinkingMode | null, effort: ts.effort ?? null })}

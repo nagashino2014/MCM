@@ -87,7 +87,7 @@ export function ClauseLibraryModal({
           <div className="relative">
             <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
-              className="cd-input text-sm w-72"
+              className="cd-input text-sm !w-72"
               style={{ paddingLeft: 32 }}
               placeholder="제목·본문 검색"
               value={q}

@@ -264,14 +264,15 @@ export function MyPayrollBoard() {
 
               <Card className={css.monthlyCard} title="월별 명세서" subtitle="행을 누르면 뷰어가 바뀝니다" icon={<ReceiptText className="w-4 h-4" />} right={<CdHelp topic="payroll.my-monthly" />}>
                 <div className="overflow-x-auto">
-                  <table className="w-full" style={{ fontSize: 14, borderCollapse: "collapse" }}>
+                  {/* FHD 좌 열(본문 약 330px)에서 수신 확인 열이 가로 스크롤 뒤로 숨지 않도록 12px·좁은 셀 여백, 수신 확인은 줄바꿈 허용 */}
+                  <table className="w-full" style={{ fontSize: 12, borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ fontSize: 12, color: C.label }}>
-                        <th className="text-left font-semibold py-2 pl-3 pr-2 whitespace-nowrap">귀속월</th>
-                        <th className="text-right font-semibold py-2 px-2 whitespace-nowrap">지급</th>
-                        <th className="text-right font-semibold py-2 px-2 whitespace-nowrap">공제</th>
-                        <th className="text-right font-semibold py-2 px-2 whitespace-nowrap">실지급</th>
-                        <th className="text-left font-semibold py-2 px-2 whitespace-nowrap">수신 확인</th>
+                        <th className="text-left font-semibold py-2 pl-3 pr-1.5 whitespace-nowrap">귀속월</th>
+                        <th className="text-right font-semibold py-2 px-1.5 whitespace-nowrap">지급</th>
+                        <th className="text-right font-semibold py-2 px-1.5 whitespace-nowrap">공제</th>
+                        <th className="text-right font-semibold py-2 px-1.5 whitespace-nowrap">실지급</th>
+                        <th className="text-left font-semibold py-2 px-1.5 whitespace-nowrap">수신 확인</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -291,13 +292,13 @@ export function MyPayrollBoard() {
                             onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = ""; }}
                             onClick={() => void open(r)}
                           >
-                            <td className="pl-3 pr-2 font-semibold whitespace-nowrap" style={{ color: C.ink }}>
+                            <td className="pl-3 pr-1.5 font-semibold whitespace-nowrap" style={{ color: C.ink }}>
                               {r.payMonth}월{r.ledgerKind !== "salary" ? <span className="cd-pill cd-pill-info ml-1.5">{KIND_LABEL[r.ledgerKind] ?? r.ledgerKind}</span> : null}
                             </td>
-                            <td className="px-2 text-right tabular-nums" style={{ color: C.body }}>{won(r.payTotal)}</td>
-                            <td className="px-2 text-right tabular-nums" style={{ color: C.label }}>{won(r.deductionTotal)}</td>
-                            <td className="px-2 text-right tabular-nums font-bold" style={{ color: C.ink }}>{won(r.netPay)}</td>
-                            <td className="px-2 whitespace-nowrap" style={{ fontSize: 12 }}>
+                            <td className="px-1.5 text-right tabular-nums" style={{ color: C.body }}>{won(r.payTotal)}</td>
+                            <td className="px-1.5 text-right tabular-nums" style={{ color: C.label }}>{won(r.deductionTotal)}</td>
+                            <td className="px-1.5 text-right tabular-nums font-bold" style={{ color: C.ink }}>{won(r.netPay)}</td>
+                            <td className="px-1.5" style={{ fontSize: 12 }}>
                               {r.viewedAt ? (
                                 <span style={{ color: "var(--cd-success)" }} title={`발행 ${dt(r.sentAt)}`}>열람 {dt(r.viewedAt)}</span>
                               ) : r.sentAt ? (
@@ -421,15 +422,16 @@ export function MyPayrollBoard() {
             {/* ── 우 열: 연도별 수령액 표 → 항목별 합계(flex:1) ── */}
             <div className={`${css.col} ${css.colRight}`}>
               <Card className={css.yearlyCard} title="연도별 수령액">
-                <table className="w-full" style={{ fontSize: 14, borderCollapse: "collapse" }}>
+                {/* FHD 우 열(본문 약 330px)에 6열이 들어가도록 12px·좁은 셀 여백(14px이면 54px 넘침) */}
+                <table className="w-full whitespace-nowrap" style={{ fontSize: 12, borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ fontSize: 12, color: C.label }}>
-                      <th className="text-left font-semibold py-1.5 pl-2 pr-1">연도</th>
-                      <th className="text-right font-semibold py-1.5 px-1">지급</th>
-                      <th className="text-right font-semibold py-1.5 px-1">공제</th>
-                      <th className="text-right font-semibold py-1.5 px-1">실지급</th>
-                      <th className="text-right font-semibold py-1.5 px-1 whitespace-nowrap">월평균</th>
-                      <th className="text-right font-semibold py-1.5 pl-1 pr-2">개월</th>
+                      <th className="text-left font-semibold py-1.5 pl-2 pr-0.5">연도</th>
+                      <th className="text-right font-semibold py-1.5 px-0.5">지급</th>
+                      <th className="text-right font-semibold py-1.5 px-0.5">공제</th>
+                      <th className="text-right font-semibold py-1.5 px-0.5">실지급</th>
+                      <th className="text-right font-semibold py-1.5 px-0.5">월평균</th>
+                      <th className="text-right font-semibold py-1.5 pl-0.5 pr-2">개월</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -442,12 +444,12 @@ export function MyPayrollBoard() {
                           style={{ height: 40, borderTop: `1px solid ${C.hairline}`, background: cur ? C.rowSelected : undefined }}
                           onClick={() => { setYear(y.year); setSelected(null); }}
                         >
-                          <td className="pl-2 pr-1 tabular-nums" style={{ color: C.ink, fontWeight: cur ? 700 : 500 }}>{y.year}</td>
-                          <td className="px-1 text-right tabular-nums" style={{ color: C.body }}>{won(y.payTotal)}</td>
-                          <td className="px-1 text-right tabular-nums" style={{ color: C.label }}>{won(y.deductionTotal)}</td>
-                          <td className="px-1 text-right tabular-nums font-bold" style={{ color: C.ink }}>{won(y.netPay)}</td>
-                          <td className="px-1 text-right tabular-nums" style={{ color: C.body }}>{y.months ? won(y.netPay / y.months) : "—"}</td>
-                          <td className="pl-1 pr-2 text-right tabular-nums" style={{ color: C.label }}>{y.months}</td>
+                          <td className="pl-2 pr-0.5 tabular-nums" style={{ color: C.ink, fontWeight: cur ? 700 : 500 }}>{y.year}</td>
+                          <td className="px-0.5 text-right tabular-nums" style={{ color: C.body }}>{won(y.payTotal)}</td>
+                          <td className="px-0.5 text-right tabular-nums" style={{ color: C.label }}>{won(y.deductionTotal)}</td>
+                          <td className="px-0.5 text-right tabular-nums font-bold" style={{ color: C.ink }}>{won(y.netPay)}</td>
+                          <td className="px-0.5 text-right tabular-nums" style={{ color: C.body }}>{y.months ? won(y.netPay / y.months) : "—"}</td>
+                          <td className="pl-0.5 pr-2 text-right tabular-nums" style={{ color: C.label }}>{y.months}</td>
                         </tr>
                       );
                     })}
@@ -502,7 +504,7 @@ function Kpi({ icon, label, value, sub, strong }: { icon: React.ReactNode; label
       <span className="cd-title-icon shrink-0">{icon}</span>
       <div className="min-w-0">
         <div style={{ fontSize: 13, color: C.label }}>{label}</div>
-        <div className="font-bold tabular-nums truncate" style={{ fontSize: 24, letterSpacing: "-0.02em", color: strong ? C.accent : C.ink }}>{value}</div>
+        <div className={`font-bold tabular-nums truncate ${css.kpiValue}`} style={{ letterSpacing: "-0.02em", color: strong ? C.accent : C.ink }}>{value}</div>
         {sub && <div style={{ fontSize: 12, color: C.sub }}>{sub}</div>}
       </div>
     </div>
@@ -514,11 +516,11 @@ function ItemList({ title, items }: { title: string; items: Array<{ itemId: stri
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between pb-2 mb-1" style={{ borderBottom: `2px solid ${C.ink}` }}>
-        <span className="font-bold" style={{ fontSize: 14, color: C.ink }}>{title}</span>
-        <span className="font-bold tabular-nums" style={{ fontSize: 20, color: C.ink }}>{won(total)}</span>
+        <span className={`font-bold ${css.itemTitle}`} style={{ color: C.ink }}>{title}</span>
+        <span className={`font-bold tabular-nums ${css.itemTotal}`} style={{ color: C.ink }}>{won(total)}</span>
       </div>
       {items.map((i) => (
-        <div key={i.itemId} className="flex items-center justify-between gap-2" style={{ fontSize: 14, padding: "9px 0", borderBottom: `1px solid ${C.hairline}` }}>
+        <div key={i.itemId} className={`flex items-center justify-between gap-2 ${css.itemRow}`} style={{ padding: "9px 0", borderBottom: `1px solid ${C.hairline}` }}>
           <span className="truncate" style={{ color: C.body }}>{i.name}</span>
           <span className="tabular-nums whitespace-nowrap" style={{ color: C.ink }}>{won(i.amount)}</span>
         </div>

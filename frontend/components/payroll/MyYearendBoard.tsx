@@ -325,7 +325,8 @@ export function MyYearendBoard() {
                   <p className="text-sm cd-text-faint">{year}년 확정 급여대장이 아직 없어 집계할 수 없습니다.</p>
                 ) : (
                   <div className="flex-1 min-h-0 2xl:overflow-y-auto scrollbar-hide">
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+                    {/* 2xl 이상에서는 이 카드가 5열 중 2열(FHD 약 620px)로 좁아지므로 뷰포트 기준 열 수를 되돌린다 */}
+                    <div className="grid grid-cols-2 xl:grid-cols-4 2xl:grid-cols-2 gap-3 mb-6">
                       <Stat label="총급여(과세)" value={`${won(r?.grossPay ?? cur.grossPay)}원`} sub={`${cur.monthCount}개월 · 비과세 ${won(cur.nonTaxablePay)}원`} />
                       <Stat label="기납부 소득세" value={`${won(cur.prepaidTax)}원`} sub="매월 원천징수 합계" />
                       <Stat label="결정세액" value={r ? `${won(r.determinedTax)}원` : "미계산"} sub={r ? `산출세액 ${won(r.calculatedTax)}` : "자료 업로드 후 관리자 계산"} />
@@ -337,7 +338,7 @@ export function MyYearendBoard() {
                       />
                     </div>
                     {r && (
-                      <div className="grid gap-6 xl:grid-cols-2">
+                      <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-1">
                         <ReportTable
                           title="소득공제"
                           rows={[

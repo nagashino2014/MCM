@@ -1120,7 +1120,7 @@ export function ApprovalLetterBoard() {
                     {letterYear}-{LETTER_RULE_KEY}-
                   </span>
                   <input
-                    className="cd-input w-[84px] font-mono text-center"
+                    className="cd-input !w-[84px] font-mono text-center"
                     inputMode="numeric"
                     maxLength={5}
                     placeholder="01036"

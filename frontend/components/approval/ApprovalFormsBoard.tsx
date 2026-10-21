@@ -534,7 +534,8 @@ export default function ApprovalFormsBoard() {
               ) : (
                 <div className="flex flex-col lg:flex-row gap-3 items-start">
                   {/* 필드 팔레트 */}
-                  <div className="w-full lg:w-[128px] shrink-0 rounded-2xl border cd-border-c p-2 grid grid-cols-4 lg:grid-cols-2 gap-1.5">
+                  {/* 128px이면 칸이 52px로 좁아 '옵션(단일)'·'담당자 검색'이 글자 단위로 줄바꿈된다(FHD 실사 10-21) */}
+                  <div className="w-full lg:w-[152px] shrink-0 rounded-2xl border cd-border-c p-2 grid grid-cols-4 lg:grid-cols-2 gap-1.5">
                     {PALETTE.map(({ type, icon: Icon }) => (
                       <button
                         key={type}

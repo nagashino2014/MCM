@@ -1817,14 +1817,14 @@ export function QuoteBoard() {
                                 next[i] = { ...next[i], label: e.target.value };
                                 updateSite(activeSite, { freeItems: next });
                               }} />
-                              <AmountInput className="cd-input text-sm w-36 text-right" value={it.amount || ""} placeholder="금액(원)" onChange={(v) => {
+                              <AmountInput className="cd-input text-sm !w-36 text-right" value={it.amount || ""} placeholder="금액(원)" onChange={(v) => {
                                 const next = [...(site.freeItems ?? [])];
                                 next[i] = { ...next[i], amount: Number(v) || 0 };
                                 const sum = next.reduce((a, x) => a + x.amount, 0);
                                 const price = Number(priceInputs[site.siteSeq] ?? 0) || sum;
                                 updateSite(activeSite, { freeItems: next, amounts: { ...site.amounts, laborCost: 0, overhead: 0, techFee: 0, directExpense: 0, sum, final: price } });
                               }} />
-                              <input className="cd-input text-sm w-44" value={it.note ?? ""} placeholder="비고" onChange={(e) => {
+                              <input className="cd-input text-sm !w-44" value={it.note ?? ""} placeholder="비고" onChange={(e) => {
                                 const next = [...(site.freeItems ?? [])];
                                 next[i] = { ...next[i], note: e.target.value };
                                 updateSite(activeSite, { freeItems: next });

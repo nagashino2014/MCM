@@ -171,7 +171,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
           <input className="cd-input" style={{ width: 70 }} inputMode="numeric" value={ad.atPct} onChange={(e) => setAd({ ...ad, atPct: e.target.value.replace(/\D/g, "") })} disabled={!canManage} />
           <span className="cd-text-muted">% 이상</span>
           <span className="cd-label ml-2">대상</span>
-          <select className="cd-select" style={{ width: 170 }} value={ad.targetModel} onChange={(e) => setAd({ ...ad, targetModel: e.target.value })} disabled={!canManage}>
+          <select className="cd-select" style={{ width: 200 }} value={ad.targetModel} onChange={(e) => setAd({ ...ad, targetModel: e.target.value })} disabled={!canManage}>
             {data.prices.filter((p) => p.selectable).map((p) => (
               <option key={p.modelFamily} value={p.modelFamily}>{p.displayName} (${p.inputPerMtok}/${p.outputPerMtok})</option>
             ))}

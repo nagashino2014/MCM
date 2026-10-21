@@ -140,7 +140,7 @@ export default function PayrollSettingsBoard() {
               ]}
             />
             {topTab === "items" && (
-              <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
+              <div className="flex shrink-0 whitespace-nowrap rounded-xl border cd-border-c overflow-hidden text-sm font-semibold">
                 {(["pay", "deduction"] as const).map((k) => (
                   <button
                     key={k}

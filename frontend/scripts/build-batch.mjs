@@ -18,6 +18,8 @@ const atAlias = {
 const ENTRIES = [
   { in: "scripts/intel-batch.ts", out: ".next/intel-batch.cjs" },
   { in: "scripts/adt-ingest.ts", out: ".next/adt-ingest.cjs" },
+  // 상시 서비스(배치 아님)지만 같은 이미지·같은 번들 방식을 쓴다 — 외부 메일 프로그램 IMAP/SMTP 게이트웨이.
+  { in: "scripts/mail-gateway.ts", out: ".next/mail-gateway.cjs" },
 ];
 
 for (const { in: entry, out } of ENTRIES) {

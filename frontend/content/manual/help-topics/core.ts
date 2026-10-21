@@ -189,6 +189,20 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     sources: ["components/mail/MailComposePage.tsx"],
     reviewedAt: "2026-10-20",
   },
+  {
+    id: "mail.external-client",
+    label: "외부 메일 프로그램 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "아웃룩·휴대폰 메일 앱에서 계정을 ‘IMAP’ 수동 설정으로 추가하고, 이 칸의 서버·포트·사용자 이름을 넣습니다(보안 SSL/TLS).",
+        "비밀번호는 [[앱 비밀번호 만들기]]로 만든 16자 앱 비밀번호를 씁니다. 앱 로그인 비밀번호는 쓰지 않습니다.",
+        "앱 비밀번호는 만든 직후에만 보입니다. 잃어버리면 [[폐기]]하고 새로 만드세요.",
+      ] },
+    ],
+    more: { article: "mail.box", section: "external-client" },
+    sources: ["components/mail/MailExternalClientSection.tsx"],
+    reviewedAt: "2026-10-21",
+  },
   // ── 할 일·일정 ──
   {
     id: "todo.scope",

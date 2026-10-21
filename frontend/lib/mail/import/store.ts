@@ -20,10 +20,14 @@ export interface ImportTarget {
   isRead: boolean;
   /** mail_message_state.labels 에 더할 라벨(예: import:아마란스/받은메일함). */
   labels: string[];
+  /** 원문 S3 키 접두(기본 mail-import). 외부 메일 프로그램이 올린 메일은 mail-client. */
+  rawKeyPrefix?: string;
 }
 
 export interface ImportResult {
   outcome: "imported" | "duplicate";
+  /** 저장된(또는 이미 있던) mail_messages.message_id — IMAP APPEND 가 UID 를 찾을 때 쓴다. */
+  messageId: string;
   bytes: number;
   /** 본문에 대용량 첨부 링크로 보이는 것이 있음(원본 파일은 함께 오지 않음). */
   linkAttachment: boolean;
@@ -99,11 +103,11 @@ export async function importRawMessage(raw: Buffer, t: ImportTarget, fallbackDat
   );
   if (existing.length) {
     await mergeState(t.mailboxId, String(existing[0].message_id), t, now);
-    return { outcome: "duplicate", bytes: 0, linkAttachment };
+    return { outcome: "duplicate", messageId: String(existing[0].message_id), bytes: 0, linkAttachment };
   }
 
   // 1) S3 선업로드(원문 + 첨부).
-  const rawKey = ["mail-import", t.mailboxId, `${idHash.slice(0, 32)}.eml`].join("/");
+  const rawKey = [t.rawKeyPrefix ?? "mail-import", t.mailboxId, `${idHash.slice(0, 32)}.eml`].join("/");
   await putContractDocument(rawKey, raw, "message/rfc822");
   const attachments = (parsed.attachments ?? []).filter((a) => a.content && (a.content as Buffer).length);
   const stored: { filename: string; contentType: string; size: number; s3Key: string; contentId: string | null }[] = [];
@@ -197,7 +201,7 @@ export async function importRawMessage(raw: Buffer, t: ImportTarget, fallbackDat
     );
     if (!again.length) throw new Error("메일 기록이 충돌했지만 기존 메일을 찾지 못했습니다.");
     await mergeState(t.mailboxId, String(again[0].message_id), t, now);
-    return { outcome: "duplicate", bytes: 0, linkAttachment };
+    return { outcome: "duplicate", messageId: String(again[0].message_id), bytes: 0, linkAttachment };
   }
-  return { outcome: "imported", bytes: raw.length, linkAttachment };
+  return { outcome: "imported", messageId: msgId, bytes: raw.length, linkAttachment };
 }

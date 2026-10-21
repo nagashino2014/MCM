@@ -81,12 +81,12 @@ export const ADMIN_HELP: HelpTopic[] = [
         "[[계정 발급]]에는 **입사일·성별·생년월일**이 필요합니다. 성별·생년월일은 주민번호를 넣고 저장하면 채워집니다.",
         "발급하면 사번(입사일 8자리 + 성별 2자리 + 순번 2자리)이 로그인 ID가 되고, 초기 비밀번호는 사번입니다. 처음 로그인할 때 바꿔야 합니다.",
         "직급에 기본 권한 템플릿이 있으면 자동 부여됩니다. 없으면 권한이 비어 있습니다.",
-        "인사카드를 저장한 뒤에도 안내가 그대로면 왼쪽 조직도에서 직원을 다시 누르세요.",
+        "인사카드를 저장하거나 [[새로고침]]을 누르면 이 안내도 바로 갱신됩니다.",
       ] },
     ],
     more: { article: "admin.registry", section: "provision" },
     sources: ["app/(app)/admin/users/registry/page.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "admin.positions",
@@ -158,11 +158,12 @@ export const ADMIN_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "**자동 저장**: 고친 뒤 잠시(약 1.5초) 멈추면 저장됩니다. 제목 옆 ‘모든 변경사항 저장됨’을 확인하세요.",
         "[[버전 저장]]: 지금 상태를 별도 버전으로 기록합니다. 크게 고치기 전이나 확정 직전에 누르세요.",
+        "[[버전 목록]]: 저장한 버전을 보고 [[이 버전으로 복원]]합니다. 복원한 내용도 자동 저장됩니다.",
         "공고기간을 입력하다 만 상태에서는 저장하지 않습니다. 날짜 8자리를 끝까지 넣으세요.",
       ] },
     ],
     more: { article: "admin.recruit", section: "editor" },
     sources: ["components/recruit/RecruitEditorBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

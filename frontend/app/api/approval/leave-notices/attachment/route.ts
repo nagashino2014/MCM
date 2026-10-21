@@ -15,7 +15,7 @@ function contentDisposition(filename: string): string {
 // GET: 서면 사후 등록 스캔본 다운로드(admin) — ?key= (leave_notices.attachments 참조 검증).
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const key = new URL(req.url).searchParams.get("key");
     if (!key) return NextResponse.json({ error: "key가 필요합니다." }, { status: 400 });
     const meta = await findNoticeAttachment(key);

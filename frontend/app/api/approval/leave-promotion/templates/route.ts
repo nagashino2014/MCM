@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // GET: 1·2차 연차 고지 문구 템플릿(admin) — 양식 관리 화면. 발신 표기용 회사 정보 동봉.
 export async function GET() {
   try {
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const [templates, company] = await Promise.all([listNoticeTemplates(), getCompanyProfile().catch(() => null)]);
     return NextResponse.json({
       templates,
@@ -24,7 +24,7 @@ export async function GET() {
 // PUT: 고지 문구 템플릿 저장(admin) — { round, title, body[] }
 export async function PUT(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as { round?: number; title?: string; body?: string[] };
     const round = Number(body.round);
     if (round !== 1 && round !== 2) return NextResponse.json({ error: "round 는 1 또는 2 여야 합니다." }, { status: 400 });

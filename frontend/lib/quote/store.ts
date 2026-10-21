@@ -363,11 +363,21 @@ export async function getQuoteById(quoteId: string): Promise<QuotationRow | null
   return rows.length ? mapRow(rows[0]) : null;
 }
 
-/** 발송견적 목록 — 양식별 문서 조회 '발송견적' 탭. from/to = YYYY-MM. */
-export async function listQuotes(params: { from?: string | null; to?: string | null; q?: string | null; limit?: number }): Promise<QuotationRow[]> {
+/** 발송견적 목록 — 양식별 문서 조회 '발송견적' 탭. from/to = YYYY-MM. drafterUserId 지정 시 그 사람이 기안한 견적만. */
+export async function listQuotes(params: {
+  from?: string | null;
+  to?: string | null;
+  q?: string | null;
+  limit?: number;
+  drafterUserId?: string | null;
+}): Promise<QuotationRow[]> {
   const db = await getDb();
   const cond: string[] = [];
   const args: unknown[] = [];
+  if (params.drafterUserId) {
+    args.push(params.drafterUserId);
+    cond.push(`doc_id IN (SELECT doc_id FROM approval_docs WHERE drafter_user_id = $${args.length})`);
+  }
   if (params.from) {
     args.push(params.from);
     cond.push(`substr(COALESCE(issue_date, created_at), 1, 7) >= $${args.length}`);

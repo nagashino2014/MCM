@@ -130,7 +130,7 @@ export function TemplateBoard() {
         const res = await fetch("/api/recruit/postings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ templateId: t.templateId, title: `${t.name} — 템플릿 편집용` }),
+          body: JSON.stringify({ templateId: t.templateId, purpose: "template_edit" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "편집용 공고 생성 실패");

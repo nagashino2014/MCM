@@ -223,7 +223,14 @@ export async function updateSurvey(surveyId: string, input: SurveyInput, userId:
     }
     put("status", input.status);
   }
-  if (input.isAnonymous !== undefined) put("is_anonymous", input.isAnonymous ? 1 : 0);
+  if (input.isAnonymous !== undefined) {
+    // 응답이 접수된 뒤 익명 여부를 바꾸면, 익명으로 받은 응답자 이름이 집계에 드러나거나(해제)
+    // 실명 응답 전제가 깨진다(설정) — 응답이 1건이라도 있으면 바꿀 수 없다(F-30, 2026-10-21).
+    if (input.isAnonymous !== existing.isAnonymous && (existing.responseCount ?? 0) > 0) {
+      throw err("이미 응답이 접수된 설문은 익명 설정을 바꿀 수 없습니다. 복제 후 새 설문으로 받으세요.", 409);
+    }
+    put("is_anonymous", input.isAnonymous ? 1 : 0);
+  }
   if (input.periodStart !== undefined) put("period_start", cleanDate(input.periodStart));
   if (input.periodEnd !== undefined) put("period_end", cleanDate(input.periodEnd));
   if (input.audience !== undefined) put("audience", JSON.stringify(normalizeAudience(input.audience)), "::jsonb");

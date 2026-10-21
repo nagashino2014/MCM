@@ -1,7 +1,7 @@
 "use client";
 
-// 완료 조건 체크박스 3개(276) — 상세 '부가 설정 › 완료 조건' · 보드 생성 '기본 완료 조건' · 보드 ⋯ 메뉴 '기본 완료 조건' 공용.
-// 하위 작업 모두 완료 / 완료 메모 입력 / 검토 단계 경유. 값은 TodoCompleteRules(켜진 키만 true).
+// 완료 조건 체크박스 4개(276·288) — 상세 '부가 설정 › 완료 조건' · 보드 생성 '기본 완료 조건' · 보드 ⋯ 메뉴 '기본 완료 조건' 공용.
+// 하위 작업 모두 완료 / 완료 메모 입력 / 검토 단계 경유 / 선행 작업 모두 완료. 값은 TodoCompleteRules(켜진 키만 true).
 
 import { CdCheckbox } from "@/components/cdash";
 import { TODO_COMPLETE_RULE_KEYS, TODO_COMPLETE_RULE_LABELS, type TodoCompleteRules } from "@/lib/todo/types";

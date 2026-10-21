@@ -977,7 +977,8 @@ function SettingsPanel() {
         {saved && <span className="text-[12px]" style={{ color: "var(--cd-primary)" }}>저장되었습니다.</span>}
       </div>
       <p className="text-[11.5px] cd-text-faint">
-        ※ 수당 금액(월평균임금 ÷ {s.wageDivisorHours} × 배수)은 직원별 급여 데이터 연동 후 지원됩니다. 현재는 시간·배수 대상까지 산정합니다.
+        ※ 수당 = 통상시급(최신 근로계약 통상임금 ÷ {s.wageDivisorHours}) × 배수 × 시간(10원 미만 절사). 주별 화면에 예상 수당으로 표시되고,
+        신청 대조로 인정된 시간이 급여대장 생성 시(전월 26일~금월 25일분) 초과근무수당으로 반영됩니다. 근로계약이 없는 직원은 금액이 표시되지 않습니다.
       </p>
       </section>
       </div>

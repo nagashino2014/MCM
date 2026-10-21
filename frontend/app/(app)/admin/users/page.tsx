@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { RefreshCw, Users as UsersIcon } from "lucide-react";
-import { hasAnyPerm, permsOf } from "@/lib/auth/perms";
+import { hasAnyPerm, hasPerm, permsOf } from "@/lib/auth/perms";
 import { ACCOUNT_ADMIN_KEYS } from "@/config/menu-permissions";
 import { AccessDenied } from "@/components/auth/AccessDenied";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
@@ -38,27 +38,43 @@ function Inner() {
   const [selectedDept, setSelectedDept] = useState<DepartmentRow | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<SelectedAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  // 권한이 없어 403 을 받은 영역 — 화면 전체를 실패시키지 않고 그 영역만 숨기거나 안내한다(F-27).
+  const [denied, setDenied] = useState({ permissions: false, users: false });
+  const [purgeTarget, setPurgeTarget] = useState<UserRow | null>(null);
   const toast = useToast();
 
   const reload = useCallback(async () => {
     setLoading(true);
-    try {
-      const [orgRes, permissionRes, userRes] = await Promise.all([
-        fetch("/api/admin/organization", { cache: "no-store" }),
-        fetch("/api/admin/permissions", { cache: "no-store" }),
-        fetch("/api/admin/users", { cache: "no-store" }),
-      ]);
-      for (const res of [orgRes, permissionRes, userRes]) {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "조회 실패");
-      }
-      setOrganization((await orgRes.json()) as OrganizationSnapshot);
-      setPermissions((await permissionRes.json()) as PermissionsSnapshot);
-      setUsers(((await userRes.json()) as { items: UserRow[] }).items ?? []);
-    } catch (err) {
-      toast.show("조회 실패: " + (err as Error).message, "error");
-    } finally {
-      setLoading(false);
-    }
+    // 세 API 의 권한 키가 다르다(조직도 org.view 등 · 템플릿 rbac.* · 계정 account.manage) — 각각 따로 불러
+    // 키 하나만 가진 담당자도 볼 수 있는 부분은 보게 한다(F-27, 2026-10-21). 403 은 '권한 없음'으로 표시, 그 외 오류만 알린다.
+    const load = async <T,>(url: string): Promise<T | "denied"> => {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.status === 403) return "denied";
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "조회 실패");
+      return (await res.json()) as T;
+    };
+    const [orgResult, permissionResult, userResult] = await Promise.allSettled([
+      load<OrganizationSnapshot>("/api/admin/organization"),
+      load<PermissionsSnapshot>("/api/admin/permissions"),
+      load<{ items: UserRow[] }>("/api/admin/users"),
+    ]);
+    const failures: string[] = [];
+    if (orgResult.status === "fulfilled") {
+      if (orgResult.value !== "denied") setOrganization(orgResult.value);
+      else failures.push("조직도: 권한이 없습니다.");
+    } else failures.push("조직도: " + (orgResult.reason as Error).message);
+    if (permissionResult.status === "fulfilled") {
+      const value = permissionResult.value;
+      setPermissions(value === "denied" ? null : value);
+      setDenied((prev) => ({ ...prev, permissions: value === "denied" }));
+    } else failures.push("권한 템플릿: " + (permissionResult.reason as Error).message);
+    if (userResult.status === "fulfilled") {
+      const value = userResult.value;
+      setUsers(value === "denied" ? [] : value.items ?? []);
+      setDenied((prev) => ({ ...prev, users: value === "denied" }));
+    } else failures.push("계정 목록: " + (userResult.reason as Error).message);
+    if (failures.length) toast.show("조회 실패 — " + failures.join(" / "), "error");
+    setLoading(false);
   }, [toast]);
 
   useEffect(() => {
@@ -72,6 +88,11 @@ function Inner() {
   if (!hasAnyPerm(permsOf(session?.user), ACCOUNT_ADMIN_KEYS)) {
     return <AccessDenied requiredKeys={ACCOUNT_ADMIN_KEYS} />;
   }
+
+  // 화면 버튼 노출 — 실제 판정은 각 API. 템플릿 저장은 rbac.template.manage, 부여·회수는 rbac.assignment.manage.
+  const sessionPerms = permsOf(session?.user);
+  const canManageTemplates = hasPerm(sessionPerms, "rbac.template.manage");
+  const canAssign = hasPerm(sessionPerms, "rbac.assignment.manage");
 
   // 시스템 관리자 = 유효한 tpl-system-admin 템플릿 보유 계정(role 이 아니다 — role 일원화 WP6).
   const systemAdminUserIds = new Set(
@@ -99,7 +120,6 @@ function Inner() {
   };
 
   // 계정 영구 삭제는 확인 모달(미리보기·로그인 ID 재입력)을 거친다 — AccountPurgeModal.
-  const [purgeTarget, setPurgeTarget] = useState<UserRow | null>(null);
   // 직원 프로필(조직 인원)에 연결된 계정 — 나머지는 조직도 "미연결 계정" 그룹에 보여 비활성·삭제할 수 있게 한다.
   const linkedUserIds = new Set((organization?.employees ?? []).map((e) => e.userId).filter((v): v is string => !!v));
   const deleteAccount = (user: UserRow) => setPurgeTarget(user);
@@ -144,6 +164,10 @@ function Inner() {
         <PermissionManagementPanel
           users={users}
           permissions={permissions}
+          permissionsDenied={denied.permissions}
+          usersDenied={denied.users}
+          canManageTemplates={canManageTemplates}
+          canAssign={canAssign}
           selectedDept={selectedDept}
           selectedAccount={selectedAccount}
           currentUserId={(session?.user as { id?: string } | undefined)?.id}

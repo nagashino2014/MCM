@@ -71,7 +71,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
     audience: ["staff", "head", "exec", "admin"],
     summary: [
       "받는 사람은 이름이나 주소 일부만 입력해도 주소록에서 찾아 줍니다.",
-      "파일은 끌어다 놓거나 [[내 PC]]로 첨부합니다. 큰 파일은 자동으로 다운로드 링크로 바뀝니다.",
+      "파일은 끌어다 놓거나 [[내 PC]] 또는 [[문서함]](개인문서함)으로 첨부합니다. 큰 파일은 자동으로 다운로드 링크로 바뀝니다.",
       "작성 중인 메일은 [[임시 저장]]을 눌러야 저장됩니다(자동 저장 없음).",
     ],
     sections: [
@@ -98,8 +98,13 @@ export const MAIL_ARTICLES: ManualArticle[] = [
             rows: [
               ["끌어다 놓기", "30MB"],
               ["[[내 PC]]로 고르기", "2GB"],
+              ["[[문서함]]에서 고르기", "2GB(개인문서함 파일)"],
             ],
           },
+          { kind: "steps", items: [
+            "[[문서함]]을 누르면 [[개인문서함에서 첨부]] 창이 열립니다.",
+            "보낼 파일을 체크하고(이름으로 검색 가능) [[선택 파일 첨부]]를 누르면 첨부 목록에 추가됩니다.",
+          ] },
           { kind: "list", items: [
             "일반 첨부 합계가 25MB를 넘으면 넘친 파일은 ‘대용량 · 링크’로 바뀝니다. 파일은 회사 저장소에 올라가고 본문에 30일짜리 다운로드 링크가 들어갑니다.",
             "보안 정책으로 막힌 확장자(실행 파일 등)는 첨부할 때 자동으로 빠집니다.",
@@ -117,6 +122,6 @@ export const MAIL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["메일 쓰기", "첨부", "대용량", "서명", "참조", "숨은 참조", "임시 저장", "보내기"],
     sources: ["components/mail/MailComposePage.tsx", "components/mail/RecipientInput.tsx", "components/mail/MailListPane.tsx", "components/layout/TopBar.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

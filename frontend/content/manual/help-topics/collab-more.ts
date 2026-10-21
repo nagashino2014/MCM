@@ -11,12 +11,12 @@ export const COLLAB_MORE_HELP: HelpTopic[] = [
         "연락처 구분은 담당자 개인이 아니라 **소속 기관·업체의 속성**입니다.",
         "한 사람의 구분을 바꾸면 같은 기관·업체의 담당자 전원에게 함께 적용됩니다.",
         "아직 정하지 않은 곳의 담당자는 [[미지정]]으로 모입니다.",
-        "구분 변경과 담당자 수정은 사업장 편집 권한이 있어야 저장됩니다.",
+        "구분 변경과 담당자 수정·삭제는 사업장 편집 권한이 있어야 하며, 권한이 있는 사람에게만 [[관리]] 열의 아이콘이 보입니다.",
       ] },
     ],
     more: { article: "directory.main", section: "edit" },
     sources: ["components/directory/DirectoryBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 
   // ── 공지·게시판 ──
@@ -90,13 +90,13 @@ export const COLLAB_MORE_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "**출장 법인차량**: 출장신청서에 법인차량을 고르고 상신하면 자동으로 표시됩니다(결재 중·승인 문서). 바꾸거나 취소하려면 결재 문서에서 처리합니다.",
-        "**직접 예약**: 이 화면에서 등록한 회의실·기타 자산 예약입니다. 겹치는 직접 예약은 등록되지 않습니다.",
+        "**직접 예약**: 이 화면에서 등록한 회의실·기타 자산 예약입니다. 겹치는 직접 예약은 등록되지 않습니다. 본인 예약은 목록의 휴지통 아이콘으로 취소하고, 자산 관리 권한자는 다른 사람 예약도 취소할 수 있습니다.",
         "**⚠ 이중 배정**: 같은 자산의 이용이 겹친다는 경고입니다. 출장 결재를 막지 않으니 당사자끼리 조정하세요.",
       ] },
     ],
     more: { article: "assets.reservations", section: "legend" },
     sources: ["components/assets/AssetCalendarBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 
   // ── 설문 ──
@@ -121,12 +121,12 @@ export const COLLAB_MORE_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "사내 설문: 집계 화면과 CSV에 응답자를 표시하지 않습니다. 한 사람이 한 번만 응답하도록 누가 응답했는지는 시스템에 남습니다.",
         "외부 설문: 구글 폼에서 이메일을 수집하지 않습니다.",
-        "응답을 받기 시작한 뒤에는 익명 설정을 바꾸지 마세요. 익명을 끄면 이미 받은 응답의 응답자도 집계에 표시됩니다.",
+        "응답이 1건이라도 들어오면 익명 설정을 바꿀 수 없습니다(이미 받은 응답의 응답자가 드러나지 않게). 바꾸려면 설문을 복제해 새로 받으세요.",
       ] },
     ],
     more: { article: "survey.internal", section: "results" },
-    sources: ["components/survey/SurveyBuilderBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    sources: ["components/survey/SurveyBuilderBoard.tsx", "lib/survey/store.ts"],
+    reviewedAt: "2026-10-21",
   },
 
   // ── 휴지통 ──
@@ -136,12 +136,12 @@ export const COLLAB_MORE_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "사업장과 계약을 삭제하면 여기에 남습니다. 다른 메뉴에서 지운 자료는 나오지 않습니다.",
-        "화면에서 복원하는 기능은 없습니다. 잘못 지웠다면 영구 삭제 전에 관리자에게 알려 주세요.",
+        "잘못 지운 항목은 [[복원]]으로 원래 목록에 되돌립니다(휴지통 복원 권한 필요).",
         "[[영구 삭제]]는 관리자만 할 수 있고 되돌릴 수 없습니다. 사업장이면 담당자·연락 이력 같은 딸린 자료도 함께 지워집니다.",
       ] },
     ],
     more: { article: "admin.trash" },
     sources: ["app/(app)/trash/page.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

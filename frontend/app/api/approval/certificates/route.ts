@@ -13,10 +13,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// GET: 발급 대기/이력 목록(발급 담당 — approval.manage) ?status=
+// GET: 발급 대기/이력 목록(발급 담당 — staffing.edit) ?status=
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const status = req.nextUrl.searchParams.get("status") || undefined;
     return NextResponse.json({ issues: await listCertificateIssues(status) });
   } catch (err) {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 //      | multipart(action=issue-stamp, issueId, file) 스캔 PDF 업로드 → 직인본 생성.
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const contentType = req.headers.get("content-type") ?? "";
 
     if (contentType.includes("multipart/form-data")) {

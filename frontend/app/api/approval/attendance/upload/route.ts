@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // 본사·지사 파일을 함께 올릴 수 있다(files 여러 개). admin 전용.
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const form = await req.formData();
     const files = form.getAll("files").filter((f): f is File => f instanceof File);
     if (!files.length) return NextResponse.json({ error: "업로드할 엑셀 파일이 없습니다." }, { status: 400 });

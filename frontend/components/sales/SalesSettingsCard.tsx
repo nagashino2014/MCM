@@ -3,7 +3,7 @@
 // 영업 제설정 카드 — Salesboard 메인 하단. 영업 관련 설정을 한곳에 모은다(2026-10-19 사용자 요청).
 //   - 영업 담당자 설정: 조직도에서 영업 담당자를 지정(sales.staff.manage = 대표이사·관리자).
 //     지정된 인원에게만 영업/마케팅 메뉴가 열린다(tpl-sales-staff 자동 부여·회수, 298).
-//   - 공공입찰 수집 소스·API & 스크래핑 소스: 기존 설정 화면으로 이동.
+//   - 공공입찰 수집 소스·API & 스크래핑 소스: 기존 설정 화면으로 이동(sales.edit 보유자에게만 노출).
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -15,10 +15,13 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 export function SalesSettingsCard({
   theme,
   canManageStaff,
+  canEditSources,
   onStaffChanged,
 }: {
   theme: string;
   canManageStaff: boolean;
+  /** 수집 소스 관리 링크 노출 — sales.edit(F-28). */
+  canEditSources: boolean;
   onStaffChanged?: () => void;
 }) {
   const [staffOpen, setStaffOpen] = useState(false);
@@ -41,7 +44,7 @@ export function SalesSettingsCard({
         <h2 className="cd-text text-sm font-extrabold">영업 제설정</h2>
         <CdHelp label="영업 제설정 도움말">
           영업 담당자로 지정된 인원과 대표이사·관리자에게만 영업/마케팅 메뉴가 열립니다. 지정·해제는 대상자가 다시
-          로그인하면 메뉴에 반영됩니다. 수집 소스는 공공입찰·인텔 화면의 소스 관리로 이동합니다.
+          로그인하면 메뉴에 반영됩니다. 수집 소스 링크는 영업 편집 권한이 있는 사람에게만 보이며, 공공입찰·인텔 화면의 소스 관리로 이동합니다.
         </CdHelp>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -51,12 +54,20 @@ export function SalesSettingsCard({
             {staffCount != null && <span className="cd-text-muted text-xs">({staffCount}명)</span>}
           </button>
         )}
-        <Link href="/sales/bids/sources" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
-          <Globe className="w-4 h-4" /> 공공입찰 수집 소스
-        </Link>
-        <Link href="/sales/intel/sources" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
-          <Radar className="w-4 h-4" /> API & 스크래핑 소스
-        </Link>
+        {/* 소스 관리 화면의 API(/api/scraper/sources)가 sales.edit 이므로 같은 권한자에게만 링크를 보인다(F-28). */}
+        {canEditSources && (
+          <>
+            <Link href="/sales/bids/sources" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
+              <Globe className="w-4 h-4" /> 공공입찰 수집 소스
+            </Link>
+            <Link href="/sales/intel/sources" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
+              <Radar className="w-4 h-4" /> API & 스크래핑 소스
+            </Link>
+          </>
+        )}
+        {!canManageStaff && !canEditSources && (
+          <span className="cd-text-faint text-xs">변경할 수 있는 설정이 없습니다. 영업 편집 권한이 필요합니다.</span>
+        )}
       </div>
 
       {staffOpen && (

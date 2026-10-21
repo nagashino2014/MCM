@@ -1200,12 +1200,12 @@ export function BidPackageBoard() {
 
             </div>
             <div className="flex flex-col gap-4 min-w-0">
-            {/* ④ 문서 구성(안내) — 생성은 P3 */}
+            {/* ④ 문서 구성 — 서식별 미리보기·전체 미리보기·HWPX 생성 */}
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 flex flex-col gap-3 min-h-[330px]">
               <h3 className="font-bold cd-text flex items-center gap-2">
                 <FileStack className="w-4 h-4 cd-text-primary" />
                 ④ 패키지 문서 구성
-                <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중 — 양식 분석 후 활성화</span>
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">양식 분석 후 미리보기·생성 가능</span>
               </h3>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[12px]">
                 {PACKAGE_DOCS.map((d, i) => (
@@ -1233,7 +1233,7 @@ export function BidPackageBoard() {
                   onClick={generate}
                   disabled={generating || !form?.hasProfile || contractIds.length === 0}
                   className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50 self-start"
-                  title="저장된 작업 상태(양식 매핑·실적 계약·수행인력) 기준으로 채움본 HWPX 를 생성합니다. 생성 전 '작업 상태 저장'을 눌러 주세요."
+                  title="현재 화면의 작업 상태(실적 계약·수행인력 등)를 자동으로 저장한 뒤 채움본 HWPX 를 생성합니다. 양식 항목 매핑은 '매핑 저장'한 값이 쓰입니다."
                 >
                   {generating ? "생성 중..." : pkg?.output ? "문서 재생성 (HWPX)" : "문서 생성 (HWPX)"}
                 </button>

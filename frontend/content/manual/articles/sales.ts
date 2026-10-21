@@ -94,13 +94,13 @@ export const SALES_ARTICLES: ManualArticle[] = [
         id: "sources",
         title: "수집 소스로 이동",
         blocks: [
-          { kind: "p", text: "[[영업 제설정]]의 [[공공입찰 수집 소스]] · [[API & 스크래핑 소스]]는 각 수집 소스 관리 화면으로 이동합니다. 소스 관리는 영업 편집 권한이 있어야 쓸 수 있습니다." },
+          { kind: "p", text: "[[영업 제설정]]의 [[공공입찰 수집 소스]] · [[API & 스크래핑 소스]]는 각 수집 소스 관리 화면으로 이동합니다. 두 링크는 영업 편집 권한이 있는 사람에게만 보입니다." },
         ],
       },
     ],
     keywords: ["영업", "Salesboard", "세일즈보드", "영업건", "투찰 임박", "경과 보고", "다가오는 일정", "영업 담당자", "영업 제설정"],
     sources: ["components/sales/SalesBoard.tsx", "components/sales/SalesSettingsCard.tsx", "components/sales/ProgressReportModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "sales.project",
@@ -519,13 +519,13 @@ export const SALES_ARTICLES: ManualArticle[] = [
             "미리보기는 저장 전 화면 상태로 만들며 보관하지 않습니다.",
             "생성본(zip)은 서버에 가장 최근 1건만 보관되어 [[최근 생성본 다운로드]]로 다시 받을 수 있습니다. [[문서 재생성 (HWPX)]]을 하면 이전 생성본은 대체됩니다.",
           ] },
-          { kind: "warn", text: "저장하지 않은 선택은 화면을 떠나면 사라집니다. 자동 저장이 없으니 중간중간 [[작업 상태 저장]]을 누르세요." },
+          { kind: "warn", text: "저장하지 않은 선택은 화면을 떠나면 사라집니다. 자동 저장은 문서 생성 때만 되니 중간중간 [[작업 상태 저장]]을 누르세요." },
         ],
       },
     ],
     keywords: ["입찰 서류", "증빙서류", "패키지", "HWPX", "수행실적", "수행인력", "실적 계약", "양식 분석", "매핑", "작업 상태 저장"],
     sources: ["components/sales/bid/BidPackageBoard.tsx", "components/sales/bid/FormProfilePanel.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "quote.write",
@@ -673,7 +673,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "list", items: [
             "내용이 바뀌면 5분마다 자동 저장됩니다. 위쪽 [[저장]]이나 결재선 아래 [[임시저장]]으로 바로 저장할 수도 있습니다.",
-            "상신하면 결재함으로 이동합니다. 승인되면 견적서(xlsx·PDF)가 만들어지고, 메일 발송이면 참조 담당자에게 PDF가 자동 발송됩니다. 직접 제출이면 문서함의 발송견적 탭에서 내려받습니다.",
+            "상신하면 견적번호가 확정되고 결재함으로 이동합니다. 승인되면 견적서(xlsx·PDF)가 만들어지고, 메일 발송이면 참조 담당자에게 PDF가 자동 발송됩니다. 직접 제출이면 문서함의 발송견적 탭에서 내려받습니다.",
             "같은 용역 건을 다시 견적할 때는 문서함 발송견적 탭의 재견적 버튼으로 들어옵니다. 이때는 [[재견적 사유]]를 꼭 골라야 하고, 위에 [[견적 이력]]과 금액 변동이 표시됩니다.",
             "[[상황 변수]]는 가격 결정 배경을 남기는 내부 기록이며 견적서에는 표기되지 않습니다.",
           ] },
@@ -683,7 +683,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["견적", "견적서", "제출 견적가", "MD", "역산", "노임단가", "제경비", "기술료", "직접경비", "출장비", "인쇄비", "공제료", "엔지니어링공제료", "기준 세트", "복수 업무", "재견적", "견적번호"],
     sources: ["components/approval/QuoteBoard.tsx", "components/approval/QuoteItemTreeEditor.tsx", "lib/quote/types.ts", "lib/quote/rates.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "quote.settings",
@@ -709,7 +709,8 @@ export const SALES_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "list", items: [
             "업무 항목은 대항목과 세부항목으로 구성하고, 세부항목에 등급별 표준 MD를 넣습니다. 이 비중대로 역산 때 MD가 나뉩니다.",
-            "[[역산 시뮬레이터 — 편집 중인 기준·최신 노임단가로 즉석 검증]]에서 견적가를 넣고 [[역산 실행]]을 누르면 저장 전에 결과와 제약 충족 여부를 볼 수 있습니다.",
+            "요율 중 [[직접경비 요율]]은 새 견적에 적용되지 않아 입력할 수 없습니다. 직접경비는 견적서에서 출장비·인쇄비로 계산합니다.",
+            "[[역산 시뮬레이터 — 편집 중인 기준·최신 노임단가로 즉석 검증]]에서 견적가를 넣고 [[역산 실행]]을 누르면 저장 전에 결과와 제약 충족 여부를 볼 수 있습니다. 실제 견적과 같이 직접경비 없이(제경비·기술료 요율만) 계산합니다.",
             "세트를 고쳐도 이미 작성한 견적서는 산정 당시 값이 유지됩니다.",
           ] },
           { kind: "warn", text: "[[세트 삭제]]를 하면 그 세분류는 자유 입력형(품목 직접 입력)으로 돌아갑니다." },
@@ -758,6 +759,6 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["견적 기준", "기준 세트", "표준 MD", "노임단가", "상황 변수", "수주 분석", "수주율", "전용 기준 세트", "요율"],
     sources: ["components/approval/QuoteSettingsBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

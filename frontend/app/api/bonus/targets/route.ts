@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { filterRowsByDeptScope, loadUserAccess, resolveDeptScope } from "@/lib/auth/rbac";
+import { checkPermission, filterRowsByDeptScope, loadUserAccess, resolveDeptScope } from "@/lib/auth/rbac";
 import { parsePeriod } from "@/lib/bonus/source";
 import { listBonusTargets } from "@/lib/bonus/targets";
 
@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
       period: `${p.year}-${p.half}`,
       targets: filterRowsByDeptScope(targets, scope, (t) => t.owningDeptId),
       scope: scope.kind,
+      // 제비용 입력·저장 가능 여부 — 저장 API(/api/bonus/costs)와 같은 bonus.calculate(2026-10-21 F-23).
+      canEditCosts: checkPermission(access, "bonus.calculate"),
     });
   } catch (err) {
     return authErrorToResponse(err);

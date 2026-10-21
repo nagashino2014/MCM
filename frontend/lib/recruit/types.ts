@@ -88,3 +88,12 @@ export interface RecruitPostingRow {
   updatedAt: string;
   updatedBy?: string | null;
 }
+
+/** [버전 저장] 스냅샷(recruit_posting_versions) — 편집기 '버전 목록'(F-40). 목록 조회에는 트리·테마를 싣지 않는다. */
+export interface RecruitPostingVersionRow {
+  version: number;
+  savedAt: string;
+  savedByName: string | null;
+  contentTree?: DocNode;
+  theme?: DocTheme;
+}

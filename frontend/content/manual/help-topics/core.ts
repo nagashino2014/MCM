@@ -170,13 +170,14 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "파일 1개 최대: 끌어다 놓기 30MB, [[내 PC]]로 고르기 2GB.",
+        "[[문서함]]을 누르면 개인문서함 파일을 골라 첨부합니다. [[내 PC]]로 고른 것과 같은 기준이 적용됩니다.",
         "일반 첨부 합계(본문 이미지 포함)가 25MB를 넘으면 넘친 파일은 ‘대용량 · 링크’가 되어 본문에 30일짜리 다운로드 링크로 들어갑니다.",
         "보안 정책으로 막힌 확장자는 추가할 때 자동으로 빠집니다.",
       ] },
     ],
     more: { article: "mail.compose", section: "attach" },
     sources: ["components/mail/MailComposePage.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "mail.draft-save",

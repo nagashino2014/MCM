@@ -38,8 +38,8 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             "[[이력]]: 상호·사업자번호·소재지 변경, 인수·합병 같은 변동 이력을 남기고 봅니다.",
             "[[편집]]: 상호·소재지·업종·별칭·사업장 분류 등을 고칩니다.",
           ] },
-          { kind: "p", text: "[[이력]]·[[편집]]·[[삭제]]와 등록증 업로드·재분석은 사업장 편집 권한이 있는 사람에게만 보입니다. 메뉴 오른쪽 위의 [[정보 전수 점검]]·[[중복 병합]]·[[수동 등록]]도 마찬가지입니다." },
-          { kind: "warn", text: "[[삭제]] → [[휴지통으로 이동]]하면 목록에서 빠집니다. 허가·생산품·연간보고 자료는 보존되지만, 휴지통에는 복원 버튼이 없고 관리자만 영구 삭제할 수 있습니다. 삭제는 사업장 삭제 권한이 따로 있어야 처리됩니다." },
+          { kind: "p", text: "[[이력]]·[[편집]]과 등록증 업로드·재분석은 사업장 편집 권한이 있는 사람에게만 보입니다. 메뉴 오른쪽 위의 [[정보 전수 점검]]·[[수동 등록]]도 마찬가지입니다. [[삭제]]는 사업장 삭제 권한, [[중복 병합]]은 사업장 병합 권한이 있는 사람에게만 보입니다." },
+          { kind: "warn", text: "[[삭제]] → [[휴지통으로 이동]]하면 목록에서 빠집니다. 허가·생산품·연간보고 자료는 보존되지만, 휴지통에는 복원 버튼이 없고 관리자만 영구 삭제할 수 있습니다." },
         ],
       },
       {
@@ -83,7 +83,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/facilities/FacilityDetailPanel.tsx",
       "components/facilities/FacilityOrdersModal.tsx",
     ],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "facilities.new",
@@ -412,7 +412,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             "아직 청구하지 않은 다른 단계와 묶으려면 [[청구 단계 추가]]로 고릅니다.",
             "금액을 확인하고 ‘…원 발행’을 누릅니다.",
           ] },
-          { kind: "warn", text: "발행 즉시 발급되며 그 단계는 계산서 발행 완료로 기록됩니다. 발급된 계산서는 취소할 수 없고, 정정은 국세청 전송(보통 다음 날)이 끝난 뒤 수정세금계산서로 합니다. 발행 창 안의 ‘전송 전에는 취소’ 안내는 현재 동작과 다릅니다." },
+          { kind: "warn", text: "발행 즉시 발급되며 그 단계는 계산서 발행 완료로 기록됩니다. 발급된 계산서는 취소할 수 없고, 정정은 국세청 전송(보통 다음 날)이 끝나 승인번호가 붙은 뒤 재무의 세금계산서 탭에서 수정발행(수정세금계산서)으로 합니다." },
         ],
       },
       {
@@ -470,7 +470,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "contracts.dashboard",

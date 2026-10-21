@@ -5,8 +5,9 @@
 
 .DESCRIPTION
   게이트웨이는 next 이미지 안의 번들(.next/mail-gateway.cjs)을 명령만 바꿔 실행하는 상시 서비스다
-  (infra/aws/mail-gateway.tf). 그래서 빌드하지 않고, staging-deploy-next.ps1 로 next 를 배포한 뒤 이 스크립트로
-  게이트웨이를 같은 이미지 태그로 맞춘다.
+  (infra/aws/mail-gateway.tf). 그래서 빌드하지 않고 next 의 현재 이미지 태그로 게이트웨이를 맞춘다.
+  staging-deploy-next.ps1 이 next 배포 마지막에 이 스크립트를 자동으로 부른다(서비스가 ACTIVE 일 때, -Wait 전달).
+  단독 실행은 그 단계가 실패·건너뜀(-SkipMailGateway)됐거나 게이트웨이를 처음 켠 직후에 쓴다.
   1) next 서비스의 현재 태스크 정의에서 image·DB/버킷 env·DB 시크릿을 가져온다(next 와 같은 DB 역할을 쓰게)
   2) 게이트웨이 서비스의 현재 태스크 정의를 받아 image·env·secrets 만 바꿔 새 리비전 등록
   3) update-service 로 적용(desired 1)

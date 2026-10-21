@@ -36,7 +36,7 @@ function TableView({ table }: { table: RuleTable }) {
                   key={ci}
                   colSpan={cell.colSpan}
                   rowSpan={cell.rowSpan}
-                  className="border px-2 py-1 align-top"
+                  className="border px-2 py-1 align-top leading-[23px]"
                   style={{ borderColor: "var(--cd-border)", background: ri === 0 ? "var(--cd-hover)" : undefined }}
                 >
                   {cell.text}
@@ -53,7 +53,7 @@ function TableView({ table }: { table: RuleTable }) {
 function ItemLine({ text }: { text: string }) {
   const level = itemHead(text)?.level ?? 1;
   return (
-    <div className="text-sm leading-relaxed mt-1" style={{ paddingLeft: 20 + (level - 1) * 18, color: "var(--cd-body)" }}>
+    <div className="text-sm leading-[calc(1.625em+7px)] mt-1" style={{ paddingLeft: 20 + (level - 1) * 18, color: "var(--cd-body)" }}>
       {text}
     </div>
   );
@@ -61,7 +61,7 @@ function ItemLine({ text }: { text: string }) {
 
 export function InternalArticleView({ article, addendum = false }: { article: RuleArticle; addendum?: boolean }) {
   return (
-    <div className="mb-5" id={article.key}>
+    <div className="mt-5 mb-5" id={article.key}>
       {article.no > 0 && (
         <div className="text-sm font-bold mb-1.5">
           제{article.no}조{article.title ? `(${article.title})` : ""}
@@ -70,7 +70,7 @@ export function InternalArticleView({ article, addendum = false }: { article: Ru
       {article.clauses.map((c, i) => (
         <div key={i} className="mb-1.5">
           {(c.text || c.label) && (
-            <div className="text-sm leading-relaxed" style={{ color: "var(--cd-body)", paddingLeft: addendum && !article.no ? 0 : 12 }}>
+            <div className="text-sm leading-[calc(1.625em+7px)]" style={{ color: "var(--cd-body)", paddingLeft: addendum && !article.no ? 0 : 12 }}>
               {c.label ? `${c.label} ` : ""}
               {c.text}
             </div>
@@ -143,7 +143,7 @@ export function InternalRuleView({ header, body }: { header: InternalRuleHeader;
                 {/^별지/.test(ap.title) ? `[${ap.title}]` : `[별표 ${ap.no}] ${ap.title}`}
               </div>
               {ap.paras.map((p, i) => (
-                <div key={i} className="text-sm leading-relaxed" style={{ color: "var(--cd-body)" }}>
+                <div key={i} className="text-sm leading-[calc(1.625em+7px)]" style={{ color: "var(--cd-body)" }}>
                   {p}
                 </div>
               ))}

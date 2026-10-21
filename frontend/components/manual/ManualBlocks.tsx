@@ -58,13 +58,13 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
   switch (block.kind) {
     case "p":
       return (
-        <p className="text-[13px] leading-relaxed cd-text">
+        <p className="text-[13px] leading-[calc(1.625em+3px)] cd-text">
           <ManualInline text={block.text} />
         </p>
       );
     case "steps":
       return (
-        <ol className="list-decimal space-y-1 pl-5 text-[13px] leading-relaxed cd-text">
+        <ol className="list-decimal space-y-1 pl-5 text-[13px] leading-[calc(1.625em+3px)] cd-text">
           {block.items.map((item, i) => (
             <li key={i}>
               <ManualInline text={item} />
@@ -74,7 +74,7 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
       );
     case "list":
       return (
-        <ul className="list-disc space-y-1 pl-5 text-[13px] leading-relaxed cd-text">
+        <ul className="list-disc space-y-1 pl-5 text-[13px] leading-[calc(1.625em+3px)] cd-text">
           {block.items.map((item, i) => (
             <li key={i}>
               <ManualInline text={item} />
@@ -84,7 +84,7 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
       );
     case "tip":
       return (
-        <div className="flex gap-2 rounded-lg border cd-border-c px-3 py-2 text-[13px] leading-relaxed cd-text" style={{ background: "var(--cd-surface)" }}>
+        <div className="flex gap-2 rounded-lg border cd-border-c px-3 py-2 text-[13px] leading-[calc(1.625em+3px)] cd-text" style={{ background: "var(--cd-surface)" }}>
           <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 cd-text-muted" aria-hidden="true" />
           <div>
             <span className="sr-only">팁: </span>
@@ -94,7 +94,7 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
       );
     case "warn":
       return (
-        <div className="flex gap-2 rounded-lg border cd-border-c cd-warn-bg px-3 py-2 text-[13px] leading-relaxed cd-text">
+        <div className="flex gap-2 rounded-lg border cd-border-c cd-warn-bg px-3 py-2 text-[13px] leading-[calc(1.625em+3px)] cd-text">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 cd-warn-text" aria-hidden="true" />
           <div>
             <span className="sr-only">주의: </span>
@@ -105,7 +105,7 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
     case "table":
       return (
         <div className="overflow-x-auto rounded-lg border cd-border-c">
-          <table className="w-full border-collapse text-left text-[12px] leading-relaxed">
+          <table className="w-full border-collapse text-left text-[12px] leading-[calc(1.625em+3px)]">
             <thead style={{ background: "var(--cd-surface)" }}>
               <tr>
                 {block.head.map((h, i) => (
@@ -131,7 +131,7 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
       );
     case "flow":
       return (
-        <ul className="space-y-1.5 text-[13px] leading-relaxed">
+        <ul className="space-y-1.5 text-[13px] leading-[calc(1.625em+3px)]">
           {block.items.map((item, i) => (
             <li key={i} className="flex flex-wrap items-baseline gap-x-1.5 cd-text">
               <span className="font-medium">

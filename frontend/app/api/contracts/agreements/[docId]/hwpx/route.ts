@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse } from "@/lib/auth/guards";
 import { assertContractsVisible, requireVisibleContracts } from "@/lib/auth/scope-guards";
+import { isDocDrafter } from "@/lib/approval/docs";
 import { getAgreementByDocId } from "@/lib/agreement/store";
 import { generateAgreementArtifacts } from "@/lib/agreement/generate";
 import { readStorageObject, sanitizeDownloadName } from "@/lib/contracts/document-bundle";
@@ -12,10 +13,11 @@ export const maxDuration = 60;
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
-    const { visible } = await requireVisibleContracts("contract.view");
+    const { ctx, visible } = await requireVisibleContracts("contract.view");
     const { docId } = await params;
     const row = await getAgreementByDocId(docId);
-    if (row) assertContractsVisible(visible, [row.contractId]); // 연동 계약 가시 범위(2026-10-19 §7.7)
+    // 연동 계약 가시 범위(2026-10-19 §7.7) — 기안자 본인은 범위와 무관하게 받는다(2026-10-21)
+    if (row && !(await isDocDrafter(ctx.userId, docId))) assertContractsVisible(visible, [row.contractId]);
     let bytes: Uint8Array | null = null;
     let fileName = "계약서.hwpx";
     if (row?.hwpxKey) {

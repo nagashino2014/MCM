@@ -140,7 +140,7 @@ export function ManualDrawer({ open, onClose, perms, initialArticle, initialSect
               />
             ) : (
               <section aria-label="매뉴얼 목차" className="flex flex-col gap-3">
-                <p className="text-[13px] leading-relaxed cd-text-muted">
+                <p className="text-[13px] leading-[calc(1.625em+3px)] cd-text-muted">
                   이 화면의 설명은 아직 준비 중입니다. 아래 목차에서 찾거나 위 검색창에 궁금한 낱말을 입력하세요.
                 </p>
                 {toc.map(({ chapter, articles }) => (
@@ -165,7 +165,7 @@ export function ManualDrawer({ open, onClose, perms, initialArticle, initialSect
                 <h3 className="mb-1.5 text-[12px] font-semibold cd-text-muted">새로 바뀐 것</h3>
                 <ul className="flex flex-col gap-1">
                   {news.map((n, i) => (
-                    <li key={i} className="text-[12px] leading-relaxed cd-text">
+                    <li key={i} className="text-[12px] leading-[calc(1.625em+3px)] cd-text">
                       <span className="mr-1.5 cd-text-muted">{n.date.slice(5)}</span>
                       <span className="mr-1 font-medium">[{n.kind}]</span>
                       {n.articles[0] ? (

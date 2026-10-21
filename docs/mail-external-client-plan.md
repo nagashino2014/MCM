@@ -111,10 +111,11 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
 
 ## 10. 남은 일·주의
 
+- **연결 허용 스위치 = 서버 켜기·끄기(2026-10-21)**: 관리자가 허용을 끄면 허용을 먼저 끊고(연결 1분 안 종료) 게이트웨이 ECS 서비스를 0대로, 켜면 1대로 먼저 올린 뒤 허용을 저장한다(`lib/mail/gateway-service.ts`). 권한은 next 태스크 역할의 기존 `ecs:DescribeServices·UpdateService`(같은 클러스터 한정, OCR 백엔드 자동 기동과 공용)라 IAM 변경 없음. NLB 는 그대로 남아 기본 요금은 계속 든다. `staging-deploy-mail-gateway.ps1` 은 desired 를 바꾸지 않는다(꺼 둔 게이트웨이를 배포가 다시 켜지 않게) — 꺼진 동안의 새 리비전은 다음에 켤 때 적용된다.
 - **NLB 헬스 체크는 TCP(8025)**: proxy_protocol_v2 를 켜면 NLB 가 헬스 체크 연결에도 PROXY 헤더를 붙여 HTTP 헬스 체크가 400 으로 실패한다(AWS NLB 문서). provider 가 HTTP→TCP 제자리 변경을 matcher 로 막아, 머지된 HCL 과 같은 값으로 `aws elbv2 modify-target-group` 후 `plan -refresh-only` 적용으로 state 를 맞췄다.
 - **새 Outlook 은 Microsoft 서버(40.99.x 등)가 대신 접속**한다 — 접속기록·실패 잠금 IP 가 사용자 PC 가 아니다. 비밀번호를 잘못 넣으면 Microsoft 재시도까지 15분 5회 잠금(`mailgw:<주소>`)에 금방 닿는다. 앱 비밀번호는 [복사] 로 붙여 넣도록 안내한다.
-- 비용: NLB 1 + Fargate 0.5vCPU/1GB 상시. 아웃룩을 켜 둔 PC 가 있으면 IDLE 조회로 Aurora 자동 일시정지가 일어나지 않는다. next 야간 정지 스케줄과 맞출지 결정 필요.
-- **next 배포가 게이트웨이도 맞춘다**: `staging-deploy-next.ps1` 마지막 단계가 게이트웨이(ACTIVE 일 때)를 같은 next 이미지로 갱신하고 이미지 일치를 확인한다. 실패하면 next 는 그대로 두고 노란 경고만 남기므로, 경고가 보이면 `staging-deploy-mail-gateway.ps1 -Wait` 를 따로 실행한다. 게이트웨이 배포는 desired 를 바꾸지 않는다 — 연결 허용 스위치가 꺼져 있으면 0 을 유지하고 태스크 정의만 새 이미지로 바뀐다(`claude/mailgw-auto-scale` 통합 전제).
-- 게이트웨이 1태스크라 배포·재시작 때 연결이 한 번 끊긴다(클라이언트가 재접속). next 를 배포할 때마다 아웃룩 연결도 한 번 끊긴다.
+- 비용: NLB 1(상시) + Fargate 0.5vCPU/1GB(연결 허용 중에만). 아웃룩을 켜 둔 PC 가 있으면 IDLE 조회로 Aurora 자동 일시정지가 일어나지 않는다. next 야간 정지 스케줄과 맞출지 결정 필요.
+- **next 배포가 게이트웨이도 맞춘다**: `staging-deploy-next.ps1` 마지막 단계가 게이트웨이(ACTIVE 일 때)를 같은 next 이미지로 갱신하고 이미지 일치를 확인한다. 실패하면 next 는 그대로 두고 노란 경고만 남기므로, 경고가 보이면 `staging-deploy-mail-gateway.ps1 -Wait` 를 따로 실행한다. 게이트웨이 배포는 desired 를 바꾸지 않는다 — 연결 허용 스위치가 꺼져 있으면 0 을 유지하고 태스크 정의만 새 이미지로 바뀐다.
+- 게이트웨이 1태스크라 배포·재시작 때 연결이 한 번 끊긴다(클라이언트가 재접속). 연결 허용 중이면 next 를 배포할 때마다 아웃룩 연결도 한 번 끊긴다.
 - IDLE 은 10초 DB 조회 — 사용자가 많아지면 LISTEN/NOTIFY 로 바꾼다.
 - 관련: [메일 가져오기](mail-import-blueprint.md)는 바깥 서버에서 **가져오는** 기능으로 별개다.

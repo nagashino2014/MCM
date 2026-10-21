@@ -92,8 +92,8 @@ next 이미지 안의 번들을 명령만 바꿔 실행하는 별도 서비스�
 - 실패해도 next 배포는 되돌리지 않고 노란 경고와 재실행 명령을 남긴다 → 원인 확인 후
   `.\infra\aws\ops\staging-deploy-mail-gateway.ps1 -Wait` 를 따로 실행한다.
 - 게이트웨이를 이전 이미지에 두려면 `-SkipMailGateway`. 게이트웨이 태스크가 바뀌면 아웃룩 연결이 한 번 끊긴다.
-- 게이트웨이 배포는 서비스의 desired 를 바꾸지 않는다(앱의 [외부 메일 프로그램 연결 허용] 스위치가 꺼져 있으면 0 유지,
-  `claude/mailgw-auto-scale` 통합 전제). 꺼져 있어도 태스크 정의는 새 이미지로 갱신되므로 다시 켜면 새 코드로 뜬다.
+- 게이트웨이 배포는 서비스의 desired 를 바꾸지 않는다(앱의 [외부 메일 프로그램 연결 허용] 스위치가 꺼져 있으면
+  0 유지). 꺼져 있어도 태스크 정의는 새 이미지로 갱신되므로 다시 켜면 새 코드로 뜬다.
 
 태스크 정의에 **새 app 시크릿 키**를 주입해야 할 때(예: ESG 플랫폼 조직도 연동용 `ORG_SYNC_SECRET`)는
 `-EnsureAppSecretKeys <키>`를 함께 준다. Terraform 은 Next 태스크 정의의 `container_definitions` 를

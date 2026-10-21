@@ -11,7 +11,7 @@ const atAlias = {
   },
 };
 
-const entryPoints = ["tests/mail-gateway-parse.test.ts", "tests/mail-gateway-session.test.ts"];
+const entryPoints = ["tests/mail-gateway-parse.test.ts", "tests/mail-gateway-session.test.ts", "tests/mail-gateway-service.test.ts"];
 await build({
   entryPoints,
   outdir: ".next/mail-gateway-tests",

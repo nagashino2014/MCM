@@ -49,7 +49,8 @@ export async function getExternalClientConfig(): Promise<ExternalClientConfig> {
 
 const HOST_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
-export async function saveExternalClientConfig(input: Partial<ExternalClientConfig>): Promise<ExternalClientConfig> {
+/** 현재 설정에 입력을 합치고 검사한다(저장하지 않음). 형식이 틀리면 400 오류. */
+export async function resolveExternalClientConfig(input: Partial<ExternalClientConfig>): Promise<ExternalClientConfig> {
   const cur = await getExternalClientConfig();
   const next: ExternalClientConfig = {
     enabled: input.enabled ?? cur.enabled,
@@ -64,6 +65,11 @@ export async function saveExternalClientConfig(input: Partial<ExternalClientConf
   for (const p of [next.imapPort, next.smtpPort]) {
     if (!Number.isInteger(p) || p < 1 || p > 65535) throw Object.assign(new Error("포트 번호가 올바르지 않습니다."), { status: 400 });
   }
+  return next;
+}
+
+export async function saveExternalClientConfig(input: Partial<ExternalClientConfig>): Promise<ExternalClientConfig> {
+  const next = await resolveExternalClientConfig(input);
   await withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO mail_settings (key, value, updated_at) VALUES ('external_client', $1, $2)

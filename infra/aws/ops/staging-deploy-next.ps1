@@ -14,6 +14,8 @@
   - 프론트 전용 변경은 next 이미지만 재배포하면 된다(백엔드 OCR 이미지는 ~15GB라 별도).
   - 빌드 컨텍스트는 repo 루트, Dockerfile 은 frontend/Dockerfile, 플랫폼 linux/amd64.
   - desired-count 1 을 함께 지정한다 — 자동 정지 해제 후 상시 가동이 기본이라서.
+  - 마지막에 메일 게이트웨이 서비스(mcm-ieps-staging-mail-gateway)가 ACTIVE 면 staging-deploy-mail-gateway.ps1 을
+    불러 같은 이미지로 맞춘다. 서비스가 없으면 건너뛰고, 실패해도 next 배포는 되돌리지 않고 경고만 남긴다.
 
 .EXAMPLE
   .\infra\aws\ops\staging-deploy-next.ps1
@@ -21,6 +23,7 @@
   .\infra\aws\ops\staging-deploy-next.ps1 -Wait        # 배포 안정화까지 대기
   .\infra\aws\ops\staging-deploy-next.ps1 -SkipBuild -Tag <이미푸시한태그>
   .\infra\aws\ops\staging-deploy-next.ps1 -EnsureAppSecretKeys ORG_SYNC_SECRET -AcknowledgePinnedScheduleLag -Wait  # 태스크 정의 secrets 에 키 추가
+  .\infra\aws\ops\staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait -SkipMailGateway  # 게이트웨이는 이전 이미지에 둔다
 #>
 param(
   [string]$AwsProfile = "mcm-kesi-staging",
@@ -31,7 +34,8 @@ param(
   [switch]$AcknowledgePinnedScheduleLag, # 두 배치가 기존 숫자 revision에 남는 것을 명시적으로 수용
   [string]$FacilityQualityEnvironmentFile = "", # 정비 워커 연결 설정 JSON, 비밀 값 금지
   [string[]]$EnsureAppSecretKeys = @(), # app 시크릿(mcm-ieps-staging/app) JSON 키를 같은 이름의 secrets 항목으로 태스크 정의에 추가(허용 목록 내 키만, 이미 있으면 유지)
-  [switch]$Force              # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
+  [switch]$Force,             # 갈라진 배포 가드(다른 브랜치 커밋 누락 경고) 생략
+  [switch]$SkipMailGateway    # next 배포 뒤 메일 게이트웨이를 같은 이미지로 맞추는 단계 생략
 )
 # aws cli 는 정상 흐름에서도 stderr 를 내므로 Stop 을 쓰지 않고 $LASTEXITCODE 로 판정한다
 # (PS 5.1 NativeCommandError 함정 — 다른 ops 스크립트와 동일한 방식).
@@ -228,6 +232,54 @@ if ($Wait) {
   aws ecs wait services-stable --cluster $cluster --services $service --region $Region
   if ($LASTEXITCODE -ne 0) { Fail "안정화 대기 타임아웃 — 콘솔에서 태스크 상태 확인" }
   Log "안정화 완료"
+}
+
+# 4) 메일 게이트웨이(외부 메일 프로그램 IMAP/SMTP)를 같은 next 이미지로 맞춘다.
+# 게이트웨이는 next 이미지 안의 번들을 명령만 바꿔 실행하는 별도 서비스라, next 만 바꾸면 옛 코드로 남는다.
+# 서비스가 ACTIVE 일 때만 staging-deploy-mail-gateway.ps1 을 호출한다(복제 로직은 그 스크립트 하나에 둔다).
+# next 배포는 위에서 이미 끝났으므로 여기서 실패해도 되돌리지 않고 경고와 재실행 명령만 남긴다.
+$mailGatewayService = "mcm-ieps-staging-mail-gateway"
+$mailGatewayRetry   = ".\infra\aws\ops\staging-deploy-mail-gateway.ps1 -Wait"
+$mailGatewayResult  = ""
+if ($SkipMailGateway) {
+  $mailGatewayResult = "건너뜀(-SkipMailGateway) — 게이트웨이는 이전 이미지에 남는다. 맞추려면: $mailGatewayRetry"
+} else {
+  $gwStatus = (aws ecs describe-services --cluster $cluster --services $mailGatewayService --region $Region --query "services[0].status" --output text)
+  if ($LASTEXITCODE -ne 0) {
+    $mailGatewayResult = "⚠ 서비스 상태 조회 실패 — 게이트웨이가 있다면 이전 이미지에 남았다. 확인 후: $mailGatewayRetry"
+  } elseif ("$gwStatus".Trim() -ne "ACTIVE") {
+    $mailGatewayResult = "서비스 없음(상태: $gwStatus) — 건너뜀"
+  } else {
+    Log "메일 게이트웨이를 같은 이미지로 맞춤 ($mailGatewayService)"
+    $gwExit = 1
+    try {
+      & (Join-Path $PSScriptRoot "staging-deploy-mail-gateway.ps1") -AwsProfile $AwsProfile -Region $Region -Wait:$Wait
+      $gwExit = $LASTEXITCODE
+    } catch {
+      Log "게이트웨이 스크립트 오류: $($_.Exception.Message)"
+    }
+    if ($gwExit -ne 0) {
+      $mailGatewayResult = "⚠ 실패 — next 배포는 유지된다. 게이트웨이는 이전 이미지일 수 있다. 원인 확인 후: $mailGatewayRetry"
+    } else {
+      # 게이트웨이 스크립트는 next 서비스의 현재 태스크 정의에서 이미지를 읽는다. 방금 배포한 이미지와 같은지 확인한다.
+      $gwTd = (aws ecs describe-services --cluster $cluster --services $mailGatewayService --region $Region --query "services[0].taskDefinition" --output text)
+      $gwImage = ""
+      if ($LASTEXITCODE -eq 0 -and $gwTd -and $gwTd -ne "None") {
+        $gwImage = (aws ecs describe-task-definition --task-definition $gwTd --region $Region --query "taskDefinition.containerDefinitions[?name=='mail-gateway'].image | [0]" --output text)
+        if ($LASTEXITCODE -ne 0) { $gwImage = "" }
+      }
+      if ("$gwImage".Trim() -eq $image) {
+        $mailGatewayResult = "같은 이미지로 갱신 ($gwTd)"
+      } else {
+        $mailGatewayResult = "⚠ 게이트웨이 이미지가 방금 배포한 이미지와 다르다(게이트웨이: $gwImage) — 확인 후: $mailGatewayRetry"
+      }
+    }
+  }
+}
+if ($mailGatewayResult.StartsWith("⚠")) {
+  Write-Host "[deploy] 메일 게이트웨이: $mailGatewayResult" -ForegroundColor Yellow
+} else {
+  Log "메일 게이트웨이: $mailGatewayResult"
 }
 
 Log "완료. 태그 $Tag 배포. 새 태스크 기동 + ALB 헬스체크까지 1~3분."

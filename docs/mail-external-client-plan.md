@@ -106,7 +106,7 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
 1. (리허설 완료, §8) `staging-apply-migrations.ps1 -Files 306_mail_external_client.sql` — lock timeout 으로 실패하면 그대로 다시 실행.
 2. next 배포(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`) — 화면·API·게이트웨이 번들 포함.
 3. 비용 확인 후 `terraform plan -var enable_mail_gateway=true -target=…`(mail-gateway.tf 머리말의 주소만) 검토 → 메일 MX·SES·bastion 변경이 섞이지 않았을 때만 같은 -target 으로 apply. 로컬 `infra/aws/staging.tfvars`(git 제외)에 `enable_mail_gateway = true` 를 남겨야 이후 plan 에서 지우려 들지 않는다.
-4. `ops/staging-deploy-mail-gateway.ps1 -Wait` — next 태스크 정의(이미지·DB 시크릿)를 복제해 게이트웨이에 적용. 이후 next 를 배포할 때마다 이 스크립트도 실행한다.
+4. `ops/staging-deploy-mail-gateway.ps1 -Wait` — next 태스크 정의(이미지·DB 시크릿)를 복제해 게이트웨이에 적용. 이후에는 `staging-deploy-next.ps1` 이 next 안정화 뒤 이 스크립트를 자동으로 불러 같은 이미지로 맞춘다(게이트웨이 서비스가 ACTIVE 일 때). 단독 실행은 처음 켤 때와 자동 단계가 실패·건너뜀(`-SkipMailGateway`)됐을 때만.
 5. 메일 설정 → 외부 메일 프로그램(관리자)에서 연결 허용 → 앱 비밀번호 발급 → 아웃룩 실기 확인(첫 동기화·보내기·보낸편지함 중복 없음·웹과 읽음 동기).
 
 ## 10. 남은 일·주의
@@ -115,6 +115,7 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
 - **NLB 헬스 체크는 TCP(8025)**: proxy_protocol_v2 를 켜면 NLB 가 헬스 체크 연결에도 PROXY 헤더를 붙여 HTTP 헬스 체크가 400 으로 실패한다(AWS NLB 문서). provider 가 HTTP→TCP 제자리 변경을 matcher 로 막아, 머지된 HCL 과 같은 값으로 `aws elbv2 modify-target-group` 후 `plan -refresh-only` 적용으로 state 를 맞췄다.
 - **새 Outlook 은 Microsoft 서버(40.99.x 등)가 대신 접속**한다 — 접속기록·실패 잠금 IP 가 사용자 PC 가 아니다. 비밀번호를 잘못 넣으면 Microsoft 재시도까지 15분 5회 잠금(`mailgw:<주소>`)에 금방 닿는다. 앱 비밀번호는 [복사] 로 붙여 넣도록 안내한다.
 - 비용: NLB 1(상시) + Fargate 0.5vCPU/1GB(연결 허용 중에만). 아웃룩을 켜 둔 PC 가 있으면 IDLE 조회로 Aurora 자동 일시정지가 일어나지 않는다. next 야간 정지 스케줄과 맞출지 결정 필요.
-- 게이트웨이 1태스크라 배포·재시작 때 연결이 한 번 끊긴다(클라이언트가 재접속).
+- **next 배포가 게이트웨이도 맞춘다**: `staging-deploy-next.ps1` 마지막 단계가 게이트웨이(ACTIVE 일 때)를 같은 next 이미지로 갱신하고 이미지 일치를 확인한다. 실패하면 next 는 그대로 두고 노란 경고만 남기므로, 경고가 보이면 `staging-deploy-mail-gateway.ps1 -Wait` 를 따로 실행한다. 게이트웨이 배포는 desired 를 바꾸지 않는다 — 연결 허용 스위치가 꺼져 있으면 0 을 유지하고 태스크 정의만 새 이미지로 바뀐다.
+- 게이트웨이 1태스크라 배포·재시작 때 연결이 한 번 끊긴다(클라이언트가 재접속). 연결 허용 중이면 next 를 배포할 때마다 아웃룩 연결도 한 번 끊긴다.
 - IDLE 은 10초 DB 조회 — 사용자가 많아지면 LISTEN/NOTIFY 로 바꾼다.
 - 관련: [메일 가져오기](mail-import-blueprint.md)는 바깥 서버에서 **가져오는** 기능으로 별개다.

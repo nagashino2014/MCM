@@ -83,6 +83,18 @@ revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinne
 않는다(옛 태그로 재시작될 뿐). 스크립트가 CLAUDE.md 의 절차(빌드 → 푸시 → image 만 바꾼 새 리비전
 등록 → update-service)를 그대로 수행한다. 프론트 전용 변경은 next 이미지만 재배포하면 된다.
 
+**메일 게이트웨이 동반 갱신(2026-10-21):** 외부 메일 프로그램 게이트웨이(ECS `mcm-ieps-staging-mail-gateway`)는
+next 이미지 안의 번들을 명령만 바꿔 실행하는 별도 서비스라 next 만 바꾸면 옛 코드로 남는다. 그래서 next 서비스
+안정화가 끝난 뒤 게이트웨이 서비스가 `ACTIVE` 이면 스크립트가 `staging-deploy-mail-gateway.ps1 -Wait` 를
+불러 같은 이미지로 맞추고, 게이트웨이 태스크 정의의 이미지가 방금 배포한 이미지와 같은지 확인한다. 위 가드
+(스케줄 고정·미커밋/미통합 차단·갈라진 배포)는 모두 next 등록 전에 그대로 돈다.
+- 서비스가 없으면(`enable_mail_gateway` 미적용) 건너뛴다.
+- 실패해도 next 배포는 되돌리지 않고 노란 경고와 재실행 명령을 남긴다 → 원인 확인 후
+  `.\infra\aws\ops\staging-deploy-mail-gateway.ps1 -Wait` 를 따로 실행한다.
+- 게이트웨이를 이전 이미지에 두려면 `-SkipMailGateway`. 게이트웨이 태스크가 바뀌면 아웃룩 연결이 한 번 끊긴다.
+- 게이트웨이 배포는 서비스의 desired 를 바꾸지 않는다(앱의 [외부 메일 프로그램 연결 허용] 스위치가 꺼져 있으면
+  0 유지). 꺼져 있어도 태스크 정의는 새 이미지로 갱신되므로 다시 켜면 새 코드로 뜬다.
+
 태스크 정의에 **새 app 시크릿 키**를 주입해야 할 때(예: ESG 플랫폼 조직도 연동용 `ORG_SYNC_SECRET`)는
 `-EnsureAppSecretKeys <키>`를 함께 준다. Terraform 은 Next 태스크 정의의 `container_definitions` 를
 `ignore_changes` 하므로 `ecs.tf` 만 고쳐서는 실제 태스크에 반영되지 않는다. 스크립트는 허용 목록

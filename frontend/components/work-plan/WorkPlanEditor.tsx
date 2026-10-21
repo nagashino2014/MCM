@@ -350,7 +350,7 @@ export default function WorkPlanEditor({
 
                 {row.subjectKind === "free" && (
                   <input
-                    className="cd-input text-sm w-28 shrink-0"
+                    className="cd-input text-sm !w-28 shrink-0"
                     placeholder="구분"
                     value={row.category}
                     onChange={(e) => updateRow(row.key, { category: e.target.value })}

@@ -309,7 +309,7 @@ export function EndpointConfigBuilder({
                 {d.mode === "relative" ? (
                   <label className="text-[12px] cd-text-muted flex items-center gap-1 whitespace-nowrap min-w-0 flex-1">
                     최근
-                    <input type="number" min={0} className="cd-input text-[12px] w-14 shrink-0" value={d.relative_days}
+                    <input type="number" min={0} className="cd-input text-[12px] !w-14 shrink-0" value={d.relative_days}
                       onChange={(e) => setDfs((p) => p.map((x, j) => (j === i ? { ...x, relative_days: Number(e.target.value) } : x)))} />
                     {d.relative_days === 0 ? "일 전(=오늘)" : "일 전"}
                   </label>

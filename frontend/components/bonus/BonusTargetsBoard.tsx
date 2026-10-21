@@ -395,7 +395,7 @@ export default function BonusTargetsBoard() {
                       <td className="p-2.5 cd-text whitespace-nowrap">{fmtDate(t.contractDate)}</td>
                       <td className="p-2.5">
                         {t.owningDeptName ? (
-                          <span className="cd-text">{t.owningDeptName}</span>
+                          <span className="cd-text whitespace-nowrap">{t.owningDeptName}</span>
                         ) : (
                           <span
                             className="text-[11px] font-semibold rounded-lg px-2 py-0.5 border cd-border-c cd-text-faint whitespace-nowrap"

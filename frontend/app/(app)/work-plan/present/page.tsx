@@ -220,6 +220,7 @@ export default function PresentPage() {
             </select>
             <select
               className="cd-select text-sm"
+              style={{ width: "auto" }}
               value={selectedKey}
               onChange={(e) => setSelectedKey(e.target.value)}
               title="발표 회차"

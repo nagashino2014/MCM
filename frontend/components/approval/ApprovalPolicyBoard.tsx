@@ -124,7 +124,7 @@ export function ApprovalPolicyBoard() {
 
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-[11px] cd-text-faint flex items-center gap-1.5">
+          <label className="text-[11px] cd-text-faint flex items-center gap-1.5 whitespace-nowrap">
             양식
             <select className="cd-select" value={formId} onChange={(e) => setFormId(e.target.value)} style={{ minWidth: 200 }}>
               {forms.map((f) => (

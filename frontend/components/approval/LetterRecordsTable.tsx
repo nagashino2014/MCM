@@ -260,10 +260,11 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
           </div>
         )}
 
-        <div className="flex-1 min-h-[420px] bg-[color:var(--cd-surface)]">
+        {/* 기본 60vh, 발송 이력·수신처 편집을 펼치면 420px까지 줄어든다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
+        <div className="relative flex-[1_1_60vh] min-h-[420px] bg-[color:var(--cd-surface)]">
           {letter &&
             (letter.pdfKey || letter.docId ? (
-              <iframe title="공문 미리보기" src={`/api/letters/${encodeURIComponent(letterId)}/pdf?disposition=inline`} className="w-full h-full min-h-[60vh]" />
+              <iframe title="공문 미리보기" src={`/api/letters/${encodeURIComponent(letterId)}/pdf?disposition=inline`} className="absolute inset-0 w-full h-full" />
             ) : (
               <div className="flex flex-col items-center justify-center h-full min-h-[420px] gap-2 cd-text-faint text-sm">
                 <p>PDF 미리보기가 없습니다 (과거 이관 문서 — hwp 원본만 보관).</p>

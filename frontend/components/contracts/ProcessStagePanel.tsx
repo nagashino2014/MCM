@@ -182,7 +182,7 @@ export default function ProcessStagePanel({
                 value={s.stageName}
                 onChange={(e) => update(s.key, { stageName: e.target.value })}
               />
-              <select className="cd-select text-xs shrink-0 w-16" value={s.status} onChange={(e) => update(s.key, { status: e.target.value as StageStatus })}>
+              <select className="cd-select text-xs shrink-0 !w-16" value={s.status} onChange={(e) => update(s.key, { status: e.target.value as StageStatus })}>
                 {STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
@@ -192,14 +192,14 @@ export default function ProcessStagePanel({
                   type="number"
                   min={0}
                   max={100}
-                  className="cd-input text-xs shrink-0 w-16"
+                  className="cd-input text-xs shrink-0 !w-16"
                   placeholder="%"
                   value={s.progressPct}
                   onChange={(e) => update(s.key, { progressPct: Number(e.target.value) })}
                 />
               )}
-              <AutoDateInput className="cd-input text-xs shrink-0 w-28" placeholder="예정일" value={s.plannedDate} onChange={(v) => update(s.key, { plannedDate: v })} />
-              <AutoDateInput className="cd-input text-xs shrink-0 w-28" placeholder="완료일" value={s.actualDate} onChange={(v) => update(s.key, { actualDate: v })} />
+              <AutoDateInput className="cd-input text-xs shrink-0 !w-28" placeholder="예정일" value={s.plannedDate} onChange={(v) => update(s.key, { plannedDate: v })} />
+              <AutoDateInput className="cd-input text-xs shrink-0 !w-28" placeholder="완료일" value={s.actualDate} onChange={(v) => update(s.key, { actualDate: v })} />
               <input
                 className="cd-input text-xs flex-1 min-w-[120px]"
                 placeholder="활동 메모 (예: 대기·수질 현장 실측)"

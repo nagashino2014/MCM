@@ -345,8 +345,9 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
           </div>
         )}
 
-        <div className="flex-1 min-h-[420px] bg-[color:var(--cd-surface)]">
-          {quote && <iframe title="견적서 미리보기" src={`/api/quotes/${encodeURIComponent(quoteId)}/pdf?disposition=inline`} className="w-full h-full min-h-[60vh]" />}
+        {/* 기본 60vh, 결과 기입·수신처 편집을 펼치면 420px까지 줄어든다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
+        <div className="relative flex-[1_1_60vh] min-h-[420px] bg-[color:var(--cd-surface)]">
+          {quote && <iframe title="견적서 미리보기" src={`/api/quotes/${encodeURIComponent(quoteId)}/pdf?disposition=inline`} className="absolute inset-0 w-full h-full" />}
         </div>
       </div>
     </div>,

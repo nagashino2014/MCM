@@ -512,7 +512,10 @@ export default function BonusEvaluationsBoard() {
                             >
                               {r.manager.employeeName}
                               {r.manager.positionName && (
-                                <span className="cd-text-faint text-xs"> {r.manager.positionName}</span>
+                                <>
+                                  {" "}
+                                  <span className="cd-text-faint text-xs whitespace-nowrap">{r.manager.positionName}</span>
+                                </>
                               )}
                             </button>
                           ) : (

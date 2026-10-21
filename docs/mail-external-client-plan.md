@@ -1,4 +1,4 @@
-# 외부 메일 프로그램(IMAP/SMTP) 연동 — A안 구현 (배포 대기)
+# 외부 메일 프로그램(IMAP/SMTP) 연동 — A안 (스테이징 가동 2026-10-21)
 
 - 2026-10-21 오전 사용자 결정(F-13 잔여): 이번에는 구축하지 않음 → 같은 날 오후 사용자 지시로 **A안 착수·구현**.
 - 게이트웨이 런타임: 쓸 만한 독립 Node IMAP 서버 라이브러리가 없어(wildduck imap-core 는 EUPL·MongoDB 결합) **Node+TS 로 IMAP4rev1 부분집합을 직접 구현**(사용자 선택). SMTP 제출은 `smtp-server`(MIT-0, 3.19.17 고정).
@@ -94,9 +94,14 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
   - 긴 트랜잭션이 `mail_messages` 를 잡고 있으면 5.3초 뒤 `lock timeout` 으로 실패하고 아무것도 바뀌지 않음(재실행 성공).
   - 스테이징 스키마 위에서 실제 저장소 통합 시나리오 재통과, `staging-apply-migrations.ps1` 정적 검사 통과(AWS 차단 상태로 첫 외부 조회 직전까지).
   - 스테이징 적용 시 잠금 시간은 1초 미만으로 예상 — 그동안 메일 수신·읽음 표시가 잠깐 기다린다. 다른 트랜잭션이 5초 넘게 잡고 있으면 실패하니 다시 실행한다.
-- 화면은 DB 가 없어 실제 렌더 확인을 못 했다(타입 체크만). 306 적용·배포 후 라이트/다크·좁은 화면·키보드 확인 필요.
+- 화면: 306 적용·next:721 배포 후 실제 화면에서 라이트/다크·375px(가로 넘침 0)·키보드 순서 확인.
 
-## 9. 켜는 순서(스테이징)
+## 9. 켜는 순서(스테이징) — 2026-10-21 완료
+
+> 실행 기록: 306 적용 → next:721 배포 → TF 15자원 -target 적용(PR #34 헬스 체크 수정 포함) → 게이트웨이 mail-gateway:2 → 관리자 연결 허용 → 새 Outlook 실기(동기화·보내기·보낸편지함 중복 없음·읽음 동기) 정상.
+> 증거: `Documents/MCM/tmp/mail-gateway-tf-20261021`(계획·적용 기록, state 버전 전후).
+> ⚠ TF 는 메인 체크아웃 `infra/aws`(옛 로컬 state 있음, STAGING-STATE.md)에서 돌리지 않는다 — origin/main 분리 워크트리에서 `init -input=false` → `staging-check-terraform-state.ps1` → 저장 계획 검증 → 그 계획 적용. 필수 변수 `r0b_transition_allow_legacy_roles`·`scheduled_next_task_definition_arn` 은 `-var` 로 현재 운영값(true·ADT 대상 리비전)을 준다.
+
 
 1. (리허설 완료, §8) `staging-apply-migrations.ps1 -Files 306_mail_external_client.sql` — lock timeout 으로 실패하면 그대로 다시 실행.
 2. next 배포(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`) — 화면·API·게이트웨이 번들 포함.
@@ -106,6 +111,8 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
 
 ## 10. 남은 일·주의
 
+- **NLB 헬스 체크는 TCP(8025)**: proxy_protocol_v2 를 켜면 NLB 가 헬스 체크 연결에도 PROXY 헤더를 붙여 HTTP 헬스 체크가 400 으로 실패한다(AWS NLB 문서). provider 가 HTTP→TCP 제자리 변경을 matcher 로 막아, 머지된 HCL 과 같은 값으로 `aws elbv2 modify-target-group` 후 `plan -refresh-only` 적용으로 state 를 맞췄다.
+- **새 Outlook 은 Microsoft 서버(40.99.x 등)가 대신 접속**한다 — 접속기록·실패 잠금 IP 가 사용자 PC 가 아니다. 비밀번호를 잘못 넣으면 Microsoft 재시도까지 15분 5회 잠금(`mailgw:<주소>`)에 금방 닿는다. 앱 비밀번호는 [복사] 로 붙여 넣도록 안내한다.
 - 비용: NLB 1 + Fargate 0.5vCPU/1GB 상시. 아웃룩을 켜 둔 PC 가 있으면 IDLE 조회로 Aurora 자동 일시정지가 일어나지 않는다. next 야간 정지 스케줄과 맞출지 결정 필요.
 - 게이트웨이 1태스크라 배포·재시작 때 연결이 한 번 끊긴다(클라이언트가 재접속).
 - IDLE 은 10초 DB 조회 — 사용자가 많아지면 LISTEN/NOTIFY 로 바꾼다.

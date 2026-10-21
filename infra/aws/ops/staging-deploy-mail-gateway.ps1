@@ -9,7 +9,7 @@
   게이트웨이를 같은 이미지 태그로 맞춘다.
   1) next 서비스의 현재 태스크 정의에서 image·DB/버킷 env·DB 시크릿을 가져온다(next 와 같은 DB 역할을 쓰게)
   2) 게이트웨이 서비스의 현재 태스크 정의를 받아 image·env·secrets 만 바꿔 새 리비전 등록
-  3) update-service 로 적용(desired 1)
+  3) update-service 로 적용(desired 는 유지 — 앱의 연결 허용 스위치가 1/0 을 정한다)
 
   - next 의 AUTH_SECRET·알림 자격증명 등은 옮기지 않는다(게이트웨이가 쓰지 않음 — 필요한 키만 화이트리스트).
   - 게이트웨이 서비스는 var.enable_mail_gateway=true 로 -target apply 한 뒤에만 있다.
@@ -89,9 +89,12 @@ $newArn = (aws ecs register-task-definition --cli-input-json "file://$tdPath" --
 if ($LASTEXITCODE -ne 0 -or -not $newArn) { Fail "태스크 정의 등록" }
 Log "새 리비전: $newArn"
 
-Log "서비스 갱신 (desired 1)"
-aws ecs update-service --cluster $cluster --service $service --task-definition $newArn --desired-count 1 --region $Region --no-cli-pager | Out-Null
+# desired 는 건드리지 않는다 — 앱의 [외부 메일 프로그램 연결 허용] 스위치가 1/0 으로 관리한다(꺼 둔 게이트웨이를 배포가 다시 켜지 않게).
+$desiredNow = (aws ecs describe-services --cluster $cluster --services $service --region $Region --query "services[0].desiredCount" --output text)
+Log "서비스 갱신 (desired 유지: $desiredNow)"
+aws ecs update-service --cluster $cluster --service $service --task-definition $newArn --region $Region --no-cli-pager | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "update-service" }
+if ("$desiredNow" -eq "0") { Log "연결 허용이 꺼져 있어 desired 0 — 새 리비전은 다음에 켤 때 적용된다" }
 
 if ($Wait) {
   Log "배포 안정화 대기 (수 분)"

@@ -6,10 +6,12 @@ import {
   createAppPassword,
   getExternalClientConfig,
   listAppPasswords,
+  resolveExternalClientConfig,
   revokeAppPassword,
   saveExternalClientConfig,
   type ExternalClientConfig,
 } from "@/lib/mail/app-passwords";
+import { getGatewayServiceStatus, syncGatewayService } from "@/lib/mail/gateway-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,20 +72,27 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-// PUT: (관리자) 연결 사용 여부·서버 주소. body 없이 ?probe=1 이면 권한 확인만.
+// PUT: (관리자) 연결 사용 여부·서버 주소. ?probe=1 이면 권한 확인만, ?status=1 이면 게이트웨이 서버 상태만.
+// 저장할 때 게이트웨이 ECS 서비스 대수를 함께 맞춘다(켜짐=1, 꺼짐=0 — 비용 정지).
+//   켤 때: 서버를 먼저 올리고 허용 저장 / 끌 때: 허용을 먼저 끊고(연결은 1분 안에 종료) 서버를 내린다.
 export async function PUT(req: NextRequest) {
   try {
     const ctx = await requirePermission("mail.manage");
     if (req.nextUrl.searchParams.get("probe") === "1") return NextResponse.json({ ok: true });
+    if (req.nextUrl.searchParams.get("status") === "1") return NextResponse.json({ gateway: await getGatewayServiceStatus() });
     const body = (await req.json().catch(() => ({}))) as Partial<ExternalClientConfig>;
-    const config = await saveExternalClientConfig(body);
+    // 형식 검사를 먼저 — 서버를 올린 뒤 저장이 400 으로 실패해 서버만 켜진 채 남지 않게.
+    const target = await resolveExternalClientConfig(body);
+    const gatewayFirst = target.enabled ? await syncGatewayService(true) : null;
+    const config = await saveExternalClientConfig(target);
+    const gateway = gatewayFirst ?? (await syncGatewayService(config.enabled));
     await recordAccessLog({
       actorUserId: ctx.userId,
       action: "admin_change",
       targetKind: "mail_external_client",
-      detail: config,
+      detail: { ...config, gatewayDesired: gateway.available ? gateway.desired : null, gatewayError: gateway.error ?? null },
     });
-    return NextResponse.json({ config });
+    return NextResponse.json({ config, gateway });
   } catch (err) {
     return authErrorToResponse(err);
   }

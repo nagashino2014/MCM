@@ -3,6 +3,7 @@
 // 외부 메일 프로그램(아웃룩 등) 연결 — 메일 설정 화면 섹션(306).
 // 직원: 서버 정보 확인 + 메일 전용 앱 비밀번호 발급·폐기(평문은 발급 직후 한 번만 보인다).
 // 관리자: 연결 사용 여부·서버 주소. 꺼져 있으면 직원에게는 섹션을 보이지 않는다.
+//   허용 스위치는 게이트웨이 ECS 서비스도 함께 켜고 끈다(켜짐=1대, 꺼짐=0대 — lib/mail/gateway-service.ts).
 // 설계: docs/mail-external-client-plan.md
 
 import { useCallback, useEffect, useState } from "react";
@@ -12,6 +13,15 @@ import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdToast } from "@/components/cdash/CdToast";
 import type { AppPasswordItem, ExternalClientConfig } from "@/lib/mail/app-passwords";
+import type { GatewayServiceStatus } from "@/lib/mail/gateway-service";
+
+const GATEWAY_LABEL: Record<GatewayServiceStatus["state"], string> = {
+  running: "실행 중",
+  starting: "켜는 중(1~2분)",
+  stopping: "끄는 중",
+  stopped: "꺼짐 — 서버 비용 없음",
+  unavailable: "상태를 확인할 수 없음",
+};
 
 function when(iso: string | null): string {
   if (!iso) return "사용 기록 없음";
@@ -29,6 +39,7 @@ export function MailExternalClientSection({ isAdmin }: { isAdmin: boolean }) {
   const [label, setLabel] = useState("");
   const [issued, setIssued] = useState<{ label: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [gateway, setGateway] = useState<GatewayServiceStatus | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/mail/external-client");
@@ -43,6 +54,27 @@ export function MailExternalClientSection({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadGateway = useCallback(async () => {
+    const r = await fetch("/api/mail/external-client?status=1", { method: "PUT" });
+    if (r.ok) setGateway((await r.json()).gateway ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) loadGateway();
+  }, [isAdmin, loadGateway]);
+
+  // 켜는 중·끄는 중이면 5초마다 다시 본다(최대 5분).
+  const gatewayState = gateway?.state;
+  useEffect(() => {
+    if (!isAdmin || (gatewayState !== "starting" && gatewayState !== "stopping")) return;
+    const started = Date.now();
+    const t = setInterval(() => {
+      if (Date.now() - started > 5 * 60_000) clearInterval(t);
+      else loadGateway();
+    }, 5_000);
+    return () => clearInterval(t);
+  }, [isAdmin, gatewayState, loadGateway]);
 
   const copy = async (text: string) => {
     try {
@@ -104,7 +136,12 @@ export function MailExternalClientSection({ isAdmin }: { isAdmin: boolean }) {
         toast(d.error ?? "저장하지 못했습니다.", "error");
         return;
       }
-      toast("외부 메일 프로그램 연결 설정을 저장했습니다.", "success");
+      if (d.gateway) setGateway(d.gateway);
+      if (d.gateway && !d.gateway.available) {
+        toast(`설정은 저장했지만 게이트웨이 서버를 조정하지 못했습니다: ${d.gateway.error ?? "알 수 없는 오류"}`, "warn");
+      } else {
+        toast("외부 메일 프로그램 연결 설정을 저장했습니다.", "success");
+      }
       await load();
     } finally {
       setBusy(false);
@@ -136,7 +173,20 @@ export function MailExternalClientSection({ isAdmin }: { isAdmin: boolean }) {
             <CdInput label="보내는 메일 서버(SMTP)" value={draft.smtpHost} onChange={(e) => setDraft({ ...draft, smtpHost: e.target.value })} />
             <CdInput label="포트" type="number" value={draft.smtpPort} onChange={(e) => setDraft({ ...draft, smtpPort: Number(e.target.value) })} />
           </div>
-          <p className="text-xs cd-text-faint">끄면 직원 화면에서 이 섹션이 사라지고, 붙어 있던 메일 프로그램은 1분 안에 연결이 끊깁니다.</p>
+          <p className="text-xs cd-text-faint">
+            끄면 직원 화면에서 이 섹션이 사라지고, 붙어 있던 메일 프로그램은 1분 안에 연결이 끊깁니다. 게이트웨이 서버도 함께 꺼지고(서버 비용
+            정지), 다시 켜면 1~2분 뒤부터 접속됩니다.
+          </p>
+          {gateway && (
+            <p
+              className="text-xs cd-text"
+              role="status"
+              style={gateway.state === "unavailable" ? { color: "var(--cd-warning)" } : undefined}
+            >
+              게이트웨이 서버: {GATEWAY_LABEL[gateway.state]}
+              {gateway.available ? ` (실행 ${gateway.running}/${gateway.desired})` : gateway.error ? ` — ${gateway.error}` : ""}
+            </p>
+          )}
           <div>
             <CdButton variant="soft" loading={busy} onClick={saveConfig}>
               연결 설정 저장

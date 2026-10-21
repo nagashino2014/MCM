@@ -7,6 +7,13 @@ import type { ChangelogEntry } from "./types";
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
+    kind: "신규",
+    title: "아웃룩·휴대폰 메일 앱 연결(앱 비밀번호)",
+    body: "관리자가 연결을 켜면 메일 설정에 [외부 메일 프로그램] 칸이 생깁니다. 앱 비밀번호를 만들어 아웃룩·휴대폰 메일 앱에서 같은 메일함을 읽고 보낼 수 있습니다.",
+    articles: ["mail.box"],
+  },
+  {
+    date: "2026-10-21",
     kind: "개선",
     title: "매뉴얼에 화면 그림 추가",
     body: "홈·메일·전자결재·할 일·일정·주소록·사업장·계약·재무 등 주요 기사에 실제 화면 그림을 넣었습니다. 이름·금액·연락처는 흐리게 처리했습니다.",

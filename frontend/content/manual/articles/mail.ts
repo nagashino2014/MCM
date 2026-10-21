@@ -80,9 +80,29 @@ export const MAIL_ARTICLES: ManualArticle[] = [
           { kind: "warn", text: "스팸 ‘즉시 삭제’를 켜면 스팸으로 분류된 메일이 바로 지워져 되돌릴 수 없습니다." },
         ],
       },
+      {
+        id: "external-client",
+        title: "아웃룩·휴대폰 메일 앱으로 쓰기",
+        blocks: [
+          { kind: "p", text: "관리자가 연결을 켜 두었으면 [[메일 설정]]에 [[외부 메일 프로그램]] 칸이 보입니다. 아웃룩·휴대폰 기본 메일 앱 같은 프로그램에서 이 메일함을 그대로 읽고 보낼 수 있습니다. 웹·모바일 앱과 같은 메일함이라 읽음·이동·삭제가 서로 맞춰집니다." },
+          { kind: "steps", items: [
+            "[[앱 비밀번호 이름]]에 쓸 곳(예: 사무실 아웃룩)을 적고 [[앱 비밀번호 만들기]]를 누릅니다.",
+            "나타난 16자 비밀번호를 [[복사]]합니다. 이 화면을 벗어나면 다시 볼 수 없습니다.",
+            "메일 프로그램에서 계정을 추가할 때 ‘IMAP’ 수동 설정을 고르고, 화면에 보이는 받는 메일(IMAP)·보내는 메일(SMTP) 서버와 포트, 사용자 이름(내 메일 주소)을 넣습니다. 보안은 SSL/TLS, 보내는 메일 서버는 인증 사용으로 둡니다.",
+            "비밀번호 칸에는 앱 로그인 비밀번호가 아니라 방금 만든 앱 비밀번호를 넣습니다.",
+          ] },
+          { kind: "list", items: [
+            "앱 비밀번호는 프로그램마다 따로 만드는 것을 권합니다(최대 5개). 목록에서 마지막 사용 시각과 IP를 확인할 수 있습니다.",
+            "보내는 사람 주소는 내 메일 주소만 쓸 수 있습니다. 다른 주소로 보내면 거절됩니다.",
+            "메일 분류(카테고리)는 프로그램에 폴더로 보입니다. 받은편지함 안의 분류 라벨은 프로그램에 나타나지 않습니다.",
+            "처음 연결하면 기존 메일을 내려받느라 시간이 걸릴 수 있습니다.",
+          ] },
+          { kind: "warn", text: "노트북·휴대폰을 잃어버렸거나 더 쓰지 않으면 그 앱 비밀번호를 [[폐기]]하세요. 폐기하면 그 프로그램은 1분 안에 연결이 끊깁니다. 퇴사로 계정이 비활성화되면 모든 연결이 자동으로 끊깁니다." },
+        ],
+      },
     ],
-    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량"],
-    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx"],
+    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램"],
+    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx"],
     reviewedAt: "2026-10-21",
   },
   {

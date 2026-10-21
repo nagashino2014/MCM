@@ -1,6 +1,6 @@
 "use client";
 
-// 메일 설정 화면(G2-12) — 스팸 설정·보관함 용량 배분·외부 클라이언트(POP3/IMAP) 안내 + (관리자) 사용자별 총용량 할당.
+// 메일 설정 화면(G2-12) — 스팸 설정·보관함 용량 배분·외부 메일 프로그램(IMAP/SMTP, 306) + (관리자) 사용자별 총용량 할당.
 
 import { useCallback, useEffect, useState } from "react";
 import { AtSign, Check, Download, HardDrive, Loader2, Mail, Settings2, ShieldAlert, Users } from "lucide-react";
@@ -9,6 +9,7 @@ import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailAddressManager } from "@/components/mail/MailAddressManager";
 import { MailAliasManager } from "@/components/mail/MailAliasManager";
+import { MailExternalClientSection } from "@/components/mail/MailExternalClientSection";
 import { MailImportManager } from "@/components/mail/MailImportManager";
 import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
 import type { MailboxSettings } from "@/lib/mail/spam";
@@ -160,8 +161,6 @@ export function MailSettingsPane() {
         </div>
       </section>
 
-      {/* 외부 클라이언트(POP3/IMAP/SMTP) 안내는 서버 구축 전까지 숨긴다(F-13, 2026-10-21 사용자 결정) — 구성안: docs/mail-external-client-plan.md */}
-
       <div>
         <CdButton variant="primary" loading={saving} icon={<Check className="w-4 h-4" />} onClick={save}>
           설정 저장
@@ -176,6 +175,9 @@ export function MailSettingsPane() {
         <p className="text-xs cd-text-faint">아마란스 메일함 백업(ZIP)이나 .eml 파일로 예전 메일을 내 메일함에 옮깁니다.</p>
         <MailImportManager />
       </section>
+
+      {/* 외부 메일 프로그램(아웃룩 등 IMAP/SMTP, 306) — 관리자가 켜면 전 직원에게 보인다 */}
+      <MailExternalClientSection isAdmin={!!adminList} />
 
       {/* 관리자 — 인원별 용량 배분(조직도 모달, G2-13) */}
       {adminList && (

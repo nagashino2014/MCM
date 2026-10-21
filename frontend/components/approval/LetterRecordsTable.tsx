@@ -40,8 +40,9 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   const [ccRefs, setCcRefs] = useState<LetterRecipient[]>([]);
   const [busy, setBusy] = useState<"save" | "resend" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  // 재발송·수신처 편집·이관 등록 삭제는 결재 운영 권한(approval.manage)만 — 열람은 전 직원(2026-10-21)
+  // 열람은 전 직원(2026-10-21). 재발송·수신처 편집 = 기안자 본인·결재 운영 권한, 이관 등록 삭제 = 결재 운영 권한
   const [canManage, setCanManage] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}`, { cache: "no-store" });
@@ -49,6 +50,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
     if (res.ok) {
       setLetter(data.letter);
       setCanManage(data.canManage === true);
+      setCanEdit(data.canEdit === true);
       setRecipients(data.letter.recipients ?? []);
       setCcRefs(data.letter.ccRefs ?? []);
     }
@@ -185,7 +187,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/hwpxico.png" alt="HWPX" style={{ width: 30, height: 30 }} />
             </button>
-            {canManage && letter && letter.source === "system" && letter.sendStatus !== "archived" && (
+            {canEdit && letter && letter.source === "system" && letter.sendStatus !== "archived" && (
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
@@ -196,7 +198,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
                 <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "처리 중..." : letter?.sendStatus === "sent" ? "수정 후 재발송" : "재발송"}
               </button>
             )}
-            {canManage && (
+            {canEdit && (
               <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집(메일주소 보완)">
                 <Pencil className="w-3 h-3" /> 수신처 편집
               </button>
@@ -234,7 +236,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
             ))}
           </div>
         )}
-        {editing && canManage && (
+        {editing && canEdit && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-3 max-h-[38vh] overflow-auto">
             <RecipientEditGrid label="수신처" list={recipients} onChange={setRecipients} />
             <RecipientEditGrid label="참조" list={ccRefs} onChange={setCcRefs} />

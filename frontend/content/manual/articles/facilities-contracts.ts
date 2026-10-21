@@ -637,6 +637,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "작성 화면은 5분마다 자동 저장되며 [[저장]]으로 바로 저장할 수도 있습니다.",
             "발송 메일은 기안자 계정으로 나가고, 결재선의 참조/열람자가 내부 참조(Cc)로 함께 받습니다.",
+            "목록에는 내가 볼 수 있는 계약에 연결된 계약서와 내가 작성한 계약서가 보입니다. 내가 작성한 계약서는 계약 열람 범위와 상관없이 다시 발송하고 PDF·한글 파일을 받을 수 있습니다.",
           ] },
         ],
       },
@@ -670,7 +671,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["계약서", "계약서 작성", "용역계약서", "발주처 발송", "HWPX", "조문", "표준 양식", "자체양식", "조항 라이브러리"],
     sources: ["components/contracts/agreements/AgreementBoard.tsx", "components/contracts/agreements/AgreementTemplateBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "contracts.deliverables",

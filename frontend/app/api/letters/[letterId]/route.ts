@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { hasPermission } from "@/lib/auth/rbac";
+import { isDocDrafter } from "@/lib/approval/docs";
 import { deleteImportedLetter, getLetterById, updateLetterMeta } from "@/lib/letter/store";
 import type { LetterRecipient } from "@/lib/letter/types";
 
@@ -9,25 +10,30 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET: 공문 대장 단건 / PATCH: 수신처·참조·제목·시행일 사후 편집(백필 문서 메일주소 보완).
-// GET 은 전 직원(approval.view, 2026-10-21 사용자 결정) — canManage 로 화면이 재발송·편집·삭제 버튼을 가린다.
+// GET 은 전 직원(approval.view, 2026-10-21 사용자 결정). 응답 플래그로 화면이 버튼을 가린다:
+//   canEdit(재발송·수신처 편집) = 기안자 본인 또는 approval.manage, canManage(이관 등록 삭제) = approval.manage.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ letterId: string }> }) {
   try {
     const ctx = await requirePermission("approval.view");
     const { letterId } = await params;
     const letter = await getLetterById(letterId);
     if (!letter) return NextResponse.json({ error: "공문을 찾을 수 없습니다." }, { status: 404 });
-    return NextResponse.json({ letter, canManage: await hasPermission(ctx.userId, "approval.manage") });
+    const canManage = await hasPermission(ctx.userId, "approval.manage");
+    const canEdit = canManage || (await isDocDrafter(ctx.userId, letter.docId));
+    return NextResponse.json({ letter, canManage, canEdit });
   } catch (err) {
     return authErrorToResponse(err);
   }
 }
 
+// PATCH 권한: 기안자 본인(본인이 보낸 공문) 또는 approval.manage(2026-10-21 사용자 결정).
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ letterId: string }> }) {
   try {
-    await requirePermission("approval.manage");
+    const ctx = await requirePermission("approval.view");
     const { letterId } = await params;
     const letter = await getLetterById(letterId);
     if (!letter) return NextResponse.json({ error: "공문을 찾을 수 없습니다." }, { status: 404 });
+    if (!(await isDocDrafter(ctx.userId, letter.docId))) await requirePermission("approval.manage");
     const body = (await req.json()) as {
       title?: string;
       issueDate?: string | null;

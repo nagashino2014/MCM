@@ -181,6 +181,23 @@ export async function isDeptHeadOf(userId: string, deptId?: string | null, db?: 
   }
 }
 
+/** 오늘 유효한 부서장 보직 부서(주 소속 부서장 + 겸직 부서장) — 결재 부서 문서함 전체 열람 범위(2026-10-21). */
+export async function userHeadDeptIds(userId: string): Promise<string[]> {
+  const db = await getDb();
+  if (!(await postsTableExists(db))) return [];
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT p.dept_id
+         FROM employee_dept_posts p
+         JOIN employee_profiles ep ON ep.employee_id = p.employee_id AND ep.status = 'active'
+        WHERE ep.user_id = $1 AND p.post_kind = 'head'
+          AND ${ACTIVE_ON.replace(/\$DATE/g, "$2")}`,
+      [userId, kstToday()]
+    )
+  );
+  return rows.map((r) => String(r.dept_id));
+}
+
 /** 오늘 유효한 보직 부서(주 소속 + 겸직) — 결재 부서 문서함 등 grant 밖 부서 판정용. */
 export async function userPostDeptIds(userId: string): Promise<string[]> {
   const db = await getDb();

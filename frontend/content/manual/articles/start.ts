@@ -189,13 +189,14 @@ export const START_ARTICLES: ManualArticle[] = [
         id: "feedback",
         title: "설명이 틀리거나 없을 때",
         blocks: [
-          { kind: "p", text: "화면과 설명이 다르거나 찾는 내용이 없으면 오픈 테스트 피드백 창구로 화면 이름과 함께 알려 주세요. 매뉴얼은 기능이 바뀔 때마다 함께 고칩니다." },
+          { kind: "p", text: "기사 맨 아래 [[틀린 내용 알리기]]를 누르면 메일 쓰기 창이 열립니다. 제목과 본문에 보고 있던 기사·화면이 자동으로 들어가 있으니, 무엇이 다르거나 부족한지만 적어 보내 주세요." },
+          { kind: "p", text: "찾는 설명이 아예 없을 때도 가까운 기사에서 같은 방법으로 알려 주세요. 매뉴얼은 기능이 바뀔 때마다 함께 고칩니다." },
         ],
       },
     ],
     keywords: ["매뉴얼", "도움말", "사용법", "F1", "물음표", "설명서"],
-    sources: ["components/manual/ManualButton.tsx", "components/manual/ManualDrawer.tsx", "components/manual/ManualPage.tsx", "components/cdash/CdHelp.tsx"],
-    reviewedAt: "2026-10-20",
+    sources: ["components/manual/ManualButton.tsx", "components/manual/ManualDrawer.tsx", "components/manual/ManualPage.tsx", "components/manual/ManualArticleView.tsx", "components/cdash/CdHelp.tsx"],
+    reviewedAt: "2026-10-21",
   },
   {
     id: "start.mobile",

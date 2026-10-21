@@ -149,6 +149,11 @@ export function MailComposePage() {
     // 주소록(G6-A) 등에서 받는 사람을 지정해 진입(/mail/compose?to=...).
     const toParam = searchParams.get("to");
     if (toParam) setTo(toParam);
+    // 매뉴얼 [틀린 내용 알리기] 등에서 제목·본문(평문)을 채워 진입(/mail/compose?subject=...&body=...) — 새 메일일 때만.
+    const prefillNew = !draftParam && !(id && mode);
+    const subjectParam = prefillNew ? searchParams.get("subject") : null;
+    const bodyParam = prefillNew ? searchParams.get("body") : null;
+    if (subjectParam) setSubject(subjectParam.slice(0, 200));
 
     const load = async () => {
       try {
@@ -188,7 +193,10 @@ export function MailComposePage() {
         }
         const sig = signature ? `<br><br><div>--<br>${signature}</div>` : "";
 
-        let initialHtml = `<div><br></div>${sig}`;
+        const prefillHtml = bodyParam
+          ? `<div>${bodyParam.slice(0, 4000).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string).replace(/\n/g, "<br>")}</div>`
+          : "";
+        let initialHtml = `${prefillHtml}<div><br></div>${sig}`;
         if (draftParam) {
           const r = await fetch("/api/mail/drafts");
           if (r.ok) {

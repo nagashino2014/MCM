@@ -3,10 +3,12 @@
 // 매뉴얼 기사 한 편 — 드로어(compact)와 /manual 페이지가 같이 쓴다.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef } from "react";
-import { ArrowUp, ExternalLink } from "lucide-react";
+import { ArrowUp, ExternalLink, MessageSquareWarning } from "lucide-react";
 import type { ManualArticle } from "@/content/manual";
 import { MANUAL_CHAPTERS } from "@/content/manual";
+import { MANUAL_FEEDBACK_EMAIL, MANUAL_FEEDBACK_SUBJECT_PREFIX } from "@/content/manual/feedback";
 import { routeHref, visibleSections } from "@/lib/manual/match";
 import { ManualBlocks } from "./ManualBlocks";
 
@@ -35,6 +37,22 @@ export function ManualArticleView({ article, perms, idPrefix, compact, onNavigat
   const sections = visibleSections(article, perms);
   const screen = article.routes.map(routeHref).find((r): r is string => !!r);
   const articleRef = useRef<HTMLElement>(null);
+  const router = useRouter();
+  // [틀린 내용 알리기] — 메일 쓰기 창을 기사·화면 정보가 채워진 채로 연다(누른 순간의 주소를 함께 적는다).
+  const sendFeedback = () => {
+    const where = typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}`;
+    const body = [
+      `기사: ${article.title} (${article.id}, 업데이트 ${article.reviewedAt})`,
+      where ? `보고 있던 화면: ${where}` : "",
+      "",
+      "어떤 내용이 화면과 다르거나 부족한지 적어 주세요:",
+      "",
+    ].filter((l, i) => l !== "" || i > 1).join("\n");
+    const q = new URLSearchParams({ subject: `${MANUAL_FEEDBACK_SUBJECT_PREFIX} ${article.title}`, body });
+    if (MANUAL_FEEDBACK_EMAIL) q.set("to", MANUAL_FEEDBACK_EMAIL);
+    onOpenScreen?.();
+    router.push(`/mail/compose?${q.toString()}`);
+  };
   // 항목 제목 옆 [맨 위로] — 드로어는 검색창까지(접두-top), 페이지는 기사 머리로 스크롤하고 제목에 포커스를 둔다.
   const scrollToTop = () => {
     // 포커스를 먼저 옮긴다 — 스크롤 뒤에 focus() 를 부르면 진행 중인 부드러운 스크롤이 취소된다.
@@ -121,6 +139,14 @@ export function ManualArticleView({ article, perms, idPrefix, compact, onNavigat
             <ManualBlocks blocks={s.blocks} onNavigate={onNavigate} />
           </section>
         ))}
+      </div>
+
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-2 rounded-lg border cd-border-c px-3.5 py-3">
+        <span className="text-[12px] cd-text-muted">설명이 화면과 다르거나 부족한가요?</span>
+        <button type="button" onClick={sendFeedback} className="cd-btn cd-btn-ghost cd-btn-sm inline-flex items-center gap-1.5">
+          <MessageSquareWarning className="h-3.5 w-3.5" aria-hidden="true" />
+          틀린 내용 알리기
+        </button>
       </div>
     </article>
   );

@@ -8,8 +8,16 @@
 -- 3) IMAP 전용 플래그(\Answered·\Deleted·키워드)와 게이트웨이 원문 캐시(크기·헤더·구조 고정 — 같은 UID 의
 --    내용이 바뀌면 안 되므로 처음 내려줄 때 원문을 확정해 S3 에 두고 그 키를 기록한다).
 -- 멱등. 기존 행 UID 백필은 표 잠금 아래에서 한 트랜잭션으로 한다(백필 중 새 배치가 끼어 UID 가 겹치지 않게).
+-- ⚠ 잠금 순서(2026-10-21 리허설에서 교착 실측): 표마다 ALTER 가 차례로 잠그면 306 은 state→messages, 수신 처리는
+--   messages→state 순서라 교착이 나고 수신 트랜잭션이 취소됐다. 그래서 맨 앞에서 앱과 같은 순서로 한 번에 잠근다:
+--   mailboxes(FK 생성용 SHARE ROW EXCLUSIVE — 계정 영구 삭제의 mailboxes→메일 표 연쇄 순서와 맞춤)
+--   → mail_messages → mail_message_state → mail_folders(ACCESS EXCLUSIVE). 5초 안에 못 잡으면 아무것도 바꾸지 않고 실패한다(재실행).
 
 BEGIN;
+
+SET LOCAL lock_timeout = '5s';
+LOCK TABLE mailboxes IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE mail_messages, mail_message_state, mail_folders IN ACCESS EXCLUSIVE MODE;
 
 CREATE TABLE IF NOT EXISTS mail_app_passwords (
   app_password_id text PRIMARY KEY,
@@ -35,8 +43,6 @@ ALTER TABLE mail_messages ADD COLUMN IF NOT EXISTS imap_raw_key text;      -- ap
 ALTER TABLE mail_messages ADD COLUMN IF NOT EXISTS imap_raw_size bigint;   -- RFC822.SIZE
 ALTER TABLE mail_messages ADD COLUMN IF NOT EXISTS imap_header bytea;      -- 원문 헤더 블록(빈 줄 포함)
 ALTER TABLE mail_messages ADD COLUMN IF NOT EXISTS imap_structure jsonb;   -- BODYSTRUCTURE 원천(MIME 트리 요약)
-
-LOCK TABLE mail_message_state IN SHARE ROW EXCLUSIVE MODE;
 
 UPDATE mail_folders
    SET imap_uidvalidity = (extract(epoch FROM clock_timestamp())::bigint)

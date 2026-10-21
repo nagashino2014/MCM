@@ -87,12 +87,18 @@ CAPABILITY `IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN AUTH=LOGIN ID IDLE NAMESPACE U
 - `npm run test:mail-gateway` 15건: 파서·토큰·시퀀스·mUTF-7(RFC 3501 예시)·MIME/BODYSTRUCTURE/섹션·ENVELOPE(그룹·한글)·SEARCH·PROXY v2·SMTP 보정·세션 종단(인증 3종·LIST/STATUS/SELECT/FETCH/STORE/SEARCH·COPY/MOVE/EXPUNGE/APPEND·IDLE·폐기 BYE).
 - 실제 소켓: PROXY v2 원 IP 전달, IMAP 로그인·LIST, SMTP EHLO·AUTH PLAIN·위조 발신 553.
 - 일회용 PostgreSQL 17(기존 메일 마이그레이션 041·095~098·102·103·280·305 + 306 두 번)에서 실제 저장소 통합 시나리오: 백필 UID·재적용 멱등, 퇴사 계정 거절, 접속기록·마지막 사용, 원문 재구성 확정·크기 불변, 웹 휴지통 이동 → NOOP EXPUNGE, MOVE(UPDATE 경로 새 UID·분류 라벨), APPEND 중복 합침, EXPUNGE 영구 삭제, 폴더 생성·이름 변경·삭제, 웹 분류 삭제 후 UID 중복 없음, SES 실패 시 발송 로그 선점 해제, 폐기 후 BYE.
-- ⚠ **실제 스테이징 스키마 덤프에서의 설치 리허설은 하지 않았다** — 적용 전 스테이징 스키마 복제본에서 306 설치·재적용을 먼저 돌린다(`mail_message_state` 행 수만큼 백필 UPDATE, 적용 중 표 잠금).
+- **306 설치 리허설(2026-10-21, 스테이징 스키마)** — 스테이징 `public` 스키마만 읽기 전용(db-app 역할, `default_transaction_read_only`)으로 `pg_dump --schema-only` → 로컬 PG17 에 복원(400/401 표, pgvector 없는 `intel_embeddings` 1개 제외 — 메일 무관). 메일 내용은 가져오지 않고 합성 데이터를 썼다.
+  - 스테이징 읽기 전용 확인: 306 객체 없음, `mail_message_state` 359행·폴더 219·메일함 36, 메일 표 트리거·정책 없음, 기본 권한(`mcm` 생성 표 → `mcm_app` arwd, 함수 X)으로 새 표·트리거 함수 권한이 자동 부여됨, 메일함 FK 기준 행 누락 0.
+  - 3회 설치: 스테이징 규모(360행) 0.3초, 200,000행 3.1초(이후 재적용 0.4초·변경 없음, UIDVALIDITY 불변). 불변식 0: UID 누락·폴더 내 중복·다음 UID≤최대·UIDVALIDITY 누락·UID 순서≠시간 순서.
+  - **발견·수정**: 적용 중 수신(메일→배치 삽입)이 겹치면 교착 → 수신 트랜잭션 취소(120건 중 1건). ALTER 가 표를 state→messages 순으로 잠그고 수신은 messages→state 순이라서다. 맨 앞에서 앱과 같은 순서(mailboxes SHARE ROW EXCLUSIVE → mail_messages·mail_message_state·mail_folders ACCESS EXCLUSIVE)로 한 번에 잠그고 `lock_timeout 5s` 를 두었다. 재현: 수신 120·웹 이동(삭제·재삽입) 60·읽음 갱신 60 동시 실행 중 적용 → 교착 0, 전부 성공, 불변식 0.
+  - 긴 트랜잭션이 `mail_messages` 를 잡고 있으면 5.3초 뒤 `lock timeout` 으로 실패하고 아무것도 바뀌지 않음(재실행 성공).
+  - 스테이징 스키마 위에서 실제 저장소 통합 시나리오 재통과, `staging-apply-migrations.ps1` 정적 검사 통과(AWS 차단 상태로 첫 외부 조회 직전까지).
+  - 스테이징 적용 시 잠금 시간은 1초 미만으로 예상 — 그동안 메일 수신·읽음 표시가 잠깐 기다린다. 다른 트랜잭션이 5초 넘게 잡고 있으면 실패하니 다시 실행한다.
 - 화면은 DB 가 없어 실제 렌더 확인을 못 했다(타입 체크만). 306 적용·배포 후 라이트/다크·좁은 화면·키보드 확인 필요.
 
 ## 9. 켜는 순서(스테이징)
 
-1. 스테이징 스키마 복제본에서 306 리허설 → `staging-apply-migrations.ps1 -Files 306_mail_external_client.sql`.
+1. (리허설 완료, §8) `staging-apply-migrations.ps1 -Files 306_mail_external_client.sql` — lock timeout 으로 실패하면 그대로 다시 실행.
 2. next 배포(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`) — 화면·API·게이트웨이 번들 포함.
 3. 비용 확인 후 `terraform plan -var enable_mail_gateway=true -target=…`(mail-gateway.tf 머리말의 주소만) 검토 → 메일 MX·SES·bastion 변경이 섞이지 않았을 때만 같은 -target 으로 apply. 로컬 `infra/aws/staging.tfvars`(git 제외)에 `enable_mail_gateway = true` 를 남겨야 이후 plan 에서 지우려 들지 않는다.
 4. `ops/staging-deploy-mail-gateway.ps1 -Wait` — next 태스크 정의(이미지·DB 시크릿)를 복제해 게이트웨이에 적용. 이후 next 를 배포할 때마다 이 스크립트도 실행한다.

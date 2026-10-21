@@ -110,7 +110,7 @@ export function InvoiceInboxCard() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="발행 금액"
-                  className="cd-input text-[12px] px-2 py-1 h-8 w-32"
+                  className="cd-input text-[12px] px-2 py-1 h-8 !w-32"
                 />
                 <button
                   type="button"

@@ -328,7 +328,7 @@ export function NoticeEditorBoard({ noticeId }: { noticeId: string }) {
                       aria-label={`띠 색상 ${i + 1}`}
                     />
                     <input
-                      className="cd-input w-28 text-xs"
+                      className="cd-input !w-28 text-xs"
                       value={c}
                       onChange={(e) => setBandColors(bandColors.map((x, xi) => (xi === i ? e.target.value.toUpperCase() : x)))}
                       aria-label={`띠 색상 ${i + 1} 코드`}

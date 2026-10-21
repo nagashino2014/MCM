@@ -294,7 +294,7 @@ export function RateCardEditor({
               {activeRound.payments.map((p, idx) => (
                 <span key={idx} className="inline-flex items-center gap-1 rounded-lg border cd-border-c px-1.5 py-1">
                   <input
-                    className="cd-input !py-0.5 !px-1.5 w-[76px] text-[11px]"
+                    className="cd-input !py-0.5 !px-1.5 !w-[76px] text-[11px]"
                     value={p.label}
                     placeholder="선급금"
                     onChange={(e) => {
@@ -303,7 +303,7 @@ export function RateCardEditor({
                     }}
                   />
                   <input
-                    className="cd-input !py-0.5 !px-1.5 w-[44px] text-[11px] text-right tabular-nums"
+                    className="cd-input !py-0.5 !px-1.5 !w-[44px] text-[11px] text-right tabular-nums"
                     inputMode="numeric"
                     value={p.ratePct}
                     placeholder="%"

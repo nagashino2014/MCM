@@ -198,7 +198,7 @@ function ReplyForm({ notice, onDone, onCancel }: { notice: MyNotice; onDone: () 
             <AutoDateInput
               value={d}
               onChange={(v) => setDate(i, v)}
-              className="cd-input text-[12px] px-2 py-1 h-8 w-36"
+              className="cd-input text-[12px] px-2 py-1 h-8 !w-36"
             />
             <button
               type="button"

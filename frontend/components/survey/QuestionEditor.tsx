@@ -155,7 +155,7 @@ export function QuestionEditor({ question, index, total, readOnly, onChange, onR
                         type="number"
                         min={0}
                         max={question.options.length}
-                        className="cd-input w-20"
+                        className="cd-input !w-20"
                         value={question.config.maxSelect ?? 0}
                         onChange={(e) =>
                           onChange({ config: { ...question.config, maxSelect: Number(e.target.value) || undefined } })

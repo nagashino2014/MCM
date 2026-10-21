@@ -307,7 +307,7 @@ export function MailImportManager() {
                   ) : (
                     <>
                       <select
-                        className="cd-input text-[12px] w-auto"
+                        className="cd-input text-[12px] !w-auto"
                         aria-label={`${p.file.name} 원본 메일함`}
                         value={p.folderKind}
                         onChange={(e) => {
@@ -321,7 +321,7 @@ export function MailImportManager() {
                       </select>
                       {p.folderKind === "custom" && (
                         <input
-                          className="cd-input text-[12px] w-32"
+                          className="cd-input text-[12px] !w-32"
                           aria-label="메일함 이름"
                           value={p.folderName}
                           onChange={(e) => update(i, { folderName: e.target.value })}

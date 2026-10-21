@@ -655,7 +655,7 @@ function BackfillModal({
             {/* 공통: 통지일 + 업로드 */}
             <div className="rounded-2xl border cd-border-c p-4 flex items-center gap-3 flex-wrap">
               <span className="text-[11px] font-bold cd-text-faint">서면 통지일</span>
-              <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input w-40" placeholder="YYYYMMDD" />
+              <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input !w-40" placeholder="YYYYMMDD" />
               <span className="text-[11px] font-bold cd-text-faint ml-2">연차 사용계획서 업로드</span>
               <label className="cd-btn cd-btn-soft rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1.5">
                 <FileUp className="w-3.5 h-3.5" /> 업로드
@@ -713,7 +713,7 @@ function BackfillModal({
                   <div className="flex flex-wrap items-center gap-2">
                     {selEntry.dates.map((d, i) => (
                       <div key={i} className="flex items-center gap-1">
-                        <AutoDateInput value={d} onChange={(v) => setDate(sel.employeeId, i, v)} className="cd-input w-36" placeholder="YYYYMMDD" />
+                        <AutoDateInput value={d} onChange={(v) => setDate(sel.employeeId, i, v)} className="cd-input !w-36" placeholder="YYYYMMDD" />
                         <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-30" onClick={() => delDate(sel.employeeId, i)} disabled={selEntry.dates.length <= 1} title="삭제">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

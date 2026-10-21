@@ -264,7 +264,7 @@ function TemplateListCard({
             placeholder="템플릿명으로 검색"
           />
         </div>
-        <select className="cd-select w-auto" value={filterKind} onChange={(e) => setFilterKind(e.target.value as typeof filterKind)}>
+        <select className="cd-select !w-auto" value={filterKind} onChange={(e) => setFilterKind(e.target.value as typeof filterKind)}>
           <option value="all">전체 템플릿</option>
           <option value="system">시스템</option>
           <option value="custom">사용자 정의</option>

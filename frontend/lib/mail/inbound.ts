@@ -21,6 +21,7 @@ import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-do
 import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
 import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
+import { senderCategoryFor } from "@/lib/mail/sender-rules";
 
 let sqs: InstanceType<typeof SQSClient> | null = null;
 let cachedQueueUrl: string | null = null;
@@ -285,6 +286,8 @@ async function storeForMailbox(
   // 스팸 판정(G2-12) — 차단 발신자·키워드 매칭 시 받은편지함 대신 스팸함으로.
   const spam = await isSpamFor(target.mailboxId, from[0]?.address ?? null, parsed.subject ?? "");
   const inboxFolderId = await getSystemFolderId(target.mailboxId, spam ? "spam" : "inbox");
+  // 발신자 자동 분류(305) — 보낸 사람 팝업에서 지정한 분류를 받은편지함 라벨로 붙인다(스팸이면 적용 안 함).
+  const categoryId = spam ? null : await senderCategoryFor(target.mailboxId, from[0]?.address ?? null);
   await withDbWrite(async (wdb) => {
     for (const s of stored) {
       await wdb.run(
@@ -294,9 +297,9 @@ async function storeForMailbox(
       );
     }
     await wdb.run(
-      `INSERT INTO mail_message_state (message_id, folder_id, mailbox_id, is_read, created_at)
-       VALUES ($1,$2,$3,0,$4) ON CONFLICT (message_id, folder_id) DO NOTHING`,
-      [msgId, inboxFolderId, target.mailboxId, now]
+      `INSERT INTO mail_message_state (message_id, folder_id, mailbox_id, is_read, category_id, created_at)
+       VALUES ($1,$2,$3,0,$4,$5) ON CONFLICT (message_id, folder_id) DO NOTHING`,
+      [msgId, inboxFolderId, target.mailboxId, categoryId, now]
     );
   });
   return true;

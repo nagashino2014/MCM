@@ -39,6 +39,26 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "sender",
+        title: "보낸 사람 메뉴 — 검색·주소록·자동 분류",
+        blocks: [
+          { kind: "p", text: "목록에서 보낸 사람 주소를 누르면 메뉴가 열립니다(보낸편지함 제외)." },
+          {
+            kind: "table",
+            head: ["메뉴", "하는 일"],
+            rows: [
+              ["메일 쓰기", "이 주소를 받는 사람으로 넣고 메일 쓰기를 엽니다."],
+              ["주소록 추가", "이름을 입력해 내 메일 주소록에 저장합니다. 메일 쓰기 받는 사람 칸에서 바로 찾을 수 있습니다."],
+              ["주소 복사", "주소를 클립보드에 복사합니다."],
+              ["차단", "받은편지함의 이 주소 메일을 스팸함으로 옮기고, 이후 받는 메일도 스팸함으로 보냅니다."],
+              ["[[보낸 사람으로 검색]]", "지금 폴더에서 이 주소로 검색합니다."],
+              ["메일 분류 지정", "고른 분류(받은편지함 카테고리)로 이 주소의 받은편지함 메일을 묶고, 앞으로 받는 메일도 자동으로 그 분류에 넣습니다. [[자동 분류 해제]]로 끌 수 있습니다."],
+            ],
+          },
+          { kind: "tip", text: "분류는 받은편지함 아래 [[새 카테고리]]로 먼저 만들어 둡니다. 자동 분류를 해제해도 이미 분류된 메일은 그대로입니다." },
+        ],
+      },
+      {
         id: "receipts",
         title: "수신 확인",
         blocks: [
@@ -53,14 +73,15 @@ export const MAIL_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "스팸 메일 설정: 제목·보낸 주소에 키워드가 있으면 스팸으로 분류합니다. 스팸함 보관 기간과 기간 경과 후 처리를 정합니다.",
             "보관함 용량 배분: 받은편지함·보낸편지함·보관함 비율을 정합니다. 합계가 100%여야 저장됩니다.",
+            "왼쪽 [[메일 설정]] 아래에는 메일함 용량(관리자가 정한 총용량 대비 사용량)과 전체·안읽음 메일 수가 보입니다. 총용량이 정해지지 않았으면 사용량만 보입니다.",
             "메일 가져오기: 예전 메일(아마란스 ZIP, 지메일 mbox, 다른 메일 계정)을 가져옵니다. 같은 메일은 한 번만 저장됩니다. 아마란스 ZIP 은 읽음 정보가 없어 받은 메일이 모두 안읽음으로 들어옵니다(지메일·메일 계정은 원래 읽음 상태 유지).",
           ] },
           { kind: "warn", text: "스팸 ‘즉시 삭제’를 켜면 스팸으로 분류된 메일이 바로 지워져 되돌릴 수 없습니다." },
         ],
       },
     ],
-    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리"],
-    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx"],
+    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량"],
+    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx"],
     reviewedAt: "2026-10-21",
   },
   {

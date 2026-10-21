@@ -55,6 +55,7 @@ export function MailListPane({
   toolbarExtra,
   total,
   footer,
+  onSenderClick,
 }: {
   /** stack = 좌우 분할용 3층 행 / row = 목록형(전체 폭 1줄: 보낸 사람 | 제목 — 미리보기 | 날짜). */
   layout?: "stack" | "row";
@@ -64,6 +65,8 @@ export function MailListPane({
   total?: number;
   /** 목록 아래 고정 영역(페이지 나눔). */
   footer?: React.ReactNode;
+  /** 보낸 사람 주소 클릭 — 팝업 메뉴(메일 쓰기·주소록·차단·검색·분류 지정)를 연다. 보낸편지함에서는 쓰지 않는다. */
+  onSenderClick?: (address: string, rect: DOMRect) => void;
   folder: string;
   items: MailListItem[];
   drafts: MailDraft[];
@@ -83,6 +86,13 @@ export function MailListPane({
   const [qInput, setQInput] = useState(q);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const isDrafts = folder === "drafts";
+  // 보낸편지함은 받는 사람이 표시되므로 보낸 사람 메뉴를 쓰지 않는다.
+  const senderMenu = !!onSenderClick && folder !== "sent";
+
+  // 보낸 사람으로 검색 등 바깥에서 검색어가 바뀌면 입력칸도 맞춘다.
+  useEffect(() => {
+    setQInput(q);
+  }, [q]);
 
   // 폴더 전환 시 선택 리셋 — 이전 폴더의 체크가 남아 "N건" 오표시되던 버그 수정(G2-13).
   useEffect(() => {
@@ -275,9 +285,16 @@ export function MailListPane({
                       />
                     </button>
                     <button
-                      onClick={() => onOpen(m.messageId)}
-                      className={cn("w-44 shrink-0 text-left text-[13px] truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}
-                      title={who}
+                      onClick={(e) =>
+                        senderMenu && m.fromAddr ? onSenderClick?.(m.fromAddr, e.currentTarget.getBoundingClientRect()) : onOpen(m.messageId)
+                      }
+                      className={cn(
+                        "w-44 shrink-0 text-left text-[13px] truncate",
+                        unread ? "font-bold cd-text" : "font-normal cd-text-muted",
+                        senderMenu && m.fromAddr && "hover:underline underline-offset-2"
+                      )}
+                      title={senderMenu && m.fromAddr ? `${who} — 눌러서 메뉴 열기` : who}
+                      aria-haspopup={senderMenu && m.fromAddr ? "dialog" : undefined}
                     >
                       {who}
                     </button>
@@ -333,7 +350,29 @@ export function MailListPane({
                     <CdAvatar name={who} size="sm" className="mt-0.5 w-[30px] h-[30px] text-[11px]" />
                     <button onClick={() => onOpen(m.messageId)} className="flex-1 min-w-0 text-left flex flex-col gap-[3px]">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>{who}</span>
+                        {senderMenu && m.fromAddr ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-haspopup="dialog"
+                            title={`${who} — 눌러서 메뉴 열기`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSenderClick?.(m.fromAddr!, e.currentTarget.getBoundingClientRect());
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter" && e.key !== " ") return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onSenderClick?.(m.fromAddr!, e.currentTarget.getBoundingClientRect());
+                            }}
+                            className={cn("text-xs truncate hover:underline underline-offset-2", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}
+                          >
+                            {who}
+                          </span>
+                        ) : (
+                          <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>{who}</span>
+                        )}
                         <span className="text-[10.5px] cd-text-faint shrink-0 tabular-nums">{fmtListDate(m.createdAt)}</span>
                       </div>
                       <span className={cn("text-[13px] truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>

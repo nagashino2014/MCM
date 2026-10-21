@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
 import { CdDateInput } from "@/components/cdash/CdField";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import { checkDateFields } from "@/lib/contracts/date-field";
 import {
   QUOTE_RESULT_LABEL,
@@ -354,6 +355,12 @@ export function QuoteRecordsTable({
   onChanged: () => void;
 }) {
   const [viewId, setViewId] = useState<string | null>(null);
+  // 화면당 20·30·50개(기본 50) — 조회 결과 건수가 바뀌면(새 검색) 첫 쪽부터.
+  const { pageRows: pageQuotes, pager, resetPage } = useClientPaging(quotes, "quote-records-page-size", loading);
+  useEffect(() => {
+    resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes.length]);
 
   if (loading) return <p className="text-sm cd-text-faint">조회 중입니다.</p>;
   return (
@@ -375,7 +382,7 @@ export function QuoteRecordsTable({
             </tr>
           </thead>
           <tbody>
-            {quotes.map((q) => (
+            {pageQuotes.map((q) => (
               <tr key={q.quoteId} className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]" onClick={() => setViewId(q.quoteId)}>
                 <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{q.quoteNo ?? "-"}</td>
                 <td className="py-2 pr-3 cd-text max-w-[300px] overflow-hidden text-ellipsis" title={q.title ?? ""}>
@@ -416,6 +423,7 @@ export function QuoteRecordsTable({
           </tbody>
         </table>
       </div>
+      {quotes.length > 0 && <div className="mt-3">{pager}</div>}
       {viewId && <QuoteViewModal quoteId={viewId} theme={theme} onClose={() => setViewId(null)} onChanged={onChanged} />}
     </>
   );

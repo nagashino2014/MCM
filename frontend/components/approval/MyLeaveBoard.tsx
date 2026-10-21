@@ -342,7 +342,7 @@ export function MyLeaveSection() {
                 const d = new Date(e.usedOn! + "T00:00:00");
                 const kind = dotKind(e);
                 return (
-                  <div key={e.entryId} className="flex items-center gap-2 text-[12.5px] py-1.5 border-t cd-hairline-row-c">
+                  <div key={e.entryId} className="flex items-center gap-2 text-[12.5px] py-[9.5px] border-t cd-hairline-row-c">
                     <span className="tabular-nums cd-text w-[84px] shrink-0">
                       {e.usedOn!.slice(5)} ({WEEKDAYS[d.getDay()]})
                     </span>
@@ -377,7 +377,7 @@ export function MyLeaveSection() {
           </div>
           <div className="grid gap-1">
             {data.special.entries.slice(0, 8).map((e) => (
-              <div key={e.entryId} className="flex items-center gap-2 text-xs border-t cd-hairline-row-c pt-1.5 first:border-t-0 first:pt-0 flex-wrap">
+              <div key={e.entryId} className="flex items-center gap-2 text-xs border-t cd-hairline-row-c pt-[9.5px] pb-[3.5px] first:border-t-0 first:pt-0 flex-wrap">
                 <span className={`cd-pill ${e.entryType === "use" ? "cd-pill-warn" : "cd-pill-success"}`}>
                   {e.entryType === "use" ? "사용" : e.entryType === "grant" ? "부여" : "조정"}
                 </span>

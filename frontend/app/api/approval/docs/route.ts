@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
+import { countApprovalBox, listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 import { syncDocCardLinks } from "@/lib/barobill/classify";
 import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
@@ -13,18 +13,25 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET: 결재함 목록 — box=draft|in_progress|completed(기안함) / pending|upcoming(결재함) / acted(결재한 문서)
+//   limit(기본 30, 최대 100)·offset 으로 페이지를 나누고, total 에 박스 전체 건수를 함께 준다.
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("approval.view");
-    const box = String(req.nextUrl.searchParams.get("box") ?? "pending");
+    const sp = req.nextUrl.searchParams;
+    const box = String(sp.get("box") ?? "pending");
+    const limit = Math.min(Math.max(Number(sp.get("limit") ?? "30") || 30, 1), 100);
+    const offset = Math.max(Number(sp.get("offset") ?? "0") || 0, 0);
     if (box === "pending" || box === "upcoming") {
-      return NextResponse.json({ docs: await listInbox(ctx.userId, box) });
+      const [docs, total] = await Promise.all([listInbox(ctx.userId, box, limit, offset), countApprovalBox(ctx.userId, box)]);
+      return NextResponse.json({ docs, total });
     }
     if (box === "acted") {
-      return NextResponse.json({ docs: await listActedDocs(ctx.userId) });
+      const [docs, total] = await Promise.all([listActedDocs(ctx.userId, limit, offset), countApprovalBox(ctx.userId, box)]);
+      return NextResponse.json({ docs, total });
     }
     if (box === "draft" || box === "in_progress" || box === "completed") {
-      return NextResponse.json({ docs: await listMyDocs(ctx.userId, box) });
+      const [docs, total] = await Promise.all([listMyDocs(ctx.userId, box, limit, offset), countApprovalBox(ctx.userId, box)]);
+      return NextResponse.json({ docs, total });
     }
     // 선행 문서 후보(127) — 내가 기안한 특정 양식 문서(보고서 기안 화면의 연결 모달용)
     if (box === "ref-candidates") {

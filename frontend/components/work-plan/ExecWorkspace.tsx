@@ -98,7 +98,7 @@ export default function ExecWorkspace() {
         eyebrow="Work · Executive"
         title="임원 검토·지시"
         helpTopic="work-plan.exec-directive"
-        help="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시를 하달합니다."
+        help="부서 통합 보고를 용역·Task별로 검토하고, 보완 요구·진행 촉구·추가보고 지시나 의견을 하달합니다."
       />
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[clamp(420px,48%,760px)_minmax(0,1fr)] gap-5">

@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 // GET: ?weekStart=(주별 요약, 기본 최근 주) / &adtEmpNo=(그 주 일별 상세) / ?unmatched=1 / ?employees=1 / ?settings=1
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const sp = req.nextUrl.searchParams;
 
     if (sp.get("settings") === "1") {
@@ -71,7 +71,7 @@ interface PostBody {
 // POST: 매핑(map)·매핑해제(unmap)·정책 저장(settings) — admin 전용
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as PostBody;
 
     if (body.map?.employeeId && body.map?.adtEmpNo) {

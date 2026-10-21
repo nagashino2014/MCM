@@ -12,7 +12,7 @@ interface RouteContext {
   params: Promise<{ reportId: string }>;
 }
 
-// 부서장 재보고(임원 지시에 대한 답변). 재보고 1회 제한.
+// 부서장 재보고(임원 지시에 대한 답변). 지시 건마다 1회(답하지 않은 지시가 있어야 함, F-32).
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
     const { reportId } = await ctx.params;

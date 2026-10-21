@@ -271,7 +271,7 @@ export function SalesBoard() {
       </div>
 
       {/* 하단: 영업 제설정(영업 담당자 지정·수집 소스) — 2026-10-19 */}
-      <SalesSettingsCard theme={theme} canManageStaff={canManageStaff} onStaffChanged={loadAssignees} />
+      <SalesSettingsCard theme={theme} canManageStaff={canManageStaff} canEditSources={canEdit} onStaffChanged={loadAssignees} />
 
       {creating && (
         <CreateProjectModal

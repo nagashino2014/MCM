@@ -517,7 +517,7 @@ export function ApprovalNoticeBoard() {
                         disabled={current}
                         onClick={() => openDraftDoc(d.docId)}
                         className={
-                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left hover:brightness-[0.98] " +
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-[9.5px] text-left hover:brightness-[0.98] " +
                           (current ? "border-[color:var(--cd-primary)]" : "cd-border-c")
                         }
                         style={{ background: "var(--cd-action-background-soft)" }}

@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
       overview,
       // 산정·명세서 생성 버튼 노출 — bonus.calculate(291) 보유 여부. 이름은 화면 호환을 위해 유지.
       isAdmin: checkPermission(access, "bonus.calculate"),
+      // 명세서 PDF·발송 버튼 노출 — 발송·PDF API 와 같은 bonus.send(2026-10-21 F-23).
+      canSend: checkPermission(access, "bonus.send"),
     });
   } catch (err) {
     return authErrorToResponse(err);

@@ -307,7 +307,7 @@ function DailyDetail({ rows }: { rows?: DailyRow[] }) {
         <span className="text-center">비고</span>
       </div>
       {rows.map((d) => (
-        <div key={d.workDate} className="grid px-3 py-1.5 text-[12px] border-b cd-border-c last:border-b-0" style={dailyGrid}>
+        <div key={d.workDate} className="grid px-3 py-[9.5px] text-[12px] border-b cd-border-c last:border-b-0" style={dailyGrid}>
           <span className="font-mono cd-text">{d.workDate.slice(5)} ({dowOf(d.workDate)})</span>
           <span className="text-center font-mono cd-text">{clock(d.inAt)}</span>
           <span className="text-center font-mono cd-text">{clock(d.outAt)}</span>
@@ -489,7 +489,7 @@ function MatchPanel() {
                 : { background: "transparent", color: "var(--cd-faint)" };
               const overridden = r.verdict === "override" || r.verdict === "rejected";
               return (
-                <div key={r.docId} className="grid items-center px-3 py-2 border-b cd-border-c last:border-b-0 text-[12.5px]" style={matchGrid}>
+                <div key={r.docId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[12.5px]" style={matchGrid}>
                   <span className="cd-text font-semibold truncate">{r.name}</span>
                   <span className="text-center font-mono cd-text">{r.workDate.slice(5)} ({dowOf(r.workDate)})</span>
                   <span className="text-center font-mono cd-text">{r.reqStart}~{r.reqEnd}</span>
@@ -654,7 +654,7 @@ function MealPanel() {
             <span>메모</span>
           </div>
           {data.rows.map((r) => (
-            <div key={r.warningId} className="grid items-center px-3 py-2 border-b cd-border-c last:border-b-0 text-[12.5px]" style={mealGrid}>
+            <div key={r.warningId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[12.5px]" style={mealGrid}>
               <span className="font-semibold cd-text truncate">{r.empName}</span>
               <span className="cd-text">
                 {r.usedOn.slice(5)}({dowOf(r.usedOn)}){r.isOffDay ? <span className="ml-1 text-[10px] font-bold" style={{ color: "var(--cd-error)" }}>휴일</span> : null}
@@ -977,7 +977,8 @@ function SettingsPanel() {
         {saved && <span className="text-[12px]" style={{ color: "var(--cd-primary)" }}>저장되었습니다.</span>}
       </div>
       <p className="text-[11.5px] cd-text-faint">
-        ※ 수당 금액(월평균임금 ÷ {s.wageDivisorHours} × 배수)은 직원별 급여 데이터 연동 후 지원됩니다. 현재는 시간·배수 대상까지 산정합니다.
+        ※ 수당 = 통상시급(최신 근로계약 통상임금 ÷ {s.wageDivisorHours}) × 배수 × 시간(10원 미만 절사). 주별 화면에 예상 수당으로 표시되고,
+        신청 대조로 인정된 시간이 급여대장 생성 시(전월 26일~금월 25일분) 초과근무수당으로 반영됩니다. 근로계약이 없는 직원은 금액이 표시되지 않습니다.
       </p>
       </section>
       </div>

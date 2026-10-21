@@ -93,17 +93,20 @@ export async function pushReportReviewed(reportId: string, action: "reject" | "c
   }
 }
 
-/** 임원 지시 하달 → 부서장. */
-export async function pushDirectiveIssued(reportId: string, actorUserId: string): Promise<void> {
+/** 임원 지시 하달 → 부서장. ‘의견’(kind=opinion)은 답변이 선택이라 문구를 달리한다(F-32). */
+export async function pushDirectiveIssued(reportId: string, actorUserId: string, kind?: string): Promise<void> {
   try {
     const brief = await loadReportBrief(reportId);
     if (!brief) return;
     const targets = await deptHeadUserIds(brief.deptId, actorUserId);
     if (!targets.length) return;
+    const opinion = kind === "opinion";
     await sendPush(targets, {
       event: "work.report",
-      title: "임원 지시 도착",
-      body: `${clip(brief.subjectLabel)} — 임원 지시가 하달됐습니다. 답변(재보고)이 필요합니다.`,
+      title: opinion ? "임원 의견 도착" : "임원 지시 도착",
+      body: opinion
+        ? `${clip(brief.subjectLabel)} — 임원 의견이 전달됐습니다. 답변은 선택입니다.`
+        : `${clip(brief.subjectLabel)} — 임원 지시가 하달됐습니다. 답변(재보고)이 필요합니다.`,
       link: "/work-reports",
       targetRef: reportId,
       dedupKey: `work.report.directive:${reportId}:${new Date().toISOString()}`,

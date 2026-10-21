@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (form.get("notifyEmail") === "1") {
       void (async () => {
         try {
-          const targets = await listNotifyTargets(scope, myDept);
+          const targets = await listNotifyTargets(scope, myDept, ctx.userId);
           if (targets.length) {
             const base = process.env.APP_PUBLIC_URL?.replace(/\/$/, "") ?? "";
             await sendNotifyEmail({

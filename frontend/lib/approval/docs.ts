@@ -38,7 +38,7 @@ export interface ApprovalLineStepInput {
   parallelGroup?: number;
 }
 
-/** 참조/열람 지정(AX-P0) — ref=완료 통보, view=진행 중 열람. */
+/** 참조/열람 지정(AX-P0) — ref·view 모두 상신 후 열람·참조/열람 문서함 노출이 같고 표기만 다르다(access.ts). */
 export interface ApprovalWatcherInput {
   userId: string;
   kind: "ref" | "view";
@@ -941,44 +941,50 @@ export async function actOnDoc(params: {
 }
 
 /** 기안함(내 문서) — box: draft(작성중/반려 포함) | in_progress | completed */
-export async function listMyDocs(userId: string, box: "draft" | "in_progress" | "completed", limit = 30): Promise<ApprovalDocSummary[]> {
+const MY_DOCS_COND: Record<"draft" | "in_progress" | "completed", string> = {
+  draft: `d.status IN ('draft','rejected')`,
+  in_progress: `d.status = 'in_progress'`,
+  completed: `d.status IN ('approved','rejected')`,
+};
+
+export async function listMyDocs(userId: string, box: "draft" | "in_progress" | "completed", limit = 30, offset = 0): Promise<ApprovalDocSummary[]> {
   const db = await getDb();
-  const cond =
-    box === "draft" ? `d.status IN ('draft','rejected')` : box === "in_progress" ? `d.status = 'in_progress'` : `d.status IN ('approved','rejected')`;
   const rows = rowsToObjects(
     await db.exec(
       `SELECT d.*, f.name AS form_name FROM approval_docs d
          JOIN approval_forms f ON f.form_id = d.form_id
-        WHERE d.drafter_user_id = $1 AND ${cond}
-        ORDER BY d.updated_at DESC LIMIT $2`,
-      [userId, limit]
+        WHERE d.drafter_user_id = $1 AND ${MY_DOCS_COND[box]}
+        ORDER BY d.updated_at DESC LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     )
   );
   return rows.map(mapSummary);
 }
 
 /** 결재 대기(내 차례 pending) / 예정(내가 뒤 순번 waiting) */
-export async function listInbox(userId: string, kind: "pending" | "upcoming", limit = 30): Promise<ApprovalDocSummary[]> {
-  const db = await getDb();
-  const status = kind === "pending" ? "pending" : "waiting";
-  const rows = rowsToObjects(
-    await db.exec(
-      `SELECT d.*, f.name AS form_name, f.folder_id, s.step_id AS my_step_id FROM approval_steps s
+const INBOX_FROM = `FROM approval_steps s
          JOIN approval_docs d ON d.doc_id = s.doc_id
          JOIN approval_forms f ON f.form_id = d.form_id
          LEFT JOIN approval_absences ab ON ab.absence_id = s.absence_id
         WHERE (s.assignee_user_id = $1
                OR ($2 = 'pending' AND s.delegated_from = $1 AND COALESCE(ab.allow_self_act, 1) = 1))
-          AND s.status = $2 AND d.status = 'in_progress'
-        ORDER BY d.urgent DESC, d.submitted_at ASC LIMIT $3`,
-      [userId, status, limit]
+          AND s.status = $2 AND d.status = 'in_progress'`;
+
+export async function listInbox(userId: string, kind: "pending" | "upcoming", limit = 30, offset = 0): Promise<ApprovalDocSummary[]> {
+  const db = await getDb();
+  const status = kind === "pending" ? "pending" : "waiting";
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name, f.folder_id, s.step_id AS my_step_id ${INBOX_FROM}
+        ORDER BY d.urgent DESC, d.submitted_at ASC LIMIT $3 OFFSET $4`,
+      [userId, status, limit, offset]
     )
   );
   return rows.map(mapSummary);
 }
 
 /** 내가 결재 처리한 문서(결재 문서함) */
-export async function listActedDocs(userId: string, limit = 30): Promise<ApprovalDocSummary[]> {
+export async function listActedDocs(userId: string, limit = 30, offset = 0): Promise<ApprovalDocSummary[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
@@ -993,7 +999,34 @@ export async function listActedDocs(userId: string, limit = 30): Promise<Approva
   return rows
     .map(mapSummary)
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-    .slice(0, limit);
+    .slice(offset, offset + limit);
+}
+
+/** 결재함 박스별 전체 건수 — 목록 페이지 나눔(20·30·50개씩)과 좌측 뱃지용. */
+export async function countApprovalBox(
+  userId: string,
+  box: "pending" | "upcoming" | "acted" | "draft" | "in_progress" | "completed"
+): Promise<number> {
+  const db = await getDb();
+  let rows: Record<string, unknown>[];
+  if (box === "pending" || box === "upcoming") {
+    rows = rowsToObjects(
+      await db.exec(`SELECT COUNT(*)::int AS n ${INBOX_FROM}`, [userId, box === "pending" ? "pending" : "waiting"])
+    );
+  } else if (box === "acted") {
+    rows = rowsToObjects(
+      await db.exec(
+        `SELECT COUNT(DISTINCT s.doc_id)::int AS n FROM approval_steps s
+          WHERE s.assignee_user_id = $1 AND s.status IN ('approved','rejected')`,
+        [userId]
+      )
+    );
+  } else {
+    rows = rowsToObjects(
+      await db.exec(`SELECT COUNT(*)::int AS n FROM approval_docs d WHERE d.drafter_user_id = $1 AND ${MY_DOCS_COND[box]}`, [userId])
+    );
+  }
+  return rows.length ? Number(rows[0].n ?? 0) : 0;
 }
 
 export interface DocRecordRow extends ApprovalDocSummary {

@@ -77,6 +77,7 @@ export type AuditAction =
   | "work_plan_save"
   | "work_plan_delete"
   | "trash_purge"
+  | "trash_restore"
   | "approval_form_update"
   | "approval_action_rerun"
   | "approval_form_actions_update"

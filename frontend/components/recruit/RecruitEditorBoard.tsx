@@ -14,6 +14,7 @@ import {
   FileText,
   History,
   LayoutTemplate,
+  ListRestart,
   Loader2,
   Pencil,
   Redo2,
@@ -25,12 +26,13 @@ import {
   DIVISION_PRESETS,
   EMPTY_META,
   HIRE_TYPE_PRESETS,
+  isTemplateEditTitle,
   PLATFORM_PRESETS,
   WORK_LOCATION_PRESETS,
   periodState,
   type PostingMeta,
 } from "@/lib/recruit/meta";
-import type { DocNode, DocTheme, RecruitPostingRow } from "@/lib/recruit/types";
+import type { DocNode, DocTheme, RecruitPostingRow, RecruitPostingVersionRow } from "@/lib/recruit/types";
 import {
   addRepeatItem,
   duplicateNode,
@@ -57,6 +59,14 @@ import { PngExportModal } from "./PngExportModal";
 import { EditorChrome, type ChromeOps } from "./EditorChrome";
 
 const AUTOSAVE_DELAY = 1500;
+
+/** 버전 저장 시각 표시 — 저장값은 UTC ISO. 로컬 시각 YYYY-MM-DD HH:mm. */
+function formatSavedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   const { theme: uiTheme } = useCdashTheme();
@@ -338,6 +348,50 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
   }, []);
 
 
+  // [버전 저장] 목록·복원(F-40) — 복원은 확인 후 현재 편집 내용을 그 버전으로 바꾸고, 저장은 자동 저장 흐름에 맡긴다.
+  // 본문 트리는 실행취소 기록에 남아 [실행취소]로 복원 직전 상태로 돌아갈 수 있다(테마는 undo 대상 아님). 버전에는 제목·구분 정보가 없어 내용·디자인만 바뀐다.
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versions, setVersions] = useState<RecruitPostingVersionRow[] | null>(null);
+  const [restoring, setRestoring] = useState<number | null>(null);
+
+  const openVersions = useCallback(async () => {
+    setVersionsOpen(true);
+    setVersions(null);
+    try {
+      const res = await fetch(`/api/recruit/postings/${postingId}/versions`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "버전 목록을 불러오지 못했습니다.");
+      setVersions(data.versions as RecruitPostingVersionRow[]);
+    } catch (e) {
+      setVersions([]);
+      toast((e as Error).message, "error");
+    }
+  }, [postingId, toast]);
+
+  const restoreVersion = useCallback(
+    async (v: RecruitPostingVersionRow) => {
+      if (!confirm(`버전 ${v.version}(${formatSavedAt(v.savedAt)})으로 복원할까요?\n지금 편집 중인 내용·디자인이 이 버전으로 바뀌고 자동 저장됩니다. 본문은 [실행취소]로 되돌릴 수 있습니다.`)) return;
+      setRestoring(v.version);
+      try {
+        const res = await fetch(`/api/recruit/postings/${postingId}/versions?version=${v.version}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "버전을 불러오지 못했습니다.");
+        const row = data.version as RecruitPostingVersionRow;
+        if (!row.contentTree) throw new Error("버전 내용이 비어 있습니다.");
+        const restored = row.contentTree;
+        applyOp(() => restored);
+        setDocTheme(row.theme ?? {});
+        setVersionsOpen(false);
+        toast(`버전 ${v.version}으로 복원했습니다.`, "success");
+      } catch (e) {
+        toast((e as Error).message, "error");
+      } finally {
+        setRestoring(null);
+      }
+    },
+    [postingId, applyOp, toast]
+  );
+
   const accentSwatches = useMemo(() => {
     const opts = docTheme.accentOptions ?? [];
     const cur = docTheme.accentColor;
@@ -403,6 +457,9 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               onClick={() => void doExport("pdf")}
             >
               PDF
+            </CdButton>
+            <CdButton size="sm" icon={<ListRestart className="w-4 h-4" />} onClick={() => void openVersions()}>
+              버전 목록
             </CdButton>
             <CdButton size="sm" variant="primary" icon={<History className="w-4 h-4" />} onClick={() => void save({ snapshot: true })}>
               버전 저장
@@ -611,6 +668,11 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
             <p className="text-[11px] mt-1.5 cd-text-faint">
               현재 내용을 새 템플릿으로 등록합니다. 부문별(통합환경허가·화관법·ESG 등) 라인업을 만들 때 사용하세요.
             </p>
+            {isTemplateEditTitle(posting?.title) && (
+              <p className="text-[11px] mt-1.5" style={{ color: "var(--cd-warning)" }}>
+                템플릿 편집용 공고라 공고 목록에는 나오지 않습니다. 다 고친 뒤 이 버튼으로 템플릿에 반영하세요.
+              </p>
+            )}
           </div>
 
           <div className="border-t cd-border-c pt-4 text-[11px] leading-relaxed cd-text-faint">
@@ -625,7 +687,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
               <li><b>이동</b> — 선택 테두리를 잡아 드래그, 또는 화살표 키 1px(Shift 8px).</li>
               <li><b>삭제</b> — 선택 후 Delete 또는 휴지통 버튼.</li>
               <li><b>이미지</b> — 편집 중: 커서 위치 / 블록 선택: 아래 / 선택 없음: 자유 배치(드래그 이동).</li>
-              <li><b>저장</b> — 자동 저장 + 상단 버전 저장으로 스냅샷.</li>
+              <li><b>저장</b> — 자동 저장 + 상단 버전 저장으로 스냅샷, 버전 목록에서 복원.</li>
             </ul>
           </div>
 
@@ -637,6 +699,55 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
 
       {/* PNG 내보내기 — 해상도 선택 */}
       <PngExportModal open={pngOpen} onClose={() => setPngOpen(false)} docRatio={docRatio} onExport={(w, f) => void doExport("png", w, f)} />
+
+      {/* 버전 목록 — [버전 저장] 스냅샷 열람·복원(F-40) */}
+      <CdModal
+        open={versionsOpen}
+        onClose={() => setVersionsOpen(false)}
+        title="버전 목록"
+        size="md"
+        footer={
+          <div className="flex justify-end">
+            <CdButton onClick={() => setVersionsOpen(false)}>닫기</CdButton>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] cd-text-faint">
+            [버전 저장]으로 남긴 시점입니다. 복원하면 현재 내용·디자인이 그 버전으로 바뀌고 자동 저장됩니다. 제목·공고 구분 정보는 바뀌지 않습니다.
+          </p>
+          {versions === null ? (
+            <div className="flex items-center gap-2 text-sm cd-text-muted py-4">
+              <Loader2 className="w-4 h-4 animate-spin" /> 버전 불러오는 중…
+            </div>
+          ) : versions.length === 0 ? (
+            <div className="text-sm cd-text-faint py-6 text-center">저장한 버전이 없습니다. 상단 [버전 저장]으로 남길 수 있습니다.</div>
+          ) : (
+            <ul className="flex flex-col divide-y cd-border-c rounded-lg border cd-border-c max-h-[50vh] overflow-y-auto">
+              {versions.map((v) => (
+                <li key={v.version} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold cd-text">버전 {v.version}</div>
+                    <div className="text-xs cd-text-muted truncate">
+                      {formatSavedAt(v.savedAt)}
+                      {v.savedByName ? ` · ${v.savedByName}` : ""}
+                    </div>
+                  </div>
+                  <CdButton
+                    size="sm"
+                    variant="soft"
+                    loading={restoring === v.version}
+                    disabled={restoring !== null}
+                    onClick={() => void restoreVersion(v)}
+                  >
+                    이 버전으로 복원
+                  </CdButton>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </CdModal>
 
       {/* 부문 템플릿으로 저장 */}
       <CdModal

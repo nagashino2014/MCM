@@ -1087,7 +1087,7 @@ export function QuoteBoard() {
                   </h3>
                   <ul className="rounded-xl border cd-border-c overflow-hidden">
                     {revision.items.map((it) => (
-                      <li key={it.docId} className="flex items-center gap-3 px-3 py-2 text-[12px] border-b cd-border-c flex-wrap">
+                      <li key={it.docId} className="flex items-center gap-3 px-3 py-[11.5px] text-[12px] border-b cd-border-c flex-wrap">
                         <span className="font-mono font-semibold cd-text w-7">v{it.version}</span>
                         <span className="font-mono text-[11px] cd-text-faint">{it.quoteNo ?? "-"}</span>
                         <span className="cd-text-faint">발송일 {shortDate(it.sentAt ?? it.issueDate ?? it.submittedAt)}</span>
@@ -2005,7 +2005,7 @@ export function QuoteBoard() {
                 </button>
               </div>
               <p className="text-[10.5px] cd-text-faint">
-                승인 완료 시 견적번호 채번 → xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
+                상신 시 견적번호 확정 → 승인 완료 시 xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
               </p>
             </div>
           </div>

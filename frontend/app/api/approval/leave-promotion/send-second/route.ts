@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // { year, assignments: [{ employeeId, assigned: ["YYYY-MM-DD", ...] }] }
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as { year?: string; assignments?: SecondAssignment[] };
     const year = String(body.year ?? new Date().getFullYear());
     const assignments = Array.isArray(body.assignments) ? body.assignments : [];

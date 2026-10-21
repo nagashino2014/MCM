@@ -753,7 +753,9 @@ function buildTarget(mailboxId: string, u: ImportUpload, job: ImportJob, ctx: Im
     const addr = m ? (m[0].match(/[\w.+-]+@[\w.-]+/) ?? [""])[0].toLowerCase() : "";
     // myAddrs = 메일함 주소 원장 전체(.app·.com) — 원 계정이 아마란스면 .com 주소가 여기에 있다.
     const mine = !!addr && ctx.myAddrs.has(addr);
-    return { mailboxId, folderId: mine ? ctx.sentFolder : ctx.importFolder, direction: mine ? "out" : "in", isRead: true, labels };
+    return { mailboxId, folderId: mine ? ctx.sentFolder : ctx.importFolder, direction: mine ? "out" : "in", isRead: mine, labels };
   }
-  return { mailboxId, folderId: job.options.inboxPlacement ? ctx.inboxFolder : ctx.importFolder, direction: "in", isRead: true, labels };
+  // 아마란스 ZIP·eml 에는 읽음 정보가 없다(10-21 원문 251통 실측: Status·X-Status·플래그 헤더 0건, 파일명도 폴더명뿐).
+  // 받은 메일은 안읽음으로 두어 사용자가 직접 읽으며 정리한다(사용자 지정). 보낸 메일만 읽음.
+  return { mailboxId, folderId: job.options.inboxPlacement ? ctx.inboxFolder : ctx.importFolder, direction: "in", isRead: false, labels };
 }

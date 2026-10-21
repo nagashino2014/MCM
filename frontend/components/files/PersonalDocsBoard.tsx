@@ -13,6 +13,7 @@ import { CdButton } from "@/components/cdash/CdButton";
 import { useCdToast } from "@/components/cdash/CdToast";
 import OrganizationTree from "@/components/admin/users/OrganizationTree";
 import type { OrganizationSnapshot, OrganizationEmployeeRow } from "@/components/admin/users/types";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import { formatBytes } from "@/lib/approval/attachments";
 import "@/components/cdash/cdash.css";
 
@@ -111,7 +112,9 @@ export function PersonalDocsBoard() {
     }
   };
 
-  const allChecked = docs.length > 0 && docs.every((d) => selected.has(d.documentId));
+  // 화면당 20·30·50개(기본 50) — 전체 선택은 지금 보이는 쪽만.
+  const { pageRows: pageDocs, pager } = useClientPaging(docs, "personal-docs-page-size", loading);
+  const allChecked = pageDocs.length > 0 && pageDocs.every((d) => selected.has(d.documentId));
   const pct = quotaBytes > 0 ? Math.min(100, Math.round((usedBytes / quotaBytes) * 100)) : 0;
   const selectedDocs = useMemo(() => docs.filter((d) => selected.has(d.documentId)), [docs, selected]);
 
@@ -207,7 +210,13 @@ export function PersonalDocsBoard() {
                   <input
                     type="checkbox"
                     checked={allChecked}
-                    onChange={() => setSelected(allChecked ? new Set() : new Set(docs.map((d) => d.documentId)))}
+                    onChange={() =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        pageDocs.forEach((d) => (allChecked ? next.delete(d.documentId) : next.add(d.documentId)));
+                        return next;
+                      })
+                    }
                     aria-label="전체 선택"
                   />
                 </th>
@@ -232,7 +241,7 @@ export function PersonalDocsBoard() {
                   </td>
                 </tr>
               ) : (
-                docs.map((d) => {
+                pageDocs.map((d) => {
                   const ext = d.fileName.includes(".") ? d.fileName.slice(d.fileName.lastIndexOf(".") + 1).toUpperCase() : "-";
                   return (
                     <tr
@@ -241,7 +250,7 @@ export function PersonalDocsBoard() {
                       onClick={() => window.open(`/api/personal-docs/open?id=${encodeURIComponent(d.documentId)}`, "_blank", "noopener")}
                       title="클릭하면 파일을 엽니다"
                     >
-                      <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-[11.5px] px-2" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(d.documentId)}
@@ -256,15 +265,15 @@ export function PersonalDocsBoard() {
                           aria-label={`${d.fileName} 선택`}
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-[11.5px] px-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
                           <span className="truncate font-medium" style={{ maxWidth: 420 }}>{d.fileName}</span>
                         </div>
                       </td>
-                      <td className="py-2 px-2 text-xs cd-text-faint">{ext}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{formatBytes(d.byteSize)}</td>
-                      <td className="py-2 px-2 tabular-nums">{d.createdAt.slice(0, 10)}</td>
+                      <td className="py-[11.5px] px-2 text-xs cd-text-faint">{ext}</td>
+                      <td className="py-[11.5px] px-2 text-right tabular-nums">{formatBytes(d.byteSize)}</td>
+                      <td className="py-[11.5px] px-2 tabular-nums">{d.createdAt.slice(0, 10)}</td>
                     </tr>
                   );
                 })
@@ -272,6 +281,7 @@ export function PersonalDocsBoard() {
             </tbody>
           </table>
         </div>
+        {docs.length > 0 && pager}
       </div>
 
       <SendModal open={sendOpen} onClose={() => setSendOpen(false)} docs={selectedDocs} />

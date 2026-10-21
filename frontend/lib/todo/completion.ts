@@ -1,6 +1,6 @@
 /*
  * 완료 조건 검사(276, 2026-10-14) — 순수 함수. 서버(lib/todo/store.ts completeItem·updateItem)·웹 완료 확인 모달·모바일 완료 시트가 공유한다.
- * 규칙: subtasks = 미완 하위 작업 0건 · note = 완료 메모 입력 · review = 검토 단계 경유(reviewed_at 기록 또는 현재 상태 review).
+ * 규칙: subtasks = 미완 하위 작업 0건 · note = 완료 메모 입력 · review = 검토 단계 경유(reviewed_at 기록 또는 현재 상태 review) · deps = 미완 선행 작업 0건(288).
  * 모바일 복제본: apps/mobile/src/lib/todo-completion.ts(동기화 유지).
  */
 import { TODO_COMPLETE_RULE_KEYS, TODO_COMPLETE_RULE_SHORT_LABELS, type TodoCompleteRuleKey, type TodoCompleteRules } from "./types";

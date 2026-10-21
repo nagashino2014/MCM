@@ -31,7 +31,8 @@ export const FILES_ARTICLES: ManualArticle[] = [
           },
           { kind: "list", items: [
             "[[보존만료]] 열은 완료일에 양식별 보존 연한을 더한 날짜입니다. 지난 문서는 ‘(만료)’로 표시됩니다.",
-            "목록은 최근 문서부터 일정 건수까지 보여 줍니다. 오래된 문서는 연도·기간을 지정해 찾으세요.",
+            "목록은 최근 500건(발송공문·발송견적은 200건)까지 불러와 한 화면에 50개씩 보여 줍니다. 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다. 더 오래된 문서는 연도·기간을 지정해 찾으세요.",
+            "[[발송견적]] 탭은 결재 관리 권한자와 영업(견적 작성) 전사 권한자에게 전사 견적이, 그 밖의 직원에게는 본인이 기안한 견적만 보입니다.",
           ] },
         ],
       },
@@ -44,7 +45,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
             head: ["탭", "누가 보나"],
             rows: [
               ["[[발송공문]]", "전 직원이 보고 PDF·한글 파일을 내려받습니다. 재발송·수신처 편집·이관 등록 삭제는 결재 운영 담당만 합니다."],
-              ["[[발송견적]]", "전 직원이 봅니다. 수주 결과 기입은 결재 운영 담당만 합니다."],
+              ["[[발송견적]]", "결재 관리 권한자·영업(견적 작성) 전사 권한자는 전사 견적을, 그 밖의 직원은 본인이 기안한 견적을 봅니다. 수주 결과 기입은 결재 운영 담당만 합니다."],
               ["[[계약 문서]]", "계약서·변경계약서는 전 직원이 모든 계약의 것을 봅니다. 세금계산서 등 그 밖의 서류는 내가 볼 수 있는 계약의 것만 보입니다."],
             ],
           },
@@ -53,7 +54,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["문서함", "완료 문서", "보존", "발송공문", "발송견적", "참조 문서", "계약서", "과거 공문", "열람 권한"],
-    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx"],
+    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx", "app/api/quotes/route.ts"],
     reviewedAt: "2026-10-21",
   },
   {
@@ -81,14 +82,16 @@ export const FILES_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "거래처 담당자에게는 메일로만 보낼 수 있습니다.",
             "메일 첨부 합계가 25MB를 넘으면 큰 파일은 다운로드 링크로 바뀝니다.",
+            "메일을 쓰는 중이라면 메일 쓰기의 [[문서함]] 버튼으로 개인문서함 파일을 골라 바로 첨부할 수도 있습니다.",
             "용량이 90%를 넘으면 [[용량이 거의 찼습니다]] 경고가 나옵니다. 용량은 관리자가 배분합니다.",
+            "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다. 전체 선택은 지금 보이는 쪽의 파일만 고릅니다.",
           ] },
         ],
       },
     ],
     keywords: ["개인문서함", "내 파일", "파일 보내기", "용량", "증명서"],
-    sources: ["components/files/PersonalDocsBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    sources: ["components/files/PersonalDocsBoard.tsx", "components/mail/MailComposePage.tsx"],
+    reviewedAt: "2026-10-21",
   },
   {
     id: "files.library",
@@ -108,12 +111,13 @@ export const FILES_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "warn", text: "여기서 지운 파일은 **원래 있던 곳(결재 문서·메신저 등)에서도 사라지며 복구할 수 없습니다.** 일괄 삭제는 현재 필터에 걸린 파일 전체가 대상입니다." },
           { kind: "p", text: "[[파일 저장 정책]]에서 [[5MB 이하 파일]] / [[50MB 이하 파일]] / [[50MB 이상 파일]]마다 보존 기간(6개월·1년·5년·영구)을 정하고 [[정책 저장]]을 누릅니다." },
+          { kind: "p", text: "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다." },
           { kind: "warn", text: "보존 기간이 지난 파일은 ‘보존기간 경과’로 표시되고, 매일 한 번 자동 삭제 작업에서 지워집니다(복구 불가, 하루 최대 1,000건)." },
         ],
       },
     ],
     keywords: ["파일함", "첨부 파일", "보존 기간", "파일 삭제", "저장 정책"],
     sources: ["components/files/FileLibraryBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

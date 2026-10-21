@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 // POST: 카탈로그 전체 저장(admin) — 사규 개정 시 관리자가 편집
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const body = (await req.json().catch(() => ({}))) as { types?: LeaveTypeItem[] };
     if (!Array.isArray(body.types)) return NextResponse.json({ error: "types 배열이 필요합니다." }, { status: 400 });
     const count = await saveLeaveTypes(body.types, actor.userId);

@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { RecipientEditGrid } from "@/components/approval/LetterRecipientGrid";
 import { LetterImportModal } from "@/components/approval/LetterImportModal";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import { LETTER_SEND_STATUS_LABEL, type LetterRecipient, type LetterSendStatus, type OfficialLetterRow } from "@/lib/letter/types";
 
 const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
@@ -291,6 +292,12 @@ export function LetterRecordsTable({
   const [importOpen, setImportOpen] = useState(false);
   const [canImport, setCanImport] = useState(false);
   const [gaps, setGaps] = useState<string[]>([]);
+  // 화면당 20·30·50개(기본 50) — 조회 결과 건수가 바뀌면(새 검색) 첫 쪽부터.
+  const { pageRows: pageLetters, pager, resetPage } = useClientPaging(letters, "letter-records-page-size", loading);
+  useEffect(() => {
+    resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letters.length]);
 
   const loadNumbering = useCallback(() => {
     fetch("/api/letters/next-no", { cache: "no-store" })
@@ -356,17 +363,17 @@ export function LetterRecordsTable({
             </tr>
           </thead>
           <tbody>
-            {letters.map((l) => (
+            {pageLetters.map((l) => (
               <tr key={l.letterId} className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]" onClick={() => setViewId(l.letterId)}>
-                <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{l.letterNo ?? "-"}</td>
-                <td className="py-2 pr-3 cd-text max-w-[340px] overflow-hidden text-ellipsis" title={l.title ?? ""}>
+                <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{l.letterNo ?? "-"}</td>
+                <td className="py-[11.5px] pr-3 cd-text max-w-[340px] overflow-hidden text-ellipsis" title={l.title ?? ""}>
                   {l.title ?? "-"}
                 </td>
-                <td className="py-2 pr-3 cd-text max-w-[220px] overflow-hidden text-ellipsis">{recipientsSummary(l.recipients)}</td>
-                <td className="py-2 pr-3 cd-text-faint">{l.letterKind === "proof" ? "내용증명" : "일반"}</td>
-                <td className="py-2 pr-3 cd-text">{l.drafterName ?? "-"}</td>
-                <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{l.issueDate ?? "-"}</td>
-                <td className="py-2 pr-3">
+                <td className="py-[11.5px] pr-3 cd-text max-w-[220px] overflow-hidden text-ellipsis">{recipientsSummary(l.recipients)}</td>
+                <td className="py-[11.5px] pr-3 cd-text-faint">{l.letterKind === "proof" ? "내용증명" : "일반"}</td>
+                <td className="py-[11.5px] pr-3 cd-text">{l.drafterName ?? "-"}</td>
+                <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{l.issueDate ?? "-"}</td>
+                <td className="py-[11.5px] pr-3">
                   {statusBadge(l.sendStatus)}
                   {l.sendHistory.length > 1 && <span className="ml-1.5 text-[10.5px] cd-text-faint">{l.sendHistory.length}차</span>}
                   {l.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">클릭 후 재발송</span>}
@@ -383,6 +390,7 @@ export function LetterRecordsTable({
           </tbody>
         </table>
       </div>
+      {letters.length > 0 && <div className="mt-3">{pager}</div>}
       {viewId && (
         <LetterViewModal
           letterId={viewId}

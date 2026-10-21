@@ -15,6 +15,7 @@ import { CdTabs } from "@/components/cdash/CdTabs";
 import { ApprovalDocModal, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
 import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import { timeRangeText, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import type { OfficialLetterRow } from "@/lib/letter/types";
@@ -264,6 +265,13 @@ export function ApprovalRecordsBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromYm, toYm]);
 
+  // 화면당 20·30·50개(기본 50) — 조회 결과 건수가 바뀌면(새 검색) 첫 쪽부터. CSV 는 전체 건.
+  const { pageRows: pageDocs, pager, resetPage } = useClientPaging(docs, "approval-records-page-size", loading);
+  useEffect(() => {
+    resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs.length]);
+
   const csv = useMemo(() => {
     const head = ["문서번호", "제목", "기안자", "부서", "상신일", "상태", ...fields.map((f) => f.label)];
     const lines = docs.map((d) => [
@@ -415,12 +423,12 @@ export function ApprovalRecordsBoard() {
                 </tr>
               </thead>
               <tbody>
-                {docs.map((d) => (
+                {pageDocs.map((d) => (
                   <tr key={d.docId} className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]" onClick={() => setDetailDocId(d.docId)}>
-                    <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{d.docNo ?? "-"}</td>
-                    <td className="py-2 pr-3 cd-text">{d.drafterName ?? "-"}</td>
-                    <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{short(d.submittedAt)}</td>
-                    <td className="py-2 pr-3">
+                    <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{d.docNo ?? "-"}</td>
+                    <td className="py-[11.5px] pr-3 cd-text">{d.drafterName ?? "-"}</td>
+                    <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{short(d.submittedAt)}</td>
+                    <td className="py-[11.5px] pr-3">
                       <span
                         className={`text-[10.5px] rounded-full px-2 py-0.5 border ${
                           d.status === "approved"
@@ -434,7 +442,7 @@ export function ApprovalRecordsBoard() {
                       </span>
                     </td>
                     {fields.map((f) => (
-                      <td key={f.key} className="py-2 pr-3 cd-text max-w-[260px] overflow-hidden text-ellipsis" title={flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames)}>
+                      <td key={f.key} className="py-[11.5px] pr-3 cd-text max-w-[260px] overflow-hidden text-ellipsis" title={flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames)}>
                         {flatten(f, d.fieldValues[f.key], leaveCatalog, assetNames) || <span className="cd-text-faint">-</span>}
                       </td>
                     ))}
@@ -451,6 +459,7 @@ export function ApprovalRecordsBoard() {
             </table>
           </div>
         )}
+        {tab === "approval" && !loading && docs.length > 0 && pager}
         {tab === "approval" && (
           <p className="text-[10.5px] cd-text-faint">최근 200건까지 표시됩니다. 행을 클릭하면 문서 원본을 확인할 수 있습니다.</p>
         )}

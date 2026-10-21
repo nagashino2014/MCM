@@ -1077,7 +1077,7 @@ export function ApprovalLetterBoard() {
                         disabled={current}
                         onClick={() => openDraftDoc(d.docId)}
                         className={
-                          "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left hover:brightness-[0.98] " +
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-[9.5px] text-left hover:brightness-[0.98] " +
                           (current ? "border-[color:var(--cd-primary)]" : "cd-border-c")
                         }
                         // 상신 버튼 그라데이션을 아주 연하게 깐 태그 면(2026-09-14 사용자 요청)

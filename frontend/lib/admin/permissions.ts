@@ -159,6 +159,11 @@ export async function savePermissionTemplate(
   const name = input.templateName.trim();
   if (!name) throw new Error("권한 템플릿명이 필요합니다.");
   const templateId = input.templateId?.trim() || id("tpl");
+  // 비활성 템플릿은 이미 부여된 계정에도 적용되지 않으므로(lib/auth/rbac.ts, F-29) 시스템 관리자 템플릿을 끄면
+  // 모든 관리자가 잠긴다 — '마지막 시스템 관리자' 회수 보호와 같은 취지로 막는다.
+  if (templateId === "tpl-system-admin" && input.isActive === false) {
+    throw Object.assign(new Error("시스템 관리자 템플릿(tpl-system-admin)은 비활성으로 바꿀 수 없습니다."), { status: 400 });
+  }
   const now = new Date().toISOString();
 
   await withDbWrite(async (db) => {

@@ -7,7 +7,7 @@ import { readContractDocument } from "@/lib/storage/contract-document-storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET ?issueId= : 발급본 PDF — 발급 담당(approval.manage) 또는 기안자 본인만.
+// GET ?issueId= : 발급본 PDF — 발급 담당(staffing.edit) 또는 기안자 본인만.
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("approval.view");
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const issue = await getCertificateIssue(issueId);
     const key = wantHwpx ? issue?.hwpxKey : issue?.fileKey;
     if (!issue || !key) return NextResponse.json({ error: "발급본이 없습니다." }, { status: 404 });
-    if (issue.userId !== ctx.userId && !(await hasPermission(ctx.userId, "approval.manage"))) {
+    if (issue.userId !== ctx.userId && !(await hasPermission(ctx.userId, "staffing.edit"))) {
       return NextResponse.json({ error: "이 발급본을 열람할 권한이 없습니다." }, { status: 403 });
     }
     const buf = await readContractDocument(key);

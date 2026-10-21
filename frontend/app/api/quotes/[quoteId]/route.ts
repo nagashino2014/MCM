@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getQuoteById, updateQuoteMeta } from "@/lib/quote/store";
+import { canViewQuote } from "@/lib/quote/access";
 import type { QuoteRecipient, QuoteResult } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
@@ -9,10 +10,12 @@ export const dynamic = "force-dynamic";
 // GET: 견적 대장 단건
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) {
   try {
-    await requirePermission("approval.view");
+    const ctx = await requirePermission("approval.view");
     const { quoteId } = await params;
     const quote = await getQuoteById(quoteId);
     if (!quote) return NextResponse.json({ error: "견적을 찾을 수 없습니다." }, { status: 404 });
+    // 전사 견적은 결재 관리·영업 전사 범위만, 그 밖은 견적 결재 문서를 볼 수 있는 사람만(F-26 후속)
+    if (!(await canViewQuote(ctx.userId, quote.docId))) return NextResponse.json({ error: "이 견적을 볼 권한이 없습니다." }, { status: 403 });
     return NextResponse.json({ quote });
   } catch (err) {
     return authErrorToResponse(err);

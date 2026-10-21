@@ -9,12 +9,12 @@ export const WORK_MGMT_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "[[반려]]는 의견 분류가 [[보완 요구]] 또는 [[오기 정정 요청]]일 때만 누를 수 있습니다. 반려한 보고는 작성자의 [[재보고 대상]]으로 갑니다.",
         "[[확인]]한 보고는 [[Merging 대상]]에 모이고, 통합 보고를 만들면 임원 검토·지시로 올라갑니다.",
-        "임원 지시는 [[임원지시]]에서 답하며, [[재보고]]는 보고마다 1회만 할 수 있습니다.",
+        "임원 지시는 [[임원지시]]에서 답하며, [[재보고]]는 지시마다 1회입니다. 임원이 [[의견]]으로 보낸 건은 답변이 선택입니다.",
       ] },
     ],
     more: { article: "work-plan.oversight", section: "review" },
     sources: ["components/work-plan/OversightWorkspace.tsx", "components/work-plan/ReportEditor.tsx", "components/work-plan/ServiceListPanel.tsx", "lib/work-plan/constants.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "work-plan.merge",
@@ -36,13 +36,13 @@ export const WORK_MGMT_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "부서장이 통합한 보고만 [[용역]] / [[Task]] 탭에 나옵니다.",
-        "지시 종류: [[보완 요구]] · [[진행 촉구]] · [[추가보고 지시]]는 [[지시 하달]]할 수 있습니다. [[의견]]을 고르면 하달 버튼이 비활성됩니다.",
-        "하달하면 부서장 감독 화면의 임원지시 목록으로 가고, 부서장은 1회 재보고합니다. 재보고는 [[용역(재보고)]] / [[Task(재보고)]] 탭에서 봅니다.",
+        "지시 종류: [[보완 요구]] · [[진행 촉구]] · [[추가보고 지시]] · [[의견]] 모두 [[지시 하달]]할 수 있습니다. [[의견]]은 부서장 답변이 선택입니다.",
+        "하달하면 부서장 감독 화면의 임원지시 목록으로 가고 알림이 갑니다. 부서장은 지시마다 1회 재보고하며, 재보고는 [[용역(재보고)]] / [[Task(재보고)]] 탭에서 봅니다.",
       ] },
     ],
     more: { article: "work-plan.exec", section: "directive" },
     sources: ["components/work-plan/ExecWorkspace.tsx", "components/work-plan/ReportEditor.tsx", "lib/work-plan/constants.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   // ── 성과급 ──
   {
@@ -69,12 +69,13 @@ export const WORK_MGMT_HELP: HelpTopic[] = [
         "[[제안]]은 이 반기의 참여 기간을 가중해 비율을 채웁니다. 확인 후 [[저장]]해야 반영됩니다.",
         "평점 가중치: A 1.125 · B 1.0625 · C 1 · D 0.9375 · E 0.8875. 평점이 없으면 C로 계산합니다.",
         "[[절대평가 옵션]]을 켜면 등급별 상한(반기 전체 평점 건수 대비 %)을 넘는 저장이 거절됩니다.",
-        "참여자 제거(X)와 관리자·참여자 지정은 [[저장]]과 관계없이 즉시 반영됩니다.",
+        "참여자 제거(X)는 확인 창을 거쳐, 관리자·참여자 지정과 함께 [[저장]]과 관계없이 즉시 반영됩니다. 제거하면 계약 수행인력에서도 빠집니다.",
+        "등급별 상한 값은 입력을 마치고 칸을 벗어나거나 Enter를 누를 때 저장됩니다.",
       ] },
     ],
     more: { article: "staffing.evaluations", section: "participation" },
     sources: ["components/bonus/BonusEvaluationsBoard.tsx", "lib/bonus/shared.ts", "lib/bonus/evaluations.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "bonus.statements",

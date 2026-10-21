@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -14,13 +15,22 @@ interface RouteContext {
  * POST: 휴지통 복원(F-11, 2026-10-21) — 사업장·계약의 휴지통 이동(삭제 표시)을 되돌린다.
  * 원본 행의 deleted_at·deleted_by·delete_reason 을 비우고 휴지통 행을 지운다.
  * 휴지통 행에 있던 사유·삭제자·삭제 전 상태는 감사 로그(before)에 남는다.
+ * 계약은 삭제(DELETE /api/contracts/[id])와 같은 회계 쓰기 잠금·스냅샷(withContractTransactionWrite) 안에서 되살린다
+ * — 복원은 거래 연결을 바꾸지 않으므로 연결 보호 검사(protect)는 생략한다.
  */
 export async function POST(_: NextRequest, ctx: RouteContext) {
   try {
     const actor = await requirePermission("trash.restore");
     const { trashId } = await ctx.params;
     const now = new Date().toISOString();
-    await withDbWrite(async (db) => {
+    const peek = rowsToObjects(
+      await (await getDb()).exec("SELECT item_type, item_id FROM trash_items WHERE trash_id = $1 AND purged_at IS NULL LIMIT 1", [trashId])
+    )[0];
+    const write = <T,>(cb: (db: PgDatabase) => Promise<T>): Promise<T> =>
+      peek && String(peek.item_type) === "contract"
+        ? withContractTransactionWrite(String(peek.item_id), null, cb, { protect: false })
+        : withDbWrite(cb);
+    await write(async (db) => {
       const rows = rowsToObjects(
         await db.exec("SELECT * FROM trash_items WHERE trash_id = $1 AND purged_at IS NULL LIMIT 1", [trashId])
       );

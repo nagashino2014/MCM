@@ -27,7 +27,13 @@ export type ManualBlock =
   /** "이 작업을 하면 → 어디에 반영" 연계 */
   | { kind: "flow"; items: { from: string; to: string }[] }
   /** 다른 기사 링크 */
-  | { kind: "link"; article: string; section?: string; label?: string };
+  | { kind: "link"; article: string; section?: string; label?: string }
+  /**
+   * 화면 캡처 — src 는 public/ 기준 경로("/manual/shots/mail-list.webp").
+   * 이름·금액·연락처는 가린 채로 찍는다(전 직원이 본다). 다시 찍는 절차: docs/manual-authoring-guide.md "화면 캡처".
+   * 화면이 바뀌어 그림이 낡으면 같은 커밋에서 다시 찍거나 블록을 뺀다.
+   */
+  | { kind: "image"; src: string; alt: string; caption?: string };
 
 export interface ManualSection {
   /** 기사 안에서 고유한 키(앵커). */

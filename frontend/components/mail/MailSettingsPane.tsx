@@ -160,14 +160,7 @@ export function MailSettingsPane() {
         </div>
       </section>
 
-      {/* 외부 클라이언트 안내 */}
-      <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-1.5">
-        <h3 className="text-sm font-bold cd-text">외부 메일 클라이언트(POP3 / IMAP / SMTP)</h3>
-        <p className="text-xs cd-text-faint leading-relaxed">
-          아웃룩 등 외부 클라이언트 연동(POP3/IMAP/SMTP 계정 발급)은 준비 중입니다. 현재는 웹메일과 모바일 앱에서 이용해 주세요.
-          지원이 시작되면 이 화면에 서버 주소·포트·보안 설정 정보가 표시됩니다.
-        </p>
-      </section>
+      {/* 외부 클라이언트(POP3/IMAP/SMTP) 안내는 서버 구축 전까지 숨긴다(F-13, 2026-10-21 사용자 결정) — 구성안: docs/mail-external-client-plan.md */}
 
       <div>
         <CdButton variant="primary" loading={saving} icon={<Check className="w-4 h-4" />} onClick={save}>

@@ -11,7 +11,7 @@ interface RouteContext {
 }
 
 // 완료/되돌리기. body { done?: boolean, completionNote?: string }(done 기본 true). 반복이면 다음 발생을 next 로 함께 돌려준다.
-// 완료 조건(276) 미충족이면 409 { error, code: "complete_rules", missing: ["subtasks"|"note"|"review"], openSubtasks } — 화면은 완료 확인 모달로 안내한다.
+// 완료 조건(276) 미충족이면 409 { error, code: "complete_rules", missing: ["subtasks"|"note"|"review"|"deps"], openSubtasks, openDeps } — 화면은 완료 확인 모달로 안내한다.
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const ctx = await requireSession();

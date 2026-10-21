@@ -484,6 +484,8 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     const unbindNow = new Date().toISOString();
     await txn.run(`UPDATE personal_receipts SET doc_id = NULL, doc_form_id = NULL, updated_at = $2 WHERE doc_id = $1`, [docId, unbindNow]);
     await txn.run(`UPDATE card_transactions SET doc_id = NULL, doc_form_id = NULL, updated_at = $2 WHERE doc_id = $1`, [docId, unbindNow]);
+    // 쇼핑몰 전표(224 귀속)도 같은 이유로 해제 — 남겨 두면 1회 연결 규칙에 막혀 다른 문서에서 다시 쓸 수 없다(G-8 후속).
+    await txn.run(`UPDATE shop_receipts SET doc_id = NULL WHERE doc_id = $1`, [docId]);
     // 발송 대장 미러(135 공문 · 136 견적) — doc_id 는 FK 가 아니라 함께 지우지 않으면 고아로 남는다.
     // 백필(imported) 공문은 doc_id 가 NULL 이라 영향 없다. quotation_sites 는 CASCADE.
     await txn.run(`DELETE FROM official_letters WHERE doc_id = $1`, [docId]);

@@ -89,7 +89,7 @@ export const START_ARTICLES: ManualArticle[] = [
             kind: "table",
             head: ["버튼", "하는 일"],
             rows: [
-              ["검색 (Ctrl K)", "메뉴·화면 이름과 매뉴얼을 찾아 바로 이동합니다. ↑↓로 고르고 Enter."],
+              ["검색 (Ctrl K)", "메뉴·화면 이름, 매뉴얼, 그리고 두 글자 이상이면 내용(메일·결재 문서·주소록·계약·사업장·할 일)까지 찾아 바로 이동합니다. ↑↓로 고르고 Enter."],
               ["[[새로 작성]]", "[[새 메일]] · [[새 기안]] · [[새 할 일]]을 바로 엽니다."],
               ["[[매뉴얼]] (F1)", "지금 보고 있는 화면의 사용법을 오른쪽에 엽니다."],
               ["할 일 알림 / 운영 알림", "나에게 배정된 할 일·댓글과 시스템 알림을 모아 봅니다."],
@@ -98,6 +98,26 @@ export const START_ARTICLES: ManualArticle[] = [
             ],
           },
           { kind: "tip", text: "계약·사업장·영업·결재 상세를 보고 있을 때 [[새 할 일]]을 누르면, 보고 있던 항목이 할 일에 자동으로 연결됩니다." },
+        ],
+      },
+      {
+        id: "search",
+        title: "검색으로 내용 찾기",
+        blocks: [
+          { kind: "p", text: "검색창에 두 글자 이상 넣으면 메뉴·매뉴얼과 함께 아래 내용도 찾습니다. 결과는 종류마다 최근 것부터 5건까지 보이고, 누르면 그 화면에서 바로 열립니다." },
+          {
+            kind: "table",
+            head: ["종류", "찾는 곳", "보이는 범위"],
+            rows: [
+              ["메일", "제목·보낸 사람", "내 메일함(휴지통·스팸 제외)"],
+              ["결재 문서", "제목·문서번호", "결재함에서 열 수 있는 문서와 같음(남의 임시저장은 제외)"],
+              ["주소록", "임직원 이름·부서, 외부 담당자 이름·회사", "임직원은 전 직원, 외부 담당자는 담당자 열람 권한이 있을 때"],
+              ["계약", "계약명·거래처", "계약 화면에서 볼 수 있는 계약"],
+              ["사업장", "업체명·주소·별칭", "사업장 열람 권한이 있을 때"],
+              ["할 일", "제목", "내 할 일·담당·공유받은 할 일, 내가 속한 보드"],
+            ],
+          },
+          { kind: "tip", text: "메일 본문까지 찾으려면 메일 화면 위쪽 검색을 쓰세요. 상단 검색은 제목·보낸 사람만 봅니다." },
         ],
       },
       {
@@ -113,8 +133,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["화면", "메뉴", "상단바", "검색", "새로 작성", "다크 모드", "알림", "단축키"],
-    sources: ["components/layout/TopBar.tsx", "components/layout/Sidebar.tsx", "components/manual/ManualButton.tsx"],
+    keywords: ["화면", "메뉴", "상단바", "검색", "내용 검색", "통합 검색", "새로 작성", "다크 모드", "알림", "단축키"],
+    sources: ["components/layout/TopBar.tsx", "components/layout/Sidebar.tsx", "components/manual/ManualButton.tsx", "components/layout/GlobalSearch.tsx"],
     reviewedAt: "2026-10-21",
   },
   {
@@ -209,6 +229,7 @@ export const START_ARTICLES: ManualArticle[] = [
       "휴대폰 브라우저로 접속하면 모바일 화면(홈·일정·결재·사업장·담당자)으로 자동 이동합니다.",
       "모바일에서 결재 승인·반려, 명함·영수증 촬영, 일정 경과 입력을 할 수 있습니다.",
       "전용 앱이 설치되어 있으면 메일·메신저·할 일·업무보고까지 앱에서 씁니다.",
+      "앱의 전체 메뉴 → [[사용 매뉴얼]]에서 이 매뉴얼을 그대로 찾아 읽을 수 있습니다.",
     ],
     sections: [
       {
@@ -232,9 +253,21 @@ export const START_ARTICLES: ManualArticle[] = [
           ] },
         ],
       },
+      {
+        id: "app-manual",
+        title: "앱에서 매뉴얼 보기",
+        blocks: [
+          { kind: "steps", items: [
+            "앱 아래쪽 [[더보기]] 탭(전체 메뉴)에서 [[사용 매뉴얼]]을 누릅니다.",
+            "위쪽 검색에 기능·버튼 이름이나 초성을 넣거나, 장을 눌러 펼친 뒤 기사를 고릅니다.",
+            "기사 안 절 제목 옆 ↑ 버튼은 기사 맨 위로 돌아갑니다.",
+          ] },
+          { kind: "tip", text: "웹 매뉴얼과 같은 내용이 내 권한에 맞게 보입니다. 웹 화면 기준 설명이라 앱에 없는 기능도 있습니다." },
+        ],
+      },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함"],
-    sources: ["components/mobile/MobileHome.tsx"],
-    reviewedAt: "2026-10-20",
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼"],
+    sources: ["components/mobile/MobileHome.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx"],
+    reviewedAt: "2026-10-21",
   },
 ];

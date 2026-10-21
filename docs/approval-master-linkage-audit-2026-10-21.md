@@ -1,6 +1,6 @@
 # 결재 양식 ↔ 마스터 데이터 연계 전수조사·개선 계획 (2026-10-21)
 
-작성: 2026-10-21. 상태: **조사 완료 · 계획 초안(결정 D-1~D-6 대기)**.
+작성: 2026-10-21. 상태: **L0·L1·L2(보정 도구)·L3·L4 구현 완료(브랜치 `claude/approval-linkage`, 미배포) — 결정 D-1~D-6 은 권장안으로 진행(2026-10-21 사용자 "계획서대로 진행")**. 진행 결과는 §6.
 대상 화면: `/approval/semantics` 데이터 관계 맵(SW-P1, [semantic-analytics-wizard-blueprint.md](semantic-analytics-wizard-blueprint.md) §4-2·§4-4).
 근거: 스테이징 DB 읽기 전용 실측(`approval_forms` 24종 최신 정의·`approval_docs`·원장 행 수, 2026-10-21) + 코드 조사.
 양식 정의는 빌더 편집분이 마이그레이션에 남지 않으므로 **DB 값을 기준**으로 했다.
@@ -262,3 +262,29 @@ L1 + L2 ─────────────▶ L3 엔진 결합(마진율)
   - 엣지 자동 개념: `frontend/lib/approval/fields.ts:124`(AUTO_CONCEPT_BY_TYPE), `:267`(TABLE_META_KEYS)
   - 지표 엔진: `frontend/lib/analytics/metric-engine.ts`(refValueOf 140-164, 문서 SELECT 195, 복합 결합 487-502)
   - 승인 훅 등록: `frontend/lib/approval/actions.ts:484-493`
+
+---
+
+## 6. 진행 결과 (2026-10-21)
+
+결정 D-1~D-6 은 권장안으로 적용했다. 스테이징 미적용·미배포.
+
+| 단계 | 구현 | 위치 |
+|---|---|---|
+| L0 | 연결 판정 모듈(문서 필드·표 행·전용 화면 값, 자산·담당자·휴가 종류·부서·직급), 결과 원장 21종 카탈로그·점선 엣지(묶음 접기/펼치기), 파생 경로 4종 표기, 공지성 양식 분류, 선행 연결 수, 경고 2종 추가(귀속 참조 없음·직접 입력 30% 초과), 계약 요약 빈칸 결함 | `lib/approval/linkage.ts`, `lib/approval/semantics.ts`, `components/approval/ApprovalSemanticsBoard.tsx`, `lib/approval/summarize.ts` |
+| L0·L1-6 | 개념 9종 추가(ref.asset·ref.contact·ref.leave_type·quantity.days·quantity.count·cost.personnel·amount.budget·amount.unit_price·when.due) + `info.reference`(집계 제외). 태그 보정 25건 — 휴가 사용일수 시간→일수, 초과근무 기사용·잔여시간은 집계 제외(신청시간과 이중 합산되던 결함) | `infra/aws/307_approval_linkage_concepts.sql`, `lib/approval/semantic-concepts.ts` |
+| L1 | 인사 이력 `doc_id`(+기존 기록 백필, 중복 판정 doc_id 우선), 인사 발령 부서·직급 선택 열({deptId}/{positionId} — 이름 매칭은 구버전 값만), 부서 검색 항목 ID 저장, 성과급·상여·근로계약 명세 표 행 직원 ID(`rowRef`·`_employeeId`, 상여대장 매칭 ID 우선), 원가 귀속 '관련 용역(계약)' 선택 항목 4양식, 연차수당 잔여일수·1일 통상임금 자동 채움(급여 조회 권한) | `infra/aws/308_approval_linkage_structure.sql`, `lib/approval/hr-actions.ts`, `components/approval/OrgRefSelect.tsx`, `lib/bonus/draft.ts`, `lib/payroll/{bonus-plan,bonus-ledger,rounds}.ts`, `app/api/approval/annual-leave-pay/route.ts` |
+| L2 | 직접 입력 값 보정 — 같은 글자의 문서를 계약·사업장에 한 번에 연결(원래 값 `originalTitle`/`originalName` 보존, 감사 기록 `approval_doc_relink`) | `POST /api/approval/semantics`, 관계 맵 [연결] |
+| L3 | 기안자·기안 부서 차원(`doc.drafter`·`doc.dept`), 표 행 단위 귀속(연관 용역/사업장·행 직원), 시스템 소스 4종 추가(기성·외주·법인카드·ADT 일별)와 부서·발주처 차원, 복합 지표 결합 축·시간축 정합 검사와 시간축 결합, 기간 필드 시간축 결함(`from` 미인식) 수정, AI 추천·질문 프롬프트를 카탈로그에서 생성, 기본 지표 8개(용역 마진율(기성 기준)·초과근무 신청−실측 등) | `lib/analytics/metric-engine.ts`, `lib/analytics/metric-types.ts`, `components/approval/MetricWizard.tsx`, 307 |
+| L4 | 빌더 '마스터 연계 점검 n건'(저장은 막지 않음), 관계 맵 직접 입력 비율 경고, 매뉴얼 4기사·도움말·변경 기록 | `components/approval/ApprovalFormsBoard.tsx`, `content/manual/*` |
+
+**검증**
+- 307·308: 스테이징 스키마 덤프 + 양식·문서·인사 이력 데이터를 일회용 PG 에 올려 2회 적용(2회차 전부 "변경 없음"). 결과 필드·버전 스냅샷 확인.
+- 같은 DB 에서 관계 맵 개요·보정·지표 엔진 실행: 엣지 35·결과 원장 29, 초과근무 직접 입력 58건 → 보정 후 연결 반영, 기안자 지표·복합 지표·축 불일치 차단·새 시스템 소스 쿼리 정상.
+- 화면: 리허설 DB 로 띄운 개발 서버에서 관계 맵(라이트·다크·375px)·보정 모달 연결·빌더 미리보기의 부서·직급 선택 열 확인.
+- `npm run test:approval-linkage`(9) · `test:manual`(9) · `test:approval-absence` · `test:dept-scope` 통과, `tsc` 신규 오류 0.
+
+**남은 일**
+- 스테이징: 307·308 적용(설치 리허설 통과) → next 배포. 모바일은 `dept_select` 객체 값 표시만 바뀌어 OTA 는 다음 묶음에 포함해도 된다.
+- 운영 데이터 작업(코드 아님): 초과근무 이관 58건 보정(29종 값 — 관계 맵 [연결]), ADT 사번 별칭 보강(직원 미매칭 21%), 계약 수행 부서(`owning_dept_id`) 72% 공백 채우기.
+- 보류: 견적·계약서의 계약 ID 역기입(계약 등록 화면 변경 필요), 출장 양식 용역분류를 계약에서 자동 채움(체크박스 대상 fillMap 미지원), 교육 이력·외부 소득자 마스터(D-4).

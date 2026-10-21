@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { anthropicChatJson, LlmError } from "@/lib/ai/llm-json";
-import { parseMetricDefinition, validateDefinition } from "@/lib/analytics/metric-types";
+import { describeSystemSources, parseMetricDefinition, validateDefinition } from "@/lib/analytics/metric-types";
 import { listSemanticConcepts } from "@/lib/approval/semantic-concepts-store";
 import { listMetrics } from "@/lib/analytics/metric-store";
 
@@ -15,10 +15,8 @@ export const dynamic = "force-dynamic";
  * 생성된 초안은 validateDefinition 을 통과해야만 반환한다(실패 시 오류).
  */
 
-const SYSTEM_SOURCES_DOC = `system.contracts: 계약 마스터. measures={amount(계약금액),count}, dims=[ref.contract,dim.category(대분류),dim.subcategory(세분류),dim.amount_band(계약금액대 구간)], times={contract_date}
-system.participants: 수행인력(계약별 참여 인원·수행 기간 — 수행 기간 분석의 표준 원천). measures={contract_id(count_distinct 로 참여 계약 수),duration_days(수행일수),amount_percentile(참여 계약금액 백분위 0~1 — sum 하면 규모 가중 수행 점수),amount_sum(참여 계약금액 원)}, dims=[ref.employee,ref.contract,dim.category,dim.subcategory,dim.amount_band], times={participated_from}
-system.attendance: ADT 근태(주별). measures={overtime_hours(인정 연장),excess_hours(12h 초과),worked_hours}, dims=[ref.employee], times={week_start}
-system.leave: 연차 대장. measures={grant_days,use_days}, dims=[ref.employee], times={year}`;
+// 시스템 소스 설명은 카탈로그에서 생성한다(소스·차원이 늘어도 프롬프트가 어긋나지 않게, 2026-10-21)
+const SYSTEM_SOURCES_DOC = describeSystemSources();
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +40,8 @@ export async function POST(req: NextRequest) {
 
 definition 스키마 (둘 중 하나):
 1) 집계: {"kind":"aggregate","source":{"type":"approval_docs","forms":"auto","status":["approved"]} 또는 {"type":"system.*"},"measure":{"agg":"sum|avg|count|min|max|count_distinct","concept":"<태그>"(approval_docs) 또는 "field":"<필드>"(system)},"groupBy":[차원 최대 3개 조합 — 예: ["dim.subcategory","dim.amount_band"] = 세분류×금액대],"timeBy":{"concept":"when.occurred"(approval_docs) 또는 "field":"<시간필드>"(system),"bucket":"month"|"year"}(생략 가능)}
-   groupBy 규칙: approval_docs 는 ref.* 1개 + dim.category 1개까지. system 소스는 해당 소스 dims 목록 안에서 조합.
+   groupBy 규칙: approval_docs 는 참조 차원 1개(ref.contract|ref.company|ref.employee|ref.dept|ref.asset|ref.contact|ref.leave_type, 또는 기안자 doc.drafter·기안 부서 doc.dept) + dim.category 1개까지. 지출 행의 연관 용역은 ref.contract·ref.company 로 자동 귀속된다. system 소스는 해당 소스 dims 목록 안에서 조합.
+   복합 지표는 결합 축(계약·직원·부서 등)과 시간 단위가 같은 지표끼리만 결합된다(doc.drafter 는 ref.employee, doc.dept 는 ref.dept 축).
 2) 복합(기존 지표들의 사칙연산): {"kind":"composite","dimensions":["ref.contract"],"formula":["(","지표키","-","지표키",")","/","지표키"],"format":"percent"|"currency"|"number"} — formula 토큰은 기존 지표 키·숫자·+ - * / ( ) 만.
 
 결재 문서(approval_docs)에서 쓸 수 있는 값 태그: ${conceptDoc}

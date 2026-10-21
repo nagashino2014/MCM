@@ -29,7 +29,8 @@ export interface AggregateDefinition {
   };
   /**
    * 그룹 차원(최대 3, 조합 = "세분류 × 금액대" 등).
-   * 결재 문서 소스: ref.*(참조, 최대 1) + dim.category(분류, 최대 1) 조합만.
+   * 결재 문서 소스: 참조 차원(ref.* 또는 기안자 doc.drafter·기안 부서 doc.dept, 최대 1) + dim.category(분류, 최대 1) 조합만.
+   *   ref.contract·ref.company 는 표 행의 연관 용역/사업장(related 열)이 있으면 행 단위로 귀속한다(2026-10-21).
    * 시스템 소스: 카탈로그 dims 내에서 자유 조합(dim.subcategory 세분류·dim.amount_band 금액대 포함).
    */
   groupBy?: string[];
@@ -75,6 +76,10 @@ export interface MetricResult {
   format: "number" | "currency" | "percent";
   hasTime: boolean;
   rows: { groupId: string | null; groupLabel: string; time?: string; value: number | null }[];
+  /** 결합 축(복합 지표 정합 검사용) — groupBy 를 축으로 정규화(doc.drafter→ref.employee, doc.dept→ref.dept) */
+  axes?: string[];
+  /** 시간 버킷(복합 지표 시간축 결합 검사용) */
+  timeBucket?: "month" | "year";
   diagnostics: {
     sources: string[];
     /** approval_docs: 조회 대상 문서 수 */
@@ -106,11 +111,61 @@ export const SYSTEM_SOURCE_CATALOG: {
     ],
     dims: [
       { key: "ref.contract", label: "계약(용역)" },
+      { key: "ref.company", label: "발주처(업체)" },
+      { key: "ref.dept", label: "수행 부서" },
       { key: "dim.category", label: "용역 대분류" },
       { key: "dim.subcategory", label: "용역 세분류" },
       { key: "dim.amount_band", label: "계약금액대" },
     ],
     times: [{ key: "contract_date", label: "계약 시작일" }],
+  },
+  {
+    key: "system.invoices",
+    label: "기성(세금계산서 발행)",
+    measures: [
+      { key: "supply_amount", label: "공급가액(원)", defaultAgg: "sum" },
+      { key: "invoice_amount", label: "발행 총액(원)", defaultAgg: "sum" },
+      { key: "count", label: "발행 건수", defaultAgg: "count" },
+    ],
+    dims: [
+      { key: "ref.contract", label: "계약(용역)" },
+      { key: "ref.company", label: "발주처(업체)" },
+      { key: "ref.dept", label: "수행 부서" },
+      { key: "dim.category", label: "용역 대분류" },
+    ],
+    times: [{ key: "issue_date", label: "발행일" }],
+  },
+  {
+    key: "system.outsourcing",
+    label: "외주(용역 원가)",
+    measures: [
+      { key: "amount", label: "외주 금액(원)", defaultAgg: "sum" },
+      { key: "count", label: "외주 건수", defaultAgg: "count" },
+    ],
+    dims: [
+      { key: "ref.contract", label: "계약(용역)" },
+      { key: "ref.company", label: "발주처(업체)" },
+      { key: "ref.dept", label: "수행 부서" },
+      { key: "dim.category", label: "용역 대분류" },
+    ],
+    times: [{ key: "contract_date", label: "외주 계약일" }],
+  },
+  {
+    key: "system.card",
+    label: "법인카드 승인내역",
+    measures: [
+      { key: "amount", label: "승인 금액(원)", defaultAgg: "sum" },
+      { key: "unlinked_amount", label: "결의 미연결 금액(원)", defaultAgg: "sum" },
+      { key: "unlinked_count", label: "결의 미연결 건수", defaultAgg: "sum" },
+    ],
+    dims: [
+      { key: "ref.employee", label: "카드 소지 직원" },
+      { key: "ref.dept", label: "소지 직원 부서" },
+      { key: "ref.contract", label: "연관 용역" },
+      { key: "ref.company", label: "연관 사업장" },
+      { key: "dim.category", label: "지출 분류" },
+    ],
+    times: [{ key: "approved_at", label: "승인일" }],
   },
   {
     key: "system.participants",
@@ -123,6 +178,7 @@ export const SYSTEM_SOURCE_CATALOG: {
     ],
     dims: [
       { key: "ref.employee", label: "직원" },
+      { key: "ref.dept", label: "직원 부서" },
       { key: "ref.contract", label: "계약(용역)" },
       { key: "dim.category", label: "용역 대분류" },
       { key: "dim.subcategory", label: "용역 세분류" },
@@ -138,8 +194,25 @@ export const SYSTEM_SOURCE_CATALOG: {
       { key: "excess_hours", label: "12h 초과(시간)", defaultAgg: "sum" },
       { key: "worked_hours", label: "실근무(시간)", defaultAgg: "sum" },
     ],
-    dims: [{ key: "ref.employee", label: "직원" }],
+    dims: [
+      { key: "ref.employee", label: "직원" },
+      { key: "ref.dept", label: "직원 부서" },
+    ],
     times: [{ key: "week_start", label: "주 시작일" }],
+  },
+  {
+    key: "system.attendance_daily",
+    label: "ADT 근태(일별)",
+    measures: [
+      { key: "worked_hours", label: "실근무(시간)", defaultAgg: "sum" },
+      { key: "night_hours", label: "야간 재실(시간)", defaultAgg: "sum" },
+      { key: "days", label: "근무일 수", defaultAgg: "sum" },
+    ],
+    dims: [
+      { key: "ref.employee", label: "직원" },
+      { key: "ref.dept", label: "직원 부서" },
+    ],
+    times: [{ key: "work_date", label: "근무일" }],
   },
   {
     key: "system.leave",
@@ -148,7 +221,10 @@ export const SYSTEM_SOURCE_CATALOG: {
       { key: "grant_days", label: "부여 일수", defaultAgg: "sum" },
       { key: "use_days", label: "사용 일수", defaultAgg: "sum" },
     ],
-    dims: [{ key: "ref.employee", label: "직원" }],
+    dims: [
+      { key: "ref.employee", label: "직원" },
+      { key: "ref.dept", label: "직원 부서" },
+    ],
     times: [{ key: "year", label: "연도" }],
   },
 ];
@@ -159,10 +235,43 @@ export const DIMENSION_LABEL: Record<string, string> = {
   "ref.company": "업체(사업장)",
   "ref.employee": "직원",
   "ref.dept": "부서",
+  "ref.asset": "자산(차량)",
+  "ref.contact": "업체 담당자",
+  "ref.leave_type": "휴가 종류",
+  "doc.drafter": "기안자",
+  "doc.dept": "기안 부서",
   "dim.category": "분류",
   "dim.subcategory": "용역 세분류",
   "dim.amount_band": "계약금액대",
 };
+
+/**
+ * 시스템 소스 설명(AI 지표 추천·질문 응답 프롬프트용) — 카탈로그에서 생성해 소스가 늘어도 프롬프트가 어긋나지 않게 한다.
+ * 형식: "system.x: 라벨. measures={key(라벨),…}, dims=[key(라벨),…], times={key(라벨)}"
+ */
+export function describeSystemSources(): string {
+  return SYSTEM_SOURCE_CATALOG.map(
+    (s) =>
+      `${s.key}: ${s.label}. measures={${s.measures.map((m) => `${m.key}(${m.label})`).join(",")}}, dims=[${s.dims
+        .map((d) => `${d.key}(${d.label})`)
+        .join(",")}], times={${s.times.map((t) => `${t.key}(${t.label})`).join(",")}}`
+  ).join("\n");
+}
+
+/** 결재 문서 소스의 그룹 차원 선택지(마법사) — 참조(ref.*·doc.*)는 1개까지, dim.category 와 조합 */
+export const DOC_GROUP_DIMS = ["ref.contract", "ref.company", "ref.employee", "ref.dept", "ref.asset", "ref.contact", "ref.leave_type", "doc.drafter", "doc.dept", "dim.category"] as const;
+
+/** 참조 차원(엔티티에 귀속) 여부 — ref.* 와 기안자·기안 부서 */
+export function isRefDimension(g: string): boolean {
+  return g.startsWith("ref.") || g.startsWith("doc.");
+}
+
+/** 결합 축 — 기안자는 직원 축, 기안 부서는 부서 축과 같다(복합 지표가 시스템 소스와 결합할 때) */
+export function axisOf(g: string): string {
+  if (g === "doc.drafter") return "ref.employee";
+  if (g === "doc.dept") return "ref.dept";
+  return g;
+}
 
 export const AGG_LABEL: Record<MetricAgg, string> = {
   sum: "합계",
@@ -201,9 +310,9 @@ export function validateDefinition(def: MetricDefinition): string | null {
       if (def.measure.agg !== "count" && !def.measure.concept) return "결재 문서 소스는 measure.concept(태그)가 필요합니다.";
       if (def.measure.agg === "count" && !def.measure.concept && def.source.forms === "auto")
         return "count + forms:auto 조합은 대상 양식을 특정할 수 없습니다(forms 명시 필요).";
-      if (groupBy.filter((g) => g.startsWith("ref.")).length > 1) return "결재 문서 소스의 참조(ref.*) 차원은 1개까지입니다.";
-      if (groupBy.some((g) => !g.startsWith("ref.") && g !== "dim.category"))
-        return "결재 문서 소스의 그룹은 ref.* 또는 dim.category 만 가능합니다.";
+      if (groupBy.filter(isRefDimension).length > 1) return "결재 문서 소스의 참조 차원(ref.*·기안자·기안 부서)은 1개까지입니다.";
+      if (groupBy.some((g) => !(DOC_GROUP_DIMS as readonly string[]).includes(g)))
+        return "결재 문서 소스의 그룹은 참조 차원(ref.*·기안자·기안 부서) 또는 dim.category 만 가능합니다.";
     } else if (!def.measure.field) {
       return "시스템 소스는 measure.field 가 필요합니다.";
     }

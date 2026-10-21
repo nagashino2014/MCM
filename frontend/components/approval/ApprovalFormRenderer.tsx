@@ -10,6 +10,7 @@ import { HelpCircle, Plus, Users, X } from "lucide-react";
 import { ApprovalDocHead, type DocHeadInfo } from "@/components/approval/ApprovalDocHead";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { RelatedCellButton } from "@/components/approval/RelatedPicker";
+import { OrgRefSelect } from "@/components/approval/OrgRefSelect";
 import { RELATED_CONTRACT_KEY, RELATED_FACILITY_KEY } from "@/lib/approval/expense-purpose";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
@@ -215,13 +216,14 @@ function FieldInput({
   const dis = readOnly === true;
   const base = "cd-input w-full text-[12.5px]";
   switch (f.type) {
-    case "text":
-    case "dept_select": {
-      const ph = f.placeholder ?? (f.type === "dept_select" ? "부서 입력" : undefined);
+    case "text": {
       return (
-        <input className={base} disabled={dis} placeholder={ph} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />
+        <input className={base} disabled={dis} placeholder={f.placeholder} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />
       );
     }
+    case "dept_select":
+      // 부서 ID 를 함께 저장한다({deptId,name}, 2026-10-21) — 구버전 자유 텍스트는 '(목록 외)'로 보존
+      return <OrgRefSelect kind="dept" className="cd-select" style={{ width: "100%" }} disabled={dis} value={value} onChange={(v) => onSet(v)} />;
     case "user_select":
       return <UserSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
     case "multitext":
@@ -1313,6 +1315,15 @@ function TableInput({
                       disabled={readOnly}
                       value={String(r[c.key] ?? "")}
                       onChange={(next) => update(ri, c.key, next)}
+                    />
+                  ) : c.type === "dept" || c.type === "position" ? (
+                    // 부서·직급 선택 열(2026-10-21) — 마스터 ID 를 함께 저장해 인사 발령이 이름 매칭 없이 반영된다
+                    <OrgRefSelect
+                      kind={c.type}
+                      className="w-full min-w-0 bg-transparent px-1.5 py-1.5 text-[12px] cd-text outline-none"
+                      disabled={readOnly}
+                      value={r[c.key]}
+                      onChange={(v) => update(ri, c.key, v)}
                     />
                   ) : c.type === "people" ? (
                     <div className="px-1.5 py-1 flex items-center gap-1 flex-wrap">

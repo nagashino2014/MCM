@@ -7,6 +7,7 @@
     "test:menu-route": "node scripts/test-menu-route.mjs",
     "test:dept-scope": "node scripts/test-dept-scope.mjs",
     "test:approval-absence": "node scripts/test-approval-absence.mjs",
+    "test:approval-linkage": "node scripts/test-approval-linkage.mjs",
     "test:money-gates": "node scripts/test-money-gates.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",
     "test:todo": "node scripts/test-todo.mjs",

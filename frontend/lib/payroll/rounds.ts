@@ -397,6 +397,8 @@ export async function createRoundDraft(roundId: string, actorUserId: string): Pr
         const cur = toNum(c.annual_salary) ?? 0;
         const prev = toNum(c.prev_salary);
         return {
+          // 행 대상 직원(rowRef: employee, 308) — 관계 맵·지표가 이름 대신 ID 로 귀속
+          _employeeId: String(c.employee_id),
           name: String(c.name),
           dept: c.dept_name ? String(c.dept_name) : "-",
           position: c.position_name ? String(c.position_name) : "-",

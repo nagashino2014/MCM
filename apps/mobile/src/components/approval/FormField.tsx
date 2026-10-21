@@ -242,7 +242,18 @@ export function FormField({
   const body = () => {
     switch (f.type) {
       case 'text':
+        return <Input value={str(value)} onChangeText={onSet} placeholder={f.placeholder} />;
+
       case 'dept_select':
+        // 웹은 부서 ID 를 함께 저장한다({deptId,name}, 2026-10-21). 고른 값은 보여 주기만 하고 변경은 웹에서.
+        if (value && typeof value === 'object') {
+          return (
+            <View className="min-h-[46px] justify-center rounded-xl border border-cd-border bg-cd-surface px-3">
+              <Text className="text-[14px] text-cd-body">{str((value as { name?: string }).name)}</Text>
+              <Text className="text-[11.5px] text-cd-faint">부서 변경은 웹에서 합니다.</Text>
+            </View>
+          );
+        }
         return <Input value={str(value)} onChangeText={onSet} placeholder={f.placeholder} />;
 
       case 'multitext': {

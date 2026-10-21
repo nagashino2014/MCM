@@ -665,6 +665,44 @@ export function ApprovalDraftBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form?.formId, values.remaining_days, values.daily_wage]);
 
+  // 연차수당 — 대상자·퇴사일을 고르면 연차 대장의 잔여일수와 근로계약의 1일 통상임금을 채운다(2026-10-21, 결재 연계 L1).
+  // 급여 조회 권한이 없으면 응답이 403 이라 아무것도 채우지 않는다(수기 입력 유지). 직전 자동값과 같을 때만 덮어쓴다.
+  const leavePayPrefillRef = useRef<{ remaining_days?: string; daily_wage?: string; calc_note?: string }>({});
+  const leavePayTargetId = (() => {
+    const v = values.target_person as { employeeId?: string } | { employeeId?: string }[] | undefined;
+    const o = Array.isArray(v) ? v[0] : v;
+    return o && typeof o === "object" ? String(o.employeeId ?? "") : "";
+  })();
+  const leavePayDate = String(values.resign_date ?? "").slice(0, 10);
+  useEffect(() => {
+    if (form?.formId !== "frm-annual-leave-pay" || !leavePayTargetId) return;
+    let cancelled = false;
+    fetch(`/api/approval/annual-leave-pay?employeeId=${encodeURIComponent(leavePayTargetId)}&date=${encodeURIComponent(leavePayDate)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        const next: { remaining_days?: string; daily_wage?: string; calc_note?: string } = {};
+        if (d.remainingDays != null) next.remaining_days = String(d.remainingDays);
+        if (d.dailyWage != null) next.daily_wage = String(d.dailyWage);
+        const basis = [d.basis?.leave, d.basis?.wage].filter(Boolean).join(" / ");
+        if (basis) next.calc_note = `자동 산정 근거: ${basis}`;
+        setValues((prev) => {
+          const out = { ...prev };
+          for (const [k, v] of Object.entries(next) as [keyof typeof next, string][]) {
+            const cur = String(prev[k] ?? "").trim();
+            // 비어 있거나 직전 자동값 그대로일 때만 채운다(수기 조정 보존)
+            if (!cur || cur === leavePayPrefillRef.current[k]) out[k] = v;
+          }
+          return out;
+        });
+        leavePayPrefillRef.current = next;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.formId, leavePayTargetId, leavePayDate]);
+
   // 결근사유서 — 내 열린 제출 요청 조회(202). 새 문서이고 기간이 비어 있으면 첫 요청 기간을 채운다.
   useEffect(() => {
     if (!isAbsenceForm) {

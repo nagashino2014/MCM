@@ -99,7 +99,9 @@ export function flattenValue(field: ApprovalFieldDef, value: unknown, leaveCatal
       const v = value as { title?: string; manual?: boolean };
       return v && typeof v === "object" ? `${v.title ?? ""}${v.manual ? " (직접입력)" : ""}` : String(value);
     }
-    case "asset_select": {
+    case "asset_select":
+    case "dept_select": {
+      // 부서 선택은 {deptId,name}(2026-10-21) — 구버전은 자유 텍스트
       const v = value as { name?: string };
       return v && typeof v === "object" ? String(v.name ?? "") : String(value);
     }
@@ -131,6 +133,8 @@ function cellText(col: ApprovalTableColumn, row: Record<string, unknown>, idx: n
     const n = Number(String(v).replace(/[^\d.-]/g, ""));
     return isNaN(n) ? String(v) : n.toLocaleString("ko-KR");
   }
+  // 부서·직급 선택 열({deptId|positionId, name}, 2026-10-21) — 구버전은 자유 텍스트
+  if ((col.type === "dept" || col.type === "position") && typeof v === "object") return String((v as { name?: string }).name ?? "");
   return String(v);
 }
 

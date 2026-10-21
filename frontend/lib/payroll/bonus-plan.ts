@@ -81,6 +81,8 @@ export async function createBonusPaymentPlanDraft(actorUserId: string, input: Bo
     if (!(amount > 0)) continue;
     total += amount;
     rows.push({
+      // 행 대상 직원(rowRef: employee, 308) — 승인 시 상여대장이 사번·이름 매칭 없이 ID 로 반영
+      _employeeId: c.employeeId,
       emp_no: c.empNo ?? "",
       name: c.name,
       dept: c.deptName ?? "-",

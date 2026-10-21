@@ -33,8 +33,10 @@ function valueToText(type: string, v: unknown): string {
     return "";
   }
   if ((type === "company_select" || type === "contract_select") && typeof v === "object") {
-    const o = v as { name?: string; manual?: boolean };
-    return o.name ? `${o.name}${o.manual ? "(직접입력)" : ""}` : "";
+    // 업체 값은 name, 계약 값은 title 에 이름이 있다(계약 요약이 빈칸이던 결함, 2026-10-21)
+    const o = v as { name?: string; title?: string; manual?: boolean };
+    const label = o.name || o.title;
+    return label ? `${label}${o.manual ? "(직접입력)" : ""}` : "";
   }
   if (type === "user_select") {
     const arr = Array.isArray(v) ? v : [v];

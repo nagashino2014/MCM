@@ -63,6 +63,8 @@ export async function createBonusPlanDraft(
         const rate =
           prev != null && prev !== 0 ? ((cur - prev) / prev) * 100 : null;
         return {
+          // 행 대상 직원(rowRef: employee, 308) — 관계 맵·지표가 이름 대신 ID 로 귀속
+          _employeeId: r.employeeId,
           name: r.employeeName,
           dept: r.deptName ?? "-",
           position: r.positionName ?? "-",

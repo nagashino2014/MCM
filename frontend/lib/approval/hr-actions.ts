@@ -7,24 +7,36 @@ import type { ActionConnector } from "@/lib/approval/actions";
  *  - 퇴직원: resignation 이벤트. 계정 비활성은 승인 즉시가 아니라 **퇴사일 도래 시**(사용자 확정) —
  *    applyDueResignations(리마인드 틱)가 매 틱 판정한다. 퇴사일이 이미 지났으면 즉시 비활성.
  *  - 휴직원: leave_start 이벤트(복직 leave_end 는 인사관리 탭에서 수기).
- *  - 인사 발령: 표 행 단위 promotion/transfer 일괄 — 발령 직급/부서는 이름 매칭(실패 시 라벨 스냅샷만).
- * 멱등 1차는 실행기(action_runs ok 유니크), 2차는 note 의 문서번호 검사.
+ *  - 인사 발령: 표 행 단위 promotion/transfer 일괄 — 발령 직급/부서는 표의 부서·직급 선택 열 ID(308)로 반영하고,
+ *   구버전 자유 텍스트 값은 이름 매칭(실패 시 라벨 스냅샷만).
+ * 멱등 1차는 실행기(action_runs ok 유니크), 2차는 doc_id 컬럼(308) — 컬럼 이전 기록은 note 의 문서번호로 검사.
  */
 
 function id(): string {
   return "hrev_" + crypto.randomBytes(8).toString("hex");
 }
 
-async function hasEventForDoc(eventType: string, employeeId: string, docTag: string): Promise<boolean> {
+async function hasEventForDoc(eventType: string, employeeId: string, docId: string, docTag: string): Promise<boolean> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec(`SELECT 1 FROM employee_hr_events WHERE employee_id = $1 AND event_type = $2 AND note LIKE $3 LIMIT 1`, [
-      employeeId,
-      eventType,
-      `%${docTag}%`,
-    ])
+    await db.exec(
+      `SELECT 1 FROM employee_hr_events
+        WHERE employee_id = $1 AND event_type = $2 AND (doc_id = $3 OR (doc_id IS NULL AND note LIKE $4)) LIMIT 1`,
+      [employeeId, eventType, docId, `%${docTag}%`]
+    )
   );
   return rows.length > 0;
+}
+
+/** 표 셀의 참조 값 — 부서·직급 선택 열은 {deptId|positionId, name}, 구버전은 자유 텍스트 */
+function refCell(v: unknown, idKey: "deptId" | "positionId"): { id: string | null; name: string | null } {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    const name = String(o.name ?? "").trim() || null;
+    return { id: String(o[idKey] ?? "").trim() || null, name };
+  }
+  const name = String(v ?? "").trim() || null;
+  return { id: null, name };
 }
 
 /** 퇴직원 승인 → resignation 기록. 퇴사일이 오늘 이전이면 즉시 비활성, 미래면 틱이 처리. */
@@ -49,15 +61,15 @@ export const recordResignationConnector: ActionConnector = {
     const resignDate = String(ctx.slot("date") ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(resignDate)) throw new Error("퇴직(예정)일이 올바르지 않습니다.");
     const docTag = ctx.docNo ?? ctx.docId;
-    if (await hasEventForDoc("resignation", employeeId, docTag)) return { detail: "이미 기록됨 — 건너뜀" };
+    if (await hasEventForDoc("resignation", employeeId, ctx.docId, docTag)) return { detail: "이미 기록됨 — 건너뜀" };
     const reason = String(ctx.slot("reason") ?? "").slice(0, 200);
     const now = new Date().toISOString();
     const today = now.slice(0, 10);
     await withDbWrite(async (txn) => {
       await txn.run(
-        `INSERT INTO employee_hr_events (event_id, employee_id, event_type, event_date, note, created_by, created_at, updated_at)
-         VALUES ($1, $2, 'resignation', $3, $4, $5, $6, $6)`,
-        [id(), employeeId, resignDate, `${reason ? `${reason} ` : ""}(퇴직원 ${docTag})`, ctx.drafterUserId, now]
+        `INSERT INTO employee_hr_events (event_id, employee_id, event_type, event_date, note, doc_id, created_by, created_at, updated_at)
+         VALUES ($1, $2, 'resignation', $3, $4, $5, $6, $7, $7)`,
+        [id(), employeeId, resignDate, `${reason ? `${reason} ` : ""}(퇴직원 ${docTag})`, ctx.docId, ctx.drafterUserId, now]
       );
       if (resignDate <= today) {
         await txn.run(`UPDATE employee_profiles SET status = 'inactive', updated_at = $1 WHERE employee_id = $2`, [now, employeeId]);
@@ -102,14 +114,14 @@ export const recordLeaveAbsenceConnector: ActionConnector = {
     const to = String(period.to ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) throw new Error("휴직 시작일이 올바르지 않습니다.");
     const docTag = ctx.docNo ?? ctx.docId;
-    if (await hasEventForDoc("leave_start", employeeId, docTag)) return { detail: "이미 기록됨 — 건너뜀" };
+    if (await hasEventForDoc("leave_start", employeeId, ctx.docId, docTag)) return { detail: "이미 기록됨 — 건너뜀" };
     const kind = String(ctx.slot("kind") ?? "휴직");
     const now = new Date().toISOString();
     await withDbWrite(async (txn) => {
       await txn.run(
-        `INSERT INTO employee_hr_events (event_id, employee_id, event_type, event_date, note, created_by, created_at, updated_at)
-         VALUES ($1, $2, 'leave_start', $3, $4, $5, $6, $6)`,
-        [id(), employeeId, from, `${kind}${to ? ` ~ ${to} 예정` : ""} (휴직원 ${docTag})`, ctx.drafterUserId, now]
+        `INSERT INTO employee_hr_events (event_id, employee_id, event_type, event_date, note, doc_id, created_by, created_at, updated_at)
+         VALUES ($1, $2, 'leave_start', $3, $4, $5, $6, $7, $7)`,
+        [id(), employeeId, from, `${kind}${to ? ` ~ ${to} 예정` : ""} (휴직원 ${docTag})`, ctx.docId, ctx.drafterUserId, now]
       );
     });
     return { detail: `휴직 시작 기록(${from}${to ? ` ~ ${to}` : ""}) — 복직 시 인사관리 탭에서 처리` };
@@ -120,8 +132,10 @@ interface AppointmentRow {
   person?: Array<{ employeeId?: string; name?: string }>;
   appoint_kind?: string;
   appoint_date?: string;
-  new_position?: string;
-  to_dept?: string;
+  /** 직급 선택 열({positionId,name}, 308) 또는 구버전 자유 텍스트 */
+  new_position?: unknown;
+  /** 부서 선택 열({deptId,name}, 308) 또는 구버전 자유 텍스트 */
+  to_dept?: unknown;
   note?: string;
 }
 
@@ -142,7 +156,7 @@ export const recordAppointmentsConnector: ActionConnector = {
       if (!people.length || !kindLabel) continue;
       for (const person of people) {
         parts.push(
-          `${person.name ?? "?"} ${kindLabel}${kindLabel === "승진" ? `(${String(raw.new_position ?? "").trim() || "직급 미기재"})` : `(→${String(raw.to_dept ?? "").trim() || "부서 미기재"})`}`
+          `${person.name ?? "?"} ${kindLabel}${kindLabel === "승진" ? `(${refCell(raw.new_position, "positionId").name ?? "직급 미기재"})` : `(→${refCell(raw.to_dept, "deptId").name ?? "부서 미기재"})`}`
         );
       }
     }
@@ -177,15 +191,20 @@ export const recordAppointmentsConnector: ActionConnector = {
           const employeeId = String(person.employeeId);
           const existing = rowsToObjects(
             await txn.exec(
-              `SELECT 1 FROM employee_hr_events WHERE employee_id = $1 AND event_type = $2 AND event_date = $3 AND note LIKE $4 LIMIT 1`,
-              [employeeId, eventType, eventDate, `%${docTag}%`]
+              `SELECT 1 FROM employee_hr_events
+                WHERE employee_id = $1 AND event_type = $2 AND event_date = $3
+                  AND (doc_id = $4 OR (doc_id IS NULL AND note LIKE $5)) LIMIT 1`,
+              [employeeId, eventType, eventDate, ctx.docId, `%${docTag}%`]
             )
           );
           if (existing.length) continue;
-          const newPositionName = String(raw.new_position ?? "").trim() || null;
-          const toDeptName = String(raw.to_dept ?? "").trim() || null;
-          const positionId = newPositionName ? posByName.get(newPositionName) ?? null : null;
-          const toDeptId = toDeptName ? deptByName.get(toDeptName) ?? null : null;
+          // 선택 열이면 ID 를 그대로, 구버전 자유 텍스트면 이름으로 찾는다
+          const pos = refCell(raw.new_position, "positionId");
+          const dept = refCell(raw.to_dept, "deptId");
+          const newPositionName = pos.name;
+          const toDeptName = dept.name;
+          const positionId = pos.id ?? (newPositionName ? posByName.get(newPositionName) ?? null : null);
+          const toDeptId = dept.id ?? (toDeptName ? deptByName.get(toDeptName) ?? null : null);
           // 부서이동의 현재 부서 스냅샷
           const cur = rowsToObjects(
             await txn.exec(
@@ -196,8 +215,8 @@ export const recordAppointmentsConnector: ActionConnector = {
           await txn.run(
             `INSERT INTO employee_hr_events
                (event_id, employee_id, event_type, event_date, position_id, position_name,
-                from_dept_id, to_dept_id, from_dept_name, to_dept_name, note, created_by, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)`,
+                from_dept_id, to_dept_id, from_dept_name, to_dept_name, note, doc_id, created_by, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)`,
             [
               id(),
               employeeId,
@@ -210,11 +229,12 @@ export const recordAppointmentsConnector: ActionConnector = {
               eventType === "transfer" && cur.length ? (cur[0].dept_name != null ? String(cur[0].dept_name) : null) : null,
               eventType === "transfer" ? toDeptName : null,
               `${String(raw.note ?? "").trim() ? `${String(raw.note).trim()} ` : ""}(인사발령 ${docTag})`,
+              ctx.docId,
               ctx.drafterUserId,
               now,
             ]
           );
-          // 발령 반영 — 승진은 현재 직급, 부서이동은 현재 부서 갱신(이름 매칭 성공 시에만)
+          // 발령 반영 — 승진은 현재 직급, 부서이동은 현재 부서 갱신(ID 를 알 때만)
           if (eventType === "promotion" && positionId) {
             await txn.run(`UPDATE employee_profiles SET position_id = $2, updated_at = $3 WHERE employee_id = $1`, [employeeId, positionId, now]);
             await txn.run(`UPDATE users SET position_id = $2, updated_at = $3 WHERE employee_id = $1`, [employeeId, positionId, now]);

@@ -556,12 +556,17 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         requires: ["approval.manage"],
         blocks: [
           { kind: "p", text: "[[새 지표 만들기]]로 양식·값·묶는 기준을 골라 노코드 지표를 추가합니다." },
+          { kind: "list", items: [
+            "결재 문서는 계약·업체·직원·부서·차량·업체 담당자·휴가 종류 또는 기안자·기안 부서로 묶을 수 있습니다. 기안자·기안 부서는 모든 양식에 있어 항상 연결됩니다.",
+            "지출 표의 연관 용역/사업장을 고른 행은 그 행 단위로 용역·사업장에 묶입니다(한 문서에 여러 용역 지출이 섞여도 나뉘어 집계).",
+            "시스템 소스로 기성(세금계산서 발행)·외주·법인카드 승인내역·ADT 일별 근태를 쓸 수 있고, 계약 축은 발주처·수행 부서로도 묶입니다.",
+          ] },
         ],
       },
     ],
-    keywords: ["데이터 분석", "지표", "통계", "리포트", "자연어 질문", "차트", "산출 근거"],
+    keywords: ["데이터 분석", "지표", "통계", "리포트", "자연어 질문", "차트", "산출 근거", "기안자", "기안 부서", "마진율"],
     sources: ["components/approval/ApprovalAnalyticsBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "approval.insights",

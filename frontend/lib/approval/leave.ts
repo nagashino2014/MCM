@@ -472,6 +472,25 @@ export async function getMyLeaveRemaining(userId: string, year: string): Promise
   return { granted, used, remaining: Math.round((granted - used) * 100) / 100 };
 }
 
+/** 직원별 잔여 연차(연차수당 신청서 자동 채움, 2026-10-21) — getMyLeaveRemaining 과 같은 산식을 직원 ID 로 */
+export async function getEmployeeLeaveRemaining(employeeId: string, year: string): Promise<{ granted: number; used: number; remaining: number } | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT COALESCE(SUM(CASE WHEN l.entry_type IN ('grant','adjust') THEN l.days END), 0) AS granted,
+              COALESCE(SUM(CASE WHEN l.entry_type = 'use' AND (lt.deduct IS NOT NULL OR l.leave_type_key IS NULL) THEN l.days END), 0) AS used
+         FROM annual_leave_ledger l
+         LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
+        WHERE l.employee_id = $1 AND l.year = $2`,
+      [employeeId, year]
+    )
+  );
+  const granted = Number(rows[0]?.granted ?? 0);
+  const used = Number(rows[0]?.used ?? 0);
+  if (granted === 0 && used === 0) return null;
+  return { granted, used, remaining: Math.round((granted - used) * 100) / 100 };
+}
+
 /* ---------- 내 휴가(본인 스코프 — /approval/my-leave) ---------- */
 
 export interface MyLeaveOverview {

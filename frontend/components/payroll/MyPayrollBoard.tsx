@@ -282,7 +282,7 @@ export function MyPayrollBoard() {
                             key={r.entryId}
                             className="cursor-pointer"
                             style={{
-                              height: 46,
+                              height: 53, // 10-21 목록 행 +7px(46→53)
                               borderTop: `1px solid ${C.hairline}`,
                               background: active ? C.rowSelected : undefined,
                               boxShadow: active ? `inset 3px 0 0 ${C.accent}` : undefined,

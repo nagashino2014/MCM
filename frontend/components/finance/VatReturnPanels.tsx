@@ -157,34 +157,34 @@ export function WithholdingPanel() {
           <tbody>
             {months.map((m) => (
               <tr key={m.month} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap">{m.year}.{String(m.month).padStart(2, "0")}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{m.dueDate}</td>
-                <td className="py-1.5 pr-3 text-right">{m.headcount}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.payTotal)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.incomeTax)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.settleIncomeTax ? won(m.settleIncomeTax) : "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.yearendIncomeTax ? won(m.yearendIncomeTax) : "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{m.farmTax ? won(m.farmTax) : "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap" title={m.bizPayTotal ? `지급액 ${won(m.bizPayTotal)}` : undefined}>{m.bizIncomeTax ? won(m.bizIncomeTax) : "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap" title={m.otherPayTotal ? `지급액 ${won(m.otherPayTotal)}` : undefined}>{m.otherIncomeTax || m.otherPayTotal ? won(m.otherIncomeTax) : "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap font-medium">{won(m.incomeTaxTotal)}</td>
-                <td className="py-1.5 text-right whitespace-nowrap">{won(m.localTax)}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{m.year}.{String(m.month).padStart(2, "0")}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{m.dueDate}</td>
+                <td className="py-[9.5px] pr-3 text-right">{m.headcount}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.payTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.incomeTax)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{m.settleIncomeTax ? won(m.settleIncomeTax) : "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{m.yearendIncomeTax ? won(m.yearendIncomeTax) : "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{m.farmTax ? won(m.farmTax) : "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap" title={m.bizPayTotal ? `지급액 ${won(m.bizPayTotal)}` : undefined}>{m.bizIncomeTax ? won(m.bizIncomeTax) : "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap" title={m.otherPayTotal ? `지급액 ${won(m.otherPayTotal)}` : undefined}>{m.otherIncomeTax || m.otherPayTotal ? won(m.otherIncomeTax) : "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium">{won(m.incomeTaxTotal)}</td>
+                <td className="py-[9.5px] text-right whitespace-nowrap">{won(m.localTax)}</td>
               </tr>
             ))}
             {months.length > 0 && (
               <tr className="border-t cd-hairline-row-c font-semibold">
-                <td className="py-2 pr-3">합계</td>
-                <td className="py-2 pr-3" />
-                <td className="py-2 pr-3" />
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.payTotal))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.settleIncomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.yearendIncomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.farmTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.bizIncomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.otherIncomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTaxTotal))}</td>
-                <td className="py-2 text-right whitespace-nowrap">{won(total((m) => m.localTax))}</td>
+                <td className="py-[11.5px] pr-3">합계</td>
+                <td className="py-[11.5px] pr-3" />
+                <td className="py-[11.5px] pr-3" />
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.payTotal))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.settleIncomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.yearendIncomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.farmTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.bizIncomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.otherIncomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(total((m) => m.incomeTaxTotal))}</td>
+                <td className="py-[11.5px] text-right whitespace-nowrap">{won(total((m) => m.localTax))}</td>
               </tr>
             )}
             {!loading && months.length === 0 && (
@@ -513,20 +513,20 @@ export function HometaxPanel() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.ntsSendKey} className={`border-t cd-hairline-row-c ${r.excluded ? "opacity-50" : ""}`}>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">{r.writeDate}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{r.writeDate}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">
                     {TAX_TYPE_LABEL[r.taxType] ?? r.taxType}
                     {r.modifyCode ? <span className="cd-pill cd-pill-warn ml-1">수정</span> : null}
                   </td>
-                  <td className="py-2 pr-3 max-w-[220px]">
+                  <td className="py-[11.5px] pr-3 max-w-[220px]">
                     <div className="truncate" title={r.partyName ?? ""}>{r.partyName ?? "-"}</div>
                     <div className="text-xs cd-text-muted">{r.partyCorpNum ? fmtCorpNum(r.partyCorpNum) : ""}</div>
                   </td>
-                  <td className="py-2 pr-3 max-w-[180px]"><div className="truncate" title={r.itemName ?? ""}>{r.itemName ?? "-"}</div></td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(r.amountTotal)}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(r.taxTotal)}</td>
-                  <td className="py-2 pr-3 text-right font-medium whitespace-nowrap">{won(r.totalAmount)}</td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-[11.5px] pr-3 max-w-[180px]"><div className="truncate" title={r.itemName ?? ""}>{r.itemName ?? "-"}</div></td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(r.amountTotal)}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(r.taxTotal)}</td>
+                  <td className="py-[11.5px] pr-3 text-right font-medium whitespace-nowrap">{won(r.totalAmount)}</td>
+                  <td className="py-[11.5px] whitespace-nowrap">
                     {r.direction === "purchase" && r.taxType !== 3 && r.htiId ? (
                       <span className="inline-flex items-center gap-1.5">
                         <select className="cd-select" aria-label={`${r.partyName ?? r.ntsSendKey} 공제 판정`} value={r.vatDeductible == null ? "" : String(r.vatDeductible)} disabled={busy}
@@ -775,7 +775,7 @@ export function CardTaxReviewPanel({ from, to, onSaved, canManage: canManageProp
     {error && <div role="alert" className="cd-error-text text-sm">{error}</div>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
     <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead><tr><th>거래일 / ID</th><th>가맹점 / 유형</th><th>금액 / 세액</th><th>공제 판정 / 보류 사유</th><th>검토</th></tr></thead><tbody>
-      {rows.map(r => <tr key={r.cardTxnId} className="border-t cd-hairline-row-c"><td className="p-2">{r.approvedAt}<div className="text-xs select-all">{r.cardTxnId}</div></td><td>{r.storeName}<div>{r.approvalType}</div></td><td>{r.amountTotal == null ? "확인 필요" : won(r.amountTotal)} / {r.taxAmount == null ? "확인 필요" : won(r.taxAmount)}</td><td>{r.issues.length > 0 && r.vatState !== "undecided" ? "재검토" : r.vatState === "deductible" ? "공제" : r.vatState === "non_deductible" ? "불공제" : "미판정"}<div className="text-xs">{r.issues.join(" / ")}</div></td><td><button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || !canManage} onClick={() => edit(r)} aria-label={`${r.cardTxnId} 검토`}>검토</button></td></tr>)}
+      {rows.map(r => <tr key={r.cardTxnId} className="border-t cd-hairline-row-c"><td className="px-2 py-[11.5px]">{r.approvedAt}<div className="text-xs select-all">{r.cardTxnId}</div></td><td>{r.storeName}<div>{r.approvalType}</div></td><td>{r.amountTotal == null ? "확인 필요" : won(r.amountTotal)} / {r.taxAmount == null ? "확인 필요" : won(r.taxAmount)}</td><td>{r.issues.length > 0 && r.vatState !== "undecided" ? "재검토" : r.vatState === "deductible" ? "공제" : r.vatState === "non_deductible" ? "불공제" : "미판정"}<div className="text-xs">{r.issues.join(" / ")}</div></td><td><button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy || !canManage} onClick={() => edit(r)} aria-label={`${r.cardTxnId} 검토`}>검토</button></td></tr>)}
       {!rows.length && <tr><td colSpan={5} className="p-3 text-center cd-text-muted">해당 기간 카드 검토 자료가 없습니다.</td></tr>}
     </tbody></table></div>
     {selected && <fieldset disabled={!canManage || busy} className="space-y-2 border-t cd-border-c pt-3">
@@ -1345,11 +1345,11 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
             <tbody>
               {deposits.filter((d) => d.isActive).map((d) => (
                 <tr key={d.depositId} className="border-t cd-hairline-row-c">
-                  <td className="py-1.5 pr-3">{d.propertyLabel}</td>
-                  <td className="py-1.5 pr-3">{d.tenantName}</td>
-                  <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(d.depositAmount)}</td>
-                  <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{d.dateFrom} ~ {d.dateTo ?? "계속"}</td>
-                  <td className="py-1.5">
+                  <td className="py-[9.5px] pr-3">{d.propertyLabel}</td>
+                  <td className="py-[9.5px] pr-3">{d.tenantName}</td>
+                  <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(d.depositAmount)}</td>
+                  <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{d.dateFrom} ~ {d.dateTo ?? "계속"}</td>
+                  <td className="py-[9.5px]">
                     <button
                       type="button"
                       className="cd-btn cd-btn-ghost cd-btn-sm"
@@ -1440,10 +1440,10 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
                 <tbody>
                   {(alertOpen === "duplicates" ? alerts.duplicates : alertOpen === "holiday" ? alerts.holiday : alerts.lateNight).map((a, i) => (
                     <tr key={i} className="border-t cd-hairline-row-c">
-                      <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{a.approvedAt}</td>
-                      <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{a.cardAlias}</td>
-                      <td className="py-1.5 pr-3">{a.storeName}</td>
-                      <td className="py-1.5 text-right whitespace-nowrap">{won(a.amountTotal)}</td>
+                      <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{a.approvedAt}</td>
+                      <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{a.cardAlias}</td>
+                      <td className="py-[9.5px] pr-3">{a.storeName}</td>
+                      <td className="py-[9.5px] text-right whitespace-nowrap">{won(a.amountTotal)}</td>
                     </tr>
                   ))}
                 </tbody>

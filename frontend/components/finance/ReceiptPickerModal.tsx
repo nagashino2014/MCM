@@ -521,10 +521,10 @@ export function ReceiptPickerModal({
                     onClick={() => !blocked && toggle(item.receiptId)}
                     title={dateUnknownLocked(item) ? "사용일이 없는 영수증 — 영수증 보관함에서 사용일을 고친 뒤 담을 수 있습니다" : undefined}
                   >
-                    <td className="py-1.5 px-3">
+                    <td className="py-[9.5px] px-3">
                       <input type="checkbox" checked={selected.has(item.receiptId) && !blocked} disabled={blocked} readOnly />
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="py-[9.5px] pr-3">
                       {hasImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -550,14 +550,14 @@ export function ReceiptPickerModal({
                         </a>
                       )}
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">
                       {item.paidDate ?? (
                         <span className="cd-text-faint" title="사용일이 인식되지 않은 건 — 촬영일 기준으로 표시합니다">
                           미상 ({item.createdAt?.slice(0, 10) ?? "-"})
                         </span>
                       )}
                     </td>
-                    <td className="py-1.5 pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
+                    <td className="py-[9.5px] pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
                       {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
                       {tab === "manual" && !used && (
@@ -574,12 +574,12 @@ export function ReceiptPickerModal({
                         </button>
                       )}
                     </td>
-                    <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.totalAmount.toLocaleString("ko-KR")}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
+                    <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{item.totalAmount.toLocaleString("ko-KR")}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">
                       {tab === "manual" ? item.payMethod ?? "-" : item.cardLast4 ? `****${item.cardLast4}` : "-"}
                     </td>
                     {/* 지출 목적·연관 용역/사업장 — 촬영·직접 첨부 때 고른 값이 기본, 여기서 고칠 수 있다. 칸을 눌러도 행 선택은 토글하지 않는다 */}
-                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-[9.5px] pr-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <select
                           className="cd-input py-1 text-xs"
@@ -608,7 +608,7 @@ export function ReceiptPickerModal({
                         )}
                       </div>
                     </td>
-                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
+                    <td className="py-[9.5px] pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
                       <RelatedCellButton
                         label={relatedOf(item)?.label ?? ""}
                         disabled={blocked || relatedLocked}
@@ -617,7 +617,7 @@ export function ReceiptPickerModal({
                         onPick={(ref) => editRow(item.receiptId, { related: ref })}
                       />
                     </td>
-                    <td className="py-1.5">
+                    <td className="py-[9.5px]">
                       {item.categoryLabel ? (
                         <span className="cd-pill cd-pill-info" title={`근거: ${item.categorySource}`}>
                           {item.formOption ?? item.categoryLabel}

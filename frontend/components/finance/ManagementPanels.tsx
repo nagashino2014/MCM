@@ -243,19 +243,19 @@ export function CashPanel() {
                 <tbody>
                   {data.monthly.map((m) => (
                     <tr key={m.month} className="border-t cd-hairline-row-c">
-                      <td className="py-1.5 pr-3 whitespace-nowrap">
+                      <td className="py-[9.5px] pr-3 whitespace-nowrap">
                         {m.month}
                         {m.forecast && <span className="ml-1.5 cd-pill cd-pill-info">전망</span>}
                       </td>
-                      <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.inflow)}</td>
-                      <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(m.outflow)}</td>
+                      <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.inflow)}</td>
+                      <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.outflow)}</td>
                       <td
-                        className="py-1.5 pr-3 text-right whitespace-nowrap font-medium"
+                        className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium"
                         style={m.net < 0 ? { color: "var(--cd-error,#FA896B)" } : { color: "var(--cd-success,#13DEB9)" }}
                       >
                         {won(m.net)}
                       </td>
-                      <td className="py-1.5 text-right whitespace-nowrap font-medium">
+                      <td className="py-[9.5px] text-right whitespace-nowrap font-medium">
                         {m.endBalance != null ? won(m.endBalance) : ""}
                       </td>
                     </tr>

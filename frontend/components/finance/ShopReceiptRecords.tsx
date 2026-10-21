@@ -383,10 +383,10 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
             <tbody>
               {uncovered.map((t) => (
                 <tr key={t.cardTxnId} className="border-t cd-border-c">
-                  <td className="py-1 pr-3 whitespace-nowrap cd-text-muted">{t.approvedDate}</td>
-                  <td className="py-1 pr-3">{t.storeName}</td>
-                  <td className="py-1 pr-3 whitespace-nowrap cd-text-muted">{t.cardAlias || t.cardCompany} ····{t.cardLast4}</td>
-                  <td className="py-1 text-right whitespace-nowrap">{t.amountTotal.toLocaleString()}원</td>
+                  <td className="py-[7.5px] pr-3 whitespace-nowrap cd-text-muted">{t.approvedDate}</td>
+                  <td className="py-[7.5px] pr-3">{t.storeName}</td>
+                  <td className="py-[7.5px] pr-3 whitespace-nowrap cd-text-muted">{t.cardAlias || t.cardCompany} ····{t.cardLast4}</td>
+                  <td className="py-[7.5px] text-right whitespace-nowrap">{t.amountTotal.toLocaleString()}원</td>
                 </tr>
               ))}
             </tbody>
@@ -473,7 +473,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
               {rows.map((row) => (
                 <Fragment key={row.receiptId}>
                   <tr className={`border-t cd-border-c ${row.excluded ? "opacity-50" : ""}`}>
-                    <td className="py-1.5 pr-2">
+                    <td className="py-[9.5px] pr-2">
                       <input
                         type="checkbox"
                         aria-label={`${row.orderDate} ${row.orderNo} 선택`}
@@ -483,11 +483,11 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                         onChange={() => toggleChecked(row.receiptId)}
                       />
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{SITE_NAMES[row.site] ?? row.site}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderDate || "-"}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap cd-text-muted">{row.orderNo}</td>
-                    <td className="py-1.5 pr-3">{row.title || "-"}</td>
-                    <td className="py-1.5 pr-3">
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap">{SITE_NAMES[row.site] ?? row.site}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap cd-text-muted">{row.orderDate || "-"}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap cd-text-muted">{row.orderNo}</td>
+                    <td className="py-[9.5px] pr-3">{row.title || "-"}</td>
+                    <td className="py-[9.5px] pr-3">
                       <input
                         ref={(el) => {
                           memoRefs.current[row.receiptId] = el;
@@ -517,10 +517,10 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                         }}
                       />
                     </td>
-                    <td className="py-1.5 pr-3 text-right whitespace-nowrap">
+                    <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">
                       {row.amount ? `${row.amount.toLocaleString()}원` : "-"}
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap">
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap">
                       {row.storageKey ? (
                         <a
                           className="cd-text-primary inline-flex items-center gap-1"
@@ -534,7 +534,7 @@ export function ShopReceiptRecords({ from, to, reloadToken, periodControls }: Pr
                         <span className="cd-text-faint">-</span>
                       )}
                     </td>
-                    <td className="py-1.5">
+                    <td className="py-[9.5px]">
                       {row.matchedTxn ? (
                         <span className="inline-flex items-center gap-1.5 flex-wrap">
                           <span className="cd-pill cd-pill-success inline-flex items-center gap-1">

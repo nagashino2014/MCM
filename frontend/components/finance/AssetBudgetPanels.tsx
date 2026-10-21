@@ -157,21 +157,21 @@ export function FixedAssetPanel() {
             {assets.filter((a) => a.isActive).map((a) => (
               <>
                 <tr key={a.faId} className={`border-t cd-hairline-row-c ${a.disposedAt ? "opacity-50" : ""}`}>
-                  <td className="py-2 pr-3">
+                  <td className="py-[11.5px] pr-3">
                     <button type="button" className="underline-offset-2 hover:underline" onClick={() => setOpenId(openId === a.faId ? null : a.faId)}>
                       {a.name}
                     </button>
                     {a.disposedAt && <span className="cd-pill cd-pill-idle ml-1">처분 {a.disposedAt}</span>}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">{CATEGORY_LABEL[a.category] ?? a.category}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">{a.acquisitionDate}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(a.acquisitionCost)}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{CATEGORY_LABEL[a.category] ?? a.category}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{a.acquisitionDate}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(a.acquisitionCost)}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">
                     {a.method === "declining" ? "정률" : "정액"} {a.usefulLifeYears}년
                   </td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(a.totalAccum)}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap font-medium">{won(a.bookValue)}</td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(a.totalAccum)}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium">{won(a.bookValue)}</td>
+                  <td className="py-[11.5px] whitespace-nowrap">
                     {!a.disposedAt && (
                       <button
                         type="button"
@@ -385,12 +385,12 @@ export function TripLogPanel() {
           <tbody>
             {logs.map((l) => (
               <tr key={l.logId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.driveDate}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{l.assetName}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{l.driverName ?? "-"}</td>
-                <td className="py-1.5 pr-3 max-w-[220px]"><div className="truncate" title={l.purpose ?? ""}>{l.purpose ?? "-"}</div></td>
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.docId ? "출장신청서" : "수기"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{l.driveDate}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{l.assetName}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{l.driverName ?? "-"}</td>
+                <td className="py-[9.5px] pr-3 max-w-[220px]"><div className="truncate" title={l.purpose ?? ""}>{l.purpose ?? "-"}</div></td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{l.docId ? "출장신청서" : "수기"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">
                   {l.distanceEstimated && (
                     <span className="cd-pill cd-pill-info mr-1" title="사무소↔출장지 실도로 거리 추정치(카카오 길찾기) — 값을 수정하면 실측으로 바뀝니다">
                       추정
@@ -412,7 +412,7 @@ export function TripLogPanel() {
                     }}
                   />
                 </td>
-                <td className="py-1.5 whitespace-nowrap">
+                <td className="py-[9.5px] whitespace-nowrap">
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void act({ action: "delete", logId: l.logId }, "삭제했습니다.")}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -527,13 +527,13 @@ export function BudgetPanel() {
               const over = b.remaining < 0;
               return (
                 <tr key={b.budgetId} className="border-t cd-hairline-row-c">
-                  <td className="py-2 pr-3">{b.categoryLabel}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(b.amount)}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap">{won(b.spent)}</td>
-                  <td className="py-2 pr-3 text-right whitespace-nowrap font-medium" style={over ? { color: "var(--cd-danger,#FA896B)" } : undefined}>
+                  <td className="py-[11.5px] pr-3">{b.categoryLabel}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(b.amount)}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(b.spent)}</td>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={over ? { color: "var(--cd-danger,#FA896B)" } : undefined}>
                     {won(b.remaining)}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="py-[11.5px] pr-3">
                     <div className="h-2 rounded-full overflow-hidden border cd-border-c">
                       <div
                         className="h-full"
@@ -541,7 +541,7 @@ export function BudgetPanel() {
                       />
                     </div>
                   </td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-[11.5px] whitespace-nowrap">
                     <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} title="금액 변경" onClick={() => setForm({ categoryKey: b.categoryKey, amount: String(b.amount) })}>
                       <Pencil className="w-3.5 h-3.5" />
                     </button>

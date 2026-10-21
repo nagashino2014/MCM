@@ -180,21 +180,21 @@ export function ShopReceiptPickerModal({
                     onClick={() => !disabled && toggle(item.receiptId)}
                     title={unmatched ? "법인카드 승인건과 매칭되지 않은 전표 — 재무 > 쇼핑몰 전표에서 카드 매칭을 확인하세요" : undefined}
                   >
-                    <td className="py-1.5 px-3">
+                    <td className="py-[9.5px] px-3">
                       <input type="checkbox" checked={selected.has(item.receiptId)} disabled={disabled} readOnly />
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.orderDate || "-"}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.siteName}</td>
-                    <td className="py-1.5 pr-3 max-w-[280px] truncate" title={item.title}>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.orderDate || "-"}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.siteName}</td>
+                    <td className="py-[9.5px] pr-3 max-w-[280px] truncate" title={item.title}>
                       {item.title || `주문 ${item.orderNo}`}
                       {existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
                       {item.docId && !existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(다른 문서에 사용)</span>}
                       {attachOnly && !used && <span className="ml-1.5 text-[10px] cd-text-primary">(카드 행에 첨부만)</span>}
                       {unmatched && !used && <span className="ml-1.5 text-[10px] cd-text-faint">(카드 미매칭)</span>}
                     </td>
-                    <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.amount.toLocaleString("ko-KR")}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.cardLast4 ? `****${item.cardLast4}` : "-"}</td>
-                    <td className="py-1.5">
+                    <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{item.amount.toLocaleString("ko-KR")}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.cardLast4 ? `****${item.cardLast4}` : "-"}</td>
+                    <td className="py-[9.5px]">
                       {item.storageKey ? (
                         <a
                           className="cd-text-primary inline-flex items-center gap-1 text-xs"

@@ -110,32 +110,32 @@ export function IncomeLedgerPanel() {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.entryId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3">{i + 1}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{r.payDate}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{r.payeeName}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{r.payeeRrnMasked ?? "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.grossAmount)}</td>
-                {isOther && <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.necessaryExpense)}</td>}
-                {isOther && <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.taxableIncome)}</td>}
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.incomeTax)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.localTax)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.withheldTotal)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap font-medium">{won(r.netAmount)}</td>
-                <td className="py-1.5 pr-3 text-xs">{r.note ?? "-"}</td>
-                <td className="py-1.5 whitespace-nowrap text-xs">{r.docNo ?? "-"}</td>
+                <td className="py-[9.5px] pr-3">{i + 1}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{r.payDate}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{r.payeeName}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{r.payeeRrnMasked ?? "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.grossAmount)}</td>
+                {isOther && <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.necessaryExpense)}</td>}
+                {isOther && <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.taxableIncome)}</td>}
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.incomeTax)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.localTax)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.withheldTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium">{won(r.netAmount)}</td>
+                <td className="py-[9.5px] pr-3 text-xs">{r.note ?? "-"}</td>
+                <td className="py-[9.5px] whitespace-nowrap text-xs">{r.docNo ?? "-"}</td>
               </tr>
             ))}
             {rows.length > 0 && (
               <tr className="border-t cd-hairline-row-c font-semibold">
-                <td className="py-2 pr-3">계</td>
+                <td className="py-[11.5px] pr-3">계</td>
                 <td className="py-2 pr-3" colSpan={3} />
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.grossAmount))}</td>
-                {isOther && <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.necessaryExpense))}</td>}
-                {isOther && <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.taxableIncome))}</td>}
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.incomeTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.localTax))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.withheldTotal))}</td>
-                <td className="py-2 pr-3 text-right whitespace-nowrap">{won(t((r) => r.netAmount))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.grossAmount))}</td>
+                {isOther && <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.necessaryExpense))}</td>}
+                {isOther && <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.taxableIncome))}</td>}
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.incomeTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.localTax))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.withheldTotal))}</td>
+                <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(t((r) => r.netAmount))}</td>
                 <td className="py-2" colSpan={2} />
               </tr>
             )}

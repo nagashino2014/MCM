@@ -312,21 +312,21 @@ export default function YearendBoard() {
               {rows.map((r) => (
                 <>
                   <tr key={r.employeeId} className="border-t cd-hairline-row-c cursor-pointer cd-row-hover" onClick={() => openRow(r)}>
-                    <td className="py-2 pr-3 whitespace-nowrap font-medium">{r.name}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-xs">{r.deptName ?? "-"}</td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap" title={r.result?.deemedBonus ? `급여대장 ${won(r.grossPay)} + 인정상여 ${won(r.result.deemedBonus)}` : undefined}>
+                    <td className="py-[11.5px] pr-3 whitespace-nowrap font-medium">{r.name}</td>
+                    <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{r.deptName ?? "-"}</td>
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap" title={r.result?.deemedBonus ? `급여대장 ${won(r.grossPay)} + 인정상여 ${won(r.result.deemedBonus)}` : undefined}>
                       {won(r.result?.deemedBonus ? r.result.grossPay : r.grossPay)}
                       {r.result?.deemedBonus ? <span className="cd-text-muted text-xs"> (인정상여 포함)</span> : null}
                     </td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap">{won(r.prepaidTax)}</td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap">{r.result ? won(r.result.determinedTax) : "-"}</td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" } : undefined}>
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(r.prepaidTax)}</td>
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{r.result ? won(r.result.determinedTax) : "-"}</td>
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" } : undefined}>
                       {r.result ? `${r.result.balance < 0 ? "환급 " : "추납 "}${won(Math.abs(r.result.balance))}` : "-"}
                     </td>
-                    <td className="py-2 pr-3 text-right whitespace-nowrap cd-text-muted">
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap cd-text-muted">
                       {uploads.filter((u) => u.employeeId === r.employeeId).length || "-"}
                     </td>
-                    <td className="py-2 whitespace-nowrap">
+                    <td className="py-[11.5px] whitespace-nowrap">
                       <span className={`cd-pill ${r.status === "confirmed" ? "cd-pill-success" : r.result ? "cd-pill-info" : "cd-pill-idle"}`}>
                         {r.status === "confirmed" ? "확정" : r.result ? "계산됨" : "미계산"}
                       </span>

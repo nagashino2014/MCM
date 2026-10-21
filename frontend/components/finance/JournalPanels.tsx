@@ -666,7 +666,7 @@ export function JournalPanel() {
               const canAssign = entry.sourceKind === "card" && !entry.expenseKindLocked;
               return (
                 <tr key={entry.entryId} className="border-t cd-hairline-row-c align-top">
-                  <td className="py-2 pr-2">
+                  <td className="py-[11.5px] pr-2">
                     {canAssign && (
                       <input
                         type="checkbox"
@@ -682,8 +682,8 @@ export function JournalPanel() {
                       />
                     )}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">{entry.entryDate}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{entry.entryDate}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">
                     <div>{SOURCE_LABEL[entry.sourceKind] ?? entry.sourceKind}</div>
                     {entry.sourceKind === "card" && (
                       <div className="mt-0.5 cd-text-faint">
@@ -693,22 +693,22 @@ export function JournalPanel() {
                       </div>
                     )}
                   </td>
-                  <td className="py-2 pr-3 max-w-[240px]">
+                  <td className="py-[11.5px] pr-3 max-w-[240px]">
                     <div className="truncate" title={entry.description ?? ""}>{entry.description ?? "-"}</div>
                   </td>
-                  <td className="py-2 pr-3 text-xs whitespace-nowrap">
+                  <td className="py-[11.5px] pr-3 text-xs whitespace-nowrap">
                     {debits.map((l, i) => (
                       <div key={i}>{l.accountName} {won(l.debit)}</div>
                     ))}
                   </td>
-                  <td className="py-2 pr-3 text-xs whitespace-nowrap">
+                  <td className="py-[11.5px] pr-3 text-xs whitespace-nowrap">
                     {credits.map((l, i) => (
                       <div key={i}>{l.accountName} {won(l.credit)}</div>
                     ))}
                   </td>
-                  <td className="py-2 pr-3 text-right font-medium whitespace-nowrap">{won(entry.total)}</td>
-                  <td className="py-2 pr-3"><span className={`cd-pill ${meta.pill}`}>{meta.label}</span></td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-[11.5px] pr-3 text-right font-medium whitespace-nowrap">{won(entry.total)}</td>
+                  <td className="py-[11.5px] pr-3"><span className={`cd-pill ${meta.pill}`}>{meta.label}</span></td>
+                  <td className="py-[11.5px] whitespace-nowrap">
                     {entry.status === "pending" && (
                       <span className="inline-flex items-center gap-1.5">
                         <select
@@ -829,15 +829,15 @@ export function JournalPanel() {
                 </thead>
                 <tbody>
                   <tr className="border-t cd-hairline-row-c">
-                    <td className="py-2 pr-3"><span className="cd-pill cd-pill-info">기준</span></td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-xs">{bulk.base.entryDate}</td>
-                    <td className="py-2 pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[bulk.base.sourceKind] ?? bulk.base.sourceKind}</td>
-                    <td className="py-2 pr-3"><div className="truncate max-w-[360px]" title={bulk.base.description ?? ""}>{bulk.base.description ?? "-"}</div></td>
-                    <td className="py-2 text-right font-medium whitespace-nowrap">{won(bulk.base.total)}</td>
+                    <td className="py-[11.5px] pr-3"><span className="cd-pill cd-pill-info">기준</span></td>
+                    <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{bulk.base.entryDate}</td>
+                    <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[bulk.base.sourceKind] ?? bulk.base.sourceKind}</td>
+                    <td className="py-[11.5px] pr-3"><div className="truncate max-w-[360px]" title={bulk.base.description ?? ""}>{bulk.base.description ?? "-"}</div></td>
+                    <td className="py-[11.5px] text-right font-medium whitespace-nowrap">{won(bulk.base.total)}</td>
                   </tr>
                   {bulk.targets.map((t) => (
                     <tr key={t.entryId} className="border-t cd-hairline-row-c">
-                      <td className="py-2 pr-3">
+                      <td className="py-[11.5px] pr-3">
                         <input
                           type="checkbox"
                           checked={!bulkOff.has(t.entryId)}
@@ -851,10 +851,10 @@ export function JournalPanel() {
                           }
                         />
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-xs">{t.entryDate}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[t.sourceKind] ?? t.sourceKind}</td>
-                      <td className="py-2 pr-3"><div className="truncate max-w-[360px]" title={t.description ?? ""}>{t.description ?? "-"}</div></td>
-                      <td className="py-2 text-right font-medium whitespace-nowrap">{won(t.total)}</td>
+                      <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{t.entryDate}</td>
+                      <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs">{SOURCE_LABEL[t.sourceKind] ?? t.sourceKind}</td>
+                      <td className="py-[11.5px] pr-3"><div className="truncate max-w-[360px]" title={t.description ?? ""}>{t.description ?? "-"}</div></td>
+                      <td className="py-[11.5px] text-right font-medium whitespace-nowrap">{won(t.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -944,12 +944,12 @@ export function LedgerPanel() {
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{r.entryDate}</td>
-                <td className="py-1.5 pr-3 max-w-[280px] truncate" title={r.description ?? ""}>{r.description ?? "-"}</td>
-                <td className="py-1.5 pr-3 max-w-[160px] truncate">{r.partyName ?? "-"}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{r.debit ? won(r.debit) : ""}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap">{r.credit ? won(r.credit) : ""}</td>
-                <td className="py-1.5 text-right whitespace-nowrap font-medium">{won(r.balance)}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{r.entryDate}</td>
+                <td className="py-[9.5px] pr-3 max-w-[280px] truncate" title={r.description ?? ""}>{r.description ?? "-"}</td>
+                <td className="py-[9.5px] pr-3 max-w-[160px] truncate">{r.partyName ?? "-"}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{r.debit ? won(r.debit) : ""}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{r.credit ? won(r.credit) : ""}</td>
+                <td className="py-[9.5px] text-right whitespace-nowrap font-medium">{won(r.balance)}</td>
               </tr>
             ))}
             {rows.length === 0 && (
@@ -962,8 +962,8 @@ export function LedgerPanel() {
             <tfoot>
               <tr className="border-t cd-hairline-row-c font-medium">
                 <td className="py-1.5 pr-3" colSpan={3}>합계</td>
-                <td className="py-1.5 pr-3 text-right">{won(totals.debit)}</td>
-                <td className="py-1.5 pr-3 text-right">{won(totals.credit)}</td>
+                <td className="py-[9.5px] pr-3 text-right">{won(totals.debit)}</td>
+                <td className="py-[9.5px] pr-3 text-right">{won(totals.credit)}</td>
                 <td />
               </tr>
             </tfoot>
@@ -1234,7 +1234,7 @@ function BacktestCard() {
                 const mismatch = r.diffDebit !== 0 || r.diffCredit !== 0;
                 return (
                   <tr key={i} className="border-t cd-hairline-row-c">
-                    <td className="py-1.5 pr-3">
+                    <td className="py-[9.5px] pr-3">
                       {r.accountName}
                       {!r.accountCode && (
                         <span className="ml-1.5 cd-pill cd-pill-warn" title="앱 계정과목에 매칭되지 않음 — 계정 시드 보강 필요">
@@ -1242,13 +1242,13 @@ function BacktestCard() {
                         </span>
                       )}
                     </td>
-                    <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.importDebit)}</td>
-                    <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.appDebit)}</td>
+                    <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.importDebit)}</td>
+                    <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.appDebit)}</td>
                     <td className={`py-1.5 pr-3 text-right whitespace-nowrap ${r.diffDebit !== 0 ? "cd-error-text font-medium" : "cd-text-muted"}`}>
                       {won(r.diffDebit)}
                     </td>
-                    <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.importCredit)}</td>
-                    <td className="py-1.5 pr-3 text-right whitespace-nowrap">{won(r.appCredit)}</td>
+                    <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.importCredit)}</td>
+                    <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(r.appCredit)}</td>
                     <td className={`py-1.5 text-right whitespace-nowrap ${r.diffCredit !== 0 ? "cd-error-text font-medium" : "cd-text-muted"}`}>
                       {won(r.diffCredit)}
                     </td>

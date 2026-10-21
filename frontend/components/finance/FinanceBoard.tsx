@@ -914,16 +914,16 @@ function ConnectionsPanel() {
                 <tbody>
                   {logs.slice(logOffset, logOffset + LOG_PAGE_SIZE).map((l) => (
                     <tr key={l.syncId} className="border-t cd-hairline-row-c">
-                      <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{l.startedAt}</td>
-                      <td className="py-1.5 pr-3">{SYNC_LOG_KIND_LABEL[l.kind] ?? l.kind}</td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{l.startedAt}</td>
+                      <td className="py-[9.5px] pr-3">{SYNC_LOG_KIND_LABEL[l.kind] ?? l.kind}</td>
+                      <td className="py-[9.5px] pr-3">
                         <span className={`cd-pill ${l.status === "ok" ? "cd-pill-success" : l.status === "error" ? "cd-pill-error" : "cd-pill-idle"}`}>
                           {l.status === "ok" ? "성공" : l.status === "error" ? "실패" : "진행중"}
                         </span>
                       </td>
-                      <td className="py-1.5 pr-3 text-right">{l.fetched}</td>
-                      <td className="py-1.5 pr-3 text-right">{l.inserted}</td>
-                      <td className="py-1.5 text-xs cd-text-muted max-w-[160px] truncate" title={l.error ?? ""}>{l.error ?? ""}</td>
+                      <td className="py-[9.5px] pr-3 text-right">{l.fetched}</td>
+                      <td className="py-[9.5px] pr-3 text-right">{l.inserted}</td>
+                      <td className="py-[9.5px] text-xs cd-text-muted max-w-[160px] truncate" title={l.error ?? ""}>{l.error ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1131,13 +1131,13 @@ function ConnectionTable({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-t cd-hairline-row-c">
-                  <td className="py-2 pr-3 truncate">{row.label}</td>
-                  <td className="py-2 pr-3 truncate font-mono text-xs" title={row.numberMasked}>{row.numberMasked}</td>
-                  <td className="py-2 pr-3">
+                  <td className="py-[11.5px] pr-3 truncate">{row.label}</td>
+                  <td className="py-[11.5px] pr-3 truncate font-mono text-xs" title={row.numberMasked}>{row.numberMasked}</td>
+                  <td className="py-[11.5px] pr-3">
                     {onSaveAlias ? <AliasCell row={row} onSave={onSaveAlias} /> : row.alias ?? <span className="cd-text-muted">—</span>}
                   </td>
-                  <td className="py-2 pr-3">{row.collectCycle}</td>
-                  <td className="py-2 pr-3">
+                  <td className="py-[11.5px] pr-3">{row.collectCycle}</td>
+                  <td className="py-[11.5px] pr-3">
                     <span
                       className={`cd-pill ${row.barobillStatus === "active" ? "cd-pill-success" : row.barobillStatus === "unlinked" ? "cd-pill-warn" : "cd-pill-idle"}`}
                       title={row.barobillStatus === "unlinked" ? "바로빌 계정에 이 연결이 없습니다(운영 전환·해지 후 잔존). 적재된 원장은 보존되며, 같은 번호로 다시 등록하면 이어집니다." : undefined}
@@ -1145,11 +1145,11 @@ function ConnectionTable({
                       {row.barobillStatus === "active" ? "수집중" : row.barobillStatus === "unlinked" ? "바로빌 미등록" : "해지됨"}
                     </span>
                   </td>
-                  <td className="py-2 pr-3 text-right">{row.txnCount.toLocaleString()}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs cd-text-muted" title="현재 적재된 데이터의 최초~최근 거래일">
+                  <td className="py-[11.5px] pr-3 text-right">{row.txnCount.toLocaleString()}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs cd-text-muted" title="현재 적재된 데이터의 최초~최근 거래일">
                     {row.firstTxnAt && row.lastTxnAt ? `${row.firstTxnAt.slice(2, 10)} ~ ${row.lastTxnAt.slice(2, 10)}` : "—"}
                   </td>
-                  <td className="py-2">
+                  <td className="py-[11.5px]">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {row.barobillStatus === "active" ? (
                         <>
@@ -1377,17 +1377,17 @@ function BankLedgerPanel() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.txnId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{r.txnAt}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{r.accountLabel}</td>
-                <td className="py-1.5 pr-3">
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{r.txnAt}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{r.accountLabel}</td>
+                <td className="py-[9.5px] pr-3">
                   <span className={`cd-pill ${r.direction === "in" ? "cd-pill-success" : r.direction === "out" ? "cd-pill-error" : "cd-pill-idle"}`}>
                     {r.direction === "in" ? "입금" : r.direction === "out" ? "출금" : "기타"}
                   </span>
                 </td>
-                <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amount)}</td>
-                <td className="py-1.5 pr-3">{r.remitterRaw ?? ""}</td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.transType ?? ""}</td>
-                <td className="py-1.5 text-xs cd-text-muted max-w-[200px] truncate" title={r.remark2 ?? ""}>{r.remark2 ?? ""}</td>
+                <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amount)}</td>
+                <td className="py-[9.5px] pr-3">{r.remitterRaw ?? ""}</td>
+                <td className="py-[9.5px] pr-3 text-xs cd-text-muted">{r.transType ?? ""}</td>
+                <td className="py-[9.5px] text-xs cd-text-muted max-w-[200px] truncate" title={r.remark2 ?? ""}>{r.remark2 ?? ""}</td>
               </tr>
             ))}
             {!loading && rows.length === 0 && (
@@ -1692,7 +1692,7 @@ function CardLedgerPanel() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.cardTxnId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-2">
+                <td className="py-[9.5px] pr-2">
                   <input
                     type="checkbox"
                     checked={checked.has(r.cardTxnId)}
@@ -1706,20 +1706,20 @@ function CardLedgerPanel() {
                     }
                   />
                 </td>
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">
                   {r.approvedAt}
                   {r.approvalType !== "승인" && <span className="ml-1 cd-pill cd-pill-error">{r.approvalType}</span>}
                 </td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">{r.cardLabel}</td>
-                <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amountTotal)}</td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap cd-text-muted">{r.taxAmount != null ? fmtAmount(r.taxAmount) : ""}</td>
-                <td className="py-1.5 pr-3 max-w-[240px]" title={r.storeName ?? ""}>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{r.cardLabel}</td>
+                <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amountTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap cd-text-muted">{r.taxAmount != null ? fmtAmount(r.taxAmount) : ""}</td>
+                <td className="py-[9.5px] pr-3 max-w-[240px]" title={r.storeName ?? ""}>
                   <div className="truncate">{r.storeName ?? ""}{r.docId && <span className="ml-1 text-[10px] cd-text-faint">결의서</span>}</div>
                   {r.merchantCorrection ? <div className="text-xs cd-text-muted mt-1 space-y-1"><div>원본 {r.merchantCorrection.originalCorpNum ? fmtCorpNum(r.merchantCorrection.originalCorpNum) : "번호 없음"}</div><div>적용 {r.merchantCorrection.effectiveCorpNum ? fmtCorpNum(r.merchantCorrection.effectiveCorpNum) : "번호 없음"}<span className={`ml-1 cd-pill ${r.merchantCorrection.status === "review_required" ? "cd-pill-warn" : "cd-pill-info"}`}>{r.merchantCorrection.status === "corrected" ? "정정" : r.merchantCorrection.status === "original" ? "원본" : "재검토"}</span></div></div> : <div className="text-xs cd-text-muted mt-1">수집 원본 {r.storeCorpNum ? fmtCorpNum(r.storeCorpNum) : "번호 없음"}</div>}
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm mt-1" onClick={() => setMerchantTarget(r)}>사업자번호 정정</button>
                 </td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
-                <td className="py-1.5 pr-3">
+                <td className="py-[9.5px] pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
+                <td className="py-[9.5px] pr-3">
                   <div className="flex items-center gap-1">
                     <select
                       className="cd-select text-xs flex-1 min-w-0"
@@ -1745,7 +1745,7 @@ function CardLedgerPanel() {
                     </button>
                   </div>
                 </td>
-                <td className="py-1.5">
+                <td className="py-[9.5px]">
                   <span className={`cd-pill ${r.vatDeductible === 1 ? "cd-pill-success" : "cd-pill-warn"}`}>
                     {r.vatDeductible === 1 ? "공제" : r.vatDeductible === 0 ? "불공제" : "미판정"}
                   </span>
@@ -2727,26 +2727,26 @@ function VatPanel() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.categoryKey ?? "none"} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3">{r.categoryLabel}</td>
-                <td className="py-1.5 pr-3 text-right">{r.count.toLocaleString()}</td>
-                <td className="py-1.5 pr-3 text-right font-medium">{fmtAmount(r.amountTotal)}</td>
-                <td className="py-1.5 pr-3 text-right cd-text-muted">{fmtAmount(r.supplyAmount)}</td>
-                <td className="py-1.5 pr-3 text-right">{fmtAmount(r.taxAmount)}</td>
-                <td className="py-1.5 pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(r.deductibleTax)}</td>
-                <td className="py-1.5 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(r.nonDeductibleTax)}</td><td className="py-1.5 text-right">{fmtAmount(r.undecidedTax)}</td>
-                <td className="py-1.5 text-right">{fmtAmount(r.linkedTax ?? 0)}</td>
+                <td className="py-[9.5px] pr-3">{r.categoryLabel}</td>
+                <td className="py-[9.5px] pr-3 text-right">{r.count.toLocaleString()}</td>
+                <td className="py-[9.5px] pr-3 text-right font-medium">{fmtAmount(r.amountTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right cd-text-muted">{fmtAmount(r.supplyAmount)}</td>
+                <td className="py-[9.5px] pr-3 text-right">{fmtAmount(r.taxAmount)}</td>
+                <td className="py-[9.5px] pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(r.deductibleTax)}</td>
+                <td className="py-[9.5px] text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(r.nonDeductibleTax)}</td><td className="py-[9.5px] text-right">{fmtAmount(r.undecidedTax)}</td>
+                <td className="py-[9.5px] text-right">{fmtAmount(r.linkedTax ?? 0)}</td>
               </tr>
             ))}
             {totals && rows.length > 0 && (
               <tr className="border-t-2 cd-border-c font-bold">
-                <td className="py-2 pr-3">합계</td>
-                <td className="py-2 pr-3 text-right">{totals.count.toLocaleString()}</td>
-                <td className="py-2 pr-3 text-right">{fmtAmount(totals.amountTotal)}</td>
-                <td className="py-2 pr-3 text-right">{fmtAmount(totals.supplyAmount)}</td>
-                <td className="py-2 pr-3 text-right">{fmtAmount(totals.taxAmount)}</td>
-                <td className="py-2 pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(totals.deductibleTax)}</td>
-                <td className="py-2 text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(totals.nonDeductibleTax)}</td><td className="py-2 text-right">{fmtAmount(totals.undecidedTax)}</td>
-                <td className="py-2 text-right">{fmtAmount(totals.linkedTax ?? 0)}</td>
+                <td className="py-[11.5px] pr-3">합계</td>
+                <td className="py-[11.5px] pr-3 text-right">{totals.count.toLocaleString()}</td>
+                <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.amountTotal)}</td>
+                <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.supplyAmount)}</td>
+                <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.taxAmount)}</td>
+                <td className="py-[11.5px] pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(totals.deductibleTax)}</td>
+                <td className="py-[11.5px] text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(totals.nonDeductibleTax)}</td><td className="py-[11.5px] text-right">{fmtAmount(totals.undecidedTax)}</td>
+                <td className="py-[11.5px] text-right">{fmtAmount(totals.linkedTax ?? 0)}</td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
@@ -2828,15 +2828,15 @@ function StoreRuleListCard() {
           <tbody>
             {rules.map((r) => (
               <tr key={r.ruleId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3">{r.storeName || r.matchValue}</td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted whitespace-nowrap">
+                <td className="py-[9.5px] pr-3">{r.storeName || r.matchValue}</td>
+                <td className="py-[9.5px] pr-3 text-xs cd-text-muted">{r.storeBizType ?? ""}</td>
+                <td className="py-[9.5px] pr-3 text-xs cd-text-muted whitespace-nowrap">
                   {r.matchType === "store_name" ? "상호" : "사업자번호"} · {r.matchType === "corp_num" ? fmtCorpNum(r.matchValue) : r.matchValue}
                 </td>
-                <td className="py-1.5 pr-3">{r.categoryLabel}</td>
-                <td className="py-1.5 pr-3 text-right">{r.txnCount.toLocaleString()}</td>
-                <td className="py-1.5 pr-3 text-xs cd-text-muted">{r.createdAt.slice(0, 10)}</td>
-                <td className="py-1.5">
+                <td className="py-[9.5px] pr-3">{r.categoryLabel}</td>
+                <td className="py-[9.5px] pr-3 text-right">{r.txnCount.toLocaleString()}</td>
+                <td className="py-[9.5px] pr-3 text-xs cd-text-muted">{r.createdAt.slice(0, 10)}</td>
+                <td className="py-[9.5px]">
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm px-1.5" disabled={busy} title="규칙 삭제" onClick={() => remove(r.ruleId)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -2999,19 +2999,19 @@ function TaxInvoicePanel() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.invoiceId} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap">{r.writeDate}</td>
-                <td className="py-1.5 pr-3">
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">{r.writeDate}</td>
+                <td className="py-[9.5px] pr-3">
                   {r.invoiceeCorpName ?? "—"}
                   {r.invoiceeEmail && <span className="block text-[11px] cd-text-faint">{r.invoiceeEmail}</span>}
                 </td>
-                <td className="py-1.5 pr-3 max-w-[240px] truncate text-xs cd-text-muted" title={`${r.contractTitle ?? ""} ${r.stageLabel ?? ""}`}>
+                <td className="py-[9.5px] pr-3 max-w-[240px] truncate text-xs cd-text-muted" title={`${r.contractTitle ?? ""} ${r.stageLabel ?? ""}`}>
                   {r.contractTitle ?? "—"}
                   {r.stageLabel ? ` · ${r.stageLabel}` : ""}
                 </td>
-                <td className="py-1.5 pr-3 text-right font-mono">{fmtAmount(r.amountTotal)}</td>
-                <td className="py-1.5 pr-3 text-right font-mono cd-text-muted">{fmtAmount(r.taxTotal)}</td>
-                <td className="py-1.5 pr-3 text-right font-mono font-medium">{fmtAmount(r.totalAmount)}</td>
-                <td className="py-1.5 pr-3 whitespace-nowrap">
+                <td className="py-[9.5px] pr-3 text-right font-mono">{fmtAmount(r.amountTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right font-mono cd-text-muted">{fmtAmount(r.taxTotal)}</td>
+                <td className="py-[9.5px] pr-3 text-right font-mono font-medium">{fmtAmount(r.totalAmount)}</td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap">
                   {r.canceledAt ? (
                     <span className="cd-pill cd-pill-error">취소됨</span>
                   ) : (
@@ -3023,7 +3023,7 @@ function TaxInvoicePanel() {
                     </>
                   )}
                 </td>
-                <td className="py-1.5 text-right whitespace-nowrap">
+                <td className="py-[9.5px] text-right whitespace-nowrap">
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void openOriginal(r.invoiceId)}>
                     원본
                   </button>

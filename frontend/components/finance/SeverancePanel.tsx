@@ -108,15 +108,15 @@ export function SeverancePanel() {
               const confirmed = r.status === "confirmed";
               return (
                 <tr key={r.settleId} className="border-t cd-hairline-row-c align-middle">
-                  <td className="py-2 pr-3 whitespace-nowrap font-medium">{r.employeeName ?? r.employeeId}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap cd-text-muted">{r.deptName ?? "-"}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap">{r.resignDate ?? "-"}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-right">
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap font-medium">{r.employeeName ?? r.employeeId}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap cd-text-muted">{r.deptName ?? "-"}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap">{r.resignDate ?? "-"}</td>
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-right">
                     {won(r.leavePayAmount)}
                     {r.leavePayDays != null && <span className="cd-text-muted text-xs"> ({r.leavePayDays}일)</span>}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-xs cd-text-muted">{r.leavePayDocNo ?? "-"}</td>
-                  <td className="py-2 pr-3 text-right">
+                  <td className="py-[11.5px] pr-3 whitespace-nowrap text-xs cd-text-muted">{r.leavePayDocNo ?? "-"}</td>
+                  <td className="py-[11.5px] pr-3 text-right">
                     <input
                       className="cd-input text-right"
                       style={{ width: 120 }}
@@ -126,7 +126,7 @@ export function SeverancePanel() {
                       onChange={(e) => setEdits((prev) => ({ ...prev, [r.settleId]: { ...edit, severanceAmount: e.target.value.replace(/[^\d]/g, "") } }))}
                     />
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="py-[11.5px] pr-3">
                     <input
                       className="cd-input w-full min-w-[140px]"
                       disabled={confirmed}
@@ -134,7 +134,7 @@ export function SeverancePanel() {
                       onChange={(e) => setEdits((prev) => ({ ...prev, [r.settleId]: { ...edit, note: e.target.value } }))}
                     />
                   </td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-[11.5px] whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       {confirmed ? (
                         <>

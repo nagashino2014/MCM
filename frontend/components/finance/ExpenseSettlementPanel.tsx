@@ -256,10 +256,10 @@ export function ExpenseSettlementPanel() {
               ) : (
                 persons.map((p) => (
                   <tr key={p.employeeId ?? p.employeeName} className="border-b cd-border-c last:border-b-0">
-                    <td className="px-3 py-2 cd-text whitespace-nowrap">{p.employeeName}</td>
-                    <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.positionName ?? "-"}</td>
-                    <td className="px-3 py-2 cd-text whitespace-nowrap">{p.count}건</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-right">
+                    <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{p.employeeName}</td>
+                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.positionName ?? "-"}</td>
+                    <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{p.count}건</td>
+                    <td className="px-3 py-[11.5px] whitespace-nowrap text-right">
                       <span className="inline-flex items-center gap-2">
                         <button
                           type="button"
@@ -272,8 +272,8 @@ export function ExpenseSettlementPanel() {
                         <span className="cd-text font-bold">{comma(p.amount)}원</span>
                       </span>
                     </td>
-                    <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>미등록</span>}</td>
-                    <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{p.bankAccount ?? "-"}</td>
+                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>미등록</span>}</td>
+                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankAccount ?? "-"}</td>
                   </tr>
                 ))
               )}
@@ -307,13 +307,13 @@ export function ExpenseSettlementPanel() {
                 <tbody>
                   {outOfScope.map((r, i) => (
                     <tr key={`${r.docId}-${i}`} className="border-b cd-border-c last:border-b-0">
-                      <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{r.completedAt ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text whitespace-nowrap">{r.employeeName ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">{(FORM_LABEL[r.formId] ?? r.formId) + (r.docNo ? ` · ${r.docNo}` : "")}</td>
-                      <td className="px-3 py-2 cd-text whitespace-nowrap">{r.usedOn ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text">{r.vendor ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(r.amount)}원</td>
-                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">{r.kind === "shop" ? "카드 미매칭 전표" : "수기"}</td>
+                      <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{r.completedAt ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{r.employeeName ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text-faint whitespace-nowrap">{(FORM_LABEL[r.formId] ?? r.formId) + (r.docNo ? ` · ${r.docNo}` : "")}</td>
+                      <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{r.usedOn ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text">{r.vendor ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">{comma(r.amount)}원</td>
+                      <td className="px-3 py-[11.5px] cd-text-faint whitespace-nowrap">{r.kind === "shop" ? "카드 미매칭 전표" : "수기"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -399,10 +399,10 @@ export function ExpenseSettlementPanel() {
                   .filter((i) => (i.employeeId ?? i.employeeName ?? "unknown") === (personDetail.employeeId ?? personDetail.employeeName))
                   .map((i) => (
                     <tr key={i.rowRef} className="border-b cd-border-c last:border-b-0">
-                      <td className="px-3 py-2 cd-text whitespace-nowrap">{i.usedOn ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.category ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text whitespace-nowrap">{i.vendor ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">
+                      <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{i.usedOn ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{i.category ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{i.vendor ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">
                         {comma(i.amount)}원
                         {i.mealDeduct && (
                           <span className="ml-1.5 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning,#FFAE1F)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
@@ -410,8 +410,8 @@ export function ExpenseSettlementPanel() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 cd-text-muted">{i.detail ?? "-"}</td>
-                      <td className="px-3 py-2 cd-text-faint whitespace-nowrap">
+                      <td className="px-3 py-[11.5px] cd-text-muted">{i.detail ?? "-"}</td>
+                      <td className="px-3 py-[11.5px] cd-text-faint whitespace-nowrap">
                         {(FORM_LABEL[i.formId] ?? i.formId) + (i.docNo ? ` · ${i.docNo}` : "")}
                       </td>
                     </tr>
@@ -445,19 +445,19 @@ function SettlementRowView({
   return (
     <>
       <tr className="border-b cd-border-c">
-        <td className="px-2 py-2 w-7">
+        <td className="px-2 py-[11.5px] w-7">
           <button type="button" className="cd-text-faint" onClick={onToggle} title="내역 펼치기">
             {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         </td>
-        <td className="px-3 py-2 cd-text whitespace-nowrap">{s.settledOn}</td>
-        <td className="px-3 py-2 cd-text-muted whitespace-nowrap">
+        <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{s.settledOn}</td>
+        <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">
           {s.periodFrom ?? "-"} ~ {s.periodTo ?? "-"}
         </td>
-        <td className="px-3 py-2 cd-text whitespace-nowrap">{s.itemCount}건</td>
-        <td className="px-3 py-2 cd-text whitespace-nowrap">{s.personCount}명</td>
-        <td className="px-3 py-2 cd-text font-bold whitespace-nowrap text-right">{comma(s.totalAmount)}원</td>
-        <td className="px-3 py-2 whitespace-nowrap">
+        <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{s.itemCount}건</td>
+        <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{s.personCount}명</td>
+        <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">{comma(s.totalAmount)}원</td>
+        <td className="px-3 py-[11.5px] whitespace-nowrap">
           <span className="inline-flex items-center gap-1.5">
             <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy === `cms-${s.settlementId}`} onClick={onCms}>
               <FileSpreadsheet className="w-3.5 h-3.5" /> {s.cmsFileKey ? "재생성" : "CMS 생성"}
@@ -469,7 +469,7 @@ function SettlementRowView({
             )}
           </span>
         </td>
-        <td className="px-3 py-2 whitespace-nowrap">
+        <td className="px-3 py-[11.5px] whitespace-nowrap">
           <span className="inline-flex items-center gap-1.5">
             <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy === `vat-${s.settlementId}`} onClick={onVat}>
               <Mail className="w-3.5 h-3.5" /> {busy === `vat-${s.settlementId}` ? "생성·발송 중…" : "부가세 자료 발송"}
@@ -481,7 +481,7 @@ function SettlementRowView({
             )}
           </span>
         </td>
-        <td className="px-3 py-2 cd-text-muted">{s.note ?? "-"}</td>
+        <td className="px-3 py-[11.5px] cd-text-muted">{s.note ?? "-"}</td>
       </tr>
       {open && (
         <tr className="border-b cd-border-c">

@@ -288,16 +288,16 @@ export function MyYearendBoard() {
                       <tbody>
                         {(cur?.uploads ?? []).map((u) => (
                           <tr key={u.uploadId} className="border-b cd-border-c last:border-0">
-                            <td className="p-1.5 text-center"><input type="checkbox" checked={checked.has(u.uploadId)} onChange={() => toggleChecked(u.uploadId)} aria-label={`${u.fileName} 선택`} /></td>
-                            <td className="p-1.5 whitespace-nowrap cd-text">{u.kindLabel}</td>
-                            <td className="p-1.5 min-w-0">
+                            <td className="px-1.5 py-[9.5px] text-center"><input type="checkbox" checked={checked.has(u.uploadId)} onChange={() => toggleChecked(u.uploadId)} aria-label={`${u.fileName} 선택`} /></td>
+                            <td className="px-1.5 py-[9.5px] whitespace-nowrap cd-text">{u.kindLabel}</td>
+                            <td className="px-1.5 py-[9.5px] min-w-0">
                               <a className="font-semibold truncate inline-block max-w-[180px] align-bottom" style={{ color: "var(--cd-primary)" }} href={`/api/payroll/my-yearend/uploads/${u.uploadId}`} target="_blank" rel="noreferrer" title={u.fileName}>
                                 {u.fileName}
                               </a>
                               <span className="cd-text-faint ml-1">{kb(u.sizeBytes)}</span>
                             </td>
-                            <td className="p-1.5 whitespace-nowrap cd-text-faint">{u.createdAt.slice(0, 10)}</td>
-                            <td className="p-1.5 whitespace-nowrap">
+                            <td className="px-1.5 py-[9.5px] whitespace-nowrap cd-text-faint">{u.createdAt.slice(0, 10)}</td>
+                            <td className="px-1.5 py-[9.5px] whitespace-nowrap">
                               {u.applied ? <span style={{ color: "var(--cd-success)" }}>계산 반영</span> : <span className="cd-text-faint">보관</span>}
                             </td>
                           </tr>

@@ -381,18 +381,18 @@ export function CardPickerModal({
                     className={`border-t cd-hairline-row-c ${used ? "opacity-45" : "cursor-pointer cd-row-hover"}`}
                     onClick={() => !used && toggle(item.cardTxnId)}
                   >
-                    <td className="py-1.5 px-3">
+                    <td className="py-[9.5px] px-3">
                       <input type="checkbox" checked={selected.has(item.cardTxnId)} disabled={used} readOnly />
                     </td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.useDate}</td>
-                    <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{item.cardLabel}</td>
-                    <td className="py-1.5 pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.useDate}</td>
+                    <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.cardLabel}</td>
+                    <td className="py-[9.5px] pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
                       {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
                     </td>
-                    <td className="py-1.5 pr-3 text-right font-medium whitespace-nowrap">{item.amountTotal.toLocaleString("ko-KR")}</td>
+                    <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{item.amountTotal.toLocaleString("ko-KR")}</td>
                     {/* 지출 목적·연관 용역/사업장 — 칸을 눌러도 행 선택은 토글하지 않는다 */}
-                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-[9.5px] pr-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <select
                           className="cd-input py-1 text-xs"
@@ -420,7 +420,7 @@ export function CardPickerModal({
                         )}
                       </div>
                     </td>
-                    <td className="py-1.5 pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
+                    <td className="py-[9.5px] pr-3" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 200 }}>
                       <RelatedCellButton
                         label={relatedOf(item)?.label ?? ""}
                         disabled={used || relatedLocked}
@@ -429,7 +429,7 @@ export function CardPickerModal({
                         onPick={(ref) => editRow(item.cardTxnId, { related: ref })}
                       />
                     </td>
-                    <td className="py-1.5 pr-3">
+                    <td className="py-[9.5px] pr-3">
                       {item.categoryLabel ? (
                         <span className="cd-pill cd-pill-info" title={`업태: ${item.storeBizType ?? "-"} · 근거: ${item.categorySource}`}>
                           {item.formOption ?? item.categoryLabel}
@@ -438,7 +438,7 @@ export function CardPickerModal({
                         <span className="cd-pill cd-pill-idle">미분류</span>
                       )}
                     </td>
-                    <td className="py-1.5">
+                    <td className="py-[9.5px]">
                       <span className={`cd-pill ${item.isPurchased ? "cd-pill-success" : "cd-pill-idle"}`}>{item.isPurchased ? "완료" : "대기"}</span>
                     </td>
                   </tr>

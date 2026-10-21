@@ -342,11 +342,11 @@ export function ClosingPanel() {
           <tbody>
             {(adjustments?.items ?? []).map((it, i) => (
               <tr key={i} className="border-t cd-hairline-row-c">
-                <td className="py-1.5 pr-3 whitespace-nowrap"><span className="cd-pill cd-pill-warn">{it.rule}</span></td>
-                <td className="py-1.5 pr-3 whitespace-nowrap text-xs">{it.entryDate}</td>
-                <td className="py-1.5 pr-3 max-w-[280px]"><div className="truncate" title={it.description}>{it.description}</div></td>
-                <td className="py-1.5 pr-3 text-right whitespace-nowrap font-medium">{won(it.amount)}</td>
-                <td className="py-1.5 text-xs cd-text-muted max-w-[300px]"><div className="truncate" title={it.note}>{it.note}</div></td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap"><span className="cd-pill cd-pill-warn">{it.rule}</span></td>
+                <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{it.entryDate}</td>
+                <td className="py-[9.5px] pr-3 max-w-[280px]"><div className="truncate" title={it.description}>{it.description}</div></td>
+                <td className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium">{won(it.amount)}</td>
+                <td className="py-[9.5px] text-xs cd-text-muted max-w-[300px]"><div className="truncate" title={it.note}>{it.note}</div></td>
               </tr>
             ))}
             {adjustments && adjustments.items.length === 0 && (

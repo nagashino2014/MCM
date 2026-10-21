@@ -7,6 +7,13 @@ import type { ChangelogEntry } from "./types";
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
+    kind: "신규",
+    title: "매뉴얼 [틀린 내용 알리기]",
+    body: "매뉴얼 기사 맨 아래 [틀린 내용 알리기]를 누르면 기사·화면 정보가 채워진 메일 쓰기 창이 열립니다. 설명이 화면과 다르거나 부족하면 알려 주세요.",
+    articles: ["start.manual"],
+  },
+  {
+    date: "2026-10-21",
     kind: "변경",
     title: "사규·내부 규정 본문 행간 확대",
     body: "사규 열람의 왼쪽 조항 목차 간격을 넓히고 각 장 제목 위에 여백을 두었습니다. 사규와 내부 규정 일람의 본문은 줄 간격을 넓히고 조마다 위쪽에 여백을 더해 읽기 편하게 했습니다.",

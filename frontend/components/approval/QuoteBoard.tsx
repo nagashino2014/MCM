@@ -2005,7 +2005,7 @@ export function QuoteBoard() {
                 </button>
               </div>
               <p className="text-[10.5px] cd-text-faint">
-                승인 완료 시 견적번호 채번 → xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
+                상신 시 견적번호 확정 → 승인 완료 시 xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
               </p>
             </div>
           </div>

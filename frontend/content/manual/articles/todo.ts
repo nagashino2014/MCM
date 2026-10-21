@@ -117,6 +117,6 @@ export const TODO_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["할 일", "투두", "todo", "칸반", "보드", "빠른 입력", "공유", "담당", "완료 조건", "반복", "타임라인"],
     sources: ["components/todo/TodoBoardPage.tsx", "components/todo/QuickAddBar.tsx", "components/todo/TodoDetailDrawer.tsx", "components/todo/CompleteConfirmModal.tsx", "lib/todo/types.ts", "components/layout/TopBar.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 ];

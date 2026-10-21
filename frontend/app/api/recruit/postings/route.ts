@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { createPosting, duplicatePosting, listPostings } from "@/lib/recruit/store";
+import { createPosting, createTemplateEditPosting, duplicatePosting, listPostings } from "@/lib/recruit/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +34,11 @@ export async function POST(req: NextRequest) {
     }
     const templateId = String(body?.templateId ?? "");
     if (!templateId) return NextResponse.json({ error: "templateId 가 필요합니다." }, { status: 400 });
+    // 템플릿 [내용 편집]용(F-40) — 목록에 안 보이는 편집용 공고. 같은 템플릿의 이전 편집용 공고는 정리한다.
+    if (body?.purpose === "template_edit") {
+      const posting = await createTemplateEditPosting(templateId, ctx.userId);
+      return NextResponse.json({ posting }, { status: 201 });
+    }
     const posting = await createPosting({
       templateId,
       title: body?.title != null ? String(body.title) : undefined,

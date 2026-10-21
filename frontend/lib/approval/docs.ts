@@ -38,7 +38,7 @@ export interface ApprovalLineStepInput {
   parallelGroup?: number;
 }
 
-/** 참조/열람 지정(AX-P0) — ref=완료 통보, view=진행 중 열람. */
+/** 참조/열람 지정(AX-P0) — ref·view 모두 상신 후 열람·참조/열람 문서함 노출이 같고 표기만 다르다(access.ts). */
 export interface ApprovalWatcherInput {
   userId: string;
   kind: "ref" | "view";

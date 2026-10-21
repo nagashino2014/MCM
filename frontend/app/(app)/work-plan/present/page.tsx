@@ -124,11 +124,18 @@ export default function PresentPage() {
   const [selectedKey, setSelectedKey] = useState(""); // "" = 전체(회차 무관 현재 현황)
   const [page, setPage] = useState(0);
 
+  // 부서 선택지는 work_plan.view 권한 범위만(F-33) — 전사 범위면 전체, 아니면 볼 수 있는 부서(겸직 포함)만.
+  //   데이터 API(oversight·sessions)가 범위 밖 부서를 소속 부서로 강제하므로 목록도 같은 범위로 맞춘다.
   useEffect(() => {
-    fetch("/api/departments", { cache: "no-store" })
+    fetch("/api/work-plan/review-context", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => {
-        const list = d.departments ?? [];
+      .then((d: { isAdmin?: boolean; deptId?: string | null; deptName?: string | null; departments?: { deptId: string; deptName: string }[] }) => {
+        const list: { deptId: string; deptName: string }[] =
+          d.isAdmin || (d.departments?.length ?? 0) > 1
+            ? d.departments ?? []
+            : d.deptId
+              ? [{ deptId: d.deptId, deptName: d.deptName ?? "내 부서" }]
+              : [];
         setDepartments(list);
         if (list.length && !deptId) {
           setDeptId(list[0].deptId);

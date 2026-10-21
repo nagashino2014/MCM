@@ -197,7 +197,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
           { kind: "steps", items: [
             "[[결재선]]에서 [[＋ 결재자 추가]]를 눌러 조직도에서 사람을 고릅니다.",
             "각 줄마다 [[합의]] 또는 [[승인]]을 고릅니다. 위에서 아래 순서대로 결재가 진행됩니다.",
-            "결재를 하지 않고 내용만 공유할 사람은 [[참조 · 열람]]에 넣습니다. 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다.",
+            "결재를 하지 않고 내용만 공유할 사람은 [[참조 · 열람]]에 넣습니다. 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 참조와 열람은 볼 수 있는 범위가 같고 문서에 표시되는 이름만 다릅니다.",
             "자주 쓰는 결재선은 [[프리셋 저장]]해 두고 다음에 [[불러오기]]로 씁니다.",
           ] },
           { kind: "list", items: [
@@ -222,7 +222,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["기안", "상신", "결재선", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
     sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "approval.letter",

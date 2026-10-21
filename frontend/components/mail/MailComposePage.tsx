@@ -2,7 +2,7 @@
 
 // 메일 쓰기 — 별도 페이지(G2-8, 모달 폐지: 편집 도구가 많아 전용 페이지가 적합 · 네이버 메일 방식).
 // 진입: /mail/compose (새 메일) · ?mode=reply|replyall|forward&id=<messageId> (인용) · ?draft=<draftId> (이어쓰기).
-// 첨부: [내 PC](탐색기) + [문서함](추후 개인/부서/전사 문서함 모달 — 현재 자리만) + 상시 드래그 앤 드롭 존.
+// 첨부: [내 PC](탐색기) + [문서함](개인문서함 파일 선택 창, F-13 2026-10-21) + 상시 드래그 앤 드롭 존.
 //   드래그 앤 드롭은 파일당 30MB, 탐색기 선택은 파일당 2GB(2026-09-17 사용자 요청).
 //   일반 첨부(메일 원문)는 총 25MB 까지 — 넘치는 파일은 대용량 첨부(S3 업로드 + 본문 다운로드 링크, 30일)로 보낸다.
 // 인라인 이미지: blob 미리보기 → 발송 시 cid: 첨부(MIME inline)로 치환 — 외부 수신측에서도 표시.
@@ -16,6 +16,7 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdInput } from "@/components/cdash/CdField";
+import { CdModal } from "@/components/cdash/CdModal";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { MailSignatureManager } from "@/components/mail/MailSignatureManager";
@@ -30,6 +31,15 @@ const MAX_TOTAL_ATTACH_BYTES = 25 * 1024 * 1024;
 const MAX_DROP_FILE_BYTES = 30 * 1024 * 1024;
 /** 탐색기 선택 파일당 상한(대용량 첨부 — lib/mail/large-attachments 와 동일). */
 const MAX_PICK_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+
+/** 개인문서함 목록 행(/api/personal-docs — lib/files/personal PersonalDocRow). */
+interface PersonalDocItem {
+  documentId: string;
+  fileName: string;
+  contentType: string | null;
+  byteSize: number;
+  createdAt: string;
+}
 
 const sizeText = (bytes: number) =>
   bytes >= 1024 * 1024 * 1024
@@ -366,6 +376,32 @@ export function MailComposePage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  /** 개인문서함 파일을 받아 첨부 목록에 넣는다 — 탐색기 선택과 같은 기준(pick: 파일당 2GB, 초과분은 대용량 첨부). */
+  const attachPersonalDocs = useCallback(
+    async (ids: string[], docs: PersonalDocItem[]) => {
+      const byId = new Map(docs.map((d) => [d.documentId, d]));
+      const loaded: File[] = [];
+      let failed = 0;
+      for (const id of ids) {
+        const info = byId.get(id);
+        if (!info) {
+          failed += 1;
+          continue;
+        }
+        const res = await fetch(`/api/personal-docs/open?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+        if (!res.ok) {
+          failed += 1;
+          continue;
+        }
+        const blob = await res.blob();
+        loaded.push(new File([blob], info.fileName, { type: info.contentType || blob.type || "application/octet-stream" }));
+      }
+      if (loaded.length) addFiles(loaded, "pick");
+      if (failed) toast(`개인문서함 파일 ${failed}개를 불러오지 못했습니다.`, "warn");
+    },
+    [addFiles, toast]
+  );
+
   // 개인문서함 전송(첨부 프리필) — /mail/compose?attach={documentId,...} 로 진입하면
   // 본인 개인문서함 파일을 받아 첨부 목록에 미리 삽입한다(탐색기 선택과 같은 기준 — 초과분은 대용량 첨부).
   const attachSeeded = useRef(false);
@@ -380,28 +416,46 @@ export function MailComposePage() {
         const metaRes = await fetch("/api/personal-docs", { cache: "no-store" });
         if (!metaRes.ok) return;
         const meta = await metaRes.json();
-        const byId = new Map<string, { fileName: string; contentType: string | null }>(
-          (Array.isArray(meta.docs) ? meta.docs : []).map((d: { documentId: string; fileName: string; contentType: string | null }) => [
-            d.documentId,
-            { fileName: d.fileName, contentType: d.contentType },
-          ])
-        );
-        const loaded: File[] = [];
-        for (const id of ids) {
-          const info = byId.get(id);
-          if (!info) continue;
-          const res = await fetch(`/api/personal-docs/open?id=${encodeURIComponent(id)}`, { cache: "no-store" });
-          if (!res.ok) continue;
-          const blob = await res.blob();
-          loaded.push(new File([blob], info.fileName, { type: info.contentType || blob.type || "application/octet-stream" }));
-        }
-        if (loaded.length) addFiles(loaded);
+        await attachPersonalDocs(ids, Array.isArray(meta.docs) ? meta.docs : []);
       } catch {
         toast("개인문서함 첨부를 불러오지 못했습니다.", "warn");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addFiles]);
+  }, [attachPersonalDocs]);
+
+  // [문서함] — 개인문서함 파일 선택 창(F-13). 고른 파일은 위 프리필과 같은 경로로 첨부된다.
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
+  const [pickerDocs, setPickerDocs] = useState<PersonalDocItem[] | null>(null);
+  const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const openDocPicker = async () => {
+    setDocPickerOpen(true);
+    setPickerSelected(new Set());
+    setPickerQuery("");
+    setPickerDocs(null);
+    try {
+      const r = await fetch("/api/personal-docs", { cache: "no-store" });
+      const d = r.ok ? await r.json() : null;
+      setPickerDocs(Array.isArray(d?.docs) ? d.docs : []);
+    } catch {
+      setPickerDocs([]);
+      toast("개인문서함 목록을 불러오지 못했습니다.", "warn");
+    }
+  };
+  const confirmDocPicker = async () => {
+    if (!pickerDocs || pickerSelected.size === 0) return;
+    setPickerBusy(true);
+    try {
+      await attachPersonalDocs(Array.from(pickerSelected), pickerDocs);
+      setDocPickerOpen(false);
+    } catch {
+      toast("개인문서함 첨부를 불러오지 못했습니다.", "warn");
+    } finally {
+      setPickerBusy(false);
+    }
+  };
 
   /** 인라인 이미지 삽입 — blob 미리보기, 발송 시 cid 치환. */
   const onPickImages = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -729,7 +783,7 @@ export function MailComposePage() {
                 size="sm"
                 className="cd-card-bg"
                 icon={<FolderOpen className="w-3.5 h-3.5" />}
-                onClick={() => toast("문서함(개인/부서/전사)은 준비 중입니다.", "info")}
+                onClick={openDocPicker}
               >
                 문서함
               </CdButton>
@@ -827,6 +881,78 @@ export function MailComposePage() {
         }}
         onInsert={insertSignature}
       />
+
+      {/* [문서함] — 개인문서함 파일 선택 창. 첨부 기준은 [내 PC]와 같다(25MB 초과분은 대용량 첨부 링크). */}
+      <CdModal
+        open={docPickerOpen}
+        onClose={() => !pickerBusy && setDocPickerOpen(false)}
+        title="개인문서함에서 첨부"
+        size="lg"
+        footer={
+          <>
+            <CdButton onClick={() => setDocPickerOpen(false)} disabled={pickerBusy}>
+              취소
+            </CdButton>
+            <CdButton
+              variant="primary"
+              icon={<Paperclip className="w-4 h-4" />}
+              loading={pickerBusy}
+              disabled={pickerSelected.size === 0}
+              onClick={confirmDocPicker}
+            >
+              선택 파일 첨부{pickerSelected.size > 0 ? ` (${pickerSelected.size})` : ""}
+            </CdButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <input
+            className="cd-input"
+            placeholder="파일 이름 검색"
+            value={pickerQuery}
+            onChange={(e) => setPickerQuery(e.target.value)}
+          />
+          {pickerDocs == null ? (
+            <p className="text-sm cd-text-faint py-6 text-center">불러오는 중입니다.</p>
+          ) : pickerDocs.length === 0 ? (
+            <p className="text-sm cd-text-faint py-6 text-center">개인문서함에 파일이 없습니다.</p>
+          ) : (
+            <div className="max-h-[50vh] overflow-auto rounded-lg border cd-border-c">
+              {pickerDocs
+                .filter((d) => !pickerQuery.trim() || d.fileName.toLowerCase().includes(pickerQuery.trim().toLowerCase()))
+                .map((d) => {
+                  const checked = pickerSelected.has(d.documentId);
+                  return (
+                    <label
+                      key={d.documentId}
+                      className="flex items-center gap-2 px-3 py-2 text-xs cd-text border-b cd-border-c last:border-b-0 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-[var(--cd-primary)]"
+                        checked={checked}
+                        onChange={() =>
+                          setPickerSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(d.documentId)) next.delete(d.documentId);
+                            else next.add(d.documentId);
+                            return next;
+                          })
+                        }
+                      />
+                      <span className="flex-1 truncate">{d.fileName}</span>
+                      <span className="cd-text-faint shrink-0 tabular-nums">{sizeText(d.byteSize)}</span>
+                      <span className="cd-text-faint shrink-0 tabular-nums">{d.createdAt.slice(0, 10)}</span>
+                    </label>
+                  );
+                })}
+            </div>
+          )}
+          <p className="text-[11px] cd-text-faint">
+            고른 파일은 [내 PC]로 첨부한 것과 같이 처리됩니다. 일반 첨부 합계 25MB 를 넘는 파일은 대용량 첨부(다운로드 링크, 30일)로 보냅니다.
+          </p>
+        </div>
+      </CdModal>
     </div>
   );
 }

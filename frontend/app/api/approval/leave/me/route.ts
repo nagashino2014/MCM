@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * 내 휴가(/approval/my-leave) — 본인 연차·특별휴가 현황.
  *
- * 관리자 화면(/api/approval/leave)은 approval.manage 로 전 직원을 보지만,
+ * 관리자 화면(/api/approval/leave)은 staffing.edit 로 전 직원을 보지만,
  * 이 라우트는 users.user_id → employee_id 스코프라 **본인 것만** 돌려준다 → approval.view 로 충분.
  * ?year=YYYY (기본 올해 KST).
  */

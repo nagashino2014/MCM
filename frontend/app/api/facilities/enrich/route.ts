@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
   try {
     if (req.nextUrl.searchParams.get("capabilities") === "1") {
       const actor=await requirePermission("facility.view");
-      return NextResponse.json({canEdit:await hasPermission(actor.userId,"facility.edit")});
+      // 버튼 노출도 처리 API 와 같은 키로 판정한다 — 삭제 facility.delete, 중복 병합 facility.merge(F-24).
+      const [canEdit,canDelete,canMerge]=await Promise.all([hasPermission(actor.userId,"facility.edit"),hasPermission(actor.userId,"facility.delete"),hasPermission(actor.userId,"facility.merge")]);
+      return NextResponse.json({canEdit,canDelete,canMerge});
     }
     await requirePermission("facility.edit");
     const db = await getDb();

@@ -30,7 +30,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         id: "external",
         title: "외부 연락처",
         blocks: [
-          { kind: "p", text: "사업장에 등록된 담당자가 모여 있습니다. 새 담당자 등록과 명함 촬영은 사업장 상세에서 합니다." },
+          { kind: "p", text: "사업장에 등록된 담당자가 모여 있습니다. 새 담당자 등록과 명함 촬영은 사업장 상세에서 합니다. 연락처 조회 권한이 없으면 ‘열람 권한이 없습니다’가 표시됩니다." },
           {
             kind: "table",
             head: ["항목", "뜻"],
@@ -48,7 +48,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         requires: ["facility.edit"],
         blocks: [
           { kind: "steps", items: [
-            "표 오른쪽 [[관리]] 열의 연필 아이콘을 누르면 [[담당자 수정]] 창이 열립니다.",
+            "표 오른쪽 [[관리]] 열의 연필 아이콘을 누르면 [[담당자 수정]] 창이 열립니다. 수정·삭제 아이콘은 사업장 수정 권한이 있는 사람에게만 보입니다.",
             "[[연락처 구분]]은 필수입니다. 이름·직급·휴대폰·사무실·이메일을 고치고 [[저장]]을 누릅니다.",
           ] },
           { kind: "tip", text: "연락처 구분을 바꾸면 같은 기관·업체의 담당자 전원에게 함께 적용됩니다." },
@@ -58,7 +58,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형"],
     sources: ["components/directory/DirectoryBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 
   // ── 공지·게시판 ──
@@ -102,6 +102,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "맨 위에 두려면 [[목록 최상단에 고정]]을 켜고 고정 기간을 넣습니다.",
             "알릴 방법([[메일 알림 발송]] / [[모바일 앱 푸시 알림]])을 고르고 [[등록]]을 누릅니다.",
           ] },
+          { kind: "p", text: "메일·푸시 알림은 작성자 본인에게는 보내지 않습니다." },
           { kind: "warn", text: "알림은 처음 등록할 때만 보냅니다. 글을 수정해도 다시 보내지 않으니, 알림을 켤지 등록 전에 정하세요." },
         ],
       },
@@ -292,7 +293,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "같은 자산에 이미 겹치는 직접 예약이 있으면 등록되지 않습니다. 종일 예약은 그날 모든 예약과 겹칩니다.",
             "예약은 하루 단위입니다. 여러 날이면 날마다 등록합니다.",
-            "내 예약은 목록 오른쪽 휴지통 아이콘으로 취소합니다.",
+            "내 예약은 목록 오른쪽 휴지통 아이콘으로 취소합니다. 자산 관리 권한이 있으면 다른 사람의 직접 예약도 같은 아이콘으로 취소할 수 있습니다.",
           ] },
           { kind: "tip", text: "출장 차량 일정을 바꾸거나 취소하려면 출장신청서 결재 문서에서 처리합니다." },
           { kind: "link", article: "scenario.trip", label: "따라하기: 출장 신청부터 경비 정산까지" },
@@ -301,7 +302,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["자산", "예약", "회의실", "법인차량", "차량", "회의실 예약", "이중 배정", "이용 현황"],
     sources: ["components/assets/AssetCalendarBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "assets.manage",
@@ -385,7 +386,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "[[마감]]하면 응답을 더 받지 않습니다. [[접수 재개]]로 다시 열 수 있습니다.",
             "접수 기간을 비우면 상시 접수입니다. 기간 밖에는 접수 중이어도 참여 목록에 나오지 않습니다.",
           ] },
-          { kind: "warn", text: "응답이 1건이라도 들어오면 문항을 고칠 수 없습니다. 바꾸려면 목록에서 복제 아이콘으로 문항까지 복사한 새 설문을 만듭니다." },
+          { kind: "warn", text: "응답이 1건이라도 들어오면 문항과 익명 설정을 고칠 수 없습니다. 바꾸려면 목록에서 복제 아이콘으로 문항까지 복사한 새 설문을 만듭니다." },
         ],
       },
       {
@@ -408,7 +409,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
       "components/survey/SurveyRespondBoard.tsx",
       "components/survey/SurveyResultsPanel.tsx",
     ],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "survey.external",
@@ -604,7 +605,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     audience: ["head", "admin"],
     summary: [
       "삭제한 사업장과 계약이 [[사업장 DB]] / [[계약관리 DB]] 탭에 남습니다.",
-      "누가 언제 무슨 사유로 지웠는지 확인합니다.",
+      "누가 언제 무슨 사유로 지웠는지 확인하고, 잘못 지운 항목은 [[복원]]으로 원래 목록에 되돌립니다.",
       "관리자는 [[영구 삭제]]로 완전히 지웁니다.",
     ],
     sections: [
@@ -616,7 +617,18 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "사업장 삭제, 계약 삭제만 휴지통에 남습니다.",
             "공지 글·설문·주소록 담당자·자산 등 다른 메뉴에서 지운 자료는 여기에 나오지 않습니다.",
           ] },
-          { kind: "p", text: "화면에서 직접 복원하는 기능은 없습니다. 잘못 지웠다면 영구 삭제 전에 관리자에게 알려 주세요." },
+        ],
+      },
+      {
+        id: "restore",
+        title: "복원",
+        requires: ["trash.restore"],
+        blocks: [
+          { kind: "steps", items: [
+            "되돌릴 항목 줄의 [[복원]]을 누릅니다.",
+            "확인 창에서 확인하면 그 사업장·계약이 사업장 DB·계약관리 목록에 다시 나타나고 휴지통에서 빠집니다.",
+          ] },
+          { kind: "p", text: "복원하면 삭제 표시와 삭제 사유가 지워집니다. 누가 언제 복원했는지는 감사 기록에 남습니다. 이미 영구 삭제한 항목은 복원할 수 없습니다." },
         ],
       },
       {
@@ -629,7 +641,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["휴지통", "삭제", "복원", "영구 삭제", "삭제된 사업장", "삭제된 계약"],
-    sources: ["app/(app)/trash/page.tsx"],
-    reviewedAt: "2026-10-20",
+    sources: ["app/(app)/trash/page.tsx", "app/api/trash/[trashId]/restore/route.ts"],
+    reviewedAt: "2026-10-21",
   },
 ];

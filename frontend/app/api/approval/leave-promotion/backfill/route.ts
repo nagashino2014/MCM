@@ -21,7 +21,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 // fields: employeeId, year, round(=1), noticeDate(YYYY-MM-DD), plan(JSON 배열), files(스캔본 다건)
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("approval.manage", { fallbackRoles: ["admin"] });
+    const actor = await requirePermission("staffing.edit", { fallbackRoles: ["admin"] });
     const form = await req.formData();
     const employeeId = String(form.get("employeeId") ?? "");
     const year = String(form.get("year") ?? new Date().getFullYear());

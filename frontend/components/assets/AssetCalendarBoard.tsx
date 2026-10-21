@@ -6,12 +6,14 @@
 // 이중 배정(차량)은 ⚠ 로 경고만 한다(결재 흐름을 자산 가용성으로 막지 않는다).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { ScheduleCalendar } from "@/components/calendar/ScheduleCalendar";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { TAG_COLOR_STRONG, type CalendarEvent } from "@/lib/calendar/types";
 import { ASSET_KIND_LABELS, type ReservableAsset } from "@/lib/assets/types";
 import "@/components/cdash/cdash.css";
@@ -35,6 +37,9 @@ interface UsageItem {
 
 export function AssetCalendarBoard() {
   const { theme } = useCdashTheme();
+  const { data: session } = useSession();
+  // 예약 취소 API 는 본인 예약 또는 asset.manage 보유자 — 관리자는 남의 직접 예약도 취소할 수 있다(F-38).
+  const canManage = hasPerm(permsOf(session?.user), "asset.manage");
   const now = new Date();
   const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [usage, setUsage] = useState<UsageItem[]>([]);
@@ -132,7 +137,8 @@ export function AssetCalendarBoard() {
 
   const remove = async (u: UsageItem) => {
     if (!u.id.startsWith("resv:")) return;
-    if (!confirm(`${u.assetName} ${u.startDate} 예약을 취소할까요?`)) return;
+    const owner = !u.mine && u.userName ? `${u.userName}님의 ` : "";
+    if (!confirm(`${u.assetName} ${u.startDate} ${owner}예약을 취소할까요?`)) return;
     try {
       const res = await fetch(`/api/assets/reservations/${encodeURIComponent(u.id.slice(5))}`, { method: "DELETE" });
       const data = await res.json();
@@ -251,7 +257,7 @@ export function AssetCalendarBoard() {
                   {u.source === "trip" && <span className="cd-text-faint"> · 출장신청 연동</span>}
                 </span>
                 {u.conflict && <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning)" }} />}
-                {u.mine && u.source === "reservation" && (
+                {(u.mine || canManage) && u.source === "reservation" && (
                   <button type="button" className="shrink-0 p-1 rounded-md cd-text-faint hover:cd-error-text" title="예약 취소" onClick={() => remove(u)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

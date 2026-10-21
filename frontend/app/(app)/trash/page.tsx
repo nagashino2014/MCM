@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Database, FileSignature, RefreshCw, Trash2 } from "lucide-react";
+import { Database, FileSignature, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -33,6 +33,9 @@ export default function TrashPage() {
   const { data: session } = useSession();
   // 영구 삭제 = trash.purge(관리자 템플릿). 목록·복원은 trash.view/restore 로 API 가 판정한다.
   const isAdmin = hasPerm(permsOf(session?.user), "trash.purge");
+  // 복원 = trash.restore(부서장·영업관리·관리자). 원래 목록으로 되돌린다(F-11).
+  const canRestore = hasPerm(permsOf(session?.user), "trash.restore");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [type, setType] = useState<TrashType>("facility");
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,9 +63,30 @@ export default function TrashPage() {
     load();
   }, [load]);
 
+  const restore = async (item: TrashItem) => {
+    if (!canRestore) return;
+    const where = item.itemType === "contract" ? "계약관리" : "사업장 DB";
+    if (!window.confirm(`'${item.itemTitle || item.itemId}' 항목을 복원할까요? ${where} 목록에 다시 나타납니다.`)) return;
+    setBusyId(item.trashId);
+    try {
+      const res = await fetch(`/api/trash/${encodeURIComponent(item.trashId)}/restore`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "HTTP " + res.status);
+      }
+      toast.show("복원되었습니다.", "success");
+      load();
+    } catch (err) {
+      toast.show("복원 실패: " + (err as Error).message, "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const purge = async (item: TrashItem) => {
     if (!isAdmin) return;
     if (!window.confirm(`'${item.itemTitle || item.itemId}' 항목을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+    setBusyId(item.trashId);
     try {
       const res = await fetch(`/api/trash/${encodeURIComponent(item.trashId)}`, { method: "DELETE" });
       if (!res.ok) {
@@ -73,6 +97,8 @@ export default function TrashPage() {
       load();
     } catch (err) {
       toast.show("영구 삭제 실패: " + (err as Error).message, "error");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -144,17 +170,31 @@ export default function TrashPage() {
                     <td className="cd-text-muted">{item.deletedByName ?? item.deletedByEmail ?? "-"}</td>
                     <td className="cd-text-muted font-mono text-xs">{item.deletedAt.slice(0, 10)}</td>
                     <td className="text-right">
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          onClick={() => purge(item)}
-                          className="cd-btn cd-btn-danger cd-btn-sm"
-                        >
-                          영구 삭제
-                        </button>
-                      ) : (
-                        <span className="text-xs cd-text-faint">관리자 전용</span>
-                      )}
+                      <div className="inline-flex items-center justify-end gap-2">
+                        {canRestore && (
+                          <button
+                            type="button"
+                            onClick={() => restore(item)}
+                            disabled={busyId === item.trashId}
+                            className="cd-btn cd-btn-ghost cd-btn-sm"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            복원
+                          </button>
+                        )}
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => purge(item)}
+                            disabled={busyId === item.trashId}
+                            className="cd-btn cd-btn-danger cd-btn-sm"
+                          >
+                            영구 삭제
+                          </button>
+                        ) : (
+                          !canRestore && <span className="text-xs cd-text-faint">관리자 전용</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

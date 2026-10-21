@@ -45,6 +45,8 @@ export default function BonusTargetsBoard() {
   const [scope, setScope] = useState<"all" | "dept" | "none">("all");
   const [settings, setSettings] = useState<BonusSettings | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  // 제비용 입력·저장은 저장 API 와 같은 bonus.calculate — 반기 설정(bonus.confirm)과 따로 판정(F-23)
+  const [canEditCosts, setCanEditCosts] = useState(false);
   const [departments, setDepartments] = useState<DeptOption[]>([]);
   const [costDrafts, setCostDrafts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
@@ -78,6 +80,7 @@ export default function BonusTargetsBoard() {
         setScope(t.scope === "dept" || t.scope === "none" ? t.scope : "all");
         setSettings(s.settings ? withDefaultHeadRates(s.settings) : null);
         setCanEdit(Boolean(s.canEdit));
+        setCanEditCosts(Boolean(t.canEditCosts));
         setCostDrafts(
           Object.fromEntries(rows.map((row) => [row.contractId, row.salesCostAmount]))
         );
@@ -349,7 +352,7 @@ export default function BonusTargetsBoard() {
             {tab === "costs" && (
               <button
                 type="button"
-                disabled={!canEdit || saving || filtered.length === 0}
+                disabled={!canEditCosts || saving || filtered.length === 0}
                 onClick={saveCosts}
                 className="ml-auto rounded-xl px-4 py-2 text-sm text-white cd-fill-primary inline-flex items-center gap-1.5 disabled:opacity-50"
               >
@@ -457,7 +460,7 @@ export default function BonusTargetsBoard() {
                         <input
                           type="number" min={0}
                           className="cd-input text-sm w-full text-right"
-                          disabled={!canEdit}
+                          disabled={!canEditCosts}
                           value={costDrafts[t.contractId] ?? t.salesCostAmount}
                           onChange={(e) =>
                             setCostDrafts((prev) => ({ ...prev, [t.contractId]: Number(e.target.value) }))

@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 /**
  * 내 근태(모바일 M5) — 최근 주별 근무·초과근무 요약 + (선택) 특정 주의 일별 기록.
  *
- * 관리자 화면(/api/approval/attendance)은 approval.manage 로 전 직원을 보지만,
+ * 관리자 화면(/api/approval/attendance)은 staffing.edit 로 전 직원을 보지만,
  * 이 라우트는 **본인 것만** 돌려주므로 approval.view 로 충분하다.
  * ?week=YYYY-MM-DD 를 주면 그 주의 일별 출퇴근까지 함께 준다.
  * ?month=YYYY-MM 을 주면 그 달에 시작하는 주만 돌려준다(모바일 연/월 탐색 — 2026-08-20).

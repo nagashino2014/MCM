@@ -134,6 +134,8 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     }
   }
 
+  // 비활성 템플릿(permission_templates.is_active = 0)은 이미 부여된 계정에도 적용하지 않는다(F-29, 사용자 결정 2026-10-21 — 즉시 적용 중지).
+  // requirePermission·권한 요약(summarizePermissions) 모두 이 grants 를 쓰므로 한 곳에서 거른다.
   const grantRows = rowsToObjects(
     await db.exec(
       `SELECT g.permission_key, g.scope_kind,
@@ -141,6 +143,7 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
               COALESCE(a.scope_override_dept_id, g.scope_dept_id) AS eff_scope_dept_id,
               g.effect
          FROM user_permission_assignments a
+         JOIN permission_templates t ON t.template_id = a.template_id AND t.is_active = 1
          JOIN permission_template_grants g ON g.template_id = a.template_id
         WHERE a.user_id = $1
           AND a.revoked_at IS NULL

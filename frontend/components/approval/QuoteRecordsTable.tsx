@@ -7,9 +7,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSession } from "next-auth/react";
 import { Pencil, RefreshCw, Trash2, Trophy, X } from "lucide-react";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { useClientPaging } from "@/components/ui/PaginationControls";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { checkDateFields } from "@/lib/contracts/date-field";
 import {
   QUOTE_RESULT_LABEL,
@@ -87,6 +89,9 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
   const [ccRefs, setCcRefs] = useState<QuoteRecipient[]>([]);
   const [busy, setBusy] = useState<"save" | "resend" | "result" | null>(null);
   const [resultEditing, setResultEditing] = useState(false);
+  // 열람은 전 직원(2026-10-21). 재발송 = 기안자·결재 운영 권한, 수신처 편집·결과 기입 = 결재 운영 권한
+  const [canManage, setCanManage] = useState(false);
+  const [canSend, setCanSend] = useState(false);
   const [resultForm, setResultForm] = useState<{
     result: QuoteResult;
     resultAt: string;
@@ -100,6 +105,8 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
     const data = await res.json();
     if (res.ok) {
       setQuote(data.quote);
+      setCanManage(data.canManage === true);
+      setCanSend(data.canSend === true);
       setRecipients(data.quote.recipients ?? []);
       setCcRefs(data.quote.ccRefs ?? []);
       setResultForm({
@@ -233,33 +240,39 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/excelico.png" alt="엑셀 다운로드" className="w-full h-full object-contain" />
             </button>
-            <button
-              type="button"
-              className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
-              disabled={busy != null}
-              onClick={resend}
-              title={quote?.sendMode === "direct" ? "수동 메일 발송(모드 전환)" : "참조자 메일로 재발송"}
-            >
-              <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "발송 중..." : quote?.sendMode === "direct" ? "메일 발송" : "재발송"}
-            </button>
-            <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집">
-              <Pencil className="w-3 h-3" /> 수신처 편집
-            </button>
-            <button
-              type="button"
-              className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1"
-              onClick={() => setResultEditing((v) => !v)}
-              title="수주 결과 기입 — 수주율·보정계수 분석의 원료"
-            >
-              <Trophy className="w-3 h-3" /> 결과 기입
-            </button>
+            {canSend && (
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
+                disabled={busy != null}
+                onClick={resend}
+                title={quote?.sendMode === "direct" ? "수동 메일 발송(모드 전환)" : "참조자 메일로 재발송"}
+              >
+                <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "발송 중..." : quote?.sendMode === "direct" ? "메일 발송" : "재발송"}
+              </button>
+            )}
+            {canManage && (
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집">
+                <Pencil className="w-3 h-3" /> 수신처 편집
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1"
+                onClick={() => setResultEditing((v) => !v)}
+                title="수주 결과 기입 — 수주율·보정계수 분석의 원료"
+              >
+                <Trophy className="w-3 h-3" /> 결과 기입
+              </button>
+            )}
             <button type="button" className="cd-btn rounded-lg border cd-border-c p-1.5" onClick={onClose}>
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {resultEditing && (
+        {resultEditing && canManage && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-2.5">
             <span className="text-[11px] font-bold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
             <div className="grid grid-cols-2 md:grid-cols-[0.8fr_0.9fr_1fr_1fr_1.3fr_auto] gap-2 items-end">
@@ -311,7 +324,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
           </div>
         )}
 
-        {editing && (
+        {editing && canManage && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-3 max-h-[38vh] overflow-auto">
             <RecipientEditGrid label="수신처" list={recipients} onChange={setRecipients} />
             <RecipientEditGrid label="참조(메일 발송 대상)" list={ccRefs} onChange={setCcRefs} />
@@ -355,6 +368,9 @@ export function QuoteRecordsTable({
   onChanged: () => void;
 }) {
   const [viewId, setViewId] = useState<string | null>(null);
+  // 발송견적은 전 직원이 열람(2026-10-21) — 재견적(새 버전 작성)은 견적 작성 권한(sales.edit) 보유자에게만 보인다
+  const { data: session } = useSession();
+  const canRequote = hasPerm(permsOf(session?.user), "sales.edit");
   // 화면당 20·30·50개(기본 50) — 조회 결과 건수가 바뀌면(새 검색) 첫 쪽부터.
   const { pageRows: pageQuotes, pager, resetPage } = useClientPaging(quotes, "quote-records-page-size", loading);
   useEffect(() => {
@@ -402,6 +418,7 @@ export function QuoteRecordsTable({
                 <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center gap-1.5">
                     {(q.version ?? 1) > 1 && <span className="text-[10.5px] font-mono cd-text-faint">v{q.version}</span>}
+                    {canRequote && (
                     <a
                       href={`/approval/quote?revise=${encodeURIComponent(q.docId)}`}
                       className="cd-action inline-flex items-center rounded-lg border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-primary hover:cd-tint-primary"
@@ -409,6 +426,7 @@ export function QuoteRecordsTable({
                     >
                       재견적
                     </a>
+                    )}
                   </span>
                 </td>
               </tr>

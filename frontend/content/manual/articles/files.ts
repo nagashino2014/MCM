@@ -32,7 +32,6 @@ export const FILES_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "[[보존만료]] 열은 완료일에 양식별 보존 연한을 더한 날짜입니다. 지난 문서는 ‘(만료)’로 표시됩니다.",
             "목록은 최근 500건(발송공문·발송견적은 200건)까지 불러와 한 화면에 50개씩 보여 줍니다. 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다. 더 오래된 문서는 연도·기간을 지정해 찾으세요.",
-            "[[발송견적]] 탭은 결재 관리 권한자와 영업(견적 작성) 전사 권한자에게 전사 견적이, 그 밖의 직원에게는 본인이 기안한 견적만 보입니다.",
           ] },
         ],
       },
@@ -45,7 +44,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
             head: ["탭", "누가 보나"],
             rows: [
               ["[[발송공문]]", "전 직원이 보고 PDF·한글 파일을 내려받습니다. 재발송·수신처 편집·이관 등록 삭제는 결재 운영 담당만 합니다."],
-              ["[[발송견적]]", "결재 관리 권한자·영업(견적 작성) 전사 권한자는 전사 견적을, 그 밖의 직원은 본인이 기안한 견적을 봅니다. 수주 결과 기입은 결재 운영 담당만 합니다."],
+              ["[[발송견적]]", "전 직원이 모든 견적을 보고 PDF·엑셀을 내려받습니다. 수신처 편집·수주 결과 기입은 결재 운영 담당만, 재발송은 기안자 본인과 결재 운영 담당만, [[재견적]]은 견적 작성 담당만 합니다."],
               ["[[계약 문서]]", "계약서·변경계약서는 전 직원이 모든 계약의 것을 봅니다. 세금계산서 등 그 밖의 서류는 내가 볼 수 있는 계약의 것만 보입니다."],
             ],
           },
@@ -54,7 +53,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["문서함", "완료 문서", "보존", "발송공문", "발송견적", "참조 문서", "계약서", "과거 공문", "열람 권한"],
-    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx", "app/api/quotes/route.ts"],
+    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx", "components/approval/QuoteRecordsTable.tsx", "app/api/quotes/route.ts"],
     reviewedAt: "2026-10-21",
   },
   {

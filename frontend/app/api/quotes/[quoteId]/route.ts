@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getQuoteById, updateQuoteMeta } from "@/lib/quote/store";
-import { canViewQuote } from "@/lib/quote/access";
+import { canViewQuote, quoteActionFlags } from "@/lib/quote/access";
 import type { QuoteRecipient, QuoteResult } from "@/lib/quote/types";
 
 export const runtime = "nodejs";
@@ -14,9 +14,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ quo
     const { quoteId } = await params;
     const quote = await getQuoteById(quoteId);
     if (!quote) return NextResponse.json({ error: "견적을 찾을 수 없습니다." }, { status: 404 });
-    // 전사 견적은 결재 관리·영업 전사 범위만, 그 밖은 견적 결재 문서를 볼 수 있는 사람만(F-26 후속)
-    if (!(await canViewQuote(ctx.userId, quote.docId))) return NextResponse.json({ error: "이 견적을 볼 권한이 없습니다." }, { status: 403 });
-    return NextResponse.json({ quote });
+    // 열람은 전 직원(2026-10-21) — canManage·canSend 로 화면이 재발송·수신처 편집·결과 기입 버튼을 가린다
+    if (!(await canViewQuote())) return NextResponse.json({ error: "이 견적을 볼 권한이 없습니다." }, { status: 403 });
+    return NextResponse.json({ quote, ...(await quoteActionFlags(ctx.userId, quote.docId)) });
   } catch (err) {
     return authErrorToResponse(err);
   }

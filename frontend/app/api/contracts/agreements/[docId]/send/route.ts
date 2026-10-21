@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse } from "@/lib/auth/guards";
 import { assertContractsVisible, requireVisibleContracts } from "@/lib/auth/scope-guards";
+import { isDocDrafter } from "@/lib/approval/docs";
 import { processAgreementSend } from "@/lib/agreement/send";
 import { getAgreementByDocId } from "@/lib/agreement/store";
 import type { AgreementRecipient } from "@/lib/agreement/types";
@@ -12,11 +13,12 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ docId: string }> }) {
   try {
-    const { visible } = await requireVisibleContracts("contract.view");
+    const { ctx, visible } = await requireVisibleContracts("contract.view");
     const { docId } = await params;
     const doc = await getAgreementByDocId(docId);
     if (!doc) return NextResponse.json({ error: "계약서를 찾을 수 없습니다." }, { status: 404 });
-    assertContractsVisible(visible, [doc.contractId]); // 연동 계약 가시 범위 밖이면 발송 불가(2026-10-19 §7.7)
+    // 연동 계약 가시 범위 밖이면 발송 불가(2026-10-19 §7.7) — 단 기안자 본인은 직접 보낸 건을 재발송한다(2026-10-21)
+    if (!(await isDocDrafter(ctx.userId, docId))) assertContractsVisible(visible, [doc.contractId]);
     const body = (await req.json().catch(() => ({}))) as {
       recipients?: AgreementRecipient[];
       includeHwpx?: boolean;

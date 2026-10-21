@@ -89,9 +89,8 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
   const [ccRefs, setCcRefs] = useState<QuoteRecipient[]>([]);
   const [busy, setBusy] = useState<"save" | "resend" | "result" | null>(null);
   const [resultEditing, setResultEditing] = useState(false);
-  // 열람은 전 직원(2026-10-21). 재발송 = 기안자·결재 운영 권한, 수신처 편집·결과 기입 = 결재 운영 권한
-  const [canManage, setCanManage] = useState(false);
-  const [canSend, setCanSend] = useState(false);
+  // 열람은 전 직원(2026-10-21). 재발송·수신처 편집·결과 기입 = 기안자 본인(본인이 보낸 견적)·결재 운영 권한
+  const [canEdit, setCanEdit] = useState(false);
   const [resultForm, setResultForm] = useState<{
     result: QuoteResult;
     resultAt: string;
@@ -105,8 +104,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
     const data = await res.json();
     if (res.ok) {
       setQuote(data.quote);
-      setCanManage(data.canManage === true);
-      setCanSend(data.canSend === true);
+      setCanEdit(data.canEdit === true);
       setRecipients(data.quote.recipients ?? []);
       setCcRefs(data.quote.ccRefs ?? []);
       setResultForm({
@@ -240,7 +238,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/excelico.png" alt="엑셀 다운로드" className="w-full h-full object-contain" />
             </button>
-            {canSend && (
+            {canEdit && (
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
@@ -251,12 +249,12 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 <RefreshCw className="w-3 h-3" /> {busy === "resend" ? "발송 중..." : quote?.sendMode === "direct" ? "메일 발송" : "재발송"}
               </button>
             )}
-            {canManage && (
+            {canEdit && (
               <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={() => setEditing((v) => !v)} title="수신처·참조 정보 편집">
                 <Pencil className="w-3 h-3" /> 수신처 편집
               </button>
             )}
-            {canManage && (
+            {canEdit && (
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1"
@@ -272,7 +270,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
           </div>
         </div>
 
-        {resultEditing && canManage && (
+        {resultEditing && canEdit && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-2.5">
             <span className="text-[11px] font-bold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
             <div className="grid grid-cols-2 md:grid-cols-[0.8fr_0.9fr_1fr_1fr_1.3fr_auto] gap-2 items-end">
@@ -324,7 +322,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
           </div>
         )}
 
-        {editing && canManage && (
+        {editing && canEdit && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-3 max-h-[38vh] overflow-auto">
             <RecipientEditGrid label="수신처" list={recipients} onChange={setRecipients} />
             <RecipientEditGrid label="참조(메일 발송 대상)" list={ccRefs} onChange={setCcRefs} />

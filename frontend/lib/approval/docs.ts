@@ -18,7 +18,7 @@ import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } 
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
 import { kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
-import { userPostDeptIds } from "@/lib/org/posts";
+import { userHeadDeptIds, userPostDeptIds } from "@/lib/org/posts";
 
 /*
  * 전자결재 문서(084) — 기안 저장/상신·채번·결재선 상태 전이·대결 라우팅·결재함 쿼리.
@@ -1074,18 +1074,23 @@ export async function getUserDeptIds(userId: string): Promise<string[]> {
   return userPostDeptIds(userId);
 }
 
-/** 부서 문서함 — 본인 보직 부서(주 소속 + 겸직)의 완료 문서(기안 완료함). */
+/**
+ * 부서 문서함 — 결재 완료·반려 문서(2026-10-21 사용자 결정):
+ *   부서장(부서장 보직, 겸직 부서장 포함) = 그 부서의 모든 문서 / 부서원 = 본인 보직 부서에서 본인이 기안한 문서만.
+ */
 export async function listDeptDocs(userId: string, limit = 50): Promise<ArchiveDocRow[]> {
   const deptIds = await getUserDeptIds(userId);
-  if (!deptIds.length) return [];
+  const headDeptIds = await userHeadDeptIds(userId);
+  if (!deptIds.length && !headDeptIds.length) return [];
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT d.*, f.name AS form_name, f.retention_years, f.org_folder FROM approval_docs d
          JOIN approval_forms f ON f.form_id = d.form_id
-        WHERE d.dept_id = ANY($1::text[]) AND d.status IN ('approved','rejected')
-        ORDER BY d.completed_at DESC NULLS LAST LIMIT $2`,
-      [deptIds, limit]
+        WHERE d.status IN ('approved','rejected')
+          AND (d.dept_id = ANY($1::text[]) OR (d.dept_id = ANY($2::text[]) AND d.drafter_user_id = $3))
+        ORDER BY d.completed_at DESC NULLS LAST LIMIT $4`,
+      [headDeptIds, deptIds, userId, limit]
     )
   );
   return rows.map(mapArchive);
@@ -1247,6 +1252,14 @@ export async function listRefCandidates(userId: string, formId: string, limit = 
 }
 
 /** 문서 상세 — 제출 당시 양식 버전의 fields 로 렌더한다. */
+/** 결재 문서의 기안자인가 — 공문·견적·계약서의 "본인이 보낸 건" 조작 허용 판정(2026-10-21 사용자 결정). */
+export async function isDocDrafter(userId: string, docId: string | null | undefined): Promise<boolean> {
+  if (!docId) return false;
+  const db = await getDb();
+  const rows = rowsToObjects(await db.exec("SELECT drafter_user_id FROM approval_docs WHERE doc_id = $1 LIMIT 1", [docId]));
+  return rows[0]?.drafter_user_id != null && String(rows[0].drafter_user_id) === userId;
+}
+
 export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   const db = await getDb();
   const rows = rowsToObjects(

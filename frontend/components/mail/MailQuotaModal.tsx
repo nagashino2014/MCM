@@ -180,13 +180,13 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <p className="cd-label">성명/직급</p>
-                    <p className="rounded-lg border cd-border-c px-2.5 py-1.5 bg-white text-black">
+                    <p className="rounded-lg border cd-border-c px-2.5 py-1.5 cd-solid-bg cd-text">
                       {selected.name} {selected.positionName ?? ""}
                     </p>
                   </div>
                   <div>
                     <p className="cd-label">부서</p>
-                    <p className="rounded-lg border cd-border-c px-2.5 py-1.5 bg-white text-black truncate">
+                    <p className="rounded-lg border cd-border-c px-2.5 py-1.5 cd-solid-bg cd-text truncate">
                       {snapshot?.departments.find((d) => d.deptId === selected.deptId)?.deptName ?? "-"}
                     </p>
                   </div>

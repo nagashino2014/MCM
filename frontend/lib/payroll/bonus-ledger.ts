@@ -14,6 +14,8 @@ import { recalcEntryTaxes } from "@/lib/payroll/generate";
 export const BONUS_PAYMENT_PLAN_FORM_ID = "frm-bonus-payment-plan";
 
 interface PlanRow {
+  /** 기안 생성 시 넣은 행 대상 직원(_employeeId, 2026-10-21) — 있으면 사번·이름 매칭보다 우선 */
+  employeeId: string | null;
   empNo: string | null;
   name: string;
   amount: number;
@@ -28,6 +30,7 @@ function parseRows(raw: unknown): PlanRow[] {
     .map((r) => {
       const o = (r ?? {}) as Record<string, unknown>;
       return {
+        employeeId: o._employeeId != null && String(o._employeeId).trim() ? String(o._employeeId).trim() : null,
         empNo: o.emp_no != null && String(o.emp_no).trim() ? String(o.emp_no).trim() : null,
         name: String(o.name ?? "").trim(),
         amount: money(o.amount),
@@ -50,7 +53,7 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 지급 명세 행 → 재직자 매칭(사번 우선, 없으면 성명 — 동명이인이면 미매칭 처리). */
+/** 지급 명세 행 → 재직자 매칭(행 직원 ID 우선, 다음 사번, 없으면 성명 — 동명이인이면 미매칭 처리). */
 async function matchEmployees(rows: PlanRow[]): Promise<Map<PlanRow, { employeeId: string; name: string; deptName: string | null; positionName: string | null } | null>> {
   const db = await getDb();
   const emps = rowsToObjects(
@@ -62,6 +65,7 @@ async function matchEmployees(rows: PlanRow[]): Promise<Map<PlanRow, { employeeI
         WHERE p.status = 'active'`
     )
   );
+  const byId = new Map(emps.map((e) => [String(e.employee_id), e]));
   const byNo = new Map(emps.filter((e) => e.employee_no).map((e) => [String(e.employee_no), e]));
   const byName = new Map<string, Record<string, unknown>[]>();
   for (const e of emps) {
@@ -72,7 +76,8 @@ async function matchEmployees(rows: PlanRow[]): Promise<Map<PlanRow, { employeeI
   const out = new Map<PlanRow, { employeeId: string; name: string; deptName: string | null; positionName: string | null } | null>();
   for (const r of rows) {
     let e: Record<string, unknown> | undefined;
-    if (r.empNo && byNo.has(r.empNo)) e = byNo.get(r.empNo);
+    if (r.employeeId && byId.has(r.employeeId)) e = byId.get(r.employeeId);
+    else if (r.empNo && byNo.has(r.empNo)) e = byNo.get(r.empNo);
     else {
       const cands = byName.get(r.name) ?? [];
       if (cands.length === 1) e = cands[0];

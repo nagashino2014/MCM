@@ -804,7 +804,7 @@ export function MailComposePage() {
             </span>
             {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. */}
             <div
-              className="rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[7rem] bg-white transition-colors"
+              className="cd-solid-bg rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[7rem] transition-colors"
               style={{
                 borderColor: dragging ? "var(--cd-primary)" : "var(--cd-border)",
                 borderStyle: dragging ? "solid" : "dashed",

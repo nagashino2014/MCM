@@ -124,6 +124,7 @@ export type AuditAction =
   | "approval_policy_update"
   | "approval_semantic_update"
   | "approval_metric_update"
+  | "approval_doc_relink" // 관계 맵 직접 입력 보정 — 이관 문서 등의 계약·사업장 직접 입력을 마스터에 연결(2026-10-21)
   | "approval_precheck_llm"
   | "mail_send"
   | "attachment_policy_change" // 첨부 확장자 정책(262) — 전사 기본·인원별 예외 변경

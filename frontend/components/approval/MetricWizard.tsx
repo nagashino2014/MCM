@@ -10,6 +10,8 @@ import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
 import {
   AGG_LABEL,
   DIMENSION_LABEL,
+  DOC_GROUP_DIMS,
+  isRefDimension,
   METRIC_AGGS,
   SYSTEM_SOURCE_CATALOG,
   formatMetricValue,
@@ -403,7 +405,7 @@ export function MetricWizard({
               >
                 <option value="">전체(그룹 없음)</option>
                 {(isDocSource
-                  ? ["ref.contract", "ref.company", "ref.employee", "dim.category"]
+                  ? [...DOC_GROUP_DIMS]
                   : (sysSpec?.dims ?? []).map((d) => d.key)
                 ).map((k) => (
                   <option key={k} value={k}>
@@ -422,9 +424,9 @@ export function MetricWizard({
                   >
                     <option value="">2차 그룹 없음</option>
                     {(isDocSource
-                      ? agg.groupBy[0].startsWith("ref.")
+                      ? isRefDimension(agg.groupBy[0])
                         ? ["dim.category"]
-                        : ["ref.contract", "ref.company", "ref.employee"]
+                        : DOC_GROUP_DIMS.filter((k) => isRefDimension(k))
                       : (sysSpec?.dims ?? []).map((d) => d.key).filter((k) => k !== agg.groupBy![0])
                     ).map((k) => (
                       <option key={k} value={k}>
@@ -452,7 +454,7 @@ export function MetricWizard({
               </select>
               으로 집계합니다.
             </div>
-            {agg.groupBy?.includes("ref.employee") && (
+            {(agg.groupBy?.includes("ref.employee") || agg.groupBy?.includes("doc.drafter")) && (
               <p className="text-[11px] cd-text-faint rounded-lg border border-dashed cd-border-c p-2.5">
                 인원별 지표는 인사 민감 정보입니다 — 공개 범위 기본값이 &quot;관리자만&quot;으로 저장됩니다.
               </p>
@@ -465,7 +467,12 @@ export function MetricWizard({
           <div className="flex flex-col gap-3">
             {!agg.groupBy?.some((g) => g.startsWith("ref.")) || !isDocSource ? (
               <p className="text-[12.5px] cd-text-faint rounded-2xl border cd-border-c p-4">
-                {isDocSource ? "분류·전체 집계는 별도 연결이 필요 없습니다." : "시스템 소스는 마스터 데이터라 연결 확인이 필요 없습니다."} 다음으로 진행하세요.
+                {!isDocSource
+                  ? "시스템 소스는 마스터 데이터라 연결 확인이 필요 없습니다."
+                  : agg.groupBy?.some((g) => g.startsWith("doc."))
+                    ? "기안자·기안 부서는 문서 정보라 항상 연결되어 있습니다."
+                    : "분류·전체 집계는 별도 연결이 필요 없습니다."}{" "}
+                다음으로 진행하세요.
               </p>
             ) : edges == null ? (
               <p className="text-[12px] cd-text-faint">연결 상태 조회 중...</p>

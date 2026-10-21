@@ -107,7 +107,7 @@ export function BoardPostBoard({ postId }: { postId: string }) {
 
           {/* 본문 — 메일 본문과 동일하게 흰 배경 고정 */}
           <div
-            className="cd-mail-editor rounded-2xl border cd-border-c bg-white text-black px-5 py-4 text-sm min-h-[420px] overflow-x-auto"
+            className="cd-mail-editor cd-doc-surface rounded-2xl border cd-border-c px-5 py-4 text-sm min-h-[420px] overflow-x-auto"
             style={{ lineHeight: 1.7 }}
             dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
           />

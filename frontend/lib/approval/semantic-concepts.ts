@@ -2,7 +2,7 @@
  * 시맨틱 개념 사전(114 semantic_concepts) — 양식 필드에 "데이터 의미"를 부여하는 표준 태그 카탈로그.
  * 설계: docs/semantic-analytics-wizard-blueprint.md §4-1 (SW-P0).
  * 지표는 필드 key 가 아니라 이 개념 태그를 참조한다 — 양식이 바뀌어도 같은 태그만 붙이면 지표가
- * 그대로 동작한다. 엔티티 참조 4종(ref.*)은 필드 타입에서 자동 부여(auto)라 빌더 드롭다운에 안 나온다.
+ * 그대로 동작한다. 엔티티 참조(ref.*)는 필드 타입에서 자동 부여(auto)라 빌더 드롭다운에 안 나온다.
  * ⚠ 이 파일은 클라이언트 안전(타입·시드·순수 조회만) — DB 접근은 semantic-concepts-store.ts(서버).
  */
 
@@ -18,21 +18,31 @@ export interface SemanticConceptItem {
   active: boolean;
 }
 
-/** 초기 시드 — 114 마이그레이션과 이 목록이 일치해야 한다. */
+/** 초기 시드 — 114·307 마이그레이션과 이 목록이 일치해야 한다. */
 export const DEFAULT_SEMANTIC_CONCEPTS: Omit<SemanticConceptItem, "sortOrder" | "active">[] = [
   { key: "ref.contract", label: "관련 용역(계약)", group: "엔티티 참조", appliesTo: ["contract_select"], auto: true },
   { key: "ref.company", label: "관련 업체", group: "엔티티 참조", appliesTo: ["company_select"], auto: true },
   { key: "ref.employee", label: "관련 인원", group: "엔티티 참조", appliesTo: ["user_select"], auto: true },
   { key: "ref.dept", label: "관련 부서", group: "엔티티 참조", appliesTo: ["dept_select"], auto: true },
+  { key: "ref.asset", label: "관련 자산(차량)", group: "엔티티 참조", appliesTo: ["asset_select"], auto: true },
+  { key: "ref.contact", label: "관련 업체 담당자", group: "엔티티 참조", appliesTo: ["contact_select"], auto: true },
+  { key: "ref.leave_type", label: "휴가 종류", group: "엔티티 참조", appliesTo: ["leave_type"], auto: true },
   { key: "cost.travel", label: "출장 경비", group: "비용", appliesTo: ["currency", "number"], auto: false },
   { key: "cost.supplies", label: "사무용품비", group: "비용", appliesTo: ["currency", "number"], auto: false },
   { key: "cost.entertain", label: "업무추진비(회식·다과)", group: "비용", appliesTo: ["currency", "number"], auto: false },
   { key: "cost.outsource", label: "외주비", group: "비용", appliesTo: ["currency", "number"], auto: false },
   { key: "cost.etc", label: "기타 경비", group: "비용", appliesTo: ["currency", "number"], auto: false },
+  { key: "cost.personnel", label: "인건비(급여·상여·수당)", group: "비용", appliesTo: ["currency", "number"], auto: false },
   { key: "amount.revenue", label: "수익·매출 금액", group: "수익", appliesTo: ["currency"], auto: false },
+  { key: "amount.budget", label: "예산·계획 금액", group: "수익", appliesTo: ["currency"], auto: false },
+  { key: "amount.unit_price", label: "단가·일급", group: "수익", appliesTo: ["currency"], auto: false },
   { key: "quantity.hours", label: "시간(시수)", group: "수량", appliesTo: ["number"], auto: false },
+  { key: "quantity.days", label: "일수", group: "수량", appliesTo: ["number"], auto: false },
+  { key: "quantity.count", label: "수량·인원·매수", group: "수량", appliesTo: ["number"], auto: false },
   { key: "when.occurred", label: "발생일(지출일·근무일)", group: "시간", appliesTo: ["date"], auto: false },
   { key: "when.period", label: "수행 기간", group: "시간", appliesTo: ["period"], auto: false },
+  { key: "when.due", label: "희망·마감일", group: "시간", appliesTo: ["date"], auto: false },
+  { key: "info.reference", label: "참고 값(집계 제외)", group: "참고", appliesTo: ["number", "currency", "date"], auto: false },
   { key: "dim.category", label: "분석 분류(차원)", group: "분류", appliesTo: ["select", "radio", "text"], auto: false },
 ];
 

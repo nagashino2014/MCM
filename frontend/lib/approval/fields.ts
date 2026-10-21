@@ -126,6 +126,9 @@ export const AUTO_CONCEPT_BY_TYPE: Partial<Record<ApprovalFieldType, string>> = 
   company_select: "ref.company",
   user_select: "ref.employee",
   dept_select: "ref.dept",
+  asset_select: "ref.asset",
+  contact_select: "ref.contact",
+  leave_type: "ref.leave_type",
 };
 
 /** 필드의 유효 개념 — 명시 태그 우선, 없으면 타입 자동 부여. */
@@ -136,7 +139,7 @@ export function resolveFieldConcept(f: { type: ApprovalFieldType; semantic?: App
 export interface ApprovalTableColumn {
   key: string;
   label: string;
-  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|link(URL — 읽기 모드에서 새 탭 링크. ⚠품명 자동 수집은 쿠팡·네이버·G마켓 봇 방어로 폐기, 2026-08-26 사용자 확정)
+  type: string; // text|date|time(HHMM 자동완성)|select|currency|number|rowno(자동 연번)|people(조직도 복수 선택 — 값은 {employeeId,name,position}[])|dept(부서 선택 — {deptId,name})|position(직급 선택 — {positionId,name})|related(연관 용역/사업장 — 행 메타 _relatedContractId/_relatedFacilityId)|link(URL — 읽기 모드에서 새 탭 링크. ⚠품명 자동 수집은 쿠팡·네이버·G마켓 봇 방어로 폐기, 2026-08-26 사용자 확정)
   options?: string[];
   /** 필수 입력 열 — 값이 있는 행에서 이 열이 비면 상신을 막는다(지출 목적 등). */
   required?: boolean;
@@ -175,6 +178,8 @@ export interface ApprovalFieldDef {
   importOnly?: { emptyText: string; rowIssue?: (row: Record<string, unknown>) => string | null };
   /** table 에서 합계를 자동 계산할 컬럼 key(currency/number) */
   sumColumn?: string;
+  /** table 전용 — 행마다 대상 직원 메타(_employeeId)가 붙는 표(인사·급여 자동 생성 표). 관계 맵·지표가 행을 직원에 귀속 */
+  rowRef?: "employee";
   /** user_select 전용 — 복수 인원 선택 허용(동행자 등) */
   multiple?: boolean;
   /** company_select/contract_select 전용 — 선택 시 다른 필드 자동 채움 규칙 */
@@ -245,6 +250,7 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
           : undefined,
         minRows: f.minRows != null ? Number(f.minRows) : undefined,
         sumColumn: f.sumColumn != null ? String(f.sumColumn) : undefined,
+        rowRef: f.rowRef === "employee" ? ("employee" as const) : undefined,
         multiple: f.multiple === true,
         assetKind: f.assetKind != null ? String(f.assetKind) : undefined,
         singleDay: f.singleDay === true || undefined,
@@ -263,8 +269,9 @@ export function parseFields(value: unknown): ApprovalFieldDef[] {
 }
 
 /** 표 행에 붙는 내부 메타 키(귀속 참조) — 행이 비었는지 판정할 때는 값으로 세지 않는다.
- *  _related* = 연관 용역/사업장 열(related)의 계약·사업장 ID(표시 문자열은 열 값, 2026-10-16). */
-const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId", "_shopReceiptId", "_relatedContractId", "_relatedFacilityId"]);
+ *  _related* = 연관 용역/사업장 열(related)의 계약·사업장 ID(표시 문자열은 열 값, 2026-10-16).
+ *  _employeeId = rowRef: "employee" 표의 행 대상 직원(인사·급여 자동 생성 표, 2026-10-21). */
+const TABLE_META_KEYS = new Set(["_cardTxnId", "_receiptId", "_shopReceiptId", "_relatedContractId", "_relatedFacilityId", "_employeeId"]);
 
 function cellFilled(v: unknown): boolean {
   if (Array.isArray(v)) return v.length > 0;

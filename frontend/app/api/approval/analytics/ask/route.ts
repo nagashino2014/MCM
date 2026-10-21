@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { anthropicChatJson, LlmError } from "@/lib/ai/llm-json";
-import { formatMetricValue, parseMetricDefinition, validateDefinition, type MetricResult } from "@/lib/analytics/metric-types";
+import { describeSystemSources, formatMetricValue, parseMetricDefinition, validateDefinition, type MetricResult } from "@/lib/analytics/metric-types";
 import { getMetric, listMetrics } from "@/lib/analytics/metric-store";
 import { runMetric } from "@/lib/analytics/metric-engine";
 import { listSemanticConcepts } from "@/lib/approval/semantic-concepts-store";
@@ -64,10 +64,12 @@ export async function POST(req: NextRequest) {
       system: `너는 그룹웨어 데이터 질문 응답기다. 사용자의 한국어 질문에 답하기 위해, 아래 중 하나를 JSON 으로 출력한다. JSON 외 텍스트 금지.
 1) 기존 지표가 질문에 맞으면: {"metricKey": "<기존 지표 키>"}
 2) 맞는 게 없으면 임시 지표 정의 생성: {"label": "지표 이름", "definition": {...}} — definition 스키마는 집계 지표만:
-{"kind":"aggregate","source":{"type":"approval_docs","forms":"auto","status":["approved"]} 또는 {"type":"system.contracts|system.participants|system.attendance|system.leave"},"measure":{"agg":"sum|avg|count|min|max|count_distinct","concept":"<태그>"(approval_docs) 또는 "field":"<필드>"(system)},"groupBy":[차원 최대 3],"timeBy":{...}(선택)}
+{"kind":"aggregate","source":{"type":"approval_docs","forms":"auto","status":["approved"]} 또는 {"type":"system.*"},"measure":{"agg":"sum|avg|count|min|max|count_distinct","concept":"<태그>"(approval_docs) 또는 "field":"<필드>"(system)},"groupBy":[차원 최대 3],"timeBy":{...}(선택)}
 
 결재 문서 값 태그: ${conceptDoc}
-시스템 소스 필드: system.contracts={amount,count; dims ref.contract,dim.category,dim.subcategory,dim.amount_band}, system.participants={contract_id,duration_days,amount_percentile,amount_sum; dims ref.employee,ref.contract,dim.category,dim.subcategory,dim.amount_band}, system.attendance={overtime_hours,excess_hours,worked_hours; dims ref.employee; time week_start}, system.leave={grant_days,use_days; dims ref.employee; time year}
+결재 문서 그룹 차원: 참조 1개(ref.contract|ref.company|ref.employee|ref.dept|ref.asset|ref.contact|ref.leave_type|doc.drafter(기안자)|doc.dept(기안 부서)) + dim.category
+시스템 소스:
+${describeSystemSources()}
 기존 지표:
 ${metricDoc}
 

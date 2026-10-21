@@ -52,6 +52,7 @@ import {
   type ApprovalTableColumn,
 } from "@/lib/approval/fields";
 import { conceptLabel, conceptsForType, type SemanticConceptItem } from "@/lib/approval/semantic-concepts";
+import { linkageWarningsOf } from "@/lib/approval/linkage";
 import "@/components/cdash/cdash.css";
 
 interface FolderRow {
@@ -424,6 +425,15 @@ export default function ApprovalFormsBoard() {
                     return untagged > 0 ? (
                       <span className="text-[11px] cd-text-faint" title="속성 패널의 '데이터 의미'를 지정하면 용역별 경비·성과 분석에 활용됩니다.">
                         의미 미지정 금액·날짜 항목 {untagged}개
+                      </span>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    // 마스터 연계 점검(L4, 2026-10-21) — 저장은 막지 않고 알려만 준다. 근거는 lib/approval/linkage.ts
+                    const linkWarnings = linkageWarningsOf(draft.formId || "", draft.fields);
+                    return linkWarnings.length > 0 ? (
+                      <span className="text-[11px] text-[color:var(--cd-warning,#FFAE1F)] cursor-help" title={linkWarnings.join("\n")}>
+                        마스터 연계 점검 {linkWarnings.length}건
                       </span>
                     ) : null;
                   })()}
@@ -1016,9 +1026,9 @@ function TableColumnsEditor({
           <input className="cd-input font-mono" style={{ width: 84 }} placeholder="col_key" value={c.key} onChange={(e) => setCol(i, { key: e.target.value })} />
           <input className="cd-input flex-1 min-w-[80px]" placeholder="열 라벨" value={c.label} onChange={(e) => setCol(i, { label: e.target.value })} />
           <select className="cd-select" style={{ width: 82 }} value={c.type} onChange={(e) => setCol(i, { type: e.target.value })}>
-            {["text", "date", "time", "select", "number", "currency", "rowno", "people", "link", "related"].map((t) => (
+            {["text", "date", "time", "select", "number", "currency", "rowno", "people", "dept", "position", "link", "related"].map((t) => (
               <option key={t} value={t}>
-                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t === "link" ? "링크(URL)" : t === "related" ? "용역/사업장" : t}
+                {t === "rowno" ? "연번(자동)" : t === "time" ? "시각(HHMM)" : t === "people" ? "인원(조직도)" : t === "dept" ? "부서(조직도)" : t === "position" ? "직급" : t === "link" ? "링크(URL)" : t === "related" ? "용역/사업장" : t}
               </option>
             ))}
           </select>

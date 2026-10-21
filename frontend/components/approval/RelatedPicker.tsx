@@ -28,11 +28,14 @@ export function RelatedPickerModal({
   onClose,
   onPick,
   current,
+  title = "연관 용역/사업장 선택",
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (ref: RelatedRef | null) => void;
   current?: string;
+  /** 모달 제목 — 관계 맵 직접 입력 보정에서 재사용할 때 바꾼다 */
+  title?: string;
 }) {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,7 +78,7 @@ export function RelatedPickerModal({
   };
 
   return (
-    <CdModal open={open} onClose={onClose} title="연관 용역/사업장 선택" size="lg">
+    <CdModal open={open} onClose={onClose} title={title} size="lg">
       <div className="grid gap-3">
         <label className="flex items-center gap-2 rounded-lg border cd-border-c px-3 py-2">
           <Search className="w-4 h-4 cd-text-faint shrink-0" />

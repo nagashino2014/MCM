@@ -1455,8 +1455,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
 
   return (
     <div className="flex flex-col">
-      {/* 툴바(1줄 통합 — 좁은 폭에서만 자동 줄바꿈. 흰 배경 + 윤곽선, G2-9/10) */}
-      <div className="flex items-center gap-0.5 border cd-border-c rounded-t-lg px-1.5 py-1 flex-wrap bg-white">
+      {/* 툴바(1줄 통합 — 좁은 폭에서만 자동 줄바꿈. 본문 면과 같은 바탕 + 윤곽선, G2-9/10 · 다크 2026-10-21) */}
+      <div className="cd-doc-surface flex items-center gap-0.5 border cd-border-c rounded-t-lg px-1.5 py-1 flex-wrap">
         <select
           onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => {
@@ -1835,7 +1835,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         </div>
       )}
 
-      {/* 본문 에디터 — 메일 본문은 흰 배경 고정. cd-mail-editor 로 목록 마커/HR 스타일 복원 */}
+      {/* 본문 에디터 — 라이트는 흰 배경, 다크는 어두운 면(cd-doc-surface — 저장 HTML 은 그대로). cd-mail-editor 로 목록 마커/HR 스타일 복원 */}
       <div className="relative">
         <div
           ref={innerRef}
@@ -1845,7 +1845,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           onKeyDown={onEditorKeyDown}
           onMouseMove={onEditorMouseMove}
           onMouseDown={onEditorMouseDown}
-          className="cd-mail-editor max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm bg-white text-black outline-none focus:border-[color:var(--cd-primary)]"
+          className="cd-mail-editor cd-doc-surface max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm outline-none focus:border-[color:var(--cd-primary)]"
           style={{ lineHeight: 1.6, minHeight: minHeightPx ?? 634 }}
         />
         {/* 이미지 선택 표시 + 우하단 크기 조절 핸들(드래그하면 비율 유지하며 확대·축소) */}
@@ -1892,7 +1892,7 @@ function TableBtn({ label, icon, onClick, danger, disabled }: { label: string; i
       onClick={onClick}
       className={
         "flex items-center gap-0.5 px-1.5 py-1 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed " +
-        (danger ? "cd-error-text hover:cd-error-bg" : "cd-text-muted hover:text-[color:var(--cd-text)] hover:bg-white/60")
+        (danger ? "cd-error-text hover:cd-error-bg" : "cd-text-muted hover:text-[color:var(--cd-text)] hover:bg-[color:var(--cd-surface)]")
       }
     >
       {icon}

@@ -5,6 +5,7 @@
 --    남겨 LIKE 로 중복을 판정하던 것을 컬럼으로 바꾼다. 기존 기록은 note 의 '(양식명 문서번호)' 꼬리로 백필.
 -- 2) 인사 발령 표 — 발령 직급(new_position)·발령 부서(to_dept) 열을 자유 텍스트 → 직급(position)·부서(dept) 선택 열.
 --    값은 {positionId,name}/{deptId,name}. 기존 문서의 문자열 값은 화면에서 '(목록 외)'로 그대로 보인다.
+--    안내문의 "직급명/부서명과 동일하게 입력하면 자동 연결" 문구도 "목록에서 고르면 반영"으로 바꾼다.
 -- 3) 인사·급여 자동 생성 표(성과급 지급 계획·상여금 지급 계획·근로계약서 갱신 계획)의 명세 표에 rowRef='employee'
 --    — 행마다 _employeeId(기안 생성 코드가 넣음)로 직원에 귀속(관계 맵·지표·상여대장 매칭).
 -- 4) 원가 귀속 '관련 용역(계약)' 선택 항목(contract_select, 필수 아님) — 구매품의서·업무기안·전문가활용비 지급 신청서·
@@ -44,6 +45,12 @@ BEGIN
                                ELSE col END
                           ORDER BY cord)
                    FROM jsonb_array_elements(elem->'tableColumns') WITH ORDINALITY AS t(col, cord)))
+             -- 안내문 — '이름을 똑같이 입력하면 연결' 문구를 선택 열에 맞게 바꾼다(빌더로 고친 문구는 건드리지 않음)
+             WHEN elem->>'key' = 'notice' AND elem->>'type' = 'static'
+                  AND elem->>'content' LIKE '%등록된 직급명/부서명과 동일하게 입력하면 자동 연결됩니다.%' THEN
+               jsonb_set(elem, '{content}', to_jsonb(replace(elem->>'content',
+                 '발령 직급·부서는 등록된 직급명/부서명과 동일하게 입력하면 자동 연결됩니다.',
+                 '발령 직급·부서는 목록에서 고르면 승인 시 그대로 반영됩니다.')))
              ELSE elem END
              ORDER BY ford)
       INTO nextfields

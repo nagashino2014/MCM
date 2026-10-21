@@ -216,7 +216,7 @@ export function MailSignatureManager({
                     )}
                   </div>
                   {/* 미리보기 — 흰 배경(메일 본문 기준) */}
-                  <div className="bg-white text-black px-3 py-2 text-sm max-h-36 overflow-y-auto" dangerouslySetInnerHTML={{ __html: s.bodyHtml }} />
+                  <div className="cd-mail-editor cd-doc-surface px-3 py-2 text-sm max-h-36 overflow-y-auto" dangerouslySetInnerHTML={{ __html: s.bodyHtml }} />
                 </li>
               ))}
             </ul>

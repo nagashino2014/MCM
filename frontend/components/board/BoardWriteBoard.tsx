@@ -230,7 +230,7 @@ export function BoardWriteBoard() {
             </div>
           )}
           <div
-            className="rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[6rem] bg-white transition-colors"
+            className="cd-solid-bg rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[6rem] transition-colors"
             style={{ borderColor: dragging ? "var(--cd-primary)" : "var(--cd-border)", borderStyle: dragging ? "solid" : "dashed" }}
             onClick={() => files.length === 0 && fileInputRef.current?.click()}
             onDragEnter={(e) => {

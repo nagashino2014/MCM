@@ -389,7 +389,7 @@ function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: 
   if (readOnly) {
     return (
       <div
-        className="cd-mail-editor w-full min-h-[40px] rounded-lg border cd-border-c bg-white px-3 py-2 text-sm text-black"
+        className="cd-mail-editor cd-doc-surface w-full min-h-[40px] rounded-lg border cd-border-c px-3 py-2 text-sm"
         style={{ lineHeight: 1.6 }}
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(toEditorHtml(value)) }}
       />

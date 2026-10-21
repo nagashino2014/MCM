@@ -438,16 +438,16 @@ export function EndpointConfigBuilder({
                 ))}
               </select>
               <label className="flex items-center gap-1">본문 최대
-                <input type="number" min={1} max={1000} className="cd-input text-[12px] w-20" value={tpMax} onChange={(e) => setTpMax(Number(e.target.value))} />
+                <input type="number" min={1} max={1000} className="cd-input text-[12px] !w-20" value={tpMax} onChange={(e) => setTpMax(Number(e.target.value))} />
                 건
               </label>
             </div>
             {tpMappings.map((m, i) => (
               <div key={i} className="flex items-center gap-2 flex-wrap text-[12px]">
-                <input className="cd-input text-[12px] w-44 font-mono" placeholder="목록 응답 필드" value={m.source_field} list={`tp-src-${epIdx}`}
+                <input className="cd-input text-[12px] !w-44 font-mono" placeholder="목록 응답 필드" value={m.source_field} list={`tp-src-${epIdx}`}
                   onChange={(e) => setTpMappings((p) => p.map((x, j) => (j === i ? { ...x, source_field: e.target.value } : x)))} />
                 <span className="cd-text-faint">→ 본문 파라미터</span>
-                <input className="cd-input text-[12px] w-44 font-mono" placeholder="본문 요청 파라미터" value={m.target_param} list={`tp-dst-${epIdx}`}
+                <input className="cd-input text-[12px] !w-44 font-mono" placeholder="본문 요청 파라미터" value={m.target_param} list={`tp-dst-${epIdx}`}
                   onChange={(e) => setTpMappings((p) => p.map((x, j) => (j === i ? { ...x, target_param: e.target.value } : x)))} />
                 <button type="button" className="cd-btn cd-btn-soft text-[11px]" onClick={() => setTpMappings((p) => p.filter((_, j) => j !== i))}>삭제</button>
               </div>

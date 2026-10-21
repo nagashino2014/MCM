@@ -723,7 +723,7 @@ export function QuoteSettingsBoard() {
                           <span className="flex items-center gap-1 shrink-0">
                             {/* 직접경비 요율은 2026-09-30 입력 폐지 — 견적서가 0 고정이라 편집을 막는다(옛 문서 재현용 값만 남음, F-34) */}
                             <input
-                              className="cd-input w-20 text-right px-1.5 disabled:opacity-60"
+                              className="cd-input !w-20 text-right px-1.5 disabled:opacity-60"
                               value={String(value)}
                               disabled={key === "directExpenseRate"}
                               onChange={(e) => editRate(key, isPct, e.target.value)}
@@ -758,7 +758,7 @@ export function QuoteSettingsBoard() {
                         <Calculator className="w-3.5 h-3.5 cd-text-primary" /> 역산 시뮬레이터 — 편집 중인 기준·최신 노임단가로 즉석 검증
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <AmountInput className="cd-input w-44 text-right text-sm" placeholder="견적가 (예: 38,000,000)" value={simPrice} onChange={(v) => setSimPrice(v)} />
+                        <AmountInput className="cd-input !w-44 text-right text-sm" placeholder="견적가 (예: 38,000,000)" value={simPrice} onChange={(v) => setSimPrice(v)} />
                         <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold" onClick={runSim}>
                           역산 실행
                         </button>

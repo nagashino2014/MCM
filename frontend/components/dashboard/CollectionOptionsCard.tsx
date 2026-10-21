@@ -620,7 +620,7 @@ function ExtractionRangeCard({
           <input
             type="number"
             min={1}
-            className="cd-input w-20 text-center"
+            className="cd-input !w-20 text-center"
             value={range.startPage ?? 1}
             onChange={(e) =>
               onChangePage("startPage", Math.max(1, Number(e.target.value) || 1))
@@ -630,7 +630,7 @@ function ExtractionRangeCard({
           <input
             type="number"
             min={1}
-            className="cd-input w-20 text-center"
+            className="cd-input !w-20 text-center"
             value={range.endPage ?? defaultEnd}
             onChange={(e) =>
               onChangePage("endPage", Math.max(1, Number(e.target.value) || 1))

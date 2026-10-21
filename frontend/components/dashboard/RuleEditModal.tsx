@@ -141,7 +141,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
               <input
                 type="number"
                 min={1}
-                className="cd-input w-24 text-center"
+                className="cd-input !w-24 text-center"
                 value={pageStart}
                 onChange={(e) => setPageStart(Math.max(1, Number(e.target.value) || 1))}
               />
@@ -149,7 +149,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
               <input
                 type="number"
                 min={1}
-                className="cd-input w-24 text-center"
+                className="cd-input !w-24 text-center"
                 value={pageEnd}
                 onChange={(e) => setPageEnd(Math.max(1, Number(e.target.value) || 1))}
               />

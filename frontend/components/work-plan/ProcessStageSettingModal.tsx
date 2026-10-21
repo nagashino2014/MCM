@@ -267,7 +267,7 @@ export default function ProcessStageSettingModal({
                     type="number"
                     min={1}
                     max={100}
-                    className="cd-input text-sm w-20 text-center"
+                    className="cd-input text-sm !w-20 text-center"
                     value={active.progressUnitPct}
                     onChange={(e) => update(active.key, { progressUnitPct: Math.min(100, Math.max(1, Number(e.target.value) || 1)) })}
                   />

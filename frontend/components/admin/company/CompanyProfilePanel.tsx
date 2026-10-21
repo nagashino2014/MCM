@@ -525,7 +525,7 @@ export function CompanyProfilePanel() {
               {/* 연월·주요내용 분리 입력 */}
               <div className="rounded-xl border cd-border-c p-3 mb-3 grid gap-2 text-xs">
                 <L label="연월">
-                  <input className="cd-input w-[120px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
+                  <input className="cd-input !w-[120px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
                 </L>
                 <L label="주요내용">
                   <input className="cd-input" value={histContent} onChange={(e) => setHistContent(e.target.value)} placeholder="예: 기술혁신형 중소기업(Inno-Biz) 인증" />

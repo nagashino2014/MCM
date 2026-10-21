@@ -53,11 +53,17 @@ export function MailListPane({
   onToggleStar,
   layout = "stack",
   toolbarExtra,
+  total,
+  footer,
 }: {
   /** stack = 좌우 분할용 3층 행 / row = 목록형(전체 폭 1줄: 보낸 사람 | 제목 — 미리보기 | 날짜). */
   layout?: "stack" | "row";
   /** 검색줄 오른쪽 끝에 붙일 요소(보기 전환 버튼 등). */
   toolbarExtra?: React.ReactNode;
+  /** 폴더 전체 건수(페이지 나눔 시) — 없으면 현재 쪽 건수. */
+  total?: number;
+  /** 목록 아래 고정 영역(페이지 나눔). */
+  footer?: React.ReactNode;
   folder: string;
   items: MailListItem[];
   drafts: MailDraft[];
@@ -201,7 +207,7 @@ export function MailListPane({
               ))}
             </>
           ) : (
-            <span className="cd-text-faint ml-1">{loading ? "" : `${isDrafts ? drafts.length : items.length}건`}</span>
+            <span className="cd-text-faint ml-1">{loading ? "" : `${isDrafts ? drafts.length : total ?? items.length}건`}</span>
           )}
         </div>
       )}
@@ -219,7 +225,7 @@ export function MailListPane({
             <ul className="divide-y cd-hairline-row-c">
               {drafts.map((d) => (
                 <li key={d.draftId} className="flex items-start">
-                  <button onClick={() => onOpenDraft(d)} className="flex-1 min-w-0 text-left px-3 py-2.5 flex flex-col gap-0.5 cd-row-hover">
+                  <button onClick={() => onOpenDraft(d)} className="flex-1 min-w-0 text-left px-3 py-[13.5px] flex flex-col gap-0.5 cd-row-hover">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium truncate cd-text">{d.subject || "(제목 없음)"}</span>
                       <span className="text-[11px] cd-text-faint shrink-0">{fmtListDate(d.updatedAt)}</span>
@@ -228,7 +234,7 @@ export function MailListPane({
                   </button>
                   <button
                     onClick={() => onDeleteDraft(d)}
-                    className="p-2 mt-1.5 mr-1 cd-text-faint hover:cd-error-text shrink-0"
+                    className="p-2 mt-[9.5px] mr-1 cd-text-faint hover:cd-error-text shrink-0"
                     title="임시보관 메일 삭제"
                     aria-label="임시보관 메일 삭제"
                   >
@@ -250,7 +256,7 @@ export function MailListPane({
               const active = activeId === m.messageId;
               return (
                 <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
-                  <div className={cn("flex items-center gap-2.5 px-3 py-3", active ? "cd-glass-active" : "cd-row-hover")}>
+                  <div className={cn("flex items-center gap-2.5 px-3 py-[15.5px]", active ? "cd-glass-active" : "cd-row-hover")}>
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
@@ -315,7 +321,7 @@ export function MailListPane({
               const active = activeId === m.messageId;
               return (
                 <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
-                  <div className={cn("flex items-start gap-2.5 px-3 py-[13px]", active ? "cd-glass-active" : "cd-row-hover")}>
+                  <div className={cn("flex items-start gap-2.5 px-3 py-[16.5px]", active ? "cd-glass-active" : "cd-row-hover")}>
                     <span
                       className="w-1.5 h-1.5 rounded-full mt-3 shrink-0"
                       style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
@@ -352,6 +358,8 @@ export function MailListPane({
           </ul>
         )}
       </div>
+
+      {footer && <div className="shrink-0 border-t cd-hairline-c px-3 py-2">{footer}</div>}
 
       <MailPreviewModal
         messageId={previewId}

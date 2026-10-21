@@ -88,6 +88,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             ],
           },
           { kind: "p", text: "소속 부서가 지정되지 않은 계정은 부서 게시판을 보거나 쓸 수 없습니다." },
+          { kind: "p", text: "고정 공지는 위에 따로 보이고, 일반 글은 한 화면에 50개씩 보입니다. 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다." },
         ],
       },
       {
@@ -118,7 +119,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["공지", "게시판", "공지사항", "전사 공지", "부서 게시판", "상단 고정", "알림", "푸시", "첨부"],
     sources: ["components/board/BoardListBoard.tsx", "components/board/BoardWriteBoard.tsx", "components/board/BoardPostBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
 
   // ── 사규·내규 ──
@@ -481,7 +482,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "검색어를 넣고 Enter 또는 돋보기를 누르면 조회됩니다.",
           ] },
           { kind: "list", items: [
-            "최근 200건까지 표시됩니다. 더 많으면 기간을 나눠 조회합니다.",
+            "최근 200건까지 불러와 한 화면에 50개씩 보여 줍니다(오른쪽 아래에서 20·30·50개씩·쪽 선택). 더 많으면 기간을 나눠 조회합니다.",
             "행을 누르면 문서 원본이 열립니다.",
           ] },
         ],
@@ -503,7 +504,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["문서 조회", "양식별", "결재 데이터", "CSV", "엑셀", "발송공문", "공문 대장", "발송견적", "이관", "결번"],
     sources: ["components/approval/ApprovalRecordsBoard.tsx", "components/approval/LetterRecordsTable.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "approval.analytics",

@@ -241,7 +241,7 @@ export function AssetCalendarBoard() {
           {/* 이용 목록 */}
           <div className="cd-card p-4 gap-2">
             {filtered.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 rounded-xl border cd-border-c p-2.5" style={u.conflict ? { borderColor: "var(--cd-warning)" } : undefined}>
+              <div key={u.id} className="flex items-center gap-3 rounded-xl border cd-border-c px-2.5 py-[13.5px]" style={u.conflict ? { borderColor: "var(--cd-warning)" } : undefined}>
                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: u.source === "trip" ? TAG_COLOR_STRONG.vehicle : TAG_COLOR_STRONG.refs }} />
                 <span className="text-[13px] font-bold cd-text shrink-0">{u.assetName}</span>
                 <span className="text-[12px] cd-text-muted tabular-nums shrink-0">{fmtWhen(u)}</span>

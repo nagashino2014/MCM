@@ -15,6 +15,7 @@ import { LetterRecordsTable } from "@/components/approval/LetterRecordsTable";
 import { QuoteRecordsTable } from "@/components/approval/QuoteRecordsTable";
 import type { OfficialLetterRow } from "@/lib/letter/types";
 import type { QuotationRow } from "@/lib/quote/types";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import { formatBytes } from "@/lib/approval/attachments";
 import "@/components/cdash/cdash.css";
 
@@ -206,6 +207,17 @@ export function ApprovalArchiveBoard() {
     });
   }, [docs, fromYm, toYm, q]);
 
+  // 화면당 20·30·50개(기본 50) — 탭·폴더·검색 조건이 바뀌면 첫 쪽부터.
+  const docPaging = useClientPaging(filteredDocs, "archive-page-size", loading);
+  const contractPaging = useClientPaging(contractDocs, "archive-page-size", contractDocsLoading);
+  const { resetPage: resetDocPage } = docPaging;
+  const { resetPage: resetContractPage } = contractPaging;
+  useEffect(() => {
+    resetDocPage();
+    resetContractPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topTab, tab, folder, fromYm, toYm, q]);
+
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
@@ -313,6 +325,7 @@ export function ApprovalArchiveBoard() {
           ) : contractDocs.length === 0 ? (
             <p className="text-sm cd-text-faint">계약 문서가 없습니다.</p>
           ) : (
+            <div className="flex flex-col gap-3">
             <div className="overflow-x-auto">
               <table className="w-full text-[12.5px]">
                 <thead className="cd-table-head">
@@ -325,24 +338,26 @@ export function ApprovalArchiveBoard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contractDocs.map((d) => (
+                  {contractPaging.pageRows.map((d) => (
                     <tr
                       key={d.documentId}
                       className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]"
                       onClick={() => d.storageKey && window.open(`/api/contracts/documents?key=${encodeURIComponent(d.storageKey)}`, "_blank", "noopener")}
                       title="클릭하면 문서를 엽니다"
                     >
-                      <td className="py-2 pr-3 cd-text">{d.contractTitle}</td>
-                      <td className="py-2 pr-3">
+                      <td className="py-[11.5px] pr-3 cd-text">{d.contractTitle}</td>
+                      <td className="py-[11.5px] pr-3">
                         <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{d.typeLabel}</span>
                       </td>
-                      <td className="py-2 pr-3 cd-text-faint">{d.fileName}</td>
-                      <td className="py-2 pr-3 text-right font-mono text-[11px] cd-text-faint">{formatBytes(d.byteSize ?? 0)}</td>
-                      <td className="py-2 font-mono text-[11px] cd-text-faint">{short(d.createdAt)}</td>
+                      <td className="py-[11.5px] pr-3 cd-text-faint">{d.fileName}</td>
+                      <td className="py-[11.5px] pr-3 text-right font-mono text-[11px] cd-text-faint">{formatBytes(d.byteSize ?? 0)}</td>
+                      <td className="py-[11.5px] font-mono text-[11px] cd-text-faint">{short(d.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            {contractPaging.pager}
             </div>
           )
         ) : loading ? (
@@ -350,6 +365,7 @@ export function ApprovalArchiveBoard() {
         ) : filteredDocs.length === 0 ? (
           <p className="text-sm cd-text-faint">문서가 없습니다.</p>
         ) : (
+          <div className="flex flex-col gap-3">
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead className="cd-table-head">
@@ -364,13 +380,13 @@ export function ApprovalArchiveBoard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocs.map((d) => {
+                {docPaging.pageRows.map((d) => {
                   const exp = expiryOf(d);
                   return (
                     <tr key={d.docId} className="border-t cd-border-c cursor-pointer hover:bg-[color:var(--cd-surface)]" onClick={() => setDetailDocId(d.docId)}>
-                      <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{d.docNo ?? "-"}</td>
-                      <td className="py-2 pr-3 cd-text-faint">{d.formName}</td>
-                      <td className="py-2 pr-3 cd-text">
+                      <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{d.docNo ?? "-"}</td>
+                      <td className="py-[11.5px] pr-3 cd-text-faint">{d.formName}</td>
+                      <td className="py-[11.5px] pr-3 cd-text">
                         {tab === "watched" && d.unread && (
                           <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ background: "var(--cd-primary)" }} title="안 읽음" />
                         )}
@@ -379,8 +395,8 @@ export function ApprovalArchiveBoard() {
                           <span className="ml-1.5 text-[10px] cd-text-faint">{d.watchKind === "view" ? "(열람)" : "(참조)"}</span>
                         )}
                       </td>
-                      <td className="py-2 pr-3 cd-text-faint">{d.drafterName ?? "-"}</td>
-                      <td className="py-2 pr-3">
+                      <td className="py-[11.5px] pr-3 cd-text-faint">{d.drafterName ?? "-"}</td>
+                      <td className="py-[11.5px] pr-3">
                         <span
                           className={`text-[10.5px] rounded-full px-2 py-0.5 border ${
                             d.status === "approved"
@@ -393,8 +409,8 @@ export function ApprovalArchiveBoard() {
                           {DOC_STATUS_LABEL[d.status] ?? d.status}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{short(d.completedAt)}</td>
-                      <td className="py-2 font-mono text-[11px]">
+                      <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{short(d.completedAt)}</td>
+                      <td className="py-[11.5px] font-mono text-[11px]">
                         {exp ? (
                           <span className={exp.expired ? "text-[color:var(--cd-danger,#FA896B)] font-bold" : "cd-text-faint"}>
                             {exp.text}
@@ -409,6 +425,8 @@ export function ApprovalArchiveBoard() {
                 })}
               </tbody>
             </table>
+          </div>
+          {docPaging.pager}
           </div>
         )}
       </div>

@@ -397,7 +397,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                   <button
                     type="button"
                     onClick={() => void toggleWeek(w.weekStart)}
-                    className="w-full grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 items-center px-1 py-2 text-[12.5px] cd-row-hover rounded-lg text-left"
+                    className="w-full grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 items-center px-1 py-[11.5px] text-[12.5px] cd-row-hover rounded-lg text-left"
                   >
                     <span className="tabular-nums cd-text font-medium">{w.weekStart} 주</span>
                     <span className="tabular-nums text-right cd-text">{hm(w.workedMinutes)}</span>
@@ -429,7 +429,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                       {(daily[w.weekStart] ?? []).map((d) => {
                         const dt = new Date(d.workDate + "T00:00:00");
                         return (
-                          <div key={d.workDate} className="grid grid-cols-[1.1fr_0.8fr_0.8fr_0.9fr_0.9fr_0.9fr] gap-2 text-[12px] py-1 border-t cd-hairline-row-c items-center">
+                          <div key={d.workDate} className="grid grid-cols-[1.1fr_0.8fr_0.8fr_0.9fr_0.9fr_0.9fr] gap-2 text-[12px] py-[7.5px] border-t cd-hairline-row-c items-center">
                             <span className="tabular-nums cd-text">
                               {d.workDate.slice(5)} ({WEEKDAYS[dt.getDay()]}){d.isLeaveDay && <span className="cd-pill cd-pill-info ml-1">휴가</span>}
                             </span>
@@ -502,7 +502,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
             </div>
             <div className="2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
             {(data?.weeks ?? []).map((w) => (
-              <div key={w.weekStart} className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 items-center px-1 py-1.5 text-[12.5px] border-t cd-hairline-row-c">
+              <div key={w.weekStart} className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 items-center px-1 py-[9.5px] text-[12.5px] border-t cd-hairline-row-c">
                 <span className="tabular-nums cd-text">{w.weekStart} 주</span>
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeDayMinutes)}</span>
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeNightMinutes)}</span>

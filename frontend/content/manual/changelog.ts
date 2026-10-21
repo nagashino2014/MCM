@@ -6,6 +6,20 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-21",
+    kind: "변경",
+    title: "전자결재 목록형 보기·목록 쪽 나눔(20·30·50개씩)·목록 행 간격 확대",
+    body: "전자결재도 메일처럼 목록이 화면 폭 전체에 한 줄씩 보이고, 문서를 누르면 그 자리에 상세가 열립니다(보기 버튼으로 좌우 분할 전환). 전자결재·메일·파일함·개인문서함·문서함(발송공문·발송견적·계약 문서 포함)·양식별 문서 조회·게시판 목록은 50개씩 보이며 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다. 결재함 상자는 30건, 문서함은 50건까지만 보이던 제한이 늘었습니다. 앱 전체의 표·목록 행 높이를 7px 늘렸습니다.",
+    articles: ["approval.home", "mail.box", "files.archive", "files.personal", "files.library", "approval.records", "board.main"],
+  },
+  {
+    date: "2026-10-21",
+    kind: "수정",
+    title: "아마란스에서 가져온 받은 메일은 안읽음으로",
+    body: "아마란스 ZIP 에는 읽음 정보가 없어 가져온 메일이 모두 읽음으로 보이던 것을, 받은 메일은 안읽음(굵게)으로 들어오도록 바꿨습니다. 이미 가져온 받은 메일도 안읽음으로 바꿨습니다.",
+    articles: ["mail.box"],
+  },
+  {
     date: "2026-10-20",
     kind: "변경",
     title: "지출 내역은 불러오기로만 — 기타 개인 지출증빙·경비 환급 화면 폐지",

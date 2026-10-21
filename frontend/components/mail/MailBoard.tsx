@@ -18,6 +18,7 @@ import { MailListPane, type BulkAction } from "@/components/mail/MailListPane";
 import { MailViewerPane } from "@/components/mail/MailViewerPane";
 import { MailReceiptsPane } from "@/components/mail/MailReceiptsPane";
 import { MailSettingsPane } from "@/components/mail/MailSettingsPane";
+import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
 import type { MailFolderInfo, MailListItem, MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
@@ -35,6 +36,9 @@ export function MailBoard() {
   const [folder, setFolder] = useState("inbox");
   const [activeCategory, setActiveCategory] = useState(""); // 받은편지함 카테고리 필터
   const [items, setItems] = useState<MailListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = usePageSize("mail-page-size");
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [q, setQ] = useState("");
@@ -60,6 +64,10 @@ export function MailBoard() {
     } catch {
       /* noop */
     }
+  };
+  const changePageSize = (n: number) => {
+    setPageSize(n);
+    setOffset(0);
   };
   const listMode = isWide && viewMode === "list";
 
@@ -104,29 +112,34 @@ export function MailBoard() {
     }
   }, []);
 
+  // 폴더 전환과 쪽 초기화가 겹치면 요청이 두 번 나간다 — 마지막 요청의 응답만 반영한다.
+  const listReq = useRef(0);
   const loadList = useCallback(
-    async (f: string, query: string, category: string) => {
+    async (f: string, query: string, category: string, size: number, from: number) => {
       if (f === "receipts" || f === "settings") return; // 자체 뷰
+      const req = ++listReq.current;
       setLoadingList(true);
       try {
         if (f === "drafts") {
           const r = await fetch("/api/mail/drafts");
-          if (r.ok) {
+          if (r.ok && req === listReq.current) {
             const d = await r.json();
             setDrafts(Array.isArray(d.drafts) ? d.drafts : []);
           }
         } else {
-          const params = new URLSearchParams({ folder: f, limit: "100" });
+          const params = new URLSearchParams({ folder: f, limit: String(size), offset: String(from) });
           if (query) params.set("q", query);
           if (f === "inbox" && category) params.set("category", category);
           const r = await fetch(`/api/mail/messages?${params.toString()}`);
           if (r.ok) {
             const d = await r.json();
+            if (req !== listReq.current) return;
             setItems(Array.isArray(d.items) ? d.items : []);
+            setTotal(Number(d.total ?? 0));
           }
         }
       } finally {
-        setLoadingList(false);
+        if (req === listReq.current) setLoadingList(false);
       }
     },
     []
@@ -136,9 +149,17 @@ export function MailBoard() {
     loadMailbox();
     loadFolders();
   }, [loadMailbox, loadFolders]);
+  // 폴더·검색·카테고리가 바뀌면 첫 쪽부터.
   useEffect(() => {
-    loadList(folder, q, activeCategory);
-  }, [folder, q, activeCategory, loadList]);
+    setOffset(0);
+  }, [folder, q, activeCategory]);
+  useEffect(() => {
+    loadList(folder, q, activeCategory, pageSize, offset);
+  }, [folder, q, activeCategory, pageSize, offset, loadList]);
+  // 마지막 쪽의 메일을 모두 옮기거나 지워 쪽이 비면 앞 쪽으로 돌아간다.
+  useEffect(() => {
+    if (!loadingList && items.length === 0 && offset > 0) setOffset(Math.max(0, offset - pageSize));
+  }, [loadingList, items.length, offset, pageSize]);
 
   // 레거시 진입점(/mail?compose=1) → 작성 페이지로 리다이렉트.
   const composeParamHandled = useRef(false);
@@ -153,9 +174,9 @@ export function MailBoard() {
   }, []);
 
   const refreshAll = useCallback(() => {
-    loadList(folder, q, activeCategory);
+    loadList(folder, q, activeCategory, pageSize, offset);
     loadFolders();
-  }, [folder, q, activeCategory, loadList, loadFolders]);
+  }, [folder, q, activeCategory, pageSize, offset, loadList, loadFolders]);
 
   // ── 카테고리 관리(G2-12) ──────────────────────────
   const createCategory = async () => {
@@ -341,6 +362,20 @@ export function MailBoard() {
       toolbarExtra={viewToggle}
       folder={folder}
       items={items}
+      total={total}
+      footer={
+        folder === "drafts" ? null : (
+          <PaginationControls
+            total={total}
+            limit={pageSize}
+            offset={offset}
+            loading={loadingList}
+            onPageChange={setOffset}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={changePageSize}
+          />
+        )
+      }
       drafts={drafts}
       categories={categories}
       loading={loadingList}

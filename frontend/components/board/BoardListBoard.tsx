@@ -12,6 +12,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import type { BoardPost } from "@/lib/board";
 import "@/components/cdash/cdash.css";
 
@@ -55,6 +56,12 @@ export function BoardListBoard() {
   const pinned = posts.filter((p) => p.pinnedNow);
   const normal = posts.filter((p) => !p.pinnedNow);
   const unreadCount = posts.filter((p) => p.unread).length;
+  // 일반 글은 화면당 20·30·50개(기본 50) — 고정 공지는 쪽과 무관하게 위에 둔다. 범위(전사·부서)를 바꾸면 첫 쪽.
+  const { pageRows: pageNormal, pager, resetPage } = useClientPaging(normal, "board-page-size", loading);
+  useEffect(() => {
+    resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
@@ -163,7 +170,7 @@ export function BoardListBoard() {
                 {normal.length === 0 ? (
                   <p className="text-[13px] cd-text-faint py-6 text-center">일반 글이 없습니다.</p>
                 ) : (
-                  normal.map((p) => (
+                  pageNormal.map((p) => (
                     <button
                       key={p.postId}
                       type="button"
@@ -194,6 +201,7 @@ export function BoardListBoard() {
                     </button>
                   ))
                 )}
+                {normal.length > 0 && <div className="px-4 py-2 border-t cd-hairline-c">{pager}</div>}
               </div>
             </div>
           )}

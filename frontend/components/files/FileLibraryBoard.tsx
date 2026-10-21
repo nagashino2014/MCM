@@ -9,6 +9,7 @@ import { FileText, Loader2, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
+import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
 import { formatBytes } from "@/lib/approval/attachments";
 import "@/components/cdash/cdash.css";
 
@@ -66,7 +67,6 @@ const TIER_LABEL: Record<keyof RetentionPolicies, string> = {
   gt50mb: "50MB 이상 파일",
 };
 
-const PAGE_SIZE = 30;
 
 /** 오늘 기준 n개월 전의 YYYYMM. */
 function ymAgo(months: number): string {
@@ -98,6 +98,7 @@ export function FileLibraryBoard() {
   const [rows, setRows] = useState<FileRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize("files-page-size");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // 필터
@@ -133,7 +134,7 @@ export function FileLibraryBoard() {
     try {
       const params = filterParams();
       params.set("page", String(page));
-      params.set("pageSize", String(PAGE_SIZE));
+      params.set("pageSize", String(pageSize));
       const res = await fetch(`/api/files?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "파일 목록을 불러오지 못했습니다.");
@@ -147,7 +148,7 @@ export function FileLibraryBoard() {
     } finally {
       setLoading(false);
     }
-  }, [filterParams, page]);
+  }, [filterParams, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -176,7 +177,6 @@ export function FileLibraryBoard() {
     setToYm(ymNow());
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   const toggleAll = () => {
@@ -429,7 +429,7 @@ export function FileLibraryBoard() {
                       onClick={() => openRow(row)}
                       title="클릭하면 파일을 엽니다"
                     >
-                      <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-[11.5px] px-2" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(row.id)}
@@ -437,7 +437,7 @@ export function FileLibraryBoard() {
                           aria-label={`${row.fileName} 선택`}
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-[11.5px] px-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
                           <span className="truncate font-medium" style={{ maxWidth: 360 }}>{row.fileName}</span>
@@ -449,12 +449,12 @@ export function FileLibraryBoard() {
                         </div>
                         {row.context && <div className="cd-text-faint text-xs truncate mt-0.5" style={{ maxWidth: 420 }}>{row.context}</div>}
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-[11.5px] px-2">
                         <span className="cd-chip cd-chip-sm">{row.sourceLabel}</span>
                       </td>
-                      <td className="py-2 px-2 uppercase text-xs cd-text-faint">{row.ext || "-"}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{formatBytes(row.byteSize ?? 0)}</td>
-                      <td className="py-2 px-2 tabular-nums">{row.uploadedAt ? row.uploadedAt.slice(0, 10) : "-"}</td>
+                      <td className="py-[11.5px] px-2 uppercase text-xs cd-text-faint">{row.ext || "-"}</td>
+                      <td className="py-[11.5px] px-2 text-right tabular-nums">{formatBytes(row.byteSize ?? 0)}</td>
+                      <td className="py-[11.5px] px-2 tabular-nums">{row.uploadedAt ? row.uploadedAt.slice(0, 10) : "-"}</td>
                     </tr>
                   );
                 })
@@ -463,23 +463,19 @@ export function FileLibraryBoard() {
           </table>
         </div>
 
-        {/* 페이지네이션 */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 text-sm">
-            <button type="button" className="cd-chip cd-chip-sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-              이전
-            </button>
-            <span className="cd-text-faint tabular-nums">{page} / {totalPages}</span>
-            <button
-              type="button"
-              className="cd-chip cd-chip-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              다음
-            </button>
-          </div>
-        )}
+        {/* 페이지네이션 — 우하단 쪽 번호 + 화면당 표시 수(20·30·50) */}
+        <PaginationControls
+          total={total}
+          limit={pageSize}
+          offset={(page - 1) * pageSize}
+          loading={loading}
+          onPageChange={(next) => setPage(Math.floor(next / pageSize) + 1)}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* 파일 저장 정책 — 크기 구간별 보존기간(설정 저장 + 목록 '경과' 표시 + 매일 자동 삭제 틱) */}

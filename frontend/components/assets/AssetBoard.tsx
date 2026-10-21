@@ -224,9 +224,9 @@ export function AssetBoard() {
                     <tbody>
                       {kindAssets.map((a) => (
                         <tr key={a.assetId} className="border-t cd-border-c">
-                          <td className="py-2 pr-2 cd-text font-semibold whitespace-nowrap">{a.name}</td>
-                          <td className="py-2 pr-2 cd-text whitespace-nowrap">{a.plateNo ?? "-"}</td>
-                          <td className="py-2 pr-2 whitespace-nowrap">
+                          <td className="py-[11.5px] pr-2 cd-text font-semibold whitespace-nowrap">{a.name}</td>
+                          <td className="py-[11.5px] pr-2 cd-text whitespace-nowrap">{a.plateNo ?? "-"}</td>
+                          <td className="py-[11.5px] pr-2 whitespace-nowrap">
                             {a.ownership ? (
                               <span className="text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">
                                 {VEHICLE_OWNERSHIP_LABELS[a.ownership]}
@@ -235,9 +235,9 @@ export function AssetBoard() {
                               <span className="cd-text-faint">-</span>
                             )}
                           </td>
-                          <td className="py-2 pr-2 cd-text whitespace-nowrap">{a.acquiredAt ?? "-"}</td>
-                          <td className="py-2 pr-2 cd-text whitespace-nowrap">{a.returnedAt ?? "-"}</td>
-                          <td className="py-2 pr-2">
+                          <td className="py-[11.5px] pr-2 cd-text whitespace-nowrap">{a.acquiredAt ?? "-"}</td>
+                          <td className="py-[11.5px] pr-2 cd-text whitespace-nowrap">{a.returnedAt ?? "-"}</td>
+                          <td className="py-[11.5px] pr-2">
                             <button
                               type="button"
                               className="cd-btn rounded-lg border cd-border-c px-2.5 py-1 text-[11px]"
@@ -249,7 +249,7 @@ export function AssetBoard() {
                           {(["contract", "registration"] as const).map((docType) => {
                             const key = docType === "contract" ? a.contractDocKey : a.registrationDocKey;
                             return (
-                              <td key={docType} className="py-2 pr-2">
+                              <td key={docType} className="py-[11.5px] pr-2">
                                 {key ? (
                                   <button
                                     type="button"
@@ -264,7 +264,7 @@ export function AssetBoard() {
                               </td>
                             );
                           })}
-                          <td className="py-2 pr-2 text-center">
+                          <td className="py-[11.5px] pr-2 text-center">
                             <input
                               type="checkbox"
                               checked={a.active}
@@ -272,7 +272,7 @@ export function AssetBoard() {
                               onChange={(e) => patchAsset(a.assetId, { active: e.target.checked })}
                             />
                           </td>
-                          <td className="py-2">
+                          <td className="py-[11.5px]">
                             {canManage && (
                               <button
                                 type="button"

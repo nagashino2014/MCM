@@ -47,6 +47,11 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             ],
           },
           { kind: "tip", text: "결재 대기 문서는 일정 시간마다 알림으로 다시 안내됩니다. 메뉴 옆 숫자는 결재 대기 건수입니다." },
+          { kind: "list", items: [
+            "넓은 화면은 기본이 목록형입니다. 목록이 화면 폭 전체에 한 줄씩 보이고, 문서를 누르면 그 자리에 상세가 열립니다. [[목록]]을 누르면 목록으로 돌아갑니다.",
+            "목록 오른쪽 위 보기 버튼으로 좌우 분할(왼쪽 목록·오른쪽 미리보기)로 바꿀 수 있습니다. 고른 보기는 다음에도 유지됩니다.",
+            "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩을 고르고 쪽 번호로 넘깁니다.",
+          ] },
         ],
       },
       {
@@ -54,7 +59,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         title: "승인·반려하기",
         blocks: [
           { kind: "steps", items: [
-            "[[결재 대기]]에서 문서를 고르면 오른쪽에 내용이 열립니다. [[문서]] / [[첨부서류]] 탭으로 본문과 첨부를 확인합니다.",
+            "[[결재 대기]]에서 문서를 고르면 내용이 열립니다(좌우 분할 보기에서는 오른쪽). [[문서]] / [[첨부서류]] 탭으로 본문과 첨부를 확인합니다.",
             "필요하면 [[결재 의견]]을 적습니다. **반려할 때는 의견이 필수**입니다.",
             "[[승인]] 또는 [[반려]]를 누릅니다.",
           ] },
@@ -106,7 +111,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["결재", "승인", "반려", "결재함", "기안함", "참조", "열람", "결재 대기", "결재 예정", "재상신", "반려 요청", "결재 취소", "전결", "회수"],
     sources: ["components/approval/ApprovalHomeBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-21",
   },
   {
     id: "approval.draft",

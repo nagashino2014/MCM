@@ -42,7 +42,7 @@
   --precision-ui-content-padding: 28px;
   --precision-ui-sheet-width: 460px;
   --precision-ui-table-header-height: 40px;
-  --precision-ui-table-row-height: 44px;
+  --precision-ui-table-row-height: 51px; /* 10-21 사용자 요청: 목록 행 +7px(44→51) — 답답함·가독성 */
   --precision-ui-control-height: 36px;
   --precision-ui-control-height-sm: 32px;
   --precision-ui-control-padding-x: 12px;

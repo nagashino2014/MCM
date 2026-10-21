@@ -669,7 +669,7 @@ export function DeliverableBoard() {
                       group.contracts.map((c) => (
                         <label
                           key={c.contractId}
-                          className={`flex items-center gap-2 px-4 py-2 text-[12px] cursor-pointer border-b cd-border-c ${
+                          className={`flex items-center gap-2 px-4 py-[11.5px] text-[12px] cursor-pointer border-b cd-border-c ${
                             contract?.contractId === c.contractId ? "cd-tint-primary" : "hover:bg-[color:var(--cd-surface)]"
                           }`}
                           onClick={() => void pickContract(c)}

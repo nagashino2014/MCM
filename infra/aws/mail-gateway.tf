@@ -129,10 +129,11 @@ resource "aws_lb_target_group" "mail_gateway_imap" {
   proxy_protocol_v2    = true
   deregistration_delay = 30
 
+  # 헬스 체크는 TCP 접속 확인 — proxy_protocol_v2 를 켜면 NLB 가 헬스 체크 연결에도 PROXY 헤더를 붙여
+  # HTTP 헬스 서버가 400 으로 실패한다(2026-10-21 적용 직후 실측, AWS NLB 문서 "Health check connections").
   health_check {
-    protocol            = "HTTP"
+    protocol            = "TCP"
     port                = "8025"
-    path                = "/healthz"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 30
@@ -151,10 +152,11 @@ resource "aws_lb_target_group" "mail_gateway_smtp" {
   proxy_protocol_v2    = true
   deregistration_delay = 30
 
+  # 헬스 체크는 TCP 접속 확인 — proxy_protocol_v2 를 켜면 NLB 가 헬스 체크 연결에도 PROXY 헤더를 붙여
+  # HTTP 헬스 서버가 400 으로 실패한다(2026-10-21 적용 직후 실측, AWS NLB 문서 "Health check connections").
   health_check {
-    protocol            = "HTTP"
+    protocol            = "TCP"
     port                = "8025"
-    path                = "/healthz"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     interval            = 30

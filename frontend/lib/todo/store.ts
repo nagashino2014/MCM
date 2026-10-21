@@ -1282,7 +1282,7 @@ async function openSubtaskCount(db: PgDatabase, itemId: string): Promise<number>
 
 /**
  * 완료 조건(276) 검사 — 미충족이면 409 를 던진다. 라우트는 err.code/err.detail 을 그대로 응답에 싣는다:
- *   { error, code: "complete_rules", missing: ["subtasks"|"note"|"review"], openSubtasks: n }
+ *   { error, code: "complete_rules", missing: ["subtasks"|"note"|"review"|"deps"], openSubtasks: n, openDeps: n }
  */
 async function assertCompletable(
   db: PgDatabase,

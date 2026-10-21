@@ -19,6 +19,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         id: "staff",
         title: "임직원 찾기",
         blocks: [
+          { kind: "image", src: "/manual/shots/directory.webp", alt: "주소록 화면 — 임직원 목록" },
           { kind: "list", items: [
             "왼쪽에서 부서를 누르면 그 부서 인원만 보입니다. [[전체]]를 누르면 다시 전원이 보입니다.",
             "검색창은 이름·부서·직급·전화·메일을 함께 찾습니다.",
@@ -78,6 +79,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         id: "read",
         title: "목록 읽는 법",
         blocks: [
+          { kind: "image", src: "/manual/shots/board.webp", alt: "공지·게시판 목록" },
           {
             kind: "table",
             head: ["표시", "뜻"],

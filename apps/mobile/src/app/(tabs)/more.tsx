@@ -127,6 +127,7 @@ export default function MoreScreen() {
     {
       label: '기타',
       items: [
+        { icon: 'book-outline', tone: c.primary, title: '사용 매뉴얼', subtitle: '기능 설명·검색', onPress: () => router.push('/manual') },
         { icon: 'settings-outline', tone: c.muted, title: '설정', subtitle: '앱 잠금·알림·계정', onPress: () => router.push('/settings') },
       ],
     },

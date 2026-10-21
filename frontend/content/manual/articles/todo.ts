@@ -46,6 +46,7 @@ export const TODO_ARTICLES: ManualArticle[] = [
         id: "scope",
         title: "누가 보나 — 범위와 공유",
         blocks: [
+          { kind: "image", src: "/manual/shots/todo.webp", alt: "할 일 화면 — 내 할 일·공유받음·맡긴 일 탭과 목록 보기" },
           {
             kind: "table",
             head: ["탭", "보이는 할 일"],

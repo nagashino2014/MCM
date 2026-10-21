@@ -145,6 +145,18 @@ function ManualBlockView({ block, onNavigate }: { block: ManualBlock; onNavigate
           ))}
         </ul>
       );
+    case "image":
+      return (
+        <figure className="space-y-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- public/ 정적 캡처, 크기는 파일 그대로 */}
+          <img src={block.src} alt={block.alt} loading="lazy" className="block h-auto max-w-full rounded-lg border cd-border-c" />
+          {block.caption && (
+            <figcaption className="text-[12px] leading-[calc(1.625em+3px)] cd-text-muted">
+              <ManualInline text={block.caption} />
+            </figcaption>
+          )}
+        </figure>
+      );
     case "link": {
       const target = getArticle(block.article);
       if (!target) return null;

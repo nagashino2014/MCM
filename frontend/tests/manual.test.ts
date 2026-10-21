@@ -43,6 +43,8 @@ function blockStrings(block: ManualBlock): string[] {
       return block.items.flatMap((i) => [i.from, i.to]);
     case "link":
       return block.label ? [block.label] : [];
+    case "image":
+      return block.caption ? [block.caption] : [];
   }
 }
 
@@ -90,6 +92,17 @@ test("기사 링크·도움말 more·변경 기록이 존재하는 기사·절�
     for (const b of t.blocks) if (b.kind === "link") check(`도움말 ${t.id}`, b.article, b.section);
   }
   for (const e of MANUAL_CHANGELOG) for (const id of e.articles) check(`변경 기록 ${e.title}`, id);
+});
+
+test("화면 캡처(image) 파일이 public/ 에 있고 대체 글이 있다", () => {
+  for (const a of MANUAL_ARTICLES)
+    for (const s of a.sections)
+      for (const b of s.blocks) {
+        if (b.kind !== "image") continue;
+        assert.ok(b.src.startsWith("/manual/shots/"), `${a.id}#${s.id}: 캡처는 /manual/shots/ 아래에 둔다 (${b.src})`);
+        assert.ok(existsSync(join(ROOT, "public", b.src)), `${a.id}#${s.id}: 캡처 파일 없음 ${b.src}`);
+        assert.ok(b.alt.trim().length >= 4, `${a.id}#${s.id}: 캡처 대체 글(alt)이 비었다`);
+      }
 });
 
 test("[[화면 문구]]는 sources 파일에 실제로 있다 — 화면 문구가 바뀌면 매뉴얼도 고친다", () => {

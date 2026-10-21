@@ -49,6 +49,15 @@
 - import: `import { CdHelp } from "@/components/cdash/CdHelp";`
 - 구조·배치·표 열·탭은 바꾸지 않는다(CLAUDE.md UI 규칙).
 
+## 4.1 화면 캡처(image 블록)
+
+- `{ kind: "image", src: "/manual/shots/<이름>.webp", alt: "무엇을 보여 주는 그림인지", caption?: "…" }` — 파일은 `frontend/public/manual/shots/`.
+- **이름·금액·연락처·메일 제목 등 실데이터는 반드시 흐리게** 찍는다(기사는 전 직원이 보고, `public/` 그림은 로그인 없이 열린다).
+- 찍는 법: 스테이징에 직접 로그인한 Playwright 프로필로 화면을 열고, 메뉴·버튼·제목·표 머리글만 남기고 나머지 글자와 이름·금액·전화·메일 패턴을 흐린 뒤 1440×900 으로 찍어 WebP(품질 78)로 저장한다. 2026-10-21 첫 캡처 스크립트는 `docs/manual-shots/capture.mjs`.
+- 찍은 그림은 커밋 전에 한 장씩 열어 흐림이 빠진 곳이 없는지 확인한다.
+- 화면이 바뀌어 그림이 낡으면 같은 커밋에서 다시 찍거나 블록을 뺀다. 캡처는 절 하나에 한 장, 기사의 핵심 화면에만 둔다(그림이 많을수록 낡기 쉽다).
+- `test:manual` 이 파일 존재·경로·대체 글(alt)을 확인한다.
+
 ## 5. 검사
 
 `npm run test:manual` — 키 중복·링크·`[[ ]]` 대조·topic 사용처·권한 키·경로 매칭을 확인한다. 기사 없는 메뉴·화면이 있으면 **실패**한다(작업 중 임시로 경고만 보려면 `MANUAL_STRICT=0`). 새 화면은 기사를 쓰거나 `content/manual/index.ts`의 `MANUAL_EXCLUDED_ROUTES`에 사유와 함께 등록한다.

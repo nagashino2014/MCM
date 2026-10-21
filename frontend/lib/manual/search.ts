@@ -38,6 +38,8 @@ function blockText(block: ManualBlock): string {
       return block.items.map((i) => `${i.from} ${i.to}`).join(" ");
     case "link":
       return block.label ?? "";
+    case "image":
+      return [block.alt, block.caption ?? ""].join(" ");
   }
 }
 

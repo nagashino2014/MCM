@@ -1087,11 +1087,12 @@ export async function listJournal(params: {
           WHERE ct.card_txn_id = e.source_id AND ct.doc_form_id IS NULL AND ct.expense_kind IS NULL)`,
     );
   } else if (params.sourceKind === "trip_personal" || params.sourceKind === "expense_personal") {
-    // 개인 지출 환급분 — expense_doc 전표(법인카드 행은 이미 card 전표가 커버)를 문서 양식으로 가른다
-    sqlParams.push(params.sourceKind === "trip_personal" ? "frm-biz-trip-report" : "frm-expense-report");
+    // 개인 지출 환급분 — expense_doc 전표(법인카드 행은 이미 card 전표가 커버)를 문서 양식으로 가른다.
+    // 지출은 지출결의서와 지출결의서(개인) 둘 다 — 개인 양식 전표가 필터에서 빠지던 결함(G-8 후속).
+    sqlParams.push(params.sourceKind === "trip_personal" ? ["frm-biz-trip-report"] : ["frm-expense-report", "frm-expense-personal"]);
     conds.push(
       `e.source_kind = 'expense_doc' AND EXISTS (
-         SELECT 1 FROM approval_docs d WHERE d.doc_id = e.doc_id AND d.form_id = $${sqlParams.length})`,
+         SELECT 1 FROM approval_docs d WHERE d.doc_id = e.doc_id AND d.form_id = ANY($${sqlParams.length}::text[]))`,
     );
   } else if (params.sourceKind) {
     sqlParams.push(params.sourceKind);

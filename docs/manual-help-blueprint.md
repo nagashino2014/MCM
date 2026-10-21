@@ -288,3 +288,13 @@ DB 마이그레이션 없음(1~2차). 피드백 저장(§5.5)을 하기로 하�
 ## 12. 피드백 창구 (2026-10-21)
 
 기사 맨 아래 [틀린 내용 알리기] → `/mail/compose?to=&subject=&body=` 로 메일 쓰기 창을 연다(제목 `[매뉴얼 피드백] 기사 제목`, 본문에 기사 id·업데이트 날짜·보고 있던 화면 주소). 받는 주소는 `frontend/content/manual/feedback.ts` 의 `MANUAL_FEEDBACK_EMAIL` 한 곳에서 바꾼다(비우면 받는 사람 칸이 빈 채로 열림). 메일 쓰기는 새 메일일 때만 `subject`·`body`(평문, 4000자) 미리 채우기를 받는다.
+
+## 13. 선택 항목·잔여 결함 (2026-10-21)
+
+사용자 결정: 화면 캡처는 실화면+개인정보 흐림, 모바일은 앱 화면+OTA 발행, POP3/IMAP 은 이번 제외·화면 정리, 상단 검색 내용 검색은 핵심 6종.
+
+- **화면 캡처**: `ManualBlock` 에 `image` 블록 추가(웹·앱 렌더러, 검색 대상은 alt·caption). 그림은 `frontend/public/manual/shots/*.webp`, 찍는 법은 작성 가이드 §4.1. `test:manual` 이 파일·경로·alt 를 확인한다.
+- **모바일 4단계**: `GET /api/manual`(목차·최근 변경, `?q=` 검색) · `GET /api/manual/[articleId]`(내 권한으로 거른 절, 볼 수 없는 기사 링크는 제거). 권한 요약은 DB 에서 새로 읽는다(Bearer 토큰에는 요약이 없음). 앱은 더보기 → [사용 매뉴얼] → `apps/mobile/src/app/manual/`. **next 배포 후** OTA 를 발행해야 앱에서 열린다(먼저 OTA 하면 목록이 "불러오지 못했습니다").
+- **상단 검색 내용 검색(F-13)**: `GET /api/search?q=`(2글자 이상) → `lib/search/global.ts`. 종류별 최대 5건, 열람 규칙은 화면과 같다 — 메일=내 메일함(휴지통·스팸 제외), 결재=`resolveDocAccess` 와 같은 SQL + 남의 임시저장 제외, 주소록=임직원 전원·외부 담당자 `contact.view`, 계약=`contract.view`+계약 범위, 사업장=`facility.view`, 할 일=`visibleItemsWhere`.
+- **POP3/IMAP(F-13)**: 메일 설정의 "준비 중" 안내를 숨기고 구성안을 `docs/mail-external-client-plan.md` 로 남겼다.
+- **후속 결함**: 할 일 완료 409 주석에 `deps` 누락, 전표 필터 `expense_personal` 이 지출결의서(개인) 양식을 빠뜨림, 결재 문서 삭제 시 쇼핑몰 전표(`shop_receipts.doc_id`) 귀속 미해제, 휴지통 계약 복원이 회계 쓰기 잠금 밖에서 실행 — 모두 수정.

@@ -117,6 +117,9 @@ function RootNavigator() {
         <Stack.Screen name="todo/index" />
         <Stack.Screen name="todo/[itemId]" />
         <Stack.Screen name="todo/inbox" />
+        {/* 사용 매뉴얼(4단계) — 목록·기사 모두 자체 헤더 */}
+        <Stack.Screen name="manual/index" />
+        <Stack.Screen name="manual/[articleId]" />
       </Stack>
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-// 회사소개서 — 지표 사전 값·통합허가 최초허가 계약 단위 상세·관리 화면 바로가기.
+// 회사소개서 — PDF 만들기·미리보기(P4) · 지표 사전 값 · 현행 카탈로그 대조 · 통합허가 최초허가 계약 단위 상세 · 관리 화면 바로가기.
 // 소개서의 숫자는 모두 지표 사전(lib/catalog/metrics.ts)에서 나온다. docs/company-catalog-blueprint.md §6-5·§11
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,6 +15,8 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import type { InitialPermitDetail, MetricValue } from "@/lib/catalog/metrics";
 import { catalogFetch } from "./catalogFetch";
 import { CatalogCoverPicker } from "./CatalogCoverPicker";
+import { CatalogReferencePanel } from "./CatalogReferencePanel";
+import { CatalogRenderPanel } from "./CatalogRenderPanel";
 import "@/components/cdash/cdash.css";
 
 interface MetricsResponse {
@@ -98,6 +100,8 @@ export function CatalogHomeBoard() {
         </div>
       )}
 
+      <CatalogRenderPanel />
+
       {canManage && <CatalogCoverPicker />}
 
       <section className="cd-card p-4 mb-3">
@@ -147,6 +151,8 @@ export function CatalogHomeBoard() {
           </p>
         )}
       </section>
+
+      {data && <CatalogReferencePanel metrics={data.metrics} initialPermit={data.initialPermit} />}
 
       <section className="cd-card p-4">
         <div className="flex items-center gap-2 flex-wrap mb-3">

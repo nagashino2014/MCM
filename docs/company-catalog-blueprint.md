@@ -480,11 +480,36 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 ```
 
 - **`paginate.js` 이식**: ESG 렌더러의 핵심(글꼴 로드 대기, 단·쪽 채우기, `data-split="rows"` 표 분할 + 머리 반복 + "(계속)", 각주 꼬리, 쪽 번호·링크 해결,
-  넘침 경고)을 `frontend/lib/print-kit/`로 옮긴다. ⚠ 원본이 미커밋이므로 **ESG 세션이 커밋한 뒤 그 커밋 기준으로 이식**하고 출처 커밋을 주석에 남긴다.
+  넘침 경고)을 print-kit 으로 옮긴다. ✅ P4(10-22): ESG-KESI origin/main `f48d0bd` 기준 이식(출처 주석) — `frontend/public/print-kit/paginate.js`(스튜디오·서버 공용 한 파일).
 - **converter 확장**: `POST /render/html-pdf`(HTML 본문 + 사용 서체 목록 → PDF). 기존 `/render/url-pdf`의 Chromium 설정 재사용. 보안상 페이지의 외부 네트워크 요청은 모두 차단하고
   서체·이미지는 `page.route`로 내부 주소만 응답(§5-5). 기본 서체 세트 파일은 이미지에 미리 넣어 캐시 적중을 높이고(현재 nanum·noto-cjk만 있음),
   업로드 서체 미리보기용 WOFF2 변환(fontTools)도 converter가 맡는다. ⚠ converter 재배포는 메모리의 주의 사항(전체 apply 금지·java-common 필수)을 따른다.
 - PDF 위생(SR 교훈): 북마크(섹션→쪽), 태그 PDF, Title·Lang 메타, 내부 링크, **다른 PDF 엔진으로 재저장 금지**(링크 소실).
+
+### 9-1. P4 구현 기록(2026-10-22)
+
+| 자리 | 내용 |
+|---|---|
+| `frontend/lib/print-kit/` | `tokens.ts`(tokens.json → CSS 변수, P1 tokens.py 와 같은 규칙) · `document.ts`(자체 완결 HTML·서체 @font-face·`PDF_SCALE`) · `server.ts`(정적 렌더·키트 파일·이미지 크기) · `converter.ts`(`/render/html-pdf` 호출) |
+| `frontend/public/print-kit/` | `paginate.js` · `sheet.css`(842×595 시트 모델) · `fonts/`(Pretendard 3굵기, converter 이미지도 이 폴더를 COPY) |
+| `frontend/public/catalog-kit/` | 디자인 시스템 `bundle.css` 사본(`kesi-catalog.css`, Google Fonts @import 만 뺌) · 로고·사옥 사진 |
+| `frontend/lib/catalog/render/` | `data.ts`(한 시점 데이터 모음) · `master-content.ts`(작성 문안 기본안) · `components/`(쪽 유형 22종·인포그래픽) · `html.ts` · `editions.ts`(S3 `catalogs/{YYYY}/{edition_id}/`, catalog_editions 생성본) |
+| API | `GET /api/catalog/render/html`(미리보기) · `POST·GET /api/catalog/render/pdf`(생성·목록) · `GET /api/catalog/editions/{id}/pdf` · `GET /api/catalog/render/asset` — 모두 catalog.view |
+| converter | `POST /render/html-pdf`(`converter/html_pdf.py`) — `https://print.local/` 을 문서 주소로 열고 자산·기본 서체만 `page.route` 로 응답, 나머지 요청 차단. 응답 = PDF + 쪽 지도(앵커→쪽)·넘침 경고 |
+
+실측 함정(다시 밟지 말 것):
+- **`@page { size }` 금지** — A4 가로 + `scale 4/3` 인쇄에 CSS 쪽 크기를 두면 Chromium 147 이 쪽 상자를 용지에 다시 맞춰 0.75배로 줄여 가운데 놓는다(ESG 원본에는 있었다).
+- **서체는 TrueType 윤곽** — Skia 는 CFF(OTF·그 WOFF) 서체를 Type 3 으로 넣는다. Pretendard 를 fontTools cu2qu 로 TrueType 윤곽 WOFF 로 바꿔 두었다
+  (`scripts/catalog/pretendard_otf2ttf.py`, 화면 차이 49,640px 중 5px) → PDF 에 `AAAAAA+Pretendard-Bold` 같은 부분 포함(Type0). 업로드 서체(P5b)도 같은 변환이 필요하다.
+  ◐·前·現 처럼 Pretendard 에 없는 글자는 시스템 대체 서체로 그려져 Type 3 으로 남는다(모양은 포함되어 같다).
+- **북마크용 숨은 제목** — `clip-path`·`display:none` 으로 숨긴 제목은 Chromium 이 북마크에 넣지 않는다. 투명 글자 1px(`.pk-outline`)로 둔다.
+  쪽마다 h1(섹션, 섹션 첫 쪽만)·h2(쪽 이름)를 숨겨 두고 보이는 제목은 p 로 그려 북마크가 정확히 2단이 된다.
+- **App Router 라우트에서 `react-dom/server` 는 막혀 있다**('react-server' 조건) — `print-kit/server.ts` 가 Node require 로 서버 렌더러를 연다. 쪽 컴포넌트는 훅·컨텍스트 없이 props 만 쓴다.
+- 넘침 검사는 쪽 높이 외에 '쪽 여백 밖 글자'·'상자에 잘린 글자'·'칸 아래로 넘쳐 다음 내용과 겹치는 글자'·'칸 폭을 넘는 표'를 본다(겹침은 flex 칸이 줄어든 경우 — 쪽 높이로는 안 잡힌다).
+
+**모티프 절제(사용자 지시 2026-10-22)**: "물방울·나뭇잎 모양이 너무 많이 쓰인다." → 물방울·잎은 상징 자리(표지·섹션 간지·뒤표지)에만 남기고,
+본문 쪽은 장식 물방울을 빼고 요소 모양(쪽 머리 표식 → 세로 막대, 글머리·분야 점 → 원, 단계 번호 → 원, 아이콘 상자·카드·사진 틀 → 둥근 사각)을
+평범하게 바꿨다(`lib/catalog/render/print-overrides.ts`). 디자인 시스템 README '모티프' 절과 목업에도 같은 규칙을 반영해야 한다.
 - 판(variant) 옵션: 풀버전 / 요약본(부록 제외) / 실명·마스킹 / **분야 맞춤판**(선택 분야만 본편에 남기고 부록도 그 분야로 필터 — P8).
 - PPTX: 1차 범위 밖(D7). 필요하면 쪽별 고해상도 이미지 슬라이드 + 노트, 또는 ESG의 PPTX 선택 트랙 결과를 보고 결정.
 
@@ -546,7 +571,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P1 디자인 시스템** ✅ | 「KESI 회사소개서 디자인 시스템」 아티팩트: SR 토큰 파생(기반 계승 + KESI 브랜드·분야 색·타입 스케일·12열 그리드), **역할별 서체 변수 + 서체 세트 4–6종**, README(콘텐츠·사진·표·인포그래픽·서체 규칙), 쪽 유형 컴포넌트, **인포그래픽 16종** | [Design System 아티팩트](https://claude.ai/artifact/AovTvRBgpnUv7r6CQvxp8B)(10-21) | P0 | L |
 | **P2 쪽 유형 목업** ✅ | 디자인 캔버스: C01–C19·A01–A03 + **인포그래픽 갤러리 보드** + **서체 비교 보드** + 색 컨셉 2–3종 비교. **현행 카탈로그의 실제 내용**으로(개인정보는 마스킹) | [Design 캔버스](https://claude.ai/artifact/2bMEZ7oMfZbNUfCtswStMb)(10-21) → 사용자 결정 대기 | P1 | L |
 | **P3 데이터 기반** | 마이그 309·310(번호 재확인), 회사 프로필 보강(연혁 자동 후보·특허·증빙 저장 수정), 지표 사전, 실적 대외 표기 규칙 + 백필 검토 화면, 인물·자문위원·고객사 관리 | 데이터 화면·API | P0(D6·D8·D9) | L |
-| **P4 렌더러** | `print-kit`(tokens → CSS, paginate.js 이식, 시트 모델), 쪽 유형·위젯 React 컴포넌트, converter `/render/html-pdf` + 기본 서체 세트·서체 라우팅, 첫 자동 생성 PDF, **현행 46장 대비 수치 대조 리포트** | PDF 생성 | P2·P3 | L |
+| **P4 렌더러** ✅ | `print-kit`(tokens → CSS, paginate.js 이식, 시트 모델), 쪽 유형·위젯 React 컴포넌트, converter `/render/html-pdf` + 기본 서체 세트·서체 라우팅, 첫 자동 생성 PDF, **현행 46장 대비 수치 대조 리포트** | PDF 생성(§9-1, 10-22) · `/sales/catalog` PDF 만들기·미리보기·받기 · 현행 카탈로그 대조 표 | P2·P3 | L |
 | **P5 스튜디오** | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | 스튜디오 화면 | P4 | L |
 | **P5b 서체 라이브러리** | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·WOFF2 변환·견본 화면·크기 보정값 계산 | 서체 화면·API | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | AI 편집 | P5 | M |
@@ -554,7 +579,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |
 
 **병렬 가능**: P1·P2(claude.ai 디자인 작업)와 P3(MCM 데이터)는 서로 독립이라 동시에 진행할 수 있다. P4는 둘 다 끝나야 한다.
-**ESG 쪽 의존**: P4의 `paginate.js` 이식은 ESG 렌더러 커밋 이후. 그 전이라도 P1–P3는 진행 가능.
+**ESG 쪽 의존**: P4의 `paginate.js` 이식은 ESG 렌더러 커밋 이후. 그 전이라도 P1–P3는 진행 가능. → ESG origin/main `f48d0bd` 기준으로 이식 완료(10-22).
 
 ---
 

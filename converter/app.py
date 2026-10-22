@@ -10,6 +10,7 @@ OCR 백엔드(15GB, 상시 미가동)와 분리된 경량 서비스 — LibreOff
   POST /render/url-meta  {url} → 상품 페이지를 Chromium 으로 열어 {title, price} 추출
                          (⚠현재 호출처 없음 — 구매품의서 자동 기입용이었으나 쿠팡·네이버·G마켓의
                           상용 봇 방어로 실효성이 없어 08-26 폐기, 추후 재활용 대비 엔드포인트만 유지)
+  POST /render/html-pdf  {html, assets[]} → 자체 완결 HTML(print-kit)을 Chromium 으로 인쇄한 PDF + 쪽 지도(회사소개서)
   GET  /health           변환기 설치 여부(배포 확인용)
 
 호출자는 Next.js 뿐이고, VPC 내부 service discovery(converter.local)로만 접근한다.
@@ -22,9 +23,10 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+import html_pdf
 import office_convert
 
-app = FastAPI(title="MCM 문서 변환", version="1.1.0")
+app = FastAPI(title="MCM 문서 변환", version="1.2.0")
 
 # URL 캡처는 바로빌 호스팅 화면 전용 — 내부 서비스라도 SSRF 방지로 도메인을 제한한다.
 RENDER_ALLOWED_SUFFIXES = (".baroservice.com", ".barobill.co.kr", ".barobill.com")
@@ -91,7 +93,53 @@ MARK_INVOICE_JS = """
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "available": office_convert.is_available(), "soffice": office_convert.soffice_path()}
+    return {
+        "status": "healthy",
+        "available": office_convert.is_available(),
+        "soffice": office_convert.soffice_path(),
+        "print_fonts": html_pdf.bundled_font_names(),
+    }
+
+
+class RenderHtmlAsset(BaseModel):
+    path: str
+    content_type: str = "application/octet-stream"
+    data_b64: str
+
+
+class RenderHtmlBody(BaseModel):
+    html: str
+    assets: list[RenderHtmlAsset] = []
+    png: bool = False
+    png_scale: float = 1.5
+    timeout_ms: int = 90000
+
+
+@app.post("/render/html-pdf")
+async def render_html_pdf(body: RenderHtmlBody):
+    try:
+        from playwright.async_api import async_playwright  # noqa: F401 — 설치 여부 확인
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Chromium 모듈(playwright)이 설치되어 있지 않습니다.")
+    try:
+        assets = html_pdf.decode_assets([a.model_dump() for a in body.assets])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        result = await html_pdf.render(
+            body.html,
+            assets,
+            png=body.png,
+            png_scale=body.png_scale,
+            timeout_ms=max(10000, min(body.timeout_ms, 180000)),
+        )
+    except html_pdf.RenderError as exc:
+        print(f"[render/html-pdf] 실패: {exc}")
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 — 호출자에게 사유를 넘긴다
+        print(f"[render/html-pdf] 실패({type(exc).__name__}): {exc}")
+        raise HTTPException(status_code=422, detail=f"PDF 생성 실패: {exc}")
+    return result
 
 
 @app.post("/render/url-pdf")

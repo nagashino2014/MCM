@@ -118,6 +118,20 @@ export const ADMIN_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "admin.company-history-auto",
+    label: "연혁 분류·자동 줄 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "면허·인증·특허·수상을 취득일과 함께 저장하면 연혁 줄이 자동으로 생깁니다. 연월·내용은 원본에서 고칩니다.",
+        "눈 아이콘 = 회사소개서 연혁에 싣기/빼기, 별 아이콘 = 주요 연혁 강조.",
+        "[[분류]]는 회사소개서 연혁 쪽에서 묶음·아이콘에 쓰입니다.",
+      ] },
+    ],
+    more: { article: "admin.company-profile", section: "history-auto" },
+    sources: ["components/admin/company/CompanyProfilePanel.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
     id: "admin.ai-budget",
     label: "AI 예산·초과 시 정책 도움말",
     blocks: [

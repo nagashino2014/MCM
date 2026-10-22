@@ -37,6 +37,8 @@ const KEY_LABEL: Record<string, string> = {
   "filing.view": "대외 신고 대기열",
   "finance.view": "재무",
   "sales.view": "영업/마케팅",
+  "catalog.view": "회사소개서",
+  "catalog.manage": "회사소개서 관리",
   "contact.view": "담당자 정보 관리",
   "data.view": "데이터",
   "trash.view": "휴지통",

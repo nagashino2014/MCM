@@ -6,12 +6,12 @@ import { addHistory, deleteHistory, listHistory, updateHistory } from "@/lib/com
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST: 연혁 추가 { eventYm: 'YYYY-MM', content }
+// POST: 연혁 추가 { eventYm: 'YYYY-MM', content, category? }
 export async function POST(req: NextRequest) {
   try {
     const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
-    const body = (await req.json().catch(() => ({}))) as { eventYm?: string; content?: string };
-    const item = await addHistory(String(body.eventYm ?? ""), String(body.content ?? ""));
+    const body = (await req.json().catch(() => ({}))) as { eventYm?: string; content?: string; category?: string };
+    const item = await addHistory(String(body.eventYm ?? ""), String(body.content ?? ""), body.category);
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "company_profile_update",
@@ -25,20 +25,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PUT: 연혁 수정 { historyId, eventYm, content }
+// PUT: 연혁 수정 { historyId, eventYm?, content?, category?, isPublic?, highlight? }
+//   면허·인증에서 자동으로 만든 줄은 공개·강조만 바뀐다(연월·내용은 원본에서 고친다).
 export async function PUT(req: NextRequest) {
   try {
     const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
-    const body = (await req.json().catch(() => ({}))) as { historyId?: string; eventYm?: string; content?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      historyId?: string;
+      eventYm?: string;
+      content?: string;
+      category?: string;
+      isPublic?: boolean;
+      highlight?: boolean;
+    };
     const historyId = String(body.historyId ?? "");
     if (!historyId) return NextResponse.json({ error: "historyId 가 필요합니다." }, { status: 400 });
-    await updateHistory(historyId, String(body.eventYm ?? ""), String(body.content ?? ""));
+    await updateHistory(historyId, {
+      eventYm: body.eventYm,
+      content: body.content,
+      category: body.category,
+      isPublic: typeof body.isPublic === "boolean" ? body.isPublic : undefined,
+      highlight: typeof body.highlight === "boolean" ? body.highlight : undefined,
+    });
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "company_profile_update",
       targetTable: "company_history",
       targetId: historyId,
-      after: { eventYm: body.eventYm },
+      after: { eventYm: body.eventYm, isPublic: body.isPublic, highlight: body.highlight },
     });
     return NextResponse.json({ history: await listHistory() });
   } catch (err) {
@@ -46,7 +60,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE: 연혁 삭제 ?historyId=
+// DELETE: 연혁 삭제 ?historyId= (자동 줄은 거절 — 비공개로 바꾸거나 원본을 지운다)
 export async function DELETE(req: NextRequest) {
   try {
     const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });

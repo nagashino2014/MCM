@@ -1,4 +1,5 @@
 import { getDb, rowsToObjects } from "@/lib/db";
+import { DASHBOARD_SERVICE_CATEGORIES } from "./contract-categories";
 
 export interface ContractListFilter {
   q?: string;
@@ -597,13 +598,8 @@ export async function getContractDetail(contractId: string) {
 // Contract Dashboard V2 — 엑셀 계약현황 대쉬보드 이전용 집계 계층
 // ---------------------------------------------------------------------------
 
-export const DASHBOARD_SERVICE_CATEGORIES = [
-  "통합환경허가",
-  "장외·화관법",
-  "HAPs 용역",
-  "ESG·탄소중립",
-  "기타 용역",
-] as const;
+// 5대 분류 목록은 클라이언트에서도 쓰도록 contract-categories.ts 로 옮겼다(값 동일).
+export { DASHBOARD_SERVICE_CATEGORIES };
 
 export type DashboardServiceCategory = (typeof DASHBOARD_SERVICE_CATEGORIES)[number];
 

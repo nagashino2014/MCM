@@ -168,4 +168,286 @@ export const SALES_HELP: HelpTopic[] = [
     sources: ["components/sales/bid/BidPackageBoard.tsx", "components/sales/bid/FormProfilePanel.tsx"],
     reviewedAt: "2026-10-20",
   },
+  // ── 회사소개서 ──
+  {
+    id: "catalog.home",
+    label: "회사소개서 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 화면을 다시 열 때 바로 반영됩니다.",
+        "아래 표에서 통합환경허가 최초허가가 어떤 계약으로 셈해졌는지 확인합니다.",
+        "관리 권한이 있으면 위쪽 카드로 실적·인물·고객사 로고 관리 화면에 갑니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "metrics" },
+    sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.cover",
+    label: "표지 디자인 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "표지 4안 중 하나를 누르면 바로 저장됩니다. 기본은 A 잎 창입니다.",
+        "'확정 전' 안(B·C)은 디자인 확정 전이라 이름·모양이 바뀔 수 있습니다.",
+        "[[사진 없는 변형으로 만들기]]는 사진 자리를 비운 변형입니다. C 는 원래 사진이 없습니다.",
+        "이미 발행한 소개서의 표지는 바뀌지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "cover" },
+    sources: ["components/sales/catalog/CatalogCoverPicker.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.metrics",
+    label: "지표 사전 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "지표는 소개서에 찍히는 숫자의 단일 원천입니다. 본문·인포그래픽은 숫자를 직접 쓰지 않고 지표를 연결합니다.",
+        "'완료'는 허가일이 있거나 마지막 대금 단계 계산서가 발행된 계약입니다.",
+        "수행 비율의 분모(환경부 통합허가 완료 사업장 수)는 외부 수치라 출처·기준일과 함께 따로 관리합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "metrics" },
+    sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.initial-permit",
+    label: "최초허가 집계 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "통합환경허가 분류에서 세분류가 최초허가(구 표기 '통합허가', 2017 시범사업 포함)인 계약입니다.",
+        "완료 계약의 사업장 수를 더합니다. 실적 노출 관리에서 지정한 허가 사업장 수가 우선이고, 없으면 결정번호 수, 결정번호도 없으면 1개소로 셉니다.",
+        "업종군(1~5차년도)은 사업장 업종으로 묶습니다. 20개 업종 밖이면 '업종 미판정'입니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "initial-permit" },
+    sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.projects",
+    label: "실적 노출 관리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "모든 계약이 나오고, 대외 표기는 규칙으로 자동 생성됩니다. 줄을 눌러 고칩니다.",
+        "새 계약은 [[미검토]]로 표시됩니다. 확인했으면 [[검토 완료로 저장]] 또는 일괄 [[검토 완료]]를 누릅니다.",
+        "부록에 실을 범위(금액·기간·상태)는 [[표시 범위]] 탭에서 정합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "list" },
+    sources: ["components/sales/catalog/CatalogProjectsBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.display-title",
+    label: "대외 표기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "대외 표기명을 비워 두면 회색 글씨의 자동 표기를 씁니다. 계약명·허가일·결정번호가 바뀌면 자동 표기도 따라 바뀝니다.",
+        "직접 적으면 그 문장이 그대로 실립니다(자동으로 바뀌지 않습니다).",
+        "비공개 고객으로 두면 목록에 '○○사'로 나오고 결정번호는 빠집니다.",
+        "묶음 행 이름이 같은 계약은 같은 분류·연도 안에서 한 줄로 합쳐집니다.",
+        "허가 사업장 수는 한 용역에 여러 사업장 허가가 묶인 통합환경허가 계약에만 적습니다(비우면 결정번호 수).",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "list" },
+    sources: ["components/sales/catalog/CatalogProjectsBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.appendix-rules",
+    label: "표시 범위 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "금액 기준은 '이 금액 이하 미표시'입니다. 0이면 그 분류는 전부 싣습니다. 변경계약 반영 금액으로 판정합니다.",
+        "항상 표시·대표 실적으로 지정한 계약은 금액 기준과 관계없이 실립니다.",
+        "총괄표·본편 숫자는 기본으로 전체 실적을 셉니다. '부록에 표시된 실적만'을 고르면 숫자가 줄어듭니다.",
+        "예상 쪽 수는 A4 가로 부록 표 한 쪽 26줄 기준의 어림값입니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "rules" },
+    sources: ["components/sales/catalog/CatalogProjectsBoard.tsx", "lib/catalog/appendix.ts"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.manual-projects",
+    label: "계약 없는 실적 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "정식 계약 없이 수행한 실적(예: 위임받아 수행하고 대금만 받은 건)을 회사소개서 지표·부록에만 넣습니다.",
+        "계약 관리의 수주·매출·수금 집계에는 들어가지 않습니다.",
+        "실적 목록에는 '계약 없음' 표시로 나오며, 줄을 누르면 이 편집 창이 열립니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "manual" },
+    sources: ["components/sales/catalog/CatalogManualProjects.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.manual-project-form",
+    label: "계약 없는 실적 입력 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "분류·실적 이름은 꼭 적습니다. 통합환경허가는 세분류(최초허가 등)·허가일·결정번호를 적어야 최초허가 건수에 들어갑니다.",
+        "허가 사업장 수는 한 건에 여러 사업장 허가가 묶였을 때만 적습니다(비우면 결정번호 수, 없으면 1).",
+        "날짜는 2020-12-03 또는 2020-12 형식으로 적습니다.",
+        "대외 표기명을 비우면 사업장·허가일·결정번호로 자동 표기합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "manual" },
+    sources: ["components/sales/catalog/CatalogManualProjects.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.people",
+    label: "인물 노출 관리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "사용자관리에 등록된 재직자만 나오며 퇴사하면 바로 빠집니다. 직급이 부장보다 높으면 임원, 부장 이하는 직원입니다.",
+        "구획·게재·사진 칸은 바꾸는 즉시 저장됩니다. 연필 아이콘으로 순서·직함·약력을 적습니다.",
+        "고문 등 촉탁 임원은 임원진 탭의 [[임원 직접 추가]]로, 자문위원은 [[자문위원]] 탭에서 등록합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-people", section: "rules" },
+    sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.people-rules",
+    label: "임원진·기술인력 판정 도움말",
+    blocks: [
+      { kind: "table", head: ["구분", "자동 판정"], rows: [
+        ["임원진", "직급이 부장보다 높은 재직자(사용자관리 기준). 사진은 거부가 아니면 게재"],
+        ["기술인력", "부장 이하 재직자 중 대행업·엔지니어링 등급 보유자. 사진은 동의자만"],
+      ] },
+      { kind: "p", text: "구획 칸에서 사람별로 바꿀 수 있고, 게재 칸의 [[항상 싣기]]·[[빼기]]로 고정합니다." },
+    ],
+    more: { article: "sales.catalog-people", section: "rules" },
+    sources: ["components/sales/catalog/CatalogPeopleBoard.tsx", "lib/catalog/people.ts"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.extra-people",
+    label: "촉탁 임원 직접 입력 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "고문처럼 근로계약 없이 자문(촉탁) 계약을 맺어 사용자관리에 없는 임원을 넣습니다.",
+        "임원진 쪽에 자동 판정 임원과 함께 순서대로 실립니다.",
+        "'인원 포함'이면 임원·임직원 수에 더해집니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-people", section: "extra" },
+    sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.extra-person-form",
+    label: "촉탁 임원 입력 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "사진은 PNG·JPG·WebP, 10MB 이하입니다. 3:4 세로 사진이 잘 맞습니다.",
+        "약력 요약은 3~4줄로 줄바꿈해 적습니다. 상세 경력은 이력 쪽에 쓰입니다.",
+        "[[임원 인원 수에 포함]]을 끄면 임원진 쪽에만 실리고 인원 수에는 들어가지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-people", section: "extra" },
+    sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.org",
+    label: "조직도 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "처음에는 MCM 조직(부서·부서장·인원)으로 만든 기본안이 나옵니다. 소개서용으로 고쳐도 인사 조직은 바뀌지 않습니다.",
+        "[[임시 저장]]은 편집 중 내용만 남기고, [[확정]]하면 새 판으로 기록됩니다. 소개서는 최신 확정판을 씁니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-org", section: "edit" },
+    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.org-edit",
+    label: "조직도 상자 편집 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "왼쪽부터 이름, 아래 줄(책임자·인원 등), 표시(촉탁·자문·외부)입니다.",
+        "화살표 = 같은 단계 안 순서, + = 하위 조직 추가, 휴지통 = 삭제(하위 조직 포함).",
+        "[[MCM 조직에서 다시 불러오기]]는 편집 칸만 다시 채웁니다(확정판은 그대로).",
+      ] },
+    ],
+    more: { article: "sales.catalog-org", section: "edit" },
+    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.org-versions",
+    label: "조직도 판 기록 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "맨 위 판이 회사소개서에 쓰는 판입니다.",
+        "[[불러오기]]는 그 판을 편집 칸으로 가져옵니다. 고친 뒤 확정하면 새 판이 됩니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-org", section: "versions" },
+    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx", "components/sales/catalog/ContentVersions.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.message",
+    label: "대표이사 인사말 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "[[임시 저장]]은 편집 중 내용만 남깁니다. 소개서에는 [[확정]]한 판이 쓰입니다.",
+        "확정할 때마다 새 판으로 기록되고, 지난 판은 지워지지 않습니다.",
+        "본문은 빈 줄로 문단을 나눕니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-message", section: "edit" },
+    sources: ["components/sales/catalog/CatalogMessageBoard.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.message-versions",
+    label: "인사말 판 기록 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "맨 위 판이 회사소개서에 쓰는 판입니다.",
+        "[[불러오기]]는 그 판을 편집 칸으로 가져옵니다. 고친 뒤 확정하면 새 판이 됩니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-message", section: "versions" },
+    sources: ["components/sales/catalog/CatalogMessageBoard.tsx", "components/sales/catalog/ContentVersions.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.clients",
+    label: "고객사 로고 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "소개서 '주요 고객사·협력 기관' 쪽에 실릴 목록입니다. 분류(공공·민간·협회)와 순서대로 놓입니다.",
+        "로고는 PNG·JPG·WebP, 5MB 이하입니다. 흰 바탕 로고가 가장 잘 보입니다.",
+        "[[싣기]]를 끄면 목록에만 남습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-assets", section: "list" },
+    sources: ["components/sales/catalog/CatalogAssetsBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.clients-add",
+    label: "고객사 추가 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "아래 목록은 아직 추가하지 않은 계약 거래처를 계약 많은 순으로 보여 줍니다. [[목록에 추가]]로 넣습니다.",
+        "계약이 없는 협회·공공기관은 위 입력란에 이름을 적고 [[추가]]를 누릅니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-assets", section: "list" },
+    sources: ["components/sales/catalog/CatalogAssetsBoard.tsx"],
+    reviewedAt: "2026-10-21",
+  },
 ];

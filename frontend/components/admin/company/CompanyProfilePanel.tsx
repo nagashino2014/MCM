@@ -10,12 +10,15 @@ import Link from "next/link";
 import {
   BadgeCheck,
   Building2,
+  Eye,
+  EyeOff,
   FileText,
   History,
   Paperclip,
   Pencil,
   Plus,
   Save,
+  Star,
   Trash2,
   Users,
   Wand2,
@@ -54,6 +57,8 @@ interface Profile {
   bizField: string;
   foundedYm: string;
   mainBusiness: string;
+  website: string;
+  email: string;
   credit: CreditRow[];
   creditImage: { storageKey: string; fileName: string } | null;
   finance: FinanceRow[];
@@ -69,18 +74,31 @@ interface HistoryItem {
   historyId: string;
   eventYm: string;
   content: string;
+  category: string;
+  /** 면허·인증에서 자동으로 만든 줄 — 연월·내용은 원본에서 고친다 */
+  sourceTable: string | null;
+  isPublic: boolean;
+  highlight: boolean;
 }
+
+type CredentialKind = "license" | "certification" | "patent" | "award";
 
 interface Credential {
   credentialId: string;
-  kind: "license" | "certification";
+  kind: CredentialKind;
   name: string;
   credentialNo: string;
   issuedAt: string;
   validUntil: string;
   issuer: string;
   note: string;
+  isPublic: boolean;
+  file: { storageKey: string; fileName: string } | null;
 }
+
+const CREDENTIAL_KIND_LABEL: Record<CredentialKind, string> = { license: "면허", certification: "인증", patent: "특허", award: "수상" };
+// 연혁 분류(회사소개서 연혁 쪽 묶음) — lib/company/profile.ts HISTORY_CATEGORIES 와 같은 값
+const HISTORY_CATEGORY_OPTIONS = ["설립", "등록", "인증", "특허", "수상", "조직", "사업"];
 
 // 면허/인증 명칭 선택지 — 직접 입력도 가능(datalist)
 const LICENSE_PRESETS = ["환경컨설팅회사", "엔지니어링 컨설팅업", "통합허가 대행업", "환경전문공사업", "기업부설연구소"];
@@ -112,13 +130,15 @@ function stripComma(value: string): string {
 
 const emptyCredentialDraft = {
   credentialId: null as string | null,
-  kind: "license" as "license" | "certification",
+  kind: "license" as CredentialKind,
   name: "",
   credentialNo: "",
   issuedAt: "",
   validUntil: "",
   issuer: "",
   note: "",
+  /** 문서 분석으로 새로 붙인 증빙(저장 전). null = 기존 파일 유지 */
+  file: null as { storageKey: string; fileName: string } | null,
 };
 
 async function jfetch(url: string, init?: RequestInit) {
@@ -147,6 +167,7 @@ export function CompanyProfilePanel() {
   // 연혁 입력
   const [histYm, setHistYm] = useState("");
   const [histContent, setHistContent] = useState("");
+  const [histCategory, setHistCategory] = useState("");
   const [histEditing, setHistEditing] = useState<string | null>(null);
   const [histBusy, setHistBusy] = useState(false);
 
@@ -207,23 +228,37 @@ export function CompanyProfilePanel() {
       if (histEditing) {
         const data = (await jfetch("/api/admin/company-profile/history", {
           method: "PUT",
-          body: JSON.stringify({ historyId: histEditing, eventYm: histYm, content: histContent }),
+          body: JSON.stringify({ historyId: histEditing, eventYm: histYm, content: histContent, category: histCategory }),
         })) as { history: HistoryItem[] };
         setHistory(data.history);
       } else {
         const data = (await jfetch("/api/admin/company-profile/history", {
           method: "POST",
-          body: JSON.stringify({ eventYm: histYm, content: histContent }),
+          body: JSON.stringify({ eventYm: histYm, content: histContent, category: histCategory }),
         })) as { history: HistoryItem[] };
         setHistory(data.history);
       }
       setHistYm("");
       setHistContent("");
+      setHistCategory("");
       setHistEditing(null);
     } catch (err) {
       alert((err as Error).message);
     } finally {
       setHistBusy(false);
+    }
+  };
+
+  // 연혁 공개·강조 토글 — 회사소개서 연혁 쪽에 실을지/굵게 보일지
+  const patchHistory = async (historyId: string, patch: { isPublic?: boolean; highlight?: boolean }) => {
+    try {
+      const data = (await jfetch("/api/admin/company-profile/history", {
+        method: "PUT",
+        body: JSON.stringify({ historyId, ...patch }),
+      })) as { history: HistoryItem[] };
+      setHistory(data.history);
+    } catch (err) {
+      alert((err as Error).message);
     }
   };
 
@@ -248,8 +283,9 @@ export function CompanyProfilePanel() {
       const data = (await jfetch("/api/admin/company-profile/credentials", {
         method: "POST",
         body: JSON.stringify(credDraft),
-      })) as { credentials: Credential[] };
+      })) as { credentials: Credential[]; history: HistoryItem[] };
       setCredentials(data.credentials);
+      setHistory(data.history ?? history);
       setCredDraft({ ...emptyCredentialDraft });
     } catch (err) {
       alert((err as Error).message);
@@ -261,7 +297,20 @@ export function CompanyProfilePanel() {
   const removeCredential = async (credentialId: string) => {
     if (!confirm("이 면허/인증 항목을 삭제할까요?")) return;
     try {
-      const data = (await jfetch(`/api/admin/company-profile/credentials?credentialId=${encodeURIComponent(credentialId)}`, { method: "DELETE" })) as { credentials: Credential[] };
+      const data = (await jfetch(`/api/admin/company-profile/credentials?credentialId=${encodeURIComponent(credentialId)}`, { method: "DELETE" })) as { credentials: Credential[]; history: HistoryItem[] };
+      setCredentials(data.credentials);
+      setHistory(data.history ?? history);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
+  const toggleCredentialPublic = async (c: Credential) => {
+    try {
+      const data = (await jfetch("/api/admin/company-profile/credentials", {
+        method: "PATCH",
+        body: JSON.stringify({ credentialId: c.credentialId, isPublic: !c.isPublic }),
+      })) as { credentials: Credential[] };
       setCredentials(data.credentials);
     } catch (err) {
       alert((err as Error).message);
@@ -275,18 +324,27 @@ export function CompanyProfilePanel() {
       const fd = new FormData();
       fd.append("file", file);
       const data = (await jfetch("/api/admin/company-profile/credentials/parse", { method: "POST", body: fd })) as {
-        fields: { kind: "license" | "certification"; name: string; credentialNo: string; issuedAt: string; validUntil: string; issuer: string };
+        fields: { kind: "license" | "certification"; name: string; credentialNo: string; issuedAt: string; validUntil: string; issuer: string } | null;
+        file: { storageKey: string; fileName: string };
+        warning?: string;
       };
-      setCredDraft((prev) => ({
-        ...prev,
-        credentialId: null,
-        kind: data.fields.kind,
-        name: data.fields.name || prev.name,
-        credentialNo: data.fields.credentialNo,
-        issuedAt: data.fields.issuedAt,
-        validUntil: data.fields.validUntil,
-        issuer: data.fields.issuer,
-      }));
+      const fields = data.fields;
+      // 수정 중인 항목에 문서를 올리면 증빙만 교체하고 항목 id 는 유지한다
+      setCredDraft((prev) =>
+        fields
+          ? {
+              ...prev,
+              kind: prev.credentialId ? prev.kind : fields.kind,
+              name: fields.name || prev.name,
+              credentialNo: fields.credentialNo,
+              issuedAt: fields.issuedAt,
+              validUntil: fields.validUntil,
+              issuer: fields.issuer,
+              file: data.file,
+            }
+          : { ...prev, file: data.file }
+      );
+      if (data.warning) alert(data.warning);
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -399,6 +457,8 @@ export function CompanyProfilePanel() {
                 <L label="설립년월"><input className="cd-input" value={profile.foundedYm} onChange={(e) => set({ foundedYm: e.target.value })} placeholder="2016-02" /></L>
                 <L label="전화번호"><input className="cd-input" value={profile.phone} onChange={(e) => set({ phone: e.target.value })} /></L>
                 <L label="팩스"><input className="cd-input" value={profile.fax} onChange={(e) => set({ fax: e.target.value })} /></L>
+                <L label="홈페이지"><input className="cd-input" value={profile.website} onChange={(e) => set({ website: e.target.value })} placeholder="www.koensain.kr" /></L>
+                <L label="대표 메일"><input className="cd-input" value={profile.email} onChange={(e) => set({ email: e.target.value })} /></L>
                 <div className="md:col-span-3">
                   <L label="주소"><input className="cd-input" value={profile.address} onChange={(e) => set({ address: e.target.value })} /></L>
                 </div>
@@ -524,15 +584,25 @@ export function CompanyProfilePanel() {
               </h3>
               {/* 연월·주요내용 분리 입력 */}
               <div className="rounded-xl border cd-border-c p-3 mb-3 grid gap-2 text-xs">
-                <L label="연월">
-                  <input className="cd-input !w-[120px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
-                </L>
+                <div className="flex items-end gap-2">
+                  <L label="연월">
+                    <input className="cd-input !w-[120px]" value={histYm} onChange={(e) => setHistYm(e.target.value)} placeholder="2025-01" />
+                  </L>
+                  <L label="분류">
+                    {/* cd-select 는 기본 너비 100% — 인라인 width 로 고정 */}
+                    <select className="cd-select" style={{ width: 96 }} value={histCategory} onChange={(e) => setHistCategory(e.target.value)}>
+                      <option value="">미분류</option>
+                      {HISTORY_CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </L>
+                  <div className="ml-auto pb-2"><CdHelp topic="admin.company-history-auto" /></div>
+                </div>
                 <L label="주요내용">
                   <input className="cd-input" value={histContent} onChange={(e) => setHistContent(e.target.value)} placeholder="예: 기술혁신형 중소기업(Inno-Biz) 인증" />
                 </L>
                 <div className="flex justify-end gap-2">
                   {histEditing && (
-                    <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-2 py-1.5 text-xs" onClick={() => { setHistEditing(null); setHistYm(""); setHistContent(""); }}>
+                    <button type="button" className="cd-btn cd-btn-ghost rounded-lg px-2 py-1.5 text-xs" onClick={() => { setHistEditing(null); setHistYm(""); setHistContent(""); setHistCategory(""); }}>
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -555,14 +625,33 @@ export function CompanyProfilePanel() {
                     </span>
                     <div className="flex items-start gap-2">
                       <span className="text-[11px] font-mono font-bold cd-text-primary shrink-0 mt-0.5">{h.eventYm.replace("-", ". ")}.</span>
-                      <span className="text-xs cd-text flex-1">{h.content}</span>
-                      <span className="opacity-0 group-hover:opacity-100 flex gap-1 shrink-0">
-                        <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => { setHistEditing(h.historyId); setHistYm(h.eventYm); setHistContent(h.content); }}>
-                          <Pencil className="w-3 h-3 cd-text-faint" />
+                      <span className={"text-xs flex-1 " + (h.isPublic ? "cd-text" : "cd-text-faint")}>
+                        {h.highlight && <Star className="w-3 h-3 inline mr-1 -mt-0.5" style={{ color: "var(--cd-warning)" }} aria-label="강조" />}
+                        {h.content}
+                        {h.sourceTable && (
+                          <span className="ml-1.5 text-[10px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint whitespace-nowrap" title="면허·인증에서 자동으로 만든 연혁입니다. 연월·내용은 원본 면허·인증에서 고칩니다.">
+                            {h.category || "인증"} 자동
+                          </span>
+                        )}
+                        {!h.isPublic && <span className="ml-1.5 text-[10px] cd-text-faint whitespace-nowrap">비공개</span>}
+                      </span>
+                      <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex gap-1 shrink-0">
+                        <button type="button" className="cd-btn cd-btn-ghost rounded p-1" title={h.isPublic ? "회사소개서 연혁에서 빼기" : "회사소개서 연혁에 싣기"} aria-label={h.isPublic ? "비공개로" : "공개로"} onClick={() => patchHistory(h.historyId, { isPublic: !h.isPublic })}>
+                          {h.isPublic ? <Eye className="w-3 h-3 cd-text-faint" /> : <EyeOff className="w-3 h-3 cd-text-faint" />}
                         </button>
-                        <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => removeHistory(h.historyId)}>
-                          <Trash2 className="w-3 h-3 cd-text-faint" />
+                        <button type="button" className="cd-btn cd-btn-ghost rounded p-1" title={h.highlight ? "강조 해제" : "주요 연혁으로 강조"} aria-label={h.highlight ? "강조 해제" : "강조"} onClick={() => patchHistory(h.historyId, { highlight: !h.highlight })}>
+                          <Star className="w-3 h-3 cd-text-faint" />
                         </button>
+                        {!h.sourceTable && (
+                          <>
+                            <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => { setHistEditing(h.historyId); setHistYm(h.eventYm); setHistContent(h.content); setHistCategory(h.category); }}>
+                              <Pencil className="w-3 h-3 cd-text-faint" />
+                            </button>
+                            <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => removeHistory(h.historyId)}>
+                              <Trash2 className="w-3 h-3 cd-text-faint" />
+                            </button>
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -624,9 +713,11 @@ export function CompanyProfilePanel() {
               <div className="rounded-xl border cd-border-c p-3 mb-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                 <div className="md:col-span-2 flex items-center gap-2">
                   {/* cd-select 는 기본 너비 100% — 인라인 width 로 고정해야 옆 명칭 입력란이 살아남는다 */}
-                  <select className="cd-select shrink-0" style={{ width: 120 }} value={credDraft.kind} onChange={(e) => setCredDraft((p) => ({ ...p, kind: e.target.value as "license" | "certification" }))}>
+                  <select className="cd-select shrink-0" style={{ width: 120 }} value={credDraft.kind} onChange={(e) => setCredDraft((p) => ({ ...p, kind: e.target.value as CredentialKind }))}>
                     <option value="license">면허/등록증</option>
                     <option value="certification">인증</option>
+                    <option value="patent">특허</option>
+                    <option value="award">수상</option>
                   </select>
                   <input
                     className="cd-input flex-1 min-w-0"
@@ -636,7 +727,7 @@ export function CompanyProfilePanel() {
                     placeholder="명칭 선택 또는 직접 입력"
                   />
                   <datalist id="credential-name-presets">
-                    {(credDraft.kind === "license" ? LICENSE_PRESETS : CERT_PRESETS).map((n) => <option key={n} value={n} />)}
+                    {(credDraft.kind === "license" ? LICENSE_PRESETS : credDraft.kind === "certification" ? CERT_PRESETS : []).map((n) => <option key={n} value={n} />)}
                   </datalist>
                   <UploadButton
                     label={parsing ? "분석 중..." : "문서 분석"}
@@ -650,7 +741,13 @@ export function CompanyProfilePanel() {
                 <input className="cd-input" value={credDraft.issuer} onChange={(e) => setCredDraft((p) => ({ ...p, issuer: e.target.value }))} placeholder="발급기관" />
                 <input className="cd-input" value={credDraft.issuedAt} onChange={(e) => setCredDraft((p) => ({ ...p, issuedAt: e.target.value }))} placeholder="취득일 (2021-08-05)" />
                 <input className="cd-input" value={credDraft.validUntil} onChange={(e) => setCredDraft((p) => ({ ...p, validUntil: e.target.value }))} placeholder="유효기간 만료일 (없으면 비움)" />
-                <div className="md:col-span-2 flex justify-end">
+                <div className="md:col-span-2 flex items-center justify-end gap-2">
+                  {(credDraft.file || (credDraft.credentialId && credentials.find((c) => c.credentialId === credDraft.credentialId)?.file)) && (
+                    <span className="mr-auto text-[10px] cd-text-faint inline-flex items-center gap-1 truncate">
+                      <Paperclip className="w-3 h-3 shrink-0" />
+                      증빙: {credDraft.file?.fileName ?? credentials.find((c) => c.credentialId === credDraft.credentialId)?.file?.fileName}
+                    </span>
+                  )}
                   <button type="button" onClick={submitCredential} disabled={credBusy || !credDraft.name.trim()} className="cd-btn cd-btn-primary rounded-lg px-3.5 py-1.5 text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1">
                     <Plus className="w-3.5 h-3.5" /> {credDraft.credentialId ? "수정 저장" : "추가"}
                   </button>
@@ -662,16 +759,34 @@ export function CompanyProfilePanel() {
                 {credentials.map((c) => (
                   <div key={c.credentialId} className="px-3 py-2 text-xs flex items-center gap-2 group">
                     <span className={"text-[10px] rounded-full px-1.5 py-0.5 shrink-0 " + (c.kind === "license" ? "cd-tint-primary" : "border cd-border-c cd-text-faint")}>
-                      {c.kind === "license" ? "면허" : "인증"}
+                      {CREDENTIAL_KIND_LABEL[c.kind] ?? "면허"}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="cd-text font-semibold truncate">{c.name}{c.credentialNo ? ` (${c.credentialNo})` : ""}</p>
+                      <p className={"font-semibold truncate " + (c.isPublic ? "cd-text" : "cd-text-faint")}>
+                        {c.name}{c.credentialNo ? ` (${c.credentialNo})` : ""}
+                        {!c.isPublic && <span className="ml-1.5 text-[10px] font-normal">비공개</span>}
+                      </p>
                       <p className="text-[10px] cd-text-faint truncate">
                         {[c.issuedAt && `취득 ${c.issuedAt}`, c.validUntil && `유효 ~${c.validUntil}`, c.issuer].filter(Boolean).join(" · ")}
                       </p>
                     </div>
-                    <span className="opacity-0 group-hover:opacity-100 flex gap-1 shrink-0">
-                      <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => setCredDraft({ credentialId: c.credentialId, kind: c.kind, name: c.name, credentialNo: c.credentialNo, issuedAt: c.issuedAt, validUntil: c.validUntil, issuer: c.issuer, note: c.note })}>
+                    {c.file && (
+                      <a
+                        href={`/api/admin/company-profile/credentials/file?credentialId=${encodeURIComponent(c.credentialId)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cd-btn cd-btn-ghost rounded p-1 shrink-0"
+                        title={`증빙 열기: ${c.file.fileName}`}
+                        aria-label="증빙 열기"
+                      >
+                        <Paperclip className="w-3 h-3 cd-text-faint" />
+                      </a>
+                    )}
+                    <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex gap-1 shrink-0">
+                      <button type="button" className="cd-btn cd-btn-ghost rounded p-1" title={c.isPublic ? "회사소개서에서 빼기" : "회사소개서에 싣기"} aria-label={c.isPublic ? "비공개로" : "공개로"} onClick={() => toggleCredentialPublic(c)}>
+                        {c.isPublic ? <Eye className="w-3 h-3 cd-text-faint" /> : <EyeOff className="w-3 h-3 cd-text-faint" />}
+                      </button>
+                      <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => setCredDraft({ credentialId: c.credentialId, kind: c.kind, name: c.name, credentialNo: c.credentialNo, issuedAt: c.issuedAt, validUntil: c.validUntil, issuer: c.issuer, note: c.note, file: null })}>
                         <Pencil className="w-3 h-3 cd-text-faint" />
                       </button>
                       <button type="button" className="cd-btn cd-btn-ghost rounded p-1" onClick={() => removeCredential(c.credentialId)}>

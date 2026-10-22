@@ -46,6 +46,11 @@ export async function PUT(req: NextRequest) {
         bizField: String(body.bizField ?? ""),
         foundedYm: String(body.foundedYm ?? ""),
         mainBusiness: String(body.mainBusiness ?? ""),
+        // 회사소개서 필드 — 보낸 경우만 갱신(생략 = 기존 값 유지)
+        website: typeof body.website === "string" ? body.website : undefined,
+        email: typeof body.email === "string" ? body.email : undefined,
+        vision: typeof body.vision === "string" ? body.vision : undefined,
+        slogan: typeof body.slogan === "string" ? body.slogan : undefined,
         credit: Array.isArray(body.credit)
           ? body.credit.map((c) => ({
               agency: String(c?.agency ?? ""),

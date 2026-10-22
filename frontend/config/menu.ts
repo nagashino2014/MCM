@@ -296,6 +296,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "공공입찰", href: "/sales/bids" },
       // 견적서 작성 — 전자결재 하위에서 영업으로 이동(2026-10-01 사용자 요청). 라우트 경로는 무변경(/approval/quote).
       { title: "견적서 작성", href: "/approval/quote", permissionKey: "sales.view" },
+      // 회사소개서(카탈로그) — 지표·실적 노출·인물·고객사 로고(catalog.view, 관리 화면은 catalog.manage). docs/company-catalog-blueprint.md
+      { title: "회사소개서", href: "/sales/catalog" },
     ],
     group: "main",
   },

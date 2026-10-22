@@ -164,7 +164,9 @@ export type AuditAction =
   | "internal_rule_delete"
   | "internal_rule_revise"
   | "dept_post_create"
-  | "dept_post_revoke";
+  | "dept_post_revoke"
+  // 회사소개서(309·310) — 실적 대외 표기·표시 범위·인물·자문위원·고객사
+  | "catalog_update";
 
 export interface AuditEntry {
   actorUserId: string | null;

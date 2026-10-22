@@ -184,6 +184,33 @@ export const SALES_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-21",
   },
   {
+    id: "catalog.pdf",
+    label: "회사소개서 PDF 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다.",
+        "인쇄·배포본은 검토용 안내문을 숨기고, 작업본은 그대로 보여 줍니다. 실명판에만 부록 C(수행인력 상세 이력)가 붙습니다.",
+        "넘침 경고가 0건인지 확인하고 보내세요. 만든 PDF 는 목록에서 [[미리보기]]·[[받기]] 합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "pdf" },
+    sources: ["components/sales/catalog/CatalogRenderPanel.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.reference",
+    label: "현행 카탈로그 대조 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "현행 카탈로그(2026.06판)에 적힌 수치와 지금 자동 집계를 나란히 봅니다.",
+        "차이가 나면 계약 데이터(분류·세분류·허가일)나 인사 데이터를 확인하거나, 정의가 다른 것인지 판단합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "reference" },
+    sources: ["components/sales/catalog/CatalogReferencePanel.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
     id: "catalog.cover",
     label: "표지 디자인 도움말",
     blocks: [

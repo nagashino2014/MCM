@@ -166,7 +166,9 @@ export type AuditAction =
   | "dept_post_create"
   | "dept_post_revoke"
   // 회사소개서(309·310) — 실적 대외 표기·표시 범위·인물·자문위원·고객사
-  | "catalog_update";
+  | "catalog_update"
+  // 회사소개서 PDF 생성본(P4 렌더러, catalog_editions)
+  | "catalog_render";
 
 export interface AuditEntry {
   actorUserId: string | null;

@@ -13,7 +13,8 @@ import {
   projectSiteCount,
   type CatalogProjectRow,
 } from "./appendix";
-import { listCatalogPeople, listExtraPeople } from "./people";
+import { listCatalogPeople, listExtraPeople, type CatalogPerson } from "./people";
+import type { CatalogExtraPerson } from "./people-types";
 import { listCatalogProjects } from "./projects";
 import { PERMIT_COHORTS, permitCohortId } from "./regions";
 
@@ -250,16 +251,21 @@ export interface MetricsBundle {
   projectsByCategory: Array<{ category: string; count: number; completed: number }>;
 }
 
-export async function computeCatalogMetrics(): Promise<MetricsBundle> {
+/** pre: 이미 읽어 둔 원천(회사소개서 렌더러가 같은 시점의 값을 한 번만 읽도록) — 없으면 여기서 읽는다. */
+export async function computeCatalogMetrics(pre?: {
+  projects?: CatalogProjectRow[];
+  people?: CatalogPerson[];
+  extraPeople?: CatalogExtraPerson[];
+}): Promise<MetricsBundle> {
   const db = await getDb();
-  const projects = await listCatalogProjects();
+  const projects = pre?.projects ?? (await listCatalogProjects());
   const [staffRow, people, extraPeople, advisorRow, profileRow, figureRow] = await Promise.all([
     db.exec(
       `SELECT COUNT(*) FILTER (WHERE TRIM(COALESCE(env_grade, '')) IN ('고급인력', '일반인력')) AS technical
          FROM employee_profiles WHERE COALESCE(status, 'active') <> 'inactive'`
     ),
-    listCatalogPeople(),
-    listExtraPeople(),
+    pre?.people ?? listCatalogPeople(),
+    pre?.extraPeople ?? listExtraPeople(),
     db.exec("SELECT COUNT(*) AS n FROM catalog_advisors WHERE is_public = 1"),
     db.exec("SELECT founded_ym FROM company_profile WHERE profile_id = 'default'"),
     db.exec("SELECT value, as_of, source FROM catalog_external_figures WHERE figure_key = 'permit.sites.total'"),

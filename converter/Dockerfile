@@ -66,7 +66,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 
-COPY converter/app.py converter/office_convert.py ./
+# 회사소개서 PDF(/render/html-pdf) 기본 서체 — print-kit 이 https://print.local/fonts/… 로 가리키는 파일을
+# page.route 가 이 폴더에서 직접 응답한다(외부 네트워크 차단). 원본은 앱 미리보기와 같은 frontend/public/print-kit/fonts.
+COPY frontend/public/print-kit/fonts/ /app/print-fonts/
+ENV MCM_PRINT_FONT_DIR=/app/print-fonts
+
+COPY converter/app.py converter/office_convert.py converter/html_pdf.py ./
 
 EXPOSE 8080
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]

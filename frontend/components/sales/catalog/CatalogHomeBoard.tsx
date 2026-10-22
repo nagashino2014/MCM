@@ -157,6 +157,7 @@ export function CatalogHomeBoard() {
             <span className="text-xs cd-text-muted">
               완료 사업장 <b className="cd-text tabular-nums">{data.initialPermit.sites}</b> · 완료 계약 {data.initialPermit.completedContracts}건 · 수행 중{" "}
               {data.initialPermit.ongoingContracts}건
+              {data.initialPermit.excludedContracts > 0 && ` · 집계 제외 ${data.initialPermit.excludedContracts}건`}
               {data.initialPermit.completedWithoutPermitNo > 0 && ` · 사업장 수·결정번호 없이 1개소로 센 완료 계약 ${data.initialPermit.completedWithoutPermitNo}건`}
             </span>
           )}
@@ -227,8 +228,14 @@ export function CatalogHomeBoard() {
                         <span className={`cd-pill ${r.completed ? "cd-pill-success" : "cd-pill-idle"}`}>{r.completed ? "완료" : "수행 중"}</span>
                       </td>
                       <td className="text-right tabular-nums whitespace-nowrap">
-                        {r.sites || "—"}
-                        {r.siteCountSet && <span className="ml-1 text-[11px] cd-text-faint">지정</span>}
+                        {r.completed && r.siteCountSet && r.sites === 0 ? (
+                          <span className="text-[11px] cd-text-faint">집계 제외</span>
+                        ) : (
+                          <>
+                            {r.sites || "—"}
+                            {r.siteCountSet && <span className="ml-1 text-[11px] cd-text-faint">지정</span>}
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

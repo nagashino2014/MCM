@@ -179,7 +179,7 @@ export interface InitialPermitRow {
   permitNo: string;
   completedAt: string;
   completed: boolean;
-  /** 이 계약이 세는 사업장 수(지정값 → 결정번호 수 → 1) — 미완료면 0 */
+  /** 이 계약이 세는 사업장 수(지정값 → 결정번호 수 → 1) — 미완료·집계 제외(지정 0)면 0 */
   sites: number;
   /** 사업장 수를 직접 지정했는지 */
   siteCountSet: boolean;
@@ -188,7 +188,10 @@ export interface InitialPermitRow {
 export interface InitialPermitDetail {
   /** 지표값 = 완료 사업장 수 */
   sites: number;
+  /** 사업장으로 센 완료 계약 수(집계 제외 제외) */
   completedContracts: number;
+  /** 사업장 수를 0으로 지정해 집계에서 뺀 완료 계약 수 */
+  excludedContracts: number;
   ongoingContracts: number;
   /** 사업장 수 지정도 결정번호도 없어 1로 센 완료 계약 수(대조 시 확인 대상) */
   completedWithoutPermitNo: number;
@@ -219,13 +222,15 @@ export function initialPermitDetailFrom(projects: CatalogProjectRow[]): InitialP
     };
   });
   const done = rows.filter((r) => r.completed);
+  const excluded = done.filter((r) => r.siteCountSet && r.sites === 0).length;
   const byCohort = [
     ...PERMIT_COHORTS.map((c) => ({ id: c.id, label: c.label, sites: done.filter((r) => r.cohortId === c.id).reduce((a, r) => a + r.sites, 0) })),
     { id: "unknown", label: "업종 미판정", sites: done.filter((r) => !r.cohortId).reduce((a, r) => a + r.sites, 0) },
   ];
   return {
     sites: done.reduce((a, r) => a + r.sites, 0),
-    completedContracts: done.length,
+    completedContracts: done.length - excluded,
+    excludedContracts: excluded,
     ongoingContracts: rows.length - done.length,
     completedWithoutPermitNo: done.filter((r) => !r.siteCountSet && !/\d{3,4}-\d{2}/.test(r.permitNo)).length,
     byCohort,

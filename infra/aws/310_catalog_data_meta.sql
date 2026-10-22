@@ -56,6 +56,8 @@ ON CONFLICT (source_table, source_id) WHERE source_table IS NOT NULL DO NOTHING;
 --   reviewed_at: 실적 노출 관리에서 확인한 시각(NULL = 미검토 배지)
 --   site_count: 한 용역이 맡은 허가 사업장 수(최초허가 지표·총괄표 괄호). NULL = 결정번호 수(없으면 1).
 --     예: 2017 환경부 시범사업(엔아이티·진주산업) 2, 한국지역난방공사 중앙지사 3, 세진메탈 1·3공장 2, 동남 울산·서산 2
+--     0 = 최초허가 집계 제외(계약 세분류는 최초허가지만 허가 사업장으로 세지 않는 계약 — 같은 용역의 변경 계약,
+--         소규모사업장 지원사업 컨설팅 등. 스테이징 대조 10-22: 기준 99개소 밖 완료 계약 7건)
 CREATE TABLE IF NOT EXISTS contract_catalog_meta (
   contract_id      text PRIMARY KEY REFERENCES contracts(contract_id) ON DELETE CASCADE,
   display_title    text,
@@ -65,13 +67,16 @@ CREATE TABLE IF NOT EXISTS contract_catalog_meta (
   display_override text NOT NULL DEFAULT 'auto' CHECK (display_override IN ('auto', 'always', 'never')),
   group_key        text,
   note             text,
-  site_count       int  CHECK (site_count BETWEEN 1 AND 50),
+  site_count       int  CHECK (site_count BETWEEN 0 AND 50),
   reviewed_at      text,
   updated_by       text,
   updated_at       text NOT NULL
 );
 -- 이 파일의 앞선 판을 적용한 개발 DB도 같은 결과가 되도록(스테이징 미적용 — CREATE 에 이미 포함)
-ALTER TABLE contract_catalog_meta ADD COLUMN IF NOT EXISTS site_count int CHECK (site_count BETWEEN 1 AND 50);
+ALTER TABLE contract_catalog_meta ADD COLUMN IF NOT EXISTS site_count int CHECK (site_count BETWEEN 0 AND 50);
+-- 앞선 판(1~50)의 검사도 0~50 으로 맞춘다(재실행 시 같은 이름으로 다시 만든다)
+ALTER TABLE contract_catalog_meta DROP CONSTRAINT IF EXISTS contract_catalog_meta_site_count_check;
+ALTER TABLE contract_catalog_meta ADD CONSTRAINT contract_catalog_meta_site_count_check CHECK (site_count BETWEEN 0 AND 50);
 CREATE INDEX IF NOT EXISTS idx_contract_catalog_meta_group ON contract_catalog_meta(group_key) WHERE group_key IS NOT NULL;
 
 -- ── 4-1) 계약 없는 실적 — 정식 계약 없이 수행한 실적을 회사소개서 지표·부록에만 넣는다(계약 관리 수주·매출 집계와 무관) ──

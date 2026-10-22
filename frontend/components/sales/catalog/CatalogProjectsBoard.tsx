@@ -519,7 +519,7 @@ export function CatalogProjectsBoard() {
               </label>
               {editing.category === "통합환경허가" && (
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">허가 사업장 수(한 용역에 여러 사업장이 묶인 경우)</span>
+                  <span className="text-xs cd-text-muted">허가 사업장 수(여러 사업장이 묶인 용역은 2 이상, 최초허가 집계에서 뺄 계약은 0)</span>
                   <input
                     className="cd-input tabular-nums"
                     style={{ width: 120 }}

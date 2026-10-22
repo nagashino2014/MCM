@@ -124,6 +124,7 @@ export function permitSiteCount(permitNo: string): number {
 /**
  * 계약이 세는 허가 사업장 수 — 직접 지정(실적 노출 관리의 사업장 수)이 우선, 없으면 결정번호 수(없으면 1).
  * 묶음 용역 예: 2017 시범사업(엔아이티·진주산업, 결정번호 없음) 2 · 지역난방 중앙지사 3 · 세진메탈 1·3공장 2 · 동남 울산·서산 2.
+ * 0 = 최초허가 집계 제외(같은 용역의 변경 계약·지원사업 컨설팅 등 — 부록 행은 그대로).
  */
 export function projectSiteCount(row: Pick<CatalogProjectRow, "permitNo" | "meta">): number {
   return row.meta?.siteCount ?? permitSiteCount(row.permitNo);

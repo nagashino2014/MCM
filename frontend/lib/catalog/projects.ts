@@ -35,7 +35,7 @@ function mapMeta(r: Record<string, unknown>): ContractCatalogMeta | null {
     displayOverride: (override === "always" || override === "never" ? override : "auto") as DisplayOverride,
     groupKey: s(r.group_key),
     note: s(r.note),
-    siteCount: r.site_count != null && Number(r.site_count) >= 1 ? Number(r.site_count) : null,
+    siteCount: r.site_count != null && Number(r.site_count) >= 0 ? Number(r.site_count) : null,
     reviewedAt: r.reviewed_at != null ? String(r.reviewed_at) : null,
   };
 }
@@ -123,7 +123,7 @@ export interface ProjectMetaPatch {
   displayOverride?: DisplayOverride;
   groupKey?: string;
   note?: string;
-  /** 허가 사업장 수 직접 지정(1~50). null = 결정번호 수로 셈 */
+  /** 허가 사업장 수 직접 지정(0~50, 0 = 최초허가 집계 제외). null = 결정번호 수로 셈 */
   siteCount?: number | null;
   /** true = 검토 완료로 표시(미검토 배지 해제) */
   reviewed?: boolean;
@@ -155,7 +155,7 @@ export async function saveProjectMeta(contractIds: string[], patch: ProjectMetaP
   if (patch.note !== undefined) push("note", s(patch.note).slice(0, 1000) || null);
   if (patch.siteCount !== undefined) {
     const n = patch.siteCount == null ? NaN : Math.round(Number(patch.siteCount));
-    push("site_count", Number.isFinite(n) && n >= 1 && n <= 50 ? n : null);
+    push("site_count", Number.isFinite(n) && n >= 0 && n <= 50 ? n : null);
   }
   if (patch.reviewed !== undefined) sets.push(patch.reviewed ? "reviewed_at = $2" : "reviewed_at = NULL");
   return withDbWrite(async (txn) => {

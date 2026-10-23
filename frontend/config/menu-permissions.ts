@@ -100,6 +100,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/sales/catalog/message", keys: ["catalog.manage"] },
   { path: "/sales/catalog/org", keys: ["catalog.manage"] },
   { path: "/sales/catalog/studio", keys: ["catalog.manage"] },
+  { path: "/sales/catalog/fonts", keys: ["catalog.manage"] },
   { path: "/data", keys: ["data.view"] },
   // ── 시스템 ──
   { path: "/trash", keys: ["trash.view"] },

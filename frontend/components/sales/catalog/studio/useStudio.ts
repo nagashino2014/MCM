@@ -8,7 +8,7 @@ import type { DocumentTheme } from "@/lib/catalog/document-theme";
 import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
 import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "@/lib/catalog/render/types";
-import { usableFontSet } from "@/lib/catalog/fonts";
+import { usableFontSet, type FontSetDef } from "@/lib/catalog/fonts";
 import { composePage, orderedPlan, variantsOf, type ComposedPage } from "@/lib/catalog/studio/compose";
 import { pageState, upsertPage, withOrder, type StudioDoc, type StudioPageState } from "@/lib/catalog/studio/doc";
 import type { PageEdits } from "@/lib/catalog/studio/edits";
@@ -23,6 +23,8 @@ export interface StudioPayload {
   prefs: Record<string, { type: string; variant: string | null }>;
   assets: StudioImageAsset[];
   opts: RenderOptions;
+  /** 서체 라이브러리 세트(사용자 세트) */
+  fontSets?: FontSetDef[];
 }
 
 export interface DocState {
@@ -95,7 +97,7 @@ export function useStudio(docId: string) {
 
   // ── 쪽 계획·트리 ──
   const theme = state?.theme ?? payload?.doc.theme;
-  const fontSet = usableFontSet(theme?.fontSet).id;
+  const fontSet = usableFontSet(theme?.fontSet, payload?.fontSets).id;
   const ctx: RenderCtx | null = useMemo(
     () => (payload && theme ? { url: previewUrl, opts: payload.opts, docLabel: payload.data.docLabel, fontSet, concept: theme.concept } : null),
     [payload, theme, fontSet]

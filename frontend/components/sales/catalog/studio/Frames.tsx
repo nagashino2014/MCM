@@ -45,8 +45,8 @@ export function PortalFrame({
   useEffect(() => {
     const doc = ref.current?.contentDocument;
     const el = doc?.getElementById("st-font");
-    if (el) el.textContent = fontCssFor(fontSet);
-  }, [fontSet, mount]);
+    if (el) el.textContent = fontCssFor(fontSet, kit.fontSets);
+  }, [fontSet, mount, kit]);
   useEffect(() => {
     const doc = ref.current?.contentDocument;
     const el = doc?.getElementById("st-extra");

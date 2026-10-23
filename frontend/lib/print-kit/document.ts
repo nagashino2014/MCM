@@ -14,6 +14,10 @@ export interface PrintFontFace {
   format: "woff" | "woff2" | "truetype" | "opentype";
   /** 크기 보정(%) — 기준 서체와 시각 크기·글자 폭을 맞춘다(@font-face size-adjust, 회사소개서 블루프린트 §5-4) */
   sizeAdjust?: number;
+  /** 윗·아랫 높이·줄 간격 보정(%) — size-adjust 를 곱한 크기 기준(Chromium 실측 2026-10-23) */
+  ascentOverride?: number;
+  descentOverride?: number;
+  lineGapOverride?: number;
 }
 
 export interface PrintConfig {
@@ -48,6 +52,8 @@ export function fontFaceCss(faces: PrintFontFace[]): string {
       (f) =>
         `@font-face { font-family: "${f.family}"; font-weight: ${f.weight}; font-style: ${f.style ?? "normal"}; font-display: block; src: url("${f.url}") format("${f.format}");${
           f.sizeAdjust ? ` size-adjust: ${f.sizeAdjust}%;` : ""
+        }${f.ascentOverride != null ? ` ascent-override: ${f.ascentOverride}%;` : ""}${f.descentOverride != null ? ` descent-override: ${f.descentOverride}%;` : ""}${
+          f.lineGapOverride != null ? ` line-gap-override: ${f.lineGapOverride}%;` : ""
         } }`
     )
     .join("\n");

@@ -1,0 +1,3 @@
+# 회사소개서 업로드 서체 준비(/fonts/prepare) — CFF → TrueType 윤곽(cu2qu)·가변 서체 굵기 고정·WOFF/WOFF2 읽기(brotli)
+# Dockerfile 이 LibreOffice·Chromium 레이어 뒤에 따로 설치한다(앞 레이어 캐시를 깨지 않게).
+fonttools[woff]==4.58.0

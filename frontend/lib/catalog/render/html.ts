@@ -1,12 +1,13 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getCatalogAsset } from "@/lib/catalog/clients";
 import { getCredential } from "@/lib/company/profile";
-import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { buildPrintHtml, type PrintFontFace } from "@/lib/print-kit/document";
 import { PRINT_ORIGIN, type PrintAsset } from "@/lib/print-kit/converter";
 import { contentTypeOf, imageSize, readPublicFile, readPublicText, renderStatic } from "@/lib/print-kit/server";
 import { tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
-import { CONVERTER_BUNDLED_FONTS, usableFontSet } from "@/lib/catalog/fonts";
+import { CONVERTER_BUNDLED_FONTS, facePreviewUrl, facePrintPath } from "@/lib/catalog/fonts";
+import { resolveFontSet } from "@/lib/catalog/font-library";
+import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { STUDIO_PRINT_CSS, composeDocument } from "@/lib/catalog/studio/compose";
 import type { StudioPageState } from "@/lib/catalog/studio/doc";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
@@ -41,6 +42,9 @@ export interface BuiltCatalogHtml {
   /** 데이터·자산 단계 확인 사항 */
   notices: string[];
   cover: CoverChoice;
+  /** 쓴 서체 세트와 업로드 서체 파일(생성본에 남겨 서체를 바꾸거나 꺼도 같은 PDF 를 다시 만든다 — §5-5) */
+  fontSet: string;
+  fonts: Array<{ fontId: string; weight: number; key: string }>;
 }
 
 /** 표지 선택(문서 설정 + 사진 해상도 판정) — 스튜디오도 같은 결과로 그린다 */
@@ -105,7 +109,8 @@ export async function loadImageKey(key: ImageKey): Promise<{ data: Buffer; conte
 
 /**
  * 문서 HTML — 쪽 계획을 노드 트리로 바꿔 스튜디오 편집층(pages, 없으면 기본본)을 얹어 그린다(블루프린트 §9 · P5).
- * 서체 = 문서 서체 세트(lib/catalog/fonts.ts). converter 이미지에 없는 서체 파일은 PDF 요청 자산으로 함께 보낸다.
+ * 서체 = 문서 서체 세트(기본 세트 lib/catalog/fonts.ts · 사용자 세트 서체 라이브러리 font-library.ts). converter 이미지에 없는 서체 파일
+ * (노토·업로드 서체)은 PDF 요청 자산으로 함께 보낸다 — Chromium 이 쓴 글자만 부분 포함한다.
  */
 export async function buildCatalogHtml(
   data: CatalogRenderData,
@@ -114,8 +119,8 @@ export async function buildCatalogHtml(
   const notices = [...data.notices];
   const cover = await chooseCover(data, notices);
   const url = (key: ImageKey) => (opts.target === "print" ? PRINT_ORIGIN + key : previewUrl(key));
-  const set = usableFontSet(data.theme.fontSet);
-  if (set.id !== data.theme.fontSet) notices.push(`서체 세트 '${data.theme.fontSet}'는 아직 서체 파일이 없어 기본 프리텐다드로 만들었습니다.`);
+  const { set, notice } = await resolveFontSet(data.theme.fontSet);
+  if (notice) notices.push(notice);
   const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept };
   const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
   const body = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
@@ -136,14 +141,18 @@ export async function buildCatalogHtml(
     family: f.family,
     weight: f.weight,
     format: "woff",
-    url: opts.target === "print" ? `${PRINT_ORIGIN}fonts/${f.file}` : `/print-kit/fonts/${f.file}`,
+    url: opts.target === "print" ? PRINT_ORIGIN + facePrintPath(f) : facePreviewUrl(f),
     sizeAdjust: f.sizeAdjust,
+    ascentOverride: f.ascentOverride,
+    descentOverride: f.descentOverride,
+    lineGapOverride: f.lineGapOverride,
   }));
   const title = `${data.company.name} 회사소개서 ${data.asOfLabel}${opts.naming === "real" ? " (실명판)" : ""}`;
   const html = buildPrintHtml({
     lang: "ko",
     title,
-    styles: [sheetCss, tokensCss, catalogCss, PRINT_OVERRIDES, STUDIO_PRINT_CSS],
+    // 사용자 세트의 역할 변수(.kc-fontset--u-…)는 디자인 시스템 CSS 뒤에
+    styles: [sheetCss, tokensCss, catalogCss, ...(set.css ? [set.css] : []), PRINT_OVERRIDES, STUDIO_PRINT_CSS],
     fonts,
     body,
     script,
@@ -152,10 +161,17 @@ export async function buildCatalogHtml(
   });
 
   const assets: PrintAsset[] = [];
+  const usedFonts = new Map<string, { fontId: string; weight: number; key: string }>();
+  for (const f of set.faces) if (f.upload) usedFonts.set(facePrintPath(f), { fontId: f.upload.fontId, weight: f.upload.fileWeight, key: f.upload.woffKey });
   if (opts.target === "print") {
+    const sent = new Set<string>();
     for (const f of set.faces) {
-      if (CONVERTER_BUNDLED_FONTS.has(f.file)) continue;
-      assets.push({ path: `fonts/${f.file}`, contentType: "font/woff", data: await readPublicFile(`print-kit/fonts/${f.file}`) });
+      const assetPath = facePrintPath(f);
+      if (sent.has(assetPath) || (!f.upload && CONVERTER_BUNDLED_FONTS.has(f.file))) continue;
+      sent.add(assetPath);
+      const data = f.upload ? await readContractDocument(f.upload.woffKey) : await readPublicFile(`print-kit/fonts/${f.file}`);
+      if (data) assets.push({ path: assetPath, contentType: "font/woff", data });
+      else notices.push(`서체 파일을 읽지 못해 대체 서체로 그렸습니다: ${f.family} ${f.weight}`);
     }
     for (const key of used) {
       const hit = await loadImageKey(key);
@@ -163,5 +179,5 @@ export async function buildCatalogHtml(
       else notices.push(`이미지를 읽지 못해 빈칸으로 남았습니다: ${key}`);
     }
   }
-  return { html, title, assets, notices, cover };
+  return { html, title, assets, notices, cover, fontSet: set.id, fonts: Array.from(usedFonts.values()) };
 }

@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-23",
+    kind: "신규",
+    title: "회사소개서 서체 라이브러리 — 서체 올리기·견본·세트",
+    body: "영업/마케팅 > 회사소개서 > 서체 라이브러리에서 TTF·OTF·WOFF·WOFF2 서체를 굵기별로 한 번에 올립니다. 올리면 굵기·본문 가능/제목 전용·한글 완성형 글자 수·PDF 포함 허용(포함 제한 서체는 등록 불가)을 바로 보여 주고, 라이선스(출처·종류·허용 범위)를 확인해야 등록됩니다. 굵기별 견본을 보고 제목·본문·숫자 세트를 만들면 스튜디오 서체 탭에서 적용할 수 있습니다 — 적용하면 넘침과 함께 문서에 쓰인 글자 중 빠진 글자도 알려 주고, PDF 에는 쓴 글자만 들어가 다른 PC 에서도 같은 모양으로 열립니다.",
+    articles: ["sales.catalog-fonts", "sales.catalog-studio"],
+  },
+  {
     date: "2026-10-22",
     kind: "신규",
     title: "회사소개서 스튜디오 — 쪽을 캔버스에서 고치기",

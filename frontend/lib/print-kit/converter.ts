@@ -105,3 +105,50 @@ export async function renderHtmlPdf(req: HtmlPdfRequest): Promise<HtmlPdfResult>
     renderMs: Number(data.render_ms ?? 0),
   };
 }
+
+export interface PreparedFont {
+  outline: "truetype" | "cff" | "cff2";
+  converted: boolean;
+  variable: boolean;
+  files: Array<{ weight: number; data: Buffer; bytes: number; glyphs: number }>;
+  ms: number;
+}
+
+/**
+ * converter POST /fonts/prepare — 업로드 서체를 정적 TrueType 윤곽 WOFF 로(회사소개서 서체 라이브러리 P5b).
+ * CFF 윤곽은 2차 곡선으로, 가변 서체는 weights 굵기로 고정한다(Chromium PDF 가 둘 다 Type 3 으로 넣기 때문). 한글 가변 서체는 수십 초 걸린다.
+ */
+export async function prepareFont(data: Buffer, weights: number[] = [], timeoutMs = 180_000): Promise<PreparedFont> {
+  const base = process.env.MCM_CONVERTER_URL?.trim();
+  if (!base) throw new ConverterError("문서 변환 서버 주소(MCM_CONVERTER_URL)가 설정되어 있지 않습니다.", 503);
+  const target = await resolveServiceUrl(base);
+  let res: Response;
+  try {
+    res = await fetch(`${target}/fonts/prepare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data_b64: data.toString("base64"), weights }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    const detail = [(err as Error).message, cause?.code, cause?.message].filter(Boolean).join(" / ");
+    console.error("[print-kit] converter 서체 변환 호출 실패:", base, detail);
+    throw new ConverterError(`문서 변환 서버에 연결하지 못했습니다. (${detail})`, 503);
+  }
+  const body = (await res.json().catch(() => null)) as
+    | { detail?: string; outline?: PreparedFont["outline"]; converted?: boolean; variable?: boolean; files?: Array<{ weight: number; data_b64: string; bytes: number; glyphs: number }>; ms?: number }
+    | null;
+  if (!res.ok || !body?.files?.length) {
+    // 옛 converter(엔드포인트 없음)는 404 — 재배포가 필요하다
+    if (res.status === 404) throw new ConverterError("문서 변환 서버에 서체 변환 기능이 없습니다(converter 재배포 필요).", 503);
+    throw new ConverterError(body?.detail ?? `서체 변환 실패(HTTP ${res.status})`, res.status === 503 ? 503 : 422);
+  }
+  return {
+    outline: body.outline ?? "truetype",
+    converted: Boolean(body.converted),
+    variable: Boolean(body.variable),
+    files: body.files.map((f) => ({ weight: Number(f.weight), data: Buffer.from(f.data_b64, "base64"), bytes: Number(f.bytes), glyphs: Number(f.glyphs) })),
+    ms: Number(body.ms ?? 0),
+  };
+}

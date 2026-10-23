@@ -13,6 +13,7 @@ import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { usableFontSet } from "@/lib/catalog/fonts";
 import type { RenderOptions } from "@/lib/catalog/render/types";
 import { EDITION_LABEL, NAMING_LABEL } from "@/lib/catalog/render/types";
 import { spanWidth } from "@/lib/catalog/studio/design-system";
@@ -91,7 +92,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const { theme: uiTheme } = useCdashTheme();
   const { toast } = useCdToast();
   const studio = useStudio(docId);
-  const [kit, setKit] = useState<StudioKit | null>(null);
+  const [baseKit, setKit] = useState<StudioKit | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
   const [curKey, setCurKey] = useState<string>("c01");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -119,6 +120,9 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   useEffect(() => {
     if (studio.payload) setAssets(studio.payload.assets);
   }, [studio.payload]);
+  // 지면 키트 + 서체 라이브러리 세트(업로드 서체) — 캔버스·썸네일·검사 틀이 모두 이 키트로 서체를 싣는다
+  const fontSets = studio.payload?.fontSets;
+  const kit = useMemo(() => (baseKit ? { ...baseKit, fontSets: fontSets ?? [] } : null), [baseKit, fontSets]);
 
   useEffect(() => {
     const ro = new ResizeObserver(() => {
@@ -256,7 +260,9 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
           return renderToStaticMarkup(renderNode(t, studio.env!, { decorate: (n, props) => (n.id === t.id ? { ...props, "data-studio-key": p.key } : props) }) as ReactElement);
         })
         .join("");
-      const res = await runFullCheck(frameDocument(kit, studio.fontSet, { body: `<div class="pk-book">${body}</div>`, script: "paginate" }));
+      // 서체 라이브러리 세트면 빠진 글자(역할 서체에 없어 프리텐다드로 채워지는 글자)도 찾는다
+      const roleFonts = usableFontSet(studio.fontSet, kit.fontSets).roleFonts;
+      const res = await runFullCheck(frameDocument(kit, studio.fontSet, { body: `<div class="pk-book">${body}</div>`, script: "paginate" }), 60000, roleFonts);
       setFullCheck(res);
     } finally {
       setChecking(false);

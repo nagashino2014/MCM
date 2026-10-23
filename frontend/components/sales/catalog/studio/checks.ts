@@ -6,6 +6,10 @@
 //   해상도: 사진이 쪽에 놓인 크기 대비 원본 화소 — 인쇄 300dpi 권장, 150dpi 미만 경고
 //   글자 크기: 7pt 미만(디자인 시스템 최소 각주 7pt)
 // 전체 검사: 모든 쪽을 정적 HTML 로 숨은 틀에 싣고 paginate 로 쪽을 나눈 뒤 넘침 경고를 쪽 키별로 모은다(서체 바꾼 뒤 재검사).
+//   서체 라이브러리 세트면 문서에 실제로 쓰인 글자 중 역할 서체에 없는 글자(빠진 글자 — 프리텐다드로 채워짐)도 모은다.
+
+import type { RoleFontInfo } from "@/lib/catalog/fonts";
+import { FONT_ROLE_LABEL, inRanges, type FontRole } from "@/lib/catalog/font-types";
 
 export type CheckKind = "overflow" | "contrast" | "resolution" | "size";
 
@@ -141,16 +145,93 @@ export function checkSheet(win: Window, sheet: HTMLElement): CheckItem[] {
   return out;
 }
 
+/** 역할 서체에 없어 대체 서체가 그린 글자 */
+export interface GlyphMiss {
+  role: FontRole;
+  label: string;
+  /** 빠진 글자(겹치지 않게, 앞 60자) */
+  chars: string;
+  distinct: number;
+  /** 문서에 나온 횟수 */
+  count: number;
+  /** 나온 쪽 키(앞 6개) */
+  pages: string[];
+  /** 본문·제목의 한글이 빠졌거나 종류가 많다 — 서체를 바꾸는 편이 낫다 */
+  severe: boolean;
+}
+
 export interface FullCheckResult {
   pages: number;
   /** 쪽 키 → 넘침 경고 */
   byKey: Record<string, Array<{ message: string; text?: string }>>;
   total: number;
+  /** 빠진 글자(서체 라이브러리 세트만) */
+  glyphs?: GlyphMiss[];
   error?: string;
 }
 
-/** 문서 전체 넘침 검사 — 정적 쪽 HTML(루트에 data-studio-key)을 숨은 틀에서 paginate 로 나눠 본다 */
-export function runFullCheck(srcDoc: string, timeoutMs = 60000): Promise<FullCheckResult> {
+const isBlank = (cp: number) => cp <= 0x20 || cp === 0xa0 || cp === 0xad || cp === 0xfeff || (cp >= 0x2000 && cp <= 0x200f) || (cp >= 0x2028 && cp <= 0x202f);
+
+/** 문서 글자 중 역할 서체에 없는 것 — 글자의 계산된 font-family 첫 이름(kcs-{세트}-{역할})으로 역할을 찾는다 */
+export function findMissingGlyphs(doc: Document, win: Window, roleFonts: Partial<Record<FontRole, RoleFontInfo>>): GlyphMiss[] {
+  const byFamily = new Map<string, { role: FontRole; info: RoleFontInfo }>();
+  // 기준 서체 프리텐다드는 빼고 본다(前·現 같은 한자는 원래 시스템 대체 서체가 그린다 — P4)
+  for (const [role, info] of Object.entries(roleFonts) as Array<[FontRole, RoleFontInfo | undefined]>)
+    if (info && info.fontId !== "b-pretendard") byFamily.set(info.family.toLowerCase(), { role, info });
+  if (!byFamily.size) return [];
+  const cache = new Map<Element, { role: FontRole; info: RoleFontInfo } | null>();
+  const acc = new Map<FontRole, { info: RoleFontInfo; chars: Map<string, number>; pages: Set<string> }>();
+  const root = doc.querySelector(".pk-book") ?? doc.body;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    if (!el) continue;
+    let hit = cache.get(el);
+    if (hit === undefined) {
+      hit = null;
+      if (!el.closest(".pk-outline, svg, [aria-hidden='true']") && el.getClientRects().length) {
+        const first = win.getComputedStyle(el).fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").toLowerCase() ?? "";
+        hit = byFamily.get(first) ?? null;
+      }
+      cache.set(el, hit);
+    }
+    if (!hit) continue;
+    for (const ch of n.nodeValue ?? "") {
+      const cp = ch.codePointAt(0) ?? 0;
+      if (isBlank(cp) || inRanges(hit.info.ranges, cp)) continue;
+      const a = acc.get(hit.role) ?? { info: hit.info, chars: new Map<string, number>(), pages: new Set<string>() };
+      acc.set(hit.role, a);
+      a.chars.set(ch, (a.chars.get(ch) ?? 0) + 1);
+      const key = el.closest(".pk-sheet")?.getAttribute("data-studio-key");
+      if (key) a.pages.add(key);
+    }
+  }
+  const order: FontRole[] = ["display", "body", "figure"];
+  return order
+    .filter((r) => acc.has(r))
+    .map((role) => {
+      const a = acc.get(role)!;
+      const chars = Array.from(a.chars.keys());
+      const hangul = chars.some((c) => /[가-힣]/.test(c));
+      return {
+        role,
+        label: a.info.label,
+        chars: chars.slice(0, 60).join(""),
+        distinct: chars.length,
+        count: Array.from(a.chars.values()).reduce((x, y) => x + y, 0),
+        pages: Array.from(a.pages).slice(0, 6),
+        severe: (role !== "figure" && hangul) || chars.length > 20,
+      };
+    });
+}
+
+/** 빠진 글자 한 줄 설명 */
+export function glyphMissText(g: GlyphMiss): string {
+  return `${FONT_ROLE_LABEL[g.role]} 서체 '${g.label}'에 없는 글자 ${g.distinct}자(${g.count}곳)`;
+}
+
+/** 문서 전체 넘침 검사 — 정적 쪽 HTML(루트에 data-studio-key)을 숨은 틀에서 paginate 로 나눠 본다. roleFonts 를 주면 빠진 글자도 찾는다 */
+export function runFullCheck(srcDoc: string, timeoutMs = 60000, roleFonts?: Partial<Record<FontRole, RoleFontInfo>>): Promise<FullCheckResult> {
   return new Promise((resolve) => {
     const frame = document.createElement("iframe");
     frame.setAttribute("aria-hidden", "true");
@@ -180,7 +261,13 @@ export function runFullCheck(srcDoc: string, timeoutMs = 60000): Promise<FullChe
         const key = sheets[(w.page ?? 1) - 1]?.getAttribute("data-studio-key") ?? "?";
         (byKey[key] ??= []).push({ message: w.message, text: w.text });
       }
-      finish({ pages: res.pages, byKey, total: Object.values(byKey).reduce((a, l) => a + l.length, 0) });
+      let glyphs: GlyphMiss[] | undefined;
+      try {
+        glyphs = roleFonts && frame.contentWindow ? findMissingGlyphs(doc, frame.contentWindow, roleFonts) : undefined;
+      } catch {
+        glyphs = undefined;
+      }
+      finish({ pages: res.pages, byKey, total: Object.values(byKey).reduce((a, l) => a + l.length, 0), glyphs });
     }, 250);
     const limit = setTimeout(() => finish({ pages: 0, byKey: {}, total: 0, error: "검사 시간이 초과됐습니다." }), timeoutMs);
     frame.srcdoc = srcDoc;

@@ -66,12 +66,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
 RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 
+# 회사소개서 업로드 서체 준비(/fonts/prepare) — fontTools 로 CFF → TrueType 윤곽·가변 서체 굵기 고정(Chromium PDF 부분 포함용).
+# 위 레이어(LibreOffice·Chromium) 캐시를 깨지 않도록 따로 설치한다.
+COPY converter/requirements-fonts.txt ./requirements-fonts.txt
+RUN pip install --no-cache-dir -r requirements-fonts.txt
+
 # 회사소개서 PDF(/render/html-pdf) 기본 서체 — print-kit 이 https://print.local/fonts/… 로 가리키는 파일을
 # page.route 가 이 폴더에서 직접 응답한다(외부 네트워크 차단). 원본은 앱 미리보기와 같은 frontend/public/print-kit/fonts.
 COPY frontend/public/print-kit/fonts/ /app/print-fonts/
 ENV MCM_PRINT_FONT_DIR=/app/print-fonts
 
-COPY converter/app.py converter/office_convert.py converter/html_pdf.py ./
+COPY converter/app.py converter/office_convert.py converter/html_pdf.py converter/font_prepare.py ./
 
 EXPOSE 8080
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]

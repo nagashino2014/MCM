@@ -468,6 +468,56 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - 스튜디오 화면 틀은 Precision UI 규칙을 따르고, **문서 지면은 UI 기준 §6 예외**(문서 미리보기·출력물)로 카탈로그 토큰을 쓴다.
 - 품질 검사(SR 린트 계승): 최소 글자 크기, 대비 4.5:1, 사진 해상도(인쇄 300dpi·화면 150dpi), 캡션 누락, 한 줄 사진 비율 혼용, 지표 각주 누락, 빈 슬롯·"TBD".
 
+### 8-4. P5 구현 기록(2026-10-22)
+
+**문서 모델 = '기본 트리 + 편집층'.** 쪽의 노드 트리는 저장하지 않고 열 때마다 쪽 계획(React 쪽 컴포넌트)에서 다시 만든다. 사용자가 고친 것만
+편집층(`catalog_pages.tree` = PageEdits)으로 저장해 같은 노드 id 에 다시 얹는다 → 계약이 늘어 데이터가 바뀌어도 기본 트리는 새 값, 편집은 그대로.
+노드 id 는 React 재조정 규칙과 같은 '자리'(부모 경로 + key 또는 순번 + 태그)의 해시라 같은 데이터 모양이면 같고, 목록이 늘어도 뒤 형제 id 는 그대로다.
+
+| 자리 | 내용 |
+|---|---|
+| `frontend/lib/doc-tree/` | 공용 핵심 — `tree-core.ts`(찾기·복제·순회) · `inline-core.ts`(문단 블록 직렬화·역파싱 순회). recruit `inline.ts`·`tree-ops.ts` 는 이 위에 얇게 감쌈(동작 동일, 회귀 시험 `tests/recruit-doc-tree-regression.test.ts` 가 추출 전 원본과 대조) |
+| `frontend/lib/catalog/render/components/plan.tsx` | 쪽 계획 — 쪽 키(데이터가 바뀌어도 같은 쪽은 같은 키: `c04`, `area-3`, `a02-1` …)·쪽 유형·섹션·편집 상한(L1/L2/L3)·흐름 여부. `document.tsx` 는 이 계획을 그대로 그림 |
+| `frontend/lib/catalog/render/infographic/` | 인포그래픽 내용·모양 분리(§4) — `types.ts`(InfoContent·16유형 메타·정리) · `render.tsx`(유형별 그리기, 기본 유형은 P4 부품 재사용) · `slot.tsx`(InfoSlot, 바깥 요소에 `data-widget="infographic"`·`data-slot`) · `match.ts`(형태 판별 + 적합도 점수, §4-3 1·2단계) · `adapt.ts` |
+| `frontend/lib/catalog/studio/` | `nodes.ts`(CNode = recruit DocNode 확장: className·attrs·bind·widget·props·asset) · `convert.ts`(쪽 요소 → 노드 트리, Icon → x-icon, InfoSlot → 인포그래픽 위젯, `data-metric`/`data-bind` → bind, `data-widget` → 데이터 위젯) · `render-tree.tsx`(정적 그리기, 바인딩 칩 최신 값) · `edits.ts`(편집층 형식·정리·적용·조작) · `doc.ts`(쪽 순서·숨김) · `compose.ts` · `select.ts`(선택 규칙·L1–L3 권한) · `inline.ts`(글 고치기 칩 보존) · `design-system.ts`(12열 그리드·4pt·타입 스케일·토큰 팔레트) · `store.ts`(DB) |
+| `frontend/lib/catalog/fonts.ts` · `public/print-kit/fonts/` | 서체 세트 — 프리텐다드(기본)·노토 산스·명조 제목(노토 세리프 제목 + 노토 산스). 노토는 Windows 기본 설치 가변 서체(OFL)에서 굵기 고정·한글 11,172자 부분 집합 TrueType WOFF(`scripts/catalog/noto_static_woff.py`, `LICENSE-Noto.txt`). 크기 보정 size-adjust = 프리텐다드 한글 평균 폭 ÷ 그 서체(노토 산스 93.9%·세리프 89.4%). converter 이미지에 없는 서체는 PDF 요청 자산으로 함께 보낸다(재배포 불필요). IBM Plex 는 파일이 없어 비활성 |
+| API | `GET·PUT /api/catalog/studio`(열기: 문서 상태 + 지금 렌더 데이터 + 표지 선택 + 선택 기록 + 사진 목록 / 자동 저장: rev 충돌 409) · `GET·POST /api/catalog/studio/versions` · `GET /api/catalog/studio/versions/{n}` · `POST /api/catalog/studio/prefs` — 모두 catalog.manage. PDF·HTML 미리보기(P4 API)는 저장된 편집층을 얹어 만든다 |
+| 화면 | `/sales/catalog/studio`(catalog.manage, 첫 화면 카드 '스튜디오') — `components/sales/catalog/studio/*`. 지면은 iframe 안(PDF 와 같은 CSS·서체, 앱 CSS 와 분리 — UI 기준 §6 예외). 캔버스는 React 포털, 썸네일·후보 미리보기는 정적 HTML |
+| 마이그레이션 | 없음 — 309 의 `catalog_pages`(page_id = `{doc_id}:{쪽 키}`, order_no = 순서+1·0 = 쪽 계획 순서, hidden, tree = 편집층)·`catalog_versions`·`catalog_infographic_prefs`·`catalog_documents.theme`(concept·fontSet 추가) 그대로 사용 |
+
+편집층(PageEdits)과 수준
+
+| 편집 | 저장 자리 | 수준 |
+|---|---|---|
+| 글 고치기(지표 칩 보존) · 목록 항목 추가·삭제·순서 | `nodes[id].content`(고정 — 그 요소만 자동 갱신 제외, 칩은 최신 값) | L1 |
+| 사진 교체·초점·확대·맞춤 | `nodes[id].image`(catalog_assets `a/…`·키트 `k/…`) | L1 |
+| 숨김 · 인포그래픽 유형·변형·색 모드·내용 · 열 수 · 사진 비율 · 쪽 변형(분야 히어로 사진·개요 그림) · 색 컨셉 · 표지 디자인 · 쪽 순서·숨김 | `nodes[id].hidden/info/style` · `variant` · `catalog_documents.theme` · `catalog_pages.order_no/hidden` | L2 |
+| 옮기기·크기(12열·4pt 맞춤) · 타입 스케일 단계 · 토큰 색 · 글상자·도형·이미지 추가 | `nodes[id].style/type` · `added` | L3 |
+
+- 데이터 위젯(대표 실적·명단·표·연혁·조직도·로고·증서·지도·업종 칩) 안은 고르지 않고 통째로만 숨김·배치 — 행은 데이터 화면. 흐름·자동 분쪽 쪽은 L2, 부록은 L1.
+- 정리(sanitize): 편집층은 신뢰하지 않는 입력 — 태그·속성·클래스·바인딩 경로 화이트리스트, 스타일은 키별 규칙(색 = `var(--토큰)`만, 길이 = px 범위, 글자 크기는 타입 스케일 단계로만), 이미지 키 모양, 노드 수 상한.
+- 품질 검사: 캔버스 쪽마다 paginate.js 의 checkSheet(`__pkCheckSheet`, `__pkConfig.manual` 이면 쪽 나누기 생략) + 대비 4.5:1·사진 dpi·7pt. 전체 검사 = 모든 쪽 정적 HTML 을 숨은 틀에서 paginate 로 나눠 쪽 키별 넘침.
+- 인포그래픽 유형 선택은 `catalog_infographic_prefs`(slot_key = `area-1.process` 등)에 남겨 다음 추천 점수에 더한다.
+
+검증(2026-10-22, 로컬 — 일회용 PG: 스테이징 스키마 덤프 + 309·310 + P4 가상 데이터, AWS 자격증명 차단, converter = P4 로컬 이미지)
+
+| 기준 | 결과 |
+|---|---|
+| 변환 충실도 | ✅ 모든 쪽(마스킹·인쇄 / 실명·작업본)에서 노드 트리로 그린 HTML = 쪽 컴포넌트 HTML(속성 순서 무관 비교) — `npm run test:catalog-studio` |
+| 데이터 갱신 뒤 편집 유지 | ✅ 시험(가상 데이터 A → 계약 1건 추가 B) + 실제 DB: 표지 사진 교체·고친 문장·인포그래픽(단계 흐름 → 기둥) 유지, 문장 속 지표 칩 87→88건, 분야 히어로 436→437건, 새 대표 실적 반영 |
+| 편집본 PDF | ✅ converter 로 78쪽·7.4MB·9.2초·넘침 0건(프리텐다드), 명조 제목 세트 78쪽·넘침 0건 — `AAAAAA+NotoSerifKR-Bold` 등 Type0 부분 포함 |
+| 서체 교체 재검사 | ✅ 노토 산스 적용 → 넘침 2건(보정 전) → size-adjust 뒤 1건(숫자로 보는 KESI 큰 문장) — 화면이 넘친 쪽과 [원래 서체로]를 보여 줌 |
+| recruit 회귀 | ✅ 인라인 역파싱·직렬화·문단 판정·트리 조작 11종이 추출 전 원본과 같음 |
+| 화면 | ✅ 라이트/다크 · 1440/1024(가로 넘침 없음) · 키보드(Tab: 머리 단추 → 지금 쪽 → 쪽 단추 → 도구줄 → 캔버스 → 패널 탭, 쪽 목록 방향키, 쪽 요소 Enter 선택, Ctrl+Z/Y·방향키 이동·Delete 숨김) · 새 세션 콘솔 오류 0 |
+
+실측 함정(다시 밟지 말 것)
+- **캔버스 검사는 배율을 풀고** — checkSheet 는 getBoundingClientRect(배율 적용)와 계산 padding(배율 미적용)을 섞어 쓴다. transform scale 상태로 재면 쪽 머리 글자가 모두 '여백 넘침'으로 잡힌다 → 검사 순간만 transform none.
+- **iframe color-scheme** — 앱이 다크이고 틀 문서가 라이트면 Chromium 이 iframe 바탕을 흰 판으로 덮는다 → iframe 요소에 `color-scheme: light`.
+- **react-dom/server 는 브라우저 판** — 칩·썸네일 정적 HTML 에 쓴다. 스튜디오 진입은 `next/dynamic(ssr:false)`.
+- **contentEditable 칩** — 정적 렌더한 칩 요소에 `contentEditable="false"` 를 줄 때 `suppressContentEditableWarning` 필요.
+- **color-mix 계산 색** — 계산 스타일이 `color(srgb …)` 로 나와 rgb 파서만 쓰면 대비가 거짓 경고된다.
+- **CdHelp 는 p 안에 두지 않는다**(팝오버 div·ul 중첩 오류).
+
 ---
 
 ## 9. 렌더링·출력
@@ -550,7 +600,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | 경로(안) | 화면 | 권한 |
 |---|---|---|
 | `/sales/catalog` | 회사소개서 목록(마스터·맞춤판), 최근 발행본, 반영 대기 | catalog.view |
-| `/sales/catalog/[docId]` | 스튜디오(§8-3) | catalog.manage(발행은 catalog.publish) |
+| `/sales/catalog/studio`(✅ P5, 맞춤판은 `?doc=`) | 스튜디오(§8-3·8-4) | catalog.manage(발행은 catalog.publish) |
 | `/sales/catalog/projects` | 실적 노출 관리(대외 표기·노출·대표 실적·묶음) | catalog.manage |
 | `/sales/catalog/people` | 인물 노출 관리(임원·직원·자문위원, 사진 동의) | catalog.manage |
 | `/sales/catalog/assets` | 사진·로고·증서 자산 | catalog.manage |
@@ -572,7 +622,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P2 쪽 유형 목업** ✅ | 디자인 캔버스: C01–C19·A01–A03 + **인포그래픽 갤러리 보드** + **서체 비교 보드** + 색 컨셉 2–3종 비교. **현행 카탈로그의 실제 내용**으로(개인정보는 마스킹) | [Design 캔버스](https://claude.ai/artifact/2bMEZ7oMfZbNUfCtswStMb)(10-21) → 사용자 결정 대기 | P1 | L |
 | **P3 데이터 기반** | 마이그 309·310(번호 재확인), 회사 프로필 보강(연혁 자동 후보·특허·증빙 저장 수정), 지표 사전, 실적 대외 표기 규칙 + 백필 검토 화면, 인물·자문위원·고객사 관리 | 데이터 화면·API | P0(D6·D8·D9) | L |
 | **P4 렌더러** ✅ | `print-kit`(tokens → CSS, paginate.js 이식, 시트 모델), 쪽 유형·위젯 React 컴포넌트, converter `/render/html-pdf` + 기본 서체 세트·서체 라우팅, 첫 자동 생성 PDF, **현행 46장 대비 수치 대조 리포트** | PDF 생성(§9-1, 10-22) · `/sales/catalog` PDF 만들기·미리보기·받기 · 현행 카탈로그 대조 표 | P2·P3 | L |
-| **P5 스튜디오** | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | 스튜디오 화면 | P4 | L |
+| **P5 스튜디오** ✅ | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | `/sales/catalog/studio`(§8-4, 10-22) | P4 | L |
 | **P5b 서체 라이브러리** | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·WOFF2 변환·견본 화면·크기 보정값 계산 | 서체 화면·API | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | AI 편집 | P5 | M |
 | **P7 자동 갱신·발행** | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력 | 운영 전환 | P4(P5와 병행 가능) | M |

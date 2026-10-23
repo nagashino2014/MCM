@@ -1,31 +1,15 @@
 /**
  * 노드트리 편집 조작 — 에디터의 텍스트 커밋·반복 항목 추가/삭제/이동.
  * 모든 함수는 원본을 건드리지 않고 새 트리를 돌려준다(undo/redo 스냅샷 스택과 호환).
+ * 트리 찾기·복제는 회사소개서 스튜디오와 같이 쓰는 공용 핵심(lib/doc-tree/tree-core.ts)을 쓴다.
  */
 import type { DocNode } from "./types";
 import { isInlineBlock } from "./inline";
+import { cloneTree, findWithParent as findWithParentCore, genNodeId } from "@/lib/doc-tree/tree-core";
 
-function clone(tree: DocNode): DocNode {
-  return JSON.parse(JSON.stringify(tree)) as DocNode;
-}
-
-function genId(): string {
-  return "n" + Math.random().toString(36).slice(2, 10);
-}
-
-/** id 로 노드와 그 부모를 찾는다. */
-function findWithParent(root: DocNode, id: string): { node: DocNode; parent: DocNode | null } | null {
-  if (root.id === id) return { node: root, parent: null };
-  const stack: DocNode[] = [root];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    for (const child of cur.children ?? []) {
-      if (child.id === id) return { node: child, parent: cur };
-      stack.push(child);
-    }
-  }
-  return null;
-}
+const clone = (tree: DocNode): DocNode => cloneTree(tree);
+const genId = (): string => genNodeId("n");
+const findWithParent = (root: DocNode, id: string) => findWithParentCore<DocNode>(root, id);
 
 export function findNode(root: DocNode, id: string): DocNode | null {
   return findWithParent(root, id)?.node ?? null;

@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getCatalogAsset } from "@/lib/catalog/clients";
 import { getCredential } from "@/lib/company/profile";
@@ -7,7 +6,10 @@ import { buildPrintHtml, type PrintFontFace } from "@/lib/print-kit/document";
 import { PRINT_ORIGIN, type PrintAsset } from "@/lib/print-kit/converter";
 import { contentTypeOf, imageSize, readPublicFile, readPublicText, renderStatic } from "@/lib/print-kit/server";
 import { tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
-import { CatalogDocument } from "./components/document";
+import { CONVERTER_BUNDLED_FONTS, usableFontSet } from "@/lib/catalog/fonts";
+import { STUDIO_PRINT_CSS, composeDocument } from "@/lib/catalog/studio/compose";
+import type { StudioPageState } from "@/lib/catalog/studio/doc";
+import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import type { CoverChoice } from "./components/pages-front";
 import { PRINT_OVERRIDES } from "./print-overrides";
 import tokensJson from "./tokens.json";
@@ -21,14 +23,6 @@ import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "./ty
  */
 
 export type RenderTarget = "print" | "preview";
-
-const FONT_FILES: Array<{ weight: number; file: string }> = [
-  { weight: 400, file: "Pretendard-Regular.woff" },
-  { weight: 600, file: "Pretendard-SemiBold.woff" },
-  { weight: 700, file: "Pretendard-Bold.woff" },
-];
-/** 기본 서체 세트 — 서체 라이브러리(P5b) 전까지는 프리텐다드만 들어 있다(converter 이미지에도 같은 파일). */
-const BUNDLED_FONT_SETS = new Set(["pretendard"]);
 
 /** 표지 사진 — 표시 상자(pt)와 맞춤 방식. 효과 해상도 = 72 ÷ (pt/px). */
 const COVER_PHOTO: Record<CoverChoice["cover"], { file: string; box: [number, number]; fit: "cover" | "width" } | null> = {
@@ -49,7 +43,8 @@ export interface BuiltCatalogHtml {
   cover: CoverChoice;
 }
 
-async function chooseCover(data: CatalogRenderData, notices: string[]): Promise<CoverChoice> {
+/** 표지 선택(문서 설정 + 사진 해상도 판정) — 스튜디오도 같은 결과로 그린다 */
+export async function chooseCover(data: CatalogRenderData, notices: string[]): Promise<CoverChoice> {
   const cover = data.theme.cover;
   const spec = COVER_PHOTO[cover];
   if (!spec || data.theme.coverPhoto === "none") return { cover, photo: null };
@@ -108,38 +103,47 @@ export async function loadImageKey(key: ImageKey): Promise<{ data: Buffer; conte
   return null;
 }
 
-export async function buildCatalogHtml(data: CatalogRenderData, opts: RenderOptions & { target: RenderTarget }): Promise<BuiltCatalogHtml> {
+/**
+ * 문서 HTML — 쪽 계획을 노드 트리로 바꿔 스튜디오 편집층(pages, 없으면 기본본)을 얹어 그린다(블루프린트 §9 · P5).
+ * 서체 = 문서 서체 세트(lib/catalog/fonts.ts). converter 이미지에 없는 서체 파일은 PDF 요청 자산으로 함께 보낸다.
+ */
+export async function buildCatalogHtml(
+  data: CatalogRenderData,
+  opts: RenderOptions & { target: RenderTarget; pages?: StudioPageState[] }
+): Promise<BuiltCatalogHtml> {
   const notices = [...data.notices];
   const cover = await chooseCover(data, notices);
+  const url = (key: ImageKey) => (opts.target === "print" ? PRINT_ORIGIN + key : previewUrl(key));
+  const set = usableFontSet(data.theme.fontSet);
+  if (set.id !== data.theme.fontSet) notices.push(`서체 세트 '${data.theme.fontSet}'는 아직 서체 파일이 없어 기본 프리텐다드로 만들었습니다.`);
+  const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept };
+  const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
+  const body = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
+  // 실제로 그린 이미지만 converter 에 보낸다(숨긴 쪽·숨긴 요소·바꾼 사진의 원래 그림은 빼고)
   const used = new Set<ImageKey>();
-  const url = (key: ImageKey) => {
-    used.add(key);
-    return opts.target === "print" ? PRINT_ORIGIN + key : previewUrl(key);
-  };
-  let fontSet = data.theme.fontSet;
-  if (!BUNDLED_FONT_SETS.has(fontSet)) {
-    notices.push(`서체 세트 '${fontSet}'는 아직 서체 라이브러리에 없어 기본 프리텐다드로 만들었습니다.`);
-    fontSet = "pretendard";
+  if (opts.target === "print") {
+    const re = /https:\/\/print\.local\/([A-Za-z0-9_./-]+)/g;
+    for (let m = re.exec(body); m; m = re.exec(body)) if (!m[1].startsWith("fonts/")) used.add(m[1].replace(/&amp;/g, "&"));
   }
-  const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet };
-  const body = renderStatic(createElement(CatalogDocument, { ctx, data, cover }));
+  for (const p of pages) if (p.orphans.length) notices.push(`'${p.item.label}' 쪽의 편집 ${p.orphans.length}건은 데이터 구조가 바뀌어 붙을 곳을 찾지 못했습니다(스튜디오에서 확인).`);
   const [sheetCss, catalogCss, script] = await Promise.all([
     readPublicText("print-kit/sheet.css"),
     readPublicText("catalog-kit/kesi-catalog.css"),
     readPublicText("print-kit/paginate.js"),
   ]);
   const tokensCss = tokensToCss(tokensJson as unknown as DesignTokens, { themeSelector: (id) => `.kc-concept--${id}` });
-  const fonts: PrintFontFace[] = FONT_FILES.map((f) => ({
-    family: "Pretendard",
+  const fonts: PrintFontFace[] = set.faces.map((f) => ({
+    family: f.family,
     weight: f.weight,
     format: "woff",
     url: opts.target === "print" ? `${PRINT_ORIGIN}fonts/${f.file}` : `/print-kit/fonts/${f.file}`,
+    sizeAdjust: f.sizeAdjust,
   }));
   const title = `${data.company.name} 회사소개서 ${data.asOfLabel}${opts.naming === "real" ? " (실명판)" : ""}`;
   const html = buildPrintHtml({
     lang: "ko",
     title,
-    styles: [sheetCss, tokensCss, catalogCss, PRINT_OVERRIDES],
+    styles: [sheetCss, tokensCss, catalogCss, PRINT_OVERRIDES, STUDIO_PRINT_CSS],
     fonts,
     body,
     script,
@@ -149,6 +153,10 @@ export async function buildCatalogHtml(data: CatalogRenderData, opts: RenderOpti
 
   const assets: PrintAsset[] = [];
   if (opts.target === "print") {
+    for (const f of set.faces) {
+      if (CONVERTER_BUNDLED_FONTS.has(f.file)) continue;
+      assets.push({ path: `fonts/${f.file}`, contentType: "font/woff", data: await readPublicFile(`print-kit/fonts/${f.file}`) });
+    }
     for (const key of used) {
       const hit = await loadImageKey(key);
       if (hit) assets.push({ path: key, contentType: hit.contentType, data: hit.data });

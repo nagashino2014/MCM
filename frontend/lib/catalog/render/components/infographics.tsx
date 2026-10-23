@@ -9,14 +9,23 @@ import type { HistoryYear } from "../types";
 import { cx, fmt } from "./parts";
 
 // ── Process 단계 흐름 ──
-export function Process({ steps, vertical }: { steps: Array<{ label: string; desc: string }>; vertical?: boolean }) {
+/** 바깥 요소에 덧붙일 속성(인포그래픽 자리 표식 data-widget·data-slot, 색 모드 변수) — 스튜디오(P5)가 쓴다 */
+export interface RootAttrs {
+  [attr: `data-${string}`]: string | undefined;
+  style?: CSSProperties;
+}
+
+const rootStyle = (root: RootAttrs | undefined, base?: CSSProperties): CSSProperties | undefined =>
+  root?.style || base ? { ...base, ...root?.style } : undefined;
+
+export function Process({ steps, vertical, root }: { steps: Array<{ label: string; desc?: string }>; vertical?: boolean; root?: RootAttrs }) {
   return (
-    <ol className={cx("kc-process", vertical && "kc-process--v", "kc-ig")}>
+    <ol {...root} className={cx("kc-process", vertical && "kc-process--v", "kc-ig")} style={rootStyle(root)}>
       {steps.map((st, i) => (
         <li key={i}>
           <span className="kc-process__num">{i + 1}</span>
           <span className="kc-ig__label">{st.label}</span>
-          <span className="kc-ig__desc">{st.desc}</span>
+          {st.desc != null ? <span className="kc-ig__desc">{st.desc}</span> : null}
         </li>
       ))}
     </ol>
@@ -24,9 +33,9 @@ export function Process({ steps, vertical }: { steps: Array<{ label: string; des
 }
 
 // ── Compare 전후 비교 ──
-export function Compare({ rows }: { rows: Array<{ label: string; before: string; after: string; beforePct: number; afterPct: number }> }) {
+export function Compare({ rows, root }: { rows: Array<{ label: string; before: string; after: string; beforePct: number; afterPct: number }>; root?: RootAttrs }) {
   return (
-    <div className="kc-compare kc-ig">
+    <div {...root} className="kc-compare kc-ig" style={rootStyle(root)}>
       {rows.map((r, i) => (
         <div className="kc-compare__row" key={i}>
           <span className="kc-ig__label">{r.label}</span>
@@ -45,10 +54,10 @@ export function Compare({ rows }: { rows: Array<{ label: string; before: string;
 }
 
 // ── BarChart 가로 막대(자격 보유) ──
-export function HBars({ rows, gap = 11 }: { rows: Array<{ name: string; count: number }>; gap?: number }) {
+export function HBars({ rows, gap = 11, root }: { rows: Array<{ name: string; count: number }>; gap?: number; root?: RootAttrs }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <div className="kc-hbars" style={{ gap }}>
+    <div {...root} className="kc-hbars" style={rootStyle(root, { gap })}>
       {rows.map((r, i) => (
         <div className="kc-hbars__row" key={i}>
           <span>{r.name}</span>
@@ -63,10 +72,10 @@ export function HBars({ rows, gap = 11 }: { rows: Array<{ name: string; count: n
 }
 
 // ── BarChart 세로 막대(경력 분포) ──
-export function Bars({ cols, height = 205, keyIndex = 0 }: { cols: Array<{ label: string; value: number }>; height?: number; keyIndex?: number }) {
+export function Bars({ cols, height = 205, keyIndex = 0, root }: { cols: Array<{ label: string; value: number }>; height?: number; keyIndex?: number; root?: RootAttrs }) {
   const max = Math.max(1, ...cols.map((c) => c.value));
   return (
-    <div className="kc-bars" style={{ height }}>
+    <div {...root} className="kc-bars" style={rootStyle(root, { height })}>
       <div className="kc-bars__plot">
         {cols.map((c, i) => (
           <div className={cx("kc-bars__col", i === keyIndex && "is-key")} key={i}>
@@ -85,7 +94,19 @@ export function Bars({ cols, height = 205, keyIndex = 0 }: { cols: Array<{ label
 }
 
 // ── Share 구성비(도넛) ──
-export function Donut({ parts, centerValue, centerUnit }: { parts: Array<{ label: string; value: number; cls: string }>; centerValue: string; centerUnit: string }) {
+export function Donut({
+  parts,
+  centerValue,
+  centerUnit,
+  root,
+  marginTop = 30,
+}: {
+  parts: Array<{ label: string; value: number; cls: string }>;
+  centerValue: string;
+  centerUnit: string;
+  root?: RootAttrs;
+  marginTop?: number;
+}) {
   const total = parts.reduce((a, p) => a + p.value, 0) || 1;
   let acc = 0;
   const segs = parts.map((p) => {
@@ -95,7 +116,7 @@ export function Donut({ parts, centerValue, centerUnit }: { parts: Array<{ label
     return seg;
   });
   return (
-    <div className="kc-share" style={{ gridTemplateColumns: "120px minmax(0, 1fr)", marginTop: 30 }}>
+    <div {...root} className="kc-share" style={rootStyle(root, { gridTemplateColumns: "120px minmax(0, 1fr)", marginTop })}>
       <div className="kc-donut__wrap">
         <svg className="kc-donut" viewBox="0 0 42 42" aria-hidden="true">
           {[...segs].reverse().map((sg, i) =>
@@ -138,6 +159,7 @@ export function KoreaMap({
   pins = [],
   zoom = 1,
   frame,
+  root,
 }: {
   mode: "regions" | "pins";
   area?: number;
@@ -146,6 +168,7 @@ export function KoreaMap({
   zoom?: number;
   /** 바깥 자리 크기(목업의 hint-size 래퍼) */
   frame?: { width: number; height: number };
+  root?: RootAttrs;
 }) {
   const vals = values ?? {};
   const max = Math.max(1, ...Object.values(vals));
@@ -186,14 +209,20 @@ export function KoreaMap({
       })}
     </div>
   );
-  const inner = zoom === 1 ? map : <div style={{ zoom }}>{map}</div>;
-  return frame ? <div style={{ width: frame.width, height: frame.height, flex: "none" }}>{inner}</div> : inner;
+  if (frame) {
+    return (
+      <div {...root} style={rootStyle(root, { width: frame.width, height: frame.height, flex: "none" })}>
+        {zoom === 1 ? map : <div style={{ zoom }}>{map}</div>}
+      </div>
+    );
+  }
+  return zoom === 1 ? map : <div {...root} style={rootStyle(root, { zoom })}>{map}</div>;
 }
 
 // ── HistoryTimeline 연혁 ──
 export function Timeline({ years, style }: { years: HistoryYear[]; style?: CSSProperties }) {
   return (
-    <ol className="kc-timeline" style={style}>
+    <ol className="kc-timeline" style={style} data-widget="timeline">
       {years.map((y) => (
         <li key={y.year} className={y.highlight ? "is-highlight" : undefined}>
           <span className="kc-timeline__year">{y.year}</span>
@@ -274,7 +303,7 @@ export function OrgChart({ doc, advisorsLabel }: { doc: OrgChartDoc; advisorsLab
     );
   }
   return (
-    <div className={cx("kc-org", large && "kc-org--lg", "kc-ig")} style={{ flex: 1, minHeight: 0, justifyContent: "center" }}>
+    <div className={cx("kc-org", large && "kc-org--lg", "kc-ig")} style={{ flex: 1, minHeight: 0, justifyContent: "center" }} data-widget="org">
       <div className="kc-org__tier">
         <span></span>
         <div className="kc-org__stem kc-org__stem--top">

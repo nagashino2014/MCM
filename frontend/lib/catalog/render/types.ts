@@ -35,6 +35,8 @@ export interface RenderCtx {
   docLabel: string;
   /** 서체 세트 클래스 접미사(kc-fontset--{fontSet}) */
   fontSet: string;
+  /** 색 컨셉 클래스 접미사(kc-concept--{concept}, 기본 navy) — 스튜디오 L2 */
+  concept?: string;
 }
 
 export interface Office {

@@ -6,6 +6,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { COVER_CONTENT, DIVIDER_CONTENT, SECTIONS, VISION_CONTENT } from "../master-content";
 import type { CatalogRenderData, HistoryYear, RenderCtx } from "../types";
 import { Timeline } from "./infographics";
+import { cardsSpec } from "../infographic/adapt";
+import { InfoSlot } from "../infographic/slot";
 import { AreaTag, Drop, Foot, Head, Icon, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval } from "./parts";
 
 const LOGO = "k/assets/kesi-signature-ko.png";
@@ -299,7 +301,9 @@ export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data:
 }
 
 // ── C05 회사 개요·비전 ──
-export function OverviewPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/** 회사 개요 변형(L2) — visual: logo(로고 판, 기본) | photo(사진, photo = 이미지 키) */
+export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: CatalogRenderData; variant?: Record<string, string> }) {
+  const visualPhoto = variant?.visual === "photo" && variant.photo ? variant.photo : null;
   const c = data.company;
   const hq = data.offices[0];
   const facts: Array<[string, ReactNode]> = [
@@ -337,26 +341,20 @@ export function OverviewPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
             <p className="kc-blockhead">
               경영철학<span className="kc-blockhead__aside">네 가지 원칙</span>
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-              {VISION_CONTENT.philosophy.map((p) => (
-                <div className="kc-card" key={p.title}>
-                  <span className="kc-card__title">
-                    {p.title}{" "}
-                    <span className="kc-muted" style={{ fontSize: 9, fontWeight: 600 }}>
-                      {p.en}
-                    </span>
-                  </span>
-                  <p className="kc-card__desc">{p.desc}</p>
-                </div>
-              ))}
-            </div>
+            <InfoSlot slot="c05.philosophy" spec={cardsSpec(VISION_CONTENT.philosophy)} box={{ w: 425, h: 150 }} />
           </div>
         </div>
         <div className="kc-span-5" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <figure style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div className="kc-photo--frame kc-ratio-hero" style={{ position: "relative", display: "grid", placeItems: "center", overflow: "hidden", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
-              <img src={ctx.url("k/assets/kesi-ko-horizontal-gradient.png")} alt="KESI ㈜한국환경안전연구원 국문 좌우조합(그라데이션)" style={{ display: "block", width: "70%", height: "auto" }} />
-            </div>
+            {visualPhoto ? (
+              <div className="kc-photo kc-photo--frame kc-ratio-hero">
+                <img src={ctx.url(visualPhoto)} alt={`${c.name} 사진`} />
+              </div>
+            ) : (
+              <div className="kc-photo--frame kc-ratio-hero" style={{ position: "relative", display: "grid", placeItems: "center", overflow: "hidden", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
+                <img src={ctx.url("k/assets/kesi-ko-horizontal-gradient.png")} alt="KESI ㈜한국환경안전연구원 국문 좌우조합(그라데이션)" style={{ display: "block", width: "70%", height: "auto" }} />
+              </div>
+            )}
           </figure>
           <dl className="kc-facts">
             {facts.map(([k, v]) => (

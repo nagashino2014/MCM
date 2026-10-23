@@ -3,6 +3,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { renderHtmlPdf, type PrintWarning } from "@/lib/print-kit/converter";
 import { putContractDocument, readContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import { loadStudioDoc } from "@/lib/catalog/studio/store";
 import { loadCatalogRenderData } from "./data";
 import { buildCatalogHtml } from "./html";
 import { EDITION_LABEL, NAMING_LABEL, type RenderOptions } from "./types";
@@ -92,11 +93,11 @@ export async function getCatalogEditionFile(editionId: string): Promise<{ summar
   return pdf ? { summary: mapEdition(r), pdf } : null;
 }
 
-/** 마스터본 PDF 생성 → 저장 → 이력. 돌려주는 값 = 이력 요약(쪽 수·넘침 경고·크기·시간). */
+/** PDF 생성 → 저장 → 이력. 스튜디오 편집본(쪽 순서·숨김·편집층)을 얹는다. 돌려주는 값 = 이력 요약(쪽 수·넘침 경고·크기·시간). */
 export async function generateCatalogPdf(opts: RenderOptions, actorUserId: string | null, docId = MASTER_DOC_ID): Promise<CatalogEditionSummary> {
   const started = Date.now();
-  const data = await loadCatalogRenderData({ ...opts, docId });
-  const built = await buildCatalogHtml(data, { ...opts, target: "print" });
+  const [data, studio] = await Promise.all([loadCatalogRenderData({ ...opts, docId }), loadStudioDoc(docId)]);
+  const built = await buildCatalogHtml(data, { ...opts, target: "print", pages: studio?.pages ?? [] });
   const rendered = await renderHtmlPdf({ html: built.html, assets: built.assets });
   const totalMs = Date.now() - started;
 
@@ -129,7 +130,16 @@ export async function generateCatalogPdf(opts: RenderOptions, actorUserId: strin
         editionId,
         docId,
         version,
-        JSON.stringify({ stage: "generated", edition: opts.edition, naming: opts.naming, cover: built.cover.cover, coverPhoto: Boolean(built.cover.photo), fontSet: data.theme.fontSet }),
+        JSON.stringify({
+          stage: "generated",
+          edition: opts.edition,
+          naming: opts.naming,
+          cover: built.cover.cover,
+          coverPhoto: Boolean(built.cover.photo),
+          fontSet: data.theme.fontSet,
+          concept: data.theme.concept,
+          studioRev: studio?.rev ?? null,
+        }),
         JSON.stringify({
           asOf: data.asOf,
           metrics,

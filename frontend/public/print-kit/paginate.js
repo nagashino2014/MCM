@@ -13,7 +13,8 @@
    2) 모든 쪽에 번호를 매기고([data-folio]), 목차·관련 쪽(data-ref)의 쪽 번호와 링크를 렌더 결과로 채운다.
       - data-ref-fmt: folio(09) · p(p.09) · range(09–12). data-ref-alt: data-ref 에 쪽이 없을 때 차례로 볼 앵커.
    3) window.__pkResult = {pages, anchors: {anchor: [첫 쪽, 끝 쪽]}, warnings} — converter 가 읽어 쪽 지도로 쓴다.
-      준비가 끝나면 <html data-pk-ready="1">(실패 "error"). */
+      준비가 끝나면 <html data-pk-ready="1">(실패 "error").
+   4) window.__pkCheckSheet(쪽) — 쪽 하나의 넘침 검사 결과(스튜디오 캔버스). __pkConfig.manual 이면 1)~3)을 하지 않는다. */
 (function () {
   "use strict";
   var cfg = window.__pkConfig || {};
@@ -38,6 +39,7 @@
     var s = sheetOf(el) || el;
     var w = { kind: kind, page: Number(s.getAttribute && s.getAttribute("data-page")) || 0, anchor: firstAnchor(s), message: message };
     if (extra) for (var k in extra) w[k] = extra[k];
+    if (cfg.manual) Object.defineProperty(w, "el", { value: el, enumerable: false }); // 스튜디오가 경고 자리를 표시(직렬화에는 안 들어감)
     warnings.push(w);
   }
 
@@ -290,5 +292,8 @@
       document.documentElement.setAttribute("data-pk-ready", "error");
     }
   }
+  // 스튜디오 캔버스(P5): 쪽 하나를 React 가 그리므로 쪽 나누기는 하지 않고 넘침 검사만 빌려 쓴다(__pkConfig.manual).
+  window.__pkCheckSheet = function (s) { var start = warnings.length; checkSheet(s); return warnings.splice(start, warnings.length - start); };
+  if (cfg.manual) return;
   if (document.readyState === "complete") run(); else window.addEventListener("load", run);
 })();

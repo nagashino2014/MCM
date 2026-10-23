@@ -9,7 +9,7 @@ import {
   type DisplayOverride,
 } from "./appendix";
 import { SOFTWARE_CATEGORY, isSoftwareServiceType } from "./areas";
-import { isCoverDesign, sanitizeDocumentTheme, type DocumentTheme } from "./document-theme";
+import { isColorConcept, isCoverDesign, sanitizeDocumentTheme, type DocumentTheme } from "./document-theme";
 import { listManualProjects, manualToProjectRow } from "./manual-projects";
 import { regionGroupId } from "./regions";
 
@@ -243,6 +243,7 @@ export async function saveDocumentTheme(docId: string, patch: Partial<DocumentTh
   if (isCoverDesign(patch.cover)) clean.cover = patch.cover;
   if (patch.coverPhoto === "photo" || patch.coverPhoto === "none") clean.coverPhoto = patch.coverPhoto;
   if (typeof patch.fontSet === "string" && /^[a-z0-9-]{1,40}$/.test(patch.fontSet)) clean.fontSet = patch.fontSet;
+  if (isColorConcept(patch.concept)) clean.concept = patch.concept;
   const next = sanitizeDocumentTheme({ ...current, ...clean });
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {

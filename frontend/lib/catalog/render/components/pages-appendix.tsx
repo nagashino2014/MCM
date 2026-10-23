@@ -33,7 +33,7 @@ export function SummaryPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
         </span>
       </div>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
-        <div className="kc-span-8">
+        <div className="kc-span-8" data-widget="table">
           <table className="kc-table kc-table--dense">
             <thead>
               <tr>
@@ -59,7 +59,7 @@ export function SummaryPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
             {data.areas[0].name} 권역별 분포<span className="kc-blockhead__aside">{fmt(permitTotal)}건</span>
           </p>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <KoreaMap mode="regions" area={1} values={data.permitByRegion} zoom={0.6} frame={{ width: 100, height: 179 }} />
+            <KoreaMap mode="regions" area={1} values={data.permitByRegion} zoom={0.6} frame={{ width: 100, height: 179 }} root={{ "data-widget": "map" }} />
             <div className="kc-maplegend" style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}>
               <span>많음</span>
               <i style={{ opacity: 1 }}></i>
@@ -74,7 +74,7 @@ export function SummaryPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
             </span>
             <span className="kc-blockhead__aside">업종군 기준</span>
           </p>
-          <table className="kc-table kc-table--dense">
+          <table className="kc-table kc-table--dense" data-widget="table">
             <thead>
               <tr>
                 <th>차년도(업종군)</th>
@@ -182,7 +182,7 @@ export function ProjectListPage({ ctx, data, area, sec }: { ctx: RenderCtx; data
           ))}
         </div>
       </div>
-      <div className="pk-col">
+      <div className="pk-col" data-widget="table">
         <div data-split="rows">
           <table className="kc-table kc-table--dense">
             <thead>

@@ -5,6 +5,8 @@
  *   → 선택지는 이 상수 하나로만 관리한다(화면·검증·렌더러가 모두 이 목록을 본다).
  */
 
+import { FONT_SETS } from "./fonts";
+
 export const COVER_DESIGNS = [
   { id: "leaf", label: "A 잎 창", desc: "사옥 사진을 잎 모양 창에 담은 표지", photo: "hq-cover-tall", confirmed: true },
   { id: "strips", label: "B 세 기둥", desc: "사진 한 장을 위가 둥근 세 기둥으로 나눠 엇갈려 세운 표지", photo: "hq-cover-tall", confirmed: false },
@@ -15,18 +17,33 @@ export const COVER_DESIGNS = [
 export type CoverDesign = (typeof COVER_DESIGNS)[number]["id"];
 export const DEFAULT_COVER: CoverDesign = "leaf";
 
-/** 기본 서체 세트(D2 변경, 10-22) — 서체 라이브러리(P5b) 세트 id */
+/** 기본 서체 세트(D2 변경, 10-22) — 세트 목록은 lib/catalog/fonts.ts FONT_SETS */
 export const DEFAULT_FONT_SET = "pretendard";
-export const FONT_SET_LABEL: Record<string, string> = { pretendard: "프리텐다드" };
+export const FONT_SET_LABEL: Record<string, string> = Object.fromEntries(FONT_SETS.map((f) => [f.id, f.label]));
+
+/** 색 컨셉(D12, 스튜디오 L2) — 디자인 시스템 테마 A·B·C. A 네이비가 확정 기본값 */
+export const COLOR_CONCEPTS = [
+  { id: "navy", label: "A 네이비", desc: "CI 메인 네이비(확정)" },
+  { id: "green", label: "B 그린", desc: "CI 그린 바탕" },
+  { id: "charcoal", label: "C 차콜", desc: "차콜 + 그린 강조" },
+] as const;
+export type ColorConcept = (typeof COLOR_CONCEPTS)[number]["id"];
+export const DEFAULT_CONCEPT: ColorConcept = "navy";
 
 export interface DocumentTheme {
   fontSet: string;
   cover: CoverDesign;
   /** photo = 안의 사진을 씀, none = 사진 없는 변형(C 는 원래 사진 없음) */
   coverPhoto: "photo" | "none";
+  /** 색 컨셉 — 쪽 루트의 kc-concept--{concept} */
+  concept: ColorConcept;
 }
 
-export const DEFAULT_DOCUMENT_THEME: DocumentTheme = { fontSet: DEFAULT_FONT_SET, cover: DEFAULT_COVER, coverPhoto: "photo" };
+export const DEFAULT_DOCUMENT_THEME: DocumentTheme = { fontSet: DEFAULT_FONT_SET, cover: DEFAULT_COVER, coverPhoto: "photo", concept: DEFAULT_CONCEPT };
+
+export function isColorConcept(v: unknown): v is ColorConcept {
+  return COLOR_CONCEPTS.some((c) => c.id === v);
+}
 
 export function isCoverDesign(v: unknown): v is CoverDesign {
   return COVER_DESIGNS.some((c) => c.id === v);
@@ -40,6 +57,7 @@ export function sanitizeDocumentTheme(input: unknown): DocumentTheme {
     fontSet,
     cover: isCoverDesign(o.cover) ? o.cover : DEFAULT_COVER,
     coverPhoto: o.coverPhoto === "none" ? "none" : "photo",
+    concept: isColorConcept(o.concept) ? o.concept : DEFAULT_CONCEPT,
   };
 }
 

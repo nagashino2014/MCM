@@ -11,11 +11,13 @@ OCR 백엔드(15GB, 상시 미가동)와 분리된 경량 서비스 — LibreOff
                          (⚠현재 호출처 없음 — 구매품의서 자동 기입용이었으나 쿠팡·네이버·G마켓의
                           상용 봇 방어로 실효성이 없어 08-26 폐기, 추후 재활용 대비 엔드포인트만 유지)
   POST /render/html-pdf  {html, assets[]} → 자체 완결 HTML(print-kit)을 Chromium 으로 인쇄한 PDF + 쪽 지도(회사소개서)
+  POST /fonts/prepare    {data_b64, weights[]} → 업로드 서체를 정적 TrueType 윤곽 WOFF 로(회사소개서 서체 라이브러리, PDF 부분 포함용)
   GET  /health           변환기 설치 여부(배포 확인용)
 
 호출자는 Next.js 뿐이고, VPC 내부 service discovery(converter.local)로만 접근한다.
 """
 import asyncio
+import base64
 import re
 from urllib.parse import urlparse
 
@@ -23,10 +25,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+import font_prepare
 import html_pdf
 import office_convert
 
-app = FastAPI(title="MCM 문서 변환", version="1.2.0")
+app = FastAPI(title="MCM 문서 변환", version="1.3.0")
 
 # URL 캡처는 바로빌 호스팅 화면 전용 — 내부 서비스라도 SSRF 방지로 도메인을 제한한다.
 RENDER_ALLOWED_SUFFIXES = (".baroservice.com", ".barobill.co.kr", ".barobill.com")
@@ -98,6 +101,7 @@ async def health():
         "available": office_convert.is_available(),
         "soffice": office_convert.soffice_path(),
         "print_fonts": html_pdf.bundled_font_names(),
+        "font_prepare": font_prepare.is_available(),
     }
 
 
@@ -140,6 +144,31 @@ async def render_html_pdf(body: RenderHtmlBody):
         print(f"[render/html-pdf] 실패({type(exc).__name__}): {exc}")
         raise HTTPException(status_code=422, detail=f"PDF 생성 실패: {exc}")
     return result
+
+
+class PrepareFontBody(BaseModel):
+    data_b64: str
+    # 가변 서체를 고정할 굵기들(정적 서체는 무시)
+    weights: list[int] = []
+
+
+@app.post("/fonts/prepare")
+async def prepare_font(body: PrepareFontBody):
+    if not font_prepare.is_available():
+        raise HTTPException(status_code=503, detail="서체 변환 모듈(fontTools)이 설치되어 있지 않습니다.")
+    try:
+        data = base64.b64decode(body.data_b64 or "", validate=True)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="서체 내용(base64)이 올바르지 않습니다.")
+    weights = [w for w in body.weights if isinstance(w, int) and 1 <= w <= 1000][:9]
+    try:
+        # 윤곽 변환은 CPU 동기 작업(한글 서체 수 초) — 이벤트 루프를 막지 않도록 스레드에서 실행한다.
+        return await asyncio.to_thread(font_prepare.prepare, data, weights)
+    except font_prepare.PrepareError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 — 호출자에게 사유를 넘긴다
+        print(f"[fonts/prepare] 실패({type(exc).__name__}): {exc}")
+        raise HTTPException(status_code=422, detail=f"서체 변환 실패: {exc}")
 
 
 @app.post("/render/url-pdf")

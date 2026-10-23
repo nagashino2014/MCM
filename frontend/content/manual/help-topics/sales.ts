@@ -245,13 +245,13 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "세트는 제목·본문·숫자 서체 묶음입니다. [[이 세트 적용]]은 문서 전체에 적용합니다.",
-        "적용 뒤 문서 전체 넘침을 다시 검사합니다. 넘치면 [[원래 서체로]] 되돌릴 수 있습니다.",
+        "적용 뒤 문서 전체 넘침과 빠진 글자(라이브러리 세트)를 다시 검사합니다. 넘치거나 빠진 글자가 많으면 [[원래 서체로]] 되돌릴 수 있습니다.",
         "서체 파일은 PDF 에 쓴 글자만 들어가 다른 PC 에서도 같은 모양으로 열립니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "fonts" },
     sources: ["components/sales/catalog/studio/PanelFonts.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-23",
   },
   {
     id: "catalog.studio-data",
@@ -547,6 +547,90 @@ export const SALES_HELP: HelpTopic[] = [
     more: { article: "sales.catalog-message", section: "versions" },
     sources: ["components/sales/catalog/CatalogMessageBoard.tsx", "components/sales/catalog/ContentVersions.tsx"],
     reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.fonts",
+    label: "서체 라이브러리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "회사소개서에 쓸 서체를 올리고 견본을 본 뒤, 제목·본문·숫자 세트를 만듭니다.",
+        "[[서체 올리기]]는 분석 → 라이선스 확인 → 등록 순서입니다. 포함 제한 서체는 등록되지 않습니다.",
+        "세트 적용은 스튜디오 서체 탭에서 합니다. 서체는 지우지 않고 비활성화합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "upload" },
+    sources: ["components/sales/catalog/fonts/CatalogFontsBoard.tsx"],
+    reviewedAt: "2026-10-23",
+  },
+  {
+    id: "catalog.fonts-verdict",
+    label: "본문 가능·제목 전용 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "본문 가능 = 보통(400)과 굵게(600·700)가 있고 한글 완성형 2,350자를 모두 가진 서체.",
+        "제목 전용 = 굵기가 하나뿐이거나 한글이 빠졌거나 장식·손글씨체. 제목·숫자에만 씁니다.",
+        "포함 허용은 서체 파일 안 표시(fsType)입니다. 포함 제한이면 PDF 에 넣을 수 없어 등록하지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "verdict" },
+    sources: ["components/sales/catalog/fonts/CatalogFontsBoard.tsx", "components/sales/catalog/fonts/FontUploadModal.tsx"],
+    reviewedAt: "2026-10-23",
+  },
+  {
+    id: "catalog.fonts-upload",
+    label: "서체 올리기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "같은 서체의 굵기별 파일(보통·굵게 등)을 한 번에 고르면 한 서체로 묶입니다.",
+        "고르면 바로 분석만 하고 저장하지 않습니다. 라이선스를 확인한 뒤 [[등록]]해야 저장됩니다.",
+        "CFF(OTF)·가변 서체는 PDF 용 파일로 바꾸느라 한 굵기에 1분 안팎 걸립니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "upload" },
+    sources: ["components/sales/catalog/fonts/FontUploadModal.tsx"],
+    reviewedAt: "2026-10-23",
+  },
+  {
+    id: "catalog.fonts-license",
+    label: "서체 라이선스 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "회사소개서는 PDF 로 배포하므로 'PDF 포함(임베딩)'이 허용된 서체만 등록할 수 있습니다.",
+        "구매 서체는 구입처·계약 번호·허용 범위를 증빙 메모로 남겨야 합니다.",
+        "서체 파일 안 라이선스 문구가 OFL 이면 미리 채워 두지만, 확인은 올리는 사람이 합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "upload" },
+    sources: ["components/sales/catalog/fonts/FontUploadModal.tsx"],
+    reviewedAt: "2026-10-23",
+  },
+  {
+    id: "catalog.fonts-specimen",
+    label: "서체 견본 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "굵기별 한글·영문·숫자와 본문 단락·표·큰 숫자를 문서와 같은 크기 보정으로 그립니다.",
+        "빨간 줄이 그어진 문서 기호는 이 서체에 없어 대체 서체로 그려집니다.",
+        "견본 위에 읽기 실패 알림이 나오면 서체 파일을 다시 올려 주세요.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "specimen" },
+    sources: ["components/sales/catalog/fonts/FontDetailDrawer.tsx"],
+    reviewedAt: "2026-10-23",
+  },
+  {
+    id: "catalog.fonts-sets",
+    label: "서체 세트 만들기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "세트 = 제목·본문·숫자 서체 + 디자인 굵기(400·500·600·700)마다 쓸 파일 굵기.",
+        "본문에는 '제목 전용' 서체와 Light·Thin 굵기를 쓸 수 없습니다. 명조 본문은 화면에서 읽기 어렵다고 알려 줍니다.",
+        "만든 세트는 스튜디오 서체 탭에서 실제 쪽으로 비교하고 적용합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-fonts", section: "sets" },
+    sources: ["components/sales/catalog/fonts/CatalogFontsBoard.tsx", "components/sales/catalog/fonts/FontSetEditor.tsx", "components/sales/catalog/studio/PanelFonts.tsx"],
+    reviewedAt: "2026-10-23",
   },
   {
     id: "catalog.clients",

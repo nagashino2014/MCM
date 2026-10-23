@@ -279,6 +279,45 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - 발행본 스냅샷에 사용 서체 id·버전을 기록해, 나중에 서체가 교체·삭제돼도 같은 발행본을 다시 만들 수 있게 한다(삭제 대신 비활성화).
 - 같은 서체 라이브러리를 홍보·채용공고 편집기(현재 Pretendard CDN 고정)에서도 쓰도록 열어 두는 것은 P8 확장.
 
+### 5-6. P5b 구현 기록(2026-10-23) — 서체 라이브러리
+
+**마이그레이션 없음** — 309 의 `catalog_fonts`·`catalog_font_sets` 만 쓴다.
+
+| 자리 | 내용 |
+|---|---|
+| `frontend/lib/catalog/font-types.ts` | 공용 형식·상수(역할·굵기 400/500/600/700·fsType 판정·라이선스 종류/범위·문서 기호·범위 찾기) |
+| `frontend/lib/catalog/font-analysis.ts` | fontkit 분석(서버·순수) — 이름 테이블(패밀리·굵기·기울임·라이선스 문구) · fsType(Restricted·비트맵 거부, 미리보기·인쇄 경고, 부분 포함 금지 경고) · 한글 완성형 2,350자·현대 한글·숫자·tnum·문서 기호 · 수치(em·x높이·한글 평균 폭) · 크기 보정 · 패밀리 묶기·용도 판정 |
+| `frontend/lib/catalog/font-library.ts` | 저장·변환·세트(서버) — 업로드는 converter 로 정적 TrueType 윤곽 WOFF 를 만들어 원본과 함께 저장(S3 `catalog/fonts/{font_id}/src/…`·`catalog/fonts/{font_id}/…`), 변환본으로 다시 재서 기록. 기본 서체(프리텐다드·노토)는 `source='bundled'` 행으로도 두어(세트 저장 때 채움) 세트 FK 가 가리킨다 |
+| `frontend/lib/catalog/fonts.ts` | 기본 세트 + `buildCustomFontSet`(사용자 세트 → 역할 별칭 서체 `kcs-{세트}-{역할}` @font-face + `.kc-fontset--{세트}` 변수 CSS) · `checkFontSetChoice`(본문 제목 전용·Light 본문·굵기 파일 없음 → 막음 / 명조 본문·tnum 없음·없는 기호·미리보기 전용 → 안내) |
+| converter | `POST /fonts/prepare`(`converter/font_prepare.py`, fontTools) — CFF·CFF2 → TrueType(cu2qu), 가변 → 요청 굵기 고정(instancer, 모든 축 고정), 이름·OS/2(fsType) 그대로, WOFF 저장. `requirements-fonts.txt` 를 Chromium 레이어 뒤 별도 레이어로 설치 |
+| API | `GET·POST /api/catalog/fonts`(목록·등록, 파일 하나씩 — 가변 서체는 `instanceWeight` 로 굵기 하나씩) · `POST /api/catalog/fonts/analyze`(저장 없는 분석) · `PATCH /api/catalog/fonts/{id}`(이름·분류·비활성화) · `GET /api/catalog/fonts/{id}/{굵기}.woff`(catalog.view, 미리보기 @font-face) · `POST·DELETE /api/catalog/fonts/sets` — 그 밖은 catalog.manage |
+| 화면 | `/sales/catalog/fonts`(catalog.manage, 첫 화면 카드 '서체 라이브러리') — `components/sales/catalog/fonts/*`: 서체 표(용도·한글 완성형·포함 허용·라이선스·쓰는 곳) · 올리기 창(분석 → 라이선스 확인 → 등록) · 견본 드로어 · 세트 창(역할 서체 + 굵기 대응 + 미리보기) |
+| 스튜디오 | 열 때 사용자 세트를 함께 받아(키트 `fontSets`) 썸네일·캔버스·검사 틀에 @font-face·변수 CSS 를 싣는다. 서체 탭에 '라이브러리' 세트, 고를 수 없는 세트는 사유와 함께 잠금. 전체 검사가 계산된 font-family 첫 이름(역할 별칭)으로 문서 글자의 역할 서체를 찾아 **빠진 글자**를 알린다(기준 서체 프리텐다드는 제외) |
+| PDF | html.ts 가 `resolveFontSet` 으로 사용자 세트를 풀어 업로드 서체 변환본을 요청 자산(`fonts/u/{font_id}/{굵기}.woff`)으로 보낸다. 생성본 `catalog_editions.options.fonts` 에 서체 id·굵기·저장소 키를 남긴다(§5-5 재현) |
+
+판정 규칙(§5-3 3) — 본문 가능 = 보통(350–500, Medium 만 있는 패밀리 포함) + 굵게(550–750) + 한글 완성형 2,350자 전부 + 장식·손글씨 아님. 숫자 서체 = 0–9 전부.
+크기 보정(§5-4) — size-adjust = 프리텐다드 한글 평균 폭 ÷ 그 서체(한글이 절반 미만이면 x높이), ascent/descent-override = 프리텐다드 높이 ÷ size-adjust.
+**Chromium 은 override 를 size-adjust 를 곱한 크기에 적용한다**(2026-10-23 실측: 90% + 95/24% → 108px) — 그래서 나눈다. 노토 산스 93.9%·세리프 89.5% 로 P5 손계산과 같다.
+
+검증(2026-10-23, 로컬 — 일회용 PG(P5 사본) · AWS 자격증명 차단 · converter = P4 시험 이미지 + fontTools + 새 코드)
+
+| 기준 | 결과 |
+|---|---|
+| OFL 서체 등록 | ✅ CFF OTF 400·700(노토 산스 KR OFL 파생 시험 서체) → TrueType 윤곽 WOFF 변환·등록, 본문 가능, 크기 보정 93.9% · 나눔고딕·KoPub 바탕(명조, Medium+Bold → 본문 가능)도 등록 |
+| Restricted 거부 | ✅ fsType 0x0002 서체: 분석 '거부', 등록 요청 400 |
+| 한글 일부 누락 | ✅ 63자·기호(㈜●◐₂) 뺀 서체 → '제목 전용(한글 완성형 63자 없음)', 빠진 글자 목록. 본문으로 고르면 세트 저장 400·화면 옵션 막힘 |
+| 가변 서체 | ✅ Noto Sans KR VF(10MB) → 굵기 400·600·700 을 한 요청에 하나씩(각 35–42초) 고정·등록, 원본은 한 번만 저장 |
+| 그 밖 | ✅ 20MB 초과 거부(Noto Serif KR VF 22.7MB) · PDF 포함 허용 미체크 거부 · 명조 본문 세트 경고 |
+| 스튜디오 | ✅ 업로드 세트 적용 → 전체 검사 넘침 0건·78쪽, 빠진 글자 '제목 서체에 없는 글자 5자(106곳) ㈜환경업비' + [원래 서체로] |
+| 편집본 PDF | ✅ CFF 변환 세트: 78쪽·경고 0·7.8MB, `AAAAAA+MCMTestCFFSans-Bold`·`BAAAAA+…-Regular` Type0(TrueType) 부분 포함, Type 3 없음 · 부분 서체 세트: `MCMTestPartial-Bold` + 빠진 글자 `Pretendard-Bold` 모두 Type0. PyMuPDF(내장 서체만)로 그려도 같은 모양 |
+| 화면 | ✅ 라이트/다크 · 1440/1024(가로 넘침 0) · 키보드(Tab → [서체 올리기] Enter 열기 → Escape 닫고 포커스 복귀), 콘솔 오류 0(dev favicon 404 제외) |
+| 시험 | ✅ `test:catalog-studio` 21/21(서체 10 추가) · `test:manual` 9/9 · 수정 파일 tsc 0건 |
+
+실측 함정(다시 밟지 말 것)
+- **fontkit `glyph.advanceWidth` 는 vmtx 가 없으면 윤곽(cbox)까지 푼다** — WOFF 는 글자마다 glyf 표 전체를 다시 압축 해제해 2,350자에 수 분. 폭은 `hmtx.metrics` 를 바로 읽는다.
+- **converter 0.5 vCPU 에서 한글 CFF·가변 한 굵기 수십 초** — 여러 굵기를 한 요청에 묶으면 ALB 300초를 넘을 수 있어 화면이 파일(굵기) 하나씩 보낸다. glyf 를 미리 컴파일하지 않는다(저장 때 한 번). fontTools OPTIMIZE_FONT_SPEED 는 오히려 느리고 커서 쓰지 않는다.
+- **이 PC 의 Avast HTTPS 검사** — 컨테이너 안 pip 가 PyPI 인증서를 믿지 못해 converter 이미지의 pip 레이어가 실패한다(10-23). 배포 빌드 전 확인 필요(§12 P5b 배포 메모).
+
 ---
 
 ## 6. 데이터 연결과 자동 갱신
@@ -604,7 +643,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | `/sales/catalog/projects` | 실적 노출 관리(대외 표기·노출·대표 실적·묶음) | catalog.manage |
 | `/sales/catalog/people` | 인물 노출 관리(임원·직원·자문위원, 사진 동의) | catalog.manage |
 | `/sales/catalog/assets` | 사진·로고·증서 자산 | catalog.manage |
-| `/sales/catalog/fonts` | 서체 라이브러리(업로드·분석 결과·견본·라이선스·세트 구성·사용 문서) | catalog.manage |
+| `/sales/catalog/fonts`(✅ P5b) | 서체 라이브러리(업로드·분석 결과·견본·라이선스·세트 구성·사용 문서, §5-6) | catalog.manage |
 | `/admin/company-profile`(기존) | 연혁 출처 배지·공개 토글, 특허·수상 종류, 증빙 이미지 | org.edit |
 
 - 메뉴 `config/menu.ts`, 경로 권한 `config/menu-permissions.ts`, 거부 라벨 `AccessDenied.tsx`, AI 키 `features.ts`.
@@ -623,7 +662,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P3 데이터 기반** | 마이그 309·310(번호 재확인), 회사 프로필 보강(연혁 자동 후보·특허·증빙 저장 수정), 지표 사전, 실적 대외 표기 규칙 + 백필 검토 화면, 인물·자문위원·고객사 관리 | 데이터 화면·API | P0(D6·D8·D9) | L |
 | **P4 렌더러** ✅ | `print-kit`(tokens → CSS, paginate.js 이식, 시트 모델), 쪽 유형·위젯 React 컴포넌트, converter `/render/html-pdf` + 기본 서체 세트·서체 라우팅, 첫 자동 생성 PDF, **현행 46장 대비 수치 대조 리포트** | PDF 생성(§9-1, 10-22) · `/sales/catalog` PDF 만들기·미리보기·받기 · 현행 카탈로그 대조 표 | P2·P3 | L |
 | **P5 스튜디오** ✅ | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | `/sales/catalog/studio`(§8-4, 10-22) | P4 | L |
-| **P5b 서체 라이브러리** | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·WOFF2 변환·견본 화면·크기 보정값 계산 | 서체 화면·API | P4(P5와 병행 가능) | M |
+| **P5b 서체 라이브러리** ✅ | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·TrueType 윤곽 WOFF 변환(converter `/fonts/prepare`)·견본 화면·크기 보정값 계산·스튜디오 세트 연동·빠진 글자 검사 | `/sales/catalog/fonts`(§5-6, 10-23) — 배포는 converter + next | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | AI 편집 | P5 | M |
 | **P7 자동 갱신·발행** | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력 | 운영 전환 | P4(P5와 병행 가능) | M |
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |

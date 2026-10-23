@@ -73,10 +73,14 @@ export function CatalogCoverPicker() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [setLabel, setSetLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    catalogFetch<{ theme: DocumentTheme }>("/api/catalog/document-theme")
-      .then((d) => setTheme(d.theme))
+    catalogFetch<{ theme: DocumentTheme; fontSetLabel?: string }>("/api/catalog/document-theme")
+      .then((d) => {
+        setTheme(d.theme);
+        setSetLabel(d.fontSetLabel ?? null);
+      })
       .catch((e) => setMessage((e as Error).message))
       .finally(() => setLoaded(true));
   }, []);
@@ -107,7 +111,7 @@ export function CatalogCoverPicker() {
         <h3 className="cd-text font-semibold text-base flex items-center gap-1">
           문서 설정 — 표지 디자인 <CdHelp topic="catalog.cover" />
         </h3>
-        <span className="text-xs cd-text-faint">마스터본 · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? theme.fontSet}</span>
+        <span className="text-xs cd-text-faint">마스터본 · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? setLabel ?? theme.fontSet}</span>
         {message && (
           <span className={`text-xs ml-auto ${message.startsWith("저장하지") ? "cd-error-text" : "cd-text-muted"}`} role="status">
             {message}

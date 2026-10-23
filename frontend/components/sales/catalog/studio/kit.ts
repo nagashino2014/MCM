@@ -8,7 +8,7 @@ import { fontFaceCss } from "@/lib/print-kit/document";
 import { tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
 import tokensJson from "@/lib/catalog/render/tokens.json";
 import { PRINT_OVERRIDES } from "@/lib/catalog/render/print-overrides";
-import { usableFontSet } from "@/lib/catalog/fonts";
+import { facePreviewUrl, usableFontSet, type FontSetDef } from "@/lib/catalog/fonts";
 import { STUDIO_PRINT_CSS } from "@/lib/catalog/studio/compose";
 
 export interface StudioKit {
@@ -16,6 +16,8 @@ export interface StudioKit {
   css: string;
   /** paginate.js 원문 */
   paginate: string;
+  /** 서체 라이브러리 세트(스튜디오를 열 때 받음) — 업로드 서체 @font-face·역할 변수 CSS */
+  fontSets?: FontSetDef[];
 }
 
 let kitPromise: Promise<StudioKit> | null = null;
@@ -38,10 +40,22 @@ export function loadStudioKit(): Promise<StudioKit> {
   return kitPromise;
 }
 
-export function fontCssFor(fontSetId: string): string {
-  return fontFaceCss(
-    usableFontSet(fontSetId).faces.map((f) => ({ family: f.family, weight: f.weight, format: "woff" as const, url: `/print-kit/fonts/${f.file}`, sizeAdjust: f.sizeAdjust }))
+/** 세트의 @font-face(+ 사용자 세트는 역할 변수 CSS) — 기본 서체는 /print-kit/fonts, 업로드 서체는 /api/catalog/fonts/… */
+export function fontCssFor(fontSetId: string, sets: FontSetDef[] = []): string {
+  const set = usableFontSet(fontSetId, sets);
+  const faces = fontFaceCss(
+    set.faces.map((f) => ({
+      family: f.family,
+      weight: f.weight,
+      format: "woff" as const,
+      url: facePreviewUrl(f),
+      sizeAdjust: f.sizeAdjust,
+      ascentOverride: f.ascentOverride,
+      descentOverride: f.descentOverride,
+      lineGapOverride: f.lineGapOverride,
+    }))
   );
+  return set.css ? `${faces}\n${set.css}` : faces;
 }
 
 const safe = (css: string) => css.replace(/<\/style/gi, "<\\/style");
@@ -57,7 +71,7 @@ export function frameDocument(kit: StudioKit, fontSetId: string, opts: { body?: 
         : "";
   return (
     `<!doctype html><html lang="ko"><head><meta charset="utf-8">` +
-    `<style id="st-font">${safe(fontCssFor(fontSetId))}</style><style>${safe(kit.css)}</style>` +
+    `<style id="st-font">${safe(fontCssFor(fontSetId, kit.fontSets))}</style><style>${safe(kit.css)}</style>` +
     `<style>html,body{margin:0;padding:0}body.pk-doc.st-frame{background:transparent;overflow:hidden}</style><style id="st-extra">${safe(opts.extraCss ?? "")}</style>` +
     `</head><body class="pk-doc st-frame">${opts.body ?? '<div id="st-root"></div>'}${script}</body></html>`
   );

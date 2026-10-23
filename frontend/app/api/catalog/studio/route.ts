@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { resolveCustomFontSets } from "@/lib/catalog/font-library";
 import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { loadCatalogRenderData } from "@/lib/catalog/render/data";
 import { chooseCover } from "@/lib/catalog/render/html";
@@ -15,6 +16,7 @@ const docIdOf = (req: NextRequest) => {
 };
 
 // GET: 스튜디오 열기 — 문서 상태(설정·쪽 순서·숨김·편집층) + 지금 데이터(렌더 데이터) + 표지 선택 + 인포그래픽 선택 기록 + 사진 목록
+//      + 서체 라이브러리 세트(업로드 서체 @font-face·역할 변수 CSS·글자 범위 — 서체 탭·빠진 글자 검사)
 // ?doc=master&edition=print|draft&naming=masked|real (데이터는 열 때마다 DB 에서 새로 읽는다 — 블루프린트 §6-1 초안 라이브)
 export async function GET(req: NextRequest) {
   try {
@@ -26,8 +28,8 @@ export async function GET(req: NextRequest) {
     const data = await loadCatalogRenderData({ ...opts, docId });
     const notices: string[] = [];
     const cover = await chooseCover(data, notices);
-    const [prefs, assets] = await Promise.all([listInfographicPrefs(), listStudioImageAssets()]);
-    return NextResponse.json({ doc, data: { ...data, notices: [...data.notices, ...notices] }, cover, prefs, assets, opts });
+    const [prefs, assets, fontSets] = await Promise.all([listInfographicPrefs(), listStudioImageAssets(), resolveCustomFontSets()]);
+    return NextResponse.json({ doc, data: { ...data, notices: [...data.notices, ...notices] }, cover, prefs, assets, opts, fontSets });
   } catch (err) {
     return authErrorToResponse(err);
   }

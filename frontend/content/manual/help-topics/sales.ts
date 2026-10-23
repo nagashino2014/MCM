@@ -184,6 +184,103 @@ export const SALES_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-21",
   },
   {
+    id: "catalog.studio",
+    label: "회사소개서 스튜디오 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "왼쪽에서 쪽을 고르고, 가운데 캔버스에서 요소를 눌러 고칩니다. 글은 바로 고칩니다.",
+        "고친 것은 자동 저장되고 데이터가 바뀌어도 남습니다. 고치지 않은 숫자·목록은 계속 새 데이터로 바뀝니다.",
+        "[[미리보기]]·[[PDF 받기]]는 저장된 편집본으로 만듭니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "layout" },
+    sources: ["components/sales/catalog/studio/CatalogStudio.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-levels",
+    label: "고칠 수 있는 범위 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "내용 = 글·사진·목록, 구조 = 숨김·인포그래픽 유형·쪽 변형·열 수, 자유 배치 = 옮기기·크기·글자 크기·색·요소 추가.",
+        "자동으로 채우는 쪽은 구조까지, 부록은 글만 고칩니다.",
+        "데이터 영역(대표 실적·명단·표 등)의 행은 데이터 화면에서 고칩니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "levels" },
+    sources: ["components/sales/catalog/studio/PanelContent.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-infographic",
+    label: "인포그래픽 유형 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "후보는 지금 내용으로 그린 미리보기입니다. 점수가 높을수록 내용·자리에 잘 맞습니다.",
+        "'자리 넘침' 후보는 그 자리에 다 들어가지 않습니다.",
+        "유형을 바꿔도 항목 내용은 그대로입니다. 목록 ↔ 수치형처럼 모양이 다른 변환은 막습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "infographic" },
+    sources: ["components/sales/catalog/studio/PanelDesign.tsx", "components/sales/catalog/studio/PanelContent.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-design",
+    label: "디자인 탭 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비).",
+        "색은 디자인 시스템 색, 글자 크기는 디자인 시스템 단계, 폭은 12열 묶음으로만 고릅니다.",
+        "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "levels" },
+    sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-fonts",
+    label: "서체 세트 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "세트는 제목·본문·숫자 서체 묶음입니다. [[이 세트 적용]]은 문서 전체에 적용합니다.",
+        "적용 뒤 문서 전체 넘침을 다시 검사합니다. 넘치면 [[원래 서체로]] 되돌릴 수 있습니다.",
+        "서체 파일은 PDF 에 쓴 글자만 들어가 다른 PC 에서도 같은 모양으로 열립니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "fonts" },
+    sources: ["components/sales/catalog/studio/PanelFonts.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-data",
+    label: "데이터 탭 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "숫자는 지표 사전에서만 옵니다. 칩으로 묶인 숫자는 데이터가 바뀌면 함께 바뀝니다.",
+        "바인딩을 풀면 그 숫자만 지금 값으로 고정됩니다.",
+        "데이터 영역은 원천 화면에서 고칩니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "data" },
+    sources: ["components/sales/catalog/studio/PanelData.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.studio-checks",
+    label: "검사 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "넘침 = 글자가 쪽 여백·칸을 넘거나 잘림(PDF 와 같은 검사), 대비 = 글자와 바탕 대비 4.5:1 미만, 해상도 = 인쇄 150dpi 미만(300dpi 권장), 글자 크기 = 7pt 미만.",
+        "자동 분쪽 쪽은 캔버스에서 나누지 않으므로 [[전체 쪽 검사]]·미리보기로 봅니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "layout" },
+    sources: ["components/sales/catalog/studio/CatalogStudio.tsx"],
+    reviewedAt: "2026-10-22",
+  },
+  {
     id: "catalog.pdf",
     label: "회사소개서 PDF 도움말",
     blocks: [

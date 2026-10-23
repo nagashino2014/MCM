@@ -3,7 +3,9 @@
  * 명단·상세 이력은 흐름 쪽(paginate)이라 사람이 늘면 쪽이 늘어난다. 표는 머리 행을 반복하고 '(계속)'을 붙인다.
  */
 import type { CatalogRenderData, LeaderCard, RenderCtx } from "../types";
-import { Bars, Donut, HBars, OrgChart } from "./infographics";
+import { barSpec, shareSpec } from "../infographic/adapt";
+import { InfoSlot } from "../infographic/slot";
+import { OrgChart } from "./infographics";
 import { Foot, Head, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval } from "./parts";
 
 // ── C12 조직 ──
@@ -92,7 +94,7 @@ export function LeadersPage({ ctx, data, people, part, parts }: { ctx: RenderCtx
     <Sheet ctx={ctx} anchors={["c13"]} outline={part === 0 ? "임원진" : undefined}>
       <Head ctx={ctx} num="04" name="조직과 사람" sub={parts > 1 ? `임원진 ${part + 1}/${parts}` : "임원진"} />
       <TitleBlock eyebrow="임원진" title={part === 0 ? `임원 ${fmt(n)}명${data.leaderAvgCareer != null ? `, 경력 평균 ${fmt(data.leaderAvgCareer)}년` : ""}` : "임원진(계속)"} />
-      <div className="kc-people" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, alignContent: "start" }}>
+      <div className="kc-people" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, alignContent: "start" }} data-widget="people">
         {people.map((p) => (
           <PersonCard key={p.key} ctx={ctx} p={p} />
         ))}
@@ -109,10 +111,10 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
   const extraExec = (mval(data, "staff.exec") ?? 0) - data.leaders.filter((l) => !l.manual).length;
   const d = st.degrees;
   const degreeParts = [
-    { label: "박사", value: d.doctor, cls: "kc-s1" },
-    { label: "석사", value: d.master, cls: "kc-s2" },
-    { label: "학사", value: d.bachelor, cls: "kc-s4" },
-    ...(d.other ? [{ label: "기타", value: d.other, cls: "kc-s5" }] : []),
+    { label: "박사", value: d.doctor, tone: 1 },
+    { label: "석사", value: d.master, tone: 2 },
+    { label: "학사", value: d.bachelor, tone: 4 },
+    ...(d.other ? [{ label: "기타", value: d.other, tone: 5 }] : []),
   ];
   return (
     <Sheet ctx={ctx} anchors={["c14"]} outline="기술인력 현황">
@@ -139,25 +141,30 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
           <p className="kc-blockhead">
             자격 보유 인원<span className="kc-blockhead__aside">단위: 명, 복수 자격은 각각 셈</span>
           </p>
-          <HBars rows={st.certs} />
+          <InfoSlot slot="c14.certs" spec={barSpec(st.certs.map((c) => ({ label: c.name, value: c.count })))} box={{ w: 297, h: 250 }} />
         </section>
         <section className="kc-span-4 kc-ig">
           <p className="kc-blockhead">
             학위 구성<span className="kc-blockhead__aside">{fmt(st.population)}명</span>
           </p>
-          <Donut parts={degreeParts} centerValue={fmt(st.population)} centerUnit="명" />
+          <InfoSlot slot="c14.degrees" spec={shareSpec(degreeParts, { label: fmt(st.population), desc: "명" })} box={{ w: 233, h: 250 }} />
         </section>
         <section className="kc-span-3 kc-ig">
           <p className="kc-blockhead">
             경력 분포<span className="kc-blockhead__aside">명</span>
           </p>
-          <Bars
-            cols={[
-              { label: "20년+", value: st.careerBuckets[0] },
-              { label: "10–19", value: st.careerBuckets[1] },
-              { label: "5–9", value: st.careerBuckets[2] },
-              { label: "1–4", value: st.careerBuckets[3] },
-            ]}
+          <InfoSlot
+            slot="c14.career"
+            spec={barSpec(
+              [
+                { label: "20년+", value: st.careerBuckets[0], key: true },
+                { label: "10–19", value: st.careerBuckets[1] },
+                { label: "5–9", value: st.careerBuckets[2] },
+                { label: "1–4", value: st.careerBuckets[3] },
+              ],
+              { variant: "v" }
+            )}
+            box={{ w: 168, h: 205 }}
           />
         </section>
       </div>
@@ -207,7 +214,7 @@ export function PeopleTablePage({
           </p>
         ) : null}
       </div>
-      <div className="pk-col">
+      <div className="pk-col" data-widget="table">
         <div data-split="rows">
           <table className="kc-table">
             <thead>
@@ -310,7 +317,7 @@ export function PeopleDetailPage({ ctx, data }: { ctx: RenderCtx; data: CatalogR
         </p>
         <span className="kc-draftmark">실명판(PQ·수의계약 제출)에만 싣습니다.</span>
       </div>
-      <div className="pk-col" style={{ gap: 14 }}>
+      <div className="pk-col" style={{ gap: 14 }} data-widget="people">
         {data.people.map((p) => (
           <article className="kc-cv" key={p.key} data-anchors={`cv-${p.key}`}>
             <div className="kc-cv__id">

@@ -12,6 +12,8 @@ export interface PrintFontFace {
   style?: "normal" | "italic";
   url: string;
   format: "woff" | "woff2" | "truetype" | "opentype";
+  /** 크기 보정(%) — 기준 서체와 시각 크기·글자 폭을 맞춘다(@font-face size-adjust, 회사소개서 블루프린트 §5-4) */
+  sizeAdjust?: number;
 }
 
 export interface PrintConfig {
@@ -44,7 +46,9 @@ export function fontFaceCss(faces: PrintFontFace[]): string {
   return faces
     .map(
       (f) =>
-        `@font-face { font-family: "${f.family}"; font-weight: ${f.weight}; font-style: ${f.style ?? "normal"}; font-display: block; src: url("${f.url}") format("${f.format}"); }`
+        `@font-face { font-family: "${f.family}"; font-weight: ${f.weight}; font-style: ${f.style ?? "normal"}; font-display: block; src: url("${f.url}") format("${f.format}");${
+          f.sizeAdjust ? ` size-adjust: ${f.sizeAdjust}%;` : ""
+        } }`
     )
     .join("\n");
 }

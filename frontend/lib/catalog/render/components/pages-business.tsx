@@ -14,7 +14,9 @@ import {
   type AreaContent,
 } from "../master-content";
 import type { AreaInfo, CatalogRenderData, RenderCtx } from "../types";
-import { Compare, HBars, KoreaMap, Process } from "./infographics";
+import { barSpec, compareSpec, regionRows, stepsSpec } from "../infographic/adapt";
+import { InfoSlot } from "../infographic/slot";
+import { KoreaMap } from "./infographics";
 import { AREA_ICON, AreaTag, Foot, Head, Icon, Kpi, M, Sheet, TitleBlock, asOfNote, cx, fmt, mval } from "./parts";
 
 // ── C08 사업 분야 개관 ──
@@ -91,10 +93,12 @@ function regionBars(data: CatalogRenderData, category: string) {
   const sec = data.matrix.find((m) => m.category === category);
   const total = sec?.rows.find((r) => r.isTotal);
   if (!total) return [];
-  return REGION_GROUPS.map((g) => ({ name: g.label.replace(/^영남권\((.*)\)$/, "$1"), count: total.byRegion[g.id] ?? 0 })).filter((r) => r.count > 0);
+  return regionRows(total.byRegion);
 }
 
-export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo }) {
+/** 분야 상세 변형(L2) — hero: figure(사진 없는 숫자, 기본) | photo(사진, photo = 이미지 키) */
+export function AreaPage({ ctx, data, area, variant }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo; variant?: Record<string, string> }) {
+  const heroPhoto = variant?.hero === "photo" && variant.photo ? variant.photo : null;
   const c: AreaContent = AREA_CONTENT[area.category];
   const isPermit = area.index === 1;
   const isEsg = area.index === 4;
@@ -144,32 +148,38 @@ export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRen
           </p>
         </div>
         <div className="kc-bizhero__visual">
-          <div className="kc-nophoto kc-photo--frame" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", gap: 14, padding: "0 22px" }}>
-            <div style={{ display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}>
-              {c.heroFigure ? (
-                <>
-                  <span className="kc-caption" style={{ color: "var(--ink)" }}>
-                    {c.heroCaption}
-                  </span>
-                  <span className="kc-ig__fig" style={{ fontSize: 40, lineHeight: "46px", letterSpacing: -1 }}>
-                    {c.heroFigure.value}
-                    <small style={{ fontSize: 14, marginLeft: 2 }}>{c.heroFigure.unit}</small>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="kc-ig__fig" style={{ fontSize: 52, lineHeight: "54px", letterSpacing: -1.5 }}>
-                    <M data={data} id={heroMetric} />
-                    <small style={{ fontSize: 16, marginLeft: 2 }}>건</small>
-                  </span>
-                  <span className="kc-caption" style={{ color: "var(--ink)" }}>
-                    {c.heroCaption}
-                    {area.firstYear ? `(${area.firstYear}–${data.asOf.slice(0, 4)}.${Number(data.asOf.slice(5, 7))})` : ""}
-                  </span>
-                </>
-              )}
+          {heroPhoto ? (
+            <div className="kc-photo kc-photo--frame" style={{ position: "absolute", inset: 0 }}>
+              <img src={ctx.url(heroPhoto)} alt={`${area.name} 사진`} />
             </div>
-          </div>
+          ) : (
+            <div className="kc-nophoto kc-photo--frame" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", gap: 14, padding: "0 22px" }}>
+              <div style={{ display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}>
+                {c.heroFigure ? (
+                  <>
+                    <span className="kc-caption" style={{ color: "var(--ink)" }}>
+                      {c.heroCaption}
+                    </span>
+                    <span className="kc-ig__fig" style={{ fontSize: 40, lineHeight: "46px", letterSpacing: -1 }}>
+                      {c.heroFigure.value}
+                      <small style={{ fontSize: 14, marginLeft: 2 }}>{c.heroFigure.unit}</small>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="kc-ig__fig" style={{ fontSize: 52, lineHeight: "54px", letterSpacing: -1.5 }}>
+                      <M data={data} id={heroMetric} />
+                      <small style={{ fontSize: 16, marginLeft: 2 }}>건</small>
+                    </span>
+                    <span className="kc-caption" style={{ color: "var(--ink)" }}>
+                      {c.heroCaption}
+                      {area.firstYear ? `(${area.firstYear}–${data.asOf.slice(0, 4)}.${Number(data.asOf.slice(5, 7))})` : ""}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </section>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0, alignContent: "start" }}>
@@ -185,7 +195,7 @@ export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRen
           {isPermit && data.permitIndustries.length ? (
             <div>
               <p className="kc-blockhead">수행 업종</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }} data-widget="chips">
                 {data.permitIndustries.slice(0, 12).map((l) => (
                   <span key={l} className="kc-badge kc-badge--soft">
                     {l}
@@ -200,7 +210,7 @@ export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRen
                 {c.compare.title}
                 <span className="kc-blockhead__aside">{c.compare.aside}</span>
               </p>
-              <Compare rows={c.compare.rows} />
+              <InfoSlot slot={`area-${area.index}.compare`} spec={compareSpec(c.compare.rows)} box={{ w: 233, h: 80 }} area={area.index} />
             </div>
           ) : null}
           {regions.length ? (
@@ -208,14 +218,14 @@ export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRen
               <p className="kc-blockhead">
                 권역별 수행<span className="kc-blockhead__aside">계약 수</span>
               </p>
-              <HBars rows={regions} gap={6} />
+              <InfoSlot slot={`area-${area.index}.regions`} spec={barSpec(regions)} box={{ w: 233, h: 110 }} area={area.index} />
             </div>
           ) : null}
         </div>
         <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <p className="kc-blockhead">{c.processTitle}</p>
-            <Process steps={c.process} />
+            <InfoSlot slot={`area-${area.index}.process`} spec={stepsSpec(c.process)} box={{ w: 490, h: 90 }} area={area.index} />
           </div>
           <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
             {kpis}
@@ -225,7 +235,7 @@ export function AreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRen
               <p className="kc-blockhead">
                 대표 실적<span className="kc-blockhead__aside">{c.casesAside}</span>
               </p>
-              <ul className="kc-cases">
+              <ul className="kc-cases" data-widget="cases">
                 {area.featured.map((f, i) => (
                   <li key={i}>
                     <span className="kc-cases__year">{f.year}</span>
@@ -574,7 +584,7 @@ export function CasePage({ ctx }: { ctx: RenderCtx; data: CatalogRenderData }) {
             대표 사례 {c.list.length}선<span className="kc-blockhead__aside">위치</span>
           </p>
           <div style={{ display: "flex", gap: 6 }}>
-            <KoreaMap mode="pins" area={1} pins={pins} zoom={0.72} frame={{ width: 120, height: 215 }} />
+            <KoreaMap mode="pins" area={1} pins={pins} zoom={0.72} frame={{ width: 120, height: 215 }} root={{ "data-widget": "map" }} />
             <p className="kc-caption" style={{ alignSelf: "flex-end" }}>
               번호는 아래 목록과 같습니다. 고객이 공개에 동의한 사례만 지명을 씁니다.
             </p>

@@ -18,7 +18,7 @@ export function CredentialsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRe
     <Sheet ctx={ctx} anchors={["sec-05", "c16"]} section="05 신뢰 근거" outline="인증·등록·특허">
       <Head ctx={ctx} num="05" name="신뢰 근거" sub="인증·등록·특허" />
       <TitleBlock eyebrow="인증·등록·특허" title={title || "인증·등록·특허"} />
-      <div className="kc-creds" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "18px 16px", flex: 1, minHeight: 0, alignContent: "start" }}>
+      <div className="kc-creds" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "18px 16px", flex: 1, minHeight: 0, alignContent: "start" }} data-widget="credentials">
         {data.credentials.map((c) => (
           <div className="kc-cred" key={c.key}>
             <div className="kc-cred__thumb">
@@ -45,7 +45,7 @@ export function ClientsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
     <Sheet ctx={ctx} anchors={["c17"]} outline="주요 고객사·협력 기관">
       <Head ctx={ctx} num="05" name="신뢰 근거" sub="주요 고객사·협력 기관" />
       <TitleBlock eyebrow="주요 고객사·협력 기관" title="공공기관과 발전·철강·화학·전자 사업장이 함께합니다" />
-      <div className="kc-logowall" style={{ flex: 1, minHeight: 0, alignContent: "start" }}>
+      <div className="kc-logowall" style={{ flex: 1, minHeight: 0, alignContent: "start" }} data-widget="logos">
         {data.clients.map((g) => (
           <div className="kc-logowall__group" key={g.label}>
             <p className="kc-logowall__label">
@@ -76,7 +76,7 @@ export function ContactPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
         <div className="kc-span-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <TitleBlock eyebrow="오시는 길" title={data.offices.map((o) => o.name).join(" · ")} />
-          <KoreaMap mode="pins" area={1} pins={pins} zoom={1.25} frame={{ width: 208, height: 373 }} />
+          <KoreaMap mode="pins" area={1} pins={pins} zoom={1.25} frame={{ width: 208, height: 373 }} root={{ "data-widget": "map" }} />
         </div>
         <div className="kc-span-8" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 24, alignContent: "start", paddingTop: 6 }}>
           {data.offices.map((o) => (

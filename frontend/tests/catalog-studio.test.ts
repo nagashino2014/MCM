@@ -1,0 +1,250 @@
+// 회사소개서 스튜디오(P5) 핵심 시험 — 쪽 계획 → 노드 트리 변환 충실도, 편집층 적용·정리, 데이터 갱신 뒤 편집 유지, 인포그래픽 매칭.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parseDocument } from "htmlparser2";
+import { Fragment, createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { buildPagePlan } from "@/lib/catalog/render/components/plan";
+import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
+import type { CatalogRenderData, RenderCtx, RenderOptions } from "@/lib/catalog/render/types";
+import { matchInfographic } from "@/lib/catalog/render/infographic/match";
+import { composeDocument } from "@/lib/catalog/studio/compose";
+import { elementToTree } from "@/lib/catalog/studio/convert";
+import { orderPlan, type StudioPageState } from "@/lib/catalog/studio/doc";
+import {
+  addElement,
+  applyEdits,
+  hideNode,
+  listItemOp,
+  patchNodeStyle,
+  sanitizePageEdits,
+  setInfo,
+  setNodeContent,
+  setNodeType,
+  type PageEdits,
+} from "@/lib/catalog/studio/edits";
+import { findNode, textOf, type CNode } from "@/lib/catalog/studio/nodes";
+import { renderTrees } from "@/lib/catalog/studio/render-tree";
+import { makeFixture } from "./catalog-studio-fixture";
+
+const COVER: CoverChoice = { cover: "leaf", photo: "k/assets/hq-cover-tall.webp" };
+const ctxOf = (opts: RenderOptions = { edition: "print", naming: "masked" }): RenderCtx => ({ url: (k) => `/x/${k}`, opts, docLabel: "회사소개서 2026.10", fontSet: "pretendard", concept: "navy" });
+
+/** HTML 을 속성 순서와 무관하게 비교하는 모양으로(태그·정렬한 속성·글자) */
+interface HNode {
+  type: string;
+  name?: string;
+  data?: string;
+  attribs?: Record<string, string>;
+  children?: HNode[];
+}
+function canon(html: string): unknown {
+  const conv = (n: HNode): unknown =>
+    n.type === "text"
+      ? n.data
+      : { t: n.name, a: Object.entries(n.attribs ?? {}).sort(([x], [y]) => x.localeCompare(y)), c: (n.children ?? []).map(conv) };
+  return ((parseDocument(html) as unknown as HNode).children ?? []).map(conv);
+}
+
+function walk(n: CNode, fn: (n: CNode) => void) {
+  fn(n);
+  n.children?.forEach((c) => walk(c, fn));
+}
+function findBy(root: CNode, pred: (n: CNode) => boolean): CNode | null {
+  let hit: CNode | null = null;
+  walk(root, (n) => {
+    if (!hit && pred(n)) hit = n;
+  });
+  return hit;
+}
+const hasClass = (cls: string) => (n: CNode) => (n.className ?? "").split(/\s+/).includes(cls);
+const pageTree = (data: CatalogRenderData, key: string) => {
+  const item = buildPagePlan(ctxOf(), data, COVER).find((p) => p.key === key)!;
+  return elementToTree(item.element, key);
+};
+
+test("변환 충실도 — 편집 없는 노드 트리는 쪽 컴포넌트와 같은 HTML", () => {
+  for (const opts of [
+    { edition: "print", naming: "masked" },
+    { edition: "draft", naming: "real" },
+  ] as RenderOptions[]) {
+    const data = makeFixture();
+    const ctx = ctxOf(opts);
+    const plan = buildPagePlan(ctx, data, COVER);
+    assert.ok(plan.length > 20, `쪽 수 ${plan.length}`);
+    for (const p of plan) {
+      const direct = renderToStaticMarkup(createElement(Fragment, null, p.element));
+      const viaTree = renderToStaticMarkup(renderTrees([elementToTree(p.element, p.key)], { url: ctx.url, data }));
+      assert.deepEqual(canon(viaTree), canon(direct), `쪽 ${p.key} 이 다르게 그려짐`);
+    }
+  }
+});
+
+test("쪽 키·노드 id 는 데이터가 바뀌어도 그대로(목록 뒤 형제 포함)", () => {
+  const a = buildPagePlan(ctxOf(), makeFixture(), COVER).map((p) => p.key);
+  const b = buildPagePlan(ctxOf(), makeFixture({ extraContract: true }), COVER).map((p) => p.key);
+  assert.deepEqual(b, a);
+  const ta = pageTree(makeFixture(), "area-1");
+  const tb = pageTree(makeFixture({ extraContract: true }), "area-1");
+  const lead = (t: CNode) => findBy(t, (n) => hasClass("kc-lead")(n))!;
+  assert.equal(lead(ta).id, lead(tb).id);
+  const proc = (t: CNode) => findBy(t, (n) => n.widget === "infographic" && (n.props as { slot: string }).slot === "area-1.process")!;
+  assert.equal(proc(ta).id, proc(tb).id);
+  const cases = (t: CNode) => findBy(t, (n) => n.widget === "cases")!;
+  assert.equal(cases(ta).id, cases(tb).id);
+  assert.equal(cases(tb).children!.length, cases(ta).children!.length + 1, "대표 실적이 하나 늘어야 함");
+  // 대표 실적 목록 뒤 형제(각주)도 같은 id
+  const foot = (t: CNode) => findBy(t, hasClass("kc-footnote"))!;
+  assert.equal(foot(ta).id, foot(tb).id);
+});
+
+test("데이터 갱신 뒤에도 편집 유지 — 글·이동·유형·숨김·추가·고정 글 속 지표", () => {
+  const before = makeFixture();
+  const after = makeFixture({ extraContract: true });
+  // area-1 쪽 편집
+  const base0 = pageTree(before, "area-1");
+  let edits: PageEdits = { v: 1 };
+  let derived = applyEdits(base0, edits);
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  edits = setNodeContent(edits, derived, lead.id, [{ id: "uaaaaaaaa", tag: "#text", text: "사용자가 고친 리드 문장입니다." }]);
+  derived = applyEdits(base0, edits);
+  const kpis = findBy(derived, hasClass("kc-kpis"))!;
+  edits = patchNodeStyle(edits, derived, kpis.id, { position: "relative", left: "64.17px", top: "8px" });
+  const proc = findBy(derived, (n) => n.widget === "infographic")!;
+  edits = setInfo(edits, proc.id, { type: "cycle" });
+  derived = applyEdits(base0, edits);
+  const services = findBy(derived, hasClass("kc-list"))!;
+  edits = hideNode(edits, derived, services.id);
+  edits = addElement(edits, {
+    id: "ubbbbbbbb",
+    tag: "div",
+    className: "kc-x-text",
+    style: { position: "absolute", left: "48px", top: "520px", width: "361px" },
+    typeStep: "caption",
+    children: [{ id: "ucccccccc", tag: "#text", text: "추가한 글상자" }],
+  });
+  // 저장·불러오기(정리) 왕복
+  edits = sanitizePageEdits(JSON.parse(JSON.stringify(edits)));
+
+  const base1 = pageTree(after, "area-1");
+  const d1 = applyEdits(base1, edits);
+  assert.equal(textOf(findBy(d1, hasClass("kc-lead"))!), "사용자가 고친 리드 문장입니다.");
+  const k1 = findBy(d1, hasClass("kc-kpis"))!;
+  assert.equal(k1.style?.left, "64.17px");
+  assert.equal(k1.style?.position, "relative");
+  assert.ok(findBy(d1, hasClass("kc-orbit")), "단계 흐름이 순환 도식으로 바뀌어 있어야 함");
+  assert.equal(findBy(d1, hasClass("kc-list")), null, "주요 서비스 목록은 숨김");
+  const box = findBy(d1, hasClass("kc-x-text"))!;
+  assert.equal(textOf(box), "추가한 글상자");
+  assert.equal(box.style?.fontSize, "8.5px", "캡션 단계 글자 크기");
+  // 데이터 쪽은 새 값으로
+  assert.match(textOf(findBy(d1, (n) => n.widget === "cases")!), /가상발전 신규 사업장/);
+
+  // c04: 지표 칩이 든 문장을 고정해도 숫자는 최신 값
+  const c4a = pageTree(before, "c04");
+  const statement = findBy(c4a, hasClass("kc-statement"))!;
+  const chip = statement.children!.find((c) => c.bind === "metric:permit.initial.completed")!;
+  let e4: PageEdits = { v: 1 };
+  e4 = setNodeContent(e4, applyEdits(c4a, e4), statement.id, [{ id: "udddddddd", tag: "#text", text: "고친 문장 — 최초허가 " }, chip]);
+  e4 = sanitizePageEdits(JSON.parse(JSON.stringify(e4)));
+  const html = renderToStaticMarkup(renderTrees([applyEdits(pageTree(after, "c04"), e4)], { url: (k) => k, data: after }));
+  assert.match(html, /고친 문장 — 최초허가 <em data-metric="permit.initial.completed">41<!-- -->?건<\/em>|고친 문장 — 최초허가 <em data-metric="permit.initial.completed">41건<\/em>/);
+});
+
+test("목록 항목 추가·삭제·순서 — 처음 조작 때 목록을 고정하고 이어서 조작", () => {
+  const base = pageTree(makeFixture(), "area-2");
+  let edits: PageEdits = { v: 1 };
+  let d = applyEdits(base, edits);
+  const list = findBy(d, hasClass("kc-list"))!;
+  const n0 = list.children!.length;
+  edits = listItemOp(edits, d, list.children![0].id, "duplicate");
+  d = applyEdits(base, edits);
+  let l2 = findNode(d, list.id)!;
+  assert.equal(l2.children!.length, n0 + 1);
+  assert.ok(l2.pinned);
+  edits = listItemOp(edits, d, l2.children![n0].id, "up");
+  d = applyEdits(base, edits);
+  edits = listItemOp(edits, d, findNode(d, list.id)!.children![0].id, "remove");
+  d = applyEdits(base, edits);
+  l2 = findNode(d, list.id)!;
+  assert.equal(l2.children!.length, n0);
+  // 고정한 항목 안의 글 고치기
+  edits = setNodeContent(edits, d, l2.children![0].id, [{ id: "ueeeeeeee", tag: "#text", text: "새 서비스" }]);
+  d = applyEdits(base, edits);
+  assert.equal(textOf(findNode(d, list.id)!.children![0]), "새 서비스");
+  // 타입 스케일 단계
+  edits = setNodeType(edits, d, list.id, "lead");
+  d = applyEdits(base, edits);
+  assert.equal(findNode(d, list.id)!.style?.fontSize, "13px");
+});
+
+test("편집층 정리 — 스크립트·외부 주소·비토큰 색·모르는 키를 버린다", () => {
+  const dirty = {
+    v: 1,
+    nodes: {
+      nabc123: {
+        content: [
+          { id: "x1", tag: "script", children: [{ id: "x2", tag: "#text", text: "alert(1)" }] },
+          { id: "uaaaaaaaa", tag: "span", attrs: { onclick: "alert(1)", href: "javascript:alert(1)", "data-ref": "c04" }, style: { color: "#ff0000", background: "url(http://x)", fontWeight: 700 }, children: [{ id: "u1", tag: "#text", text: "ok" }] },
+          { id: "ubbbbbbbb", tag: "img", attrs: { src: "http://evil" } },
+        ],
+        style: { color: "red", left: "64px", position: "fixed", width: "calc(100% - 1px)", background: "var(--brand-tint)" },
+        type: "nope",
+        info: { type: "bogus" },
+        image: { key: "../../etc/passwd" },
+      },
+      "bad id": { hidden: true },
+    },
+    added: [{ id: "ucccccccc", tag: "div", className: "kc-x-text", style: { position: "fixed", left: "10px", top: "10px", width: "100px" }, children: [{ id: "u9", tag: "iframe" }] }],
+    variant: { hero: "photo", photo: "https://evil/x.png", ok: "a/cas_1" },
+  };
+  const clean = sanitizePageEdits(dirty);
+  const ne = clean.nodes!.nabc123;
+  assert.equal(ne.content!.length, 1, "script·img 는 빠짐");
+  const span = ne.content![0];
+  assert.deepEqual(span.attrs, { "data-ref": "c04" });
+  assert.deepEqual(span.style, { fontWeight: 700 });
+  assert.deepEqual(ne.style, { left: "64px", background: "var(--brand-tint)" });
+  assert.equal(ne.type, undefined);
+  assert.equal(ne.image, undefined);
+  assert.equal(clean.nodes!["bad id"], undefined);
+  assert.equal(clean.added!.length, 1);
+  assert.equal(clean.added![0].style!.position, "absolute");
+  assert.equal(textOf(clean.added![0]), "");
+  assert.deepEqual(clean.variant, { hero: "photo", ok: "a/cas_1" });
+});
+
+test("쪽 순서·숨김 — 새로 생긴 쪽은 쪽 계획의 자리에, 숨긴 쪽은 출력에서 빠짐", () => {
+  const plan = [{ key: "a" }, { key: "b" }, { key: "c" }, { key: "d" }];
+  const pages: StudioPageState[] = [
+    { key: "c", order: 0, hidden: false, edits: { v: 1 } },
+    { key: "a", order: 1, hidden: false, edits: { v: 1 } },
+    { key: "d", order: 2, hidden: false, edits: { v: 1 } },
+  ];
+  assert.deepEqual(
+    orderPlan(plan, pages).map((p) => p.key),
+    ["c", "a", "b", "d"]
+  );
+  const data = makeFixture();
+  const composed = composeDocument(ctxOf(), data, COVER, [{ key: "c02", order: null, hidden: true, edits: { v: 1 } }]);
+  assert.ok(!composed.some((p) => p.item.key === "c02"));
+  assert.ok(composed.some((p) => p.item.key === "c04"));
+});
+
+test("인포그래픽 매칭 — 목록은 수치형을 막고, 순환어는 순환을 앞에, 자리 높이를 본다", () => {
+  const steps = {
+    title: "허가 이후 사후관리",
+    items: ["허가조건 이행", "자가측정·기록", "정기검사 대응", "변경허가·신고", "허가 재검토"].map((label, i) => ({ id: `s${i}`, label })),
+  };
+  const tall = matchInfographic(steps, { box: { w: 420, h: 260 }, current: "process" });
+  assert.ok(tall.blocked.some((b) => b.type === "bar"));
+  assert.ok(tall.blocked.some((b) => b.type === "matrix"));
+  assert.equal(tall.candidates[0].type, "cycle");
+  const low = matchInfographic(steps, { box: { w: 490, h: 90 }, current: "process" });
+  assert.equal(low.candidates[0].type, "process");
+  const nums = { items: [{ id: "a", label: "수도권", value: 10, region: "capital" }, { id: "b", label: "중부권", value: 5, region: "central" }, { id: "c", label: "호남권", value: 3, region: "honam" }] };
+  const m = matchInfographic(nums, { box: { w: 233, h: 200 }, current: "bar" });
+  assert.ok(m.candidates.some((c) => c.type === "map"));
+  assert.ok(m.candidates.some((c) => c.type === "share"));
+  assert.ok(m.blocked.some((b) => b.type === "process"));
+});

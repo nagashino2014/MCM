@@ -78,9 +78,9 @@ function cleanStyle(v: string): string | null {
     const val = part.slice(i + 1).trim();
     if (!val || val.length > 300) continue;
     if (!STYLE_PROPS.has(k) || unsafeValue(val)) continue;
-    // 색 변수는 매처가 만든 --il-cN 만
+    // 색 변수는 매처가 만든 --il-cN(색)·--il-i{항목}{밝기}(항목별 색)만
     const vars = val.match(/var\(\s*--[\w-]+/g) ?? [];
-    if (vars.some((x) => !/^var\(\s*--il-c\d{1,3}$/.test(x))) continue;
+    if (vars.some((x) => !/^var\(\s*--il-(c\d{1,3}|i\d{1,2}(m2|m1|0|p1|p2))$/.test(x))) continue;
     out.push(`${k}:${val}`);
   }
   return out.length ? out.join(";") : null;

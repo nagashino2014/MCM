@@ -15,7 +15,8 @@ import {
 } from "../master-content";
 import type { AreaInfo, CatalogRenderData, CustomAreaInfo, RenderCtx } from "../types";
 import { barSpec, compareSpec, regionRows, stepsSpec } from "../infographic/adapt";
-import { InfoSlot } from "../infographic/slot";
+import { InfoSlot, InfoSource } from "../infographic/slot";
+import type { InfoSpec } from "../infographic/types";
 import { KoreaMap } from "./infographics";
 import { AREA_ICON, AreaTag, Foot, Head, Icon, Kpi, M, Sheet, TitleBlock, asOfNote, cx, fmt, mval } from "./parts";
 
@@ -29,12 +30,30 @@ const ORBIT_POS = [
   { left: 520, top: 300, x2: 520, y2: 350 },
 ];
 
+/** C08 원형 도식의 내용 — 스튜디오에서 유형을 바꾸거나 일러스트로 그릴 때 이 내용(분야명·누적 건수 지표·주요 서비스)이 그대로 간다 */
+function businessMapSpec(data: CatalogRenderData): InfoSpec {
+  return {
+    type: "hub",
+    content: {
+      center: { label: ORBIT_CENTER[ORBIT_CENTER.length - 1], desc: ORBIT_CENTER.slice(0, -1).join(" ") },
+      items: data.areas.map((a) => {
+        const sw = a.index === 6;
+        const bullets = sw ? SOFTWARE_CONTENT.products.map((p) => p.name) : AREA_CONTENT[a.category]?.overview ?? [];
+        const products = sw && a.count === 0;
+        // 서비스는 원래 카드처럼 한 줄에 하나
+        return { id: `a${a.index}`, label: a.name, desc: bullets.join("\n"), metric: products ? "software.products" : `projects.area.${a.index}`, unit: products ? "종" : "건" };
+      }),
+    },
+  };
+}
+
 export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const consulting = data.areas.filter((a) => a.index <= 5).length;
   return (
     <Sheet ctx={ctx} anchors={["c08"]} outline="사업 분야 개관">
       <Head ctx={ctx} num="02" name="사업 분야" sub="사업 분야 개관" />
       <TitleBlock eyebrow="사업 분야 개관" title={`환경 컨설팅 ${consulting}분야와 응용소프트웨어로 사업장을 지원합니다`} />
+      <InfoSource slot="c08.areas" spec={businessMapSpec(data)} box={{ w: 746, h: 400 }}>
       <div className="kc-ig kc-orbit" style={{ flex: 1, minHeight: 0 }}>
         <svg className="kc-orbit__svg" viewBox="0 0 746 420" preserveAspectRatio="none" aria-hidden="true">
           {ORBIT_POS.map((p, i) => (
@@ -83,6 +102,7 @@ export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRe
           );
         })}
       </div>
+      </InfoSource>
       <Foot items={[`* ${asOfNote(data)}. 건수는 계약 관리 분류별 누적 계약 수(수행 중 포함, 기타 용역 포함)입니다. 응용소프트웨어는 제품 수이며, 공급 계약이 생기면 계약 건수로 셉니다.`]} />
     </Sheet>
   );

@@ -9,6 +9,7 @@ import {
   illustCandidates,
   illustColorVars,
   illustSlotTexts,
+  illustTints,
   placeholderContent,
   sanitizeIllustColors,
   sanitizeIllustrationMeta,
@@ -134,9 +135,12 @@ test("후보 — 항목 수가 같은 일러스트만, 같은 유형·쪽 추천
     "4항목·보관 제외"
   );
   assert.ok(out[0].reasons.some((r) => r.includes("같은 유형")) && out[0].reasons.some((r) => r.includes("C09 추천")));
-  // 수치형 내용인데 숫자 자리가 모자라면 제외
+  // 수치형 유형(큰 숫자 등)인데 숫자 자리가 모자라면 제외, 목록형이면 후보(숫자는 제목 뒤 지표 칩)
   const noNum = { ...info(), assetId: "cil_eeeeeeeeeeeeeeee", slots: info().slots.filter((s) => s.role !== "number") };
-  assert.equal(illustCandidates([noNum], CONTENT, { type: "process" }).length, 0);
+  assert.equal(illustCandidates([noNum], CONTENT, { type: "stats" }).length, 0);
+  assert.equal(illustCandidates([noNum], CONTENT, { type: "process" }).length, 1);
+  const t1 = illustSlotTexts(noNum, CONTENT).find((t) => t.slot.id === "s1")!;
+  assert.deepEqual(t1.suffix, { metric: "contracts.total", num: "12", unit: "건" });
   assert.equal(placeholderContent(a).items.length, 3);
 });
 
@@ -147,7 +151,7 @@ test("색 — 모드별 토큰, 무리 안 밝기 차는 color-mix, 직접 고�
   assert.match(area["--il-c2"], /^color-mix\(in srgb, var\(--area\) \d+%, white\)$/);
   assert.equal(area["--il-c3"], "var(--ink-muted)");
   const areas = illustColorVars(i.palette, { mode: "areas" });
-  assert.equal(areas["--il-c1"], "var(--area-1-mid)");
+  assert.equal(areas["--il-c1"], "var(--area-1)");
   assert.deepEqual(illustColorVars(i.palette, { mode: "original" }), {}, "원래 색 = 변수 없음(대체값 그대로)");
   const own = illustColorVars(i.palette, sanitizeIllustColors({ mode: "original", map: { "0": "area-4-mid", "1": "evil;}", x: "brand" } }));
   assert.deepEqual(own, { "--il-c1": "var(--area-4-mid)" });
@@ -167,7 +171,7 @@ test("일러스트 모양 그리기 — SVG 등록·글자 HTML·지표 칩·색
   assert.ok(html.includes('data-illust="cil_0123456789abcdef"') && html.includes('data-illust-art="cil_0123456789abcdef"'));
   assert.ok(html.includes("<svg") && html.includes("사전 진단") && html.includes("현황 조사와 쟁점 정리"));
   assert.ok(html.includes('<span data-metric="contracts.total">12</span>건'), "숫자만 칩, 단위는 밖");
-  assert.ok(html.includes("--il-c1:var(--area-1-mid)"));
+  assert.ok(html.includes("--il-c1:var(--area-1)"));
   assert.ok(html.includes("width:min(100%, 450px)"), "자리 높이(150)에 맞춰 폭을 줄임");
   assert.equal((html.match(/kc-ill__slot /g) ?? []).length, 7);
 });
@@ -220,7 +224,7 @@ test("스튜디오 — 인포그래픽 자리를 일러스트로: 데이터 갱�
   assert.ok(html.includes('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100">'), "그릴 때 SVG 를 채움");
   assert.ok(html.includes("고친 둘째 단계"));
   assert.match(html, /<span data-metric="permit\.initial\.completed">41<\/span>/, "숫자 자리는 갱신된 지표(40→41)");
-  assert.ok(html.includes("--il-c1:var(--area-1-mid)"));
+  assert.ok(html.includes("--il-c1:var(--area-1)"));
   // 기본 도식으로
   const back = setInfo(edits, proc.id, { ...edits.nodes![proc.id].info!, illust: null });
   const d2 = applyEdits(tree(after, "area-1"), sanitizePageEdits(JSON.parse(JSON.stringify(back))));
@@ -270,7 +274,7 @@ test("글자 자리 글 → 내용 칸(역할별), 지표에 묶은 숫자는 �
   const c: InfoContent = { title: "제목", center: { label: "중심" }, items: [{ id: "a", label: "가", metric: "x.y" }, { id: "b", label: "나" }] };
   assert.equal(applySlotText(c, "heading", 0, "새 제목")?.title, "새 제목");
   assert.deepEqual(applySlotText(c, "center", 0, "종합\n환경 컨설팅")?.center, { label: "종합", desc: "환경 컨설팅" });
-  assert.equal(applySlotText(c, "desc", 2, "설명\n둘째 줄")?.items[1].desc, "설명 둘째 줄");
+  assert.equal(applySlotText(c, "desc", 2, "설명\n\n둘째 줄")?.items[1].desc, "설명\n둘째 줄", "설명은 줄바꿈을 지킨다");
   assert.equal(applySlotText(c, "number", 1, "99"), null, "지표 칩 숫자는 고치지 않음");
   assert.equal(applySlotText(c, "number", 2, "12건")?.items[1].valueText, "12건");
   assert.equal(applySlotText(c, "title", 1, "가"), null, "바뀐 것 없음");
@@ -284,4 +288,28 @@ test("글자 넘침 추정 — 글자별 폭(한글·영문·공백)과 자리 �
   const desc = info().slots.find((s) => s.id === "s3")!; // 3줄 + 1
   assert.equal(slotOverflows(desc, "현황 조사와 쟁점 정리", 300), false);
   assert.ok(textWidthEm("ABC abc") < textWidthEm("가나다 라마바"));
+});
+
+test("항목별 색 — 같은 계열로 그린 노드도 분야 6색이면 n번 항목 = n번 분야 키 색(표지 분야 원과 같은 색)", () => {
+  const svg = '<svg viewBox="0 0 10 10"><circle style="fill:var(--il-i10,var(--il-c2,#41a7e0))"/><circle style="fill:var(--il-i2p1,var(--il-c2,#41a7e0))"/><circle style="fill:var(--il-i60,var(--il-c2,#41a7e0))"/></svg>';
+  const tints = illustTints(svg);
+  assert.deepEqual(tints, [{ n: 1, shades: ["0"] }, { n: 2, shades: ["p1"] }, { n: 6, shades: ["0"] }]);
+  const i = info();
+  const v = illustColorVars(i.palette, { mode: "areas" }, tints);
+  assert.equal(v["--il-i10"], "var(--area-1)");
+  assert.match(v["--il-i2p1"], /^color-mix\(in srgb, var\(--area-2\) \d+%, white\)$/);
+  assert.equal(v["--il-i60"], "var(--area-6)");
+  // 다른 모드는 항목 색을 두지 않고 무리 색을 따른다 — 항목에 직접 고른 색만
+  const own = illustColorVars(i.palette, sanitizeIllustColors({ mode: "brand", map: { i2: "area-4" } }), tints);
+  assert.equal(own["--il-i10"], undefined);
+  assert.equal(own["--il-i2p1"]?.includes("var(--area-4)"), true);
+  // 유채색 제목 글자는 그 항목의 키 색
+  const t = { ...i.slots[2], item: 2 };
+  assert.equal(slotTextColor(t, i.palette, { mode: "areas" }, undefined, tints), "var(--area-2)");
+});
+
+test("SVG 정리 — 항목별 색 변수(--il-i)는 남기고 다른 변수는 버린다", () => {
+  const out = sanitizeIllustrationSvg('<svg viewBox="0 0 1 1"><circle style="fill:var(--il-i3p1,var(--il-c2,#41a7e0))"/><rect style="fill:var(--il-x9,#000)"/></svg>', "ilt-").svg;
+  assert.ok(out.includes("fill:var(--il-i3p1,var(--il-c2,#41a7e0))"));
+  assert.ok(!out.includes("--il-x9"));
 });

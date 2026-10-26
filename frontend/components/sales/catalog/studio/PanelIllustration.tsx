@@ -20,7 +20,7 @@ import {
   type IllustColors,
   type IllustrationInfo,
 } from "@/lib/catalog/illustration-types";
-import { illustrationRender } from "@/lib/catalog/render/infographic/illustration";
+import { illustrationRender, tintsOf } from "@/lib/catalog/render/infographic/illustration";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { INFO_TYPES, INFO_TYPE_META, type InfoSpec, type InfoType } from "@/lib/catalog/render/infographic/types";
@@ -32,6 +32,8 @@ import { ensureIllustrations } from "./useStudio";
 
 /** 무리마다 고를 수 있는 색(면 색 토큰) */
 const GROUP_TOKENS = ["brand", "accent", "accent-2", "area-1-mid", "area-2-mid", "area-3-mid", "area-4-mid", "area-5-mid", "area-6-mid", "ci-gray", "ink"];
+/** 항목마다 고를 수 있는 색 — 분야 키 색(표지 하단 분야 원과 같은 색)이 먼저 */
+const ITEM_TOKENS = ["area-1", "area-2", "area-3", "area-4", "area-5", "area-6", ...GROUP_TOKENS];
 
 let libraryCache: IllustrationInfo[] | null = null;
 
@@ -97,7 +99,17 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
   const candidates = useMemo(() => illustCandidates(all, spec.content, { type: spec.type, pageType: item.type, box: slot.box }).slice(0, 6), [all, spec.content, spec.type, item.type, slot.box]);
   const hiddenOther = all.filter((i) => i.count !== spec.content.items.length).length;
   const ready = useEnsured(candidates.map((c) => c.info.assetId).concat(spec.illust ? [spec.illust.asset] : []));
-  const cur = spec.illust ? illustrationRender(spec.illust.asset)?.info : undefined;
+  const curRender = spec.illust ? illustrationRender(spec.illust.asset) : undefined;
+  const cur = curRender?.info;
+  const tints = curRender ? tintsOf(curRender) : [];
+  // 라이브러리에 같은 일러스트의 새 판이 있으면(다시 가져오기로 이 판은 보관됨) 바꿀 수 있게
+  const newer = cur && cur.status === "archived" ? all.find((i) => i.sourceKey === cur.sourceKey && i.status === "active" && i.assetId !== cur.assetId) : undefined;
+  const setMap = (key: string, token: string) => {
+    const map = { ...(colors.map ?? {}) };
+    if (token) map[key] = token;
+    else delete map[key];
+    setIllust(cur!.assetId, { mode: colors.mode, ...(Object.keys(map).length ? { map } : {}) });
+  };
   const colors: IllustColors = sanitizeIllustColors(spec.illust?.colors);
   const fit = spec.illust?.fit;
   const setIllust = (asset: string, next?: IllustColors, nextFit: "width" | undefined = fit) =>
@@ -117,6 +129,11 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
         <div className="rounded-lg border p-2 flex flex-col gap-2" style={{ borderColor: "var(--cd-primary)" }}>
           <p className="text-xs cd-text">
             지금 <b>{cur.title}</b> · {INFO_TYPE_META[cur.type].label} {cur.count}항목
+            {newer ? (
+              <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-1" onClick={() => void ensureIllustrations([newer.assetId]).then(() => setIllust(newer.assetId))}>
+                새 판으로 바꾸기
+              </button>
+            ) : null}
             <span className="block text-[11px] cd-text-faint">
               {[cur.license.provider, cur.license.stockId ? `#${cur.license.stockId}` : "", cur.license.license].filter(Boolean).join(" · ")}
             </span>
@@ -155,6 +172,29 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
                 </button>
               ))}
             </div>
+            {tints.length ? (
+              <div className="flex flex-col gap-1 text-[11px] cd-text-muted">
+                <span>항목 색 — {colors.mode === "areas" ? "n번 항목 = n번 분야 색(표지 분야 원과 같은 색)" : "고른 항목만 그 색, 나머지는 위 색 모드"}</span>
+                {tints.map((t) => {
+                  const it = spec.content.items[t.n - 1];
+                  return (
+                    <label key={t.n} className="flex items-center gap-1.5">
+                      <span className="w-28 truncate cd-text">
+                        {t.n}. {it?.label ?? ""}
+                      </span>
+                      <select className="cd-select flex-1" aria-label={`${t.n}번 항목 색`} value={colors.map?.[`i${t.n}`] ?? ""} onChange={(e) => setMap(`i${t.n}`, e.target.value)}>
+                        <option value="">{colors.mode === "areas" ? `자동(area-${((t.n - 1) % 6) + 1})` : "자동"}</option>
+                        {ITEM_TOKENS.map((tk) => (
+                          <option key={tk} value={tk}>
+                            {tk}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
             {groupCount(cur.palette) > 0 ? (
               <div className="flex flex-wrap gap-1.5 items-center text-[11px] cd-text-muted">
                 {Array.from({ length: Math.min(6, groupCount(cur.palette)) }, (_, g) => {
@@ -167,12 +207,7 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
                         style={{ width: 104 }}
                         aria-label={`색 무리 ${g + 1}`}
                         value={colors.map?.[String(g)] ?? ""}
-                        onChange={(e) => {
-                          const map = { ...(colors.map ?? {}) };
-                          if (e.target.value) map[String(g)] = e.target.value;
-                          else delete map[String(g)];
-                          setIllust(cur.assetId, { mode: colors.mode, ...(Object.keys(map).length ? { map } : {}) });
-                        }}
+                        onChange={(e) => setMap(String(g), e.target.value)}
                       >
                         <option value="">자동</option>
                         {GROUP_TOKENS.map((t) => (

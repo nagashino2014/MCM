@@ -13,11 +13,13 @@ import {
   ILLUST_MIN_CHARS,
   ILLUST_MIN_PT,
   illustColorVars,
+  illustTints,
   illustSlotTexts,
   sanitizeIllustColors,
   slotBgHex,
   slotTextColor,
   type IllustSlot,
+  type IllustTint,
   type IllustSlotRole,
   type IllustrationRender,
 } from "@/lib/catalog/illustration-types";
@@ -25,6 +27,17 @@ import type { RootAttrs } from "../components/infographics";
 import type { InfoBox, InfoSpec } from "./types";
 
 const REG = new Map<string, IllustrationRender>();
+const TINTS = new WeakMap<IllustrationRender, IllustTint[]>();
+
+/** 항목별 색(SVG 의 --il-i 변수) — 등록한 그림마다 한 번 읽는다 */
+export function tintsOf(r: IllustrationRender): IllustTint[] {
+  let t = TINTS.get(r);
+  if (!t) {
+    t = illustTints(r.svg);
+    TINTS.set(r, t);
+  }
+  return t;
+}
 
 /** 그릴 일러스트를 등록한다(같은 자산 id 는 새 정보로 덮어쓴다) */
 export function registerIllustrations(list: IllustrationRender[]): void {
@@ -45,15 +58,23 @@ export function illustWidth(view: [number, number], box: InfoBox, fit?: string):
 }
 
 /** 글자 자리 상자(최소 글자 크기·줄 수 적용)가 그림 위·아래로 나가는 길이(pt) — 그린 폭 width 기준 근사 */
-export function slotOverhang(slots: IllustSlot[], view: [number, number], width: number): { top: number; bottom: number } {
+/** 글이 원래 자리보다 길 때 위로 늘리는지 — 아래 빈 공간으로 모자라고 위 공간이 더 넉넉할 때(화살·띠 위에 놓인 설명 등) */
+export function growsUp(s: IllustSlot, needH: number, H: number): boolean {
+  if (!s.room) return false;
+  const extra = needH - s.h * H;
+  const [, , gu, gd] = s.room;
+  return extra > gd * H + 0.5 && gu > gd;
+}
+
+export function slotOverhang(slots: IllustSlot[], view: [number, number], width: number, fit: Record<string, { font: number; lines: number }> = {}): { top: number; bottom: number } {
   const H = (width * view[1]) / view[0];
   let top = 0;
   let bottom = 0;
   for (const s of slots) {
-    const font = Math.max(ILLUST_MIN_PT[s.role], s.fs * width);
+    const font = fit[s.id]?.font ?? Math.max(ILLUST_MIN_PT[s.role], s.fs * width);
     const lead = Math.max(0, s.lh - 0.72);
-    const y0 = s.y * H - (font * lead) / 2;
-    const h = Math.max(s.h * H + font * lead, font * s.lh * (s.lines + (s.role === "desc" ? 1 : 0)));
+    const h = Math.max(s.h * H + font * lead, font * s.lh * (fit[s.id]?.lines ?? s.lines + (s.role === "desc" ? 1 : 0)));
+    const y0 = growsUp(s, h, H) ? (s.y + s.h) * H + (font * lead) / 2 - h : s.y * H - (font * lead) / 2;
     top = Math.max(top, -y0);
     bottom = Math.max(bottom, y0 + h - H);
   }
@@ -72,10 +93,11 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
   }
   const { info } = r;
   const colors = sanitizeIllustColors(ref.colors);
-  const vars = illustColorVars(info.palette, colors);
+  const tints = tintsOf(r);
+  const vars = illustColorVars(info.palette, colors, tints);
   const width = illustWidth(info.view, box, ref.fit);
   const texts = illustSlotTexts(info, spec.content, width).filter((t) => t.text);
-  const reserve = slotOverhang(texts.map((t) => t.slot), info.view, width);
+  const reserve = slotOverhang(texts.map((t) => t.slot), info.view, width, Object.fromEntries(texts.map((t) => [t.slot.id, { font: t.font, lines: t.lines }])));
   const style = {
     position: "relative",
     width: `min(100%, ${Math.round(width)}px)`,
@@ -89,11 +111,12 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
   return (
     <div {...root} className="kc-ig kc-ill" data-illust={info.assetId} style={style}>
       <div className="kc-ill__art" data-illust-art={info.assetId} aria-hidden="true" dangerouslySetInnerHTML={{ __html: r.svg }} />
-      {texts.map(({ slot, text, metric }) => {
-        const extra = slot.role === "desc" ? 1 : 0;
-        const fs = `max(${ILLUST_MIN_PT[slot.role]}px, ${(slot.fs * 100).toFixed(3)}cqw)`;
+      {texts.map(({ slot, text, metric, suffix, font, shrunk, lines: nLines, width: wFrac }) => {
+        const H = (width * info.view[1]) / info.view[0];
+        // 글이 길면 자리에 맞게 줄인 크기(최소 크기까지), 아니면 그림 폭 비율
+        const fs = shrunk ? `${font}px` : `max(${ILLUST_MIN_PT[slot.role]}px, ${(slot.fs * 100).toFixed(3)}cqw)`;
         const lead = Math.max(0, slot.lh - 0.72);
-        // 정렬 기준점을 지킨다 — 가운데 정렬은 가운데, 오른쪽 정렬은 오른쪽 끝에서 최소 폭만큼 넓힌다
+        // 정렬 기준점을 지킨다 — 가운데 정렬은 가운데, 오른쪽 정렬은 오른쪽 끝에서 넓힌다(글이 길면 바깥쪽으로 최대 1.5배)
         const anchor: CSSProperties =
           slot.align === "center"
             ? { left: `${((slot.x + slot.w / 2) * 100).toFixed(2)}%`, transform: "translateX(-50%)" }
@@ -103,17 +126,19 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
         const st = {
           "--fs": fs,
           ...anchor,
-          top: `calc(${(slot.y * 100).toFixed(2)}% - var(--fs) * ${(lead / 2).toFixed(3)})`,
-          width: `max(${(slot.w * 100).toFixed(2)}%, calc(var(--fs) * ${ILLUST_MIN_CHARS[slot.role]}))`,
-          height: `max(calc(${(slot.h * 100).toFixed(2)}% + var(--fs) * ${lead.toFixed(3)}), calc(var(--fs) * ${(slot.lh * (slot.lines + extra)).toFixed(3)}))`,
+          ...(growsUp(slot, Math.max(slot.h * H + font * lead, font * slot.lh * nLines), H)
+            ? { bottom: `calc(${((1 - slot.y - slot.h) * 100).toFixed(2)}% - var(--fs) * ${(lead / 2).toFixed(3)})` }
+            : { top: `calc(${(slot.y * 100).toFixed(2)}% - var(--fs) * ${(lead / 2).toFixed(3)})` }),
+          width: `max(${(Math.max(slot.w, wFrac) * 100).toFixed(2)}%, calc(var(--fs) * ${ILLUST_MIN_CHARS[slot.role]}))`,
+          height: `max(calc(${(slot.h * 100).toFixed(2)}% + var(--fs) * ${lead.toFixed(3)}), calc(var(--fs) * ${(slot.lh * nLines).toFixed(3)}))`,
           fontSize: "var(--fs)",
           lineHeight: slot.lh,
           textAlign: slot.align,
           fontWeight: WEIGHT[slot.role],
-          color: slotTextColor(slot, info.palette, colors, area),
-        } as CSSProperties;
+          color: slotTextColor(slot, info.palette, colors, area, tints),
+        } as unknown as CSSProperties;
         const lines = text.split("\n");
-        const bg = slotBgHex(slot, info.palette, colors, area);
+        const bg = slotBgHex(slot, info.palette, colors, area, tints);
         return (
           <div
             key={slot.id}
@@ -138,6 +163,13 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
                   </span>
                 ))
               )}
+              {suffix ? (
+                <span className="kc-ill__fig">
+                  {" "}
+                  <span data-metric={suffix.metric}>{suffix.num}</span>
+                  {suffix.unit}
+                </span>
+              ) : null}
             </span>
           </div>
         );

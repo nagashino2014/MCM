@@ -43,6 +43,8 @@ export interface IllustSlot {
   color?: string;
   /** 글자 자리 아래 도형 색(#hex) — 바꿔 칠한 뒤 대비(4.5:1)가 모자라면 흰 글자·짙은 글자 중 나은 쪽으로 */
   bg?: string;
+  /** 둘레 빈 공간 [왼, 오른, 위, 아래](그림 폭·높이 비율) — 매처가 그림 도형까지 잰 값. 글이 길 때 이 안에서만 넓히고 늘린다 */
+  room?: [number, number, number, number];
 }
 
 export interface IllustPaletteEntry {
@@ -144,6 +146,7 @@ export function sanitizeSlots(input: unknown): IllustSlot[] {
       align: o.align === "center" || o.align === "right" ? o.align : "left",
       ...(typeof o.color === "string" && /^#[0-9a-f]{6}$/i.test(o.color) ? { color: o.color.toLowerCase() } : {}),
       ...(typeof o.bg === "string" && /^#[0-9a-f]{6}$/i.test(o.bg) ? { bg: o.bg.toLowerCase() } : {}),
+      ...(Array.isArray(o.room) && o.room.length === 4 && o.room.every((v) => num(v, 0, 1.5) != null) ? { room: o.room.map((v) => r4(v as number)) as [number, number, number, number] } : {}),
     });
   }
   return out;
@@ -230,8 +233,43 @@ export const ILLUST_COLOR_MODES: Array<{ id: IllustColorMode; label: string }> =
 
 export interface IllustColors {
   mode: IllustColorMode;
-  /** 무리(group 순번 문자열) → 색 토큰 이름 — 무리마다 직접 고른 색 */
+  /** 무리(group 순번 "0"…) 또는 항목("i1"…) → 색 토큰 이름 — 직접 고른 색 */
   map?: Record<string, string>;
+}
+
+/** 항목별 색(매처가 도형마다 가까운 항목을 찾아 var(--il-i{n}{밝기}, …) 로 감싼 것) — n = 항목 순번, shades = 쓰인 밝기 단계 */
+export interface IllustTint {
+  n: number;
+  shades: string[];
+}
+
+const SHADE_STEP: Record<string, number> = { m2: -2, m1: -1, "0": 0, p1: 1, p2: 2 };
+
+/** SVG 본문에서 항목별 색 변수를 읽는다(DB 에 따로 두지 않음 — 그림과 늘 같다) */
+export function illustTints(svg: string): IllustTint[] {
+  const by = new Map<number, Set<string>>();
+  for (const m of svg.matchAll(/--il-i(\d{1,2})(m2|m1|0|p1|p2)\b/g)) {
+    const n = Number(m[1]);
+    if (!by.has(n)) by.set(n, new Set());
+    by.get(n)!.add(m[2]);
+  }
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([n, s]) => ({ n, shades: [...s] }));
+}
+
+/** 항목 n 의 바탕 색 — 직접 고른 색, 분야 6색이면 n번 분야 키 색(표지 하단 분야 원과 같은 색), 그 밖에는 없음(무리 색을 따른다) */
+export function itemBase(colors: IllustColors, n: number): string | null {
+  const own = colors.map?.[`i${n}`];
+  if (own) return `var(--${own})`;
+  if (colors.mode === "areas") return `var(--area-${((n - 1) % 6) + 1})`;
+  return null;
+}
+
+function shadeMix(base: string, sh: number): string {
+  return sh > 0.05
+    ? `color-mix(in srgb, ${base} ${Math.round(100 - Math.min(0.75, sh * 0.7) * 100)}%, white)`
+    : sh < -0.05
+      ? `color-mix(in srgb, ${base} ${Math.round(100 - Math.min(0.5, -sh * 0.5) * 100)}%, black)`
+      : base;
 }
 
 export function sanitizeIllustColors(input: unknown): IllustColors {
@@ -241,7 +279,7 @@ export function sanitizeIllustColors(input: unknown): IllustColors {
   if (o.map && typeof o.map === "object") {
     const map: Record<string, string> = {};
     for (const [k, v] of Object.entries(o.map as Record<string, unknown>).slice(0, 12)) {
-      if (/^\d{1,2}$/.test(k) && typeof v === "string" && isColorToken(v)) map[k] = v;
+      if (/^i?\d{1,2}$/.test(k) && typeof v === "string" && isColorToken(v)) map[k] = v;
     }
     if (Object.keys(map).length) out.map = map;
   }
@@ -250,7 +288,8 @@ export function sanitizeIllustColors(input: unknown): IllustColors {
 
 const SEQ: Record<Exclude<IllustColorMode, "original">, string[]> = {
   area: ["var(--area-mid)", "var(--area)", "color-mix(in srgb, var(--area-mid) 55%, white)", "color-mix(in srgb, var(--area) 70%, black)"],
-  areas: [1, 2, 3, 4, 5, 6].map((i) => `var(--area-${i}-mid)`),
+  // 분야 6색 = 표지 하단 분야 이름 앞 원과 같은 분야 키 색
+  areas: [1, 2, 3, 4, 5, 6].map((i) => `var(--area-${i})`),
   brand: ["var(--brand)", "var(--accent-2)", "var(--accent)", "var(--ci-gray)", "var(--area-6-mid)", "var(--area-3-mid)"],
   mono: ["var(--brand)", "color-mix(in srgb, var(--brand) 70%, white)", "color-mix(in srgb, var(--brand) 45%, white)", "color-mix(in srgb, var(--brand) 25%, white)"],
 };
@@ -270,19 +309,19 @@ export function groupCount(palette: IllustPaletteEntry[]): number {
 }
 
 /** 색 변수 값 — style 에 그대로 넣는다(--il-cN: …). 원래 색 모드에서 직접 고른 무리가 없으면 빈 객체 */
-export function illustColorVars(palette: IllustPaletteEntry[], colors: IllustColors): Record<string, string> {
+export function illustColorVars(palette: IllustPaletteEntry[], colors: IllustColors, tints: IllustTint[] = []): Record<string, string> {
   const out: Record<string, string> = {};
+  // 항목별 색 — 분야 6색이나 항목에 직접 고른 색이 있으면 그 항목 도형은 무리 색 대신 이 색(밝기 단계는 0.5 씩)
+  for (const t of tints) {
+    const base = itemBase(colors, t.n);
+    if (!base) continue;
+    for (const s of t.shades) if (s in SHADE_STEP) out[`--il-i${t.n}${s}`] = shadeMix(base, SHADE_STEP[s] * 0.5);
+  }
   for (const p of palette) {
     if (p.group != null) {
       const base = groupBase(colors, p.group);
       if (!base) continue;
-      const sh = p.shade ?? 0;
-      out[`--il-${p.v}`] =
-        sh > 0.05
-          ? `color-mix(in srgb, ${base} ${Math.round(100 - Math.min(0.75, sh * 0.7) * 100)}%, white)`
-          : sh < -0.05
-            ? `color-mix(in srgb, ${base} ${Math.round(100 - Math.min(0.5, -sh * 0.5) * 100)}%, black)`
-            : base;
+      out[`--il-${p.v}`] = shadeMix(base, p.shade ?? 0);
     } else if (colors.mode !== "original") {
       // 무채색: 흰색은 그대로, 나머지는 글자·회색 토큰 단계
       if (p.l >= 0.93) continue;
@@ -356,9 +395,9 @@ export function contrastRatio(a: string, b: string): number {
 
 /** 글자 자리 색 — 유채색 글자는 그 무리의 글자용 색(4.5:1 키 색), 무채색은 밝기로 ink·ink-muted·흰 글자.
  *  자리 아래에 칠한 도형이 있으면(bg) 바꿔 칠한 색과 대비를 재서 모자라면 흰 글자·짙은 글자 중 대비가 큰 쪽으로 바꾼다. */
-export function slotTextColor(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors, area?: number): string {
-  const base = baseTextColor(slot, palette, colors);
-  const bgHex = slotBgHex(slot, palette, colors, area);
+export function slotTextColor(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors, area?: number, tints: IllustTint[] = []): string {
+  const base = baseTextColor(slot, palette, colors, tints);
+  const bgHex = slotBgHex(slot, palette, colors, area, tints);
   if (!bgHex) return base;
   const fg = cssColorHex(base, area);
   if (!bgHex || !fg || contrastRatio(fg, bgHex) >= 4.5) return base;
@@ -368,17 +407,23 @@ export function slotTextColor(slot: IllustSlot, palette: IllustPaletteEntry[], c
 }
 
 /** 글자 자리 아래 도형을 바꿔 칠한 색(#hex) — 모르면 null. 캔버스 대비 검사의 바탕(data-ill-bg)으로도 쓴다 */
-export function slotBgHex(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors, area?: number): string | null {
+export function slotBgHex(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors, area?: number, tints: IllustTint[] = []): string | null {
   if (!slot.bg) return null;
   const bp = palette.find((e) => e.hex === slot.bg);
-  const fill = bp ? (illustColorVars([bp], colors)[`--il-${bp.v}`] ?? slot.bg) : slot.bg;
+  const own = bp?.group != null && slot.item > 0 && tints.some((t) => t.n === slot.item) ? itemBase(colors, slot.item) : null;
+  const fill = own ?? (bp ? (illustColorVars([bp], colors)[`--il-${bp.v}`] ?? slot.bg) : slot.bg);
   return cssColorHex(fill, area);
 }
 
-function baseTextColor(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors): string {
+function baseTextColor(slot: IllustSlot, palette: IllustPaletteEntry[], colors: IllustColors, tints: IllustTint[] = []): string {
   const hex = slot.color;
   if (!hex) return "var(--ink)";
   const p = palette.find((e) => e.hex === hex);
+  if (p?.group != null && slot.item > 0 && tints.some((t) => t.n === slot.item)) {
+    // 항목별 색 — 그 항목 색의 글자용(키) 색
+    const own = itemBase(colors, slot.item);
+    if (own) return own.replace(/-(mid|tint)\)$/, ")");
+  }
   if (p?.group != null) {
     const own = colors.map?.[String(p.group)];
     if (own) return `var(--${own.replace(/-(mid|tint)$/, "")})`;
@@ -399,6 +444,13 @@ export interface SlotText {
   text: string;
   /** 숫자 자리의 지표 바인딩 */
   metric?: string;
+  /** 제목 뒤에 붙이는 수치(그림에 그 항목 숫자 자리가 없을 때) — 지표 칩 + 단위 */
+  suffix?: { metric: string; num: string; unit: string };
+  /** 자리에 맞춘 글자 크기(pt)와 줄였는지, 쓰는 줄 수, 자리 폭(그림 폭 비율) */
+  font: number;
+  shrunk: boolean;
+  lines: number;
+  width: number;
   /** 자리에 들어갈 대략 글자 수(넘침 판정, 한글 기준) */
   capacity: number;
   /** 넘침 — 글자별 폭(한글·영문·숫자·공백)으로 잰 글이 자리 줄 수를 넘는지 */
@@ -406,8 +458,11 @@ export interface SlotText {
 }
 
 /** 자리 글자 수 용량 — 한 줄 폭 ÷ 글자 폭(한글 ≈ 0.95em) × 줄 수(설명은 1줄 여유) */
-/** 역할별 최소 글자 크기(pt) — 스톡 그림을 쪽 폭으로 줄이면 설명 글자가 5pt 안팎이 되므로 가독 하한을 둔다 */
-export const ILLUST_MIN_PT: Record<IllustSlotRole, number> = { title: 8, sub: 7, desc: 7, number: 9, center: 9, heading: 12 };
+/** 역할별 최소 글자 크기(pt) — 스톡 그림을 쪽 폭으로 줄이면 설명 글자가 5pt 안팎이 되므로 가독 하한을 둔다(설명 = 디자인 시스템 캡션 8.5pt) */
+export const ILLUST_MIN_PT: Record<IllustSlotRole, number> = { title: 9, sub: 8, desc: 8.5, number: 9, center: 10, heading: 12 };
+/** 최소 크기에서도 넘치면 아래로 더 쓸 수 있는 줄 수(설명·중심만) */
+const EXTRA_LINES: Record<IllustSlotRole, number> = { title: 0, sub: 0, desc: 3, number: 0, center: 2, heading: 0 };
+const baseLines = (s: IllustSlot) => (s.role === "desc" ? s.lines + 1 : s.lines);
 /** 역할별 최소 자리 폭(글자 크기 배수) — 원래 그림의 자리 표시가 짧아도(01·영문 두 글자) 한글이 들어갈 폭 */
 export const ILLUST_MIN_CHARS: Record<IllustSlotRole, number> = { title: 4, sub: 4, desc: 6, number: 2.6, center: 5, heading: 6 };
 
@@ -435,15 +490,68 @@ export function textWidthEm(text: string): number {
 }
 
 /** 이 글이 자리에 넘치는지 — 낱말 단위 줄바꿈 여유(0.9)를 두고 줄 수와 비교 */
-export function slotOverflows(s: IllustSlot, text: string, widthPt = 400): boolean {
-  if (!text) return false;
-  const font = Math.max(ILLUST_MIN_PT[s.role], s.fs * widthPt);
-  const slotW = Math.max(s.w * widthPt, font * ILLUST_MIN_CHARS[s.role]);
-  const lines = s.role === "desc" ? s.lines + 1 : s.lines;
-  const explicit = text.split("\n");
-  if (explicit.length > lines) return true;
-  const need = explicit.reduce((n, ln) => n + Math.max(1, Math.ceil((textWidthEm(ln) * font) / (slotW * 0.9))), 0);
-  return need > lines;
+/** 자리가 정렬 반대쪽(그림 바깥)으로 넓어질 수 있는 한도(그림 폭 비율) — 오른쪽 정렬은 왼쪽 끝까지, 왼쪽 정렬은 오른쪽 끝까지, 가운데는 양쪽 */
+export function slotRoom(s: IllustSlot): number {
+  // 매처가 잰 빈 공간이 있으면 그 안에서만(그림 도형과 겹치지 않게)
+  if (s.room) {
+    const [gl, gr] = s.room;
+    if (s.align === "right") return s.w + gl;
+    if (s.align === "left") return s.w + gr;
+    return s.w + 2 * Math.min(gl, gr);
+  }
+  // 없으면(이전 판) 넓어지는 쪽이 그림 가운데를 향하지 않을 때만 — 왼쪽 정렬은 오른쪽 절반, 오른쪽 정렬은 왼쪽 절반에 있을 때
+  const cx = s.x + s.w / 2;
+  if (s.align === "right") return cx <= 0.5 ? s.x + s.w : s.w;
+  if (s.align === "left") return cx >= 0.5 ? 1 - s.x : s.w;
+  return 2 * Math.min(cx, 1 - cx);
+}
+
+/** 그릴 자리 폭(pt) — 원래 폭(최소 폭 적용)에서 가장 긴 줄이 들어가게, 원래 폭의 1.5배(가운데 정렬 1.1배)·바깥 여유까지 넓힌다.
+ *  원래 그림의 자리는 짧은 영문 자리 표시 기준이라 한글 문장이 한두 낱말만 다음 줄로 떨어지는 것을 막는다. */
+export function slotWidthPt(s: IllustSlot, text: string, widthPt: number, fontPt: number): number {
+  const base = Math.max(s.w * widthPt, fontPt * ILLUST_MIN_CHARS[s.role]);
+  const longest = Math.max(0, ...text.split("\n").map((ln) => (textWidthEm(ln) * fontPt) / 0.9));
+  const cap = Math.max(base, Math.min(base * (s.align === "center" ? 1.1 : 1.5), slotRoom(s) * widthPt));
+  return Math.min(Math.max(base, longest), cap);
+}
+
+/** 이 글자 크기에서 필요한 줄 수 — 낱말 단위 줄바꿈 여유(0.9)를 둔 근사 */
+export function slotLinesNeeded(s: IllustSlot, text: string, widthPt = 400, fontPt?: number): number {
+  if (!text) return 0;
+  const font = fontPt ?? Math.max(ILLUST_MIN_PT[s.role], s.fs * widthPt);
+  const slotW = slotWidthPt(s, text, widthPt, font);
+  return text.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil((textWidthEm(ln) * font) / (slotW * 0.9))), 0);
+}
+
+/** 이 글이 자리에 넘치는지(원래 줄 수 기준) */
+export function slotOverflows(s: IllustSlot, text: string, widthPt = 400, fontPt?: number): boolean {
+  return slotLinesNeeded(s, text, widthPt, fontPt) > baseLines(s);
+}
+
+/**
+ * 글이 자리에 맞는 글자 크기(pt)·줄 수 — 그림 비율 크기에서 시작해 역할별 최소 크기까지 0.5pt 씩 줄이고,
+ * 최소 크기에서도 넘치면 설명·중심은 아래로 줄을 더 쓴다(더 작게 줄이지 않는다 — 읽기 어려움). 그래도 넘치면 overflow.
+ */
+export function slotFitFont(s: IllustSlot, text: string, widthPt = 400, heightPt?: number): { font: number; shrunk: boolean; overflow: boolean; lines: number } {
+  const start = Math.max(ILLUST_MIN_PT[s.role], s.fs * widthPt);
+  const base = baseLines(s);
+  for (let f = start; f >= ILLUST_MIN_PT[s.role] - 1e-6; f -= 0.5) {
+    const n = slotLinesNeeded(s, text, widthPt, f);
+    if (n <= base) return { font: f, shrunk: f < start - 1e-6, overflow: false, lines: Math.max(n, Math.min(base, slotMaxLines(s, f, heightPt))) };
+  }
+  const f = ILLUST_MIN_PT[s.role];
+  const need = slotLinesNeeded(s, text, widthPt, f);
+  const cap = slotMaxLines(s, f, heightPt);
+  return { font: f, shrunk: start > f + 1e-6, overflow: need > cap, lines: Math.min(Math.max(need, Math.min(base, cap)), cap) };
+}
+
+/** 이 크기에서 쓸 수 있는 최대 줄 수 — 원래 줄 수 + 여유 줄(설명·중심). 매처가 잰 빈 공간이 있으면 그림·다른 자리와 겹치지 않는 만큼만 */
+export function slotMaxLines(s: IllustSlot, fontPt: number, heightPt?: number): number {
+  const base = baseLines(s);
+  const extra = base + EXTRA_LINES[s.role];
+  if (!s.room || !heightPt) return extra;
+  const avail = s.h * heightPt + Math.max(s.room[2], s.room[3]) * heightPt;
+  return Math.max(s.lines, Math.min(extra, Math.floor(avail / (fontPt * s.lh) + 0.15)));
 }
 
 function numberText(it: InfoItem | undefined, i: number, unit?: string): string {
@@ -455,12 +563,18 @@ function numberText(it: InfoItem | undefined, i: number, unit?: string): string 
 }
 
 /** 내용(InfoContent) → 자리별 글자. 항목은 자리의 item 순번으로 짝짓는다. */
-export function illustSlotTexts(info: Pick<IllustrationInfo, "slots">, content: InfoContent, widthPt?: number): SlotText[] {
-  return info.slots.map((slot) => {
+export function illustSlotTexts(info: Pick<IllustrationInfo, "slots"> & Partial<Pick<IllustrationInfo, "view">>, content: InfoContent, widthPt?: number): SlotText[] {
+  const heightPt = widthPt && info.view ? (widthPt * info.view[1]) / info.view[0] : undefined;
+  const numbered = new Set(info.slots.filter((s) => s.role === "number").map((s) => s.item));
+  const out = info.slots.map((slot) => {
     const it = slot.item > 0 ? content.items[slot.item - 1] : undefined;
     let text = "";
     let metric: string | undefined;
-    if (slot.role === "title") text = it?.label ?? "";
+    let suffix: SlotText["suffix"];
+    if (slot.role === "title") {
+      text = it?.label ?? "";
+      if (it?.metric && !numbered.has(slot.item)) suffix = { metric: it.metric, num: it.value != null ? fmt(it.value) : "-", unit: it.unit ?? content.unit ?? "" };
+    }
     else if (slot.role === "sub") text = it?.sub ?? it?.when ?? "";
     else if (slot.role === "desc") text = it?.desc ?? "";
     else if (slot.role === "number") {
@@ -468,7 +582,29 @@ export function illustSlotTexts(info: Pick<IllustrationInfo, "slots">, content: 
       if (it?.metric) metric = it.metric;
     } else if (slot.role === "center") text = [content.center?.label ?? content.title ?? "", content.center?.desc ?? ""].filter(Boolean).join("\n");
     else if (slot.role === "heading") text = content.title ?? "";
-    return { slot, text, metric, capacity: slotCapacity(slot, widthPt), overflow: slotOverflows(slot, text, widthPt) };
+    const full = suffix ? `${text} ${suffix.num}${suffix.unit}` : text;
+    const fit = slotFitFont(slot, full, widthPt, heightPt);
+    const wPt = widthPt ?? 400;
+    return { slot, text, metric, suffix, full, capacity: slotCapacity(slot, widthPt), overflow: fit.overflow, font: fit.font, shrunk: fit.shrunk, lines: fit.lines, width: full ? slotWidthPt(slot, full, wPt, fit.font) / wPt : slot.w };
+  });
+  // 같은 역할 자리(항목들의 제목·설명…)는 같은 크기로 — 맞춘 크기 중 가장 작은 것(최소 크기 이상)에 맞추고, 그 크기에서 줄 수를 다시 잰다
+  const minByRole = new Map<IllustSlotRole, number>();
+  for (const t of out) if (t.text && t.slot.item > 0) minByRole.set(t.slot.role, Math.min(minByRole.get(t.slot.role) ?? Infinity, t.font));
+  return out.map(({ full, ...t }) => {
+    const m = t.slot.item > 0 ? minByRole.get(t.slot.role) : undefined;
+    if (m == null || m >= t.font - 1e-6) return t;
+    const wPt = widthPt ?? 400;
+    const need = slotLinesNeeded(t.slot, full, wPt, m);
+    const base = baseLines(t.slot);
+    const cap = slotMaxLines(t.slot, m, heightPt);
+    return {
+      ...t,
+      font: m,
+      shrunk: true,
+      lines: Math.min(Math.max(need, Math.min(base, cap)), cap),
+      overflow: need > cap,
+      width: slotWidthPt(t.slot, full, wPt, m) / wPt,
+    };
   });
 }
 
@@ -499,7 +635,8 @@ export function illustCandidates(list: IllustrationInfo[], content: InfoContent,
   for (const info of list) {
     if (info.status !== "active" || info.count !== n || !info.slots.length) continue;
     const numberSlots = new Set(info.slots.filter((s) => s.role === "number" && s.item > 0).map((s) => s.item)).size;
-    if (numeric && numberSlots < n) continue;
+    // 수치형 유형(막대·구성비·큰 숫자…)일 때만 숫자 자리가 항목마다 있어야 한다 — 목록형은 숫자를 제목 뒤 칩으로 붙인다
+    if (numeric && INFO_TYPE_META[ctx.type].family === "number" && numberSlots < n) continue;
     const reasons = [`항목 수 ${n} = 그림 ${info.count}`];
     let score = 40;
     if (info.type === ctx.type) {
@@ -561,7 +698,7 @@ export function applySlotText(content: InfoContent, role: IllustSlotRole, item: 
   if (!it) return null;
   const one = t.replace(/\n+/g, " ");
   const patch: Partial<InfoItem> =
-    role === "title" ? { label: one } : role === "sub" ? { sub: one } : role === "desc" ? { desc: t.replace(/\n+/g, " ") } : role === "number" && !it.metric ? { valueText: one } : {};
+    role === "title" ? { label: one } : role === "sub" ? { sub: one } : role === "desc" ? { desc: t.replace(/\n{2,}/g, "\n") } : role === "number" && !it.metric ? { valueText: one } : {};
   const key = Object.keys(patch)[0] as keyof InfoItem | undefined;
   if (!key || (it[key] ?? "") === patch[key]) return null;
   return { ...content, items: content.items.map((x, j) => (j === i ? { ...x, ...patch } : x)) };

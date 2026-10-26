@@ -428,15 +428,143 @@ def palette_vars(root, doc):
     return pal
 
 
-def apply_vars(root, pal):
-    var = {p['hex']: (p['v'], p.get('alias', p['hex'])) for p in pal}
+SHADE_SUFFIX = {-2: 'm2', -1: 'm1', 0: '0', 1: 'p1', 2: 'p2'}
 
-    def sub(v):
+
+def item_tints(doc2, elmap, slots, vb):
+    """항목별 색 — 같은 색상 계열로 그린 노드(파랑 3색 원 6개 등)도 '분야 6색'에서 항목마다 다른 분야 색을 받게 한다.
+    1) 항목 글자 자리들의 중심 = 항목 위치  2) 유채색 도형을 겹침으로 묶어 노드를 만들고, 큰 노드 N개(N = 항목 수)를
+    항목과 거리 합이 가장 작게 1:1 로 짝짓는다  3) 남은 작은 묶음(점·선 장식)은 가까운 노드를 따른다.
+    → ({요소: (항목, 밝기 단계)}, [{n, shades}])"""
+    import itertools
+    anchors = {}
+    for sl in slots:
+        if sl.get('item', 0) > 0:
+            anchors[sl['item']] = bb_union(anchors.get(sl['item']), sl['bb'])
+    if len(anchors) < 2:
+        return {}, []
+    cen = {n: ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for n, b in anchors.items()}
+    sep = min(math.hypot(a[0] - b[0], a[1] - b[1]) for i, a in cen.items() for j, b in cen.items() if i < j)
+    cands = []
+    for p in doc2.prims:
+        col = p.get('fill') if p.get('fill') is not None else p.get('stroke')
+        if col is None or is_neutral(col, 0.2) or not bb_inter(p['bb'], vb) or p['key'] not in elmap:
+            continue
+        b = p['bb']
+        if math.hypot(b[2] - b[0], b[3] - b[1]) > 1.2 * sep:  # 여러 항목에 걸친 큰 도형(중심 링·띠)은 무리 색 그대로
+            continue
+        cands.append((p, col))
+    if not cands:
+        return {}, []
+    # 겹치는 도형끼리 묶기(union-find)
+    tol = 0.005 * max(vb[2] - vb[0], vb[3] - vb[1])
+    parent = list(range(len(cands)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(cands)):
+        bi = cands[i][0]['bb']
+        for j in range(i + 1, len(cands)):
+            bj = cands[j][0]['bb']
+            if bi[0] - tol <= bj[2] and bj[0] - tol <= bi[2] and bi[1] - tol <= bj[3] and bj[1] - tol <= bi[3]:
+                parent[find(i)] = find(j)
+    groups = {}
+    for i in range(len(cands)):
+        groups.setdefault(find(i), []).append(i)
+    clusters = []
+    for idx in groups.values():
+        bb = None
+        area = 0.0
+        for i in idx:
+            b = cands[i][0]['bb']
+            bb = bb_union(bb, b)
+            area += (b[2] - b[0]) * (b[3] - b[1])
+        clusters.append({'idx': idx, 'bb': bb, 'area': area, 'c': ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)})
+    clusters.sort(key=lambda c: -c['area'])
+    items = sorted(cen)
+    k = len(items)
+    if len(clusters) < k:
+        return {}, []
+    nodes = clusters[:k]
+    # 1:1 짝 — 8항목까지는 모든 순열, 그보다 많으면 가까운 것부터
+    dist = [[math.hypot(nd['c'][0] - cen[n][0], nd['c'][1] - cen[n][1]) for n in items] for nd in nodes]
+    if k <= 8:
+        best = min(itertools.permutations(range(k)), key=lambda perm: sum(dist[i][perm[i]] for i in range(k)))
+    else:
+        best, used = [None] * k, set()
+        for i, j in sorted(((i, j) for i in range(k) for j in range(k)), key=lambda t: dist[t[0]][t[1]]):
+            if best[i] is None and j not in used:
+                best[i] = j
+                used.add(j)
+    item_of = {}
+    for i, nd in enumerate(nodes):
+        nd['item'] = items[best[i]]
+        for ci in nd['idx']:
+            item_of[ci] = nd['item']
+    node_sep = min(math.hypot(a['c'][0] - b['c'][0], a['c'][1] - b['c'][1]) for a, b in itertools.combinations(nodes, 2))
+    for cl in clusters[k:]:
+        d, nd = min((math.hypot(cl['c'][0] - nd['c'][0], cl['c'][1] - nd['c'][1]), nd) for nd in nodes)
+        if d <= 0.6 * node_sep:
+            for ci in cl['idx']:
+                item_of[ci] = nd['item']
+    hits = {}
+    for ci, n in item_of.items():
+        p, col = cands[ci]
+        hits[elmap[p['key']]] = (n, rgb_hls(col)[1])
+    by_item = {}
+    for n, l in hits.values():
+        by_item.setdefault(n, []).append(l)
+    if len(by_item) < 2:
+        return {}, []
+    ref = {n: sorted(ls)[len(ls) // 2] for n, ls in by_item.items()}
+    out, shades = {}, {}
+    for el, (n, l) in hits.items():
+        s = max(-2, min(2, int(round((l - ref[n]) / 0.25))))
+        out[el] = (n, SHADE_SUFFIX[s])
+        shades.setdefault(n, set()).add(SHADE_SUFFIX[s])
+    return out, [{'n': n, 'shades': sorted(v)} for n, v in sorted(shades.items())]
+
+
+def slot_room(bb, art, vb):
+    """글자 자리 둘레 빈 공간(pt) — 자리 띠와 겹치는 그림 도형까지의 거리(왼·오·위·아래). 자리를 덮는 도형(화살 위 번호 등)은 빼고 잰다.
+    앱은 글이 길면 이 안에서만 자리를 넓히거나(가로) 아래가 막혔을 때 위로 늘린다(세로)."""
+    x0, y0, x1, y1 = bb
+    gl, gr, gu, gd = x0 - vb[0], vb[2] - x1, y0 - vb[1], vb[3] - y1
+    eps = 0.5
+    for b in art:
+        if b[0] <= x0 + eps and b[2] >= x1 - eps and b[1] <= y0 + eps and b[3] >= y1 - eps:
+            continue  # 자리를 덮는 바탕 도형
+        if b[1] < y1 and b[3] > y0:  # 가로 띠가 겹침
+            if b[0] >= x1 - eps:
+                gr = min(gr, max(0.0, b[0] - x1))
+            elif b[2] <= x0 + eps:
+                gl = min(gl, max(0.0, x0 - b[2]))
+        if b[0] < x1 and b[2] > x0:  # 세로 띠가 겹침
+            if b[1] >= y1 - eps:
+                gd = min(gd, max(0.0, b[1] - y1))
+            elif b[3] <= y0 + eps:
+                gu = min(gu, max(0.0, y0 - b[3]))
+    return gl, gr, gu, gd
+
+
+def apply_vars(root, pal, tints=None):
+    var = {p['hex']: (p['v'], p.get('alias', p['hex'])) for p in pal}
+    tints = tints or {}
+
+    def sub(v, el=None):
         rgb = parse_color(v.strip())
         if rgb is None:
             return None
         h = rgb_to_hex(rgb)
-        return 'var(--il-%s,%s)' % var[h] if h in var else None
+        if h not in var:
+            return None
+        base = 'var(--il-%s,%s)' % var[h]
+        t = tints.get(el)
+        return 'var(--il-i%d%s,%s)' % (t[0], t[1], base) if t and not is_neutral(rgb, 0.2) else base
 
     for el, skip in _iter_color(root):
         if skip:
@@ -449,11 +577,11 @@ def apply_vars(root, pal):
                     continue
                 k, v = part.split(':', 1)
                 k = k.strip()
-                r = sub(v) if k in COLOR_ATTRS else None
+                r = sub(v, el) if k in COLOR_ATTRS else None
                 decl.append('%s:%s' % (k, r if r else v.strip()))
         for a in COLOR_ATTRS:
             v = el.get(a)
-            r = sub(v) if v else None
+            r = sub(v, el) if v else None
             if r:
                 del el.attrib[a]
                 decl.append('%s:%s' % (a, r))
@@ -634,12 +762,13 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
     # 판 배경(밝은 무채색 큰 면) — 쪽 바탕이 비치도록 지운다
     n_bg = 0
     par_of = _parents(root)
+    elmap = {p['key']: _el_at(root, p['key']) for p in doc2.prims}  # 지우기 전에 키 → 요소(지우면 순번이 밀린다)
     for p in doc2.prims:
         b = bb_inter(p['bb'], vb)
         col = p.get('fill')
         if b and col is not None and is_neutral(col, 0.2) and rgb_hls(col)[1] >= 0.9 and \
                 (b[2] - b[0]) * (b[3] - b[1]) >= 0.5 * W * H:
-            el = _el_at(root, p['key'])
+            el = elmap.get(p['key'])
             par = par_of.get(el) if el is not None else None
             if par is not None and el in list(par):
                 par.remove(el)
@@ -647,7 +776,10 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
     if n_bg:
         notes.append('판 배경 %d개를 지움' % n_bg)
     pal = palette_vars(root, doc2)
-    apply_vars(root, pal)
+    tint_map, tints = item_tints(doc2, elmap, slots, vb)
+    if tints:
+        notes.append('항목별 색 %d항목(도형 %d개)' % (len(tints), len(tint_map)))
+    apply_vars(root, pal, tint_map)
     tidy_ids(root)
     root.set('viewBox', '%.2f %.2f %.2f %.2f' % (vb[0], vb[1], W, H))
     root.set('width', '%.2f' % W)
@@ -661,9 +793,12 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
     size = os.path.getsize(svg_path)
     if size > MAX_SVG_BYTES:
         notes.append('SVG %.1fMB — 앱 상한(3MB)을 넘어 올라가지 않음' % (size / 1048576))
+    art = [p['bb'] for p in doc2.prims if bb_inter(p['bb'], vb) and (p.get('fill') is not None or p.get('stroke') is not None or p.get('fill_url'))
+           and not (p.get('fill') is not None and is_neutral(p['fill'], 0.2) and rgb_hls(p['fill'])[1] >= 0.97)]
     out_slots = []
     for n, s in enumerate(slots, 1):
         b = s['bb']
+        gl, gr, gu, gd = slot_room(b, art + [o['bb'] for o in slots if o is not s], vb)  # 다른 글자 자리도 장애물
         out_slots.append({
             'id': 's%d' % n, 'role': s['role'], 'item': s['item'],
             'x': round((b[0] - vb[0]) / W, 4), 'y': round((b[1] - vb[1]) / H, 4),
@@ -671,9 +806,10 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
             'lines': s['lines'], 'fs': round(s['fs'] / W, 5), 'lh': round(s['lh'], 2), 'align': s['align'],
             **({'color': s['color']} if s.get('color') else {}),
             **({'bg': s['bg']} if s.get('bg') else {}),
+            'room': [round(gl / W, 4), round(gr / W, 4), round(gu / H, 4), round(gd / H, 4)],
         })
     return {
-        'svg_bytes': size, 'view': [round(W, 2), round(H, 2)], 'slots': out_slots, 'palette': pal,
+        'svg_bytes': size, 'view': [round(W, 2), round(H, 2)], 'slots': out_slots, 'palette': pal, 'tints': tints,
         'effects_removed': n_fx, 'notes': notes,
     }
 
@@ -736,7 +872,7 @@ def run_export(work, out, only, min_quality, keep_effects, no_illustrator, force
             'type': TYPE_KEYS.get(rv['type'], 'process'), 'matcherType': rv['type'],
             'count': rv.get('count'), 'center': bool(rv.get('center')), 'loop': bool(rv.get('loop')),
             'quality': rv.get('quality'), 'note': rv.get('note', ''), 'alt': [TYPE_KEYS.get(t) for t in rv.get('alt', []) if TYPE_KEYS.get(t)],
-            'view': res['view'], 'slots': res['slots'], 'palette': [p for p in res['palette'] if 'alias' not in p],
+            'view': res['view'], 'slots': res['slots'], 'palette': [p for p in res['palette'] if 'alias' not in p], 'tints': res['tints'],
             'license': _license(reg['slug'], ent), 'fits': fits.get(reg['id'], [])[:6],
             'source': {'slug': reg['slug'], 'name': ent['name'], 'artboard': reg['page'], 'regionPt': reg['region']},
             'effectsRemoved': res['effects_removed'], 'warnings': res['notes'],

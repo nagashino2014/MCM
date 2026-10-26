@@ -421,6 +421,16 @@ export function SoftwarePage({ ctx, data, area }: { ctx: RenderCtx; data: Catalo
   );
 }
 
+/** C09 플랫폼 5단계 파이프라인의 내용(되돌이 포함) */
+function platformSpec(): InfoSpec {
+  const c = PLATFORM_CONTENT;
+  return {
+    type: "process",
+    variant: "h",
+    content: { title: c.loop, items: c.steps.map((st) => ({ id: `s${st.num}`, label: st.title, sub: st.num, desc: st.items.join("\n"), icon: st.icon, ...(st.core ? { key: true } : {}) })) },
+  };
+}
+
 export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const c = PLATFORM_CONTENT;
   const caption = c.caption
@@ -435,6 +445,7 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
           {c.badge}
         </span>
       </div>
+      <InfoSource slot="c09-platform.pipeline" spec={platformSpec()} box={{ w: 746, h: 150 }} area={6}>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="kc-pipe">
           <div className="kc-pipe__src">
@@ -466,6 +477,7 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
           <span style={{ left: 471 }}>{c.loop}</span>
         </div>
       </div>
+      </InfoSource>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0, rowGap: 0, alignItems: "start" }}>
         <section className="kc-span-7" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p className="kc-blockhead" style={{ margin: 0 }}>
@@ -514,6 +526,42 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
 }
 
 // ── C10 핵심 역량 ──
+/** C10 ② 사람 — 큰 숫자 3개(공정전문가·임원 평균 경력·자문위원) */
+function strengthsPeopleSpec(data: CatalogRenderData): InfoSpec {
+  const c = STRENGTHS_CONTENT.people;
+  return {
+    type: "stats",
+    variant: "row",
+    content: {
+      title: c.head,
+      items: [
+        { id: "process", label: c.process.label, desc: c.process.desc, value: Number(c.process.value), unit: c.process.unit, icon: "factory" },
+        { id: "leaders", label: c.leaders.label, desc: c.leaders.desc, value: data.leaderAvgCareer ?? undefined, unit: "년", icon: "award" },
+        { id: "advisors", label: c.advisors.label, desc: c.advisors.desc, value: mval(data, "advisors.total") ?? undefined, unit: "명", metric: "advisors.total", icon: "network" },
+      ],
+    },
+  };
+}
+
+/** C10 ③ 방법 — 진단·협의·사후관리 3단계 + 되돌이 */
+function strengthsMethodSpec(): InfoSpec {
+  const c = STRENGTHS_CONTENT.method;
+  return {
+    type: "process",
+    variant: "h",
+    content: {
+      title: c.loop,
+      items: c.steps.map((st) => ({
+        id: st.tag,
+        label: st.title,
+        sub: st.tag,
+        desc: "checks" in st && st.checks ? st.checks.join("\n") : "desc" in st ? st.desc : "",
+        icon: st.icon,
+      })),
+    },
+  };
+}
+
 export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const c = STRENGTHS_CONTENT;
   const industries = fmt(mval(data, "permit.industries"));
@@ -553,6 +601,7 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
             <b>02</b>사람
           </p>
           <p className="kc-strengths__head">{c.people.head}</p>
+          <InfoSource slot="c10.people" spec={strengthsPeopleSpec(data)} box={{ w: 360, h: 150 }}>
           <div className="kc-strengths__trio">
             <div className="kc-strengths__person">
               <span className="kc-strengths__num">
@@ -588,12 +637,14 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
               <p className="kc-strengths__desc">{c.people.advisors.desc}</p>
             </div>
           </div>
+          </InfoSource>
         </section>
         <section className="kc-strengths__method">
           <p className="kc-strengths__tag">
             <b>03</b>
             {c.method.head}
           </p>
+          <InfoSource slot="c10.method" spec={strengthsMethodSpec()} box={{ w: 460, h: 140 }}>
           <ol className="kc-strengths__flow">
             {c.method.steps.map((st) => (
               <li key={st.tag}>
@@ -620,6 +671,7 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
               </li>
             ))}
           </ol>
+          </InfoSource>
           <div className="kc-strengths__loop" aria-hidden="true">
             <svg viewBox="0 0 458 18" preserveAspectRatio="none">
               <path d="M398 0 V10 H18 V5"></path>

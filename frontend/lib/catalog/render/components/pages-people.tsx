@@ -4,11 +4,44 @@
  */
 import type { CatalogRenderData, LeaderCard, RenderCtx } from "../types";
 import { barSpec, shareSpec } from "../infographic/adapt";
-import { InfoSlot } from "../infographic/slot";
+import { InfoSlot, InfoSource } from "../infographic/slot";
+import type { InfoSpec } from "../infographic/types";
 import { OrgChart } from "./infographics";
 import { Foot, Head, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval } from "./parts";
 
 // ── C12 조직 ──
+const ORG_STATS = [
+  ["staff.total", "임직원"],
+  ["staff.technical", "기술인력"],
+  ["advisors.total", "자문위원"],
+] as const;
+
+/** C12 오른쪽 위 통계 3개의 내용 */
+function orgStatsSpec(data: CatalogRenderData): InfoSpec {
+  return {
+    type: "stats",
+    variant: "row",
+    content: { items: ORG_STATS.map(([id, label]) => ({ id: id.replace(/\W/g, "_"), label, metric: id, value: mval(data, id) ?? undefined, unit: "명" })) },
+  };
+}
+
+/** C14 기술인력 KPI 4개의 내용 — 지표가 있는 것은 지표로, 통계값은 숫자로 */
+function staffKpiSpec(data: CatalogRenderData): InfoSpec {
+  const st = data.staffStats;
+  return {
+    type: "stats",
+    variant: "row",
+    content: {
+      items: [
+        { id: "total", label: "임직원", metric: "staff.total", value: mval(data, "staff.total") ?? undefined, unit: "명" },
+        { id: "technical", label: "기술인력", metric: "staff.technical", value: mval(data, "staff.technical") ?? undefined, unit: "명", desc: data.offices.map((o) => o.name).join(" · ") },
+        { id: "experts", label: "기술사·박사", value: st.experts ?? undefined, unit: "명", desc: st.expertNote || undefined },
+        { id: "career", label: "평균 경력", value: st.avgCareer ?? undefined, unit: "년", desc: "이전 직장 경력 포함" },
+      ],
+    },
+  };
+}
+
 export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const units = data.orgChart.nodes[0]?.children.filter((c) => !c.badge && c.children.length > 0).length ?? 0;
   const advisors = mval(data, "advisors.total") ?? 0;
@@ -17,14 +50,9 @@ export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData
       <Head ctx={ctx} num="04" name="조직과 사람" sub="조직" />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24 }}>
         <TitleBlock eyebrow="조직" title={units ? `${units}개 본부와 연구소·지사로 일합니다` : "조직"} />
+        <InfoSource slot="c12.stats" spec={orgStatsSpec(data)} box={{ w: 300, h: 60 }}>
         <div className="kc-stats" style={{ gap: 20, flex: "none" }}>
-          {(
-            [
-              ["staff.total", "임직원"],
-              ["staff.technical", "기술인력"],
-              ["advisors.total", "자문위원"],
-            ] as const
-          ).map(([id, label]) => (
+          {ORG_STATS.map(([id, label]) => (
             <div className="kc-stat" key={id}>
               <span className="kc-stat__fig" style={{ fontSize: 24, lineHeight: "28px" }} data-metric={id}>
                 {fmt(mval(data, id))}
@@ -34,6 +62,7 @@ export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData
             </div>
           ))}
         </div>
+        </InfoSource>
       </div>
       <OrgChart doc={data.orgChart} advisorsLabel={advisors > 0 ? `매체별 ${fmt(advisors)}명` : undefined} />
       <Foot items={[`* ${asOfNote(data)}. 인원은 사용자관리 등록 재직자 기준입니다.`]} />
@@ -120,6 +149,7 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
     <Sheet ctx={ctx} anchors={["c14"]} outline="기술인력 현황">
       <Head ctx={ctx} num="04" name="조직과 사람" sub="기술인력 현황" />
       <TitleBlock eyebrow="기술인력 현황" title={<>전문 자격을 갖춘 기술인력 <span data-metric="staff.technical">{fmt(st.technical)}</span>명</>} />
+      <InfoSource slot="c14.kpis" spec={staffKpiSpec(data)} box={{ w: 746, h: 90 }}>
       <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
         <Kpi
           label="임직원"
@@ -136,6 +166,7 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
         <Kpi label="기술사·박사" value={fmt(st.experts)} unit="명" note={st.expertNote || undefined} />
         <Kpi label="평균 경력" value={fmt(st.avgCareer)} unit="년" note="이전 직장 경력 포함" />
       </div>
+      </InfoSource>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
         <section className="kc-span-5 kc-ig">
           <p className="kc-blockhead">

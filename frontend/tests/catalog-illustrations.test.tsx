@@ -313,3 +313,32 @@ test("SVG 정리 — 항목별 색 변수(--il-i)는 남기고 다른 변수는 
   assert.ok(out.includes("fill:var(--il-i3p1,var(--il-c2,#41a7e0))"));
   assert.ok(!out.includes("--il-x9"));
 });
+
+test("쪽 고유 도식(InfoSource) — 원래 마크업 그대로, 내용 spec 이 인포그래픽 위젯으로 잡힌다(항목 수·지표)", () => {
+  const data = makeFixture();
+  const expect: Record<string, { page: string; n: number; type: string }> = {
+    "c08.areas": { page: "c08", n: 6, type: "hub" },
+    "c04.figures": { page: "c04", n: 8, type: "stats" },
+    "c09-platform.pipeline": { page: "c09-platform", n: 5, type: "process" },
+    "c10.people": { page: "c10", n: 3, type: "stats" },
+    "c10.method": { page: "c10", n: 3, type: "process" },
+    "c12.stats": { page: "c12", n: 3, type: "stats" },
+    "c14.kpis": { page: "c14", n: 4, type: "stats" },
+  };
+  for (const [slot, e] of Object.entries(expect)) {
+    const t = tree(data, e.page);
+    const w = findBy(t, (n) => n.widget === "infographic" && (n.props as { slot?: string } | undefined)?.slot === slot);
+    assert.ok(w, `${slot} 위젯`);
+    const spec = (w!.props as unknown as InfoSlotProps).spec;
+    assert.equal(spec.type, e.type, slot);
+    assert.equal(spec.content.items.length, e.n, slot);
+    // 원래 마크업이 그대로(InfoSource 는 자식을 감쌀 뿐) — 위젯 노드가 쪽 고유 클래스를 가진다
+    assert.ok(!(w!.className ?? "").includes("kc-ill"), `${slot} 는 기본 상태에서 일러스트가 아님`);
+  }
+  // C04 큰 숫자는 모두 지표에 묶여 데이터가 바뀌면 함께 바뀐다
+  const c04 = (findBy(tree(data, "c04"), (n) => (n.props as { slot?: string } | undefined)?.slot === "c04.figures")!.props as unknown as InfoSlotProps).spec;
+  assert.ok(c04.content.items.every((it) => it.metric));
+  assert.equal(c04.content.items[0].value, 40);
+  const c04b = (findBy(tree(makeFixture({ extraContract: true }), "c04"), (n) => (n.props as { slot?: string } | undefined)?.slot === "c04.figures")!.props as unknown as InfoSlotProps).spec;
+  assert.equal(c04b.content.items[0].value, 41);
+});

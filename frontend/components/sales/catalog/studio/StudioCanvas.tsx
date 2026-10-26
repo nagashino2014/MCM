@@ -29,7 +29,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { COL_STEP, COL_W, COLUMNS, CONTENT_W, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_X, PAGE_H, PAGE_W, snapWidth, snapX, snapY } from "@/lib/catalog/studio/design-system";
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, toEditableHtml } from "@/lib/catalog/studio/inline";
 import { stripDerived } from "@/lib/catalog/studio/edits";
-import { findNode, isChip, type CNode } from "@/lib/catalog/studio/nodes";
+import { findNode, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { nodeProps, renderNode, resolvedChildren, type TreeEnv } from "@/lib/catalog/studio/render-tree";
 import { capabilities, isTextBlock, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
 import type { DomLike } from "@/lib/doc-tree/inline-core";
@@ -103,6 +103,7 @@ export function StudioCanvas({
   checks,
   onSelect,
   onCommitText,
+  onCommitSlot,
   onPatchStyle,
   onKeyCommand,
   onRequestBind,
@@ -122,6 +123,8 @@ export function StudioCanvas({
   checks: CheckItem[];
   onSelect: (id: string | null) => void;
   onCommitText: (id: string, children: CNode[]) => void;
+  /** 일러스트 글자 자리(313) 고치기 — 평문 → 그 인포그래픽 내용 */
+  onCommitSlot?: (slotNodeId: string, text: string) => void;
   onPatchStyle: (id: string, patch: Record<string, string>) => void;
   /** 캔버스에서 누른 단축키(실행 취소 등) — 처리하면 true */
   onKeyCommand: (key: string, e: KeyboardEvent) => boolean;
@@ -199,6 +202,39 @@ export function StudioCanvas({
         return out;
       },
       override: (n: CNode): ReactNode | undefined => {
+        // 일러스트 글자 자리 — 바로 눌러 고친다(평문, 지표에 묶은 숫자는 칩이라 고치지 않음)
+        if (onCommitSlot && maxLevel >= 2 && n.attrs && "data-ill-slot" in n.attrs && !(function hasBind(x: CNode): boolean { return Boolean(x.bind) || (x.children ?? []).some(hasBind); })(n)) {
+          const role = String(n.attrs["data-ill-role"] ?? "");
+          const multi = role === "desc" || role === "center";
+          const text = textOf(n);
+          return createElement(n.tag, {
+            ...nodeProps(n, env),
+            "data-cn": n.id,
+            "data-st-edit": "1",
+            contentEditable: true,
+            suppressContentEditableWarning: true,
+            spellCheck: false,
+            dangerouslySetInnerHTML: { __html: text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>") },
+            onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
+              if (e.key === "Enter" && multi && role === "center") {
+                e.preventDefault();
+                e.currentTarget.ownerDocument.execCommand("insertLineBreak");
+              } else if (e.key === "Enter" || e.key === "Escape") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            },
+            onPaste: (e: RClipboardEvent<HTMLElement>) => {
+              e.preventDefault();
+              e.currentTarget.ownerDocument.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+            },
+            onFocus: () => onSelect(n.id),
+            onBlur: (e: RFocusEvent<HTMLElement>) => {
+              const next = e.currentTarget.innerText;
+              if (next.trim() !== text.trim()) onCommitSlot(n.id, next);
+            },
+          });
+        }
         if (n.attrs && "data-folio" in n.attrs && !textBlocks.has(n.id)) {
           return createElement(n.tag, { ...nodeProps(n, env), "data-cn": n.id }, pad2(folio));
         }
@@ -240,7 +276,7 @@ export function StudioCanvas({
       },
     };
     return renderNode(tree, env, hooks);
-  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect, captureAt, onRequestBind, onKeyCommand]);
+  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect, captureAt, onRequestBind, onKeyCommand, onCommitSlot, maxLevel]);
 
   const sheetEl = useCallback(() => (scaleRef.current?.querySelector(".pk-sheet") as HTMLElement | null) ?? null, []);
   const elOf = useCallback((id: string | null) => (id && frame ? (frame.doc.querySelector(`[data-cn="${CSS.escape(id)}"]`) as HTMLElement | null) : null), [frame]);

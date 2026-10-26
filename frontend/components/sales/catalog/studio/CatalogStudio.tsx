@@ -37,7 +37,10 @@ import {
 } from "@/lib/catalog/studio/edits";
 import { makeBindChip } from "@/lib/catalog/studio/binds";
 import { appendCaret, placeChip } from "@/lib/catalog/studio/inline";
-import { findNode, newUserId, type CNode } from "@/lib/catalog/studio/nodes";
+import { findNode, findPath, newUserId, widgetAncestor, type CNode } from "@/lib/catalog/studio/nodes";
+import { applySlotText, placeholderContent, type IllustSlotRole } from "@/lib/catalog/illustration-types";
+import { illustrationRender } from "@/lib/catalog/render/infographic/illustration";
+import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { renderNode } from "@/lib/catalog/studio/render-tree";
 import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
@@ -59,7 +62,7 @@ import { PanelFonts } from "./PanelFonts";
 import { StudioCanvas, type BindTarget, type CanvasHandle } from "./StudioCanvas";
 import { StudioThumbs } from "./StudioThumbs";
 import type { StudioOps } from "./types";
-import { useStudio } from "./useStudio";
+import { ensureIllustrations, useStudio } from "./useStudio";
 import "@/components/cdash/cdash.css";
 
 type PanelTab = "content" | "design" | "fonts" | "data";
@@ -87,6 +90,21 @@ function mergeOverride(existing: InfoOverride | undefined, patch: InfoOverride):
     else out[k] = v;
   }
   return out as InfoOverride;
+}
+
+/** 넣은 일러스트(313) — 내용은 자리 표시 글, 폭 8열(높이는 그림 비율), 색은 이 쪽 분야 색 */
+function newIllustration(assetId: string, pageKey?: string): CNode | null {
+  const info = illustrationRender(assetId)?.info;
+  if (!info) return null;
+  const spec = { type: info.type, content: placeholderContent(info), illust: { asset: assetId, colors: { mode: "area" } } };
+  return {
+    id: newUserId(),
+    tag: "div",
+    className: "kc-x-illust",
+    widget: "infographic",
+    style: { position: "absolute", left: "48px", top: "120px", width: `${spanWidth(8).toFixed(2)}px` },
+    props: { slot: "x", spec, box: { w: 842, h: 0 }, ...(/^area-[1-6]$/.test(pageKey ?? "") ? { area: Number(pageKey!.slice(5)) } : {}) },
+  };
 }
 
 function newAdded(kind: "text" | "shape" | "image", asset?: string): CNode {
@@ -222,6 +240,23 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         pe((e) => addElement(e, node));
         setSelectedId(node.id);
       },
+      addIllustration: async (assetId) => {
+        await ensureIllustrations([assetId]);
+        const node = newIllustration(assetId, itemKey);
+        if (!node) return;
+        pe((e) => addElement(e, node));
+        setSelectedId(node.id);
+      },
+      commitSlot: (slotId, text) => {
+        const path = findPath(derived, slotId);
+        const slotNode = path?.[path.length - 1];
+        const w = path ? widgetAncestor(path) : null;
+        if (!slotNode || !w || w.widget !== "infographic" || !w.props) return;
+        const p = w.props as unknown as InfoSlotProps;
+        const role = String(slotNode.attrs?.["data-ill-role"] ?? "") as IllustSlotRole;
+        const next = applySlotText(p.spec.content, role, Number(slotNode.attrs?.["data-ill-item"] ?? 0), text);
+        if (next) pe((e) => setInfo(e, w.id, mergeOverride(e.nodes?.[w.id]?.info, { content: next })), `info:${w.id}`);
+      },
       setVariant: (k, v) => pe((e) => setVariant(e, k, v)),
       pickImage: (cb) => setPicker(() => cb),
       requestBind: (blockId) => {
@@ -232,7 +267,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
     };
-  }, [tree, pe, composed, setBindTarget]);
+  }, [tree, pe, composed, itemKey, setBindTarget]);
 
   // ── 지표 넣기 — 표식 자리에 칩을 넣는다(실행 취소 한 단계) ──
   const insertBind = useCallback(
@@ -569,6 +604,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 checks={checks}
                 onSelect={setSelectedId}
                 onCommitText={ops.commitText}
+                onCommitSlot={ops.commitSlot}
                 onPatchStyle={ops.patchStyle}
                 onKeyCommand={onKeyCommand}
                 onRequestBind={setBindTarget}

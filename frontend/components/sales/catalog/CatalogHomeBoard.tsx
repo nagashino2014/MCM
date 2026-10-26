@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { BookOpenText, Building2, FileBadge, ListChecks, MessageSquareQuote, Network, PenTool, RefreshCw, Send, Type, Users } from "lucide-react";
+import { BookOpenText, Building2, FileBadge, ListChecks, MessageSquareQuote, Network, PenTool, RefreshCw, Send, Shapes, Type, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -35,6 +35,7 @@ interface MetricsResponse {
 const LINKS = [
   { href: "/sales/catalog/studio", title: "스튜디오", desc: "쪽을 캔버스에서 직접 고치기 — 글·사진·인포그래픽·서체·배치", icon: PenTool },
   { href: "/sales/catalog/fonts", title: "서체 라이브러리", desc: "서체 올리기·견본·라이선스, 제목·본문·숫자 세트 만들기", icon: Type },
+  { href: "/sales/catalog/illustrations", title: "일러스트 라이브러리", desc: "보유 스톡 인포그래픽 일러스트 올리기·글자 자리·라이선스", icon: Shapes },
   { href: "/sales/catalog/projects", title: "실적 노출 관리", desc: "부록 실적의 대외 표기·노출·대표 실적·표시 범위", icon: ListChecks },
   { href: "/sales/catalog/people", title: "인물 노출 관리", desc: "임원진·기술인력·자문위원, 사진 게재 동의", icon: Users },
   { href: "/sales/catalog/assets", title: "고객사 로고", desc: "주요 고객사·협력 기관 로고와 순서", icon: Building2 },

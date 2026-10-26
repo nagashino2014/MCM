@@ -625,6 +625,89 @@ export const SALES_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-22",
   },
   {
+    id: "catalog.illustrations",
+    label: "일러스트 라이브러리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "보유 스톡 인포그래픽 일러스트를 올려 두면 스튜디오에서 인포그래픽 모양으로 고르거나 쪽 위에 넣습니다.",
+        "[[묶음 폴더 가져오기]]는 관리자 PC 매처가 만든 폴더를 통째로, [[SVG 한 장 올리기]]는 정리한 SVG 한 장을 올립니다.",
+        "쓰는 쪽이 있는 일러스트는 빼도 지우지 않고 보관합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/CatalogIllustrationsBoard.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-use",
+    label: "일러스트와 기본 인포그래픽 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "일러스트는 인포그래픽의 모양 하나입니다. 유형은 기본 인포그래픽 16종 중 어느 것과 같은 뜻인지를 나타냅니다.",
+        "그림에 항목 수가 고정돼 있어, 스튜디오에서는 항목 수가 같은 인포그래픽 자리에만 후보로 나옵니다.",
+        "'추천 자리'는 매처가 매긴 회사소개서 쪽 적합도입니다(상·중·하).",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "studio" },
+    sources: ["components/sales/catalog/illustrations/CatalogIllustrationsBoard.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-import",
+    label: "묶음 폴더 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "관리자 PC 에서 asset_matcher.py export 로 만든 폴더를 고릅니다. 영역마다 meta.json·illust.svg·thumb.png 가 있어야 합니다.",
+        "같은 일러스트를 다시 올리면 새 판으로 바뀌고, 쪽에서 쓰던 이전 판은 보관됩니다.",
+        "SVG 는 3MB 이하만 받습니다. 넘으면 매처에서 영역을 더 좁히거나(crop) 효과를 걷어 냅니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/IllustrationImportModal.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-slots",
+    label: "글자 자리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "글자 자리는 스튜디오가 항목 글을 얹는 상자입니다. 역할(제목·설명·번호·숫자·중심)과 항목 번호로 내용과 짝짓습니다.",
+        "끌어 옮기고 모서리로 크기를 바꿉니다. 방향키 0.5%, Shift 2%, Alt+방향키 크기, Delete 지우기.",
+        "글자 크기는 그림 폭에 비례하되 쪽에서 7pt 아래로 내려가지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "slots" },
+    sources: ["components/sales/catalog/illustrations/IllustrationDetailDrawer.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-license",
+    label: "일러스트 라이선스 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "출처·스톡 번호·라이선스 종류·구입일을 적어 둡니다. Adobe Stock Standard 는 인쇄 50만 부까지의 마케팅 인쇄물·디지털 문서에 쓸 수 있습니다.",
+        "구입한 원본 파일은 저작물이라 저장소나 외부에 올리지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/IllustrationDetailDrawer.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.studio-illustration",
+    label: "일러스트로 그리기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "보유 일러스트로 인포그래픽을 그립니다. 항목 수가 같은 일러스트만 후보로 나오고, 같은 유형·이 쪽 추천이 앞에 옵니다.",
+        "글자 자리를 캔버스에서 눌러 바로 고칩니다. 숫자 자리는 지표에 묶으면 데이터가 바뀌어도 최신 값입니다.",
+        "색은 KESI 토큰·분야 색으로 다시 칠합니다. [[기본 도식으로]] 누르면 원래 인포그래픽으로 돌아갑니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "studio" },
+    sources: ["components/sales/catalog/studio/PanelIllustration.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
     id: "catalog.fonts",
     label: "서체 라이브러리 도움말",
     blocks: [

@@ -5,6 +5,7 @@
 import { createElement, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Icon } from "@/lib/catalog/render/components/parts";
 import type { CatalogRenderData, ImageKey } from "@/lib/catalog/render/types";
+import { illustrationRender } from "@/lib/catalog/render/infographic/illustration";
 import { resolveBind } from "./binds";
 import type { CNode } from "./nodes";
 
@@ -78,6 +79,8 @@ export function renderNode(n: CNode, env: TreeEnv, hooks?: TreeHooks): ReactNode
   }
   let props = nodeProps(n, env);
   if (hooks?.decorate) props = hooks.decorate(n, props);
+  const art = n.attrs?.["data-illust-art"];
+  if (typeof art === "string") return createElement(n.tag, { ...props, dangerouslySetInnerHTML: { __html: illustrationRender(art)?.svg ?? "" } });
   const children = resolvedChildren(n, env).map(render);
   return createElement(n.tag, props, ...(children.length ? children : []));
 }

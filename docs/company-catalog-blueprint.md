@@ -222,6 +222,24 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - 디자인 시스템 아티팩트에는 **인포그래픽 갤러리 보드**(16종 × 대표 변형, KESI 실제 내용)를 둬 사용자가 미리 보고 고를 수 있게 한다.
 - 선택 기록을 분야별 기본값으로 저장(다음 생성 시 같은 분야는 같은 유형 우선).
 
+### 4-5. 보유 스톡 일러스트 — 인포그래픽의 '모양' 하나(2026-10-26, 313)
+
+회사가 산 Adobe Stock 등 인포그래픽 일러스트를 회사소개서 모듈로 쓴다. 일러스트는 **내용은 그대로, 모양만 바꾸는** 인포그래픽 모양 하나다
+(`InfoSpec.illust = { asset, colors, fit }`). 기본 16종은 항목 수에 맞춰 늘고 줄지만 일러스트는 그림에 항목 수가 고정이라 **항목 수가 같은 자리에만** 후보로 뜬다.
+
+| 단계 | 어디서 | 하는 일 |
+|---|---|---|
+| 변환·정리(관리자 PC) | `scripts/catalog_assets` `asset_matcher.py export` | Illustrator SVG(대지별, `ai_to_svg.jsx` — pdftocairo SVG 는 투명·혼합을 필터 합성 체인으로 그려 PDF 에서 래스터로 굳어 쓰지 않음) → 영역 자르기·가장자리 조각 지우기 → **글자 레이어(Text·Title…)를 지우기 전에 글자 덩어리마다 자리(slots: 상자·줄 수·크기·정렬·글자 색·아래 도형 색, 역할 title·sub·desc·number·center·heading, 항목 순번)** → 회색 '자리 표시 막대'도 설명 자리로 → 배경·템플릿 이름·그림자(이미지·필터·마스크) 걷기 → 색 값마다 `var(--il-cN, #원래색)` + 팔레트(색상 무리·밝기 차) → `illust.svg·thumb.png·meta.json` 묶음 |
+| 가져오기(관리 화면) | `/sales/catalog/illustrations` | 묶음 폴더 통째로(webkitdirectory) 또는 SVG 한 장. 서버가 SVG 를 화이트리스트로 다시 씀(스크립트·외부 참조·처리기 제거, id 접두사, 3MB 상한), 매처를 안 거친 SVG 는 색 변수화. 라이선스(출처·스톡 번호·종류·구입일) 기록. 같은 키 재가져오기 = 새 판(쓰던 이전 판은 보관) |
+| 쓰기(스튜디오) | 디자인 탭 | 인포그래픽 고르기 → **일러스트로 그리기**(항목 수 같은 것만, 같은 유형·쪽 추천·품질·글자 넘침 순) / 요소 추가 **[일러스트]**(쪽 유형·유형·항목 수로 거른 라이브러리) → 쪽 위 요소(편집층 `added`, 12열 폭·4pt 이동, 높이는 그림 비율) |
+| 글 | 캔버스 | 글자 자리를 눌러 바로 고침 → 그 항목의 label·sub·desc·valueText·center·title 로 저장(편집층 info.content). 숫자 자리는 지표에 묶으면 지표 칩(최신 값) |
+| 색 | 디자인 탭 | 이 쪽 분야 색·분야 6색·브랜드·단색·원래 색 + 무리별 토큰. 글자는 무리의 글자용 키 색, 아래 도형과 대비 4.5:1 이 안 되면 흰/짙은 글자(캔버스 대비 검사는 `data-ill-bg` 를 바탕으로) |
+| PDF | 서버 html.ts | 문서 편집층이 쓰는 일러스트를 등록표에 올린 뒤 그림 — SVG 는 인라인 벡터, 글은 HTML(검색·복사). 글자 자리는 줄 수만큼 높이 + 넘치면 잘림 → paginate 넘침 검사 |
+
+- 글자 크기 = 그림 폭 비율(cqw)이되 역할별 최소(7~12pt), 자리 폭도 역할별 최소(번호 2.6em·제목 4em…), 그림 위·아래로 나가는 자리만큼 바깥 여백을 잡아 다음 내용과 겹치지 않음.
+- 크기: 기본 '자리 높이에 맞춤'(쪽 구성 안전), 필요하면 '자리 폭에 맞춤'(그 뒤 쪽 검사).
+- 빼기: 쪽·버전·발행본이 쓰면 보관(`status = archived`, 라이브러리에서만 숨김), 아니면 행·파일 삭제.
+
 ---
 
 ## 5. 서체 선택·업로드 ★
@@ -681,7 +699,9 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 
 **312_catalog_publish.sql**(P7) — tpl-staff-basic `catalog.view` · `catalog_refresh_state` · 반영 대기 열린 항목 부분 유니크 · `catalog_edition_distributions`. 일회용 PG 에 두 번 적용해 멱등 확인(§6-8).
 
-DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`, P7 은 `-Files 312_catalog_publish.sql`.
+**313_catalog_illustrations.sql**(일러스트 라이브러리, §4-5) — `catalog_assets.kind` CHECK 에 `illustration` 추가 + `catalog_illustrations`(asset_id, source_key, title, info_type, alt_types, item_count, has_center, has_loop, quality, note, view_w/h, slots jsonb, palette jsonb, license jsonb, fits jsonb, thumb_key, svg_bytes, status active|archived, 작성·수정 기록). 312 는 P7. 일회용 PG 에 두 번 적용해 멱등 확인(10-26).
+
+DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`, P7 은 `-Files 312_catalog_publish.sql`, 일러스트 라이브러리는 `-Files 313_catalog_illustrations.sql`.
 
 ---
 
@@ -695,6 +715,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | `/sales/catalog/people` | 인물 노출 관리(임원·직원·자문위원, 사진 동의) | catalog.manage |
 | `/sales/catalog/assets` | 사진·로고·증서 자산 | catalog.manage |
 | `/sales/catalog/fonts`(✅ P5b) | 서체 라이브러리(업로드·분석 결과·견본·라이선스·세트 구성·사용 문서, §5-6) | catalog.manage |
+| `/sales/catalog/illustrations`(✅ 10-26) | 일러스트 라이브러리(묶음 폴더·SVG 가져오기, 글자 자리·유형·항목 수·라이선스, 빼기·보관, §4-5) | catalog.manage |
 | `/admin/company-profile`(기존) | 연혁 출처 배지·공개 토글, 특허·수상 종류, 증빙 이미지 | org.edit |
 
 - 메뉴 `config/menu.ts`, 경로 권한 `config/menu-permissions.ts`, 거부 라벨 `AccessDenied.tsx`, AI 키 `features.ts`.
@@ -716,6 +737,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P5b 서체 라이브러리** ✅ | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·TrueType 윤곽 WOFF 변환(converter `/fonts/prepare`)·견본 화면·크기 보정값 계산·스튜디오 세트 연동·빠진 글자 검사 | `/sales/catalog/fonts`(§5-6, 10-23) — 배포는 converter + next | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** ✅ | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | 스튜디오 [AI로 수정]·[AI로 줄이기]·AI 순위, 실적 [표기 제안](§7-4, 10-24) — 배포는 311 + next | P5 | M |
 | **P7 자동 갱신·발행** ✅ | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력, 판 옵션(풀·요약 × 실명·마스킹), 배포 기록, 전 직원 열람 | `/sales/catalog` 발행본·반영 대기·발행(§6-8, 10-26) — 배포는 312 + next | P4(P5와 병행 가능) | M |
+| **일러스트 라이브러리** ✅ | 보유 스톡 일러스트 모듈화 — 매처 export(Illustrator SVG·글자 자리·색 변수)·관리 화면·스튜디오 '일러스트로 그리기'·'일러스트 넣기'·글자 자리 바로 고치기·재채색·대비 | §4-5, 313(10-26) — 배포는 313 + next | P5·P6 | M |
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |
 
 **병렬 가능**: P1·P2(claude.ai 디자인 작업)와 P3(MCM 데이터)는 서로 독립이라 동시에 진행할 수 있다. P4는 둘 다 끝나야 한다.

@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ImagePlus, Loader2, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
+import { ImagePlus, Loader2, PenTool, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { COLOR_CONCEPTS, COVER_DESIGNS } from "@/lib/catalog/document-theme";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
@@ -20,6 +20,7 @@ import { gridColumnsOf, type Selection } from "@/lib/catalog/studio/select";
 import type { CNode } from "@/lib/catalog/studio/nodes";
 import { fetchRank, type RankResponse } from "./aiClient";
 import { StaticFrame } from "./Frames";
+import { IllustrationLibraryModal, IllustrationShapePicker } from "./PanelIllustration";
 import { GRID_NOTE } from "./StudioCanvas";
 import type { PanelProps } from "./types";
 
@@ -44,10 +45,12 @@ export function PanelDesign(props: PanelProps) {
   const { studio, item, composed, sel, caps, ops } = props;
   const theme = studio.state?.theme;
   const variant = pageState(studio.state?.pages ?? [], item.key).edits.variant ?? {};
+  const [libOpen, setLibOpen] = useState(false);
   if (!theme) return null;
   return (
     <div className="flex flex-col gap-4">
-      {sel?.kind === "infographic" && caps?.infographic ? <InfoTypePicker {...props} sel={sel} /> : null}
+      {sel?.kind === "infographic" && caps?.infographic && sel.node.origin !== "add" ? <InfoTypePicker {...props} sel={sel} /> : null}
+      {sel?.kind === "infographic" && caps?.infographic ? <IllustrationShapePicker {...props} sel={sel} /> : null}
 
       {sel && caps ? <ElementDesign {...props} sel={sel} /> : null}
 
@@ -113,7 +116,19 @@ export function PanelDesign(props: PanelProps) {
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.pickImage((key) => ops.addElement("image", key))}>
               <ImagePlus className="w-3.5 h-3.5" /> 이미지
             </button>
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setLibOpen(true)}>
+              <PenTool className="w-3.5 h-3.5" /> 일러스트
+            </button>
           </div>
+          <IllustrationLibraryModal
+            open={libOpen}
+            pageType={item.type}
+            onClose={() => setLibOpen(false)}
+            onPick={async (info) => {
+              await ops.addIllustration(info.assetId);
+              setLibOpen(false);
+            }}
+          />
           <p className="text-[11px] cd-text-faint">{GRID_NOTE}</p>
         </section>
       ) : null}
@@ -355,7 +370,8 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
         </div>
       ) as ReactElement
     );
-  const apply = (type: InfoType, variant: string) => ops.setInfo(sel.id, { type, variant }, slot.slot);
+  // 기본 도식을 고르면 일러스트 모양은 푼다
+  const apply = (type: InfoType, variant: string) => ops.setInfo(sel.id, { type, variant, illust: undefined }, slot.slot);
   const meta = INFO_TYPE_META[spec.type];
   return (
     <section className="flex flex-col gap-2">
@@ -380,7 +396,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
       </p>
       <ul className="flex flex-col gap-2">
         {top.map((c) => {
-          const cur = c.type === spec.type;
+          const cur = c.type === spec.type && !spec.illust;
           const w = Math.min(268, slot.box.w);
           const srcH = Math.max(slot.box.h, INFO_TYPE_META[c.type].minHeight) + 8;
           const key = `${c.type}:${c.variant}`;
@@ -419,7 +435,10 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
           );
         })}
       </ul>
-      {onAiShrink && overflow[`${spec.type}:${top.find((c) => c.type === spec.type)?.variant}`] ? (
+      {spec.illust ? (
+        <p className="text-[11px] cd-text-muted">지금 모양은 보유 일러스트입니다(아래 '일러스트로 그리기'). 위 유형을 고르면 기본 도식으로 바뀝니다.</p>
+      ) : null}
+      {!spec.illust && onAiShrink && overflow[`${spec.type}:${top.find((c) => c.type === spec.type)?.variant}`] ? (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="cd-pill cd-pill-warn">지금 유형이 자리를 넘칩니다</span>
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => onAiShrink([sel.id])}>
@@ -428,7 +447,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
           <span className="cd-text-faint">또는 넘치지 않는 다른 유형을 고르세요.</span>
         </div>
       ) : null}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1" hidden={Boolean(spec.illust)}>
         <p className="text-xs cd-text-muted">변형</p>
         <div className="flex flex-wrap gap-1.5">
           {meta.variants.map((v) => (

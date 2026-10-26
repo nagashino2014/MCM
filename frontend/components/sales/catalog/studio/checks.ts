@@ -102,6 +102,12 @@ export function checkSheet(win: Window, sheet: HTMLElement): CheckItem[] {
     // 바탕: 가장 가까운 불투명 배경색(그림 바탕이면 건너뜀)
     let bg: [number, number, number, number] | null = null;
     for (let a: Element | null = el; a; a = a.parentElement) {
+      // 일러스트 글자 자리(313) — 바탕은 그 아래 SVG 도형을 바꿔 칠한 색
+      const illBg = a.getAttribute("data-ill-bg");
+      if (illBg && /^#[0-9a-f]{6}$/i.test(illBg)) {
+        bg = [parseInt(illBg.slice(1, 3), 16), parseInt(illBg.slice(3, 5), 16), parseInt(illBg.slice(5, 7), 16), 1];
+        break;
+      }
       const as = style(a);
       if (as.backgroundImage && as.backgroundImage !== "none") {
         bg = null;

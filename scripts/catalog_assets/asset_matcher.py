@@ -6,6 +6,7 @@
   python -I asset_matcher.py match   --work <작업 폴더>
   python -I asset_matcher.py report  --work <작업 폴더> [--stock stock_candidates.json]
   python -I asset_matcher.py recolor <in.svg> --out <out.svg> [--palette ci|area|mono] [--map #hex=#hex] [--strip-text]
+  python -I asset_matcher.py export  --work <작업 폴더> --out <묶음 폴더> [--only <영역 id…>]   # 앱 '일러스트 가져오기'용 묶음
   python -I asset_matcher.py all     --src <에셋 폴더> --work <작업 폴더>
 
 에셋은 신뢰하지 않는 데이터로 다룬다: 각 파일을 <작업>/_inputs/<slug>/src.<ext> 로 따로 복사해 처리하고,
@@ -360,6 +361,12 @@ def cmd_recolor(a):
         out(line)
 
 
+def cmd_export(a):
+    from am_export import run_export
+    run_export(os.path.abspath(a.work), os.path.abspath(a.out), a.only or [], a.min_quality, a.keep_effects,
+               a.no_illustrator, a.force, out)
+
+
 def cmd_all(a):
     cmd_ingest(a)
     cmd_convert(a)
@@ -409,12 +416,20 @@ def main():
     p.add_argument('--map', action='append', help='#원래색=#새색 또는 #원래색=area-2 (여러 번)')
     p.add_argument('--strip-text', action='store_true', help='글자(글리프) 지우기')
     p.add_argument('--list', action='store_true', help='색 목록만 출력')
+    p = sub.add_parser('export', help='판정한 영역을 회사소개서 일러스트 묶음(illust.svg·thumb.png·meta.json)으로')
+    common(p)
+    p.add_argument('--out', required=True, help='묶음 폴더(관리 화면에서 이 폴더를 통째로 고른다)')
+    p.add_argument('--only', nargs='*', help='이 영역 id(as-123/ab01/r2) 또는 slug 만')
+    p.add_argument('--min-quality', type=int, default=3, help='--only 가 없을 때 이 품질(1~5) 이상만')
+    p.add_argument('--keep-effects', action='store_true', help='그림자·흐림(이미지·필터·마스크)을 남김(기본: 평면화)')
+    p.add_argument('--no-illustrator', action='store_true', help='Illustrator 를 띄우지 않음(이미 만든 aisvg 만)')
+    p.add_argument('--force', action='store_true', help='Illustrator SVG 를 다시 만듦')
 
     a = ap.parse_args()
     if getattr(a, 'only', None) is None and hasattr(a, 'only'):
         a.only = []
     {'ingest': cmd_ingest, 'convert': cmd_convert, 'analyze': cmd_analyze, 'match': cmd_match,
-     'report': cmd_report, 'recolor': cmd_recolor, 'all': cmd_all}[a.cmd](a)
+     'report': cmd_report, 'recolor': cmd_recolor, 'export': cmd_export, 'all': cmd_all}[a.cmd](a)
 
 
 if __name__ == '__main__':

@@ -36,6 +36,23 @@ python -I scripts\catalog_assets\asset_matcher.py recolor $W\assets\<slug>\ab01\
 `--strip-text` 는 살아 있는 글자(글리프)만 지웁니다. 윤곽선으로 바뀐 글자는 도형이라 Illustrator 에서 지웁니다. 숫자·글자는 HTML 로 덧씌우고, 자리 좌표는 `slots.json` 에 있습니다.
 `report` 는 항목별 상위 후보를 재채색하고 Edge 헤드리스(`AM_EDGE`)로 PNG 미리보기를 굽습니다(`recolor/index.json` 캐시, `--force-recolor` 로 다시).
 
+## 앱으로 내보내기(export) — 회사소개서 일러스트 라이브러리
+판정을 마친 영역을 회사소개서 앱의 **일러스트 라이브러리**(관리 화면 `/sales/catalog/illustrations`)에 올릴 묶음으로 만듭니다.
+```powershell
+python -I scripts\catalog_assets\asset_matcher.py export --work $W --out $W\bundle                       # review.json 품질 3 이상 전부
+python -I scripts\catalog_assets\asset_matcher.py export --work $W --out $W\bundle --only as-1998385985/ab01/r2
+```
+- 벡터는 **Illustrator SVG**(`ai_to_svg.jsx`, 대지별)에서 다시 만듭니다. pdftocairo SVG 는 투명·혼합을 필터 합성 체인으로 그려 PDF 에서 래스터로 굳기 때문입니다.
+- 글자 레이어(Text·Title…)를 지우기 전에 글자 덩어리마다 상자·줄 수·크기·정렬·색을 재서 `slots`(역할 title·sub·desc·number·center·heading + 항목 순번)를 만듭니다.
+  회색 막대로 그린 설명 자리 표시(lorem 대신)도 설명 자리로 바꾸고 지웁니다. 배경·템플릿 이름 레이어(Background·Name·Logo)·판 배경도 지웁니다.
+- 평면화: 래스터 이미지와 필터·마스크를 쓰는 요소(그림자·흐림)를 지웁니다(`--keep-effects` 로 남김). 디자인 시스템은 그림자를 쓰지 않습니다.
+- 색 값마다 `var(--il-cN, #원래색)` 으로 바꾸고 팔레트(쓰임 순, 색상 무리, 무리 안 밝기 차)를 meta.json 에 남깁니다. 앱은 변수만 바꿔 KESI 토큰·분야 색으로 칠합니다.
+- `review.json` 에 더 쓸 수 있는 키: `title`(이름), `crop`(영역 안 비율 상자 [x0,y0,x1,y1] — 장식만 있는 가장자리 덜기),
+  `drop_boxes`(원래 영역 비율 상자 목록 — 중심이 그 안에 있는 도형을 지움), `text_layers`·`drop_layers`·`keep_layers`(레이어 이름), `keep_effects`.
+  영역 밖으로 절반 넘게 나간 도형(옆 슬라이드·배경 장식의 잘린 조각)은 자동으로 지웁니다. 중심 없이 네 귀퉁이에 놓인 4항목은 읽기 순서로 번호를 매깁니다.
+- 산출: `<out>/<영역 키>/illust.svg·thumb.png·meta.json`, `<out>/index.json`. 관리 화면 [묶음 폴더 가져오기]에서 `<out>` 폴더를 고릅니다.
+  구입한 스톡 원본·묶음은 저작물이라 저장소에 넣지 않습니다(앱 저장소에는 정리한 SVG 만 올라가고 라이선스를 함께 기록합니다).
+
 ## 한계
 - 윤곽선으로 바뀐 글자는 내용을 읽지 못해(줄 단위 자리만) 연도·번호 단서는 살아 있는 글자에만 쓰입니다.
 - 한 대지에 여러 그림이 붙어 있으면 한 영역으로 묶일 수 있습니다. 반대로 멀리 떨어진 요소는 나뉠 수 있습니다.

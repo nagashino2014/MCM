@@ -14,6 +14,8 @@ import { pageState, upsertPage, withOrder, type StudioDoc, type StudioPageState 
 import type { PageEdits } from "@/lib/catalog/studio/edits";
 import type { TreeEnv } from "@/lib/catalog/studio/render-tree";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
+import { illustIdsIn, type IllustrationRender } from "@/lib/catalog/illustration-types";
+import { illustrationRender, registerIllustrations } from "@/lib/catalog/render/infographic/illustration";
 import { catalogFetch } from "../catalogFetch";
 
 export interface StudioPayload {
@@ -25,6 +27,17 @@ export interface StudioPayload {
   opts: RenderOptions;
   /** 서체 라이브러리 세트(사용자 세트) */
   fontSets?: FontSetDef[];
+  /** 문서가 쓰는 일러스트(313) — 정보 + 정리한 SVG */
+  illustrations?: IllustrationRender[];
+}
+
+/** 아직 등록하지 않은 일러스트를 받아 등록한다(스튜디오가 그리기 전에) — 받은 것이 있으면 true */
+export async function ensureIllustrations(ids: string[]): Promise<boolean> {
+  const missing = ids.filter((id) => !illustrationRender(id));
+  if (!missing.length) return false;
+  const r = await catalogFetch<{ items: IllustrationRender[] }>(`/api/catalog/illustrations/render?ids=${missing.join(",")}`);
+  registerIllustrations(r.items);
+  return r.items.length > 0;
 }
 
 export interface DocState {
@@ -72,6 +85,7 @@ export function useStudio(docId: string) {
       try {
         const q = new URLSearchParams({ doc: docId, edition: v.edition, naming: v.naming });
         const p = await catalogFetch<StudioPayload>(`/api/catalog/studio?${q}`);
+        registerIllustrations(p.illustrations ?? []);
         setPayload(p);
         setState({ theme: p.doc.theme, pages: p.doc.pages });
         setRev(p.doc.rev);
@@ -115,7 +129,21 @@ export function useStudio(docId: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ctx, data, cover, variantSig, orderSig]
   );
-  const env: TreeEnv | null = useMemo(() => (data ? { url: previewUrl, data } : null), [data]);
+  // 일러스트 SVG 는 그릴 때 등록표에서 꺼낸다 — 새로 받으면 env 를 바꿔 캔버스·썸네일을 다시 그린다
+  const [illustTick, setIllustTick] = useState(0);
+  const illustSig = useMemo(() => illustIdsIn(state?.pages ?? []).join(","), [state]);
+  useEffect(() => {
+    if (!illustSig) return;
+    let alive = true;
+    ensureIllustrations(illustSig.split(","))
+      .then((got) => alive && got && setIllustTick((t) => t + 1))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [illustSig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const env: TreeEnv | null = useMemo(() => (data ? { url: previewUrl, data } : null), [data, illustTick]);
 
   // 쪽 트리 캐시 — 같은 쪽 요소·같은 편집층이면 다시 만들지 않는다
   const cache = useRef(new Map<string, { element: unknown; edits: PageEdits | undefined; hidden: boolean; composed: ComposedPage }>());

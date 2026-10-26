@@ -7,6 +7,7 @@ import { contentTypeOf, imageSize, readPublicFile, readPublicText, renderStatic 
 import { tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
 import { CONVERTER_BUNDLED_FONTS, facePreviewUrl, facePrintPath } from "@/lib/catalog/fonts";
 import { resolveFontSet } from "@/lib/catalog/font-library";
+import { registerUsedIllustrations } from "@/lib/catalog/illustrations";
 import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { STUDIO_PRINT_CSS, composeDocument } from "@/lib/catalog/studio/compose";
 import type { StudioPageState } from "@/lib/catalog/studio/doc";
@@ -123,6 +124,7 @@ export async function buildCatalogHtml(
   const { set, notice } = await resolveFontSet(data.theme.fontSet);
   if (notice) notices.push(notice);
   const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept };
+  await registerUsedIllustrations(opts.pages ?? []);
   const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
   const drawn = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
   const body = opts.naming === "masked" ? maskNamesInHtml(drawn, data.maskNames ?? []) : drawn;

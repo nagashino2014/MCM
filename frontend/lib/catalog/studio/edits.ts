@@ -14,7 +14,7 @@
  * 기본 트리는 저장하지 않으므로 데이터가 바뀌어도 편집층은 같은 노드 id 에 다시 붙는다. 노드가 사라지면(데이터 쪽 구조 변화) 그 편집은 쓰이지 않고 남는다.
  * 보안: 편집층은 신뢰하지 않는 입력이다 — 태그·속성·스타일·클래스·바인딩 경로를 모두 화이트리스트로 다시 만든다(서버 저장 전·클라이언트 불러온 뒤).
  */
-import { resolveInfoMetrics, sanitizeInfoSpec, type InfoSpec } from "@/lib/catalog/render/infographic/types";
+import { resolveInfoMetrics, sanitizeInfoSpec, type InfoIllust, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { infographicToTree } from "./convert";
 import { PHOTO_RATIOS, isTokenVar, isTypeStep, typeStepStyle } from "./design-system";
@@ -26,6 +26,8 @@ export interface InfoOverride {
   variant?: string;
   colorMode?: InfoSpec["colorMode"];
   content?: InfoSpec["content"];
+  /** 일러스트 모양(313) — null = 기본 도식으로 되돌림 */
+  illust?: InfoIllust | null;
 }
 
 export interface NodeEdit {
@@ -247,8 +249,8 @@ function sanitizeImageRef(input: unknown): ImageRef | undefined {
   return out;
 }
 
-/** 추가한 요소 — 글상자(kc-x-text)·도형(kc-x-shape)·이미지(kc-x-image)만 */
-export type AddedKind = "text" | "shape" | "image";
+/** 추가한 요소 — 글상자(kc-x-text)·도형(kc-x-shape)·이미지(kc-x-image)·일러스트(kc-x-illust, 313)만 */
+export type AddedKind = "text" | "shape" | "image" | "illust";
 export const ADDED_SHAPES = ["rect", "round", "circle", "line"] as const;
 
 export function addedKind(n: CNode): AddedKind | null {
@@ -256,6 +258,7 @@ export function addedKind(n: CNode): AddedKind | null {
   if (/\bkc-x-text\b/.test(c)) return "text";
   if (/\bkc-x-shape\b/.test(c)) return "shape";
   if (/\bkc-x-image\b/.test(c)) return "image";
+  if (/\bkc-x-illust\b/.test(c)) return "illust";
   return null;
 }
 
@@ -272,6 +275,16 @@ function sanitizeAdded(raw: unknown, budget: Budget): CNode | null {
   if (kind === "shape") {
     const shape = ADDED_SHAPES.find((s) => String(n.className).includes(`kc-x-shape--${s}`)) ?? "rect";
     return { id, tag: "div", className: `kc-x-shape kc-x-shape--${shape}`, style };
+  }
+  if (kind === "illust") {
+    // 일러스트: 내용·모양(spec)만 저장하고 그림·글자 자리는 그릴 때마다 다시 만든다. 높이는 그림 비율을 따른다
+    const props = (n.props && typeof n.props === "object" ? n.props : {}) as Record<string, unknown>;
+    const spec = sanitizeInfoSpec(props.spec, { type: "process", content: { items: [] } });
+    if (!spec.illust) return null;
+    delete style.height;
+    // 분야 번호는 분야 쪽에 넣을 때만(없으면 쪽 기본 --area = 브랜드 색)
+    const area = typeof props.area === "number" && props.area >= 1 && props.area <= 6 ? Math.round(props.area) : undefined;
+    return { id, tag: "div", className: "kc-x-illust", widget: "infographic", style, props: { slot: `x-${id}`, spec, box: { w: 842, h: 0 }, ...(area ? { area } : {}) } };
   }
   if (kind === "image") {
     const asset = sanitizeImageRef(n.asset);
@@ -296,6 +309,8 @@ function sanitizeInfoOverride(input: unknown): InfoOverride | undefined {
   if (o.variant) out.variant = spec.variant;
   if (o.colorMode) out.colorMode = spec.colorMode;
   if (o.content) out.content = spec.content;
+  if (o.illust === null) out.illust = null;
+  else if (o.illust && spec.illust) out.illust = spec.illust;
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -381,7 +396,8 @@ export function mergeInfoSpec(base: InfoSpec, o: InfoOverride | undefined): Info
   if (!o) return base;
   const type = o.type ?? base.type;
   const variant = o.type && o.type !== base.type && !o.variant ? undefined : (o.variant ?? base.variant);
-  return { type, variant, colorMode: o.colorMode ?? base.colorMode, content: o.content ?? base.content };
+  const illust = o.illust === null ? undefined : (o.illust ?? base.illust);
+  return { type, variant, colorMode: o.colorMode ?? base.colorMode, content: o.content ?? base.content, ...(illust ? { illust } : {}) };
 }
 
 /** 기본 트리 + 편집층 → 파생 트리. 원본은 건드리지 않는다. */
@@ -415,9 +431,21 @@ export function applyEdits(base: CNode, edits: PageEdits | undefined, opts: Appl
     return n;
   };
   const root = walk(base) ?? { ...base, children: [] };
-  const added = (edits?.added ?? []).map((a) => markOwned(a, "add", a.id));
+  const added = (edits?.added ?? []).map((a) => (a.widget === "infographic" && a.props ? illustAdded(a, opts) : markOwned(a, "add", a.id)));
   if (added.length) root.children = [...(root.children ?? []), ...added];
   return root;
+}
+
+/** 추가한 일러스트 → 그린 노드(그림·글자 자리). 자리 노드 자체가 인포그래픽 위젯이라 내용·모양 고치기가 그대로 된다 */
+function illustAdded(a: CNode, opts: ApplyOptions): CNode {
+  const p = a.props as unknown as InfoSlotProps;
+  const rebuilt = infographicToTree({ ...p, spec: { ...p.spec, content: resolveInfoMetrics(p.spec.content, opts.metrics) } }, a.id);
+  if (!rebuilt) return markOwned(a, "add", a.id);
+  const owned = markOwned(rebuilt, "add", a.id);
+  // 높이는 그림 비율을 따른다(크기 조절 손잡이가 남긴 높이는 쓰지 않음)
+  const { height: _h, ...pos } = (a.style ?? {}) as Record<string, string | number>;
+  void _h;
+  return { ...owned, className: [rebuilt.className, "kc-x-illust"].filter(Boolean).join(" "), style: { ...rebuilt.style, ...pos }, widget: "infographic", props: a.props };
 }
 
 // ───────────────────────── 편집 조작(ops) ─────────────────────────
@@ -585,6 +613,17 @@ export function resetNode(edits: PageEdits, id: string, parts: Array<keyof NodeE
 
 /** 인포그래픽 유형·변형·색·내용 바꾸기(L2) — null = 기본 spec 으로 */
 export function setInfo(edits: PageEdits, id: string, info: InfoOverride | null): PageEdits {
+  const added = edits.added?.find((a) => a.id === id && a.widget === "infographic");
+  if (added) {
+    const clean = info ? sanitizeInfoOverride(info) : undefined;
+    if (!clean) return edits;
+    const p = added.props as unknown as InfoSlotProps;
+    const spec = mergeInfoSpec(p.spec, clean);
+    if (!spec.illust) return edits; // 추가한 일러스트는 일러스트 모양만(기본 도식으로 바꾸려면 지우고 새로 넣는다)
+    const next = cloneEdits(edits);
+    next.added = next.added!.map((a) => (a.id === id ? { ...a, props: { ...a.props, spec } } : a));
+    return next;
+  }
   const next = cloneEdits(edits);
   if (!info) {
     if (next.nodes?.[id]) delete next.nodes[id].info;

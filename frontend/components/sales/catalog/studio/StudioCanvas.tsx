@@ -216,7 +216,7 @@ export function StudioCanvas({
             spellCheck: false,
             dangerouslySetInnerHTML: { __html: text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>") },
             onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
-              if (e.key === "Enter" && multi && role === "center") {
+              if (e.key === "Enter" && multi) {
                 e.preventDefault();
                 e.currentTarget.ownerDocument.execCommand("insertLineBreak");
               } else if (e.key === "Enter" || e.key === "Escape") {

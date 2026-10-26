@@ -15,7 +15,8 @@ import {
 } from "../master-content";
 import type { AreaInfo, CatalogRenderData, CustomAreaInfo, RenderCtx } from "../types";
 import { barSpec, compareSpec, regionRows, stepsSpec } from "../infographic/adapt";
-import { InfoSlot } from "../infographic/slot";
+import { InfoSlot, InfoSource } from "../infographic/slot";
+import type { InfoSpec } from "../infographic/types";
 import { KoreaMap } from "./infographics";
 import { AREA_ICON, AreaTag, Foot, Head, Icon, Kpi, M, Sheet, TitleBlock, asOfNote, cx, fmt, mval } from "./parts";
 
@@ -29,12 +30,30 @@ const ORBIT_POS = [
   { left: 520, top: 300, x2: 520, y2: 350 },
 ];
 
+/** C08 원형 도식의 내용 — 스튜디오에서 유형을 바꾸거나 일러스트로 그릴 때 이 내용(분야명·누적 건수 지표·주요 서비스)이 그대로 간다 */
+function businessMapSpec(data: CatalogRenderData): InfoSpec {
+  return {
+    type: "hub",
+    content: {
+      center: { label: ORBIT_CENTER[ORBIT_CENTER.length - 1], desc: ORBIT_CENTER.slice(0, -1).join(" ") },
+      items: data.areas.map((a) => {
+        const sw = a.index === 6;
+        const bullets = sw ? SOFTWARE_CONTENT.products.map((p) => p.name) : AREA_CONTENT[a.category]?.overview ?? [];
+        const products = sw && a.count === 0;
+        // 서비스는 원래 카드처럼 한 줄에 하나
+        return { id: `a${a.index}`, label: a.name, desc: bullets.join("\n"), metric: products ? "software.products" : `projects.area.${a.index}`, unit: products ? "종" : "건" };
+      }),
+    },
+  };
+}
+
 export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const consulting = data.areas.filter((a) => a.index <= 5).length;
   return (
     <Sheet ctx={ctx} anchors={["c08"]} outline="사업 분야 개관">
       <Head ctx={ctx} num="02" name="사업 분야" sub="사업 분야 개관" />
       <TitleBlock eyebrow="사업 분야 개관" title={`환경 컨설팅 ${consulting}분야와 응용소프트웨어로 사업장을 지원합니다`} />
+      <InfoSource slot="c08.areas" spec={businessMapSpec(data)} box={{ w: 746, h: 400 }}>
       <div className="kc-ig kc-orbit" style={{ flex: 1, minHeight: 0 }}>
         <svg className="kc-orbit__svg" viewBox="0 0 746 420" preserveAspectRatio="none" aria-hidden="true">
           {ORBIT_POS.map((p, i) => (
@@ -83,6 +102,7 @@ export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRe
           );
         })}
       </div>
+      </InfoSource>
       <Foot items={[`* ${asOfNote(data)}. 건수는 계약 관리 분류별 누적 계약 수(수행 중 포함, 기타 용역 포함)입니다. 응용소프트웨어는 제품 수이며, 공급 계약이 생기면 계약 건수로 셉니다.`]} />
     </Sheet>
   );
@@ -401,6 +421,16 @@ export function SoftwarePage({ ctx, data, area }: { ctx: RenderCtx; data: Catalo
   );
 }
 
+/** C09 플랫폼 5단계 파이프라인의 내용(되돌이 포함) */
+function platformSpec(): InfoSpec {
+  const c = PLATFORM_CONTENT;
+  return {
+    type: "process",
+    variant: "h",
+    content: { title: c.loop, items: c.steps.map((st) => ({ id: `s${st.num}`, label: st.title, sub: st.num, desc: st.items.join("\n"), icon: st.icon, ...(st.core ? { key: true } : {}) })) },
+  };
+}
+
 export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const c = PLATFORM_CONTENT;
   const caption = c.caption
@@ -415,6 +445,7 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
           {c.badge}
         </span>
       </div>
+      <InfoSource slot="c09-platform.pipeline" spec={platformSpec()} box={{ w: 746, h: 150 }} area={6}>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="kc-pipe">
           <div className="kc-pipe__src">
@@ -446,6 +477,7 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
           <span style={{ left: 471 }}>{c.loop}</span>
         </div>
       </div>
+      </InfoSource>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0, rowGap: 0, alignItems: "start" }}>
         <section className="kc-span-7" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p className="kc-blockhead" style={{ margin: 0 }}>
@@ -494,6 +526,42 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
 }
 
 // ── C10 핵심 역량 ──
+/** C10 ② 사람 — 큰 숫자 3개(공정전문가·임원 평균 경력·자문위원) */
+function strengthsPeopleSpec(data: CatalogRenderData): InfoSpec {
+  const c = STRENGTHS_CONTENT.people;
+  return {
+    type: "stats",
+    variant: "row",
+    content: {
+      title: c.head,
+      items: [
+        { id: "process", label: c.process.label, desc: c.process.desc, value: Number(c.process.value), unit: c.process.unit, icon: "factory" },
+        { id: "leaders", label: c.leaders.label, desc: c.leaders.desc, value: data.leaderAvgCareer ?? undefined, unit: "년", icon: "award" },
+        { id: "advisors", label: c.advisors.label, desc: c.advisors.desc, value: mval(data, "advisors.total") ?? undefined, unit: "명", metric: "advisors.total", icon: "network" },
+      ],
+    },
+  };
+}
+
+/** C10 ③ 방법 — 진단·협의·사후관리 3단계 + 되돌이 */
+function strengthsMethodSpec(): InfoSpec {
+  const c = STRENGTHS_CONTENT.method;
+  return {
+    type: "process",
+    variant: "h",
+    content: {
+      title: c.loop,
+      items: c.steps.map((st) => ({
+        id: st.tag,
+        label: st.title,
+        sub: st.tag,
+        desc: "checks" in st && st.checks ? st.checks.join("\n") : "desc" in st ? st.desc : "",
+        icon: st.icon,
+      })),
+    },
+  };
+}
+
 export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const c = STRENGTHS_CONTENT;
   const industries = fmt(mval(data, "permit.industries"));
@@ -533,6 +601,7 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
             <b>02</b>사람
           </p>
           <p className="kc-strengths__head">{c.people.head}</p>
+          <InfoSource slot="c10.people" spec={strengthsPeopleSpec(data)} box={{ w: 360, h: 150 }}>
           <div className="kc-strengths__trio">
             <div className="kc-strengths__person">
               <span className="kc-strengths__num">
@@ -568,12 +637,14 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
               <p className="kc-strengths__desc">{c.people.advisors.desc}</p>
             </div>
           </div>
+          </InfoSource>
         </section>
         <section className="kc-strengths__method">
           <p className="kc-strengths__tag">
             <b>03</b>
             {c.method.head}
           </p>
+          <InfoSource slot="c10.method" spec={strengthsMethodSpec()} box={{ w: 460, h: 140 }}>
           <ol className="kc-strengths__flow">
             {c.method.steps.map((st) => (
               <li key={st.tag}>
@@ -600,6 +671,7 @@ export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
               </li>
             ))}
           </ol>
+          </InfoSource>
           <div className="kc-strengths__loop" aria-hidden="true">
             <svg viewBox="0 0 458 18" preserveAspectRatio="none">
               <path d="M398 0 V10 H18 V5"></path>

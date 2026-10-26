@@ -92,7 +92,7 @@ export function sanitizeInfoIllust(input: unknown): InfoIllust | undefined {
     const mode = ["area", "areas", "brand", "mono", "original"].includes(String(c.mode)) ? String(c.mode) : "area";
     const map: Record<string, string> = {};
     if (c.map && typeof c.map === "object")
-      for (const [k, v] of Object.entries(c.map as Record<string, unknown>).slice(0, 12)) if (/^\d{1,2}$/.test(k) && typeof v === "string" && /^[a-z0-9-]{1,30}$/.test(v)) map[k] = v;
+      for (const [k, v] of Object.entries(c.map as Record<string, unknown>).slice(0, 12)) if (/^i?\d{1,2}$/.test(k) && typeof v === "string" && /^[a-z0-9-]{1,30}$/.test(v)) map[k] = v;
     out.colors = Object.keys(map).length ? { mode, map } : { mode };
   }
   if (o.fit === "width") out.fit = "width";

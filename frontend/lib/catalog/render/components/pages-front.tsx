@@ -7,7 +7,9 @@ import { COVER_CONTENT, DIVIDER_CONTENT, SECTIONS, VISION_CONTENT } from "../mas
 import type { CatalogRenderData, HistoryYear, RenderCtx } from "../types";
 import { Timeline } from "./infographics";
 import { cardsSpec } from "../infographic/adapt";
-import { InfoSlot } from "../infographic/slot";
+import { InfoSlot, InfoSource } from "../infographic/slot";
+import type { InfoItem, InfoSpec } from "../infographic/types";
+import type { MetricId } from "@/lib/catalog/metrics";
 import { AreaTag, Drop, Foot, Head, Icon, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval } from "./parts";
 
 const LOGO = "k/assets/kesi-signature-ko.png";
@@ -255,6 +257,24 @@ export function MessagePage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
 }
 
 // ── C04 숫자로 보는 KESI ──
+/** C04 큰 숫자 8개의 내용 — 스튜디오에서 유형을 바꾸거나 일러스트로 그릴 때 라벨·지표·단위가 그대로 간다 */
+function figuresSpec(data: CatalogRenderData): InfoSpec {
+  const area = (i: number) => data.areas[i - 1];
+  const sw = data.areas[5];
+  const hasAdv = (mval(data, "advisors.total") ?? 0) > 0;
+  const items: InfoItem[] = [
+    { id: "initial", label: "통합환경허가 최초허가", metric: "permit.initial.completed", unit: "건", icon: "factory" },
+    { id: "change", label: "변경허가·변경신고", metric: "permit.change.completed", unit: "건", icon: "file-check" },
+    { id: "haps", label: "HAPs 신고·점검보고", metric: "projects.area.3", unit: "건", icon: "wind" },
+    { id: "chem", label: "화학사고 예방·영업허가 등", metric: "projects.area.2", unit: "건", icon: "flask-conical" },
+    { id: "esg", label: "ESG·탄소중립 용역", metric: "projects.area.4", unit: "건", icon: "leaf" },
+    { id: "other", label: area(5).name, metric: "projects.area.5", unit: "건", icon: "graduation-cap" },
+    { id: "staff", label: "임직원", metric: "staff.total", unit: "명", icon: "users" },
+    hasAdv ? { id: "advisors", label: "매체별 자문위원", metric: "advisors.total", unit: "명", icon: "network" } : { id: "software", label: sw.name, metric: "software.products", unit: "종", icon: "layout-grid" },
+  ];
+  return { type: "stats", variant: "row", content: { title: "숫자로 보는 KESI", items: items.map((it) => ({ ...it, value: mval(data, it.metric as MetricId) ?? undefined })) } };
+}
+
 export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; sectionStart?: boolean }) {
   const share = mval(data, "market.permit.share");
   const denom = data.figures["permit.sites.total"];
@@ -273,6 +293,7 @@ export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data:
           <span data-metric="permit.industries">{fmt(mval(data, "permit.industries"))}</span>개 업종의 사업장과 함께했습니다.
         </p>
       </div>
+      <InfoSource slot="c04.figures" spec={figuresSpec(data)} box={{ w: 746, h: 380 }}>
       <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gridTemplateRows: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, marginTop: 6 }}>
         <Kpi size="xl" area={1} icon="factory" label="통합환경허가 최초허가" value={fmt(initial)} unit="건" metric="permit.initial.completed"
           note={share != null && denom ? `허가 사업장 ${fmt(denom)}개소 중 ${fmt(share)}%` : undefined} />
@@ -290,6 +311,7 @@ export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data:
           <Kpi size="" area={6} icon="layout-grid" label={sw.name} value={<M data={data} id="software.products" />} unit="종" note="그룹웨어 & ERP 등 자체 개발" />
         )}
       </div>
+      </InfoSource>
       <Foot
         items={[
           `* ${asOfNote(data)}. 계약 관리(5분류 모두, 기타 용역 포함)·사용자관리·회사 프로필에서 자동 집계합니다. 최초허가는 완료한 사업장 수, 그 밖의 분야는 누적 계약 수(수행 중 포함)입니다.`,

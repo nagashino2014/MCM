@@ -8,13 +8,14 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { CdDrawer } from "@/components/cdash/CdModal";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { INFO_TYPES, type InfoType } from "@/lib/catalog/render/infographic/types";
-import { ILLUST_SLOT_ROLES, type IllustLicense, type IllustSlot, type IllustSlotRole, type IllustrationInfo } from "@/lib/catalog/illustration-types";
+import { ILLUST_SLOT_BINDS, ILLUST_SLOT_ROLES, defaultBind, type IllustLicense, type IllustSlot, type IllustSlotBind, type IllustSlotRole, type IllustrationInfo } from "@/lib/catalog/illustration-types";
 import { catalogFetch } from "../catalogFetch";
 import { svgUrl } from "./CatalogIllustrationsBoard";
 import { LICENSE_KINDS } from "./IllustrationImportModal";
 
 const ROLE_COLOR: Record<IllustSlotRole, string> = { title: "#d33b3b", sub: "#c27a00", desc: "#2f6fd6", number: "#13893f", center: "#8f3fb8", heading: "#555" };
 const roleLabel = (r: IllustSlotRole) => ILLUST_SLOT_ROLES.find((x) => x.id === r)?.label ?? r;
+const bindLabel = (b: IllustSlotBind) => ILLUST_SLOT_BINDS.find((x) => x.id === b)?.label ?? b;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const r4 = (v: number) => Math.round(v * 10000) / 10000;
 
@@ -221,6 +222,7 @@ export function IllustrationDetailDrawer({
                 <span style={{ background: "#fff", padding: "0 2px" }}>
                   {roleLabel(s.role)}
                   {s.item ? ` ${s.item}` : ""}
+                  {s.src === "user" ? " ●" : ""}
                 </span>
                 <span
                   aria-hidden
@@ -249,6 +251,25 @@ export function IllustrationDetailDrawer({
                   {Array.from({ length: itemMax }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
                       {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="cd-text-muted flex flex-col gap-1">
+                내용(얹을 칸)
+                <select
+                  className="cd-select"
+                  style={{ width: 130 }}
+                  value={selSlot.bind ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value as IllustSlotBind | "";
+                    patchSlot(selSlot.id, v ? { bind: v } : ({ bind: undefined } as Partial<IllustSlot>));
+                  }}
+                >
+                  <option value="">자동 · {bindLabel(defaultBind(selSlot.role))}</option>
+                  {ILLUST_SLOT_BINDS.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label}
                     </option>
                   ))}
                 </select>
@@ -292,6 +313,42 @@ export function IllustrationDetailDrawer({
           ) : (
             <p className="text-[11px] cd-text-faint">자리를 눌러 고릅니다. 끌어 옮기고 오른쪽 아래 모서리로 크기를 바꿉니다(방향키 0.5%, Shift 2%, Alt+방향키 크기).</p>
           )}
+          <details className="text-xs">
+            <summary className="cd-text-muted cursor-pointer">
+              자리 ↔ 내용 매핑 표{slots.some((s) => s.src === "user") ? ` · 직접 고친 자리 ${slots.filter((s) => s.src === "user").length}개(●, 다시 가져와도 유지)` : ""}
+            </summary>
+            <table className="cd-table mt-1">
+              <thead>
+                <tr>
+                  <th>자리</th>
+                  <th>역할</th>
+                  <th>항목</th>
+                  <th>내용</th>
+                  <th>줄</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {slots.map((s) => (
+                  <tr key={s.id} style={sel === s.id ? { background: "var(--cd-soft-primary)" } : undefined}>
+                    <td>
+                      <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setSel(s.id)}>
+                        {s.id}
+                      </button>
+                    </td>
+                    <td>{roleLabel(s.role)}</td>
+                    <td className="tabular-nums">{s.item || "—"}</td>
+                    <td>
+                      {bindLabel(s.bind ?? defaultBind(s.role))}
+                      {s.bind ? "" : <span className="cd-text-faint">(자동)</span>}
+                    </td>
+                    <td className="tabular-nums">{s.lines}</td>
+                    <td>{s.src === "user" ? "●" : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
         </section>
 
         <section className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>

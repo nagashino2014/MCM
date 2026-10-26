@@ -6,7 +6,7 @@
  */
 import { Fragment, isValidElement, type ReactElement, type ReactNode } from "react";
 import { Icon } from "@/lib/catalog/render/components/parts";
-import { InfoSlot, type InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
+import { InfoSlot, InfoSource, type InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { hashId, type CNode } from "./nodes";
 
 const FORWARD_REF = Symbol.for("react.forward_ref");
@@ -75,6 +75,18 @@ function convertAt(c: ReactNode, path: string, out: CNode[]): void {
     const node: CNode = { id: hashId(path + ":x-icon"), tag: "x-icon", props: { name: p.name ?? "file-text", cls: p.cls ?? "kc-icon" } };
     if (p.style) node.style = { ...p.style };
     out.push(node);
+    return;
+  }
+  if (type === InfoSource) {
+    const sp = props as unknown as InfoSlotProps & { children: ReactElement<Record<string, unknown>> };
+    const made: CNode[] = [];
+    convertAt(InfoSource(sp), path, made);
+    const root = made.find((n) => n.tag !== "#text");
+    if (root) {
+      root.widget = "infographic";
+      root.props = { slot: sp.slot, spec: sp.spec, box: sp.box, ...(sp.area != null ? { area: sp.area } : {}) };
+    }
+    out.push(...made);
     return;
   }
   if (type === InfoSlot) {

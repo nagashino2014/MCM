@@ -335,7 +335,9 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   // ── 사람 ──
   const shownPeople = people.filter((p) => p.shown);
   const hr = await loadHrDetails(people.map((p) => p.employeeId));
-  const photoKey = (p: CatalogPerson) => (!p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null);
+  // 마스킹판은 사람 사진을 모두 뺀다(블루프린트 §6-6 — 이름 가리기와 함께 쪽마다 다르지 않게 일괄 적용, 사진 자리는 이니셜)
+  const photoKey = (p: CatalogPerson) =>
+    masked || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
   const ceoPerson = people.find((p) => p.positionName === "대표이사") ?? null;
   const toLeader = (p: CatalogPerson): LeaderCard => {
     const d = hr.get(p.employeeId);
@@ -365,7 +367,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         name: nm(x.name),
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
-        photo: x.photoAssetId ? `a/${x.photoAssetId}` : null,
+        photo: !masked && x.photoAssetId ? `a/${x.photoAssetId}` : null,
         edu: "",
         cert: "",
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),
@@ -581,6 +583,9 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     orgChart,
     clients: [...groups.values()],
     people: cvs,
+    maskNames: masked
+      ? [...people.map((p) => p.name), ...extras.map((x) => x.name), ...advisors.map((a) => a.name), profile.ceoName, ceoMsg?.signName ?? ""].filter(Boolean)
+      : [],
     notices: [...new Set(notices)],
   };
 }

@@ -2,17 +2,19 @@
 
 // 회사소개서 스튜디오(P5) — 쪽을 캔버스에서 직접 고친다. docs/company-catalog-blueprint.md §8
 //   왼쪽: 쪽 썸네일(순서·숨김) · 가운데: A4 캔버스(안내선·검사 표식) · 오른쪽: 내용·디자인·서체·데이터
-//   위: 실행 취소·다시 실행·버전·미리보기·PDF 받기. 고친 것은 자동 저장되고(편집층), 데이터를 새로 읽어도 유지된다.
+//   위: 실행 취소·다시 실행·버전·미리보기·PDF 받기 · 반영 대기·발행(P7). 고친 것은 자동 저장되고(편집층), 데이터를 새로 읽어도 유지된다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, PenTool, Redo2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, PenTool, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { usableFontSet } from "@/lib/catalog/fonts";
 import type { RenderOptions } from "@/lib/catalog/render/types";
 import { EDITION_LABEL, NAMING_LABEL } from "@/lib/catalog/render/types";
@@ -41,6 +43,8 @@ import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalogFetch } from "../catalogFetch";
+import { CatalogPendingButton, CatalogPendingModal, usePending } from "../CatalogPending";
+import { CatalogPublishModal } from "../CatalogPublishModal";
 import { metricBriefs } from "@/lib/catalog/ai/patch";
 import { AiEditModal } from "./AiEditModal";
 import { proposeShrink, type ClientProposal } from "./aiClient";
@@ -125,7 +129,12 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
     // 글 고치던 중이면 그 글 끝으로 돌아가 이어서 고친다
     setTimeout(() => (t?.atCaret ? canvasHandle.current?.focusChip(t.blockId, "") : back?.isConnected && back.focus()), 60);
   }, [bindTarget]);
-  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai">(null);
+  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai" | "pending" | "publish">(null);
+  // 반영 대기·발행(P7) — 스튜디오는 catalog.manage 화면이라 반영 대기는 늘 보이고, 발행은 catalog.publish 만
+  const { data: session } = useSession();
+  const canPublish = hasPerm(permsOf(session?.user), "catalog.publish");
+  const pending = usePending(true);
+  const pendingCount = pending.data ? pending.data.items.length : null;
   const [aiInitial, setAiInitial] = useState<ClientProposal | null>(null);
   const [shrinking, setShrinking] = useState(false);
   const canvasHandle = useRef<CanvasHandle | null>(null);
@@ -418,6 +427,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             <Link href="/sales/catalog" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
               <ArrowLeft className="w-3.5 h-3.5" /> 회사소개서
             </Link>
+            <CatalogPendingButton count={pendingCount} onClick={() => setModal("pending")} />
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={studio.undo} disabled={!studio.canUndo} aria-label="실행 취소(Ctrl+Z)">
               <Undo2 className="w-3.5 h-3.5" /> 실행 취소
             </button>
@@ -441,6 +451,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={async () => (await studio.save(), setModal("pdf"))}>
               <Download className="w-3.5 h-3.5" /> PDF 받기
             </button>
+            {canPublish && (
+              <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={async () => (await studio.save(), setModal("publish"))}>
+                <Send className="w-3.5 h-3.5" /> 발행
+              </button>
+            )}
           </div>
         }
       />
@@ -675,6 +690,24 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         ) : null}
       </CdModal>
       <PdfModal open={modal === "pdf"} onClose={() => setModal(null)} view={studio.view} />
+      <CatalogPendingModal
+        open={modal === "pending"}
+        onClose={() => setModal(null)}
+        pending={pending}
+        canPublish={canPublish}
+        onPublish={async () => (await studio.save(), setModal("publish"))}
+      />
+      {canPublish ? (
+        <CatalogPublishModal
+          open={modal === "publish"}
+          onClose={() => setModal(null)}
+          pendingCount={pendingCount}
+          onPublished={(e) => {
+            void pending.reload();
+            toast(`발행했습니다 — ${e.label}`, "success");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

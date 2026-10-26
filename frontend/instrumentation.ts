@@ -24,6 +24,7 @@ export async function register() {
     __aiBudgetTimer?: ReturnType<typeof setInterval>;
     __todoRemindTimer?: ReturnType<typeof setInterval>;
     __mailImportTimer?: ReturnType<typeof setInterval>;
+    __catalogRefreshTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -101,5 +102,13 @@ export async function register() {
     const importTick = () => callTick("/api/internal/mail-import-tick", "mail-import");
     g.__mailImportTimer = setInterval(importTick, 60 * 1000);
     setTimeout(importTick, 105 * 1000); // 기동 직후 1회
+  }
+
+  // 회사소개서 변경 감지(P7) — 1시간마다 원천 지문을 최근 발행본과 비교해 반영 대기·담당자 알림(하루 한 번).
+  // 업무 시간(KST 09~18시) 밖이면 라우트가 DB 를 열지 않는다(Aurora auto-pause 보호).
+  if (!g.__catalogRefreshTimer) {
+    const catalogTick = () => callTick("/api/internal/catalog-refresh-tick", "catalog-refresh");
+    g.__catalogRefreshTimer = setInterval(catalogTick, 60 * 60 * 1000);
+    setTimeout(catalogTick, 180 * 1000); // 기동 직후 1회
   }
 }

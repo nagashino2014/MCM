@@ -12,6 +12,7 @@ import { STUDIO_PRINT_CSS, composeDocument } from "@/lib/catalog/studio/compose"
 import type { StudioPageState } from "@/lib/catalog/studio/doc";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import type { CoverChoice } from "./components/pages-front";
+import { maskNamesInHtml } from "./masking";
 import { PRINT_OVERRIDES } from "./print-overrides";
 import tokensJson from "./tokens.json";
 import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "./types";
@@ -123,7 +124,8 @@ export async function buildCatalogHtml(
   if (notice) notices.push(notice);
   const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept };
   const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
-  const body = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
+  const drawn = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
+  const body = opts.naming === "masked" ? maskNamesInHtml(drawn, data.maskNames ?? []) : drawn;
   // 실제로 그린 이미지만 converter 에 보낸다(숨긴 쪽·숨긴 요소·바꾼 사진의 원래 그림은 빼고)
   const used = new Set<ImageKey>();
   if (opts.target === "print") {

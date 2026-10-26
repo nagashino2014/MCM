@@ -174,14 +174,58 @@ export const SALES_HELP: HelpTopic[] = [
     label: "회사소개서 도움말",
     blocks: [
       { kind: "list", items: [
-        "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 화면을 다시 열 때 바로 반영됩니다.",
-        "아래 표에서 통합환경허가 최초허가가 어떤 계약으로 셈해졌는지 확인합니다.",
-        "관리 권한이 있으면 위쪽 카드로 실적·인물·고객사 로고 관리 화면에 갑니다.",
+        "[[발행본]] 표에서 대외 배포용 회사소개서를 받습니다. 발행본은 발행한 때의 파일 그대로입니다.",
+        "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 초안에는 바로 들어가고, 발행본에는 검토 후 발행해야 들어갑니다.",
+        "관리 권한이 있으면 위쪽 카드로 관리 화면·스튜디오에 가고, 반영 대기와 PDF 만들기를 씁니다.",
       ] },
     ],
-    more: { article: "sales.catalog", section: "metrics" },
+    more: { article: "sales.catalog", section: "editions" },
     sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.editions",
+    label: "회사소개서 발행본 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "대외 배포용으로 확정한 판입니다. [[받기]]로 내려받은 파일을 그대로 보내면 됩니다.",
+        "발행본은 발행한 때의 파일 그대로라, 이후 데이터가 바뀌어도 같은 PDF 를 받습니다.",
+        "마스킹판은 전 직원이, 실명판은 관리·발행 담당만 받습니다. 실명판 열람·받기는 접속기록에 남습니다.",
+        "관리·발행 담당은 배포 기록 칸에서 누구에게 냈는지 남깁니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "editions" },
+    sources: ["components/sales/catalog/CatalogEditionsPanel.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.pending",
+    label: "반영 대기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "최근 발행본과 지금 데이터(계약·인물·회사 정보·연혁·인증·인사말/조직도)가 달라진 점입니다.",
+        "초안(스튜디오·PDF 만들기)에는 이미 들어 있습니다. 발행하면 발행본에 반영되고 목록이 비워집니다.",
+        "1시간마다 저절로 점검하고, 새 항목이 생기면 하루 한 번 담당자에게 알립니다. [[지금 다시 점검]]으로 바로 확인합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "pending" },
+    sources: ["components/sales/catalog/CatalogPending.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.publish",
+    label: "회사소개서 발행 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "범위(풀버전·요약본)와 이름 표기(마스킹판·실명판)를 골라 [[발행]]합니다. 지금 데이터와 스튜디오 편집본으로 만듭니다.",
+        "마스킹판은 모든 쪽에서 이름 가운데 글자를 ○ 로 바꾸고 사람 사진을 뺍니다.",
+        "넘침 경고가 있으면 확인을 받습니다([[그래도 발행]]). 발행본은 고치거나 지울 수 없습니다.",
+        "배포처를 적으면 배포 기록이 함께 남습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "publish" },
+    sources: ["components/sales/catalog/CatalogPublishModal.tsx"],
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.studio",
@@ -302,14 +346,14 @@ export const SALES_HELP: HelpTopic[] = [
     label: "회사소개서 PDF 도움말",
     blocks: [
       { kind: "list", items: [
-        "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다.",
+        "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다. 요약본은 부록을 뺍니다.",
         "인쇄·배포본은 검토용 안내문을 숨기고, 작업본은 그대로 보여 줍니다. 실명판에만 부록 C(수행인력 상세 이력)가 붙습니다.",
-        "넘침 경고가 0건인지 확인하고 보내세요. 만든 PDF 는 목록에서 [[미리보기]]·[[받기]] 합니다.",
+        "여기서 만든 PDF 는 검토용입니다. 넘침 경고가 0건인지 확인한 뒤 인쇄·배포본 줄의 [[발행]]으로 그대로 발행본이 됩니다(발행 담당).",
       ] },
     ],
     more: { article: "sales.catalog", section: "pdf" },
     sources: ["components/sales/catalog/CatalogRenderPanel.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.reference",

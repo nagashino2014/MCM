@@ -14,14 +14,19 @@ import type { InitialPermitDetail, MetricId, MetricValue } from "@/lib/catalog/m
 export type EditionKind = "print" | "draft";
 /** 이름 — 마스킹판(가운데 글자 ○, 홍보·공개) / 실명판(PQ·수의계약 제출, 부록 C 포함) */
 export type NamingMode = "masked" | "real";
+/** 범위 — 풀버전(본편 + 부록) / 요약본(부록 제외, P7 발행 판 옵션) */
+export type ScopeMode = "full" | "summary";
 
 export interface RenderOptions {
   edition: EditionKind;
   naming: NamingMode;
+  /** 없으면 풀버전 */
+  scope?: ScopeMode;
 }
 
 export const EDITION_LABEL: Record<EditionKind, string> = { print: "인쇄·배포본", draft: "작업본" };
 export const NAMING_LABEL: Record<NamingMode, string> = { masked: "마스킹판", real: "실명판" };
+export const SCOPE_LABEL: Record<ScopeMode, string> = { full: "풀버전", summary: "요약본" };
 
 /**
  * 이미지 키 — "k/…" 키트 파일(public/catalog-kit/…), "a/{asset_id}" 회사소개서 자산(catalog_assets), "e/{employee_id}" 인사 사진.
@@ -225,6 +230,8 @@ export interface CatalogRenderData {
   orgChart: OrgChartDoc;
   clients: ClientGroup[];
   people: PersonCv[];
+  /** 마스킹판에서 본문 전체를 한 번 더 가릴 실명 목록(스튜디오에서 손으로 적은 글까지 — 실명판은 빈 배열). 발행본 스냅샷에는 남기지 않는다. */
+  maskNames?: string[];
   /** 데이터 단계에서 찾은 확인 사항(쪽 번호 없음) */
   notices: string[];
 }

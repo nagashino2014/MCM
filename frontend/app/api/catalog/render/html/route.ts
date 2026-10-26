@@ -10,10 +10,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET: 회사소개서 HTML 미리보기 — PDF 와 같은 HTML·같은 쪽 나누기 스크립트(print-kit)를 앱 주소로 연다. 스튜디오 편집본을 얹는다.
-// ?edition=print|draft&naming=masked|real&doc=master
+// ?edition=print|draft&naming=masked|real&scope=full|summary&doc=master — 지금 데이터(실명 포함)라 catalog.manage
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("catalog.view");
+    await requirePermission("catalog.manage");
     const opts = parseRenderOptions(Object.fromEntries(req.nextUrl.searchParams));
     const docId = req.nextUrl.searchParams.get("doc") || MASTER_DOC_ID;
     const [data, studio] = await Promise.all([loadCatalogRenderData({ ...opts, docId }), loadStudioDoc(docId)]);

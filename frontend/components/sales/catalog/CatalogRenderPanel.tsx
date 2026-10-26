@@ -1,13 +1,13 @@
 "use client";
 
-// 회사소개서 PDF — 마스터본을 지금 데이터로 만들어 미리 보고 받는다(블루프린트 §9, P4 렌더러).
-// 만든 PDF 는 생성본으로 이력(catalog_editions)에 남는다. 발행 확정(대외 제출 이력)은 P7 에서 붙는다.
+// 회사소개서 PDF — 마스터본을 지금 데이터로 만들어 미리 보고 받는다(블루프린트 §9, P4 렌더러). 관리 담당(catalog.manage).
+// 만든 PDF 는 검토용 생성본으로 이력(catalog_editions)에 남는다. 발행 담당은 검토한 인쇄·배포본 생성본을 그대로 [발행]할 수 있다(P7).
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Eye, FileText, Loader2, MonitorPlay } from "lucide-react";
+import { Download, Eye, FileText, Loader2, MonitorPlay, Send } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import type { CatalogEditionSummary } from "@/lib/catalog/render/editions";
-import { EDITION_LABEL, NAMING_LABEL, type EditionKind, type NamingMode } from "@/lib/catalog/render/types";
+import { EDITION_LABEL, NAMING_LABEL, SCOPE_LABEL, type EditionKind, type NamingMode, type ScopeMode } from "@/lib/catalog/render/types";
 import { catalogFetch } from "./catalogFetch";
 
 const fmtSize = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.round(n / 1024)}KB`);
@@ -15,9 +15,10 @@ const fmtSec = (ms: number) => `${(ms / 1000).toFixed(1)}초`;
 const fmtWhen = (iso: string) =>
   iso ? new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
-export function CatalogRenderPanel() {
+export function CatalogRenderPanel({ canPublish = false, onPublish }: { canPublish?: boolean; onPublish?: (edition: CatalogEditionSummary) => void }) {
   const [edition, setEdition] = useState<EditionKind>("print");
   const [naming, setNaming] = useState<NamingMode>("masked");
+  const [scope, setScope] = useState<ScopeMode>("full");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<CatalogEditionSummary | null>(null);
@@ -42,7 +43,7 @@ export function CatalogRenderPanel() {
     try {
       const d = await catalogFetch<{ edition: CatalogEditionSummary }>("/api/catalog/render/pdf", {
         method: "POST",
-        body: JSON.stringify({ edition, naming }),
+        body: JSON.stringify({ edition, naming, scope }),
       });
       setLast(d.edition);
       setPreviewId(d.edition.editionId);
@@ -74,6 +75,13 @@ export function CatalogRenderPanel() {
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
+          범위
+          <select className="cd-select" style={{ width: "auto" }} value={scope} onChange={(e) => setScope(e.target.value as ScopeMode)} disabled={busy}>
+            <option value="full">{SCOPE_LABEL.full}</option>
+            <option value="summary">{SCOPE_LABEL.summary}(부록 제외)</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs cd-text-muted">
           이름 표기
           <select className="cd-select" style={{ width: "auto" }} value={naming} onChange={(e) => setNaming(e.target.value as NamingMode)} disabled={busy}>
             <option value="masked">{NAMING_LABEL.masked}</option>
@@ -85,7 +93,7 @@ export function CatalogRenderPanel() {
         </button>
         <a
           className="cd-btn cd-btn-ghost cd-btn-sm cd-action"
-          href={`/api/catalog/render/html?edition=${edition}&naming=${naming}`}
+          href={`/api/catalog/render/html?edition=${edition}&naming=${naming}&scope=${scope}`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -163,6 +171,11 @@ export function CatalogRenderPanel() {
                     <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action ml-1" href={`/api/catalog/editions/${e.editionId}/pdf?download=1`}>
                       <Download className="w-3.5 h-3.5" /> 받기
                     </a>
+                    {canPublish && onPublish && e.edition === "print" && (
+                      <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-1" onClick={() => onPublish(e)} title="이 PDF 를 그대로 발행본으로 확정">
+                        <Send className="w-3.5 h-3.5" /> 발행
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

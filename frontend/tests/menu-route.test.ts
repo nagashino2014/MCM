@@ -6,11 +6,12 @@ import { resolveMenuRoute } from "../components/layout/menu-route";
 
 // 역할별 권한 요약(테스트용) — docs/open-test-permission-plan-2026-10-19.md §1.3·§4.1 의 템플릿 grant 를 요약 형식으로 옮긴 것.
 // 298(2026-10-19): billing.view·sales.view 는 사원·부서장·임원에서 회수, payroll.view·finance.view 는 임원에서 회수.
+// 312(2026-10-26): 회사소개서 발행본 열람(catalog.view)을 전 직원(tpl-staff-basic)에게 연다 — 블루프린트 D3. 임원은 309 부터.
 const STAFF_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view",
-  "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view"];
+  "contact.view@all", "work_plan.view", "work_plan.edit", "staffing.view", "catalog.view@all"];
 const LEAD_PERMS = [...STAFF_PERMS, "billing.dept.view", "contract.edit", "work_plan.merge", "work_plan.lock_release", "bonus.view",
   "staffing.evaluation.read", "staffing.evaluation.write", "staffing.record.view", "trash.view", "trash.restore"];
-const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "contract.view@all",
+const EXEC_PERMS = ["approval.view", "approval.act", "board.view", "board.write", "catalog.view@all", "contract.view@all",
   "contact.view@all", "facility.view@all", "work_plan.view@all", "work_plan.directive@all",
   "work_plan.lock_release@all", "bonus.view@all", "staffing.view@all", "staffing.evaluation.read@all",
   "staffing.record.view@all", "calendar.meeting.manage@all", "todo.admin@all"];
@@ -134,16 +135,19 @@ test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 �
   assert.equal(visibleSubmenu(contracts, EXEC_PERMS).some((s) => s.href === "/contracts/dept-billing"), false);
 });
 
-test("영업/마케팅 메뉴는 지정된 영업 담당자·대표이사·관리자만 본다(298)", () => {
+test("영업/마케팅 메뉴는 지정된 영업 담당자·대표이사·관리자만 본다(298) — 전 직원은 회사소개서 발행본만(312)", () => {
   const sales = MENU_ITEMS.find((item) => item.title === "영업/마케팅")!;
-  // 담당자 정보 데이터(contact.view)는 전 직원에게 있지만 메뉴는 sales.view 로 가린다
-  assert.equal(isMenuVisible(sales, STAFF_PERMS), false);
-  assert.equal(isMenuVisible(sales, LEAD_PERMS), false);
-  assert.equal(isMenuVisible(sales, EXEC_PERMS), false);
+  // 담당자 정보 데이터(contact.view)는 전 직원에게 있지만 영업 화면은 sales.view 로 가린다.
+  // 회사소개서(catalog.view)는 전 직원 발행본 열람이라 영업/마케팅 아래 그 한 줄만 보이고, 레일 클릭은 회사소개서로 간다.
+  for (const perms of [STAFF_PERMS, LEAD_PERMS, EXEC_PERMS]) {
+    assert.deepEqual(visibleSubmenu(sales, perms).map((s) => s.href), ["/sales/catalog"]);
+    assert.equal(menuEntryHref(sales, perms), "/sales/catalog");
+  }
+  assert.equal(isMenuVisible(sales, ["approval.view"]), false);
   assert.equal(isMenuVisible(sales, SALES_STAFF_PERMS), true);
   assert.equal(isMenuVisible(sales, CEO_PERMS), true);
   assert.deepEqual(visibleSubmenu(sales, SALES_STAFF_PERMS).map((s) => s.href),
-    ["/sales", "/sales/contacts", "/sales/intel", "/sales/rag", "/sales/bids", "/approval/quote"]);
+    ["/sales", "/sales/contacts", "/sales/intel", "/sales/rag", "/sales/bids", "/approval/quote", "/sales/catalog"]);
 });
 
 test("API 가 관리 권한을 요구하는 화면은 메뉴·URL 도 같은 키로 가린다(2026-10-20 F-1~F-3)", () => {

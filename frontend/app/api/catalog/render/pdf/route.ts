@@ -10,21 +10,22 @@ export const dynamic = "force-dynamic";
 // 본편+부록 PDF 생성(converter Chromium) — 목표 60초 이하, 여유를 둔다
 export const maxDuration = 180;
 
-// GET: 최근 생성본 목록(마스터본)
+// GET: 최근 생성본 목록(마스터본) — 발행본 목록은 /api/catalog/editions
 export async function GET() {
   try {
-    await requirePermission("catalog.view");
-    return NextResponse.json({ editions: await listCatalogEditions() });
+    await requirePermission("catalog.manage");
+    return NextResponse.json({ editions: await listCatalogEditions(undefined, 20, { stage: "generated" }) });
   } catch (err) {
     return authErrorToResponse(err);
   }
 }
 
-// POST: 마스터본 PDF 생성 { edition: print|draft, naming: masked|real } → 생성본 요약(쪽 수·넘침 경고·크기·시간)
-// 발행 확정은 P7(검토 후 발행) 몫 — 여기서 만드는 것은 미리보기·받기용 생성본이다.
+// POST: 마스터본 PDF 생성 { edition: print|draft, naming: masked|real, scope: full|summary } → 생성본 요약(쪽 수·넘침 경고·크기·시간)
+// 여기서 만드는 것은 검토용 생성본이다. 발행(대외 배포본 확정)은 /api/catalog/editions — 인쇄·배포본 생성본을 그대로 승격할 수 있다.
+// 지금 데이터로 실명판까지 만들 수 있어 catalog.manage(전 직원 열람 catalog.view 와 분리, 312).
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requirePermission("catalog.view");
+    const actor = await requirePermission("catalog.manage");
     const opts = parseRenderOptions((await req.json().catch(() => ({}))) as Record<string, unknown>);
     const edition = await generateCatalogPdf(opts, actor.userId);
     await recordAuditLog({
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       action: "catalog_render",
       targetTable: "catalog_editions",
       targetId: edition.editionId,
-      after: { edition: edition.edition, naming: edition.naming, pages: edition.pages, warnings: edition.warnings.length },
+      after: { edition: edition.edition, naming: edition.naming, scope: edition.scope, pages: edition.pages, warnings: edition.warnings.length },
     });
     return NextResponse.json({ edition });
   } catch (err) {

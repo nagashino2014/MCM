@@ -91,7 +91,7 @@ export function fmtKstFull(iso: string | null | undefined): string {
   return d.toISOString().slice(0, 19).replace("T", " ");
 }
 
-export const GROUP_ORDER = ["전자결재", "업무보고", "문서 파싱", "양식 분석", "영업 인텔", "스크래퍼", "기타"];
+export const GROUP_ORDER = ["전자결재", "업무보고", "문서 파싱", "양식 분석", "영업 인텔", "회사소개서", "스크래퍼", "기타"];
 
 /** 모델 정규형 ID → 짧은 표시명(단가표 display_name 우선). */
 export function modelLabel(family: string | null | undefined, prices: ModelPriceRow[]): string {

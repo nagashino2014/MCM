@@ -466,6 +466,34 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - 결정적 대체안: LLM 없이도 쪽이 만들어지도록 규칙 기반 초안(`template_draft` 패턴 — 분야 지표·대표 실적으로 리드 문장 조립)을 둔다.
 - 데이터 안 지시문은 데이터로 취급(프롬프트 규칙), 응답 원문은 저장하지 않고 채택된 패치만 버전에 남긴다.
 
+### 7-4. P6 구현 기록(2026-10-24)
+
+**원칙 그대로**: LLM 은 '쪽 개요'의 자리 id 에 대한 JSON 패치만 돌려주고, 서버가 검증한 바꿈을 사람이 고른 것만 보통 편집과 같은 편집층(`catalog_pages.tree`)에 얹는다.
+응답 원문은 어디에도 저장하지 않는다(사용량 로그는 형상 메타만). 숫자는 `{{metric:지표 id}}` → 지표 칩(bind) 노드, 인포그래픽 수치 항목은 `InfoItem.metric` 바인딩.
+
+| 자리 | 내용 |
+|---|---|
+| `lib/ai/features.ts` | 그룹 '회사소개서' + 키 5종 — section_write·page_compose = Opus 5, infographic_suggest·project_label = Haiku 4.5, **copy_fit = Haiku 4.5**(Sonnet 5 는 기본 생각 모드라 짧은 축약에 출력 2,000토큰을 다 써 잘림 — 실측). 관리 화면 재지정·킬스위치·예산·사용량 기록은 게이트웨이(claudeMessages) 그대로 |
+| `lib/catalog/ai/patch.ts`(클라이언트 안전) | 쪽 개요 `buildOutline`(문단·목록·인포그래픽·분야 대표 실적, 쪽 머리·각주·숫자 칸·추가 글상자·고정 글 안쪽은 제외/읽기 전용) · 패치 검증 `validatePatch`(없는 자리·읽기 전용·형식 오류 버림, 지표 칩 변환, 지표 밖 숫자·최상급·이모지 = '검토', 글자 수 = 알림, 인포그래픽 = 유형 제한·형태 막힘·수치형은 항목마다 지표, 대표 실적 = 후보 id 만) · `applyChanges`(부분 채택) |
+| `lib/catalog/ai/template.ts` | 규칙 대체안 — 지시에서 인포그래픽 유형·단계 수·줄이기만 해석, `ruleShorten`(괄호 → 접속 표현 → 뒤 문장 → 구분점; 지표 표식 보존), `templateArea`(메모 → 리드·서비스, 관련 분류 → 절차·KPI, 이름·메모 낱말이 든 계약만 대표 실적; 메모 속 지시·최상급은 옮기지 않음) |
+| `lib/catalog/ai/prompts.ts`·`service.ts`(서버) | 콘텐츠 원칙(디자인 시스템 README 요약)·숫자 규칙·자료 규칙(`<data>` 안 지시문 무시) · 컨텍스트 묶음(쪽 개요·지표 id/값/정의·대표 실적 후보(공개 계약만)·회사 기본 정보·인포그래픽 유형 표·아이콘 목록) · 실패/키 없음/꺼짐/예산 → 규칙 대체 + 사유 |
+| `lib/catalog/ai/label-rules.ts` | 실적 표기 '어색함' 판정(내부 표식·공백 반복·변경계약·차수·내부 메모·코드·회사 형태·반복·날짜 시작·건수 꼬리·길이) + 제안 검사(원래 없던 숫자·최상급·비공개 고객 이름·상태 표현) |
+| 새 사업 분야 | `catalog_business_areas.content`(311) — `lib/catalog/custom-area-types.ts`·`custom-areas.ts`, 쪽 `CustomAreaPage`(분야 상세와 같은 틀, 쪽 키 `area-x??????`, 응용소프트웨어 앞, 간지 목록 포함). 분야 색 = 빈 area 슬롯, **6색을 다 쓰면 첫 관련 분류의 색을 공유**(새 색 토큰은 디자인 시스템 결정 필요) |
+| API(catalog.manage) | `POST /api/catalog/ai/edit`(제안) · `PUT /ai/edit`(대표 실적 채택 = 그 분류의 is_featured 를 고른 계약으로) · `POST /ai/fit` · `POST /ai/rank`(규칙 후보는 서버가 다시 계산) · `POST·PUT·DELETE /ai/area` · `POST·PUT /ai/labels`(제안·일괄 확정 = 대외 표기 + 검토 완료) |
+| 화면 | 스튜디오 위 **[AI로 수정]**(이 쪽 고치기 / 새 사업 분야 추가) → 검토(지금·채택 후 미리보기, 바꿀 곳별 전·후·검토 표시, 렌더 후 넘침 실측 → 넘치면 copy_fit 0.85·0.7 로 1–2회 자동 축약, 자리보다 큰 유형이면 축약 대신 다른 유형 제안) → 고른 곳 채택 + 버전 저장. 쪽 아래 검사·인포그래픽 유형 패널의 **[AI로 줄이기]**(넘친 곳이 데이터 영역이면 고친 글·긴 리드부터). 유형 후보에 AI 순위·이유 한 줄(실패 시 '규칙 점수 순'). 실적 노출 관리 **[표기 제안]** |
+
+검증(2026-10-24, 로컬 — 일회용 PG = P5b PG 사본 + 311, AWS 자격증명 차단, 실제 Anthropic API)
+
+| 시나리오 | 결과 |
+|---|---|
+| ESG 분야 "공급망 실사 대응 사례 추가 + 인포그래픽 5단계 절차도" | ✅ Opus 5 34초 — 블록 제목 + 5단계 절차도 바꿈 2곳, 넘침 0→0, 채택·버전 2. 지표 밖 숫자 0건. 후보에 아직 대표로 안 건 공급망 실사 계약이 없어 대표 실적은 바꾸지 않고 사유를 notes 로 냄(지어내지 않음). 별도 지시로 대표 실적 재선정(cases) → 후보 안 계약 4건만, 채택 API 로 is_featured 반영 확인 |
+| 새 분야 쪽 생성("토양·지하수 조사", 메모에 지시문 심음) | ✅ page_compose 18–20초, 지표 밖 숫자 0건, 메모 속 '업계 최고' 지시 무시(notes 에 명시), 관련 실적 없어 대표 실적 비움, area-5 공유. 추가 → 79쪽 전체 넘침 0건, 서버 HTML(=PDF 경로)에 새 쪽·초안 표식·지표 칩 |
+| 넘침 문구 축약 | ✅ 리드를 늘려 넘침 3건 → [AI로 줄이기] → Haiku 1회로 넘침 0, 채택·버전 4 |
+| 실적 표기 제안 | ✅ 어색한 행 4건 → 내부 표식·차수·코드·반복 제거 제안, 검사 이슈 0 → 일괄 확정(대외 표기 + 검토 완료) |
+| 킬스위치·예산·사용량 | ✅ 기능 끔 → 규칙 대체 + 로그 status=disabled · 기능 예산(block_noncritical) 초과 → 규칙 대체 + budget_blocked · 성공 호출은 토큰·비용 기록(시험 전체 35건 $0.42) |
+| 화면 | ✅ 라이트/다크 · 1440/1024 가로 넘침 0 · 키보드(Tab 으로 [AI로 수정] → Enter → 대화상자 안 초점·순서 → Esc 로 닫으면 단추로 복귀). 검토 단계로 바뀔 때 초점이 body 로 빠지던 문제 수정 |
+| 시험 | `npm run test:catalog-studio` 32/32(P6 11건 추가) · `test:manual` 9/9 · 수정 파일 tsc 0건 |
+
 ---
 
 ## 8. 캔버스(스튜디오) — 세부 디자인 수정
@@ -630,7 +658,9 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - `catalog_clients`(client_id, facility_id null, name, category 공공|민간|협회, logo_asset_id, order_no, is_public)
 - `catalog_external_figures`(key, value, unit, source, as_of) — 분모 등 외부 수치
 
-DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분).
+**311_catalog_custom_areas.sql**(P6) — `catalog_business_areas` + `content jsonb`(새 사업 분야 쪽 구성, NULL = 기존 6개 분야) · `created_by` · `updated_by`. 일회용 PG(스테이징 스키마 사본)에 두 번 적용해 멱등 확인.
+
+DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`.
 
 ---
 
@@ -663,7 +693,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P4 렌더러** ✅ | `print-kit`(tokens → CSS, paginate.js 이식, 시트 모델), 쪽 유형·위젯 React 컴포넌트, converter `/render/html-pdf` + 기본 서체 세트·서체 라우팅, 첫 자동 생성 PDF, **현행 46장 대비 수치 대조 리포트** | PDF 생성(§9-1, 10-22) · `/sales/catalog` PDF 만들기·미리보기·받기 · 현행 카탈로그 대조 표 | P2·P3 | L |
 | **P5 스튜디오** ✅ | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | `/sales/catalog/studio`(§8-4, 10-22) | P4 | L |
 | **P5b 서체 라이브러리** ✅ | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·TrueType 윤곽 WOFF 변환(converter `/fonts/prepare`)·견본 화면·크기 보정값 계산·스튜디오 세트 연동·빠진 글자 검사 | `/sales/catalog/fonts`(§5-6, 10-23) — 배포는 converter + next | P4(P5와 병행 가능) | M |
-| **P6 LLM 편집·인포그래픽 추천** | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | AI 편집 | P5 | M |
+| **P6 LLM 편집·인포그래픽 추천** ✅ | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | 스튜디오 [AI로 수정]·[AI로 줄이기]·AI 순위, 실적 [표기 제안](§7-4, 10-24) — 배포는 311 + next | P5 | M |
 | **P7 자동 갱신·발행** | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력 | 운영 전환 | P4(P5와 병행 가능) | M |
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |
 

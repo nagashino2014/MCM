@@ -6,6 +6,7 @@
  */
 import type { AppendixResult, AppendixRules } from "@/lib/catalog/appendix";
 import type { OrgChartDoc } from "@/lib/catalog/content-types";
+import type { CustomAreaContent } from "@/lib/catalog/custom-area-types";
 import type { DocumentTheme } from "@/lib/catalog/document-theme";
 import type { InitialPermitDetail, MetricId, MetricValue } from "@/lib/catalog/metrics";
 
@@ -70,6 +71,20 @@ export interface AreaInfo {
   featured: Array<{ year: string; title: string; meta: string }>;
   /** 대표 실적 표시 계약이 없어 금액 상위로 채웠는지 */
   featuredFallback: boolean;
+}
+
+/** 새 사업 분야(P6) — 계약 분류 밖에서 소개서에만 더한 분야(catalog_business_areas.content) */
+export interface CustomAreaInfo {
+  /** area_id("x" + 6자) */
+  id: string;
+  /** 쪽 키 "area-{id}" */
+  key: string;
+  name: string;
+  /** 분야 색 슬롯 1~6 */
+  slot: number;
+  content: CustomAreaContent;
+  /** 대표 실적(content.featured 계약 중 공개 계약) */
+  featured: Array<{ year: string; title: string; meta: string }>;
 }
 
 export interface LeaderCard {
@@ -188,6 +203,8 @@ export interface CatalogRenderData {
   /** 외부 수치(catalog_external_figures) */
   figures: Record<string, number>;
   areas: AreaInfo[];
+  /** 새 사업 분야(P6) — 없으면 빈 목록 */
+  customAreas: CustomAreaInfo[];
   appendix: AppendixResult;
   /** 부록 B 행 보조 — 계약 id → 세분류·허가일(AppendixListRow 에 없는 칸) */
   projectIndex: Record<string, { subtype: string; permitIssuedAt: string }>;

@@ -5,7 +5,7 @@
 // 계약 입력 동선은 바꾸지 않는다 — 메타는 이 화면에서만 다룬다. docs/company-catalog-blueprint.md §6-4
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ListChecks, RefreshCw, RotateCcw, Save, Search, X } from "lucide-react";
+import { ListChecks, RefreshCw, RotateCcw, Save, Search, Sparkles, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -34,6 +34,8 @@ import {
   type ManualProject,
 } from "@/lib/catalog/appendix";
 import { regionGroupLabel } from "@/lib/catalog/regions";
+import { awkwardReasons } from "@/lib/catalog/ai/label-rules";
+import { CatalogLabelSuggest } from "./CatalogLabelSuggest";
 import { catalogFetch, formatAmountShort } from "./catalogFetch";
 import {
   ManualProjectModal,
@@ -83,6 +85,7 @@ export function CatalogProjectsBoard() {
   const [editing, setEditing] = useState<CatalogProjectRow | null>(null);
   const [draft, setDraft] = useState<MetaDraft | null>(null);
   const [groupPrompt, setGroupPrompt] = useState<string | null>(null);
+  const [labelOpen, setLabelOpen] = useState(false);
   // 계약 없는 실적
   const [manuals, setManuals] = useState<ManualProject[]>([]);
   const [manualDraft, setManualDraft] = useState<ManualDraft | null>(null);
@@ -139,6 +142,8 @@ export function CatalogProjectsBoard() {
   }, [rows, q, category, year, visibility, reasonOf]);
   const { pageRows, pager, resetPage } = useClientPaging(filtered, "catalog-projects-page-size", loading);
   const unreviewed = useMemo(() => rows.filter((r) => !r.meta?.reviewedAt).length, [rows]);
+  // 규칙 표기가 어색한 행(AI 표기 제안 대상, P6)
+  const awkwardCount = useMemo(() => rows.filter((r) => r.source === "contract" && awkwardReasons(r).length > 0).length, [rows]);
 
   const savedResult = useMemo(() => applyAppendixRules(rows, savedRules, nowYear), [rows, savedRules, nowYear]);
   const draftResult = useMemo(() => applyAppendixRules(rows, draftRules, nowYear), [rows, draftRules, nowYear]);
@@ -276,9 +281,14 @@ export function CatalogProjectsBoard() {
           </span>
         }
         actions={
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
-            <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setLabelOpen(true)} disabled={loading || busy || awkwardCount === 0}>
+              <Sparkles className="w-3.5 h-3.5" /> 표기 제안{awkwardCount ? ` ${awkwardCount.toLocaleString("ko-KR")}` : ""}
+            </button>
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
+              <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
+            </button>
+          </div>
         }
         tabs={
           <CdTabs<TabKey>
@@ -577,6 +587,14 @@ export function CatalogProjectsBoard() {
           <span className="text-[11px] cd-text-faint">같은 분류·같은 수주 연도 안에서 이름이 같은 계약이 부록에서 한 줄로 합쳐지고, 고객사 이름이 나열됩니다.</span>
         </label>
       </CdModal>
+      <CatalogLabelSuggest
+        open={labelOpen}
+        onClose={() => setLabelOpen(false)}
+        onSaved={(next, count) => {
+          setRows(next);
+          setNotice(`대외 표기 ${count}건을 확정했습니다(검토 완료로 표시)`);
+        }}
+      />
     </div>
   );
 }

@@ -3,9 +3,9 @@
 // 오른쪽 패널 · 디자인 탭 — L2 구조(쪽 변형·인포그래픽 유형·열 수·사진 배치·색 컨셉)와 L3 자유 배치(크기·글자 크기·토큰 색·요소 추가).
 // 자유도는 디자인 시스템 안: 색 = 토큰 팔레트, 글자 크기 = 타입 스케일 단계, 폭 = 12열 묶음, 위치 = 그리드·4pt 맞춤.
 
-import { useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ImagePlus, RotateCcw, Shapes, Square, Type } from "lucide-react";
+import { ImagePlus, Loader2, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { COLOR_CONCEPTS, COVER_DESIGNS } from "@/lib/catalog/document-theme";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
@@ -18,6 +18,7 @@ import { FILL_COLORS, PHOTO_RATIOS, PICKABLE_TYPE_STEPS, TEXT_COLORS, spanWidth 
 import { pageState } from "@/lib/catalog/studio/doc";
 import { gridColumnsOf, type Selection } from "@/lib/catalog/studio/select";
 import type { CNode } from "@/lib/catalog/studio/nodes";
+import { fetchRank, type RankResponse } from "./aiClient";
 import { StaticFrame } from "./Frames";
 import { GRID_NOTE } from "./StudioCanvas";
 import type { PanelProps } from "./types";
@@ -67,6 +68,15 @@ export function PanelDesign(props: PanelProps) {
               사진 없는 변형
             </label>
           </>
+        ) : /^area-x[a-z0-9]{6}$/.test(item.key) ? (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs cd-text-muted">AI 편집으로 더한 새 사업 분야 쪽입니다. 내용은 [AI로 수정]이나 글 고치기로 바꿉니다.</p>
+            {props.onRemoveCustomArea ? (
+              <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm self-start" onClick={() => props.onRemoveCustomArea?.(item.key.slice(5))}>
+                <Trash2 className="w-3.5 h-3.5" /> 이 분야 쪽 빼기
+              </button>
+            ) : null}
+          </div>
         ) : item.key.startsWith("area-") ? (
           <PhotoVariant label="분야 히어로" field="hero" values={[["figure", "숫자(사진 없음)"], ["photo", "사진"]]} variant={variant} ops={ops} />
         ) : item.key === "c05" ? (
@@ -279,7 +289,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
 }
 
 /** 인포그래픽 유형 바꾸기 — 규칙 기반 후보를 실제 내용으로 그려 보여 준다(블루프린트 §4-3·4-4) */
-function InfoTypePicker({ studio, kit, item, sel, ops }: PanelProps & { sel: Selection }) {
+function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps & { sel: Selection }) {
   const slot = sel.node.props as unknown as InfoSlotProps;
   const spec: InfoSpec = slot.spec;
   const theme = studio.state!.theme;
@@ -304,7 +314,36 @@ function InfoTypePicker({ studio, kit, item, sel, ops }: PanelProps & { sel: Sel
     () => matchInfographic(spec.content, { box: slot.box, current: spec.type, sectionTypes, pref }),
     [spec, slot.box, sectionTypes, pref]
   );
-  const top = candidates.slice(0, 6);
+  // 3단계 LLM 순위·이유(catalog.infographic_suggest) — 같은 내용·자리는 한 번만 묻고, 실패하면 규칙 점수 순 그대로
+  const [rank, setRank] = useState<RankResponse | null>(null);
+  const [ranking, setRanking] = useState(false);
+  // 스튜디오 상태는 렌더마다 새 객체라 요청 내용(JSON)으로만 다시 묻는다
+  const rankBody = JSON.stringify({ content: spec.content, box: slot.box, current: spec.type, sectionTypes, pref, slot: slot.slot });
+  const canRank = candidates.length >= 2;
+  useEffect(() => {
+    let alive = true;
+    setRank(null);
+    if (!canRank) return;
+    setRanking(true);
+    fetchRank(JSON.parse(rankBody))
+      .then((r) => alive && setRank(r))
+      .catch(() => alive && setRank({ source: "rule", fallback: "AI 순위를 받지 못했습니다", ranking: [] }))
+      .finally(() => alive && setRanking(false));
+    return () => {
+      alive = false;
+    };
+  }, [rankBody, canRank]);
+  const top = useMemo(() => {
+    const base = candidates.slice(0, 6);
+    if (!rank || rank.source !== "ai") return base.map((c) => ({ ...c, ai: false }));
+    const order = new Map(rank.ranking.map((r, i) => [r.type, i]));
+    return base
+      .map((c) => {
+        const r = rank.ranking.find((x) => x.type === c.type);
+        return { ...c, reason: r?.reason ?? c.reason, ai: r?.source === "ai" };
+      })
+      .sort((a, b) => (order.get(a.type) ?? 99) - (order.get(b.type) ?? 99));
+  }, [candidates, rank]);
   const previewHtml = (type: InfoType, variant: string) =>
     renderToStaticMarkup(
       (
@@ -326,6 +365,19 @@ function InfoTypePicker({ studio, kit, item, sel, ops }: PanelProps & { sel: Sel
       <p className="text-xs cd-text-muted">
         지금 {meta.label} · 내용 {spec.content.items.length}항목 · 자리 {Math.round(slot.box.w)}×{Math.round(slot.box.h)}pt
       </p>
+      <p className="text-[11px] cd-text-faint flex items-center gap-1" aria-live="polite">
+        {ranking ? (
+          <>
+            <Loader2 className="w-3 h-3 animate-spin" /> AI 가 순위를 매기는 중…
+          </>
+        ) : rank?.source === "ai" ? (
+          <>
+            <Sparkles className="w-3 h-3" /> AI 순위 · 이유 한 줄(규칙 점수는 오른쪽 숫자)
+          </>
+        ) : (
+          <>규칙 점수 순{rank?.fallback ? ` — ${rank.fallback}` : ""}</>
+        )}
+      </p>
       <ul className="flex flex-col gap-2">
         {top.map((c) => {
           const cur = c.type === spec.type;
@@ -346,6 +398,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops }: PanelProps & { sel: Sel
                   <b className="cd-text">{c.label}</b>
                   {cur ? <span className="cd-pill cd-pill-info">지금</span> : null}
                   {overflow[key] ? <span className="cd-pill cd-pill-warn">자리 넘침</span> : null}
+                  {c.ai ? <Sparkles className="w-3 h-3 cd-text-faint" aria-label="AI 순위" /> : null}
                   <span className="ml-auto tabular-nums cd-text-faint">{c.score}</span>
                 </span>
                 <span className="rounded border cd-border-c overflow-hidden" style={{ background: "#fff" }}>
@@ -366,6 +419,15 @@ function InfoTypePicker({ studio, kit, item, sel, ops }: PanelProps & { sel: Sel
           );
         })}
       </ul>
+      {onAiShrink && overflow[`${spec.type}:${top.find((c) => c.type === spec.type)?.variant}`] ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="cd-pill cd-pill-warn">지금 유형이 자리를 넘칩니다</span>
+          <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => onAiShrink([sel.id])}>
+            <Sparkles className="w-3.5 h-3.5" /> AI로 줄이기
+          </button>
+          <span className="cd-text-faint">또는 넘치지 않는 다른 유형을 고르세요.</span>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1">
         <p className="text-xs cd-text-muted">변형</p>
         <div className="flex flex-wrap gap-1.5">

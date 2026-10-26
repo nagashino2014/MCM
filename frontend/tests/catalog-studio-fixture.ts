@@ -154,6 +154,7 @@ export function makeFixture(opts: { extraContract?: boolean } = {}): CatalogRend
     regionColumns: REGION_GROUPS.map((g) => ({ id: g.id, label: g.label })),
     permitByRegion: { capital: 60 + extra, central: 30, honam: 30 },
     permitIndustries: ["발전", "철강", "석유화학", "제지", "전자", "반도체"],
+    customAreas: [],
     history: [
       { year: "2016", highlight: true, items: [{ month: "03", content: "회사 설립", category: "설립", highlight: true }] },
       { year: "2021", highlight: false, items: [{ month: "05", content: "통합허가 대행업 등록", category: "등록", highlight: false }] },

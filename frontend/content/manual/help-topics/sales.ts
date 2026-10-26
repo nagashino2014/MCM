@@ -217,13 +217,29 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "후보는 지금 내용으로 그린 미리보기입니다. 점수가 높을수록 내용·자리에 잘 맞습니다.",
-        "'자리 넘침' 후보는 그 자리에 다 들어가지 않습니다.",
+        "'자리 넘침' 후보는 그 자리에 다 들어가지 않습니다. 지금 유형이 넘치면 [[AI로 줄이기]]로 라벨·설명을 줄인 제안을 봅니다.",
+        "AI 를 쓸 수 있으면 AI 가 내용의 뜻으로 순서를 다시 매기고 이유를 한 줄 답니다(✦). 아니면 규칙 점수 순입니다.",
         "유형을 바꿔도 항목 내용은 그대로입니다. 목록 ↔ 수치형처럼 모양이 다른 변환은 막습니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "infographic" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx", "components/sales/catalog/studio/PanelContent.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-24",
+  },
+  {
+    id: "catalog.studio-ai",
+    label: "AI로 수정 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "AI 는 이 쪽의 글·목록·인포그래픽 내용만 바꿉니다. 배치·색·글자 크기는 그대로입니다.",
+        "숫자는 지표 칩으로만 씁니다. 지표에 없는 숫자·근거 없는 최상급에는 '검토' 표시가 붙고 기본으로 고르지 않습니다.",
+        "채택 전 넘침을 재고, 넘치면 한두 번 자동으로 줄입니다. 고른 곳만 채택되고 버전이 남습니다.",
+        "AI 를 쓸 수 없으면 규칙 초안(유형 바꾸기·단계·줄이기)만 만듭니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "ai" },
+    sources: ["components/sales/catalog/studio/AiEditModal.tsx", "components/sales/catalog/studio/AiAreaPanel.tsx"],
+    reviewedAt: "2026-10-24",
   },
   {
     id: "catalog.studio-design",
@@ -380,6 +396,21 @@ export const SALES_HELP: HelpTopic[] = [
     more: { article: "sales.catalog-projects", section: "list" },
     sources: ["components/sales/catalog/CatalogProjectsBoard.tsx"],
     reviewedAt: "2026-10-21",
+  },
+  {
+    id: "catalog.project-label-ai",
+    label: "대외 표기 제안 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "자동 표기가 어색한 행만 모읍니다. 직접 정한 표기·검토 완료·통합환경허가 행은 빠집니다.",
+        "AI 는 원래 계약명에 없던 숫자나 새 사실을 더하지 않습니다. 걸리면 '확인' 표시가 붙습니다.",
+        "비공개 고객은 이름 대신 '○○사'로 보냅니다.",
+        "제안 칸을 고쳐 체크한 뒤 확정하면 대외 표기로 저장되고 검토 완료가 됩니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-projects", section: "list" },
+    sources: ["components/sales/catalog/CatalogLabelSuggest.tsx"],
+    reviewedAt: "2026-10-24",
   },
   {
     id: "catalog.appendix-rules",

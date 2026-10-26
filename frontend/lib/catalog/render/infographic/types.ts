@@ -48,6 +48,8 @@ export interface InfoItem {
   key?: boolean;
   /** 구성비 색 단계 1~5(kc-s1..5) */
   tone?: number;
+  /** 지표 바인딩(lib/catalog/metrics MetricId) — 있으면 value 는 그릴 때 지표 값으로 채운다(P6 LLM 편집: 숫자는 지표 id 로만) */
+  metric?: string;
 }
 
 export interface InfoContent {
@@ -156,6 +158,7 @@ export function sanitizeInfoContent(input: unknown): InfoContent {
     if (typeof it.region === "string" && /^[a-z0-9_-]{1,20}$/.test(it.region)) out.region = it.region;
     if (it.key === true) out.key = true;
     if (typeof it.tone === "number" && Number.isInteger(it.tone) && it.tone >= 1 && it.tone <= 5) out.tone = it.tone;
+    if (typeof it.metric === "string" && /^[a-z0-9.]{1,40}$/.test(it.metric)) out.metric = it.metric;
     return out;
   });
   const out: InfoContent = { items };
@@ -181,7 +184,19 @@ export function sanitizeInfoSpec(input: unknown, fallback: InfoSpec): InfoSpec {
   return { type, variant, colorMode, content: o.content ? sanitizeInfoContent(o.content) : fallback.content };
 }
 
-/** 내용의 형태 — 수치가 모든 항목에 있으면 수치형 */
+/** 내용의 형태 — 수치가 모든 항목에 있으면 수치형(지표 바인딩 항목은 수치로 본다) */
 export function contentFamily(c: InfoContent): InfoFamily {
-  return c.items.length > 0 && c.items.every((it) => it.value != null) ? "number" : "list";
+  return c.items.length > 0 && c.items.every((it) => it.value != null || it.metric) ? "number" : "list";
+}
+
+/** 지표 바인딩 항목의 value 를 지표 값으로 채운다(값이 없으면 그대로) */
+export function resolveInfoMetrics(c: InfoContent, metrics: Record<string, { value: number | null } | undefined> | undefined): InfoContent {
+  if (!metrics || !c.items.some((it) => it.metric)) return c;
+  return {
+    ...c,
+    items: c.items.map((it) => {
+      const m = it.metric ? metrics[it.metric] : undefined;
+      return m && m.value != null ? { ...it, value: m.value } : it;
+    }),
+  };
 }

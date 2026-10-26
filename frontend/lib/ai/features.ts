@@ -6,7 +6,7 @@
  * - critical: 사용자 대면 경로(예산 초과 시 마지막까지 살려야 하는 기능). 비필수는 P2 예산 정책이 먼저 차단한다.
  */
 
-export type AiFeatureGroup = "전자결재" | "업무보고" | "문서 파싱" | "양식 분석" | "영업 인텔" | "스크래퍼";
+export type AiFeatureGroup = "전자결재" | "업무보고" | "문서 파싱" | "양식 분석" | "영업 인텔" | "회사소개서" | "스크래퍼";
 
 export interface AiFeatureDef {
   label: string;
@@ -53,6 +53,12 @@ export const AI_FEATURES = {
   "intel.dart_supply_classify": { label: "DART 공급계약 발주처 분류", group: "영업 인텔", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   "intel.rag_briefing": { label: "AI 브리핑 생성", group: "영업 인텔", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "intel.rag_briefing:refine": { label: "AI 브리핑 추가 분석", group: "영업 인텔", critical: false, defaultModel: "claude-sonnet-5", vision: false },
+  // 회사소개서(docs/company-catalog-blueprint.md §7) — 디자인 시스템 안에서 내용만 고친다. 숫자는 지표 id 로만.
+  "catalog.section_write": { label: "회사소개서 쪽 문안 작성·수정", group: "회사소개서", critical: false, defaultModel: "claude-opus-5", vision: false },
+  "catalog.page_compose": { label: "회사소개서 새 사업 분야 쪽 구성", group: "회사소개서", critical: false, defaultModel: "claude-opus-5", vision: false },
+  "catalog.infographic_suggest": { label: "회사소개서 인포그래픽 유형 순위", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
+  "catalog.copy_fit": { label: "회사소개서 넘침 문구 줄이기", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
+  "catalog.project_label": { label: "회사소개서 실적 대외 표기 제안", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   // 스크래퍼 소스 분석
   "scraper.analyze_source:profile": { label: "소스 분석 — API 프로필 생성", group: "스크래퍼", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "scraper.analyze_source:catalog": { label: "소스 분석 — 카탈로그 목록 추출", group: "스크래퍼", critical: false, defaultModel: "claude-sonnet-5", vision: false },

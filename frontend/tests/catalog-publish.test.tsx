@@ -14,7 +14,7 @@ import {
 } from "@/lib/catalog/refresh/diff";
 import { buildPagePlan } from "@/lib/catalog/render/components/plan";
 import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
-import { maskName, maskNamesInHtml } from "@/lib/catalog/render/masking";
+import { maskName, maskNamesInHtml, nameMasker } from "@/lib/catalog/render/masking";
 import { parseRenderOptions } from "@/lib/catalog/render/options";
 import type { RenderCtx } from "@/lib/catalog/render/types";
 import { composeDocument } from "@/lib/catalog/studio/compose";
@@ -157,4 +157,16 @@ test("마스킹판 일괄 가리기 — 본문·속성의 세 글자 이상 실�
   assert.equal(out, `<p>대표이사 김○수</p><img alt="김○수 사진"><p>남○○수 이사 · 이수 과정 이수 · 정진</p><p>이미 가린 김○수</p>`);
   assert.equal(maskNamesInHtml(html, []), html);
   assert.equal(maskName("이수"), "이○");
+});
+
+test("마스킹판도 대표이사는 실명 — 이름 가리기·일괄 목록에서 대표이사만 뺀다", () => {
+  const masked = nameMasker(true, ["홍길동", " ", ""]);
+  assert.equal(masked.nm("홍길동"), "홍길동");
+  assert.equal(masked.nm("김철수"), "김○수");
+  assert.deepEqual(masked.maskList(["홍길동", "김철수", "남궁민수", ""]), ["김철수", "남궁민수"]);
+  const html = `<p>대표이사 홍길동</p><p>이사 김철수</p>`;
+  assert.equal(maskNamesInHtml(html, masked.maskList(["홍길동", "김철수"])), `<p>대표이사 홍길동</p><p>이사 김○수</p>`);
+  const real = nameMasker(false, ["홍길동"]);
+  assert.equal(real.nm("김철수"), "김철수");
+  assert.deepEqual(real.maskList(["김철수"]), []);
 });

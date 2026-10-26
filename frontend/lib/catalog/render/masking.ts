@@ -13,6 +13,18 @@ export function maskName(name: string): string {
   return n[0] + "○".repeat(n.length - 2) + n[n.length - 1];
 }
 
+/**
+ * 마스킹판에서도 실명·사진을 남길 사람 — 대표이사만(사용자 결정 2026-10-26). 다른 임원·직원·자문위원은 모두 가린다.
+ * keep 에 든 이름은 가리지 않는 이름 가리기 함수와, 일괄 가리기 목록에서 뺀 이름 목록을 돌려준다.
+ */
+export function nameMasker(masked: boolean, keep: string[]): { nm: (name: string) => string; maskList: (names: string[]) => string[] } {
+  const kept = new Set(keep.map((x) => x.trim()).filter(Boolean));
+  return {
+    nm: (name) => (masked && !kept.has(name.trim()) ? maskName(name) : name),
+    maskList: (names) => (masked ? names.filter((x) => x && !kept.has(x.trim())) : []),
+  };
+}
+
 /** 자유 글(조직도 아래 줄 등)에서 알려진 사람 이름만 골라 가린다(일반 낱말은 건드리지 않는다). */
 export function maskNamesIn(text: string, names: string[]): string {
   let out = text;

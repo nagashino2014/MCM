@@ -431,6 +431,25 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
   최근 발행본 지문과 다르면 `catalog_pending_changes`에 사람이 읽을 수 있는 항목(추가·변경·삭제)으로 기록 → 담당자 알림(기존 push·메일).
 - audit_log 폴링보다 원천 지문 비교가 견고하다(감사 기록이 없는 경로·스크립트 입력도 잡음).
 
+### 6-8. P7 구현 기록(2026-10-26) — 발행·변경 감지
+
+| 자리 | 내용 |
+|---|---|
+| `infra/aws/312_catalog_publish.sql` | tpl-staff-basic 에 `catalog.view`(D3, 309 주석의 약속) · `catalog_refresh_state`(발행본이 없을 때의 첫 점검 기준·하루 한 번 알림 표식) · 반영 대기 열린 항목 부분 유니크 `(doc_id, source, ref->>'key')` · `catalog_edition_distributions`(배포 기록) |
+| `lib/catalog/refresh/diff.ts`(순수) | 지문 = 원천별 `{항목 키 → {이름표, 표시 칸}}`. 비교 → 추가·변경(칸별 전후)·삭제와 사람이 읽는 문장. 기준에 없는 원천은 비교하지 않는다(원천을 늘린 날 쏟아짐 방지) |
+| `lib/catalog/refresh/service.ts` | 지문 계산(계약·계약 없는 실적 / 재직자·촉탁 임원·자문위원 / 회사 프로필 칸 / 공개 연혁 / 공개 인증·특허 / 인사말·조직도 확정판) · 기준 = 최근 발행본 지문, 없으면 첫 점검 기준 · 열린 반영 대기와 맞추기(새 차이 추가·같은 항목 문장 갱신·되돌려진 차이 삭제) · 담당자 알림(push `catalog.pending` + 메일, KST 하루 한 번) |
+| tick | `/api/internal/catalog-refresh-tick`(1시간, x-cron-key). **KST 09~18시 밖은 DB 를 열지 않는다**(Aurora auto-pause 보호), 같은 시 두 번째 호출은 메모리로 거름, `?force=1` 점검용. 자동 발행 없음(D4) |
+| 발행 | `lib/catalog/render/editions.ts` — 생성본에도 지문·데이터 스냅샷을 남기고, 발행 = 인쇄·배포본 생성본 승격(`options.stage = published`, `generatedAt`·`resolvedCount`). 발행 직후 열린 대기를 그 발행본으로 해소하고 새 기준으로 바로 다시 점검(만든 뒤 바뀐 것은 새 대기로) |
+| 판 옵션 | `RenderOptions.scope` full / summary(부록 A·B·C 제외 — 목차 부록 줄은 `data-ref-missing="hide"` 로 사라짐) × naming masked / real. 마스킹판은 사람 사진 전부 제외(이니셜) + 그린 본문 전체에서 세 글자 이상 실명을 한 번 더 가림(`maskNamesInHtml`, 스튜디오 자유 글 포함). 두 글자 이름은 일반 낱말과 겹쳐 데이터 단계 가리기만 |
+| API | `GET·POST /api/catalog/editions`(목록 view · 발행 publish, 넘침이면 409 `needsConfirm`) · `POST /editions/{id}/publish`(승격) · `POST·DELETE /editions/{id}/distributions`(manage·publish) · `GET·POST /api/catalog/pending`(manage·publish) · `GET /editions/{id}/pdf`(발행본 마스킹판 = view, 실명판 = manage·publish + access_log, 생성본 = manage) |
+| 권한 정리 | catalog.view 가 전 직원이 되면서 생성(`render/pdf`)·HTML 미리보기·미리보기 자산·자산 원본은 **catalog.manage** 로 올림. 지표 API 는 view 에 합계만(최초허가 계약 단위 행은 manage) |
+| 화면 | 첫 화면: 머리 [반영 대기 N건]·[발행], '발행본 이후 바뀐 것' 줄, **발행본** 표(전 직원, 실명판은 담당자만), 배포 기록 펼침. 관리 카드·PDF 만들기(범위 선택·생성본 [발행])·대조·최초허가 표는 manage. 스튜디오 머리에 [반영 대기]·[발행] |
+| 매뉴얼 | `sales.catalog` 절 editions·pending·publish 신설(절 권한), 도움말 catalog.editions·pending·publish, changelog 1줄 |
+
+- 지문은 계약의 `updated_at` 대신 **소개서에 실리는 값**(분류·금액·발주처·허가일·대외 표기·공개 등)을 비교한다 — 계산서·메모 수정만으로 반영 대기가 생기지 않게.
+- 메뉴: 일반 직원에게도 '영업/마케팅 > 회사소개서' 한 줄만 보인다(D3). 레일 클릭은 회사소개서로 간다.
+- 미구현(범위 밖): 부록만 자동 발행 옵션(D4 기본 꺼짐), 발행본 폐기·대체 표시, 분야 맞춤판(P8).
+
 ---
 
 ## 7. LLM 편집 — 디자인 시스템 안에서 내용을 고치고 더한다
@@ -660,7 +679,9 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 
 **311_catalog_custom_areas.sql**(P6) — `catalog_business_areas` + `content jsonb`(새 사업 분야 쪽 구성, NULL = 기존 6개 분야) · `created_by` · `updated_by`. 일회용 PG(스테이징 스키마 사본)에 두 번 적용해 멱등 확인.
 
-DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`.
+**312_catalog_publish.sql**(P7) — tpl-staff-basic `catalog.view` · `catalog_refresh_state` · 반영 대기 열린 항목 부분 유니크 · `catalog_edition_distributions`. 일회용 PG 에 두 번 적용해 멱등 확인(§6-8).
+
+DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`, P7 은 `-Files 312_catalog_publish.sql`.
 
 ---
 
@@ -668,7 +689,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 
 | 경로(안) | 화면 | 권한 |
 |---|---|---|
-| `/sales/catalog` | 회사소개서 목록(마스터·맞춤판), 최근 발행본, 반영 대기 | catalog.view |
+| `/sales/catalog`(✅ P7) | 발행본 목록·받기(전 직원, 실명판은 manage·publish) · 반영 대기·발행·배포 기록(manage·publish) · PDF 만들기·지표·대조(manage) | catalog.view |
 | `/sales/catalog/studio`(✅ P5, 맞춤판은 `?doc=`) | 스튜디오(§8-3·8-4) | catalog.manage(발행은 catalog.publish) |
 | `/sales/catalog/projects` | 실적 노출 관리(대외 표기·노출·대표 실적·묶음) | catalog.manage |
 | `/sales/catalog/people` | 인물 노출 관리(임원·직원·자문위원, 사진 동의) | catalog.manage |
@@ -694,7 +715,7 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P5 스튜디오** ✅ | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | `/sales/catalog/studio`(§8-4, 10-22) | P4 | L |
 | **P5b 서체 라이브러리** ✅ | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·TrueType 윤곽 WOFF 변환(converter `/fonts/prepare`)·견본 화면·크기 보정값 계산·스튜디오 세트 연동·빠진 글자 검사 | `/sales/catalog/fonts`(§5-6, 10-23) — 배포는 converter + next | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** ✅ | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | 스튜디오 [AI로 수정]·[AI로 줄이기]·AI 순위, 실적 [표기 제안](§7-4, 10-24) — 배포는 311 + next | P5 | M |
-| **P7 자동 갱신·발행** | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력 | 운영 전환 | P4(P5와 병행 가능) | M |
+| **P7 자동 갱신·발행** ✅ | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력, 판 옵션(풀·요약 × 실명·마스킹), 배포 기록, 전 직원 열람 | `/sales/catalog` 발행본·반영 대기·발행(§6-8, 10-26) — 배포는 312 + next | P4(P5와 병행 가능) | M |
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |
 
 **병렬 가능**: P1·P2(claude.ai 디자인 작업)와 P3(MCM 데이터)는 서로 독립이라 동시에 진행할 수 있다. P4는 둘 다 끝나야 한다.

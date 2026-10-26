@@ -275,13 +275,14 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "숫자는 지표 사전에서만 옵니다. 칩으로 묶인 숫자는 데이터가 바뀌면 함께 바뀝니다.",
+        "[[지표 넣기]](글 고치는 중 Ctrl+K)로 지표나 회사 정보·기준월 같은 글 항목을 칩으로 넣습니다. 소수 자리·단위를 고를 수 있습니다.",
         "바인딩을 풀면 그 숫자만 지금 값으로 고정됩니다.",
         "데이터 영역은 원천 화면에서 고칩니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "data" },
-    sources: ["components/sales/catalog/studio/PanelData.tsx"],
-    reviewedAt: "2026-10-22",
+    sources: ["components/sales/catalog/studio/PanelData.tsx", "components/sales/catalog/studio/BindPicker.tsx"],
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.studio-checks",

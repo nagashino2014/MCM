@@ -3,9 +3,9 @@
  * 편집 표식이 필요한 스튜디오 캔버스는 hooks.decorate 로 속성을 덧붙이고, 문단 블록을 편집 요소로 바꿔 그린다.
  */
 import { createElement, type CSSProperties, type ReactElement, type ReactNode } from "react";
-import { Icon, fmt } from "@/lib/catalog/render/components/parts";
+import { Icon } from "@/lib/catalog/render/components/parts";
 import type { CatalogRenderData, ImageKey } from "@/lib/catalog/render/types";
-import type { MetricId } from "@/lib/catalog/metrics";
+import { resolveBind } from "./binds";
 import type { CNode } from "./nodes";
 
 export interface TreeEnv {
@@ -20,24 +20,8 @@ export interface TreeHooks {
   override?: (n: CNode, render: (child: CNode) => ReactNode) => ReactNode | undefined;
 }
 
-/** 바인딩 값 — 지표는 지표 사전 값, 데이터 경로는 허용한 경로만 */
-export function resolveBind(bind: string, data: CatalogRenderData, digits?: number): string | null {
-  if (bind.startsWith("metric:")) {
-    const m = data.metrics[bind.slice(7) as MetricId];
-    return m ? fmt(m.value ?? null, digits ?? 1) : null;
-  }
-  if (bind.startsWith("data:")) {
-    const path = bind.slice(5);
-    if (!DATA_BIND_PATHS.test(path)) return null;
-    let cur: unknown = data;
-    for (const k of path.split(".")) cur = cur != null && typeof cur === "object" ? (cur as Record<string, unknown>)[k] : undefined;
-    return cur == null ? null : String(cur);
-  }
-  return null;
-}
-
-/** data: 바인딩으로 쓸 수 있는 경로 */
-export const DATA_BIND_PATHS = /^(company\.(name|nameShort|nameEn|ceoName|website|email|phone|foundedYear)|asOfLabel|docLabel|areas\.[0-5]\.name)$/;
+/** 바인딩 값 풀기·지원 목록은 binds.ts 한 곳 */
+export { resolveBind } from "./binds";
 
 const NUMERIC_TEXT = /^[\s]*(-|[\d,]+(\.\d+)?)[\s]*$/;
 

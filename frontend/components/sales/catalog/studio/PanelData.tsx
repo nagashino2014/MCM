@@ -1,14 +1,15 @@
 "use client";
 
-// 오른쪽 패널 · 데이터 탭 — 고른 요소에 묶인 지표(바인딩)와 원천 화면 바로가기, 바인딩 해제·되돌리기.
+// 오른쪽 패널 · 데이터 탭 — 고른 요소에 묶인 지표(바인딩)와 원천 화면 바로가기, 바인딩 해제·되돌리기, 고른 글에 지표 넣기.
 // 숫자는 지표 사전에서만 온다(블루프린트 §6-5). 바인딩을 풀면 그 숫자만 지금 값으로 고정되어 자동 갱신에서 빠진다.
 
 import Link from "next/link";
-import { ExternalLink, Link2Off, RotateCcw } from "lucide-react";
+import { ExternalLink, Hash, Link2Off, RotateCcw } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import type { MetricId } from "@/lib/catalog/metrics";
 import { unbindChip } from "@/lib/catalog/studio/inline";
 import { findPath, type CNode } from "@/lib/catalog/studio/nodes";
+import { bindLabel } from "@/lib/catalog/studio/binds";
 import { resolveBind } from "@/lib/catalog/studio/render-tree";
 import { isTextBlock, WIDGET_SOURCE } from "@/lib/catalog/studio/select";
 import type { PanelProps } from "./types";
@@ -22,7 +23,7 @@ interface BindRow {
   footnote: string;
 }
 
-export function PanelData({ studio, composed, sel, ops }: PanelProps) {
+export function PanelData({ studio, composed, sel, caps, ops }: PanelProps) {
   const data = studio.data;
   if (!data) return null;
   const tree = composed.tree;
@@ -37,7 +38,7 @@ export function PanelData({ studio, composed, sel, ops }: PanelProps) {
       rows.push({
         node: n,
         block,
-        label: metric?.label ?? n.bind.replace(/^data:/, "데이터 · "),
+        label: bindLabel(n.bind, data),
         value: resolveBind(n.bind, data, n.bindDigits) ?? "-",
         footnote: metric?.footnote ?? "",
       });
@@ -61,6 +62,15 @@ export function PanelData({ studio, composed, sel, ops }: PanelProps) {
           <Link href={source.href} className="cd-action cd-btn cd-btn-ghost cd-btn-sm self-start" target="_blank" rel="noreferrer">
             <ExternalLink className="w-3.5 h-3.5" /> {source.label} 열기
           </Link>
+        </section>
+      ) : null}
+
+      {sel && caps?.editText ? (
+        <section className="rounded-lg border cd-border-c p-2 text-xs flex flex-col gap-1">
+          <span className="cd-text">고른 글 끝에 지표·데이터 칩을 넣습니다. 글을 고치는 중이면 Ctrl+K 로 커서 자리에 넣습니다.</span>
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm self-start" onClick={() => ops.requestBind(sel.id)}>
+            <Hash className="w-3.5 h-3.5" /> 지표 넣기
+          </button>
         </section>
       ) : null}
 

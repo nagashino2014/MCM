@@ -19,7 +19,7 @@ import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { infographicToTree } from "./convert";
 import { PHOTO_RATIOS, isTokenVar, isTypeStep, typeStepStyle } from "./design-system";
 import { BASE_ID_RE, USER_ID_RE, findPath, newUserId, type CNode, type ImageRef } from "./nodes";
-import { DATA_BIND_PATHS } from "./render-tree";
+import { isDataBindKey } from "./binds";
 
 export interface InfoOverride {
   type?: InfoSpec["type"];
@@ -162,7 +162,7 @@ function sanitizeClass(v: unknown): string | undefined {
 function sanitizeBind(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   if (/^metric:[a-z0-9.]{1,40}$/.test(v)) return v;
-  if (v.startsWith("data:") && DATA_BIND_PATHS.test(v.slice(5))) return v;
+  if (v.startsWith("data:") && isDataBindKey(v.slice(5))) return v;
   return undefined;
 }
 

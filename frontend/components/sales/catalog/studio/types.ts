@@ -27,6 +27,8 @@ export interface StudioOps {
   setVariant: (key: string, value: string | null) => void;
   /** 사진 고르기 창 — 고르면 onPick */
   pickImage: (onPick: (key: string) => void) => void;
+  /** 지표 넣기 창 — 고른 글 끝에 칩을 넣는다 */
+  requestBind: (blockId: string) => void;
   /** 이 쪽 편집층에서 붙을 곳을 잃은 편집 지우기 */
   dropOrphans: () => void;
   /** 추가한 도형 모양 */

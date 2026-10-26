@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, Grid3x3, History, Loader2, PenTool, Redo2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, PenTool, Redo2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -33,7 +33,9 @@ import {
   type InfoOverride,
   type PageEdits,
 } from "@/lib/catalog/studio/edits";
-import { newUserId, type CNode } from "@/lib/catalog/studio/nodes";
+import { makeBindChip } from "@/lib/catalog/studio/binds";
+import { appendCaret, placeChip } from "@/lib/catalog/studio/inline";
+import { findNode, newUserId, type CNode } from "@/lib/catalog/studio/nodes";
 import { renderNode } from "@/lib/catalog/studio/render-tree";
 import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
@@ -43,13 +45,14 @@ import { metricBriefs } from "@/lib/catalog/ai/patch";
 import { AiEditModal } from "./AiEditModal";
 import { proposeShrink, type ClientProposal } from "./aiClient";
 import { AssetPicker } from "./AssetPicker";
+import { BindPicker } from "./BindPicker";
 import { CHECK_LABEL, runFullCheck, type CheckItem, type FullCheckResult } from "./checks";
 import { frameDocument, loadStudioKit, type StudioKit } from "./kit";
 import { PanelContent } from "./PanelContent";
 import { PanelData } from "./PanelData";
 import { PanelDesign } from "./PanelDesign";
 import { PanelFonts } from "./PanelFonts";
-import { StudioCanvas, type CanvasHandle } from "./StudioCanvas";
+import { StudioCanvas, type BindTarget, type CanvasHandle } from "./StudioCanvas";
 import { StudioThumbs } from "./StudioThumbs";
 import type { StudioOps } from "./types";
 import { useStudio } from "./useStudio";
@@ -108,6 +111,20 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const [prevFontSet, setPrevFontSet] = useState<string | null>(null);
   const [assets, setAssets] = useState<StudioImageAsset[]>([]);
   const [picker, setPicker] = useState<((key: string) => void) | null>(null);
+  const [bindTarget, setBindTargetState] = useState<BindTarget | null>(null);
+  // 지표 넣기 창을 연 자리(닫은 뒤 초점을 돌려준다)
+  const bindReturn = useRef<HTMLElement | null>(null);
+  const setBindTarget = useCallback((t: BindTarget | null) => {
+    if (t) bindReturn.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBindTargetState(t);
+  }, []);
+  const closeBind = useCallback(() => {
+    const t = bindTarget;
+    const back = bindReturn.current;
+    setBindTargetState(null);
+    // 글 고치던 중이면 그 글 끝으로 돌아가 이어서 고친다
+    setTimeout(() => (t?.atCaret ? canvasHandle.current?.focusChip(t.blockId, "") : back?.isConnected && back.focus()), 60);
+  }, [bindTarget]);
   const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai">(null);
   const [aiInitial, setAiInitial] = useState<ClientProposal | null>(null);
   const [shrinking, setShrinking] = useState(false);
@@ -198,11 +215,34 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       },
       setVariant: (k, v) => pe((e) => setVariant(e, k, v)),
       pickImage: (cb) => setPicker(() => cb),
+      requestBind: (blockId) => {
+        const n = findNode(derived, blockId);
+        if (n) setBindTarget({ blockId, children: appendCaret(n.children ?? []), atCaret: false });
+      },
       dropOrphans: () => pe((e) => (composed?.orphans ?? []).reduce((acc, id) => resetNode(acc, id), e)),
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
     };
-  }, [tree, pe, composed]);
+  }, [tree, pe, composed, setBindTarget]);
+
+  // ── 지표 넣기 — 표식 자리에 칩을 넣는다(실행 취소 한 단계) ──
+  const insertBind = useCallback(
+    (bind: string, opts: { digits?: number; unit?: boolean }) => {
+      const target = bindTarget;
+      setBindTargetState(null);
+      if (!target || !studio.data) return;
+      const chip = makeBindChip(bind, studio.data, opts);
+      if (!chip) {
+        toast("이 지표는 지금 넣을 수 없습니다.", "error");
+        return;
+      }
+      ops.commitText(target.blockId, placeChip(target.children, chip));
+      setSelectedId(target.blockId);
+      const back = bindReturn.current;
+      setTimeout(() => (target.atCaret ? canvasHandle.current?.focusChip(target.blockId, chip.id) : back?.isConnected && back.focus()), 60);
+    },
+    [bindTarget, studio.data, ops, toast]
+  );
 
   // ── 단축키 ──
   const { undo, redo } = studio;
@@ -219,6 +259,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         return true;
       }
       if (!selectedId) return false;
+      if (mod && e.code === "KeyK" && caps?.editText) {
+        const t = canvasHandle.current?.captureBind();
+        if (t) setBindTarget(t);
+        return true;
+      }
       if (key === "Escape") {
         setSelectedId(null);
         return true;
@@ -237,7 +282,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       }
       return false;
     },
-    [undo, redo, selectedId, caps, ops]
+    [undo, redo, selectedId, caps, ops, setBindTarget]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -435,6 +480,21 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
               </b>
               <span className="cd-pill cd-pill-idle">편집 L{item.maxLevel}</span>
               {item.flow ? <span className="cd-pill cd-pill-idle">자동 분쪽 — 전체 모양은 미리보기</span> : null}
+              <button
+                type="button"
+                className="cd-btn cd-btn-ghost cd-btn-sm whitespace-nowrap"
+                disabled={!caps?.editText}
+                title="고치는 글의 커서 자리(또는 고른 글 끝)에 지표 칩을 넣습니다 — Ctrl+K"
+                aria-keyshortcuts="Control+K"
+                // 글 고치는 중 커서를 잃지 않게 초점을 옮기지 않는다
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const t = canvasHandle.current?.captureBind();
+                  if (t) setBindTarget(t);
+                }}
+              >
+                <Hash className="w-3.5 h-3.5" /> 지표 넣기
+              </button>
               <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                 <label className="flex items-center gap-1 cd-text-muted whitespace-nowrap">
                   판
@@ -496,6 +556,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 onCommitText={ops.commitText}
                 onPatchStyle={ops.patchStyle}
                 onKeyCommand={onKeyCommand}
+                onRequestBind={setBindTarget}
                 onChecks={setChecks}
                 handleRef={canvasHandle}
               />
@@ -584,6 +645,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         }}
         onUploaded={(a) => setAssets((list) => [a, ...list.filter((x) => x.key !== a.key)])}
       />
+      <BindPicker open={bindTarget != null} data={studio.data} onClose={closeBind} onPick={insertBind} />
       {kit && item ? (
         <AiEditModal
           open={modal === "ai"}

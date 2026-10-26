@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-26",
+    kind: "개선",
+    title: "회사소개서 스튜디오 — 글에 지표 칩 넣기",
+    body: "스튜디오에서 글을 고치는 중 [지표 넣기](Ctrl+K)를 누르면 지표 사전(분야별, 지금 값·정의 표시)과 회사 정보·기준월 같은 글 항목에서 골라 커서 자리에 파란 칩으로 넣습니다. 데이터 탭에서도 고른 글 끝에 넣을 수 있고, 소수 자리·단위를 고릅니다. 넣은 칩은 데이터가 바뀌면 함께 바뀌고 PDF 에도 그대로 나가며, 실행 취소로 되돌립니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
     date: "2026-10-24",
     kind: "신규",
     title: "회사소개서 AI 편집 — AI로 수정·새 사업 분야·넘침 줄이기·표기 제안",

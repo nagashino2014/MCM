@@ -61,6 +61,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
     projectId: String(row.project_id ?? ""),
     facilityId: String(row.facility_id ?? ""),
     facilityName: text(row.facility_name),
+    regionSido: text(row.region_sido),
     title: String(row.title ?? ""),
     stage: (String(row.stage ?? "lead") as SalesProject["stage"]),
     ownerEmployeeId: text(row.owner_employee_id),
@@ -85,7 +86,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
 }
 
 const PROJECT_SELECT = `
-  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, p.title, p.stage,
+  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, f.region_sido, p.title, p.stage,
          p.owner_employee_id, e.name AS owner_employee_name, p.owner_dept_id, p.contract_id,
          p.service_category, p.service_subcategory,
          p.expected_amount, p.priority, p.status, p.opened_at, p.closed_at, p.memo,
@@ -116,7 +117,7 @@ async function attachStepTypes(
   const ph = ids.map((_, i) => `$${i + 1}`).join(",");
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result
+      `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids
          FROM sales_activities WHERE project_id IN (${ph})`,
       ids
     )
@@ -128,10 +129,14 @@ async function attachStepTypes(
     if (!byPid.has(pid)) byPid.set(pid, []);
     byPid.get(pid)!.push(a);
   }
+  const nowKst = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 19);
   for (const p of projects) {
     const acts = byPid.get(p.projectId) ?? [];
     if (!acts.length) {
       p.activityTypes = [];
+      // 스케쥴이 없으면 저장된 단계가 곧 도달 단계(실주·보류는 근거가 없어 리드로 본다)
+      p.reachedStage = STAGE_RANK[p.stage] != null ? p.stage : "lead";
+      p.finalBidAmount = null;
       continue;
     }
     const earliest = new Map<SalesActivityType, string>();
@@ -145,8 +150,44 @@ async function attachStepTypes(
       .sort((a, b) => (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1))
       .map(([t]) => t);
     p.stage = computeStage(acts);
+    // 수주·실주 확정일 — Salesboard KPI의 '올해' 판정용. computeStage 와 같은 결과 스케쥴(첫 result)의 날짜.
+    if (p.stage === "won" || p.stage === "lost") {
+      const r = acts.find((a) => String(a.activity_type) === "result");
+      const at = r ? String(r.scheduled_at ?? r.occurred_at ?? r.ended_at ?? r.created_at ?? "") : "";
+      p.outcomeAt = at ? at.slice(0, 10) : null;
+    }
+    // 도달 단계(Salesboard 퍼널 W4) — 시작된 스케쥴 중 가장 높은 단계. 수주면 수주.
+    //   computeStage 는 '지금' 단계라 결과 뒤 실주·재투찰로 내려갈 수 있어 퍼널에는 이 값을 쓴다.
+    let best: SalesStage = "lead";
+    for (const a of acts) {
+      const start = String(a.scheduled_at ?? a.occurred_at ?? "");
+      if (!start || start > nowKst) continue; // 아직 시작하지 않은 예정 스케쥴은 도달로 보지 않는다
+      const st = STAGE_BY_ACTIVITY_TYPE[String(a.activity_type)];
+      if (st && (STAGE_RANK[st] ?? -1) > (STAGE_RANK[best] ?? -1)) best = st;
+    }
+    p.reachedStage = p.stage === "won" ? "won" : best;
+    // 최종 투찰가(W6) — 가장 늦게 시작한 투찰 스케쥴의 마지막 회차 금액
+    let lastBidAt = "";
+    let lastBid: number | null = null;
+    for (const a of acts) {
+      if (String(a.activity_type) !== "bid") continue;
+      const bids = jsonArray<ActivityBid>(a.bids);
+      const amt = bids.length ? bids[bids.length - 1].amount : null;
+      const at = String(a.scheduled_at ?? a.occurred_at ?? a.created_at ?? "");
+      if (amt != null && at >= lastBidAt) { lastBidAt = at; lastBid = Number(amt); }
+    }
+    p.finalBidAmount = lastBid;
   }
 }
+
+// 퍼널 순서 — 도달 단계 비교용. 실주·보류는 단계가 아니라 결과·상태라 순위가 없다.
+const STAGE_RANK: Partial<Record<SalesStage, number>> = {
+  lead: 0,
+  contact: 1,
+  proposal: 2,
+  bidding: 3,
+  won: 4,
+};
 
 export async function listSalesProjects(filter: SalesProjectFilter = {}): Promise<SalesProject[]> {
   const where: string[] = [];

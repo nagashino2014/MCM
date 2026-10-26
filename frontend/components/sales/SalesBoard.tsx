@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
+  AlarmClock, Briefcase, CalendarClock, ClipboardList, Percent, Plus, Search, Siren, Sparkles, Trophy, Workflow, X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
@@ -11,6 +11,8 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ProgressReportModal } from "./ProgressReportModal";
 import { SalesSettingsCard } from "./SalesSettingsCard";
+import { SalesInsightZone, funnelLabel, reachedAtLeast } from "./SalesInsights";
+import { useClientPaging } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
 import {
   ACTIVITY_TYPE_META,
@@ -23,6 +25,7 @@ import {
   type SalesServiceCategory,
   type SalesStage,
 } from "@/lib/sales/types";
+import { SALES_REGION_GROUPS, SALES_REGION_UNKNOWN, salesRegionGroupId } from "@/lib/sales/regions";
 
 const STAGE_PILL: Record<SalesStage, string> = {
   lead: "cd-pill-idle",
@@ -49,8 +52,46 @@ const STEP_TAG_LABELS: Record<SalesActivityType, string> = {
 
 const PANEL_HEIGHT = 375; // 탭 패널·리스트 카드 높이
 const TAB_PANEL_WIDTH = 616; // 탭 패널 너비
+const TAG_PANEL_WIDTH = 236; // 리스트 왼쪽 태그 필터 패널 너비(지역권·업종분류 2열)
+const SEARCH_WIDTH = 300; // 제목·사업장 검색란 너비(180→300, 2026-10-26)
 
 type TabKey = "bids" | "reports" | "activities";
+
+// 리스트 왼쪽 태그 필터(2026-10-26) — 지역권(공공입찰 7권+미상)·업종분류(용역 분류 4종+미분류).
+// 같은 그룹 안은 OR, 그룹 사이는 AND. 영업건이 늘어도 목록을 좁혀 볼 수 있게 한다.
+const CATEGORY_UNSET = "unset";
+const REGION_TAGS: { id: string; label: string }[] = [
+  ...SALES_REGION_GROUPS.map((g) => ({ id: g.id, label: g.label })),
+  { id: SALES_REGION_UNKNOWN.id, label: SALES_REGION_UNKNOWN.label },
+];
+const CATEGORY_TAGS: { id: string; label: string }[] = [
+  ...SALES_SERVICE_CATEGORIES.map((c) => ({ id: c.code, label: c.label })),
+  { id: CATEGORY_UNSET, label: "미분류" },
+];
+const projectCategoryId = (p: SalesProject) => p.serviceCategory ?? CATEGORY_UNSET;
+
+// 상단 KPI 띠(2026-10-26) — 목록 응답(가시성 scope 적용됨)과 탭 패널 응답에서만 파생한다. 새 API 없음.
+// 목록 필터(검색·담당·연도·태그)와 무관하게 '보이는 영업건 전체' 기준이다. 날짜 판정은 KST.
+// 칸을 누르면 목록 필터로 걸린다(KpiFilter). 투찰 예정 칸은 필터 대신 왼쪽 [투찰 임박] 탭을 연다.
+type KpiFilter = "active" | "new" | "won" | "lost" | "outcome";
+const KPI_FILTER_LABELS: Record<KpiFilter, string> = {
+  active: "진행 중",
+  new: "이번 달 신규",
+  won: "올해 수주",
+  lost: "올해 실주",
+  outcome: "올해 결과",
+};
+const kstNow = () => new Date(Date.now() + 9 * 3600000).toISOString();
+const isActiveProject = (p: SalesProject) => p.status !== "closed" && p.stage !== "won" && p.stage !== "lost";
+const openedMonth = (p: SalesProject) => (p.openedAt ?? p.createdAt ?? "").slice(0, 7);
+// 결과 확정 연도 — 결과 스케쥴 날짜, 없으면(스케쥴 없이 단계만 저장된 옛 건) 종료일·시작일.
+const outcomeYear = (p: SalesProject) => (p.outcomeAt ?? p.closedAt ?? p.openedAt ?? "").slice(0, 4);
+const daysUntil = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
+};
 
 interface FacilityOption {
   facilityId: string;
@@ -112,6 +153,13 @@ export function SalesBoard() {
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("");
   const [year, setYear] = useState("");
+  // 태그 필터(다중 선택) — 비어 있으면 그 그룹은 제한 없음
+  const [regionIds, setRegionIds] = useState<string[]>([]);
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  // KPI 칸 클릭 필터(하나만) — 같은 칸을 다시 누르면 해제
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter | null>(null);
+  // 하단 퍼널(W4) 막대 필터 — 도달 단계가 이 단계 이상인 건
+  const [reachedFilter, setReachedFilter] = useState<SalesStage | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -185,17 +233,108 @@ export function SalesBoard() {
     [projects]
   );
 
-  const filtered = useMemo(() => {
+  // KPI 값 — 목록 필터와 무관하게 보이는 영업건 전체 기준.
+  const kpi = useMemo(() => {
+    const now = kstNow();
+    const thisYear = now.slice(0, 4);
+    const thisMonth = now.slice(0, 7);
+    const prev = new Date(Date.UTC(Number(thisYear), Number(now.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+    const active = projects.filter(isActiveProject);
+    const byStage = (st: SalesStage) => active.filter((p) => p.stage === st).length;
+    const won = projects.filter((p) => p.stage === "won" && outcomeYear(p) === thisYear).length;
+    const lost = projects.filter((p) => p.stage === "lost" && outcomeYear(p) === thisYear).length;
+    const nearest = upcomingBids.reduce<number | null>((m, b) => {
+      const n = daysUntil(b.bidEnd);
+      return m == null || n < m ? n : m;
+    }, null);
+    return {
+      thisYear,
+      thisMonth,
+      active: active.length,
+      // 보류는 있을 때만 덧붙여 내역 합이 진행 중 건수와 맞게 한다.
+      activeBreakdown:
+        `리드 ${byStage("lead")} · 컨택 ${byStage("contact")} · 제안 ${byStage("proposal")} · 입찰 ${byStage("bidding")}` +
+        (byStage("hold") > 0 ? ` · 보류 ${byStage("hold")}` : ""),
+      newThisMonth: projects.filter((p) => openedMonth(p) === thisMonth).length,
+      newPrevMonth: projects.filter((p) => openedMonth(p) === prev).length,
+      bids: upcomingBids.length,
+      nearestBid: nearest,
+      won,
+      lost,
+      winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null,
+    };
+  }, [projects, upcomingBids]);
+
+  const matchKpi = (p: SalesProject) => {
+    switch (kpiFilter) {
+      case "active": return isActiveProject(p);
+      case "new": return openedMonth(p) === kpi.thisMonth;
+      case "won": return p.stage === "won" && outcomeYear(p) === kpi.thisYear;
+      case "lost": return p.stage === "lost" && outcomeYear(p) === kpi.thisYear;
+      case "outcome": return (p.stage === "won" || p.stage === "lost") && outcomeYear(p) === kpi.thisYear;
+      default: return true;
+    }
+  };
+  const toggleKpi = (k: KpiFilter) => setKpiFilter((cur) => (cur === k ? null : k));
+
+  // 상단 필터(검색·담당·연도)와 KPI 칸 필터를 적용한 모집단. 태그 건수는 여기서 "다른 그룹 선택"까지 적용해 센다.
+  const baseFiltered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return projects.filter((p) => {
       if (s && !(p.title.toLowerCase().includes(s) || (p.facilityName ?? "").toLowerCase().includes(s))) return false;
       if (owner && p.ownerEmployeeId !== owner && p.leadMemberId !== owner) return false;
       if (year && (p.openedAt ?? "").slice(0, 4) !== year) return false;
+      if (!matchKpi(p)) return false;
+      if (reachedFilter && !reachedAtLeast(p, reachedFilter)) return false;
       return true;
     });
-  }, [projects, q, owner, year]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, q, owner, year, kpiFilter, reachedFilter, kpi.thisYear, kpi.thisMonth]);
 
-  const hasFilter = !!(q || owner || year);
+  const regionOf = (p: SalesProject) => salesRegionGroupId(p.regionSido);
+  const matchRegion = (p: SalesProject) => regionIds.length === 0 || regionIds.includes(regionOf(p));
+  const matchCategory = (p: SalesProject) => categoryIds.length === 0 || categoryIds.includes(projectCategoryId(p));
+
+  const filtered = useMemo(
+    () => baseFiltered.filter((p) => matchRegion(p) && matchCategory(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [baseFiltered, regionIds, categoryIds]
+  );
+
+  // 태그별 건수 — 같은 그룹의 선택은 빼고(OR 라 선택해도 늘어나는 수를 보이게), 다른 그룹 선택은 적용.
+  const regionCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of baseFiltered) if (matchCategory(p)) m.set(regionOf(p), (m.get(regionOf(p)) ?? 0) + 1);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseFiltered, categoryIds]);
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of baseFiltered) if (matchRegion(p)) m.set(projectCategoryId(p), (m.get(projectCategoryId(p)) ?? 0) + 1);
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseFiltered, regionIds]);
+
+  const toggleIn = (set: (f: (prev: string[]) => string[]) => void, id: string) =>
+    set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const hasFilter = !!(q || owner || year || regionIds.length || categoryIds.length || kpiFilter || reachedFilter);
+  const clearFilters = () => {
+    setQ("");
+    setOwner("");
+    setYear("");
+    setRegionIds([]);
+    setCategoryIds([]);
+    setKpiFilter(null);
+    setReachedFilter(null);
+  };
+
+  // 목록 쪽 나눔(공용 useClientPaging, 10-21 규칙). 필터가 바뀌면 첫 쪽으로.
+  const { pageRows, pager, resetPage } = useClientPaging(filtered, "sales-board-page-size", loading);
+  useEffect(() => {
+    resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, owner, year, regionIds, categoryIds, kpiFilter, reachedFilter]);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -216,6 +355,15 @@ export function SalesBoard() {
 
       {error && <div className="cd-error-bg cd-error-text rounded-xl px-4 py-3 text-sm mb-3">{error}</div>}
 
+      {/* 상단 KPI 띠 — 5칸. 칸을 누르면 아래 목록이 그 조건으로 걸린다(투찰 예정은 왼쪽 탭 열기) */}
+      <KpiStrip
+        kpi={kpi}
+        loading={loading}
+        active={kpiFilter}
+        onToggle={toggleKpi}
+        onOpenBids={() => pickTab("bids")}
+      />
+
       <div className="flex gap-3 items-stretch flex-wrap">
         {/* 좌: 탭 패널 */}
         <SalesTabPanel
@@ -230,13 +378,14 @@ export function SalesBoard() {
         />
 
         {/* 우: 영업건 리스트(필터 + 목록, 합쳐 PANEL_HEIGHT) */}
-        <div className="flex flex-col min-w-0" style={{ flex: "1 1 480px", height: PANEL_HEIGHT }}>
+        {/* 태그 패널(236px)이 더해져 좁은 화면(1366~1600)에서는 아래 줄로 내려 전폭을 쓴다(basis 480→720, 2026-10-26) */}
+        <div className="flex flex-col min-w-0" style={{ flex: "1 1 720px", height: PANEL_HEIGHT }}>
           <div className="flex items-center gap-2 flex-wrap mb-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <Search className="w-4 h-4 cd-text-faint" />
               <input
                 className="cd-input"
-                style={{ width: 180 }}
+                style={{ width: SEARCH_WIDTH }}
                 placeholder="제목·사업장 검색"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -254,21 +403,65 @@ export function SalesBoard() {
                 {years.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             )}
+            {kpiFilter && (
+              <span className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                {KPI_FILTER_LABELS[kpiFilter]}
+                <button type="button" onClick={() => setKpiFilter(null)} aria-label={`${KPI_FILTER_LABELS[kpiFilter]} 필터 해제`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {reachedFilter && (
+              <span className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                {funnelLabel(reachedFilter)} 도달
+                <button type="button" onClick={() => setReachedFilter(null)} aria-label={`${funnelLabel(reachedFilter)} 도달 필터 해제`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {hasFilter && (
-              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { setQ(""); setOwner(""); setYear(""); }}>
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={clearFilters}>
                 <X className="w-3.5 h-3.5" /> 초기화
               </button>
             )}
           </div>
-          <div className="flex-1 min-h-0">
-            {loading ? (
-              <div className="cd-text-faint text-sm p-6">불러오는 중…</div>
-            ) : (
-              <ListView projects={filtered} onRowClick={(id) => router.push(`/sales/${id}`)} />
-            )}
+          {/* 아래: 왼쪽 태그 필터 패널 + 오른쪽 목록(쪽 나눔) */}
+          <div className="flex-1 min-h-0 flex gap-2">
+            <TagFilterPanel
+              regionIds={regionIds}
+              categoryIds={categoryIds}
+              regionCounts={regionCounts}
+              categoryCounts={categoryCounts}
+              onToggleRegion={(id) => toggleIn(setRegionIds, id)}
+              onToggleCategory={(id) => toggleIn(setCategoryIds, id)}
+              onClearRegion={() => setRegionIds([])}
+              onClearCategory={() => setCategoryIds([])}
+            />
+            <div className="flex-1 min-w-0 min-h-0">
+              {loading ? (
+                <div className="cd-text-faint text-sm p-6">불러오는 중…</div>
+              ) : (
+                <ListView projects={pageRows} total={filtered.length} pager={pager} onRowClick={(id) => router.push(`/sales/${id}`)} />
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 하단 인포그래픽 존(W4~W7 + W8 요약) — 막대·행을 누르면 위 목록 필터로 걸린다(2026-10-26) */}
+      <SalesInsightZone
+        projects={projects}
+        assignees={assignees}
+        upcomingActs={upcomingActs}
+        pendingReports={pendingReports}
+        loading={loading}
+        reachedFilter={reachedFilter}
+        onReached={(st) => setReachedFilter((cur) => (cur === st ? null : st))}
+        categoryIds={categoryIds}
+        onToggleCategory={(id) => toggleIn(setCategoryIds, id)}
+        owner={owner}
+        onOwner={(id) => setOwner((cur) => (cur === id ? "" : id))}
+      />
 
       {/* 하단: 영업 제설정(영업 담당자 지정·수집 소스) — 2026-10-19 */}
       <SalesSettingsCard theme={theme} canManageStaff={canManageStaff} canEditSources={canEdit} onStaffChanged={loadAssignees} />
@@ -432,6 +625,206 @@ function SalesTabPanel({
   );
 }
 
+// 상단 KPI 띠 — 숫자는 텍스트 색(cd-text), 아이콘만 칸별 색. 상태색(수주·실주)은 라벨과 함께 쓴다.
+// 칸은 무광 카드 + 1px 경계(UI Precision), 선택된 칸은 경계만 primary.
+interface KpiValues {
+  thisYear: string;
+  active: number;
+  activeBreakdown: string;
+  newThisMonth: number;
+  newPrevMonth: number;
+  bids: number;
+  nearestBid: number | null;
+  won: number;
+  lost: number;
+  winRate: number | null;
+}
+
+function KpiStrip({
+  kpi,
+  loading,
+  active,
+  onToggle,
+  onOpenBids,
+}: {
+  kpi: KpiValues;
+  loading: boolean;
+  active: KpiFilter | null;
+  onToggle: (k: KpiFilter) => void;
+  onOpenBids: () => void;
+}) {
+  const v = (n: number | string) => (loading ? "—" : n);
+  const tileCls = "cd-card-bg rounded-2xl border cd-border-c min-w-0";
+  const tileStyle = (on: boolean) => (on ? { borderColor: "var(--cd-primary)" } : undefined);
+  const btnCls = "cd-row-hover w-full h-full text-left rounded-2xl px-3 py-2 flex items-center gap-3 min-w-0";
+  const head = (Icon: typeof Workflow, color: string, label: string) => (
+    <>
+      <span
+        className="w-6 h-6 rounded-md inline-flex items-center justify-center shrink-0"
+        style={{ background: `color-mix(in srgb, ${color} 14%, var(--cd-card))`, color }}
+      >
+        <Icon className="w-3.5 h-3.5" />
+      </span>
+      <span className="cd-text-muted text-[11.5px] font-bold truncate">{label}</span>
+    </>
+  );
+  const valueRow = (value: ReactNode, sub: string) => (
+    <span className="flex items-baseline gap-2 min-w-0">
+      <span className="cd-text text-xl font-extrabold leading-none">{value}</span>
+      {/* 좁은 화면에서 말줄임되면 마우스를 올려 전체를 본다 */}
+      <span className="cd-text-faint text-[11px] truncate" title={sub}>{sub}</span>
+    </span>
+  );
+  const simple = (
+    key: KpiFilter,
+    Icon: typeof Workflow,
+    color: string,
+    label: string,
+    value: ReactNode,
+    sub: string,
+    title: string
+  ) => (
+    <div className={tileCls} style={tileStyle(active === key)}>
+      <button type="button" className={btnCls} aria-pressed={active === key} title={title} onClick={() => onToggle(key)}>
+        <span className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <span className="flex items-center gap-2 min-w-0">{head(Icon, color, label)}</span>
+          {valueRow(value, sub)}
+        </span>
+      </button>
+    </div>
+  );
+  const pillBtn = (key: KpiFilter, label: string, n: number, color: string) => (
+    <button
+      type="button"
+      className="cd-row-hover rounded-lg px-1.5 py-0.5 inline-flex items-baseline gap-1.5"
+      style={active === key ? { boxShadow: "inset 0 0 0 1px var(--cd-primary)" } : undefined}
+      aria-pressed={active === key}
+      title={`올해 ${label} 영업건만 목록에 보기`}
+      onClick={() => onToggle(key)}
+    >
+      <span className="w-2 h-2 rounded-full self-center" style={{ background: color }} />
+      <span className="cd-text-muted text-[11.5px] font-bold">{label}</span>
+      <span className="cd-text text-xl font-extrabold leading-none">{v(n)}</span>
+    </button>
+  );
+
+  return (
+    <div className="grid gap-3 mb-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5" role="group" aria-label="영업 핵심 지표">
+      {simple("active", Workflow, "var(--cd-primary)", "진행 중 영업건", v(kpi.active), kpi.activeBreakdown, "수주·실주가 아닌 영업건만 목록에 보기")}
+      {simple(
+        "new",
+        Sparkles,
+        "var(--cd-secondary)",
+        "이번 달 신규",
+        v(kpi.newThisMonth),
+        `지난달 ${kpi.newPrevMonth}건`,
+        "이번 달에 시작한 영업건만 목록에 보기"
+      )}
+      <div className={tileCls}>
+        <button type="button" className={btnCls} title="왼쪽 투찰 임박 탭 열기" onClick={onOpenBids}>
+          <span className="flex flex-col gap-1.5 min-w-0 flex-1">
+            <span className="flex items-center gap-2 min-w-0">{head(AlarmClock, "var(--cd-error)", "투찰 예정 (14일)")}</span>
+            {valueRow(
+              v(kpi.bids),
+              kpi.nearestBid == null ? "예정 없음" : `가장 가까운 ${kpi.nearestBid <= 0 ? "D-DAY" : `D-${kpi.nearestBid}`}`
+            )}
+          </span>
+        </button>
+      </div>
+      <div className={`${tileCls} px-3 py-2 flex flex-col gap-1.5`} style={tileStyle(active === "won" || active === "lost")}>
+        <span className="flex items-center gap-2 min-w-0">{head(Trophy, "var(--cd-success)", `${kpi.thisYear}년 수주 / 실주`)}</span>
+        <span className="flex items-center gap-1 flex-wrap -ml-1.5">
+          {pillBtn("won", "수주", kpi.won, "var(--cd-success)")}
+          {pillBtn("lost", "실주", kpi.lost, "var(--cd-error)")}
+        </span>
+      </div>
+      {simple(
+        "outcome",
+        Percent,
+        "var(--cd-warning)",
+        `${kpi.thisYear}년 수주율`,
+        loading || kpi.winRate == null ? "—" : `${kpi.winRate}%`,
+        kpi.won + kpi.lost > 0 ? `수주 ${kpi.won} ÷ 결과 ${kpi.won + kpi.lost}건` : "올해 결과 없음",
+        "올해 수주·실주로 끝난 영업건만 목록에 보기"
+      )}
+    </div>
+  );
+}
+
+// 리스트 왼쪽 태그 필터 패널 — 지역권·업종분류 두 그룹, 다중 선택(cd-chip data-active 토글, 공공입찰 알림 설정과 같은 패턴).
+// 각 태그 오른쪽 숫자는 현재 다른 조건을 적용했을 때의 건수.
+function TagFilterPanel({
+  regionIds,
+  categoryIds,
+  regionCounts,
+  categoryCounts,
+  onToggleRegion,
+  onToggleCategory,
+  onClearRegion,
+  onClearCategory,
+}: {
+  regionIds: string[];
+  categoryIds: string[];
+  regionCounts: Map<string, number>;
+  categoryCounts: Map<string, number>;
+  onToggleRegion: (id: string) => void;
+  onToggleCategory: (id: string) => void;
+  onClearRegion: () => void;
+  onClearCategory: () => void;
+}) {
+  const group = (
+    title: string,
+    tags: { id: string; label: string }[],
+    selected: string[],
+    counts: Map<string, number>,
+    onToggle: (id: string) => void,
+    onClear: () => void
+  ) => (
+    <div className="flex flex-col gap-1 flex-1 min-w-0">
+      <div className="flex items-center justify-between px-1" style={{ height: 18 }}>
+        <span className="cd-text-faint text-[11px] font-bold">
+          {title}
+          {selected.length > 0 && <span className="cd-text-primary"> {selected.length}</span>}
+        </span>
+        {selected.length > 0 && (
+          <button type="button" className="cd-text-faint" onClick={onClear} aria-label={`${title} 선택 해제`}>
+            <X className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      {tags.map((t) => {
+        const active = selected.includes(t.id);
+        const n = counts.get(t.id) ?? 0;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            className="cd-chip cd-chip-sm w-full justify-between"
+            // 패널 높이(375) 안에 지역권 8개가 들어가도록 칩을 낮춘다(32→28px).
+            style={{ minHeight: 28, padding: "3px 8px" }}
+            data-active={active}
+            aria-pressed={active}
+            onClick={() => onToggle(t.id)}
+          >
+            <span className="truncate">{t.label}</span>
+            <span className={`text-[11px] shrink-0 ${active ? "" : "cd-text-faint"}`}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+  return (
+    <aside
+      className="cd-card-bg rounded-2xl border cd-border-c p-2 flex gap-2 overflow-y-auto shrink-0"
+      style={{ width: TAG_PANEL_WIDTH }}
+      aria-label="영업건 태그 필터"
+    >
+      {group("지역권", REGION_TAGS, regionIds, regionCounts, onToggleRegion, onClearRegion)}
+      {group("업종분류", CATEGORY_TAGS, categoryIds, categoryCounts, onToggleCategory, onClearCategory)}
+    </aside>
+  );
+}
+
 // 태그 순서는 서버가 내려준 순서(스케쥴 시작 날짜 오름차순)를 그대로 유지한다.
 function StepTags({ types }: { types: SalesActivityType[] }) {
   if (types.length === 0) return <span className="cd-text-faint text-[11px]">—</span>;
@@ -454,18 +847,29 @@ function StepTags({ types }: { types: SalesActivityType[] }) {
   );
 }
 
-function ListView({ projects, onRowClick }: { projects: SalesProject[]; onRowClick: (projectId: string) => void }) {
-  if (projects.length === 0) {
+// projects = 현재 쪽의 행, total = 필터 결과 전체 건수. 예상 수주금액 열은 2026-10-26 사용자 요청으로 제거(값은 DB에 유지).
+function ListView({
+  projects,
+  total,
+  pager,
+  onRowClick,
+}: {
+  projects: SalesProject[];
+  total: number;
+  pager: ReactNode;
+  onRowClick: (projectId: string) => void;
+}) {
+  if (total === 0) {
     return <div className="cd-text-faint text-sm p-6 text-center cd-card-bg rounded-2xl border cd-border-c h-full flex items-center justify-center">표시할 영업건이 없습니다.</div>;
   }
   return (
-    <div className="sales-list-scope cd-card-bg rounded-2xl border cd-border-c overflow-hidden h-full">
+    <div className="sales-list-scope cd-card-bg rounded-2xl border cd-border-c overflow-hidden h-full flex flex-col">
       {/* 본문은 좌측 탭 패널 목록(text-sm = 0.875rem)과 동일 크기로 맞춘다. 전역 cd-table은 공유 클래스라 스코프 오버라이드 */}
       <style>{`
         .sales-list-scope .cd-table thead th { font-size: 0.75rem; }
         .sales-list-scope .cd-table tbody td { font-size: 0.875rem; }
       `}</style>
-      <div className="overflow-auto h-full">
+      <div className="overflow-auto flex-1 min-h-0">
         <table className="cd-table">
           <thead>
             <tr>
@@ -474,7 +878,6 @@ function ListView({ projects, onRowClick }: { projects: SalesProject[]; onRowCli
               <th>분류 단계</th>
               <th>업무 단계</th>
               <th>담당</th>
-              <th style={{ textAlign: "right" }}>예상 수주금액</th>
             </tr>
           </thead>
           <tbody>
@@ -487,13 +890,13 @@ function ListView({ projects, onRowClick }: { projects: SalesProject[]; onRowCli
                   <td><span className={`cd-pill ${STAGE_PILL[p.stage]}`}>{SALES_STAGE_LABELS[p.stage]}</span></td>
                   <td><StepTags types={p.activityTypes ?? []} /></td>
                   <td className="cd-text-muted">{assignee ?? "—"}</td>
-                  <td className="cd-text" style={{ textAlign: "right" }}>{p.expectedAmount != null ? `${p.expectedAmount.toLocaleString()}원` : "—"}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <div className="shrink-0 border-t cd-border-c px-3 py-1.5">{pager}</div>
     </div>
   );
 }
@@ -510,7 +913,6 @@ function CreateProjectModal({
   const [title, setTitle] = useState("");
   const [serviceCategory, setServiceCategory] = useState<SalesServiceCategory | "">("");
   const [serviceSubcategory, setServiceSubcategory] = useState<string>("");
-  const [expected, setExpected] = useState("");
   const [memo, setMemo] = useState("");
   const [facility, setFacility] = useState<FacilityOption | null>(null);
   const [facilityQuery, setFacilityQuery] = useState("");
@@ -564,7 +966,7 @@ function CreateProjectModal({
           priority: "normal",
           serviceCategory: serviceCategory || null,
           serviceSubcategory: serviceSubcategory || null,
-          expectedAmount: expected ? Number(expected.replace(/[^0-9]/g, "")) : null,
+          // 예상 수주금액 입력은 2026-10-26 제거(컬럼·API는 유지, 보내지 않으면 null).
           memo: memo.trim() || null,
         }),
       });
@@ -646,9 +1048,6 @@ function CreateProjectModal({
             </select>
           </div>
         </div>
-
-        <label className="cd-label">예상 수주금액(원)</label>
-        <input className="cd-input mb-3" value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="예: 30000000" inputMode="numeric" />
 
         <label className="cd-label">메모</label>
         <textarea className="cd-textarea mb-4" rows={2} value={memo} onChange={(e) => setMemo(e.target.value)} />

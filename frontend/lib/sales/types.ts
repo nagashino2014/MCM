@@ -138,6 +138,8 @@ export interface SalesProject {
   projectId: string;
   facilityId: string;
   facilityName: string | null;
+  /** 사업장 소재지 시도(facilities.region_sido) — 목록 지역권 태그 필터용. 지역권은 lib/sales/regions.ts 로 파생 */
+  regionSido: string | null;
   title: string;
   stage: SalesStage;
   ownerEmployeeId: string | null;
@@ -161,6 +163,12 @@ export interface SalesProject {
   leadMemberName?: string | null;
   /** 이 영업건에 등록된 활동유형 집합(진행단계 태그용) */
   activityTypes?: SalesActivityType[];
+  /** 수주·실주로 끝난 건의 결과 스케쥴 날짜(YYYY-MM-DD) — Salesboard KPI '올해' 판정용. 그 외 null/미지정 */
+  outcomeAt?: string | null;
+  /** 도달 단계 — 시작된 스케쥴 중 가장 높은 단계(수주면 won). Salesboard 퍼널(W4)용. 실주·보류는 오지 않는다 */
+  reachedStage?: SalesStage;
+  /** 최종 투찰가(원) — 가장 늦은 투찰 스케쥴의 마지막 회차. Salesboard 수주 성과(W6)용 */
+  finalBidAmount?: number | null;
 }
 
 export interface SalesActivityContact {

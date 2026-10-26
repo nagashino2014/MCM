@@ -1,7 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import {
+  carryOverInfo,
+  carryOverSlots,
   illustIdsIn,
+  markChangedSlots,
   sanitizeFits,
   sanitizeIllustrationMeta,
   sanitizeLicense,
@@ -169,6 +172,8 @@ export interface ImportResult {
   sourceKey: string;
   replaced: Array<{ assetId: string; action: "deleted" | "archived" }>;
   dropped: string[];
+  /** 이전 판에서 이어 붙인 것 — 사용자 자리 수와 정보 항목 */
+  carried: { slots: number; info: string[] };
 }
 
 export async function importIllustration(input: ImportInput): Promise<ImportResult> {
@@ -202,6 +207,19 @@ export async function importIllustration(input: ImportInput): Promise<ImportResu
   const prev = rowsToObjects(
     await (await getDb()).exec("SELECT asset_id FROM catalog_illustrations WHERE source_key = $1 AND status = 'active'", [meta.sourceKey])
   ).map((r) => s(r.asset_id));
+  // 이전 판에서 사용자가 고친 자리·이름·라이선스 메모는 새 판에 이어 붙인다(D)
+  const carried: ImportResult["carried"] = { slots: 0, info: [] };
+  const prevInfo = prev.length ? await getIllustration(prev[0]) : null;
+  if (prevInfo) {
+    const sl = carryOverSlots(prevInfo.slots, meta.slots);
+    meta.slots = sl.slots;
+    carried.slots = sl.carried;
+    const inf = carryOverInfo(prevInfo, meta);
+    meta.title = inf.title;
+    meta.license = inf.license;
+    meta.note = inf.note;
+    carried.info = inf.carried;
+  }
   const replaced: ImportResult["replaced"] = [];
   const toDelete: string[] = [];
   for (const id of prev) {
@@ -254,7 +272,7 @@ export async function importIllustration(input: ImportInput): Promise<ImportResu
       ]
     );
   });
-  return { assetId, title: meta.title, sourceKey: meta.sourceKey, replaced, dropped: clean.dropped };
+  return { assetId, title: meta.title, sourceKey: meta.sourceKey, replaced, dropped: clean.dropped, carried };
 }
 
 export interface IllustrationPatch {
@@ -292,7 +310,8 @@ export async function updateIllustration(assetId: string, patch: IllustrationPat
   if (patch.quality !== undefined) next.quality = patch.quality == null ? null : Math.max(1, Math.min(5, Math.round(Number(patch.quality))));
   if (patch.note != null) next.note = String(patch.note).slice(0, 300);
   if (patch.slots !== undefined) {
-    next.slots = sanitizeSlots(patch.slots);
+    // 바뀐 자리·새 자리만 사용자 자리로 표시 — 다시 가져올 때 이 자리들만 이어 붙는다
+    next.slots = markChangedSlots(cur.slots, sanitizeSlots(patch.slots));
     if (!next.slots.length) throw new IllustrationError("글자 자리가 하나는 있어야 합니다.");
   }
   if (patch.license !== undefined) next.license = sanitizeLicense(patch.license);

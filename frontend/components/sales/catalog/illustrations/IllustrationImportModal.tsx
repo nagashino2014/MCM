@@ -102,6 +102,7 @@ export function IllustrationImportModal({ mode, onClose, onDone }: { mode: "fold
     setRunning(true);
     let ok = 0;
     let replaced = 0;
+    let carriedSlots = 0;
     for (let i = 0; i < bundles.length; i++) {
       const b = bundles[i];
       if (!b.pick || b.state === "done") continue;
@@ -111,17 +112,21 @@ export function IllustrationImportModal({ mode, onClose, onDone }: { mode: "fold
       form.set("svg", b.svg);
       if (b.thumb) form.set("thumb", b.thumb);
       try {
-        const out = await catalogFetch<{ replaced: Array<{ action: string }> }>("/api/catalog/illustrations", { method: "POST", body: form });
+        const out = await catalogFetch<{ replaced: Array<{ action: string }>; carried?: { slots: number; info: string[] } }>("/api/catalog/illustrations", { method: "POST", body: form });
         ok += 1;
         replaced += out.replaced.length;
-        setBundles((list) => list.map((x, j) => (j === i ? { ...x, state: "done", message: out.replaced.length ? `이전 판 ${out.replaced.length}건 교체` : "추가" } : x)));
+        carriedSlots += out.carried?.slots ?? 0;
+        const carried = out.carried && (out.carried.slots || out.carried.info.length)
+          ? ` · 이어 붙임: ${[out.carried.slots ? `고친 자리 ${out.carried.slots}개` : "", ...out.carried.info].filter(Boolean).join("·")}`
+          : "";
+        setBundles((list) => list.map((x, j) => (j === i ? { ...x, state: "done", message: (out.replaced.length ? `이전 판 ${out.replaced.length}건 교체` : "추가") + carried } : x)));
       } catch (e) {
         setBundles((list) => list.map((x, j) => (j === i ? { ...x, state: "error", message: (e as Error).message } : x)));
       }
     }
     setRunning(false);
     const failed = bundles.filter((b) => b.pick).length - ok;
-    if (ok && !failed) onDone(`일러스트 ${ok}점을 가져왔습니다${replaced ? `(이전 판 ${replaced}건 교체)` : ""}.`);
+    if (ok && !failed) onDone(`일러스트 ${ok}점을 가져왔습니다${replaced ? `(이전 판 ${replaced}건 교체${carriedSlots ? `, 직접 고친 자리 ${carriedSlots}개 이어 붙임` : ""})` : ""}.`);
     else if (ok) setError(`${ok}점은 가져왔고 ${failed}점은 실패했습니다. 사유를 확인하세요.`);
   };
 

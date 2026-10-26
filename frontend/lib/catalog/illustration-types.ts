@@ -22,9 +22,30 @@ export const ILLUST_SLOT_ROLES: Array<{ id: IllustSlotRole; label: string }> = [
   { id: "heading", label: "큰 제목" },
 ];
 
+/** 자리에 얹을 내용 칸 — 없으면 역할대로(defaultBind). 관리 화면 '내용'에서 바꾼다 */
+export type IllustSlotBind = "label" | "desc" | "sub" | "when" | "number" | "center" | "title" | "none";
+export const ILLUST_SLOT_BINDS: Array<{ id: IllustSlotBind; label: string }> = [
+  { id: "label", label: "항목 이름" },
+  { id: "desc", label: "항목 설명" },
+  { id: "sub", label: "항목 머리글" },
+  { id: "when", label: "항목 시점" },
+  { id: "number", label: "항목 숫자·번호" },
+  { id: "center", label: "중심 문구" },
+  { id: "title", label: "제목" },
+  { id: "none", label: "비움" },
+];
+
+export function defaultBind(role: IllustSlotRole): IllustSlotBind {
+  return role === "title" ? "label" : role === "sub" ? "sub" : role === "desc" ? "desc" : role === "number" ? "number" : role === "center" ? "center" : "title";
+}
+
 export interface IllustSlot {
   id: string;
   role: IllustSlotRole;
+  /** 얹을 내용 칸(없으면 역할대로) */
+  bind?: IllustSlotBind;
+  /** 사용자가 관리 화면에서 고친 자리 — 같은 일러스트를 다시 가져와도 이 자리는 유지한다 */
+  src?: "user";
   /** 항목 순번(1부터) — 0 = 항목 밖(중심·큰 제목) */
   item: number;
   /** 그림 대비 비율 상자 */
@@ -144,6 +165,8 @@ export function sanitizeSlots(input: unknown): IllustSlot[] {
       fs: Math.round((num(o.fs, 0.001, 0.2) ?? 0.015) * 100000) / 100000,
       lh: Math.round((num(o.lh, 0.9, 2.4) ?? 1.3) * 100) / 100,
       align: o.align === "center" || o.align === "right" ? o.align : "left",
+      ...(ILLUST_SLOT_BINDS.some((b) => b.id === o.bind) ? { bind: o.bind as IllustSlotBind } : {}),
+      ...(o.src === "user" ? { src: "user" as const } : {}),
       ...(typeof o.color === "string" && /^#[0-9a-f]{6}$/i.test(o.color) ? { color: o.color.toLowerCase() } : {}),
       ...(typeof o.bg === "string" && /^#[0-9a-f]{6}$/i.test(o.bg) ? { bg: o.bg.toLowerCase() } : {}),
       ...(Array.isArray(o.room) && o.room.length === 4 && o.room.every((v) => num(v, 0, 1.5) != null) ? { room: o.room.map((v) => r4(v as number)) as [number, number, number, number] } : {}),
@@ -565,23 +588,24 @@ function numberText(it: InfoItem | undefined, i: number, unit?: string): string 
 /** 내용(InfoContent) → 자리별 글자. 항목은 자리의 item 순번으로 짝짓는다. */
 export function illustSlotTexts(info: Pick<IllustrationInfo, "slots"> & Partial<Pick<IllustrationInfo, "view">>, content: InfoContent, widthPt?: number): SlotText[] {
   const heightPt = widthPt && info.view ? (widthPt * info.view[1]) / info.view[0] : undefined;
-  const numbered = new Set(info.slots.filter((s) => s.role === "number").map((s) => s.item));
+  const numbered = new Set(info.slots.filter((s) => (s.bind ?? defaultBind(s.role)) === "number").map((s) => s.item));
   const out = info.slots.map((slot) => {
     const it = slot.item > 0 ? content.items[slot.item - 1] : undefined;
+    const bind = slot.bind ?? defaultBind(slot.role);
     let text = "";
     let metric: string | undefined;
     let suffix: SlotText["suffix"];
-    if (slot.role === "title") {
+    if (bind === "label") {
       text = it?.label ?? "";
       if (it?.metric && !numbered.has(slot.item)) suffix = { metric: it.metric, num: it.value != null ? fmt(it.value) : "-", unit: it.unit ?? content.unit ?? "" };
-    }
-    else if (slot.role === "sub") text = it?.sub ?? it?.when ?? "";
-    else if (slot.role === "desc") text = it?.desc ?? "";
-    else if (slot.role === "number") {
+    } else if (bind === "sub") text = it?.sub ?? it?.when ?? "";
+    else if (bind === "when") text = it?.when ?? "";
+    else if (bind === "desc") text = it?.desc ?? "";
+    else if (bind === "number") {
       text = numberText(it, slot.item, content.unit);
       if (it?.metric) metric = it.metric;
-    } else if (slot.role === "center") text = [content.center?.label ?? content.title ?? "", content.center?.desc ?? ""].filter(Boolean).join("\n");
-    else if (slot.role === "heading") text = content.title ?? "";
+    } else if (bind === "center") text = [content.center?.label ?? content.title ?? "", content.center?.desc ?? ""].filter(Boolean).join("\n");
+    else if (bind === "title") text = content.title ?? "";
     const full = suffix ? `${text} ${suffix.num}${suffix.unit}` : text;
     const fit = slotFitFont(slot, full, widthPt, heightPt);
     const wPt = widthPt ?? 400;
@@ -606,6 +630,84 @@ export function illustSlotTexts(info: Pick<IllustrationInfo, "slots"> & Partial<
       width: slotWidthPt(t.slot, full, wPt, m) / wPt,
     };
   });
+}
+
+// ───────────────────────── 재가져오기·저장 때 사용자 자리 보존 ─────────────────────────
+
+const SLOT_KEYS: Array<keyof IllustSlot> = ["role", "bind", "item", "x", "y", "w", "h", "lines", "fs", "lh", "align"];
+
+function sameSlot(a: IllustSlot, b: IllustSlot): boolean {
+  return SLOT_KEYS.every((k) => (a[k] ?? null) === (b[k] ?? null));
+}
+
+/** 저장 — 이전 자리와 달라진 자리·새 자리만 사용자 자리(src user)로 표시하고, 그대로인 자리는 이전 표식을 지킨다 */
+export function markChangedSlots(prev: IllustSlot[], next: IllustSlot[]): IllustSlot[] {
+  const byId = new Map(prev.map((s) => [s.id, s]));
+  return next.map((s) => {
+    const p = byId.get(s.id);
+    if (p && sameSlot(p, s)) return p.src ? { ...s, src: p.src } : s;
+    return { ...s, src: "user" };
+  });
+}
+
+/**
+ * 같은 일러스트를 다시 가져올 때 — 이전 판에서 사용자가 고친 자리는 새 판에 이어 붙인다.
+ * 위치가 가까운(중심 거리 ≤ 8%) 새 자리에 사용자 값을 덮고, 짝이 없으면 자리를 그대로 더한다. 매처가 새로 잰 color·bg·room 은 새 판 것을 쓴다.
+ */
+export function carryOverSlots(prevSlots: IllustSlot[], newSlots: IllustSlot[]): { slots: IllustSlot[]; carried: number } {
+  const out = newSlots.map((s) => ({ ...s }));
+  const used = new Set<number>();
+  let carried = 0;
+  for (const u of prevSlots.filter((s) => s.src === "user")) {
+    const cx = u.x + u.w / 2;
+    const cy = u.y + u.h / 2;
+    let best = -1;
+    let bd = 0.08;
+    out.forEach((s, i) => {
+      if (used.has(i)) return;
+      const d = Math.hypot(s.x + s.w / 2 - cx, s.y + s.h / 2 - cy);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    });
+    if (best >= 0) {
+      used.add(best);
+      const keep = out[best];
+      out[best] = { ...keep, role: u.role, item: u.item, x: u.x, y: u.y, w: u.w, h: u.h, lines: u.lines, fs: u.fs, lh: u.lh, align: u.align, ...(u.bind ? { bind: u.bind } : {}), src: "user" };
+    } else {
+      let id = u.id;
+      let n = 1;
+      while (out.some((s) => s.id === id)) id = `${u.id}${n++}`;
+      used.add(out.length);
+      out.push({ ...u, id, src: "user" });
+    }
+    carried += 1;
+  }
+  return { slots: out, carried };
+}
+
+/** 이전 판에서 사용자가 라이브러리에서 고친 정보 — 이름(매처 이름과 다르면)·라이선스 메모(구입일·주소·메모)·메모 */
+export function carryOverInfo(prev: Pick<IllustrationInfo, "title" | "license" | "note">, meta: { title: string; license: IllustLicense; note: string }): { title: string; license: IllustLicense; note: string; carried: string[] } {
+  const carried: string[] = [];
+  let title = meta.title;
+  if (prev.title && prev.title !== meta.title) {
+    title = prev.title;
+    carried.push("이름");
+  }
+  const license = { ...meta.license };
+  for (const k of ["purchasedAt", "url", "note"] as const) {
+    if (prev.license[k] && !license[k]) {
+      license[k] = prev.license[k];
+      carried.push(k === "purchasedAt" ? "구입일" : k === "url" ? "원본 주소" : "라이선스 메모");
+    }
+  }
+  let note = meta.note;
+  if (prev.note && !note) {
+    note = prev.note;
+    carried.push("메모");
+  }
+  return { title, license, note, carried };
 }
 
 // ───────────────────────── 후보 ─────────────────────────

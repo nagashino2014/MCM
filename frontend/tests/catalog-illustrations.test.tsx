@@ -6,10 +6,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { paletteizeSvg, sanitizeIllustrationSvg } from "@/lib/catalog/illustration-svg";
 import {
   applySlotText,
+  carryOverInfo,
+  carryOverSlots,
   illustCandidates,
   illustColorVars,
   illustSlotTexts,
   illustTints,
+  markChangedSlots,
   placeholderContent,
   sanitizeIllustColors,
   sanitizeIllustrationMeta,
@@ -121,6 +124,43 @@ test("글자 자리 ↔ 내용 — 항목 순번으로 짝짓고, 숫자 자리�
   assert.equal(n1.text, "12건");
   assert.equal(n1.metric, "contracts.total");
   assert.equal(t.find((x) => x.slot.id === "s5")?.text, "3");
+});
+
+test("자리 ↔ 내용 매핑(bind) — 역할과 다른 칸을 얹고, 숫자로 묶은 자리는 제목 칩에서 뺀다", () => {
+  const i = info();
+  i.slots = i.slots.map((s) => (s.id === "s3" ? { ...s, bind: "sub" as const } : s.id === "s2" ? { ...s, bind: "none" as const } : s));
+  const t = illustSlotTexts(i, { ...CONTENT, items: CONTENT.items.map((it, k) => (k === 0 ? { ...it, sub: "1단계" } : it)) });
+  assert.equal(t.find((x) => x.slot.id === "s3")?.text, "1단계", "설명 자리에 머리글 칸을 얹음");
+  assert.equal(t.find((x) => x.slot.id === "s2")?.text, "", "비움");
+  assert.ok(t.find((x) => x.slot.id === "s1")?.suffix, "숫자 자리를 비우면 제목에 지표 칩이 붙는다");
+});
+
+test("사용자 자리 표시·새 판에 이어 붙이기 — 바뀐 자리만 user, 가까운 자리에 덮고 짝 없으면 더함, 이름·라이선스 메모 유지", () => {
+  const base = info().slots;
+  const edited = base.map((s) => (s.id === "s1" ? { ...s, x: s.x + 0.02, bind: "label" as const } : s));
+  const marked = markChangedSlots(base, edited);
+  assert.deepEqual(marked.filter((s) => s.src === "user").map((s) => s.id), ["s1"]);
+  const marked2 = markChangedSlots(marked, [...marked, { ...base[0], id: "n1", x: 0.7, y: 0.7, w: 0.1, h: 0.1 }]);
+  assert.deepEqual(marked2.filter((s) => s.src === "user").map((s) => s.id).sort(), ["n1", "s1"], "그대로인 자리는 표식 유지, 새 자리는 user");
+  // 새 판: 매처가 s1 자리를 조금 다르게 쟀고(가까움) n1 자리는 없다
+  const fresh = base.map((s) => (s.id === "s1" ? { ...s, id: "t1", x: s.x + 0.01, room: [0.1, 0.1, 0.1, 0.1] as [number, number, number, number] } : { ...s, id: `t${s.id.slice(1)}` }));
+  const co = carryOverSlots(marked2, fresh);
+  assert.equal(co.carried, 2);
+  const t1 = co.slots.find((s) => s.id === "t1")!;
+  assert.equal(t1.x, base[0].x + 0.02, "사용자 위치로 덮음");
+  assert.equal(t1.bind, "label");
+  assert.equal(t1.src, "user");
+  assert.deepEqual(t1.room, [0.1, 0.1, 0.1, 0.1], "매처가 새로 잰 여유는 새 판 것");
+  assert.ok(co.slots.some((s) => s.id === "n1" && s.src === "user"), "짝 없는 사용자 자리는 그대로 더함");
+  assert.equal(co.slots.filter((s) => s.src === "user").length, 2, "손대지 않은 자리는 새 판 그대로");
+  const inf = carryOverInfo(
+    { title: "허브 6갈래(내가 고친 이름)", license: { ...info().license, purchasedAt: "2026-10-01", url: "", note: "표준" }, note: "" },
+    { title: "허브 6갈래", license: { ...info().license, purchasedAt: "", url: "https://stock.adobe.com/1", note: "" }, note: "매처 메모" }
+  );
+  assert.equal(inf.title, "허브 6갈래(내가 고친 이름)");
+  assert.equal(inf.license.purchasedAt, "2026-10-01");
+  assert.equal(inf.license.url, "https://stock.adobe.com/1", "새 판에 값이 있으면 새 판 것");
+  assert.deepEqual(inf.carried, ["이름", "구입일", "라이선스 메모"]);
 });
 
 test("후보 — 항목 수가 같은 일러스트만, 같은 유형·쪽 추천이 앞", () => {

@@ -21,7 +21,8 @@ from am_svg import HREF, SKIP_TAGS, SvgDoc, _prune, _prune_defs, bb_inter, bb_un
 
 TEXT_LAYER = re.compile(r'^(text|texts|txt|title|titles|headline|heading|header|copy|caption|captions|label|labels|lorem|'
                         r'number|numbers|글자|텍스트|문구|제목)$', re.I)
-BG_LAYER = re.compile(r'^(background|backgrounds|bg|배경|name|logo|watermark)$', re.I)  # 배경·템플릿 이름 로고
+NUMBER_LAYER = re.compile(r'^(place_for_numbers?|numbers?|num|digits?|step_numbers?)$', re.I)  # 번호 자리 그룹(역할 number 고정)
+BG_LAYER = re.compile(r'^(background|backgrounds|bg|배경|name|logo|logos|emblem|watermark|credits?)$', re.I)  # 배경·템플릿 이름 로고
 COLOR_ATTRS = ('fill', 'stroke', 'stop-color', 'flood-color')
 NO_RECOLOR = {'mask', 'clipPath', 'filter'}
 TYPE_KEYS = {  # 매처 16유형 → 앱 인포그래픽 유형(lib/catalog/render/infographic/types.ts)
@@ -107,6 +108,35 @@ def illustrator_svgs(work, man, slugs, force, log):
 
 # ---------- 글자 자리 ----------
 
+def _in(key, prefixes):
+    """요소 키(경로 튜플)가 어느 접두사(그룹 경로) 아래인가"""
+    return any(key[:len(k)] == k for k in prefixes)
+
+
+def find_text_groups(root, text_names=(), keep_names=(), stop_names=()):
+    """글자·번호 그룹을 깊이에 관계없이 찾는다 → [(키 경로, 요소, 고정 역할|None)]. 스톡은 글자가 항목 그룹 안(Group_N/…/Text,
+    Place_for_Number)에 들어 있는 경우가 많다. 맞는 그룹 아래로는 더 내려가지 않는다. keep_names 는 글자로 보지 않고, stop_names 아래는 보지 않는다."""
+    out = []
+
+    def walk(el, key, depth):
+        for i, ch in enumerate(list(el)):
+            if local(ch.tag) != 'g':
+                continue
+            n = layer_name(ch.get('id', '')).lower()
+            k = key + (i,)
+            if n in keep_names or n in stop_names:
+                continue
+            if NUMBER_LAYER.match(n):
+                out.append((k, ch, 'number'))
+            elif TEXT_LAYER.match(n) or n in text_names:
+                out.append((k, ch, None))
+            elif depth < 8:
+                walk(ch, k, depth + 1)
+
+    walk(root, (), 0)
+    return out
+
+
 def _units(el, key):
     """글자 레이어 아래 '글자 덩어리'(자식에 g 가 없는 g, 또는 g 와 섞인 도형) 목록 → [(key, el)]."""
     kids = list(el)
@@ -168,30 +198,85 @@ def _align_of(edges):
     return min(spread, key=lambda k: (spread[k], ['left', 'center', 'right'].index(k)))
 
 
+def merge_stacked(blocks):
+    """세로로 붙어 있고 가로로 겹치는 글 덩어리(제목 + 설명이 다른 그룹에 있을 때)를 한 항목 덩어리로 합친다. 번호 덩어리는 합치지 않는다."""
+    blocks = sorted(blocks, key=lambda b: (b['bb'][1], b['bb'][0]))
+    merged = []
+    for b in blocks:
+        if b['forced']:
+            merged.append(b)
+            continue
+        for m in merged:
+            if m['forced']:
+                continue
+            a, c = m['bb'], b['bb']
+            ov = min(a[2], c[2]) - max(a[0], c[0])
+            narrow = min(a[2] - a[0], c[2] - c[0])
+            fs = max(max(u['fs'] for u in m['units']), max(u['fs'] for u in b['units']))
+            gap = c[1] - a[3]
+            if ov >= 0.5 * narrow and -fs <= gap <= 1.3 * fs:
+                m['units'] = m['units'] + b['units']
+                m['bb'] = bb_union(a, c)
+                break
+        else:
+            merged.append(b)
+    return merged
+
+
 def text_slots(doc, text_layers, R, kind, art_bb):
-    """글자 레이어(최상위 요소 [(idx, el)]) → 자리 목록(쪽 좌표 pt). kind = 매처 유형(Hub 등)."""
+    """글자 그룹 [(키 경로, 요소, 고정 역할)] → 자리 목록(쪽 좌표 pt). kind = 매처 유형(Hub 등)."""
     blocks = []
-    for idx, el in text_layers:
+    extra_remove = []  # 번호 그룹에서 숫자 글자만(탭·원 같은 바탕 도형은 그림으로 남긴다)
+    for key, el, forced in text_layers:
+        if forced == 'number':
+            # 번호 그룹(Place_for_Number 등): 자식 전체(탭·원·숫자)를 모아 숫자 글자만 고른다 — 바탕 도형은 그림으로 남긴다
+            units = []
+            for i, ch in enumerate(list(el)):
+                if local(ch.tag) in SKIP_TAGS:
+                    continue
+                for k, u in _units(ch, key + (i,)):
+                    m = _measure(doc, k)
+                    if m and bb_inter(m['bb'], R):
+                        m['el'] = u
+                        units.append(m)
+            if not units:
+                continue
+            if len(units) > 1:
+                hmax = max(u['bb'][3] - u['bb'][1] for u in units)
+                digits = [u for u in units if u['bb'][3] - u['bb'][1] < 0.8 * hmax]
+                if digits:
+                    units = digits
+            extra_remove += [u['el'] for u in units]
+            bb = None
+            for u in units:
+                bb = bb_union(bb, u['bb'])
+            one = dict(units[0], bb=bb, glyphs=sum(u['glyphs'] for u in units), lines=1, lbbs=[bb])
+            blocks.append({'units': [one], 'bb': bb, 'forced': forced})
+            continue
         for i, ch in enumerate(list(el)):
             if local(ch.tag) in SKIP_TAGS:
                 continue
             units = []
-            for k, u in _units(ch, (idx, i)):
+            for k, u in _units(ch, key + (i,)):
                 m = _measure(doc, k)
                 if m and bb_inter(m['bb'], R):
+                    m['el'] = u
                     units.append(m)
-            if units:
-                bb = None
-                for u in units:
-                    bb = bb_union(bb, u['bb'])
-                blocks.append({'units': units, 'bb': bb})
+            if not units:
+                continue
+            bb = None
+            for u in units:
+                bb = bb_union(bb, u['bb'])
+            blocks.append({'units': units, 'bb': bb, 'forced': forced})
     if not blocks:
-        return [], []
-    # 쪽 머리 제목(다른 덩어리보다 훨씬 큰 글자 하나)은 항목이 아니다
+        return [], [], []
+    blocks = merge_stacked(blocks)
+    # 쪽 머리 제목(다른 덩어리보다 훨씬 큰 낱말 하나)은 항목이 아니다 — 큰 번호(01)는 아니다
     tops = sorted(max(u['fs'] for u in b['units']) for b in blocks)
     med = tops[len(tops) // 2]
     for b in blocks:
-        b['heading'] = len(blocks) >= 3 and len(b['units']) == 1 and max(u['fs'] for u in b['units']) >= 1.6 * med
+        b['heading'] = (len(blocks) >= 3 and len(b['units']) == 1 and not b['forced'] and b['units'][0]['glyphs'] > 3
+                        and max(u['fs'] for u in b['units']) >= 1.6 * med)
     cx0 = (art_bb[0] + art_bb[2]) / 2
     cy0 = (art_bb[1] + art_bb[3]) / 2
     size = min(art_bb[2] - art_bb[0], art_bb[3] - art_bb[1])
@@ -200,7 +285,7 @@ def text_slots(doc, text_layers, R, kind, art_bb):
         us = sorted(b['units'], key=lambda u: (u['bb'][1], u['bb'][0]))
         bx, by = (b['bb'][0] + b['bb'][2]) / 2, (b['bb'][1] + b['bb'][3]) / 2
         b['center'] = kind in RADIAL and math.hypot(bx - cx0, by - cy0) <= 0.14 * size
-        b['number'] = len(us) == 1 and us[0]['lines'] == 1 and us[0]['glyphs'] <= 3
+        b['number'] = b['forced'] == 'number' or (len(us) == 1 and us[0]['lines'] == 1 and us[0]['glyphs'] <= 3)
         al = _align_of([(u['bb'][0], u['bb'][2]) for u in us])
         top = max(u['fs'] for u in us)
         for u in us:
@@ -272,7 +357,7 @@ def text_slots(doc, text_layers, R, kind, art_bb):
         s['item'] = 0 if s['role'] in ('center', 'heading') else s['_b'].get('item', 0)
         del s['_b']
     slots.sort(key=lambda s: (s['item'] or 99, ROLE_ORDER.index(s['role']), s['bb'][1]))
-    return slots, notes
+    return slots, notes, extra_remove
 
 
 ROLE_ORDER = ['title', 'sub', 'number', 'desc', 'center', 'heading']
@@ -283,7 +368,7 @@ def placeholder_bars(doc, R, skip_keys):
     H = R[3] - R[1]
     bars = []
     for p in doc.prims:
-        if p['key'][0] in skip_keys or p['k'] != 'path' or not bb_inter(p['bb'], R):
+        if _in(p['key'], skip_keys) or p['k'] != 'path' or not bb_inter(p['bb'], R):
             continue
         w, h = p['bb'][2] - p['bb'][0], p['bb'][3] - p['bb'][1]
         col = p.get('fill') if p.get('fill') is not None else p.get('stroke')
@@ -431,12 +516,11 @@ def palette_vars(root, doc):
 SHADE_SUFFIX = {-2: 'm2', -1: 'm1', 0: '0', 1: 'p1', 2: 'p2'}
 
 
-def item_tints(doc2, elmap, slots, vb):
+def item_tints(doc2, elmap, slots, vb, kind='Process', center=None):
     """항목별 색 — 같은 색상 계열로 그린 노드(파랑 3색 원 6개 등)도 '분야 6색'에서 항목마다 다른 분야 색을 받게 한다.
-    1) 항목 글자 자리들의 중심 = 항목 위치  2) 유채색 도형을 겹침으로 묶어 노드를 만들고, 큰 노드 N개(N = 항목 수)를
-    항목과 거리 합이 가장 작게 1:1 로 짝짓는다  3) 남은 작은 묶음(점·선 장식)은 가까운 노드를 따른다.
+    항목 위치 = 그 항목 글자 자리들의 중심. 유채색 도형마다 가장 가까운 항목을 찾되, 둘째 후보와 확실히 구분될 때만 배정한다.
+    방사형(허브·순환·협력)은 거리 대신 무게중심 기준 **각도**로 잰다(중심까지 뻗은 조각·꽃잎도 제 항목을 찾고, 중심 링은 뺀다).
     → ({요소: (항목, 밝기 단계)}, [{n, shades}])"""
-    import itertools
     anchors = {}
     for sl in slots:
         if sl.get('item', 0) > 0:
@@ -445,87 +529,63 @@ def item_tints(doc2, elmap, slots, vb):
         return {}, []
     cen = {n: ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for n, b in anchors.items()}
     sep = min(math.hypot(a[0] - b[0], a[1] - b[1]) for i, a in cen.items() for j, b in cen.items() if i < j)
-    cands = []
+    radial = kind in RADIAL
+    # 방사형의 기준점은 그림 자체의 중심(글자는 바깥에 몰려 있어 글자 무게중심은 치우친다)
+    if radial and center:
+        gx, gy = center
+    else:
+        gx = sum(c[0] for c in cen.values()) / len(cen)
+        gy = sum(c[1] for c in cen.values()) / len(cen)
+    ang = {n: math.atan2(c[1] - gy, c[0] - gx) for n, c in cen.items()}
+
+    def adiff(a, b):
+        d = abs(a - b) % (2 * math.pi)
+        return min(d, 2 * math.pi - d)
+
+    hits = {}
+    dbg = {'chroma': 0, 'big': 0, 'center': 0, 'ambig': 0}
     for p in doc2.prims:
         col = p.get('fill') if p.get('fill') is not None else p.get('stroke')
         if col is None or is_neutral(col, 0.2) or not bb_inter(p['bb'], vb) or p['key'] not in elmap:
             continue
+        dbg['chroma'] += 1
         b = p['bb']
-        if math.hypot(b[2] - b[0], b[3] - b[1]) > 1.2 * sep:  # 여러 항목에 걸친 큰 도형(중심 링·띠)은 무리 색 그대로
+        if math.hypot(b[2] - b[0], b[3] - b[1]) > 2.0 * sep:  # 여러 항목에 걸친 큰 도형(띠·판)은 무리 색 그대로
+            dbg['big'] += 1
             continue
-        cands.append((p, col))
-    if not cands:
-        return {}, []
-    # 겹치는 도형끼리 묶기(union-find)
-    tol = 0.005 * max(vb[2] - vb[0], vb[3] - vb[1])
-    parent = list(range(len(cands)))
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    for i in range(len(cands)):
-        bi = cands[i][0]['bb']
-        for j in range(i + 1, len(cands)):
-            bj = cands[j][0]['bb']
-            if bi[0] - tol <= bj[2] and bj[0] - tol <= bi[2] and bi[1] - tol <= bj[3] and bj[1] - tol <= bi[3]:
-                parent[find(i)] = find(j)
-    groups = {}
-    for i in range(len(cands)):
-        groups.setdefault(find(i), []).append(i)
-    clusters = []
-    for idx in groups.values():
-        bb = None
-        area = 0.0
-        for i in idx:
-            b = cands[i][0]['bb']
-            bb = bb_union(bb, b)
-            area += (b[2] - b[0]) * (b[3] - b[1])
-        clusters.append({'idx': idx, 'bb': bb, 'area': area, 'c': ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)})
-    clusters.sort(key=lambda c: -c['area'])
-    items = sorted(cen)
-    k = len(items)
-    if len(clusters) < k:
-        return {}, []
-    nodes = clusters[:k]
-    # 1:1 짝 — 8항목까지는 모든 순열, 그보다 많으면 가까운 것부터
-    dist = [[math.hypot(nd['c'][0] - cen[n][0], nd['c'][1] - cen[n][1]) for n in items] for nd in nodes]
-    if k <= 8:
-        best = min(itertools.permutations(range(k)), key=lambda perm: sum(dist[i][perm[i]] for i in range(k)))
-    else:
-        best, used = [None] * k, set()
-        for i, j in sorted(((i, j) for i in range(k) for j in range(k)), key=lambda t: dist[t[0]][t[1]]):
-            if best[i] is None and j not in used:
-                best[i] = j
-                used.add(j)
-    item_of = {}
-    for i, nd in enumerate(nodes):
-        nd['item'] = items[best[i]]
-        for ci in nd['idx']:
-            item_of[ci] = nd['item']
-    node_sep = min(math.hypot(a['c'][0] - b['c'][0], a['c'][1] - b['c'][1]) for a, b in itertools.combinations(nodes, 2))
-    for cl in clusters[k:]:
-        d, nd = min((math.hypot(cl['c'][0] - nd['c'][0], cl['c'][1] - nd['c'][1]), nd) for nd in nodes)
-        if d <= 0.6 * node_sep:
-            for ci in cl['idx']:
-                item_of[ci] = nd['item']
-    hits = {}
-    for ci, n in item_of.items():
-        p, col = cands[ci]
-        hits[elmap[p['key']]] = (n, rgb_hls(col)[1])
+        c = ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+        if radial:
+            far = max(((b[x], b[y]) for x in (0, 2) for y in (1, 3)), key=lambda q: math.hypot(q[0] - gx, q[1] - gy))
+            rc = math.hypot(far[0] - gx, far[1] - gy)
+            if math.hypot(c[0] - gx, c[1] - gy) < 0.2 * sep and rc < 0.6 * sep:  # 그림 중심 위 작은 도형(중심 링·판)
+                dbg['center'] += 1
+                continue
+            th = math.atan2(c[1] - gy, c[0] - gx)
+            ds = sorted((adiff(th, a), n) for n, a in ang.items())
+            if os.environ.get('AM_DEBUG') == '2':
+                print('    shape bb %s c %s far %s rc %.0f th %.0f ds %s' % ([round(v) for v in b], [round(v) for v in c], [round(v) for v in far], rc, math.degrees(th), [(round(math.degrees(d)), n) for d, n in ds]))
+            if len(ds) > 1 and ds[0][0] > 0.6 * ds[1][0]:
+                dbg['ambig'] += 1
+                continue
+        else:
+            ds = sorted((math.hypot(c[0] - a[0], c[1] - a[1]), n) for n, a in cen.items())
+            if len(ds) > 1 and ds[0][0] > 0.85 * ds[1][0]:
+                dbg['ambig'] += 1
+                continue
+        hits[elmap[p['key']]] = (ds[0][1], rgb_hls(col)[1])
     by_item = {}
     for n, l in hits.values():
         by_item.setdefault(n, []).append(l)
+    if os.environ.get('AM_DEBUG'):
+        print('  [tints] %s anchors %d sep %.0f %s items %s' % ('radial' if radial else 'linear', len(cen), sep, dbg, {n: len(v) for n, v in sorted(by_item.items())}))
     if len(by_item) < 2:
         return {}, []
     ref = {n: sorted(ls)[len(ls) // 2] for n, ls in by_item.items()}
     out, shades = {}, {}
     for el, (n, l) in hits.items():
-        s = max(-2, min(2, int(round((l - ref[n]) / 0.25))))
-        out[el] = (n, SHADE_SUFFIX[s])
-        shades.setdefault(n, set()).add(SHADE_SUFFIX[s])
+        k = max(-2, min(2, int(round((l - ref[n]) / 0.25))))
+        out[el] = (n, SHADE_SUFFIX[k])
+        shades.setdefault(n, set()).add(SHADE_SUFFIX[k])
     return out, [{'n': n, 'shades': sorted(v)} for n, v in sorted(shades.items())]
 
 
@@ -668,25 +728,28 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
     def lname(ch):
         return layer_name(ch.get('id', '')).lower()
 
-    text_layers = [(i, ch) for i, ch in layers if lname(ch) not in keep_names and (TEXT_LAYER.match(lname(ch)) or lname(ch) in text_names)]
     drop = [ch for _, ch in layers if lname(ch) not in keep_names and (BG_LAYER.match(lname(ch)) or lname(ch) in drop_names)]
-    text_keys = {i for i, _ in text_layers}
-    art = [p for p in doc.prims if p['key'][0] not in text_keys and bb_inter(p['bb'], R)
-           and not any(p['key'][0] == i for i, ch in layers if ch in drop)]
+    drop_prefixes = {(i,) for i, ch in layers if ch in drop}
+    stop_names = {lname(ch) for ch in drop}
+    text_layers = find_text_groups(root, text_names, keep_names, stop_names)
+    text_keys = {k for k, _, _ in text_layers}  # 글자 그룹 키 접두사
+    skip_prefixes = text_keys | drop_prefixes
+    art = [p for p in doc.prims if not _in(p['key'], skip_prefixes) and bb_inter(p['bb'], R)]
     art_bb = None
     for p in art:
         art_bb = bb_union(art_bb, bb_inter(p['bb'], R))
     art_bb = art_bb or R
     notes = []
+    extra_remove = []
     if text_layers:
-        slots, n2 = text_slots(doc, text_layers, R, kind, art_bb)
+        slots, n2, extra_remove = text_slots(doc, text_layers, R, kind, art_bb)
         notes += n2
         fallback_keys = set()
     else:
         slots, fallback_keys = fallback_slots(doc, R)
         notes.append('글자 레이어가 없어 윤곽선 글자를 추정으로 찾음 — 자리를 관리 화면에서 확인')
     # 설명 자리 표시 막대 → 설명 자리(가장 가까운 제목의 항목)
-    bar_blocks, bar_keys = placeholder_bars(doc, R, text_keys | {i for i, ch in layers if ch in drop})
+    bar_blocks, bar_keys = placeholder_bars(doc, R, skip_prefixes)
     for b in bar_blocks:
         bx, by = (b['bb'][0] + b['bb'][2]) / 2, (b['bb'][1] + b['bb'][3]) / 2
         near = min((s for s in slots if s['role'] == 'title'), default=None,
@@ -697,8 +760,8 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
         slots.sort(key=lambda s: (s['item'] or 99, ROLE_ORDER.index(s['role']), s['bb'][1]))
         notes.append('설명 자리 표시 막대 %d묶음을 설명 자리로 바꿈' % len(bar_blocks))
     # 글자 자리 아래 도형 색(그리는 순서상 맨 위 채움) — 앱이 바꿔 칠한 뒤 글자 대비를 잰다
-    drop_idx = {i for i, ch in layers if ch in drop}
-    under = [p for p in doc.prims if p['key'][0] not in text_keys and p['key'][0] not in drop_idx and p['key'] not in bar_keys
+    text_only = {k for k, _, forced in text_layers if not forced} | drop_prefixes
+    under = [p for p in doc.prims if not _in(p['key'], text_only) and p['key'] not in bar_keys
              and (p.get('fill') is not None or p.get('fill_url')) and not p.get('masked') and bb_inter(p['bb'], R)]
     for sl in slots:
         cx, cy = (sl['bb'][0] + sl['bb'][2]) / 2, (sl['bb'][1] + sl['bb'][3]) / 2
@@ -710,7 +773,7 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
         if hit is not None and hit.get('fill') is not None and not hit.get('fill_url'):  # 그라데이션 위면 모른다
             sl['bg'] = rgb_to_hex(hit['fill'])
     parent = _parents(root)
-    remove = [ch for _, ch in text_layers] + drop
+    remove = [el for _, el, forced in text_layers if not forced] + extra_remove + drop
     for k in fallback_keys | bar_keys:  # 키 → 요소(최상위부터 순번으로 내려간다)
         el = _el_at(root, k)
         if el is not None and el is not root:
@@ -723,7 +786,7 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
         b = p['bb']
         area = (b[2] - b[0]) * (b[3] - b[1])
         hit = bb_inter(b, R)
-        if hit is None or p['key'][0] in text_keys:
+        if hit is None or _in(p['key'], text_keys):
             continue
         cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
         boxed = any(x0 <= cx <= x1 and y0 <= cy <= y1 for x0, y0, x1, y1 in boxes)
@@ -776,7 +839,7 @@ def export_region(reg, review, svg_in, out_dir, opts, log):
     if n_bg:
         notes.append('판 배경 %d개를 지움' % n_bg)
     pal = palette_vars(root, doc2)
-    tint_map, tints = item_tints(doc2, elmap, slots, vb)
+    tint_map, tints = item_tints(doc2, elmap, slots, vb, kind, ((art_bb[0] + art_bb[2]) / 2, (art_bb[1] + art_bb[3]) / 2))
     if tints:
         notes.append('항목별 색 %d항목(도형 %d개)' % (len(tints), len(tint_map)))
     apply_vars(root, pal, tint_map)

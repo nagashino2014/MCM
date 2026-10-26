@@ -163,6 +163,8 @@ export interface SalesProject {
   leadMemberName?: string | null;
   /** 이 영업건에 등록된 활동유형 집합(진행단계 태그용) */
   activityTypes?: SalesActivityType[];
+  /** 수주·실주로 끝난 건의 결과 스케쥴 날짜(YYYY-MM-DD) — Salesboard KPI '올해' 판정용. 그 외 null/미지정 */
+  outcomeAt?: string | null;
 }
 
 export interface SalesActivityContact {

@@ -146,6 +146,12 @@ async function attachStepTypes(
       .sort((a, b) => (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1))
       .map(([t]) => t);
     p.stage = computeStage(acts);
+    // 수주·실주 확정일 — Salesboard KPI의 '올해' 판정용. computeStage 와 같은 결과 스케쥴(첫 result)의 날짜.
+    if (p.stage === "won" || p.stage === "lost") {
+      const r = acts.find((a) => String(a.activity_type) === "result");
+      const at = r ? String(r.scheduled_at ?? r.occurred_at ?? r.ended_at ?? r.created_at ?? "") : "";
+      p.outcomeAt = at ? at.slice(0, 10) : null;
+    }
   }
 }
 

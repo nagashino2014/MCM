@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlarmClock, Briefcase, CalendarClock, ClipboardList, Plus, Search, Siren, X,
+  AlarmClock, Briefcase, CalendarClock, ClipboardList, Percent, Plus, Search, Siren, Sparkles, Trophy, Workflow, X,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
@@ -69,6 +69,29 @@ const CATEGORY_TAGS: { id: string; label: string }[] = [
 ];
 const projectCategoryId = (p: SalesProject) => p.serviceCategory ?? CATEGORY_UNSET;
 
+// 상단 KPI 띠(2026-10-26) — 목록 응답(가시성 scope 적용됨)과 탭 패널 응답에서만 파생한다. 새 API 없음.
+// 목록 필터(검색·담당·연도·태그)와 무관하게 '보이는 영업건 전체' 기준이다. 날짜 판정은 KST.
+// 칸을 누르면 목록 필터로 걸린다(KpiFilter). 투찰 예정 칸은 필터 대신 왼쪽 [투찰 임박] 탭을 연다.
+type KpiFilter = "active" | "new" | "won" | "lost" | "outcome";
+const KPI_FILTER_LABELS: Record<KpiFilter, string> = {
+  active: "진행 중",
+  new: "이번 달 신규",
+  won: "올해 수주",
+  lost: "올해 실주",
+  outcome: "올해 결과",
+};
+const kstNow = () => new Date(Date.now() + 9 * 3600000).toISOString();
+const isActiveProject = (p: SalesProject) => p.status !== "closed" && p.stage !== "won" && p.stage !== "lost";
+const openedMonth = (p: SalesProject) => (p.openedAt ?? p.createdAt ?? "").slice(0, 7);
+// 결과 확정 연도 — 결과 스케쥴 날짜, 없으면(스케쥴 없이 단계만 저장된 옛 건) 종료일·시작일.
+const outcomeYear = (p: SalesProject) => (p.outcomeAt ?? p.closedAt ?? p.openedAt ?? "").slice(0, 4);
+const daysUntil = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
+};
+
 interface FacilityOption {
   facilityId: string;
   companyName: string;
@@ -132,6 +155,8 @@ export function SalesBoard() {
   // 태그 필터(다중 선택) — 비어 있으면 그 그룹은 제한 없음
   const [regionIds, setRegionIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  // KPI 칸 클릭 필터(하나만) — 같은 칸을 다시 누르면 해제
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -205,16 +230,62 @@ export function SalesBoard() {
     [projects]
   );
 
-  // 상단 필터(검색·담당·연도)만 적용한 모집단. 태그 건수는 여기서 "다른 그룹 선택"까지 적용해 센다.
+  // KPI 값 — 목록 필터와 무관하게 보이는 영업건 전체 기준.
+  const kpi = useMemo(() => {
+    const now = kstNow();
+    const thisYear = now.slice(0, 4);
+    const thisMonth = now.slice(0, 7);
+    const prev = new Date(Date.UTC(Number(thisYear), Number(now.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+    const active = projects.filter(isActiveProject);
+    const byStage = (st: SalesStage) => active.filter((p) => p.stage === st).length;
+    const won = projects.filter((p) => p.stage === "won" && outcomeYear(p) === thisYear).length;
+    const lost = projects.filter((p) => p.stage === "lost" && outcomeYear(p) === thisYear).length;
+    const nearest = upcomingBids.reduce<number | null>((m, b) => {
+      const n = daysUntil(b.bidEnd);
+      return m == null || n < m ? n : m;
+    }, null);
+    return {
+      thisYear,
+      thisMonth,
+      active: active.length,
+      // 보류는 있을 때만 덧붙여 내역 합이 진행 중 건수와 맞게 한다.
+      activeBreakdown:
+        `리드 ${byStage("lead")} · 컨택 ${byStage("contact")} · 제안 ${byStage("proposal")} · 입찰 ${byStage("bidding")}` +
+        (byStage("hold") > 0 ? ` · 보류 ${byStage("hold")}` : ""),
+      newThisMonth: projects.filter((p) => openedMonth(p) === thisMonth).length,
+      newPrevMonth: projects.filter((p) => openedMonth(p) === prev).length,
+      bids: upcomingBids.length,
+      nearestBid: nearest,
+      won,
+      lost,
+      winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null,
+    };
+  }, [projects, upcomingBids]);
+
+  const matchKpi = (p: SalesProject) => {
+    switch (kpiFilter) {
+      case "active": return isActiveProject(p);
+      case "new": return openedMonth(p) === kpi.thisMonth;
+      case "won": return p.stage === "won" && outcomeYear(p) === kpi.thisYear;
+      case "lost": return p.stage === "lost" && outcomeYear(p) === kpi.thisYear;
+      case "outcome": return (p.stage === "won" || p.stage === "lost") && outcomeYear(p) === kpi.thisYear;
+      default: return true;
+    }
+  };
+  const toggleKpi = (k: KpiFilter) => setKpiFilter((cur) => (cur === k ? null : k));
+
+  // 상단 필터(검색·담당·연도)와 KPI 칸 필터를 적용한 모집단. 태그 건수는 여기서 "다른 그룹 선택"까지 적용해 센다.
   const baseFiltered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return projects.filter((p) => {
       if (s && !(p.title.toLowerCase().includes(s) || (p.facilityName ?? "").toLowerCase().includes(s))) return false;
       if (owner && p.ownerEmployeeId !== owner && p.leadMemberId !== owner) return false;
       if (year && (p.openedAt ?? "").slice(0, 4) !== year) return false;
+      if (!matchKpi(p)) return false;
       return true;
     });
-  }, [projects, q, owner, year]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, q, owner, year, kpiFilter, kpi.thisYear, kpi.thisMonth]);
 
   const regionOf = (p: SalesProject) => salesRegionGroupId(p.regionSido);
   const matchRegion = (p: SalesProject) => regionIds.length === 0 || regionIds.includes(regionOf(p));
@@ -243,13 +314,14 @@ export function SalesBoard() {
   const toggleIn = (set: (f: (prev: string[]) => string[]) => void, id: string) =>
     set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const hasFilter = !!(q || owner || year || regionIds.length || categoryIds.length);
+  const hasFilter = !!(q || owner || year || regionIds.length || categoryIds.length || kpiFilter);
   const clearFilters = () => {
     setQ("");
     setOwner("");
     setYear("");
     setRegionIds([]);
     setCategoryIds([]);
+    setKpiFilter(null);
   };
 
   // 목록 쪽 나눔(공용 useClientPaging, 10-21 규칙). 필터가 바뀌면 첫 쪽으로.
@@ -257,7 +329,7 @@ export function SalesBoard() {
   useEffect(() => {
     resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, owner, year, regionIds, categoryIds]);
+  }, [q, owner, year, regionIds, categoryIds, kpiFilter]);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -277,6 +349,15 @@ export function SalesBoard() {
       />
 
       {error && <div className="cd-error-bg cd-error-text rounded-xl px-4 py-3 text-sm mb-3">{error}</div>}
+
+      {/* 상단 KPI 띠 — 5칸. 칸을 누르면 아래 목록이 그 조건으로 걸린다(투찰 예정은 왼쪽 탭 열기) */}
+      <KpiStrip
+        kpi={kpi}
+        loading={loading}
+        active={kpiFilter}
+        onToggle={toggleKpi}
+        onOpenBids={() => pickTab("bids")}
+      />
 
       <div className="flex gap-3 items-stretch flex-wrap">
         {/* 좌: 탭 패널 */}
@@ -316,6 +397,14 @@ export function SalesBoard() {
                 <option value="">연도 전체</option>
                 {years.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
+            )}
+            {kpiFilter && (
+              <span className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                {KPI_FILTER_LABELS[kpiFilter]}
+                <button type="button" onClick={() => setKpiFilter(null)} aria-label={`${KPI_FILTER_LABELS[kpiFilter]} 필터 해제`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
             )}
             {hasFilter && (
               <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={clearFilters}>
@@ -504,6 +593,132 @@ function SalesTabPanel({
           )
         )}
       </div>
+    </div>
+  );
+}
+
+// 상단 KPI 띠 — 숫자는 텍스트 색(cd-text), 아이콘만 칸별 색. 상태색(수주·실주)은 라벨과 함께 쓴다.
+// 칸은 무광 카드 + 1px 경계(UI Precision), 선택된 칸은 경계만 primary.
+interface KpiValues {
+  thisYear: string;
+  active: number;
+  activeBreakdown: string;
+  newThisMonth: number;
+  newPrevMonth: number;
+  bids: number;
+  nearestBid: number | null;
+  won: number;
+  lost: number;
+  winRate: number | null;
+}
+
+function KpiStrip({
+  kpi,
+  loading,
+  active,
+  onToggle,
+  onOpenBids,
+}: {
+  kpi: KpiValues;
+  loading: boolean;
+  active: KpiFilter | null;
+  onToggle: (k: KpiFilter) => void;
+  onOpenBids: () => void;
+}) {
+  const v = (n: number | string) => (loading ? "—" : n);
+  const tileCls = "cd-card-bg rounded-2xl border cd-border-c min-w-0";
+  const tileStyle = (on: boolean) => (on ? { borderColor: "var(--cd-primary)" } : undefined);
+  const btnCls = "cd-row-hover w-full h-full text-left rounded-2xl px-3 py-2 flex items-center gap-3 min-w-0";
+  const head = (Icon: typeof Workflow, color: string, label: string) => (
+    <>
+      <span
+        className="w-6 h-6 rounded-md inline-flex items-center justify-center shrink-0"
+        style={{ background: `color-mix(in srgb, ${color} 14%, var(--cd-card))`, color }}
+      >
+        <Icon className="w-3.5 h-3.5" />
+      </span>
+      <span className="cd-text-muted text-[11.5px] font-bold truncate">{label}</span>
+    </>
+  );
+  const valueRow = (value: ReactNode, sub: string) => (
+    <span className="flex items-baseline gap-2 min-w-0">
+      <span className="cd-text text-xl font-extrabold tabular-nums leading-none">{value}</span>
+      {/* 좁은 화면에서 말줄임되면 마우스를 올려 전체를 본다 */}
+      <span className="cd-text-faint text-[11px] truncate" title={sub}>{sub}</span>
+    </span>
+  );
+  const simple = (
+    key: KpiFilter,
+    Icon: typeof Workflow,
+    color: string,
+    label: string,
+    value: ReactNode,
+    sub: string,
+    title: string
+  ) => (
+    <div className={tileCls} style={tileStyle(active === key)}>
+      <button type="button" className={btnCls} aria-pressed={active === key} title={title} onClick={() => onToggle(key)}>
+        <span className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <span className="flex items-center gap-2 min-w-0">{head(Icon, color, label)}</span>
+          {valueRow(value, sub)}
+        </span>
+      </button>
+    </div>
+  );
+  const pillBtn = (key: KpiFilter, label: string, n: number, color: string) => (
+    <button
+      type="button"
+      className="cd-row-hover rounded-lg px-1.5 py-0.5 inline-flex items-baseline gap-1.5"
+      style={active === key ? { boxShadow: "inset 0 0 0 1px var(--cd-primary)" } : undefined}
+      aria-pressed={active === key}
+      title={`올해 ${label} 영업건만 목록에 보기`}
+      onClick={() => onToggle(key)}
+    >
+      <span className="w-2 h-2 rounded-full self-center" style={{ background: color }} />
+      <span className="cd-text-muted text-[11.5px] font-bold">{label}</span>
+      <span className="cd-text text-xl font-extrabold tabular-nums leading-none">{v(n)}</span>
+    </button>
+  );
+
+  return (
+    <div className="grid gap-3 mb-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5" role="group" aria-label="영업 핵심 지표">
+      {simple("active", Workflow, "var(--cd-primary)", "진행 중 영업건", v(kpi.active), kpi.activeBreakdown, "수주·실주가 아닌 영업건만 목록에 보기")}
+      {simple(
+        "new",
+        Sparkles,
+        "var(--cd-secondary)",
+        "이번 달 신규",
+        v(kpi.newThisMonth),
+        `지난달 ${kpi.newPrevMonth}건`,
+        "이번 달에 시작한 영업건만 목록에 보기"
+      )}
+      <div className={tileCls}>
+        <button type="button" className={btnCls} title="왼쪽 투찰 임박 탭 열기" onClick={onOpenBids}>
+          <span className="flex flex-col gap-1.5 min-w-0 flex-1">
+            <span className="flex items-center gap-2 min-w-0">{head(AlarmClock, "var(--cd-error)", "투찰 예정 (14일)")}</span>
+            {valueRow(
+              v(kpi.bids),
+              kpi.nearestBid == null ? "예정 없음" : `가장 가까운 ${kpi.nearestBid <= 0 ? "D-DAY" : `D-${kpi.nearestBid}`}`
+            )}
+          </span>
+        </button>
+      </div>
+      <div className={`${tileCls} px-3 py-2 flex flex-col gap-1.5`} style={tileStyle(active === "won" || active === "lost")}>
+        <span className="flex items-center gap-2 min-w-0">{head(Trophy, "var(--cd-success)", `${kpi.thisYear}년 수주 / 실주`)}</span>
+        <span className="flex items-center gap-1 flex-wrap -ml-1.5">
+          {pillBtn("won", "수주", kpi.won, "var(--cd-success)")}
+          {pillBtn("lost", "실주", kpi.lost, "var(--cd-error)")}
+        </span>
+      </div>
+      {simple(
+        "outcome",
+        Percent,
+        "var(--cd-warning)",
+        `${kpi.thisYear}년 수주율`,
+        loading || kpi.winRate == null ? "—" : `${kpi.winRate}%`,
+        kpi.won + kpi.lost > 0 ? `수주 ${kpi.won} ÷ 결과 ${kpi.won + kpi.lost}건` : "올해 결과 없음",
+        "올해 수주·실주로 끝난 영업건만 목록에 보기"
+      )}
     </div>
   );
 }

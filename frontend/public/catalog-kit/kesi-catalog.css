@@ -474,6 +474,13 @@
 .kc-orbit__dot { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50% 0 50% 50%; background: var(--area); color: var(--on-area);
   font-family: var(--kc-font-figure); font-size: 9px; font-weight: 700; margin-bottom: 2px; }
 .kc-motif--ring .kc-orbit__dot, .kc-motif--contour .kc-orbit__dot { border-radius: 50%; }
+/* 일러스트 모양(313 보유 스톡 일러스트) — 그림은 벡터 SVG, 글자는 자리마다 HTML(검색·복사). 자리는 줄 수만큼 높이를 갖고 넘치면 잘려 넘침 검사에 걸린다 */
+.kc-ill { position: relative; }
+.kc-ill__art { position: absolute; inset: 0; }
+.kc-ill__art > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.kc-ill__slot { position: absolute; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; letter-spacing: -0.01em; }
+.kc-ill__slot--number { font-family: var(--kc-font-figure, inherit); font-variant-numeric: tabular-nums; }
+.kc-ill--missing { display: grid; place-items: center; border: 1px dashed var(--rule); background: var(--canvas); }
 .kc-orbit__card { position: absolute; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); border-top: 3px solid var(--area); }
 
 /* pillars 기둥 */

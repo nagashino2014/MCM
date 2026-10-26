@@ -2,6 +2,7 @@
 
 // 스튜디오 A4 캔버스 — 쪽 하나를 iframe 안에 그대로(PDF 와 같은 CSS) 그리고 그 위에서 고른다·고친다·옮긴다.
 //   글 블록: 바로 눌러 고친다(contentEditable). 지표 값·아이콘·쪽 번호 링크는 칩(고칠 수 없음, 지울 수는 있음)
+//     Ctrl+K = 지표 넣기(커서 자리), 글을 고치지 않은 채 Ctrl+Z/Y = 스튜디오 실행 취소/다시(칩 넣기 되돌리기)
 //   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 오른쪽·아래·모서리 손잡이로 크기 — 12열 그리드·4pt 기준선에 맞춘다(L3 쪽만)
 //   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt), Delete = 숨기기, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
 //   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도(주황)
@@ -26,9 +27,9 @@ import {
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { COL_STEP, COL_W, COLUMNS, CONTENT_W, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_X, PAGE_H, PAGE_W, snapWidth, snapX, snapY } from "@/lib/catalog/studio/design-system";
-import { collectChips, fromEditableDom, toEditableHtml } from "@/lib/catalog/studio/inline";
+import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, toEditableHtml } from "@/lib/catalog/studio/inline";
 import { stripDerived } from "@/lib/catalog/studio/edits";
-import { isChip, type CNode } from "@/lib/catalog/studio/nodes";
+import { findNode, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { nodeProps, renderNode, resolvedChildren, type TreeEnv } from "@/lib/catalog/studio/render-tree";
 import { capabilities, isTextBlock, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
 import type { DomLike } from "@/lib/doc-tree/inline-core";
@@ -39,6 +40,18 @@ import type { StudioKit } from "./kit";
 export interface CanvasHandle {
   /** 방향키 옮기기(가로 = 열, 세로 = 4pt) */
   nudge: (dx: -1 | 0 | 1, dy: number) => void;
+  /** 지표 넣기 자리 — 고치는 중인 글이면 커서 자리, 아니면 고른 글 끝. 글 블록이 아니면 null */
+  captureBind: () => BindTarget | null;
+  /** 넣은 칩 뒤로 커서를 옮겨 이어서 고치게 한다 */
+  focusChip: (blockId: string, chipId: string) => void;
+}
+
+/** 지표 넣기 대상 — 글 블록 id 와 표식(caret)이 든 자식 */
+export interface BindTarget {
+  blockId: string;
+  children: CNode[];
+  /** 커서 자리에서 열었는지(아니면 글 끝) */
+  atCaret: boolean;
 }
 
 interface Rect {
@@ -90,8 +103,10 @@ export function StudioCanvas({
   checks,
   onSelect,
   onCommitText,
+  onCommitSlot,
   onPatchStyle,
   onKeyCommand,
+  onRequestBind,
   onChecks,
   handleRef,
 }: {
@@ -108,9 +123,13 @@ export function StudioCanvas({
   checks: CheckItem[];
   onSelect: (id: string | null) => void;
   onCommitText: (id: string, children: CNode[]) => void;
+  /** 일러스트 글자 자리(313) 고치기 — 평문 → 그 인포그래픽 내용 */
+  onCommitSlot?: (slotNodeId: string, text: string) => void;
   onPatchStyle: (id: string, patch: Record<string, string>) => void;
   /** 캔버스에서 누른 단축키(실행 취소 등) — 처리하면 true */
   onKeyCommand: (key: string, e: KeyboardEvent) => boolean;
+  /** 글 고치는 중 Ctrl+K — 지표 넣기 창을 연다 */
+  onRequestBind?: (target: BindTarget) => void;
   onChecks: (items: CheckItem[]) => void;
   handleRef?: MutableRefObject<CanvasHandle | null>;
 }) {
@@ -145,13 +164,35 @@ export function StudioCanvas({
     [env]
   );
 
+  // 글을 친 뒤 아직 반영(blur)하지 않은 블록 — 이때 Ctrl+Z 는 브라우저 기본(글 안 되돌리기)
+  const dirtyRef = useRef(new Set<string>());
+
   const commitBlock = useCallback(
     (n: CNode, el: HTMLElement) => {
+      dirtyRef.current.delete(n.id);
       const next = fromEditableDom(el as unknown as DomLike, collectChips(n.children ?? []));
       if (!sameJson(noIds(next), noIds(n.children ?? []))) onCommitText(n.id, next);
     },
     [onCommitText]
   );
+
+  // 커서 자리에 표식을 잠깐 넣고 역파싱 → 표식 노드가 든 자식(지표를 고르면 표식을 칩으로 바꾼다)
+  const captureAt = useCallback((n: CNode, el: HTMLElement | null): BindTarget => {
+    const doc = el?.ownerDocument;
+    const s = doc?.getSelection();
+    const range = el && doc && doc.activeElement === el && s && s.rangeCount && el.contains(s.getRangeAt(0).endContainer) ? s.getRangeAt(0).cloneRange() : null;
+    if (!el || !doc || !range) return { blockId: n.id, children: appendCaret(n.children ?? []), atCaret: false };
+    range.collapse(false);
+    const mark = doc.createElement("span");
+    mark.setAttribute("data-chip", CARET_ID);
+    range.insertNode(mark);
+    const chips = collectChips(n.children ?? []);
+    chips.set(CARET_ID, caretNode());
+    const children = fromEditableDom(el as unknown as DomLike, chips);
+    mark.remove();
+    el.normalize();
+    return { blockId: n.id, children, atCaret: true };
+  }, []);
 
   const content = useMemo(() => {
     const hooks = {
@@ -161,6 +202,39 @@ export function StudioCanvas({
         return out;
       },
       override: (n: CNode): ReactNode | undefined => {
+        // 일러스트 글자 자리 — 바로 눌러 고친다(평문, 지표에 묶은 숫자는 칩이라 고치지 않음)
+        if (onCommitSlot && maxLevel >= 2 && n.attrs && "data-ill-slot" in n.attrs && !(function hasBind(x: CNode): boolean { return Boolean(x.bind) || (x.children ?? []).some(hasBind); })(n)) {
+          const role = String(n.attrs["data-ill-role"] ?? "");
+          const multi = role === "desc" || role === "center";
+          const text = textOf(n);
+          return createElement(n.tag, {
+            ...nodeProps(n, env),
+            "data-cn": n.id,
+            "data-st-edit": "1",
+            contentEditable: true,
+            suppressContentEditableWarning: true,
+            spellCheck: false,
+            dangerouslySetInnerHTML: { __html: text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>") },
+            onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
+              if (e.key === "Enter" && multi && role === "center") {
+                e.preventDefault();
+                e.currentTarget.ownerDocument.execCommand("insertLineBreak");
+              } else if (e.key === "Enter" || e.key === "Escape") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            },
+            onPaste: (e: RClipboardEvent<HTMLElement>) => {
+              e.preventDefault();
+              e.currentTarget.ownerDocument.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+            },
+            onFocus: () => onSelect(n.id),
+            onBlur: (e: RFocusEvent<HTMLElement>) => {
+              const next = e.currentTarget.innerText;
+              if (next.trim() !== text.trim()) onCommitSlot(n.id, next);
+            },
+          });
+        }
         if (n.attrs && "data-folio" in n.attrs && !textBlocks.has(n.id)) {
           return createElement(n.tag, { ...nodeProps(n, env), "data-cn": n.id }, pad2(folio));
         }
@@ -176,7 +250,15 @@ export function StudioCanvas({
           dangerouslySetInnerHTML: { __html: toEditableHtml(kids, (c) => (isChip(c) ? chipHtml(c) : "")) },
           onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
             const d = e.currentTarget.ownerDocument;
-            if (e.key === "Enter") {
+            const mod = e.ctrlKey || e.metaKey;
+            if (mod && !e.altKey && e.code === "KeyK" && onRequestBind) {
+              e.preventDefault();
+              onRequestBind(captureAt(n, e.currentTarget));
+            } else if (mod && !e.altKey && (e.code === "KeyZ" || e.code === "KeyY") && !dirtyRef.current.has(n.id)) {
+              // 친 글이 없으면 스튜디오 실행 취소(칩 넣기·글 반영 되돌리기)
+              e.preventDefault();
+              onKeyCommand(e.code === "KeyZ" ? "z" : "y", e.nativeEvent);
+            } else if (e.key === "Enter") {
               e.preventDefault();
               d.execCommand("insertLineBreak");
             } else if (e.key === "Escape") {
@@ -187,13 +269,14 @@ export function StudioCanvas({
             e.preventDefault();
             e.currentTarget.ownerDocument.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
           },
+          onInput: () => dirtyRef.current.add(n.id),
           onFocus: () => onSelect(n.id),
           onBlur: (e: RFocusEvent<HTMLElement>) => commitBlock(n, e.currentTarget),
         });
       },
     };
     return renderNode(tree, env, hooks);
-  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect]);
+  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect, captureAt, onRequestBind, onKeyCommand, onCommitSlot, maxLevel]);
 
   const sheetEl = useCallback(() => (scaleRef.current?.querySelector(".pk-sheet") as HTMLElement | null) ?? null, []);
   const elOf = useCallback((id: string | null) => (id && frame ? (frame.doc.querySelector(`[data-cn="${CSS.escape(id)}"]`) as HTMLElement | null) : null), [frame]);
@@ -355,8 +438,29 @@ export function StudioCanvas({
         const dx = dir === 0 ? 0 : dir * COL_STEP;
         commitMove(selectedId, el, rect, readCs(el, frame.win), dx, dy);
       },
+      captureBind: () => {
+        const active = frame?.doc.activeElement as HTMLElement | null;
+        const editing = (active?.closest?.("[data-st-edit]") as HTMLElement | null) ?? null;
+        const id = editing?.getAttribute("data-cn") ?? selectedId;
+        const n = id && textBlocks.has(id) ? findNode(tree, id) : null;
+        if (!n) return null;
+        return captureAt(n, editing && editing.getAttribute("data-cn") === n.id ? editing : null);
+      },
+      focusChip: (blockId, chipId) => {
+        const el = elOf(blockId);
+        if (!el || !frame) return;
+        const chip = el.querySelector(`[data-chip="${CSS.escape(chipId)}"]`);
+        el.focus();
+        const r = frame.doc.createRange();
+        if (chip) r.setStartAfter(chip);
+        else r.selectNodeContents(el);
+        r.collapse(Boolean(chip));
+        const s = frame.doc.getSelection();
+        s?.removeAllRanges();
+        s?.addRange(r);
+      },
     };
-  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove]);
+  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt]);
 
   // iframe 안의 단축키 → 화면 쪽 처리기
   useEffect(() => {

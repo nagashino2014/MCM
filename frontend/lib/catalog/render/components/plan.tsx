@@ -134,11 +134,14 @@ export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: Co
   if (data.credentials.length) add("c16", "C16", "인증·등록·특허", "05", <CredentialsPage ctx={ctx} data={data} />, { maxLevel: 2 });
   if (data.clients.length) add("c17", "C17", "주요 고객사·협력 기관", "05", <ClientsPage ctx={ctx} data={data} />, { maxLevel: 2 });
   add("c18", "C18", "오시는 길", "06", <ContactPage ctx={ctx} data={data} />);
-  add("a01", "A01", "부록 A 수행실적 총괄", "부록", <SummaryPage ctx={ctx} data={data} />, { maxLevel: 1 });
-  appendixSections.forEach(({ sec, area }) =>
-    add(`a02-${area.index}`, "A02", `부록 B ${area.name}`, "부록", <ProjectListPage ctx={ctx} data={data} area={area} sec={sec} />, { maxLevel: 1, flow: true })
-  );
-  if (ctx.opts.naming === "real" && data.people.length) add("a03", "A03", "부록 C 수행인력 상세 이력", "부록", <PeopleDetailPage ctx={ctx} data={data} />, { maxLevel: 1, flow: true });
+  // 요약본(P7 판 옵션)은 부록을 통째로 뺀다 — 목차의 부록 줄은 쪽을 못 찾으면 숨는다(data-ref-missing="hide")
+  if (ctx.opts.scope !== "summary") {
+    add("a01", "A01", "부록 A 수행실적 총괄", "부록", <SummaryPage ctx={ctx} data={data} />, { maxLevel: 1 });
+    appendixSections.forEach(({ sec, area }) =>
+      add(`a02-${area.index}`, "A02", `부록 B ${area.name}`, "부록", <ProjectListPage ctx={ctx} data={data} area={area} sec={sec} />, { maxLevel: 1, flow: true })
+    );
+    if (ctx.opts.naming === "real" && data.people.length) add("a03", "A03", "부록 C 수행인력 상세 이력", "부록", <PeopleDetailPage ctx={ctx} data={data} />, { maxLevel: 1, flow: true });
+  }
   add("c19", "C19", "뒤표지", "", <BackCoverPage ctx={ctx} data={data} />);
   return out;
 }

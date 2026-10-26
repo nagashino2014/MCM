@@ -6,9 +6,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET: 회사소개서 미리보기 이미지 — 렌더러 이미지 키(a/자산 · c/증빙 · e/인사 사진)를 바이트로. PDF 는 같은 키를 converter 에 직접 넘긴다.
+// 스튜디오·HTML 미리보기(관리 화면) 전용 — catalog.view 가 전 직원에게 열려(312) 인사 사진이 새지 않게 catalog.manage 로 가린다.
 export async function GET(req: NextRequest) {
   try {
-    await requirePermission("catalog.view");
+    await requirePermission("catalog.manage");
     const key = req.nextUrl.searchParams.get("key") ?? "";
     if (!/^[ace]\/[A-Za-z0-9_\-]{1,80}$/.test(key)) return NextResponse.json({ error: "잘못된 이미지 키입니다." }, { status: 400 });
     const hit = await loadImageKey(key);

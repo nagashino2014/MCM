@@ -20,7 +20,7 @@ import { REGION_GROUPS, REGION_UNKNOWN } from "@/lib/catalog/regions";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit";
 import { getCompanyProfile, listCredentials, listHistory } from "@/lib/company/profile";
 import { AREA_DISPLAY_NAME, CLIENT_GROUP_LABEL, MATRIX_DESC, OFFICE_CONTENT, VISION_CONTENT } from "./master-content";
-import { initialOf, maskName, maskNamesIn } from "./masking";
+import { initialOf, maskNamesIn, nameMasker } from "./masking";
 import type {
   AreaInfo,
   CustomAreaInfo,
@@ -212,7 +212,6 @@ export interface LoadOptions extends RenderOptions {
 export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRenderData> {
   const docId = o.docId ?? MASTER_DOC_ID;
   const masked = o.naming === "masked";
-  const nm = (name: string) => (masked ? maskName(name) : name);
   const db = await getDb();
   const asOf = kstToday();
   const nowYear = Number(asOf.slice(0, 4));
@@ -236,6 +235,9 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       db.exec("SELECT name, display_name FROM catalog_business_areas WHERE is_active = 1 AND content IS NULL"),
       listCustomAreas(),
     ]);
+  // 마스킹판도 대표이사는 실명·사진(사용자 결정 2026-10-26) — 회사 프로필 대표자·인사말 서명·직위 '대표이사' 재직자
+  const ceoNames = [profile.ceoName, ceoMsg?.signName ?? "", ...people.filter((p) => p.positionName === "대표이사").map((p) => p.name)];
+  const { nm, maskList } = nameMasker(masked, ceoNames);
   const metricsBundle = await computeCatalogMetrics({ projects, people, extraPeople: extras });
   const metrics = Object.fromEntries(metricsBundle.metrics.map((m) => [m.id, m])) as Record<MetricId, MetricValue>;
   const notices: string[] = [];
@@ -335,7 +337,9 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   // ── 사람 ──
   const shownPeople = people.filter((p) => p.shown);
   const hr = await loadHrDetails(people.map((p) => p.employeeId));
-  const photoKey = (p: CatalogPerson) => (!p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null);
+  // 마스킹판은 대표이사 말고는 사람 사진을 모두 뺀다(블루프린트 §6-6 — 이름 가리기와 함께 쪽마다 다르지 않게 일괄 적용, 사진 자리는 이니셜)
+  const photoKey = (p: CatalogPerson) =>
+    (masked && p.positionName !== "대표이사") || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
   const ceoPerson = people.find((p) => p.positionName === "대표이사") ?? null;
   const toLeader = (p: CatalogPerson): LeaderCard => {
     const d = hr.get(p.employeeId);
@@ -365,7 +369,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         name: nm(x.name),
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
-        photo: x.photoAssetId ? `a/${x.photoAssetId}` : null,
+        photo: !masked && x.photoAssetId ? `a/${x.photoAssetId}` : null,
         edu: "",
         cert: "",
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),
@@ -478,7 +482,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     orgChart = await buildOrgChartFromMaster();
     notices.push("조직도 확정판이 없어 MCM 조직 마스터에서 만든 기본안으로 그렸습니다(회사소개서 > 조직도에서 확정).");
   }
-  if (masked) orgChart = maskOrg(orgChart, [...people.map((p) => p.name), ...extras.map((x) => x.name)]);
+  if (masked) orgChart = maskOrg(orgChart, maskList([...people.map((p) => p.name), ...extras.map((x) => x.name)]));
 
   // ── 고객사 ──
   const groups = new Map<string, ClientGroup>();
@@ -581,6 +585,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     orgChart,
     clients: [...groups.values()],
     people: cvs,
+    maskNames: maskList([...people.map((p) => p.name), ...extras.map((x) => x.name), ...advisors.map((a) => a.name)]),
     notices: [...new Set(notices)],
   };
 }

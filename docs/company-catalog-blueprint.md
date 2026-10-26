@@ -222,6 +222,24 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - 디자인 시스템 아티팩트에는 **인포그래픽 갤러리 보드**(16종 × 대표 변형, KESI 실제 내용)를 둬 사용자가 미리 보고 고를 수 있게 한다.
 - 선택 기록을 분야별 기본값으로 저장(다음 생성 시 같은 분야는 같은 유형 우선).
 
+### 4-5. 보유 스톡 일러스트 — 인포그래픽의 '모양' 하나(2026-10-26, 313)
+
+회사가 산 Adobe Stock 등 인포그래픽 일러스트를 회사소개서 모듈로 쓴다. 일러스트는 **내용은 그대로, 모양만 바꾸는** 인포그래픽 모양 하나다
+(`InfoSpec.illust = { asset, colors, fit }`). 기본 16종은 항목 수에 맞춰 늘고 줄지만 일러스트는 그림에 항목 수가 고정이라 **항목 수가 같은 자리에만** 후보로 뜬다.
+
+| 단계 | 어디서 | 하는 일 |
+|---|---|---|
+| 변환·정리(관리자 PC) | `scripts/catalog_assets` `asset_matcher.py export` | Illustrator SVG(대지별, `ai_to_svg.jsx` — pdftocairo SVG 는 투명·혼합을 필터 합성 체인으로 그려 PDF 에서 래스터로 굳어 쓰지 않음) → 영역 자르기·가장자리 조각 지우기 → **글자 레이어(Text·Title…)를 지우기 전에 글자 덩어리마다 자리(slots: 상자·줄 수·크기·정렬·글자 색·아래 도형 색, 역할 title·sub·desc·number·center·heading, 항목 순번)** → 회색 '자리 표시 막대'도 설명 자리로 → 배경·템플릿 이름·그림자(이미지·필터·마스크) 걷기 → 색 값마다 `var(--il-cN, #원래색)` + 팔레트(색상 무리·밝기 차) → `illust.svg·thumb.png·meta.json` 묶음 |
+| 가져오기(관리 화면) | `/sales/catalog/illustrations` | 묶음 폴더 통째로(webkitdirectory) 또는 SVG 한 장. 서버가 SVG 를 화이트리스트로 다시 씀(스크립트·외부 참조·처리기 제거, id 접두사, 3MB 상한), 매처를 안 거친 SVG 는 색 변수화. 라이선스(출처·스톡 번호·종류·구입일) 기록. 같은 키 재가져오기 = 새 판(쓰던 이전 판은 보관) |
+| 쓰기(스튜디오) | 디자인 탭 | 인포그래픽 고르기 → **일러스트로 그리기**(항목 수 같은 것만, 같은 유형·쪽 추천·품질·글자 넘침 순) / 요소 추가 **[일러스트]**(쪽 유형·유형·항목 수로 거른 라이브러리) → 쪽 위 요소(편집층 `added`, 12열 폭·4pt 이동, 높이는 그림 비율) |
+| 글 | 캔버스 | 글자 자리를 눌러 바로 고침 → 그 항목의 label·sub·desc·valueText·center·title 로 저장(편집층 info.content). 숫자 자리는 지표에 묶으면 지표 칩(최신 값) |
+| 색 | 디자인 탭 | 이 쪽 분야 색·분야 6색·브랜드·단색·원래 색 + 무리별 토큰. 글자는 무리의 글자용 키 색, 아래 도형과 대비 4.5:1 이 안 되면 흰/짙은 글자(캔버스 대비 검사는 `data-ill-bg` 를 바탕으로) |
+| PDF | 서버 html.ts | 문서 편집층이 쓰는 일러스트를 등록표에 올린 뒤 그림 — SVG 는 인라인 벡터, 글은 HTML(검색·복사). 글자 자리는 줄 수만큼 높이 + 넘치면 잘림 → paginate 넘침 검사 |
+
+- 글자 크기 = 그림 폭 비율(cqw)이되 역할별 최소(7~12pt), 자리 폭도 역할별 최소(번호 2.6em·제목 4em…), 그림 위·아래로 나가는 자리만큼 바깥 여백을 잡아 다음 내용과 겹치지 않음.
+- 크기: 기본 '자리 높이에 맞춤'(쪽 구성 안전), 필요하면 '자리 폭에 맞춤'(그 뒤 쪽 검사).
+- 빼기: 쪽·버전·발행본이 쓰면 보관(`status = archived`, 라이브러리에서만 숨김), 아니면 행·파일 삭제.
+
 ---
 
 ## 5. 서체 선택·업로드 ★
@@ -430,6 +448,25 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 - tick은 원천별 **지문(fingerprint)**을 계산한다: 계약(공개 대상 집합의 id·updated_at), 인사(재직 임원·기술인력 집합), 회사 프로필·연혁·인증 updated_at.
   최근 발행본 지문과 다르면 `catalog_pending_changes`에 사람이 읽을 수 있는 항목(추가·변경·삭제)으로 기록 → 담당자 알림(기존 push·메일).
 - audit_log 폴링보다 원천 지문 비교가 견고하다(감사 기록이 없는 경로·스크립트 입력도 잡음).
+
+### 6-8. P7 구현 기록(2026-10-26) — 발행·변경 감지
+
+| 자리 | 내용 |
+|---|---|
+| `infra/aws/312_catalog_publish.sql` | tpl-staff-basic 에 `catalog.view`(D3, 309 주석의 약속) · `catalog_refresh_state`(발행본이 없을 때의 첫 점검 기준·하루 한 번 알림 표식) · 반영 대기 열린 항목 부분 유니크 `(doc_id, source, ref->>'key')` · `catalog_edition_distributions`(배포 기록) |
+| `lib/catalog/refresh/diff.ts`(순수) | 지문 = 원천별 `{항목 키 → {이름표, 표시 칸}}`. 비교 → 추가·변경(칸별 전후)·삭제와 사람이 읽는 문장. 기준에 없는 원천은 비교하지 않는다(원천을 늘린 날 쏟아짐 방지) |
+| `lib/catalog/refresh/service.ts` | 지문 계산(계약·계약 없는 실적 / 재직자·촉탁 임원·자문위원 / 회사 프로필 칸 / 공개 연혁 / 공개 인증·특허 / 인사말·조직도 확정판) · 기준 = 최근 발행본 지문, 없으면 첫 점검 기준 · 열린 반영 대기와 맞추기(새 차이 추가·같은 항목 문장 갱신·되돌려진 차이 삭제) · 담당자 알림(push `catalog.pending` + 메일, KST 하루 한 번) |
+| tick | `/api/internal/catalog-refresh-tick`(1시간, x-cron-key). **KST 09~18시 밖은 DB 를 열지 않는다**(Aurora auto-pause 보호), 같은 시 두 번째 호출은 메모리로 거름, `?force=1` 점검용. 자동 발행 없음(D4) |
+| 발행 | `lib/catalog/render/editions.ts` — 생성본에도 지문·데이터 스냅샷을 남기고, 발행 = 인쇄·배포본 생성본 승격(`options.stage = published`, `generatedAt`·`resolvedCount`). 발행 직후 열린 대기를 그 발행본으로 해소하고 새 기준으로 바로 다시 점검(만든 뒤 바뀐 것은 새 대기로) |
+| 판 옵션 | `RenderOptions.scope` full / summary(부록 A·B·C 제외 — 목차 부록 줄은 `data-ref-missing="hide"` 로 사라짐) × naming masked / real. 마스킹판은 사람 사진 전부 제외(이니셜) + 그린 본문 전체에서 세 글자 이상 실명을 한 번 더 가림(`maskNamesInHtml`, 스튜디오 자유 글 포함). 두 글자 이름은 일반 낱말과 겹쳐 데이터 단계 가리기만 |
+| API | `GET·POST /api/catalog/editions`(목록 view · 발행 publish, 넘침이면 409 `needsConfirm`) · `POST /editions/{id}/publish`(승격) · `POST·DELETE /editions/{id}/distributions`(manage·publish) · `GET·POST /api/catalog/pending`(manage·publish) · `GET /editions/{id}/pdf`(발행본 마스킹판 = view, 실명판 = manage·publish + access_log, 생성본 = manage) |
+| 권한 정리 | catalog.view 가 전 직원이 되면서 생성(`render/pdf`)·HTML 미리보기·미리보기 자산·자산 원본은 **catalog.manage** 로 올림. 지표 API 는 view 에 합계만(최초허가 계약 단위 행은 manage) |
+| 화면 | 첫 화면: 머리 [반영 대기 N건]·[발행], '발행본 이후 바뀐 것' 줄, **발행본** 표(전 직원, 실명판은 담당자만), 배포 기록 펼침. 관리 카드·PDF 만들기(범위 선택·생성본 [발행])·대조·최초허가 표는 manage. 스튜디오 머리에 [반영 대기]·[발행] |
+| 매뉴얼 | `sales.catalog` 절 editions·pending·publish 신설(절 권한), 도움말 catalog.editions·pending·publish, changelog 1줄 |
+
+- 지문은 계약의 `updated_at` 대신 **소개서에 실리는 값**(분류·금액·발주처·허가일·대외 표기·공개 등)을 비교한다 — 계산서·메모 수정만으로 반영 대기가 생기지 않게.
+- 메뉴: 일반 직원에게도 '영업/마케팅 > 회사소개서' 한 줄만 보인다(D3). 레일 클릭은 회사소개서로 간다.
+- 미구현(범위 밖): 부록만 자동 발행 옵션(D4 기본 꺼짐), 발행본 폐기·대체 표시, 분야 맞춤판(P8).
 
 ---
 
@@ -660,7 +697,11 @@ HTML 텍스트로 얹어 PDF 텍스트 검색·복사가 되게 한다. 아이�
 
 **311_catalog_custom_areas.sql**(P6) — `catalog_business_areas` + `content jsonb`(새 사업 분야 쪽 구성, NULL = 기존 6개 분야) · `created_by` · `updated_by`. 일회용 PG(스테이징 스키마 사본)에 두 번 적용해 멱등 확인.
 
-DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`.
+**312_catalog_publish.sql**(P7) — tpl-staff-basic `catalog.view` · `catalog_refresh_state` · 반영 대기 열린 항목 부분 유니크 · `catalog_edition_distributions`. 일회용 PG 에 두 번 적용해 멱등 확인(§6-8).
+
+**313_catalog_illustrations.sql**(일러스트 라이브러리, §4-5) — `catalog_assets.kind` CHECK 에 `illustration` 추가 + `catalog_illustrations`(asset_id, source_key, title, info_type, alt_types, item_count, has_center, has_loop, quality, note, view_w/h, slots jsonb, palette jsonb, license jsonb, fits jsonb, thumb_key, svg_bytes, status active|archived, 작성·수정 기록). 312 는 P7. 일회용 PG 에 두 번 적용해 멱등 확인(10-26).
+
+DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(쉼표 구분). P6 는 `-Files 311_catalog_custom_areas.sql`, P7 은 `-Files 312_catalog_publish.sql`, 일러스트 라이브러리는 `-Files 313_catalog_illustrations.sql`.
 
 ---
 
@@ -668,12 +709,13 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 
 | 경로(안) | 화면 | 권한 |
 |---|---|---|
-| `/sales/catalog` | 회사소개서 목록(마스터·맞춤판), 최근 발행본, 반영 대기 | catalog.view |
+| `/sales/catalog`(✅ P7) | 발행본 목록·받기(전 직원, 실명판은 manage·publish) · 반영 대기·발행·배포 기록(manage·publish) · PDF 만들기·지표·대조(manage) | catalog.view |
 | `/sales/catalog/studio`(✅ P5, 맞춤판은 `?doc=`) | 스튜디오(§8-3·8-4) | catalog.manage(발행은 catalog.publish) |
 | `/sales/catalog/projects` | 실적 노출 관리(대외 표기·노출·대표 실적·묶음) | catalog.manage |
 | `/sales/catalog/people` | 인물 노출 관리(임원·직원·자문위원, 사진 동의) | catalog.manage |
 | `/sales/catalog/assets` | 사진·로고·증서 자산 | catalog.manage |
 | `/sales/catalog/fonts`(✅ P5b) | 서체 라이브러리(업로드·분석 결과·견본·라이선스·세트 구성·사용 문서, §5-6) | catalog.manage |
+| `/sales/catalog/illustrations`(✅ 10-26) | 일러스트 라이브러리(묶음 폴더·SVG 가져오기, 글자 자리·유형·항목 수·라이선스, 빼기·보관, §4-5) | catalog.manage |
 | `/admin/company-profile`(기존) | 연혁 출처 배지·공개 토글, 특허·수상 종류, 증빙 이미지 | org.edit |
 
 - 메뉴 `config/menu.ts`, 경로 권한 `config/menu-permissions.ts`, 거부 라벨 `AccessDenied.tsx`, AI 키 `features.ts`.
@@ -694,7 +736,8 @@ DB 적용: `infra/aws/ops/staging-apply-migrations.ps1 -Files 309_...,310_...`(�
 | **P5 스튜디오** ✅ | recruit 엔진 확장(쪽·바인딩·위젯·자산·토큰 스타일), L1–L3 편집, 버전, 품질 검사, **서체 패널(세트 비교·적용·넘침 재검사)** | `/sales/catalog/studio`(§8-4, 10-22) | P4 | L |
 | **P5b 서체 라이브러리** ✅ | 업로드·fontkit 분석(fsType·글자 범위·수치)·용도 판정·라이선스 기록·TrueType 윤곽 WOFF 변환(converter `/fonts/prepare`)·견본 화면·크기 보정값 계산·스튜디오 세트 연동·빠진 글자 검사 | `/sales/catalog/fonts`(§5-6, 10-23) — 배포는 converter + next | P4(P5와 병행 가능) | M |
 | **P6 LLM 편집·인포그래픽 추천** ✅ | 기능 키 5종, 컨텍스트 묶음, JSON 패치·검증·전후 비교, 유형 자동 매칭·선택 UI, 새 사업 분야 추가 | 스튜디오 [AI로 수정]·[AI로 줄이기]·AI 순위, 실적 [표기 제안](§7-4, 10-24) — 배포는 311 + next | P5 | M |
-| **P7 자동 갱신·발행** | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력 | 운영 전환 | P4(P5와 병행 가능) | M |
+| **P7 자동 갱신·발행** ✅ | 변경 감지 tick, 반영 대기·차이 보기, 알림, 발행본 보관·이력, 판 옵션(풀·요약 × 실명·마스킹), 배포 기록, 전 직원 열람 | `/sales/catalog` 발행본·반영 대기·발행(§6-8, 10-26) — 배포는 312 + next | P4(P5와 병행 가능) | M |
+| **일러스트 라이브러리** ✅ | 보유 스톡 일러스트 모듈화 — 매처 export(Illustrator SVG·글자 자리·색 변수)·관리 화면·스튜디오 '일러스트로 그리기'·'일러스트 넣기'·글자 자리 바로 고치기·재채색·대비 | §4-5, 313(10-26) — 배포는 313 + next | P5·P6 | M |
 | **P8 확장** | 분야 맞춤판, 영문판, PPTX 내보내기, 홈페이지 게시용 PNG | — | P7 | — |
 
 **병렬 가능**: P1·P2(claude.ai 디자인 작업)와 P3(MCM 데이터)는 서로 독립이라 동시에 진행할 수 있다. P4는 둘 다 끝나야 한다.

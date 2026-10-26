@@ -30,3 +30,6 @@ backend/data/jobs
 *.env
 .env
 .env.local
+# 하위 폴더의 로컬 환경 파일(frontend/.env.local 등)도 빌드 컨텍스트에서 뺀다 — 로컬 DB 주소·키가 빌드에 섞이지 않게(2026-10-26)
+**/.env
+**/.env*.local

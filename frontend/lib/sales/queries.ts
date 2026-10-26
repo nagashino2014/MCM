@@ -61,6 +61,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
     projectId: String(row.project_id ?? ""),
     facilityId: String(row.facility_id ?? ""),
     facilityName: text(row.facility_name),
+    regionSido: text(row.region_sido),
     title: String(row.title ?? ""),
     stage: (String(row.stage ?? "lead") as SalesProject["stage"]),
     ownerEmployeeId: text(row.owner_employee_id),
@@ -85,7 +86,7 @@ function mapProject(row: Record<string, unknown>): SalesProject {
 }
 
 const PROJECT_SELECT = `
-  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, p.title, p.stage,
+  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, f.region_sido, p.title, p.stage,
          p.owner_employee_id, e.name AS owner_employee_name, p.owner_dept_id, p.contract_id,
          p.service_category, p.service_subcategory,
          p.expected_amount, p.priority, p.status, p.opened_at, p.closed_at, p.memo,

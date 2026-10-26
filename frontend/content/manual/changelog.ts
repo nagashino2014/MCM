@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-26",
+    kind: "개선",
+    title: "Salesboard — 지역권·업종분류 태그 필터, 목록 쪽 나눔, 예상 수주금액 열 제거",
+    body: "영업/마케팅 > Salesboard 영업건 목록 왼쪽에 지역권(공공입찰과 같은 7권+미상)·업종분류(용역 분류 4종+미분류) 태그 패널을 두어 여러 개 골라 좁혀 볼 수 있습니다. 제목·사업장 검색란을 넓혔고 목록은 화면당 20·30·50건으로 나눠 보입니다. 목록의 예상 수주금액 열과 영업건 추가 창의 예상 수주금액 입력은 없앴습니다.",
+    articles: ["sales.board"],
+  },
+  {
     date: "2026-10-24",
     kind: "신규",
     title: "회사소개서 AI 편집 — AI로 수정·새 사업 분야·넘침 줄이기·표기 제안",

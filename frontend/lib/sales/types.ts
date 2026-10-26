@@ -138,6 +138,8 @@ export interface SalesProject {
   projectId: string;
   facilityId: string;
   facilityName: string | null;
+  /** 사업장 소재지 시도(facilities.region_sido) — 목록 지역권 태그 필터용. 지역권은 lib/sales/regions.ts 로 파생 */
+  regionSido: string | null;
   title: string;
   stage: SalesStage;
   ownerEmployeeId: string | null;

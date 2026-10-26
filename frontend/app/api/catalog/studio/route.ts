@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { resolveCustomFontSets } from "@/lib/catalog/font-library";
+import { illustIdsIn } from "@/lib/catalog/illustration-types";
+import { loadIllustrationRenders } from "@/lib/catalog/illustrations";
 import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { loadCatalogRenderData } from "@/lib/catalog/render/data";
 import { chooseCover } from "@/lib/catalog/render/html";
@@ -28,8 +30,13 @@ export async function GET(req: NextRequest) {
     const data = await loadCatalogRenderData({ ...opts, docId });
     const notices: string[] = [];
     const cover = await chooseCover(data, notices);
-    const [prefs, assets, fontSets] = await Promise.all([listInfographicPrefs(), listStudioImageAssets(), resolveCustomFontSets()]);
-    return NextResponse.json({ doc, data: { ...data, notices: [...data.notices, ...notices] }, cover, prefs, assets, opts, fontSets });
+    const [prefs, assets, fontSets, illustrations] = await Promise.all([
+      listInfographicPrefs(),
+      listStudioImageAssets(),
+      resolveCustomFontSets(),
+      loadIllustrationRenders(illustIdsIn(doc.pages)),
+    ]);
+    return NextResponse.json({ doc, data: { ...data, notices: [...data.notices, ...notices] }, cover, prefs, assets, opts, fontSets, illustrations });
   } catch (err) {
     return authErrorToResponse(err);
   }

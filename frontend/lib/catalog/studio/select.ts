@@ -56,8 +56,9 @@ export function describe(path: CNode[]): Selection {
   const node = path[path.length - 1];
   const parent = path.length > 1 ? path[path.length - 2] : null;
   let kind: Selection["kind"] = "box";
-  if (node.origin === "add") kind = "added";
-  else if (node.widget === "infographic") kind = "infographic";
+  // 추가한 일러스트(313)는 인포그래픽 위젯이라 내용·모양 고치기가 되고, 추가 요소처럼 옮기고 크기를 바꾼다(capabilities 의 added)
+  if (node.widget === "infographic") kind = "infographic";
+  else if (node.origin === "add") kind = "added";
   else if (node.widget) kind = "widget";
   else if (node.tag === "img") kind = "image";
   else if (LIST_TAGS.has(node.tag)) kind = "list";
@@ -116,8 +117,9 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     photoLayout: maxLevel >= 2 && sel.kind === "image",
     move: maxLevel >= 3 && !isRoot,
     resize: maxLevel >= 3 && !isRoot && n.tag !== "#text",
-    typeStep: maxLevel >= 3 && (sel.kind === "text" || added),
-    color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added),
+    // 넣은 일러스트는 글자 크기·색을 일러스트 패널(그림 비율·색 모드)로 고친다
+    typeStep: maxLevel >= 3 && (sel.kind === "text" || added) && !n.widget,
+    color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added) && !n.widget,
   };
   if (sel.kind === "widget") caps.locked = "데이터에서 자동으로 채우는 영역입니다. 행·항목은 데이터 화면에서 고칩니다.";
   else if (maxLevel === 1) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";

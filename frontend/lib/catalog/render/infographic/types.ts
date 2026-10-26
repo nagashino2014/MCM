@@ -64,11 +64,39 @@ export interface InfoContent {
   axes?: [string, string, string, string];
 }
 
+/** 일러스트 모양(313 보유 스톡 일러스트) — 있으면 유형(type)의 기본 도식 대신 이 그림에 내용을 얹어 그린다(illustration.tsx) */
+export interface InfoIllust {
+  /** catalog_illustrations 자산 id */
+  asset: string;
+  /** 색 — { mode: area|areas|brand|mono|original, map?: { 무리 순번: 토큰 } } (illustration-types.sanitizeIllustColors) */
+  colors?: { mode: string; map?: Record<string, string> };
+  /** 크기 — 기본(없음) = 자리 높이에 맞춤, "width" = 자리 폭 전체 */
+  fit?: "width";
+}
+
 export interface InfoSpec {
   type: InfoType;
   variant?: string;
   colorMode?: InfoColorMode;
   content: InfoContent;
+  illust?: InfoIllust;
+}
+
+export function sanitizeInfoIllust(input: unknown): InfoIllust | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const o = input as Record<string, unknown>;
+  if (typeof o.asset !== "string" || !/^cil_[a-f0-9]{16}$/.test(o.asset)) return undefined;
+  const out: InfoIllust = { asset: o.asset };
+  if (o.colors && typeof o.colors === "object") {
+    const c = o.colors as Record<string, unknown>;
+    const mode = ["area", "areas", "brand", "mono", "original"].includes(String(c.mode)) ? String(c.mode) : "area";
+    const map: Record<string, string> = {};
+    if (c.map && typeof c.map === "object")
+      for (const [k, v] of Object.entries(c.map as Record<string, unknown>).slice(0, 12)) if (/^\d{1,2}$/.test(k) && typeof v === "string" && /^[a-z0-9-]{1,30}$/.test(v)) map[k] = v;
+    out.colors = Object.keys(map).length ? { mode, map } : { mode };
+  }
+  if (o.fit === "width") out.fit = "width";
+  return out;
 }
 
 /** 슬롯 크기 힌트(pt) — 원형 도식 크기와 적합도 계산에 쓴다 */
@@ -181,7 +209,8 @@ export function sanitizeInfoSpec(input: unknown, fallback: InfoSpec): InfoSpec {
   const type = isInfoType(o.type) ? o.type : fallback.type;
   const variant = typeof o.variant === "string" && INFO_TYPE_META[type].variants.some((v) => v.id === o.variant) ? o.variant : defaultVariant(type);
   const colorMode: InfoColorMode = o.colorMode === "brand" || o.colorMode === "mono" ? o.colorMode : "area";
-  return { type, variant, colorMode, content: o.content ? sanitizeInfoContent(o.content) : fallback.content };
+  const illust = sanitizeInfoIllust(o.illust);
+  return { type, variant, colorMode, content: o.content ? sanitizeInfoContent(o.content) : fallback.content, ...(illust ? { illust } : {}) };
 }
 
 /** 내용의 형태 — 수치가 모든 항목에 있으면 수치형(지표 바인딩 항목은 수치로 본다) */

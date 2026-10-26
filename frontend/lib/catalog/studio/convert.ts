@@ -84,7 +84,7 @@ function convertAt(c: ReactNode, path: string, out: CNode[]): void {
     const root = made.find((n) => n.tag !== "#text");
     if (root) {
       root.widget = "infographic";
-      root.props = { slot: sp.slot, spec: sp.spec, box: sp.box, area: sp.area ?? 1 };
+      root.props = { slot: sp.slot, spec: sp.spec, box: sp.box, ...(sp.area != null ? { area: sp.area } : {}) };
     }
     out.push(...made);
     return;
@@ -117,6 +117,6 @@ export function infographicToTree(props: InfoSlotProps, slotNodeId: string): CNo
   if (!root) return null;
   root.id = slotNodeId;
   root.widget = "infographic";
-  root.props = { slot: props.slot, spec: props.spec, box: props.box, area: props.area ?? 1 };
+  root.props = { slot: props.slot, spec: props.spec, box: props.box, ...(props.area != null ? { area: props.area } : {}) };
   return root;
 }

@@ -11,6 +11,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ProgressReportModal } from "./ProgressReportModal";
 import { SalesSettingsCard } from "./SalesSettingsCard";
+import { SalesInsightZone, funnelLabel, reachedAtLeast } from "./SalesInsights";
 import { useClientPaging } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
 import {
@@ -157,6 +158,8 @@ export function SalesBoard() {
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   // KPI 칸 클릭 필터(하나만) — 같은 칸을 다시 누르면 해제
   const [kpiFilter, setKpiFilter] = useState<KpiFilter | null>(null);
+  // 하단 퍼널(W4) 막대 필터 — 도달 단계가 이 단계 이상인 건
+  const [reachedFilter, setReachedFilter] = useState<SalesStage | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -282,10 +285,11 @@ export function SalesBoard() {
       if (owner && p.ownerEmployeeId !== owner && p.leadMemberId !== owner) return false;
       if (year && (p.openedAt ?? "").slice(0, 4) !== year) return false;
       if (!matchKpi(p)) return false;
+      if (reachedFilter && !reachedAtLeast(p, reachedFilter)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects, q, owner, year, kpiFilter, kpi.thisYear, kpi.thisMonth]);
+  }, [projects, q, owner, year, kpiFilter, reachedFilter, kpi.thisYear, kpi.thisMonth]);
 
   const regionOf = (p: SalesProject) => salesRegionGroupId(p.regionSido);
   const matchRegion = (p: SalesProject) => regionIds.length === 0 || regionIds.includes(regionOf(p));
@@ -314,7 +318,7 @@ export function SalesBoard() {
   const toggleIn = (set: (f: (prev: string[]) => string[]) => void, id: string) =>
     set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const hasFilter = !!(q || owner || year || regionIds.length || categoryIds.length || kpiFilter);
+  const hasFilter = !!(q || owner || year || regionIds.length || categoryIds.length || kpiFilter || reachedFilter);
   const clearFilters = () => {
     setQ("");
     setOwner("");
@@ -322,6 +326,7 @@ export function SalesBoard() {
     setRegionIds([]);
     setCategoryIds([]);
     setKpiFilter(null);
+    setReachedFilter(null);
   };
 
   // 목록 쪽 나눔(공용 useClientPaging, 10-21 규칙). 필터가 바뀌면 첫 쪽으로.
@@ -329,7 +334,7 @@ export function SalesBoard() {
   useEffect(() => {
     resetPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, owner, year, regionIds, categoryIds, kpiFilter]);
+  }, [q, owner, year, regionIds, categoryIds, kpiFilter, reachedFilter]);
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -406,6 +411,14 @@ export function SalesBoard() {
                 </button>
               </span>
             )}
+            {reachedFilter && (
+              <span className="cd-pill cd-pill-info inline-flex items-center gap-1">
+                {funnelLabel(reachedFilter)} 도달
+                <button type="button" onClick={() => setReachedFilter(null)} aria-label={`${funnelLabel(reachedFilter)} 도달 필터 해제`}>
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {hasFilter && (
               <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={clearFilters}>
                 <X className="w-3.5 h-3.5" /> 초기화
@@ -434,6 +447,21 @@ export function SalesBoard() {
           </div>
         </div>
       </div>
+
+      {/* 하단 인포그래픽 존(W4~W7 + W8 요약) — 막대·행을 누르면 위 목록 필터로 걸린다(2026-10-26) */}
+      <SalesInsightZone
+        projects={projects}
+        assignees={assignees}
+        upcomingActs={upcomingActs}
+        pendingReports={pendingReports}
+        loading={loading}
+        reachedFilter={reachedFilter}
+        onReached={(st) => setReachedFilter((cur) => (cur === st ? null : st))}
+        categoryIds={categoryIds}
+        onToggleCategory={(id) => toggleIn(setCategoryIds, id)}
+        owner={owner}
+        onOwner={(id) => setOwner((cur) => (cur === id ? "" : id))}
+      />
 
       {/* 하단: 영업 제설정(영업 담당자 지정·수집 소스) — 2026-10-19 */}
       <SalesSettingsCard theme={theme} canManageStaff={canManageStaff} canEditSources={canEdit} onStaffChanged={loadAssignees} />
@@ -642,7 +670,7 @@ function KpiStrip({
   );
   const valueRow = (value: ReactNode, sub: string) => (
     <span className="flex items-baseline gap-2 min-w-0">
-      <span className="cd-text text-xl font-extrabold tabular-nums leading-none">{value}</span>
+      <span className="cd-text text-xl font-extrabold leading-none">{value}</span>
       {/* 좁은 화면에서 말줄임되면 마우스를 올려 전체를 본다 */}
       <span className="cd-text-faint text-[11px] truncate" title={sub}>{sub}</span>
     </span>
@@ -676,7 +704,7 @@ function KpiStrip({
     >
       <span className="w-2 h-2 rounded-full self-center" style={{ background: color }} />
       <span className="cd-text-muted text-[11.5px] font-bold">{label}</span>
-      <span className="cd-text text-xl font-extrabold tabular-nums leading-none">{v(n)}</span>
+      <span className="cd-text text-xl font-extrabold leading-none">{v(n)}</span>
     </button>
   );
 

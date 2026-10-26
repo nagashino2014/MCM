@@ -9,6 +9,7 @@ import {
 } from "@/lib/catalog/appendix";
 import { CATALOG_CATEGORIES, SOFTWARE_CATEGORY, areaIndex } from "@/lib/catalog/areas";
 import { getPublishedContent } from "@/lib/catalog/contents";
+import { listCustomAreas } from "@/lib/catalog/custom-areas";
 import type { OrgChartDoc, OrgNode } from "@/lib/catalog/content-types";
 import { listClients } from "@/lib/catalog/clients";
 import { computeCatalogMetrics, type MetricId, type MetricValue } from "@/lib/catalog/metrics";
@@ -22,6 +23,7 @@ import { AREA_DISPLAY_NAME, CLIENT_GROUP_LABEL, MATRIX_DESC, OFFICE_CONTENT, VIS
 import { initialOf, maskName, maskNamesIn } from "./masking";
 import type {
   AreaInfo,
+  CustomAreaInfo,
   CatalogRenderData,
   ClientGroup,
   CredentialCard,
@@ -148,6 +150,18 @@ function caseTitle(row: CatalogProjectRow): string {
   return t.replace(/\s*준공\s*(\([^)]*\))?\s*$/, "").replace(/\s*수행 중\s*$/, "").trim();
 }
 
+/** 대표 실적 한 줄(연도·표기·허가일 또는 기간) — 분야 쪽(C09)·새 분야 쪽 공용 */
+export function caseRow(p: CatalogProjectRow): { year: string; title: string; meta: string } {
+  return {
+    year: p.year,
+    title: caseTitle(p),
+    meta:
+      p.category === CATALOG_CATEGORIES[0] && p.permitIssuedAt
+        ? [p.permitIssuedAt.slice(0, 10), formatPermitNo(p.permitNo) ? `제${formatPermitNo(p.permitNo)}호` : ""].filter(Boolean).join(" · ")
+        : periodShort(p),
+  };
+}
+
 const MAP_REGION: Record<string, string> = { "yeongnam-n": "tk", "yeongnam-s": "bug" };
 export const mapRegionId = (id: string) => MAP_REGION[id] ?? id;
 
@@ -204,7 +218,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   const nowYear = Number(asOf.slice(0, 4));
   const nowYears = nowYear + (Number(asOf.slice(5, 7)) - 0.5) / 12;
 
-  const [theme, rules, projects, profile, history, credentials, people, extras, advisors, ceoMsg, orgPublished, clients, figureRows, areaRows] =
+  const [theme, rules, projects, profile, history, credentials, people, extras, advisors, ceoMsg, orgPublished, clients, figureRows, areaRows, customDefs] =
     await Promise.all([
       getDocumentTheme(docId),
       getAppendixRules(docId),
@@ -219,7 +233,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       getPublishedContent("org_chart"),
       listClients(),
       db.exec("SELECT figure_key, value FROM catalog_external_figures"),
-      db.exec("SELECT name, display_name FROM catalog_business_areas WHERE is_active = 1"),
+      db.exec("SELECT name, display_name FROM catalog_business_areas WHERE is_active = 1 AND content IS NULL"),
+      listCustomAreas(),
     ]);
   const metricsBundle = await computeCatalogMetrics({ projects, people, extraPeople: extras });
   const metrics = Object.fromEntries(metricsBundle.metrics.map((m) => [m.id, m])) as Record<MetricId, MetricValue>;
@@ -260,17 +275,25 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       recent3: list.filter((p) => Number(p.year) >= nowYear - 2).length,
       regions: new Set(list.map((p) => p.regionGroup).filter((g) => g && g !== REGION_UNKNOWN.id)).size,
       firstYear: years.length ? String(Math.min(...years)) : "",
-      featured: pick.map((p) => ({
-        year: p.year,
-        title: caseTitle(p),
-        meta:
-          category === CATALOG_CATEGORIES[0] && p.permitIssuedAt
-            ? [p.permitIssuedAt.slice(0, 10), formatPermitNo(p.permitNo) ? `제${formatPermitNo(p.permitNo)}호` : ""].filter(Boolean).join(" · ")
-            : periodShort(p),
-      })),
+      featured: pick.map(caseRow),
       featuredFallback: fallback && pick.length > 0,
     };
   });
+
+  // ── 새 사업 분야(P6) — 대표 실적은 지정한 계약 중 공개 계약만 ──
+  const projectById = new Map(projects.map((p) => [p.contractId, p]));
+  const customAreas: CustomAreaInfo[] = customDefs.map((d) => ({
+    id: d.areaId,
+    key: `area-${d.areaId}`,
+    name: d.name,
+    slot: d.slot,
+    content: d.content,
+    featured: d.content.featured
+      .map((id) => projectById.get(id))
+      .filter((p): p is NonNullable<typeof p> => p != null && (p.meta?.isPublic ?? true))
+      .sort((a, b) => (a.year || "").localeCompare(b.year || ""))
+      .map(caseRow),
+  }));
 
   // 통합허가 수행 업종(20개 업종 라벨) — 계약 수 많은 순
   const labelSet = new Set(INTEGRATED_PERMIT_INDUSTRIES.map((x) => x.label));
@@ -539,6 +562,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     initialPermit: metricsBundle.initialPermit,
     figures,
     areas,
+    customAreas,
     appendix,
     projectIndex: Object.fromEntries(projects.map((p) => [p.contractId, { subtype: p.subtype, permitIssuedAt: p.permitIssuedAt }])),
     matrix,

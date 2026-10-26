@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, Grid3x3, History, Loader2, PenTool, Redo2, RefreshCw, Undo2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Grid3x3, History, Loader2, PenTool, Redo2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -39,6 +39,9 @@ import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalogFetch } from "../catalogFetch";
+import { metricBriefs } from "@/lib/catalog/ai/patch";
+import { AiEditModal } from "./AiEditModal";
+import { proposeShrink, type ClientProposal } from "./aiClient";
 import { AssetPicker } from "./AssetPicker";
 import { CHECK_LABEL, runFullCheck, type CheckItem, type FullCheckResult } from "./checks";
 import { frameDocument, loadStudioKit, type StudioKit } from "./kit";
@@ -105,7 +108,9 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const [prevFontSet, setPrevFontSet] = useState<string | null>(null);
   const [assets, setAssets] = useState<StudioImageAsset[]>([]);
   const [picker, setPicker] = useState<((key: string) => void) | null>(null);
-  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf">(null);
+  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai">(null);
+  const [aiInitial, setAiInitial] = useState<ClientProposal | null>(null);
+  const [shrinking, setShrinking] = useState(false);
   const canvasHandle = useRef<CanvasHandle | null>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   const [mainW, setMainW] = useState(800);
@@ -269,6 +274,38 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
     }
   }, [kit, studio, plan]);
 
+  // ── AI(P6) — [AI로 줄이기]: 넘친 요소를 줄인 제안을 [AI로 수정]과 같은 검토 화면으로 ──
+  const aiShrink = useCallback(
+    async (nodeIds: string[]) => {
+      if (!item || !tree || !studio.data) return;
+      setShrinking(true);
+      try {
+        const p = await proposeShrink(item, tree, nodeIds, metricBriefs(studio.data.metrics), docId);
+        setAiInitial(p);
+        setModal("ai");
+      } catch (e) {
+        toast((e as Error).message, "error");
+      } finally {
+        setShrinking(false);
+      }
+    },
+    [item, tree, studio.data, docId, toast]
+  );
+  const removeCustomArea = useCallback(
+    async (areaId: string) => {
+      if (!window.confirm("이 사업 분야 쪽을 뺍니다. 분야 정의는 남아 관리자가 되살릴 수 있습니다. 계속할까요?")) return;
+      try {
+        await studio.save();
+        await catalogFetch(`/api/catalog/ai/area?areaId=${encodeURIComponent(areaId)}`, { method: "DELETE" });
+        await studio.reload();
+        toast("사업 분야 쪽을 뺐습니다.", "success");
+      } catch (e) {
+        toast((e as Error).message, "error");
+      }
+    },
+    [studio, toast]
+  );
+
   const applyFont = (id: string) => {
     const cur = studio.state?.theme.fontSet ?? "pretendard";
     if (cur === id) return;
@@ -341,6 +378,14 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             </button>
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={studio.redo} disabled={!studio.canRedo} aria-label="다시 실행(Ctrl+Y)">
               <Redo2 className="w-3.5 h-3.5" /> 다시 실행
+            </button>
+            <button
+              type="button"
+              className="cd-btn cd-btn-soft cd-btn-sm"
+              onClick={() => (setAiInitial(null), setModal("ai"))}
+              disabled={!item || !kit || !studio.payload}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> AI로 수정
             </button>
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setModal("versions")}>
               <History className="w-3.5 h-3.5" /> 버전
@@ -474,6 +519,16 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                   </button>
                 ))
               )}
+              {checks.some((c) => c.kind === "overflow" && c.nodeId) ? (
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-soft cd-btn-sm"
+                  onClick={() => void aiShrink(checks.filter((c) => c.kind === "overflow" && c.nodeId).map((c) => c.nodeId!))}
+                  disabled={shrinking}
+                >
+                  {shrinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} AI로 줄이기
+                </button>
+              ) : null}
               <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm ml-auto" onClick={() => void runCheck()} disabled={checking}>
                 {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} 전체 쪽 검사
               </button>
@@ -496,7 +551,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             </div>
             <div id="st-panel" role="tabpanel" className="flex-1 min-h-0 overflow-y-auto p-3">
               {(() => {
-                const props = { studio, kit, item, composed, sel, caps, ops, checks, assets };
+                const props = { studio, kit, item, composed, sel, caps, ops, checks, assets, onAiShrink: (ids: string[]) => void aiShrink(ids), onRemoveCustomArea: (id: string) => void removeCustomArea(id) };
                 if (tab === "content") return <PanelContent {...props} />;
                 if (tab === "design") return <PanelDesign {...props} />;
                 if (tab === "fonts")
@@ -529,6 +584,19 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         }}
         onUploaded={(a) => setAssets((list) => [a, ...list.filter((x) => x.key !== a.key)])}
       />
+      {kit && item ? (
+        <AiEditModal
+          open={modal === "ai"}
+          onClose={() => (setModal(null), setAiInitial(null))}
+          studio={studio}
+          kit={kit}
+          item={item}
+          sel={sel}
+          docId={docId}
+          initial={aiInitial}
+          onOpenPage={openPage}
+        />
+      ) : null}
       <VersionsModal open={modal === "versions"} onClose={() => setModal(null)} docId={docId} studio={studio} toast={toast} />
       <CdModal open={modal === "preview"} onClose={() => setModal(null)} title="미리보기 — PDF 와 같은 조판" size="xl" maxHeightClass="max-h-[92vh]">
         {modal === "preview" ? (

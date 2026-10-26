@@ -13,7 +13,7 @@ import {
   STRENGTHS_CONTENT,
   type AreaContent,
 } from "../master-content";
-import type { AreaInfo, CatalogRenderData, RenderCtx } from "../types";
+import type { AreaInfo, CatalogRenderData, CustomAreaInfo, RenderCtx } from "../types";
 import { barSpec, compareSpec, regionRows, stepsSpec } from "../infographic/adapt";
 import { InfoSlot } from "../infographic/slot";
 import { KoreaMap } from "./infographics";
@@ -253,6 +253,100 @@ export function AreaPage({ ctx, data, area, variant }: { ctx: RenderCtx; data: C
           `* ${asOfNote(data)} 자동 집계(누적 계약 수, 수행 중 포함).${isPermit && share != null ? ` 허가 사업장 대비 비율 = 최초허가 ÷ 환경부 통합허가 완료 사업장 ${fmt(data.figures["permit.sites.total"])}개소.` : ""}${c.footnote ? " " + c.footnote : ""}`,
         ]}
       />
+    </Sheet>
+  );
+}
+
+/** 문안 속 {{metric:지표 id}} → 지표 값 칩(작업본 점선 밑줄) — 새 사업 분야 문안은 숫자를 지표로만 쓴다(블루프린트 §7-2) */
+function MetricText({ data, text }: { data: CatalogRenderData; text: string }) {
+  const parts = text.split(/\{\{metric:([a-z0-9.]{1,40})\}\}/);
+  return <>{parts.map((p, i) => (i % 2 === 1 ? data.metrics[p as MetricId] ? <M key={i} data={data} id={p as MetricId} /> : null : p))}</>;
+}
+
+// ── C09 새 사업 분야(P6) — 분야 상세와 같은 틀, 문안은 catalog_business_areas.content ──
+export function CustomAreaPage({ ctx, data, area }: { ctx: RenderCtx; data: CatalogRenderData; area: CustomAreaInfo }) {
+  const c = area.content;
+  const kpiIds = c.kpis.filter((id) => data.metrics[id as MetricId]) as MetricId[];
+  const hero = kpiIds[0];
+  return (
+    <Sheet ctx={ctx} area={area.slot} anchors={[area.key]} outline={area.name} style={{ gap: 16 }}>
+      <Head ctx={ctx} num="02" name="사업 분야" sub={area.name} />
+      <section className="kc-bizhero">
+        <div className="kc-bizhero__text">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <p className="kc-eyebrow">사업 분야</p>
+            {c.draft ? <span className="kc-draftmark">초안 · 새 사업 분야 — 검토 필요</span> : null}
+          </div>
+          <div className="kc-bizhero__title">
+            <span className="kc-iconbox">
+              <Icon name={c.icon} cls="kc-icon kc-icon--lg" />
+            </span>
+            <p className="kc-page-title">{area.name}</p>
+          </div>
+          <p className="kc-lead" style={{ fontSize: 12, lineHeight: "19px" }}>
+            <MetricText data={data} text={c.lead} />
+          </p>
+        </div>
+        <div className="kc-bizhero__visual">
+          <div className="kc-nophoto kc-photo--frame" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", gap: 14, padding: "0 22px" }}>
+            <div style={{ display: "flex", flexDirection: "column", position: "relative", zIndex: 1 }}>
+              {hero ? (
+                <span className="kc-ig__fig" style={{ fontSize: 52, lineHeight: "54px", letterSpacing: -1.5 }}>
+                  <M data={data} id={hero} />
+                  <small style={{ fontSize: 16, marginLeft: 2 }}>{data.metrics[hero].unit}</small>
+                </span>
+              ) : null}
+              <span className="kc-caption" style={{ color: "var(--ink)" }}>
+                <MetricText data={data} text={c.heroCaption || (hero ? data.metrics[hero].label : area.name)} />
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="kc-grid" style={{ flex: 1, minHeight: 0, alignContent: "start" }}>
+        <div className="kc-span-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <p className="kc-blockhead">주요 서비스</p>
+            <ul className="kc-list">
+              {c.services.map((sv, i) => (
+                <li key={i}>
+                  <MetricText data={data} text={sv} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <p className="kc-blockhead">{c.processTitle}</p>
+            <InfoSlot slot={`${area.key}.process`} spec={{ ...stepsSpec(c.process), type: c.infoType }} box={{ w: 490, h: 90 }} area={area.slot} />
+          </div>
+          {kpiIds.length ? (
+            <div className="kc-kpis" style={{ gridTemplateColumns: `repeat(${Math.max(2, kpiIds.length)}, minmax(0, 1fr))`, gap: 10 }}>
+              {kpiIds.map((id) => (
+                <Kpi key={id} label={data.metrics[id].label} value={<M data={data} id={id} />} unit={data.metrics[id].unit} />
+              ))}
+            </div>
+          ) : null}
+          {area.featured.length ? (
+            <div>
+              <p className="kc-blockhead">
+                대표 실적<span className="kc-blockhead__aside">{c.casesAside}</span>
+              </p>
+              <ul className="kc-cases" data-widget="cases">
+                {area.featured.map((f, i) => (
+                  <li key={i}>
+                    <span className="kc-cases__year">{f.year}</span>
+                    <span>{f.title}</span>
+                    <span className="kc-cases__meta">{f.meta}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <Foot items={[`* ${asOfNote(data)} 자동 집계. 지표 정의: ${kpiIds.map((id) => data.metrics[id].footnote).join(" ") || "—"}`]} />
     </Sheet>
   );
 }

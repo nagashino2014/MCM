@@ -47,7 +47,7 @@ export function composeDocument(
   const byKey = new Map(pages.map((p) => [p.key, p]));
   return orderedPlan(ctx, data, cover, pages)
     .filter((it) => opts.includeHidden || !byKey.get(it.key)?.hidden)
-    .map((it) => composePage(it, byKey.get(it.key) ?? null, opts));
+    .map((it) => composePage(it, byKey.get(it.key) ?? null, { metrics: data.metrics, ...opts }));
 }
 
 /** 스튜디오가 만든 요소(글상자·도형·이미지)의 지면 CSS — PDF·미리보기·캔버스 공용(디자인 시스템 토큰만) */

@@ -7,7 +7,7 @@
 import type { ReactElement } from "react";
 import type { CatalogRenderData, HistoryYear, LeaderCard, RenderCtx } from "../types";
 import { DIVIDER_CONTENT, SECTIONS } from "../master-content";
-import { BusinessMapPage, AreaPage, CasePage, PlatformPage, SoftwarePage, StrengthsPage } from "./pages-business";
+import { BusinessMapPage, AreaPage, CasePage, CustomAreaPage, PlatformPage, SoftwarePage, StrengthsPage } from "./pages-business";
 import { ContentsPage, CoverPage, DividerPage, FiguresPage, HistoryPage, MessagePage, OverviewPage, type CoverChoice } from "./pages-front";
 import { AdvisorsPage, LeadersPage, OrgPage, PeopleDetailPage, StaffListPage, StaffPage } from "./pages-people";
 import { BackCoverPage, ClientsPage, ContactPage, CredentialsPage } from "./pages-trust";
@@ -92,11 +92,15 @@ export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: Co
       title="사업 분야"
       lead={DIVIDER_CONTENT["02"].lead}
       anchor="sec-02"
-      items={data.areas.map((a) => ({ label: a.name, area: a.index, ref: `area-${a.index}` }))}
+      items={[
+        ...data.areas.map((a) => ({ label: a.name, area: a.index, ref: `area-${a.index}` })),
+        ...(data.customAreas ?? []).map((a) => ({ label: a.name, area: a.slot, ref: a.key })),
+      ]}
     />
   );
   add("c08", "C08", "사업 분야 개관", "02", <BusinessMapPage ctx={ctx} data={data} />);
   consulting.forEach((a) => add(`area-${a.index}`, "C09", a.name, "02", <AreaPage ctx={ctx} data={data} area={a} variant={v(`area-${a.index}`)} />));
+  (data.customAreas ?? []).forEach((a) => add(a.key, "C09", a.name, "02", <CustomAreaPage ctx={ctx} data={data} area={a} />));
   add("c09-software", "C09", software.name, "02", <SoftwarePage ctx={ctx} data={data} area={software} />);
   add("c09-platform", "C09", "통합허가 플랫폼", "02", <PlatformPage ctx={ctx} data={data} />);
   add(

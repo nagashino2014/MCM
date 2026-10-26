@@ -14,7 +14,7 @@
  * 기본 트리는 저장하지 않으므로 데이터가 바뀌어도 편집층은 같은 노드 id 에 다시 붙는다. 노드가 사라지면(데이터 쪽 구조 변화) 그 편집은 쓰이지 않고 남는다.
  * 보안: 편집층은 신뢰하지 않는 입력이다 — 태그·속성·스타일·클래스·바인딩 경로를 모두 화이트리스트로 다시 만든다(서버 저장 전·클라이언트 불러온 뒤).
  */
-import { sanitizeInfoSpec, type InfoSpec } from "@/lib/catalog/render/infographic/types";
+import { resolveInfoMetrics, sanitizeInfoSpec, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { infographicToTree } from "./convert";
 import { PHOTO_RATIOS, isTokenVar, isTypeStep, typeStepStyle } from "./design-system";
@@ -354,6 +354,8 @@ export function sanitizePageEdits(input: unknown): PageEdits {
 export interface ApplyOptions {
   /** 숨긴 노드도 흐리게 남긴다(스튜디오 캔버스) */
   showHidden?: boolean;
+  /** 지표 값(인포그래픽 항목의 지표 바인딩을 그릴 때 채운다 — P6) */
+  metrics?: Record<string, { value: number | null } | undefined>;
 }
 
 function mergeStyle(base: CNode["style"], patch: Record<string, string> | undefined, typeStep?: string): CNode["style"] {
@@ -391,7 +393,8 @@ export function applyEdits(base: CNode, edits: PageEdits | undefined, opts: Appl
     let n: CNode = { ...node, origin: "base" };
     if (e?.info && node.widget === "infographic" && node.props) {
       const p = node.props as unknown as InfoSlotProps;
-      const rebuilt = infographicToTree({ ...p, spec: mergeInfoSpec(p.spec, e.info) }, node.id);
+      const merged = mergeInfoSpec(p.spec, e.info);
+      const rebuilt = infographicToTree({ ...p, spec: { ...merged, content: resolveInfoMetrics(merged.content, opts.metrics) } }, node.id);
       if (rebuilt) n = { ...rebuilt, origin: "base", edited: true };
     }
     if (e?.content) {

@@ -43,6 +43,10 @@ export interface PanelProps {
   ops: StudioOps;
   checks: CheckItem[];
   assets: StudioImageAsset[];
+  /** [AI로 줄이기] — 넘친 요소(노드 id)를 줄인 제안을 검토 화면으로(P6) */
+  onAiShrink?: (nodeIds: string[]) => void;
+  /** 새 사업 분야 쪽 빼기(P6) */
+  onRemoveCustomArea?: (areaId: string) => void;
 }
 
 /** 선택 종류 이름 */

@@ -124,11 +124,11 @@ export function useStudio(docId: string) {
       const st = pages ? pageState(pages, item.key) : null;
       const hit = cache.current.get(item.key);
       if (hit && hit.element === item.element && hit.edits === st?.edits && hit.hidden === (st?.hidden ?? false)) return hit.composed;
-      const composed = composePage(item, st);
+      const composed = composePage(item, st, { metrics: data?.metrics });
       cache.current.set(item.key, { element: item.element, edits: st?.edits, hidden: st?.hidden ?? false, composed });
       return composed;
     },
-    [pages]
+    [pages, data]
   );
 
   // ── 편집(실행 취소 가능) ──
@@ -145,6 +145,8 @@ export function useStudio(docId: string) {
     if (!merge) past.current = [...past.current.slice(-HISTORY + 1), cur];
     future.current = [];
     dirty.current = true;
+    // 바로 이어서 저장(save)을 부르는 조작(AI 바꿈 채택 → 버전 저장)이 새 상태를 읽도록 렌더 전에 맞춰 둔다
+    stateRef.current = next;
     setState(next);
     setSaveState("pending");
     setHistTick((t) => t + 1);

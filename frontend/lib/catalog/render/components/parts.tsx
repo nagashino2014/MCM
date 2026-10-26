@@ -60,6 +60,9 @@ const ICONS: Record<string, LucideIcon> = {
   "search-check": SearchCheck,
 };
 
+/** 쓸 수 있는 아이콘 이름(LLM 편집이 고를 수 있는 목록) */
+export const ICON_NAMES = Object.keys(ICONS);
+
 /** 분야 번호 → 아이콘 */
 export const AREA_ICON = ["", "factory", "flask-conical", "wind", "leaf", "graduation-cap", "layout-grid"];
 

@@ -280,7 +280,7 @@ export function renderInfographic(spec: InfoSpec, box: InfoBox, rootIn: RootAttr
           {items.map((it) => (
             <div className="kc-stat" key={it.id}>
               <span className="kc-stat__fig" style={items.length > 3 ? { fontSize: 24, lineHeight: "28px" } : undefined}>
-                {it.valueText ?? fmt(it.value ?? null)}
+                {it.metric && !it.valueText ? <span data-metric={it.metric}>{fmt(it.value ?? null)}</span> : (it.valueText ?? fmt(it.value ?? null))}
                 {it.valueText ? null : <small>{it.unit ?? unit ?? ""}</small>}
               </span>
               <span className="kc-ig__desc">{it.label}</span>

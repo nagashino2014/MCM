@@ -24,9 +24,15 @@ export interface StudioOps {
   setImage: (id: string, image: ImageRef | null) => void;
   listOp: (itemId: string, op: ListOp) => void;
   addElement: (kind: "text" | "shape" | "image", asset?: string) => void;
+  /** 일러스트 넣기(313) — SVG 를 받아 등록한 뒤 쪽 위에 놓는다 */
+  addIllustration: (assetId: string) => Promise<void>;
+  /** 캔버스에서 고친 일러스트 글자 자리 → 그 인포그래픽 내용 */
+  commitSlot: (slotNodeId: string, text: string) => void;
   setVariant: (key: string, value: string | null) => void;
   /** 사진 고르기 창 — 고르면 onPick */
   pickImage: (onPick: (key: string) => void) => void;
+  /** 지표 넣기 창 — 고른 글 끝에 칩을 넣는다 */
+  requestBind: (blockId: string) => void;
   /** 이 쪽 편집층에서 붙을 곳을 잃은 편집 지우기 */
   dropOrphans: () => void;
   /** 추가한 도형 모양 */

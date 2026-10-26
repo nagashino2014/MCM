@@ -2,17 +2,19 @@
 
 // 회사소개서 스튜디오(P5) — 쪽을 캔버스에서 직접 고친다. docs/company-catalog-blueprint.md §8
 //   왼쪽: 쪽 썸네일(순서·숨김) · 가운데: A4 캔버스(안내선·검사 표식) · 오른쪽: 내용·디자인·서체·데이터
-//   위: 실행 취소·다시 실행·버전·미리보기·PDF 받기. 고친 것은 자동 저장되고(편집층), 데이터를 새로 읽어도 유지된다.
+//   위: 실행 취소·다시 실행·버전·미리보기·PDF 받기 · 반영 대기·발행(P7). 고친 것은 자동 저장되고(편집층), 데이터를 새로 읽어도 유지된다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, Grid3x3, History, Loader2, PenTool, Redo2, RefreshCw, Sparkles, Undo2 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, PenTool, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { useCdToast } from "@/components/cdash/CdToast";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { usableFontSet } from "@/lib/catalog/fonts";
 import type { RenderOptions } from "@/lib/catalog/render/types";
 import { EDITION_LABEL, NAMING_LABEL } from "@/lib/catalog/render/types";
@@ -33,26 +35,34 @@ import {
   type InfoOverride,
   type PageEdits,
 } from "@/lib/catalog/studio/edits";
-import { newUserId, type CNode } from "@/lib/catalog/studio/nodes";
+import { makeBindChip } from "@/lib/catalog/studio/binds";
+import { appendCaret, placeChip } from "@/lib/catalog/studio/inline";
+import { findNode, findPath, newUserId, widgetAncestor, type CNode } from "@/lib/catalog/studio/nodes";
+import { applySlotText, placeholderContent, type IllustSlotRole } from "@/lib/catalog/illustration-types";
+import { illustrationRender } from "@/lib/catalog/render/infographic/illustration";
+import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { renderNode } from "@/lib/catalog/studio/render-tree";
 import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalogFetch } from "../catalogFetch";
+import { CatalogPendingButton, CatalogPendingModal, usePending } from "../CatalogPending";
+import { CatalogPublishModal } from "../CatalogPublishModal";
 import { metricBriefs } from "@/lib/catalog/ai/patch";
 import { AiEditModal } from "./AiEditModal";
 import { proposeShrink, type ClientProposal } from "./aiClient";
 import { AssetPicker } from "./AssetPicker";
+import { BindPicker } from "./BindPicker";
 import { CHECK_LABEL, runFullCheck, type CheckItem, type FullCheckResult } from "./checks";
 import { frameDocument, loadStudioKit, type StudioKit } from "./kit";
 import { PanelContent } from "./PanelContent";
 import { PanelData } from "./PanelData";
 import { PanelDesign } from "./PanelDesign";
 import { PanelFonts } from "./PanelFonts";
-import { StudioCanvas, type CanvasHandle } from "./StudioCanvas";
+import { StudioCanvas, type BindTarget, type CanvasHandle } from "./StudioCanvas";
 import { StudioThumbs } from "./StudioThumbs";
 import type { StudioOps } from "./types";
-import { useStudio } from "./useStudio";
+import { ensureIllustrations, useStudio } from "./useStudio";
 import "@/components/cdash/cdash.css";
 
 type PanelTab = "content" | "design" | "fonts" | "data";
@@ -82,6 +92,21 @@ function mergeOverride(existing: InfoOverride | undefined, patch: InfoOverride):
   return out as InfoOverride;
 }
 
+/** 넣은 일러스트(313) — 내용은 자리 표시 글, 폭 8열(높이는 그림 비율), 색은 이 쪽 분야 색 */
+function newIllustration(assetId: string, pageKey?: string): CNode | null {
+  const info = illustrationRender(assetId)?.info;
+  if (!info) return null;
+  const spec = { type: info.type, content: placeholderContent(info), illust: { asset: assetId, colors: { mode: "area" } } };
+  return {
+    id: newUserId(),
+    tag: "div",
+    className: "kc-x-illust",
+    widget: "infographic",
+    style: { position: "absolute", left: "48px", top: "120px", width: `${spanWidth(8).toFixed(2)}px` },
+    props: { slot: "x", spec, box: { w: 842, h: 0 }, ...(/^area-[1-6]$/.test(pageKey ?? "") ? { area: Number(pageKey!.slice(5)) } : {}) },
+  };
+}
+
 function newAdded(kind: "text" | "shape" | "image", asset?: string): CNode {
   const base = { id: newUserId(), tag: "div" };
   const at = { position: "absolute", left: "48px", top: "120px" };
@@ -108,7 +133,26 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const [prevFontSet, setPrevFontSet] = useState<string | null>(null);
   const [assets, setAssets] = useState<StudioImageAsset[]>([]);
   const [picker, setPicker] = useState<((key: string) => void) | null>(null);
-  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai">(null);
+  const [bindTarget, setBindTargetState] = useState<BindTarget | null>(null);
+  // 지표 넣기 창을 연 자리(닫은 뒤 초점을 돌려준다)
+  const bindReturn = useRef<HTMLElement | null>(null);
+  const setBindTarget = useCallback((t: BindTarget | null) => {
+    if (t) bindReturn.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBindTargetState(t);
+  }, []);
+  const closeBind = useCallback(() => {
+    const t = bindTarget;
+    const back = bindReturn.current;
+    setBindTargetState(null);
+    // 글 고치던 중이면 그 글 끝으로 돌아가 이어서 고친다
+    setTimeout(() => (t?.atCaret ? canvasHandle.current?.focusChip(t.blockId, "") : back?.isConnected && back.focus()), 60);
+  }, [bindTarget]);
+  const [modal, setModal] = useState<null | "versions" | "preview" | "pdf" | "ai" | "pending" | "publish">(null);
+  // 반영 대기·발행(P7) — 스튜디오는 catalog.manage 화면이라 반영 대기는 늘 보이고, 발행은 catalog.publish 만
+  const { data: session } = useSession();
+  const canPublish = hasPerm(permsOf(session?.user), "catalog.publish");
+  const pending = usePending(true);
+  const pendingCount = pending.data ? pending.data.items.length : null;
   const [aiInitial, setAiInitial] = useState<ClientProposal | null>(null);
   const [shrinking, setShrinking] = useState(false);
   const canvasHandle = useRef<CanvasHandle | null>(null);
@@ -196,13 +240,53 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         pe((e) => addElement(e, node));
         setSelectedId(node.id);
       },
+      addIllustration: async (assetId) => {
+        await ensureIllustrations([assetId]);
+        const node = newIllustration(assetId, itemKey);
+        if (!node) return;
+        pe((e) => addElement(e, node));
+        setSelectedId(node.id);
+      },
+      commitSlot: (slotId, text) => {
+        const path = findPath(derived, slotId);
+        const slotNode = path?.[path.length - 1];
+        const w = path ? widgetAncestor(path) : null;
+        if (!slotNode || !w || w.widget !== "infographic" || !w.props) return;
+        const p = w.props as unknown as InfoSlotProps;
+        const role = String(slotNode.attrs?.["data-ill-role"] ?? "") as IllustSlotRole;
+        const next = applySlotText(p.spec.content, role, Number(slotNode.attrs?.["data-ill-item"] ?? 0), text);
+        if (next) pe((e) => setInfo(e, w.id, mergeOverride(e.nodes?.[w.id]?.info, { content: next })), `info:${w.id}`);
+      },
       setVariant: (k, v) => pe((e) => setVariant(e, k, v)),
       pickImage: (cb) => setPicker(() => cb),
+      requestBind: (blockId) => {
+        const n = findNode(derived, blockId);
+        if (n) setBindTarget({ blockId, children: appendCaret(n.children ?? []), atCaret: false });
+      },
       dropOrphans: () => pe((e) => (composed?.orphans ?? []).reduce((acc, id) => resetNode(acc, id), e)),
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
     };
-  }, [tree, pe, composed]);
+  }, [tree, pe, composed, itemKey, setBindTarget]);
+
+  // ── 지표 넣기 — 표식 자리에 칩을 넣는다(실행 취소 한 단계) ──
+  const insertBind = useCallback(
+    (bind: string, opts: { digits?: number; unit?: boolean }) => {
+      const target = bindTarget;
+      setBindTargetState(null);
+      if (!target || !studio.data) return;
+      const chip = makeBindChip(bind, studio.data, opts);
+      if (!chip) {
+        toast("이 지표는 지금 넣을 수 없습니다.", "error");
+        return;
+      }
+      ops.commitText(target.blockId, placeChip(target.children, chip));
+      setSelectedId(target.blockId);
+      const back = bindReturn.current;
+      setTimeout(() => (target.atCaret ? canvasHandle.current?.focusChip(target.blockId, chip.id) : back?.isConnected && back.focus()), 60);
+    },
+    [bindTarget, studio.data, ops, toast]
+  );
 
   // ── 단축키 ──
   const { undo, redo } = studio;
@@ -219,6 +303,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         return true;
       }
       if (!selectedId) return false;
+      if (mod && e.code === "KeyK" && caps?.editText) {
+        const t = canvasHandle.current?.captureBind();
+        if (t) setBindTarget(t);
+        return true;
+      }
       if (key === "Escape") {
         setSelectedId(null);
         return true;
@@ -237,7 +326,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       }
       return false;
     },
-    [undo, redo, selectedId, caps, ops]
+    [undo, redo, selectedId, caps, ops, setBindTarget]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -373,6 +462,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             <Link href="/sales/catalog" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
               <ArrowLeft className="w-3.5 h-3.5" /> 회사소개서
             </Link>
+            <CatalogPendingButton count={pendingCount} onClick={() => setModal("pending")} />
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={studio.undo} disabled={!studio.canUndo} aria-label="실행 취소(Ctrl+Z)">
               <Undo2 className="w-3.5 h-3.5" /> 실행 취소
             </button>
@@ -396,6 +486,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={async () => (await studio.save(), setModal("pdf"))}>
               <Download className="w-3.5 h-3.5" /> PDF 받기
             </button>
+            {canPublish && (
+              <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={async () => (await studio.save(), setModal("publish"))}>
+                <Send className="w-3.5 h-3.5" /> 발행
+              </button>
+            )}
           </div>
         }
       />
@@ -435,6 +530,21 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
               </b>
               <span className="cd-pill cd-pill-idle">편집 L{item.maxLevel}</span>
               {item.flow ? <span className="cd-pill cd-pill-idle">자동 분쪽 — 전체 모양은 미리보기</span> : null}
+              <button
+                type="button"
+                className="cd-btn cd-btn-ghost cd-btn-sm whitespace-nowrap"
+                disabled={!caps?.editText}
+                title="고치는 글의 커서 자리(또는 고른 글 끝)에 지표 칩을 넣습니다 — Ctrl+K"
+                aria-keyshortcuts="Control+K"
+                // 글 고치는 중 커서를 잃지 않게 초점을 옮기지 않는다
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const t = canvasHandle.current?.captureBind();
+                  if (t) setBindTarget(t);
+                }}
+              >
+                <Hash className="w-3.5 h-3.5" /> 지표 넣기
+              </button>
               <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                 <label className="flex items-center gap-1 cd-text-muted whitespace-nowrap">
                   판
@@ -494,8 +604,10 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 checks={checks}
                 onSelect={setSelectedId}
                 onCommitText={ops.commitText}
+                onCommitSlot={ops.commitSlot}
                 onPatchStyle={ops.patchStyle}
                 onKeyCommand={onKeyCommand}
+                onRequestBind={setBindTarget}
                 onChecks={setChecks}
                 handleRef={canvasHandle}
               />
@@ -584,6 +696,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         }}
         onUploaded={(a) => setAssets((list) => [a, ...list.filter((x) => x.key !== a.key)])}
       />
+      <BindPicker open={bindTarget != null} data={studio.data} onClose={closeBind} onPick={insertBind} />
       {kit && item ? (
         <AiEditModal
           open={modal === "ai"}
@@ -613,6 +726,24 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         ) : null}
       </CdModal>
       <PdfModal open={modal === "pdf"} onClose={() => setModal(null)} view={studio.view} />
+      <CatalogPendingModal
+        open={modal === "pending"}
+        onClose={() => setModal(null)}
+        pending={pending}
+        canPublish={canPublish}
+        onPublish={async () => (await studio.save(), setModal("publish"))}
+      />
+      {canPublish ? (
+        <CatalogPublishModal
+          open={modal === "publish"}
+          onClose={() => setModal(null)}
+          pendingCount={pendingCount}
+          onPublished={(e) => {
+            void pending.reload();
+            toast(`발행했습니다 — ${e.label}`, "success");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

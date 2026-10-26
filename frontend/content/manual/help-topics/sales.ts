@@ -174,14 +174,58 @@ export const SALES_HELP: HelpTopic[] = [
     label: "회사소개서 도움말",
     blocks: [
       { kind: "list", items: [
-        "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 화면을 다시 열 때 바로 반영됩니다.",
-        "아래 표에서 통합환경허가 최초허가가 어떤 계약으로 셈해졌는지 확인합니다.",
-        "관리 권한이 있으면 위쪽 카드로 실적·인물·고객사 로고 관리 화면에 갑니다.",
+        "[[발행본]] 표에서 대외 배포용 회사소개서를 받습니다. 발행본은 발행한 때의 파일 그대로입니다.",
+        "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 초안에는 바로 들어가고, 발행본에는 검토 후 발행해야 들어갑니다.",
+        "관리 권한이 있으면 위쪽 카드로 관리 화면·스튜디오에 가고, 반영 대기와 PDF 만들기를 씁니다.",
       ] },
     ],
-    more: { article: "sales.catalog", section: "metrics" },
+    more: { article: "sales.catalog", section: "editions" },
     sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.editions",
+    label: "회사소개서 발행본 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "대외 배포용으로 확정한 판입니다. [[받기]]로 내려받은 파일을 그대로 보내면 됩니다.",
+        "발행본은 발행한 때의 파일 그대로라, 이후 데이터가 바뀌어도 같은 PDF 를 받습니다.",
+        "마스킹판은 전 직원이, 실명판은 관리·발행 담당만 받습니다. 실명판 열람·받기는 접속기록에 남습니다.",
+        "관리·발행 담당은 배포 기록 칸에서 누구에게 냈는지 남깁니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "editions" },
+    sources: ["components/sales/catalog/CatalogEditionsPanel.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.pending",
+    label: "반영 대기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "최근 발행본과 지금 데이터(계약·인물·회사 정보·연혁·인증·인사말/조직도)가 달라진 점입니다.",
+        "초안(스튜디오·PDF 만들기)에는 이미 들어 있습니다. 발행하면 발행본에 반영되고 목록이 비워집니다.",
+        "1시간마다 저절로 점검하고, 새 항목이 생기면 하루 한 번 담당자에게 알립니다. [[지금 다시 점검]]으로 바로 확인합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "pending" },
+    sources: ["components/sales/catalog/CatalogPending.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.publish",
+    label: "회사소개서 발행 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "범위(풀버전·요약본)와 이름 표기(마스킹판·실명판)를 골라 [[발행]]합니다. 지금 데이터와 스튜디오 편집본으로 만듭니다.",
+        "마스킹판은 모든 쪽에서 이름 가운데 글자를 ○ 로 바꾸고 사람 사진을 뺍니다. 대표이사만 실명·사진을 그대로 둡니다.",
+        "넘침 경고가 있으면 확인을 받습니다([[그래도 발행]]). 발행본은 고치거나 지울 수 없습니다.",
+        "배포처를 적으면 배포 기록이 함께 남습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "publish" },
+    sources: ["components/sales/catalog/CatalogPublishModal.tsx"],
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.studio",
@@ -275,13 +319,14 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "숫자는 지표 사전에서만 옵니다. 칩으로 묶인 숫자는 데이터가 바뀌면 함께 바뀝니다.",
+        "[[지표 넣기]](글 고치는 중 Ctrl+K)로 지표나 회사 정보·기준월 같은 글 항목을 칩으로 넣습니다. 소수 자리·단위를 고를 수 있습니다.",
         "바인딩을 풀면 그 숫자만 지금 값으로 고정됩니다.",
         "데이터 영역은 원천 화면에서 고칩니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "data" },
-    sources: ["components/sales/catalog/studio/PanelData.tsx"],
-    reviewedAt: "2026-10-22",
+    sources: ["components/sales/catalog/studio/PanelData.tsx", "components/sales/catalog/studio/BindPicker.tsx"],
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.studio-checks",
@@ -301,14 +346,14 @@ export const SALES_HELP: HelpTopic[] = [
     label: "회사소개서 PDF 도움말",
     blocks: [
       { kind: "list", items: [
-        "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다.",
+        "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다. 요약본은 부록을 뺍니다.",
         "인쇄·배포본은 검토용 안내문을 숨기고, 작업본은 그대로 보여 줍니다. 실명판에만 부록 C(수행인력 상세 이력)가 붙습니다.",
-        "넘침 경고가 0건인지 확인하고 보내세요. 만든 PDF 는 목록에서 [[미리보기]]·[[받기]] 합니다.",
+        "여기서 만든 PDF 는 검토용입니다. 넘침 경고가 0건인지 확인한 뒤 인쇄·배포본 줄의 [[발행]]으로 그대로 발행본이 됩니다(발행 담당).",
       ] },
     ],
     more: { article: "sales.catalog", section: "pdf" },
     sources: ["components/sales/catalog/CatalogRenderPanel.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.reference",
@@ -578,6 +623,89 @@ export const SALES_HELP: HelpTopic[] = [
     more: { article: "sales.catalog-message", section: "versions" },
     sources: ["components/sales/catalog/CatalogMessageBoard.tsx", "components/sales/catalog/ContentVersions.tsx"],
     reviewedAt: "2026-10-22",
+  },
+  {
+    id: "catalog.illustrations",
+    label: "일러스트 라이브러리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "보유 스톡 인포그래픽 일러스트를 올려 두면 스튜디오에서 인포그래픽 모양으로 고르거나 쪽 위에 넣습니다.",
+        "[[묶음 폴더 가져오기]]는 관리자 PC 매처가 만든 폴더를 통째로, [[SVG 한 장 올리기]]는 정리한 SVG 한 장을 올립니다.",
+        "쓰는 쪽이 있는 일러스트는 빼도 지우지 않고 보관합니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/CatalogIllustrationsBoard.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-use",
+    label: "일러스트와 기본 인포그래픽 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "일러스트는 인포그래픽의 모양 하나입니다. 유형은 기본 인포그래픽 16종 중 어느 것과 같은 뜻인지를 나타냅니다.",
+        "그림에 항목 수가 고정돼 있어, 스튜디오에서는 항목 수가 같은 인포그래픽 자리에만 후보로 나옵니다.",
+        "'추천 자리'는 매처가 매긴 회사소개서 쪽 적합도입니다(상·중·하).",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "studio" },
+    sources: ["components/sales/catalog/illustrations/CatalogIllustrationsBoard.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-import",
+    label: "묶음 폴더 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "관리자 PC 에서 asset_matcher.py export 로 만든 폴더를 고릅니다. 영역마다 meta.json·illust.svg·thumb.png 가 있어야 합니다.",
+        "같은 일러스트를 다시 올리면 새 판으로 바뀌고, 쪽에서 쓰던 이전 판은 보관됩니다.",
+        "SVG 는 3MB 이하만 받습니다. 넘으면 매처에서 영역을 더 좁히거나(crop) 효과를 걷어 냅니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/IllustrationImportModal.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-slots",
+    label: "글자 자리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "글자 자리는 스튜디오가 항목 글을 얹는 상자입니다. 역할(제목·설명·번호·숫자·중심)과 항목 번호로 내용과 짝짓습니다.",
+        "끌어 옮기고 모서리로 크기를 바꿉니다. 방향키 0.5%, Shift 2%, Alt+방향키 크기, Delete 지우기.",
+        "글자 크기는 그림 폭에 비례하되 쪽에서 7pt 아래로 내려가지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "slots" },
+    sources: ["components/sales/catalog/illustrations/IllustrationDetailDrawer.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.illustrations-license",
+    label: "일러스트 라이선스 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "출처·스톡 번호·라이선스 종류·구입일을 적어 둡니다. Adobe Stock Standard 는 인쇄 50만 부까지의 마케팅 인쇄물·디지털 문서에 쓸 수 있습니다.",
+        "구입한 원본 파일은 저작물이라 저장소나 외부에 올리지 않습니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "import" },
+    sources: ["components/sales/catalog/illustrations/IllustrationDetailDrawer.tsx"],
+    reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.studio-illustration",
+    label: "일러스트로 그리기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "보유 일러스트로 인포그래픽을 그립니다. 항목 수가 같은 일러스트만 후보로 나오고, 같은 유형·이 쪽 추천이 앞에 옵니다.",
+        "글자 자리를 캔버스에서 눌러 바로 고칩니다. 숫자 자리는 지표에 묶으면 데이터가 바뀌어도 최신 값입니다.",
+        "색은 KESI 토큰·분야 색으로 다시 칠합니다. [[기본 도식으로]] 누르면 원래 인포그래픽으로 돌아갑니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-illustrations", section: "studio" },
+    sources: ["components/sales/catalog/studio/PanelIllustration.tsx"],
+    reviewedAt: "2026-10-26",
   },
   {
     id: "catalog.fonts",

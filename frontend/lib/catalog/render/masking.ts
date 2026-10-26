@@ -13,12 +13,36 @@ export function maskName(name: string): string {
   return n[0] + "○".repeat(n.length - 2) + n[n.length - 1];
 }
 
+/**
+ * 마스킹판에서도 실명·사진을 남길 사람 — 대표이사만(사용자 결정 2026-10-26). 다른 임원·직원·자문위원은 모두 가린다.
+ * keep 에 든 이름은 가리지 않는 이름 가리기 함수와, 일괄 가리기 목록에서 뺀 이름 목록을 돌려준다.
+ */
+export function nameMasker(masked: boolean, keep: string[]): { nm: (name: string) => string; maskList: (names: string[]) => string[] } {
+  const kept = new Set(keep.map((x) => x.trim()).filter(Boolean));
+  return {
+    nm: (name) => (masked && !kept.has(name.trim()) ? maskName(name) : name),
+    maskList: (names) => (masked ? names.filter((x) => x && !kept.has(x.trim())) : []),
+  };
+}
+
 /** 자유 글(조직도 아래 줄 등)에서 알려진 사람 이름만 골라 가린다(일반 낱말은 건드리지 않는다). */
 export function maskNamesIn(text: string, names: string[]): string {
   let out = text;
   const list = [...new Set(names.map((x) => x.trim()).filter((x) => HANGUL_NAME.test(x) && !x.includes("○")))].sort((a, b) => b.length - a.length);
   for (const n of list) out = out.split(n).join(maskName(n));
   return out;
+}
+
+/**
+ * 마스킹판 마지막 단계 — 그린 본문 HTML 전체에서 실명을 한 번 더 가린다(쪽마다 다르지 않게 일괄, 블루프린트 §6-6).
+ * 데이터 단계에서 이미 가렸어도 스튜디오에서 손으로 적은 글·조직도 아래 줄 같은 자유 글에 남은 이름을 잡는다.
+ * 두 글자 이름은 일반 낱말(예: 이수·정진)과 겹치기 쉬워 여기서는 세 글자 이상만 — 두 글자 이름은 데이터 단계 가리기가 맡는다.
+ */
+export function maskNamesInHtml(html: string, names: string[]): string {
+  const full = names.map((x) => x.trim()).filter((x) => x.length >= 3);
+  if (!full.length) return html;
+  // 태그 사이 글자와 속성 값(alt 등) 모두 — 태그 이름·속성 이름은 영문이라 한글 이름과 겹치지 않는다
+  return maskNamesIn(html, full);
 }
 
 /** 사진 없는 변형의 이니셜(성) */

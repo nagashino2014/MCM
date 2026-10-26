@@ -6,10 +6,10 @@ import { readContractDocument } from "@/lib/storage/contract-document-storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 회사소개서 자산(로고·사진·증서) 원본 — 화면 미리보기용
+// GET: 회사소개서 자산(로고·사진·증서) 원본 — 관리 화면 미리보기용(catalog.manage, 312 이후 catalog.view 는 전 직원)
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ assetId: string }> }) {
   try {
-    await requirePermission("catalog.view");
+    await requirePermission("catalog.manage");
     const { assetId } = await params;
     const asset = await getCatalogAsset(assetId);
     if (!asset) return NextResponse.json({ error: "자산을 찾을 수 없습니다." }, { status: 404 });

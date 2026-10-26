@@ -8,6 +8,7 @@ import { REGION_GROUPS } from "@/lib/catalog/regions";
 import { Icon, cx, fmt } from "../components/parts";
 import { Bars, Compare, Donut, HBars, KoreaMap, Process, type RootAttrs } from "../components/infographics";
 import { MAP_H, MAP_W } from "../korea-map";
+import { IllustrationFigure } from "./illustration";
 import { defaultVariant, type InfoBox, type InfoColorMode, type InfoItem, type InfoSpec } from "./types";
 
 const SHARE_CLS = ["kc-s1", "kc-s2", "kc-s3", "kc-s4", "kc-s5"];
@@ -97,7 +98,10 @@ function Orbit({ spec, box, root, kind }: { spec: InfoSpec; box: InfoBox; root: 
 }
 
 /** 유형별 그리기. root = 바깥 요소 속성(자리 표식·색 모드). */
-export function renderInfographic(spec: InfoSpec, box: InfoBox, rootIn: RootAttrs = {}, area = 1): ReactNode {
+export function renderInfographic(spec: InfoSpec, box: InfoBox, rootIn: RootAttrs = {}, areaIn?: number): ReactNode {
+  // 일러스트 모양은 쪽에 분야가 없으면(기본 --area = 브랜드) 그대로 알아야 대비를 바르게 잰다
+  if (spec.illust) return <IllustrationFigure spec={spec} box={box} root={rootIn} area={areaIn} />;
+  const area = areaIn ?? 1;
   const variant = spec.variant ?? defaultVariant(spec.type);
   const vars = colorModeVars(spec.colorMode);
   const root: RootAttrs = vars ? { ...rootIn, style: { ...rootIn.style, ...vars } } : rootIn;

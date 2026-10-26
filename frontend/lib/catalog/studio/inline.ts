@@ -113,3 +113,35 @@ export function unbindChip(children: CNode[], chipId: string, valueText: string)
     return c.children ? { ...c, children: unbindChip(c.children, chipId, valueText) } : c;
   });
 }
+
+// ── 지표 넣기 — 커서 자리 표식 ──
+// 편집 DOM 의 커서 자리에 data-chip="caret" 표식을 잠깐 넣고 역파싱하면 그 자리가 표식 노드로 남는다 → 지표를 고르면 표식을 칩으로 바꾼다.
+
+export const CARET_ID = "caret";
+
+export function caretNode(): CNode {
+  return { id: CARET_ID, tag: "#caret" };
+}
+
+/** 글 끝에 표식(데이터 탭에서 넣을 때) — 끝 글자가 공백이 아니면 한 칸 띄운다 */
+export function appendCaret(children: CNode[]): CNode[] {
+  const last = children[children.length - 1];
+  const needSpace = last && !(last.tag === "#text" && /\s$/.test(last.text ?? "")) && last.tag !== "br";
+  return [...children, ...(needSpace ? [{ id: newUserId(), tag: "#text", text: " " }] : []), caretNode()];
+}
+
+/** 표식 자리에 칩을 넣는다(표식이 없으면 끝에) */
+export function placeChip(children: CNode[], chip: CNode): CNode[] {
+  let placed = false;
+  const walk = (list: CNode[]): CNode[] =>
+    list.flatMap((c) => {
+      if (c.id === CARET_ID && c.tag === "#caret") {
+        if (placed) return [];
+        placed = true;
+        return [chip];
+      }
+      return c.children ? [{ ...c, children: walk(c.children) }] : [c];
+    });
+  const out = walk(children);
+  return placed ? out : [...out, chip];
+}

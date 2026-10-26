@@ -23,6 +23,8 @@ import {
   setNodeType,
   type PageEdits,
 } from "@/lib/catalog/studio/edits";
+import { BIND_GROUP_ORDER, DATA_BINDS, bindOptions, makeBindChip, resolveBind } from "@/lib/catalog/studio/binds";
+import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, placeChip } from "@/lib/catalog/studio/inline";
 import { findNode, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import { makeFixture } from "./catalog-studio-fixture";
@@ -247,4 +249,82 @@ test("인포그래픽 매칭 — 목록은 수치형을 막고, 순환어는 순
   assert.ok(m.candidates.some((c) => c.type === "map"));
   assert.ok(m.candidates.some((c) => c.type === "share"));
   assert.ok(m.blocked.some((b) => b.type === "process"));
+});
+
+/** htmlparser2 노드 → DOM 모양(역파싱 입력) */
+function domOf(html: string): unknown {
+  const text = (n: HNode): string => (n.type === "text" ? n.data ?? "" : (n.children ?? []).map(text).join(""));
+  const adapt = (n: HNode): unknown =>
+    n.type === "text"
+      ? { nodeType: 3, textContent: n.data ?? "", childNodes: [] }
+      : { nodeType: 1, tagName: (n.name ?? "").toUpperCase(), textContent: text(n), childNodes: (n.children ?? []).map(adapt), getAttribute: (k: string) => n.attribs?.[k] ?? null };
+  return adapt(((parseDocument(`<div>${html}</div>`) as unknown as HNode).children ?? [])[0]);
+}
+
+test("지표 넣기 — 커서 자리 칩, 저장 왕복, 데이터 갱신 뒤 새 값, 편집 전 상태로 되돌리기", () => {
+  const before = makeFixture();
+  const after = makeFixture({ extraContract: true });
+  const base0 = pageTree(before, "area-1");
+  let edits: PageEdits = { v: 1 };
+  const derived = applyEdits(base0, edits);
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+
+  // 편집 DOM 의 커서 자리 표식 → 표식 노드(굵게 안쪽 포함)
+  const chips = collectChips(lead.children ?? []);
+  chips.set(CARET_ID, caretNode());
+  const parsed = fromEditableDom(domOf(`앞 글 <b>굵게<span data-chip="${CARET_ID}"></span></b> 뒤 글`) as never, chips);
+  assert.equal(parsed[1].tag, "b");
+  assert.equal(parsed[1].children?.[1]?.id, CARET_ID, "표식은 굵게 안 커서 자리");
+
+  const chip = makeBindChip("metric:permit.initial.completed", before, { digits: 0 })!;
+  assert.equal(textOf(chip), "40건", "지금 값 + 단위");
+  assert.equal(chip.attrs?.["data-metric"], "permit.initial.completed");
+  const placed = placeChip(parsed, chip);
+  assert.equal(placed[1].children?.[1]?.bind, "metric:permit.initial.completed", "표식 자리에 칩");
+  assert.equal(JSON.stringify(placed).includes(`"${CARET_ID}"`), false, "표식은 남지 않음");
+
+  const saved = edits;
+  edits = setNodeContent(edits, derived, lead.id, placed);
+  // 데이터 칩(설립 연월)·단위 없는 칩도 끝에 넣는다
+  const d2 = applyEdits(base0, edits);
+  const lead2 = findBy(d2, hasClass("kc-lead"))!;
+  const founded = makeBindChip("data:company.founded", before)!;
+  edits = setNodeContent(edits, d2, lead2.id, placeChip(appendCaret(lead2.children ?? []), founded));
+  edits = sanitizePageEdits(JSON.parse(JSON.stringify(edits)));
+
+  const after2 = { ...after, company: { ...after.company, foundedYear: "2011", foundedMonth: "4" } };
+  const html = renderToStaticMarkup(renderTrees([applyEdits(pageTree(after2, "area-1"), edits)], { url: (k) => k, data: after2 }));
+  assert.match(html, /<span data-metric="permit.initial.completed">41(<!-- -->)?건<\/span>/, "계약 1건 추가 뒤 41건");
+  assert.match(html, /<span data-bind="company.founded">2011년 4월<\/span>/, "설립 연월도 새 값");
+  const out = applyEdits(pageTree(after2, "area-1"), edits);
+  const kept = findBy(out, (n) => n.bind === "metric:permit.initial.completed" && n.origin !== "base")!;
+  assert.equal(kept.bindDigits, 0, "자릿수 옵션 유지");
+
+  // 되돌리기 = 넣기 전 편집층 → 칩 없음
+  const undone = applyEdits(pageTree(after, "area-1"), saved);
+  assert.equal(findBy(findBy(undone, hasClass("kc-lead"))!, (n) => n.bind === "metric:permit.initial.completed"), null);
+});
+
+test("지표 넣기 목록 — 지원 데이터 항목·묶음 순서·정리 규칙", () => {
+  const data = makeFixture();
+  const opts = bindOptions(data);
+  const groups = [...new Set(opts.map((o) => o.group))];
+  assert.deepEqual(groups, BIND_GROUP_ORDER.filter((g) => groups.includes(g)), "묶음 순서대로");
+  assert.equal(opts.filter((o) => o.kind === "metric").length, Object.keys(data.metrics).length, "지표 사전 전부");
+  for (const b of DATA_BINDS) assert.ok(opts.some((o) => o.bind === `data:${b.key}`), `데이터 항목 ${b.key}`);
+  assert.equal(resolveBind("data:company.name", data), data.company.name);
+  assert.equal(resolveBind("data:offices.0.phone", data), null, "목록에 없는 경로는 풀지 않음");
+  assert.equal(makeBindChip("data:company.secret", data), null);
+  assert.equal(makeBindChip("metric:nope.none", data), null);
+  // 끝에 넣을 때 한 칸 띄움
+  const tail = appendCaret([{ id: "uaaaaaaaa", tag: "#text", text: "기준" }]);
+  assert.equal(tail[1].text, " ");
+  // 저장 정리: 모르는 데이터 경로·자릿수 범위 밖은 버린다
+  const clean = sanitizePageEdits({
+    v: 1,
+    nodes: { nabc: { content: [{ id: "ubbbbbbbb", tag: "span", bind: "data:company.secret", bindDigits: 9, children: [{ id: "ucccccccc", tag: "#text", text: "x" }] }] } },
+  });
+  const node = clean.nodes?.nabc?.content?.[0];
+  assert.equal(node?.bind, undefined);
+  assert.equal(node?.bindDigits, undefined);
 });

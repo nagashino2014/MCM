@@ -7,6 +7,13 @@ import type { ChangelogEntry } from "./types";
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-27",
+    kind: "신규",
+    title: "회사소개서 스튜디오 — 여러 개 고르기·복제",
+    body: "캔버스에서 Shift·Ctrl+클릭으로 요소를 여러 개 골라 묶음 손잡이·방향키로 함께 옮기고(서로의 자리 유지), [숨기기·지우기]로 한 번에 뺍니다. [복제](Ctrl+D)는 글·사진·직접 넣은 요소의 사본을 오른쪽 아래에 놓습니다. 모두 실행 취소 한 단계입니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
+    date: "2026-10-27",
     kind: "수정",
     title: "회사소개서 스튜디오 — 배포 뒤 일러스트 글자가 그림 아래로 쏟아지던 문제",
     body: "브라우저에 남은 예전 지면 CSS 를 계속 쓰던 탓에, 일러스트의 그림·글자 자리가 겹쳐 놓이지 않고 아래로 흘러 넘침 표시가 나던 문제를 고쳤습니다. 이제 스튜디오를 열 때마다 지면 CSS·쪽 검사 스크립트가 최신인지 확인합니다.",

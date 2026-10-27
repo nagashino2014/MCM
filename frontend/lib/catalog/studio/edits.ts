@@ -17,7 +17,7 @@
 import { resolveInfoMetrics, sanitizeInfoSpec, type InfoIllust, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { infographicToTree } from "./convert";
-import { PHOTO_RATIOS, isTokenVar, isTypeStep, typeStepStyle } from "./design-system";
+import { PHOTO_RATIOS, isTokenVar, isTypeStep, nearestTypeStep, typeStepStyle } from "./design-system";
 import { BASE_ID_RE, USER_ID_RE, findPath, newUserId, type CNode, type ImageRef } from "./nodes";
 import { isDataBindKey } from "./binds";
 
@@ -717,6 +717,51 @@ export function addElement(edits: PageEdits, node: CNode): PageEdits {
   const next = cloneEdits(edits);
   next.added = [...(next.added ?? []), clean].slice(0, 40);
   return next;
+}
+
+/** 복제 자리 — 원본이 지금 쪽에 그려진 상자(쪽 기준 px)와 글자 크기 */
+export interface DuplicateAt {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fontPx?: number;
+}
+
+/** 복제한 사본이 원본에서 비켜 놓이는 거리(4pt 기준선 4칸) */
+export const DUPLICATE_OFFSET = 16;
+
+const pxv = (v: number) => `${Math.round(v * 100) / 100}px`;
+
+/**
+ * 요소 복제(L3) — 사본은 추가한 요소가 되어 원본 오른쪽 아래(16px)에 놓인다. 추가 요소는 그대로, 기본 글은 글상자로,
+ * 기본 사진은 이미지 상자로 찍는다(데이터 영역·도식은 복제하지 않음). 추가한 요소 수 상한(40)이면 그대로 돌려준다.
+ */
+export function duplicateNode(edits: PageEdits, derived: CNode, id: string, at: DuplicateAt): { edits: PageEdits; id: string } | null {
+  const path = findPath(derived, id);
+  const node = path?.[path.length - 1];
+  if (!node || (edits.added?.length ?? 0) >= 40) return null;
+  let copy: CNode | null = null;
+  if (node.origin === "add") {
+    const stored = edits.added?.find((a) => a.id === id);
+    if (!stored) return null;
+    const style = { ...(stored.style ?? {}) } as Record<string, string | number>;
+    style.left = pxv((parseFloat(String(style.left)) || at.x) + DUPLICATE_OFFSET);
+    style.top = pxv((parseFloat(String(style.top)) || at.y) + DUPLICATE_OFFSET);
+    copy = { ...freshCopy(stored), style };
+  } else {
+    const place = { position: "absolute", left: pxv(at.x + DUPLICATE_OFFSET), top: pxv(at.y + DUPLICATE_OFFSET), width: pxv(Math.max(8, at.w)) };
+    if (node.tag === "img" && node.asset) {
+      copy = { id: newUserId(), tag: "div", className: "kc-x-image", style: { ...place, height: pxv(Math.max(8, at.h)) }, asset: node.asset };
+    } else if (node.children?.length) {
+      const typeStep = isTypeStep(node.typeStep) ? node.typeStep : nearestTypeStep(at.fontPx ?? 0);
+      copy = { id: newUserId(), tag: "div", className: "kc-x-text", style: place, typeStep, children: node.children.map(freshCopy) };
+    }
+  }
+  if (!copy) return null;
+  const next = addElement(edits, copy);
+  const added = next.added?.[next.added.length - 1];
+  return added && next !== edits ? { edits: next, id: added.id } : null;
 }
 
 /** 쪽 변형(L2) — value null = 지우기 */

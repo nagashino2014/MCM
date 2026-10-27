@@ -14,6 +14,7 @@ import { orderPlan, type StudioPageState } from "@/lib/catalog/studio/doc";
 import {
   addElement,
   applyEdits,
+  duplicateNode,
   hideNode,
   listItemOp,
   patchNodeStyle,
@@ -26,6 +27,7 @@ import {
 import { BIND_GROUP_ORDER, DATA_BINDS, bindOptions, makeBindChip, resolveBind } from "@/lib/catalog/studio/binds";
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, placeChip } from "@/lib/catalog/studio/inline";
 import { findNode, textOf, type CNode } from "@/lib/catalog/studio/nodes";
+import { capabilities, outermost, resolveSelection } from "@/lib/catalog/studio/select";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import { makeFixture } from "./catalog-studio-fixture";
 
@@ -327,4 +329,55 @@ test("지표 넣기 목록 — 지원 데이터 항목·묶음 순서·정리 �
   const node = clean.nodes?.nabc?.content?.[0];
   assert.equal(node?.bind, undefined);
   assert.equal(node?.bindDigits, undefined);
+});
+
+test("스튜디오 — 복제: 추가 요소는 그대로·기본 글은 글상자·기본 사진은 이미지 상자로, 원본 오른쪽 아래 16px", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  let edits: PageEdits = { v: 1 };
+  let derived = applyEdits(base, edits);
+  // 기본 글(리드) → 글상자, 글자 크기는 가장 가까운 단계
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  const leadSel = resolveSelection(derived, lead.id)!;
+  assert.equal(capabilities(leadSel, 3).duplicate, true);
+  assert.equal(capabilities(leadSel, 2).duplicate, false, "자유 배치(L3) 쪽에서만");
+  const r1 = duplicateNode(edits, derived, lead.id, { x: 48, y: 200, w: 500, h: 40, fontPx: 13 })!;
+  assert.ok(r1, "글 복제");
+  edits = r1.edits;
+  const copy = edits.added!.find((a) => a.id === r1.id)!;
+  assert.equal(copy.className, "kc-x-text");
+  assert.equal(copy.style?.left, "64px");
+  assert.equal(copy.style?.top, "216px");
+  assert.equal(copy.style?.width, "500px");
+  assert.equal(textOf(copy), textOf(lead));
+  // 추가 요소 복제 → 같은 모양, 자리만 16px 비킴, id 새로
+  derived = applyEdits(base, edits);
+  const r2 = duplicateNode(edits, derived, r1.id, { x: 64, y: 216, w: 500, h: 40 })!;
+  edits = r2.edits;
+  const copy2 = edits.added!.find((a) => a.id === r2.id)!;
+  assert.notEqual(r2.id, r1.id);
+  assert.equal(copy2.style?.left, "80px");
+  assert.equal(copy2.style?.top, "232px");
+  assert.equal(copy2.typeStep, copy.typeStep);
+  // 데이터 영역·도식은 복제하지 않음
+  const info = findBy(derived, (n) => n.widget === "infographic")!;
+  assert.equal(capabilities(resolveSelection(derived, info.id)!, 3).duplicate, false);
+  // 저장 왕복에도 사본이 남는다
+  const round = sanitizePageEdits(JSON.parse(JSON.stringify(edits)));
+  assert.equal(round.added?.length, 2);
+  // 40개 한도
+  const full: PageEdits = { v: 1, added: Array.from({ length: 40 }, (_, i) => ({ ...copy, id: `u${String(i).padStart(8, "0")}` })) };
+  assert.equal(duplicateNode(full, applyEdits(base, full), "u00000000", { x: 0, y: 0, w: 10, h: 10 }), null);
+});
+
+test("스튜디오 — 여러 개 고르기: 다른 고른 요소 안에 든 것은 빼고 함께 숨기기", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  const derived = applyEdits(base, { v: 1 });
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  const list = findBy(derived, hasClass("kc-list"))!;
+  const li = (list.children ?? []).find((c) => c.tag === "li")!;
+  assert.deepEqual(outermost(derived, [list.id, li.id, lead.id]), [list.id, lead.id]);
+  const edits = [lead.id, list.id].reduce((acc, id) => hideNode(acc, derived, id), { v: 1 } as PageEdits);
+  const d1 = applyEdits(base, edits);
+  assert.equal(findBy(d1, hasClass("kc-lead")), null);
+  assert.equal(findBy(d1, hasClass("kc-list")), null);
 });

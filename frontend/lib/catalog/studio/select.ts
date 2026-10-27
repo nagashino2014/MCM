@@ -67,6 +67,12 @@ export function describe(path: CNode[]): Selection {
   return { id: node.id, node, path, parent, kind };
 }
 
+/** 여러 개 고른 것 중 다른 고른 요소 안에 든 것은 뺀다(함께 옮기기·숨기기에서 두 번 적용되지 않게) */
+export function outermost(root: CNode, ids: string[]): string[] {
+  const set = new Set(ids);
+  return ids.filter((id) => !(findPath(root, id) ?? []).slice(0, -1).some((a) => set.has(a.id)));
+}
+
 /** 위쪽으로 고를 수 있는 다음 조상(쪽 루트 전까지) */
 export function parentSelection(root: CNode, sel: Selection): Selection | null {
   for (let i = sel.path.length - 2; i >= 1; i--) {
@@ -90,6 +96,8 @@ export interface Capabilities {
   resize: boolean;
   typeStep: boolean;
   color: boolean;
+  /** 복제(L3) — 추가한 요소·글·사진만(데이터 영역·도식은 빼고) */
+  duplicate: boolean;
   /** 막힌 이유(사용자에게 보여 줌) */
   locked?: string;
 }
@@ -120,6 +128,7 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     // 넣은 일러스트는 글자 크기·색을 일러스트 패널(그림 비율·색 모드)로 고친다
     typeStep: maxLevel >= 3 && (sel.kind === "text" || added) && !n.widget,
     color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added) && !n.widget,
+    duplicate: maxLevel >= 3 && !isRoot && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset))),
   };
   if (sel.kind === "widget") caps.locked = "데이터에서 자동으로 채우는 영역입니다. 행·항목은 데이터 화면에서 고칩니다.";
   else if (maxLevel === 1) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";

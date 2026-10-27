@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-27",
+    kind: "수정",
+    title: "회사소개서 스튜디오 — 배포 뒤 일러스트 글자가 그림 아래로 쏟아지던 문제",
+    body: "브라우저에 남은 예전 지면 CSS 를 계속 쓰던 탓에, 일러스트의 그림·글자 자리가 겹쳐 놓이지 않고 아래로 흘러 넘침 표시가 나던 문제를 고쳤습니다. 이제 스튜디오를 열 때마다 지면 CSS·쪽 검사 스크립트가 최신인지 확인합니다.",
+    articles: ["sales.catalog-illustrations"],
+  },
+  {
     date: "2026-10-26",
     kind: "개선",
     title: "일러스트 글자 자리 ↔ 내용 매핑·새 판에 설정 이어 붙이기",

@@ -66,13 +66,13 @@ export function useAutosave(opts: {
 export function AutosaveStatus({ lastSavedAt, lastError }: { lastSavedAt: Date | null; lastError: string | null }) {
   if (lastError) {
     return (
-      <span className="text-[10.5px] whitespace-nowrap" style={{ color: "var(--cd-error)" }} title={lastError}>
+      <span className="text-[11px] whitespace-nowrap cd-error-text" title={lastError}>
         자동 저장 실패
       </span>
     );
   }
-  if (!lastSavedAt) return <span className="text-[10.5px] cd-text-faint whitespace-nowrap">5분마다 자동 저장</span>;
+  if (!lastSavedAt) return <span className="text-[11px] cd-text-faint whitespace-nowrap">5분마다 자동 저장</span>;
   const hh = String(lastSavedAt.getHours()).padStart(2, "0");
   const mm = String(lastSavedAt.getMinutes()).padStart(2, "0");
-  return <span className="text-[10.5px] cd-text-faint whitespace-nowrap">마지막 저장 {hh}:{mm}</span>;
+  return <span className="text-[11px] cd-text-faint whitespace-nowrap">마지막 저장 {hh}:{mm}</span>;
 }

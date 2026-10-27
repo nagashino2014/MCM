@@ -86,7 +86,7 @@ export function QuoteItemTreeEditor({
   return (
     <>
       {/* 기술등급 축(가변) — 등급을 빼면 그 MD를 남은 등급에 비율대로 재분배한다 */}
-      <div className="flex items-center gap-2 flex-wrap text-[11.5px]">
+      <div className="flex items-center gap-2 flex-wrap text-[12px]">
         <span className="cd-text-faint">기술등급</span>
         {(LABOR_GRADES as readonly string[]).map((g) => {
           const on = grades.includes(g);
@@ -103,13 +103,13 @@ export function QuoteItemTreeEditor({
             </button>
           );
         })}
-        <span className="text-[10.5px] cd-text-faint">
+        <span className="text-[11px] cd-text-faint">
           등급 제외 시 해당 MD는 남은 등급에 비율대로 재분배됩니다(합계 보존).
         </span>
       </div>
       <div className="overflow-x-auto">
         {/* 등급 열은 개수와 무관하게 총폭 고정(40%)을 균등 분할 — 3열이든 5열이든 표 폭이 같다 */}
-        <table className="w-full text-[11.5px] border-collapse min-w-[640px] table-fixed">
+        <table className="w-full text-[12px] border-collapse min-w-[640px] table-fixed">
           <colgroup>
             <col style={{ width: "56px" }} />
             <col />
@@ -145,7 +145,7 @@ export function QuoteItemTreeEditor({
                 {grades.map((g) => (
                   <td key={g} className="border cd-border-c px-1 py-0.5 text-center">
                     {r.isParent ? (
-                      <span className="cd-text-faint text-[10px]">소계</span>
+                      <span className="cd-text-faint text-[11px]">소계</span>
                     ) : (
                       <MdCell
                         value={r.baseMd[g]}
@@ -171,10 +171,10 @@ export function QuoteItemTreeEditor({
         </table>
       </div>
       <div className="flex items-center gap-2">
-        <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint" onClick={() => onRowsChange([...rows, { label: "", isParent: false, baseMd: {} }])}>
+        <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint" onClick={() => onRowsChange([...rows, { label: "", isParent: false, baseMd: {} }])}>
           ＋ 행 추가
         </button>
-        <span className="text-[10.5px] cd-text-faint">세부항목은 위쪽의 가장 가까운 대항목에 소속됩니다. 대항목 MD는 자동 소계.</span>
+        <span className="text-[11px] cd-text-faint">세부항목은 위쪽의 가장 가까운 대항목에 소속됩니다. 대항목 MD는 자동 소계.</span>
       </div>
     </>
   );

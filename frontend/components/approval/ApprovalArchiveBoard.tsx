@@ -219,7 +219,7 @@ export function ApprovalArchiveBoard() {
   }, [topTab, tab, folder, fromYm, toYm, q]);
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<Archive className="w-5 h-5" />}
         eyebrow="Approval · Archive"
@@ -227,7 +227,7 @@ export function ApprovalArchiveBoard() {
         help="완료된 결재 문서를 개인·부서·전사 범위로 조회합니다. 보존연한이 지난 문서는 만료로 표시됩니다."
       />
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         {/* 전자결재 / 발송공문 / 발송견적 / 계약 문서 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
         <CdTabs<TopTab>
           active={topTab}
@@ -312,12 +312,12 @@ export function ApprovalArchiveBoard() {
         {topTab === "letters" ? (
           <>
             <LetterRecordsTable letters={letters} loading={lettersLoading} theme={theme} onChanged={loadLetters} />
-            <p className="text-[10.5px] cd-text-faint">공문을 클릭하면 PDF 원문 확인·PDF/한글 다운로드·재발송·수신처 편집이 가능합니다.</p>
+            <p className="text-[11px] cd-text-faint">공문을 클릭하면 PDF 원문 확인·PDF/한글 다운로드·재발송·수신처 편집이 가능합니다.</p>
           </>
         ) : topTab === "quotes" ? (
           <>
             <QuoteRecordsTable quotes={quotes} loading={quotesLoading} theme={theme} onChanged={loadQuotes} />
-            <p className="text-[10.5px] cd-text-faint">견적을 클릭하면 PDF 확인·PDF/xlsx 다운로드·재발송·수주 결과 기입이 가능합니다.</p>
+            <p className="text-[11px] cd-text-faint">견적을 클릭하면 PDF 확인·PDF/xlsx 다운로드·재발송·수주 결과 기입이 가능합니다.</p>
           </>
         ) : topTab === "contracts" ? (
           contractDocsLoading ? (
@@ -327,7 +327,7 @@ export function ApprovalArchiveBoard() {
           ) : (
             <div className="flex flex-col gap-3">
             <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
+              <table className="w-full text-[13px]">
                 <thead className="cd-table-head">
                   <tr className="text-left cd-text-faint text-[11px]">
                     <th className="py-1.5 pr-3 font-semibold">계약</th>
@@ -347,7 +347,7 @@ export function ApprovalArchiveBoard() {
                     >
                       <td className="py-[11.5px] pr-3 cd-text">{d.contractTitle}</td>
                       <td className="py-[11.5px] pr-3">
-                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{d.typeLabel}</span>
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{d.typeLabel}</span>
                       </td>
                       <td className="py-[11.5px] pr-3 cd-text-faint">{d.fileName}</td>
                       <td className="py-[11.5px] pr-3 text-right font-mono text-[11px] cd-text-faint">{formatBytes(d.byteSize ?? 0)}</td>
@@ -367,7 +367,7 @@ export function ApprovalArchiveBoard() {
         ) : (
           <div className="flex flex-col gap-3">
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13px]">
               <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">문서번호</th>
@@ -392,13 +392,13 @@ export function ApprovalArchiveBoard() {
                         )}
                         {d.title}
                         {tab === "watched" && d.watchKind && (
-                          <span className="ml-1.5 text-[10px] cd-text-faint">{d.watchKind === "view" ? "(열람)" : "(참조)"}</span>
+                          <span className="ml-1.5 text-[11px] cd-text-faint">{d.watchKind === "view" ? "(열람)" : "(참조)"}</span>
                         )}
                       </td>
                       <td className="py-[11.5px] pr-3 cd-text-faint">{d.drafterName ?? "-"}</td>
                       <td className="py-[11.5px] pr-3">
                         <span
-                          className={`text-[10.5px] rounded-full px-2 py-0.5 border ${
+                          className={`text-[11px] rounded-full px-2 py-0.5 border ${
                             d.status === "approved"
                               ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                               : d.status === "rejected"
@@ -412,7 +412,7 @@ export function ApprovalArchiveBoard() {
                       <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{short(d.completedAt)}</td>
                       <td className="py-[11.5px] font-mono text-[11px]">
                         {exp ? (
-                          <span className={exp.expired ? "text-[color:var(--cd-error)] font-bold" : "cd-text-faint"}>
+                          <span className={exp.expired ? "text-[color:var(--cd-error)] font-semibold" : "cd-text-faint"}>
                             {exp.text}
                             {exp.expired ? " (만료)" : ""}
                           </span>

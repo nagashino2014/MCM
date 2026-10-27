@@ -79,11 +79,11 @@ export function HolidayBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white min-h-full p-4 rounded-lg" data-theme={theme}>
       <CdPageHeader icon={<CalendarOff className="w-5 h-5" />} title="휴무일 지정" helpTopic="hr.holidays" />
 
       <p className="text-[13px] cd-text-muted mb-4 flex items-start gap-1.5">
-        <Info className="w-4 h-4 shrink-0 mt-[1px]" style={{ color: "var(--cd-primary)" }} />
+        <Info className="w-4 h-4 shrink-0 mt-[1px] cd-text-primary" />
         <span>
           날짜를 클릭하면 <b>사내 휴무일</b>(대체휴일·창립기념일·전체연차 사용)로 지정할 수 있습니다. 법정공휴일·명절·근로자의 날은
           자동으로 표시되며 별도 지정이 필요 없습니다. 지정된 휴무일은 홈·일정 캘린더에 붉은색과 휴무일명으로 나타나고,
@@ -91,7 +91,7 @@ export function HolidayBoard() {
         </span>
       </p>
 
-      {error && <p className="text-[13px] mb-3" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[13px] mb-3 cd-error-text">{error}</p>}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_480px] gap-4 items-start">
         <ScheduleCalendar
@@ -105,27 +105,27 @@ export function HolidayBoard() {
         />
 
         <div className="flex flex-col gap-4">
-          <section className="rounded-2xl border cd-border-c p-3">
-            <div className="text-[11px] font-bold cd-text-faint mb-2">
+          <section className="rounded-lg border cd-border-c p-3">
+            <div className="text-[11px] font-semibold cd-text-faint mb-2">
               사내 지정 휴무일 ({company.length}) — {cur.y}년
             </div>
             {loading ? (
-              <p className="text-[12.5px] cd-text-faint">불러오는 중입니다.</p>
+              <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
             ) : company.length === 0 ? (
-              <p className="text-[12.5px] cd-text-faint">지정된 사내 휴무일이 없습니다. 캘린더에서 날짜를 클릭하세요.</p>
+              <p className="text-[13px] cd-text-faint">지정된 사내 휴무일이 없습니다. 캘린더에서 날짜를 클릭하세요.</p>
             ) : (
               <div className="flex flex-col gap-1">
                 {company.map((h) => (
                   <div key={h.date} className="flex items-center gap-2 rounded-lg border cd-border-c px-2 py-1.5" style={{ background: "var(--cd-card-solid)" }}>
-                    <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: "#EF4444" }}>
+                    <span className="font-mono text-[12px] font-semibold shrink-0" style={{ color: "#EF4444" }}>
                       {h.date.slice(5)} ({dowOf(h.date)})
                     </span>
-                    <span className="text-[12.5px] cd-text font-semibold truncate">{h.name}</span>
+                    <span className="text-[13px] cd-text font-semibold truncate">{h.name}</span>
                     <span className="text-[11px] cd-text-faint ml-auto shrink-0">{reasonLabel(h.reason)}</span>
                     <button
                       type="button"
                       onClick={() => setEdit({ date: h.date, holiday: h })}
-                      className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary shrink-0"
+                      className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c cd-text-faint hover:cd-tint-primary shrink-0"
                     >
                       수정
                     </button>
@@ -137,17 +137,17 @@ export function HolidayBoard() {
             {/* 매년 반복 — 창립기념일처럼 해마다 같은 월일에 돌아오는 휴무일은 월·일만 등록해 두면
                 조회 연도에 맞춰 자동 전개된다(해마다 다시 찍을 필요 없음). */}
             <div className="mt-3 pt-3 border-t cd-border-c">
-              <div className="text-[11px] font-bold cd-text-faint mb-2 flex items-center gap-1">
+              <div className="text-[11px] font-semibold cd-text-faint mb-2 flex items-center gap-1">
                 <Repeat className="w-3.5 h-3.5" /> 매년 반복 ({annual.length}) — 월·일만 등록하면 매년 자동 적용
               </div>
               {annual.length > 0 && (
                 <div className="flex flex-col gap-1 mb-2">
                   {annual.map((a) => (
                     <div key={`${a.month}-${a.day}`} className="flex items-center gap-2 rounded-lg border cd-border-c px-2 py-1.5" style={{ background: "var(--cd-card-solid)" }}>
-                      <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: "#EF4444" }}>
+                      <span className="font-mono text-[12px] font-semibold shrink-0" style={{ color: "#EF4444" }}>
                         매년 {a.month}/{a.day}
                       </span>
-                      <span className="text-[12.5px] cd-text font-semibold truncate">{a.name}</span>
+                      <span className="text-[13px] cd-text font-semibold truncate">{a.name}</span>
                       <span className="text-[11px] cd-text-faint shrink-0">
                         {cur.y}년 {String(a.month).padStart(2, "0")}-{String(a.day).padStart(2, "0")} ({dowOf(`${cur.y}-${String(a.month).padStart(2, "0")}-${String(a.day).padStart(2, "0")}`)})
                       </span>
@@ -155,7 +155,7 @@ export function HolidayBoard() {
                       <button
                         type="button"
                         onClick={() => removeAnnual(a)}
-                        className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c shrink-0 hover:cd-tint-primary"
+                        className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c shrink-0 hover:cd-tint-primary"
                         style={{ color: "var(--cd-error)" }}
                       >
                         삭제
@@ -168,8 +168,8 @@ export function HolidayBoard() {
             </div>
           </section>
 
-          <section className="rounded-2xl border cd-border-c p-3">
-            <div className="text-[11px] font-bold cd-text-faint mb-2">
+          <section className="rounded-lg border cd-border-c p-3">
+            <div className="text-[11px] font-semibold cd-text-faint mb-2">
               법정공휴일·명절 ({publicDays.length}) — 자동 반영, 지정 불필요
             </div>
             {/* 태그 폭을 균등하게 3열 고정 — 명칭 길이에 따라 들쭉날쭉하면 훑어보기 어렵다. */}
@@ -246,7 +246,7 @@ function AnnualForm({ onSaved }: { onSaved: () => void }) {
           <Plus className="w-3.5 h-3.5 inline" /> 추가
         </button>
       </div>
-      {error && <p className="text-[11.5px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[12px] cd-error-text">{error}</p>}
     </div>
   );
 }
@@ -313,20 +313,20 @@ function HolidayModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4" style={{ background: "rgba(15,23,42,.35)" }} onClick={onClose}>
       <div
-        className="w-full max-w-[420px] rounded-2xl border cd-border-c p-4 flex flex-col gap-3"
+        className="w-full max-w-[420px] rounded-lg border cd-border-c p-4 flex flex-col gap-3"
         style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow-hover)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <CalendarOff className="w-4 h-4" style={{ color: "var(--cd-primary)" }} />
-          <span className="text-[15px] font-extrabold cd-text">휴무일 지정</span>
-          <span className="ml-auto font-mono text-[13px] font-bold" style={{ color: "#EF4444" }}>
+          <CalendarOff className="w-4 h-4 cd-text-primary" />
+          <span className="text-base font-semibold cd-text">휴무일 지정</span>
+          <span className="ml-auto font-mono text-[13px] font-semibold" style={{ color: "#EF4444" }}>
             {target.date} ({dowOf(target.date)})
           </span>
         </div>
 
         {isPublic && (
-          <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2" style={{ color: "var(--cd-primary)" }}>
+          <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2 cd-text-primary">
             이미 <b>{target.holiday?.name}</b>(법정공휴일)로 처리되는 날입니다. 사내 휴무일로 지정하면 이 명칭을 대신합니다.
           </p>
         )}
@@ -340,7 +340,7 @@ function HolidayModal({
             placeholder="예: 창립기념일"
             maxLength={40}
           />
-          <span className="text-[10.5px] cd-text-faint">캘린더에 이 이름이 표시됩니다.</span>
+          <span className="text-[11px] cd-text-faint">캘린더에 이 이름이 표시됩니다.</span>
         </label>
 
         <label className="flex flex-col gap-1">
@@ -352,7 +352,7 @@ function HolidayModal({
           </select>
         </label>
 
-        {error && <p className="text-[12px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+        {error && <p className="text-[12px] cd-error-text">{error}</p>}
 
         <div className="flex items-center gap-2 pt-1">
           {existing && (
@@ -360,20 +360,20 @@ function HolidayModal({
               type="button"
               disabled={busy}
               onClick={remove}
-              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] font-semibold disabled:opacity-50"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] font-semibold disabled:opacity-50"
               style={{ color: "var(--cd-error)" }}
             >
               <Trash2 className="w-3.5 h-3.5 inline mr-1" /> 지정 해제
             </button>
           )}
-          <button type="button" onClick={onClose} className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] font-semibold cd-text-muted ml-auto">
+          <button type="button" onClick={onClose} className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] font-semibold cd-text-muted ml-auto">
             취소
           </button>
           <button
             type="button"
             disabled={busy || !name.trim()}
             onClick={submit}
-            className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[12.5px] font-semibold disabled:opacity-50"
+            className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50"
           >
             {existing ? "수정" : "휴무일 지정"}
           </button>

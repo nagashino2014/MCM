@@ -170,7 +170,7 @@ export function ApprovalAbsenceBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl overflow-y-auto" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg overflow-y-auto" data-theme={theme}>
       <CdPageHeader
         icon={<UserRoundCog className="w-5 h-5" />}
         eyebrow="Approval · Absence"
@@ -179,10 +179,10 @@ export function ApprovalAbsenceBoard() {
       />
 
       {canManage && (
-        <div className="cd-card rounded-3xl p-5 flex flex-col gap-2">
+        <div className="cd-card rounded-lg p-5 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12px] font-semibold cd-text">설정 대상</span>
-            <span className="text-[12.5px] cd-text">{target ? `${target.name} (대리 설정)` : "본인"}</span>
+            <span className="text-[13px] cd-text">{target ? `${target.name} (대리 설정)` : "본인"}</span>
             <CdButton size="sm" onClick={() => setPicker("target")}>
               다른 직원 선택
             </CdButton>
@@ -196,15 +196,15 @@ export function ApprovalAbsenceBoard() {
         </div>
       )}
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-2">
-        <p className="text-[12.5px] cd-text">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-2">
+        <p className="text-[13px] cd-text">
           {target ? `${target.name}님 차례로` : "지금 내 차례로"} 대기 중인 결재: <b>{pending.middle + pending.final}건</b>
           {pending.final > 0 && <span className="cd-text-faint"> (그중 최종 결재 {pending.final}건은 부재 중에도 넘어가지 않습니다)</span>}
         </p>
-        <p className="text-[11.5px] cd-text-faint">최종 결재자로 지정된 문서는 대결·건너뛰기 없이 복귀 후 직접 결재해야 합니다.</p>
+        <p className="text-[12px] cd-text-faint">최종 결재자로 지정된 문서는 대결·건너뛰기 없이 복귀 후 직접 결재해야 합니다.</p>
       </div>
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <h2 className="text-[14px] font-semibold cd-text">부재 등록</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
           <CdDateInput label="시작일" required value={startDate} onChange={setStartDate} />
@@ -212,13 +212,13 @@ export function ApprovalAbsenceBoard() {
         </div>
         <fieldset className="flex flex-col gap-2">
           <legend className="text-[12px] font-semibold cd-text mb-1">처리 방식</legend>
-          <label className="flex items-start gap-2 text-[12.5px] cd-text">
+          <label className="flex items-start gap-2 text-[13px] cd-text">
             <input type="radio" name="absence-mode" checked={mode === "delegate"} onChange={() => setMode("delegate")} className="mt-0.5" />
             <span>
               대결자 지정 — 지정한 사람이 나 대신 결재합니다.
             </span>
           </label>
-          <label className="flex items-start gap-2 text-[12.5px] cd-text">
+          <label className="flex items-start gap-2 text-[13px] cd-text">
             <input type="radio" name="absence-mode" checked={mode === "skip"} onChange={() => setMode("skip")} className="mt-0.5" />
             <span>다음 결재자로 넘기기 — 내 단계를 생략하고 다음 결재자에게 바로 넘깁니다.</span>
           </label>
@@ -226,7 +226,7 @@ export function ApprovalAbsenceBoard() {
         {mode === "delegate" && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12px] font-semibold cd-text">대결자</span>
-            <span className="text-[12.5px] cd-text">{delegate ? delegate.name : <span className="cd-text-faint">미지정</span>}</span>
+            <span className="text-[13px] cd-text">{delegate ? delegate.name : <span className="cd-text-faint">미지정</span>}</span>
             <CdButton size="sm" onClick={() => setPicker("absence")}>
               {delegate ? "변경" : "조직도에서 선택"}
             </CdButton>
@@ -247,7 +247,7 @@ export function ApprovalAbsenceBoard() {
             {saving ? "등록 중..." : "부재 등록"}
           </CdButton>
           {formError && (startDate || endDate) ? (
-            <span className="text-[12px]" style={{ color: "var(--cd-error)" }}>{formError}</span>
+            <span className="text-[12px] cd-error-text">{formError}</span>
           ) : startsNow && pending.middle > 0 ? (
             <span className="text-[12px] cd-text-faint">
               등록하면 지금 대기 중인 결재 {pending.middle}건이 {mode === "delegate" ? "대결자에게" : "다음 결재자에게"} 바로 넘어갑니다.
@@ -255,18 +255,18 @@ export function ApprovalAbsenceBoard() {
           ) : null}
         </div>
         {msg && <p className="text-[12px] cd-text">{msg}</p>}
-        {error && <p className="text-[12px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+        {error && <p className="text-[12px] cd-error-text">{error}</p>}
       </div>
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
         <h2 className="text-[14px] font-semibold cd-text">{target ? `${target.name}님의 부재 기간` : "내 부재 기간"}</h2>
         {loading ? (
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : absences.length === 0 ? (
-          <p className="text-[12.5px] cd-text-faint">등록한 부재가 없습니다.</p>
+          <p className="text-[13px] cd-text-faint">등록한 부재가 없습니다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13px]">
               <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">상태</th>
@@ -305,13 +305,13 @@ export function ApprovalAbsenceBoard() {
         )}
       </div>
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
         <h2 className="text-[14px] font-semibold cd-text">휴가 연동 기본 대결자</h2>
-        <p className="text-[11.5px] cd-text-faint">
+        <p className="text-[12px] cd-text-faint">
           부재를 따로 등록하지 않아도, 승인된 휴가신청서 기간에는 이 사람이 대신 결재합니다. 지정하지 않으면 휴가 중에도 결재가 넘어가지 않습니다.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[12.5px] cd-text">
+          <span className="text-[13px] cd-text">
             {defaultDelegate.delegateUserId ? defaultDelegate.delegateName ?? defaultDelegate.delegateUserId : <span className="cd-text-faint">미지정</span>}
           </span>
           <CdButton size="sm" onClick={() => setPicker("default")}>

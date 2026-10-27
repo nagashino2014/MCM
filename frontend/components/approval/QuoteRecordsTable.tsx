@@ -33,9 +33,9 @@ function statusBadge(status: QuoteSendStatus) {
       : status === "failed"
         ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
         : status === "generated"
-          ? "border-[color:var(--cd-primary,#5D87FF)] text-[color:var(--cd-primary,#5D87FF)]"
+          ? "border-[color:var(--cd-primary)] text-[color:var(--cd-primary)]"
           : "border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]";
-  return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{QUOTE_SEND_STATUS_LABEL[status] ?? status}</span>;
+  return <span className={`text-[11px] rounded-full px-2 py-0.5 border ${color}`}>{QUOTE_SEND_STATUS_LABEL[status] ?? status}</span>;
 }
 
 const RESULT_LABEL = QUOTE_RESULT_LABEL;
@@ -47,7 +47,7 @@ function resultBadge(result: QuotationRow["result"]) {
       : result === "lost"
         ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
         : "cd-border-c cd-text-faint";
-  return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{RESULT_LABEL[result]}</span>;
+  return <span className={`text-[11px] rounded-full px-2 py-0.5 border ${color}`}>{RESULT_LABEL[result]}</span>;
 }
 
 function recipientsSummary(list: QuoteRecipient[]): string {
@@ -60,7 +60,7 @@ function recipientsSummary(list: QuoteRecipient[]): string {
 function RecipientEditGrid({ label, list, onChange }: { label: string; list: QuoteRecipient[]; onChange: (next: QuoteRecipient[]) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold cd-text">{label}</span>
+      <span className="text-[11px] font-semibold cd-text">{label}</span>
       {list.map((r, i) => (
         <div key={i} className="grid grid-cols-2 md:grid-cols-5 gap-1.5 items-center">
           <input className="cd-input" placeholder="업체/기관" value={r.facilityName ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, facilityName: e.target.value } : x)))} />
@@ -195,10 +195,10 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
   return createPortal(
     // 포털 모달 — .cdash 밖이라 cdash-vars + cd-fields-white + data-theme 부여(UI 규칙)
     <div className="cdash-vars cd-fields-white fixed inset-0 z-[80] flex items-center justify-center p-4" data-theme={theme} style={{ background: "rgba(15,20,34,0.45)" }} onClick={onClose}>
-      <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1400px] max-h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="rounded-lg bg-[color:var(--cd-card)] shadow-[var(--cd-shadow-dialog)] w-full max-w-[1400px] max-h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b cd-border-c">
           <div className="flex flex-col min-w-0">
-            <span className="text-[13.5px] font-bold cd-text truncate">
+            <span className="text-[14px] font-semibold cd-text truncate">
               {quote ? `${quote.quoteNo ?? "미채번"} · ${quote.title ?? ""}` : "불러오는 중..."}
             </span>
             <span className="text-[11px] cd-text-faint flex items-center gap-1.5 flex-wrap">
@@ -272,10 +272,10 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
 
         {resultEditing && canEdit && (
           <div className="px-5 py-3.5 border-b cd-border-c flex flex-col gap-2.5">
-            <span className="text-[11px] font-bold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
+            <span className="text-[11px] font-semibold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
             <div className="grid grid-cols-2 md:grid-cols-[0.8fr_0.9fr_1fr_1fr_1.3fr_auto] gap-2 items-end">
               <div className="flex flex-col gap-1">
-                <span className="text-[10.5px] cd-text-faint">결과</span>
+                <span className="text-[11px] cd-text-faint">결과</span>
                 <select className="cd-select text-[12px]" value={resultForm.result} onChange={(e) => setResultForm((f) => ({ ...f, result: e.target.value as QuoteResult }))}>
                   {(Object.keys(RESULT_LABEL) as QuoteResult[]).map((k) => (
                     <option key={k} value={k}>{RESULT_LABEL[k]}</option>
@@ -283,11 +283,11 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[10.5px] cd-text-faint">결과 확정일</span>
+                <span className="text-[11px] cd-text-faint">결과 확정일</span>
                 <CdDateInput value={resultForm.resultAt} onChange={(v) => setResultForm((f) => ({ ...f, resultAt: v }))} aria-label="결과 확정일" />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[10.5px] cd-text-faint">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
+                <span className="text-[11px] cd-text-faint">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
                 <input
                   className="cd-input text-[12px] text-right"
                   inputMode="numeric"
@@ -297,7 +297,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[10.5px] cd-text-faint">사유</span>
+                <span className="text-[11px] cd-text-faint">사유</span>
                 <select className="cd-select text-[12px]" value={resultForm.resultReason} onChange={(e) => setResultForm((f) => ({ ...f, resultReason: e.target.value }))}>
                   <option value="">선택 안 함</option>
                   {QUOTE_RESULT_REASONS.map((r) => (
@@ -306,7 +306,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[10.5px] cd-text-faint">메모</span>
+                <span className="text-[11px] cd-text-faint">메모</span>
                 <input className="cd-input text-[12px]" value={resultForm.resultNote} onChange={(e) => setResultForm((f) => ({ ...f, resultNote: e.target.value }))} placeholder="경쟁사·발주처 코멘트 등" />
               </div>
               <div className="col-span-2 md:col-span-1 flex items-center gap-2 whitespace-nowrap">
@@ -318,7 +318,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 </button>
               </div>
             </div>
-            <span className="text-[10.5px] cd-text-faint">실주 시 경쟁 낙찰가를 함께 기입하면 세분류별 표준가 하향 여지가 자동 제안됩니다.</span>
+            <span className="text-[11px] cd-text-faint">실주 시 경쟁 낙찰가를 함께 기입하면 세분류별 표준가 하향 여지가 자동 제안됩니다.</span>
           </div>
         )}
 
@@ -405,22 +405,22 @@ export function QuoteRecordsTable({
                 </td>
                 <td className="py-2 pr-3 cd-text max-w-[200px] overflow-hidden text-ellipsis">{recipientsSummary(q.recipients)}</td>
                 <td className="py-2 pr-3 cd-text-faint">{q.serviceSubtype ?? "-"}</td>
-                <td className="py-2 pr-3 cd-text text-right font-mono text-[11.5px]">{won(q.totalAmount)}</td>
+                <td className="py-2 pr-3 cd-text text-right font-mono text-[12px]">{won(q.totalAmount)}</td>
                 <td className="py-2 pr-3 cd-text">{q.drafterName ?? "-"}</td>
                 <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{q.issueDate ?? "-"}</td>
                 <td className="py-2 pr-3">
                   {statusBadge(q.sendStatus)}
-                  {q.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
+                  {q.sendStatus === "failed" && <span className="ml-1.5 text-[11px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
                 </td>
                 <td className="py-2 pr-3">{resultBadge(q.result)}</td>
                 {/* 재견적(269) — 이 건의 최신 버전을 복사해 새 버전으로 작성한다. 행 클릭(뷰어)과 분리 */}
                 <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center gap-1.5">
-                    {(q.version ?? 1) > 1 && <span className="text-[10.5px] font-mono cd-text-faint">v{q.version}</span>}
+                    {(q.version ?? 1) > 1 && <span className="text-[11px] font-mono cd-text-faint">v{q.version}</span>}
                     {canRequote && (
                     <a
                       href={`/approval/quote?revise=${encodeURIComponent(q.docId)}`}
-                      className="cd-action inline-flex items-center rounded-lg border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-primary hover:cd-tint-primary"
+                      className="cd-action inline-flex items-center rounded-lg border cd-border-c px-2 py-0.5 text-[11px] cd-text-primary hover:cd-tint-primary"
                       title="이 용역 건의 최신 견적을 복사해 새 버전(재견적)을 작성합니다"
                     >
                       재견적

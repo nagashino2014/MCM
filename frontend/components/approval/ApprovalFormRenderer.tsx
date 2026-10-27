@@ -166,7 +166,7 @@ function FieldCell({
   const span = Math.max(1, Math.min(3, f.span ?? 1));
   if (f.type === "static") {
     return (
-      <div className="px-3 py-2.5 text-[11.5px] cd-text-faint whitespace-pre-wrap" style={{ flex: span }}>
+      <div className="px-3 py-2.5 text-[12px] cd-text-faint whitespace-pre-wrap" style={{ flex: span }}>
         {f.content ?? ""}
       </div>
     );
@@ -174,11 +174,11 @@ function FieldCell({
   const autoFilled = !readOnly && isAutoFilled(f, allFields, allValues);
   return (
     <div className="flex min-w-0 border-t md:border-t-0 md:border-l first:border-l-0 first:border-t-0 cd-border-c" style={{ flex: span }}>
-      <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-bold cd-surface-bg cd-text flex items-center">
+      <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-semibold cd-surface-bg cd-text flex items-center">
         <span>
           {f.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
           {f.label}
-          {autoFilled && <span className="ml-1 text-[10px] font-medium cd-text-primary">자동</span>}
+          {autoFilled && <span className="ml-1 text-[11px] font-medium cd-text-primary">자동</span>}
         </span>
       </div>
       <div className="flex-1 min-w-0 px-2.5 py-2 flex items-center">
@@ -214,7 +214,7 @@ function FieldInput({
   allValues: Values;
 }) {
   const dis = readOnly === true;
-  const base = "cd-input w-full text-[12.5px]";
+  const base = "cd-input w-full text-[13px]";
   switch (f.type) {
     case "text": {
       return (
@@ -265,7 +265,7 @@ function FieldInput({
       );
     case "radio":
       return (
-        <div className="flex items-center gap-3 flex-wrap text-[12.5px] cd-text">
+        <div className="flex items-center gap-3 flex-wrap text-[13px] cd-text">
           {(f.options ?? []).map((o) => (
             <label key={o} className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" disabled={dis} checked={value === o} onChange={() => onSet(o)} />
@@ -277,7 +277,7 @@ function FieldInput({
     case "checkbox": {
       const arr = Array.isArray(value) ? value.map(String) : [];
       return (
-        <div className="flex items-center gap-3 flex-wrap text-[12.5px] cd-text">
+        <div className="flex items-center gap-3 flex-wrap text-[13px] cd-text">
           {(f.options ?? []).map((o) => (
             <label key={o} className="flex items-center gap-1.5 cursor-pointer">
               <input
@@ -410,7 +410,7 @@ function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: 
 function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
   const v: ApprovalTimeRange = parseTimeRange(value);
   const minutes = timeRangeMinutes(value);
-  const base = "cd-input w-full text-[12.5px]";
+  const base = "cd-input w-full text-[13px]";
   return (
     <div className="flex items-center gap-1.5 w-full">
       <AutoTimeInput
@@ -520,13 +520,13 @@ function CompanySelectInput({
     <div className="w-full relative">
       <div className="flex items-center gap-2.5 flex-wrap">
         <input
-          className="cd-input flex-1 min-w-[160px] text-[12.5px]"
+          className="cd-input flex-1 min-w-[160px] text-[13px]"
           disabled={readOnly}
           placeholder={f.placeholder ?? (v.manual ? "업체명 직접 입력" : "업체명 검색(2자 이상)")}
           value={v.name ?? ""}
           onChange={(e) => onSet({ ...v, name: e.target.value, facilityId: undefined })}
         />
-        <label className="flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer shrink-0" title="계약·등록되지 않은 컨택 중 업체는 직접 입력합니다">
+        <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0" title="계약·등록되지 않은 컨택 중 업체는 직접 입력합니다">
           <input
             type="checkbox"
             disabled={readOnly}
@@ -539,18 +539,18 @@ function CompanySelectInput({
           미계약 업체(직접 입력)
         </label>
       </div>
-      {v.facilityId && !v.manual && <p className="text-[10.5px] cd-text-primary mt-0.5">선택됨: {v.name}</p>}
+      {v.facilityId && !v.manual && <p className="text-[11px] cd-text-primary mt-0.5">선택됨: {v.name}</p>}
       {options.length > 0 && !v.facilityId && !v.manual && !readOnly && (
-        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-52 overflow-y-auto">
           {options.map((o) => (
             <button
               key={o.facilityId}
               type="button"
-              className="w-full px-3 py-2 text-left text-[12.5px] hover:bg-[color:var(--cd-surface)]"
+              className="w-full px-3 py-2 text-left text-[13px] hover:bg-[color:var(--cd-surface)]"
               onClick={() => pick(o)}
             >
               <span className="cd-text">{o.companyName}</span>
-              <span className="ml-2 text-[10.5px] cd-text-faint">{o.businessRegistrationNo ?? ""}</span>
+              <span className="ml-2 text-[11px] cd-text-faint">{o.businessRegistrationNo ?? ""}</span>
             </button>
           ))}
         </div>
@@ -697,7 +697,7 @@ function ContractSelectInput({
     <div className="w-full relative">
       <div className="flex items-center gap-2.5 flex-wrap">
         <input
-          className="cd-input flex-1 min-w-[160px] text-[12.5px]"
+          className="cd-input flex-1 min-w-[160px] text-[13px]"
           disabled={readOnly}
           placeholder={
             f.placeholder ??
@@ -715,7 +715,7 @@ function ContractSelectInput({
           }}
           onChange={(e) => onSet({ ...v, title: e.target.value, contractId: undefined })}
         />
-        <label className="flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer shrink-0" title="계약 전 업무(제안서·발표자료 등)는 직접 입력합니다">
+        <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0" title="계약 전 업무(제안서·발표자료 등)는 직접 입력합니다">
           <input
             type="checkbox"
             disabled={readOnly}
@@ -728,24 +728,24 @@ function ContractSelectInput({
           미등록 용역(직접 입력)
         </label>
       </div>
-      {v.contractId && !v.manual && <p className="text-[10.5px] cd-text-primary mt-0.5">선택됨: {v.title}</p>}
+      {v.contractId && !v.manual && <p className="text-[11px] cd-text-primary mt-0.5">선택됨: {v.title}</p>}
       {linkedFacilityId && !v.contractId && !v.manual && companyList && companyList.length === 0 && (
-        <p className="text-[10.5px] cd-text-faint mt-0.5">
+        <p className="text-[11px] cd-text-faint mt-0.5">
           {companyFacility?.name}의 최근 3년 계약이 없습니다 — 직접 입력을 사용하세요.
         </p>
       )}
       {listToShow.length > 0 && !readOnly && (
-        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-52 overflow-y-auto">
           {listToShow.map((o) => (
             <button
               key={o.contractId}
               type="button"
-              className="w-full px-3 py-2 text-left text-[12.5px] hover:bg-[color:var(--cd-surface)]"
+              className="w-full px-3 py-2 text-left text-[13px] hover:bg-[color:var(--cd-surface)]"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(o)}
             >
               <span className="cd-text">{o.contractTitle}</span>
-              <span className="ml-2 text-[10.5px] cd-text-faint">
+              <span className="ml-2 text-[11px] cd-text-faint">
                 {o.counterpartyName}
                 {o.contractDate ? ` · ${o.contractDate}` : ""}
               </span>
@@ -834,10 +834,10 @@ function ContactSelectInput({
 
   if (readOnly) {
     return (
-      <div className="w-full flex items-center gap-1.5 flex-wrap text-[12.5px] cd-text">
+      <div className="w-full flex items-center gap-1.5 flex-wrap text-[13px] cd-text">
         {people.length > 0
           ? people.map((p) => (
-              <span key={p.id} className="inline-flex items-center rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px]">
+              <span key={p.id} className="inline-flex items-center rounded-full cd-tint-primary px-2.5 py-1 text-[12px]">
                 {tagLabel(p)}
               </span>
             ))
@@ -850,13 +850,13 @@ function ContactSelectInput({
     <div className="w-full relative">
       <div className="flex items-center gap-1.5 flex-wrap">
         <input
-          className="cd-input flex-1 min-w-[180px] text-[12.5px]"
+          className="cd-input flex-1 min-w-[180px] text-[13px]"
           placeholder={f.placeholder ?? "담당자 검색(성명·업체명, 2자 이상)"}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         {people.map((p) => (
-          <span key={p.id} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px] shrink-0">
+          <span key={p.id} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
             {tagLabel(p)}
             <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x.id !== p.id))}>
               <X className="w-3 h-3" />
@@ -870,19 +870,19 @@ function ContactSelectInput({
         )}
       </div>
       {options.length > 0 && (
-        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-52 overflow-y-auto">
           {options.map((o) => (
             <button
               key={o.id}
               type="button"
-              className="w-full px-3 py-2 text-left text-[12.5px] hover:bg-[color:var(--cd-surface)]"
+              className="w-full px-3 py-2 text-left text-[13px] hover:bg-[color:var(--cd-surface)]"
               onClick={() => pick(o)}
             >
               <span className="cd-text">
                 {o.personName}
                 {o.title ? <span className="cd-text-faint text-[11px]"> {o.title}</span> : null}
               </span>
-              <span className="ml-2 text-[10.5px] cd-text-faint">
+              <span className="ml-2 text-[11px] cd-text-faint">
                 {o.facilityName ?? ""}
                 {o.departmentName ? ` · ${o.departmentName}` : ""}
               </span>
@@ -951,7 +951,7 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
       </select>
       {badge && (
         <span
-          className={`text-[11.5px] rounded-full px-2.5 py-1 shrink-0 ${
+          className={`text-[12px] rounded-full px-2.5 py-1 shrink-0 ${
             badge.tone === "ok"
               ? "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
               : badge.tone === "primary"
@@ -1078,7 +1078,7 @@ function UserSelectInput({
   return (
     <div className="w-full flex items-center gap-1.5 flex-wrap">
       {people.map((p) => (
-        <span key={p.employeeId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[11.5px]">
+        <span key={p.employeeId} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px]">
           {p.name}
           {!readOnly && (
             <button type="button" title="제거" onClick={() => commit(people.filter((x) => x.employeeId !== p.employeeId))}>
@@ -1090,7 +1090,7 @@ function UserSelectInput({
       {!readOnly && (
         <button
           type="button"
-          className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1"
+          className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1"
           onClick={() => setOrgModal(true)}
         >
           <Users className="w-3.5 h-3.5" /> 조직도에서 선택
@@ -1175,7 +1175,7 @@ function TableInput({
             {cols.map((c) => (
               <th
                 key={c.key}
-                className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap"
+                className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-semibold whitespace-nowrap"
                 style={c.width ? { width: c.width } : undefined}
               >
                 {c.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
@@ -1226,7 +1226,7 @@ function TableInput({
                     readOnly ? (
                       String(r[c.key] ?? "").trim() ? (
                         <a
-                          className="block px-1.5 py-1.5 text-[12px] underline truncate max-w-[200px] text-[color:var(--cd-primary,#5D87FF)]"
+                          className="block px-1.5 py-1.5 text-[12px] underline truncate max-w-[200px] text-[color:var(--cd-primary)]"
                           href={String(r[c.key])}
                           target="_blank"
                           rel="noreferrer"
@@ -1344,12 +1344,12 @@ function TableInput({
                       ))}
                       {/* 구버전 텍스트 값(문자열) 호환 표시 */}
                       {typeof r[c.key] === "string" && String(r[c.key]).trim() !== "" && (
-                        <span className="text-[11.5px] cd-text">{String(r[c.key])}</span>
+                        <span className="text-[12px] cd-text">{String(r[c.key])}</span>
                       )}
                       {!readOnly && (
                         <button
                           type="button"
-                          className="cd-btn rounded-md border cd-border-c px-1.5 py-0.5 text-[10.5px] flex items-center gap-1 shrink-0"
+                          className="cd-btn rounded-lg border cd-border-c px-1.5 py-0.5 text-[11px] flex items-center gap-1 shrink-0"
                           title="조직도에서 선택(복수 가능)"
                           onClick={() => setPeopleTarget({ ri, colKey: c.key })}
                         >
@@ -1403,7 +1403,7 @@ function TableInput({
             </tr>
             {rowIssue && (
               <tr>
-                <td colSpan={cols.length + 1} className="px-2 py-1 text-[11.5px]" style={{ color: "var(--cd-error)" }}>
+                <td colSpan={cols.length + 1} className="px-2 py-1 text-[12px] cd-error-text">
                   {ri + 1}행: {rowIssue} — 행을 삭제하고 불러오기로 다시 담으세요.
                 </td>
               </tr>
@@ -1414,7 +1414,7 @@ function TableInput({
           {sum != null && (
             <tr>
               {cols.map((c, ci) => (
-                <td key={c.key} className="border cd-border-c px-2 py-1.5 font-bold cd-text text-right">
+                <td key={c.key} className="border cd-border-c px-2 py-1.5 font-semibold cd-text text-right">
                   {ci === 0 ? "합계" : c.key === f.sumColumn ? `${fmtComma(sum)} 원` : ""}
                 </td>
               ))}
@@ -1426,7 +1426,7 @@ function TableInput({
       {!readOnly && !importOnly && (
         <button
           type="button"
-          className="mt-1.5 text-[11.5px] cd-text-primary flex items-center gap-1"
+          className="mt-1.5 text-[12px] cd-text-primary flex items-center gap-1"
           onClick={() => onSet([...rows, emptyRow()])}
         >
           <Plus className="w-3.5 h-3.5" /> 행 추가

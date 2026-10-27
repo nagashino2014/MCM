@@ -84,7 +84,7 @@ export function AbsenceRequestPanel() {
     <div className="flex flex-col gap-4">
       {/* 요청 생성 */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
-        <p className="text-[13px] font-bold cd-text">결근사유서 제출 요청 보내기</p>
+        <p className="text-[13px] font-semibold cd-text">결근사유서 제출 요청 보내기</p>
         <div className="flex items-center gap-2 flex-wrap">
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setOrgModal(true)}>
             <UserRoundSearch className="w-3.5 h-3.5" /> {target ? target.name : "대상자 선택"}
@@ -106,7 +106,7 @@ export function AbsenceRequestPanel() {
         <p className="text-[11px] cd-text-faint">
           요청을 받은 인원의 결근사유서 기안 화면에 안내 배너가 표시되고, 상신하면 요청이 자동으로 마감됩니다. 종료일을 비우면 하루 결근으로 처리합니다.
         </p>
-        {error && <p className="text-[12px]" style={{ color: "var(--cd-error,#FA896B)" }}>{error}</p>}
+        {error && <p className="text-[12px] cd-error-text">{error}</p>}
       </div>
 
       {/* 요청 목록 */}
@@ -115,7 +115,7 @@ export function AbsenceRequestPanel() {
           <thead>
             <tr>
               {["대상", "부서", "결근 기간", "메모", "상태", "제출 문서", "요청일", ""].map((h) => (
-                <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">
+                <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">
                   {h}
                 </th>
               ))}

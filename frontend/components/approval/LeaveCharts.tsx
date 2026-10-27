@@ -85,28 +85,28 @@ export function LeaveCharts({ year, theme }: { year: string; theme: CdTheme }) {
   );
 
   if (!data) {
-    return <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">{[0, 1, 2].map((i) => <div key={i} className="cd-card rounded-2xl p-4 h-[240px]" />)}</div>;
+    return <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">{[0, 1, 2].map((i) => <div key={i} className="cd-card rounded-lg p-4 h-[240px]" />)}</div>;
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-      <div className="cd-card rounded-2xl p-4">
-        <div className="text-[11px] font-bold uppercase tracking-wider cd-text-faint mb-1">월별 연차 사용일수</div>
-        <div className="text-[10px] cd-text-faint mb-2">{data.year}년 · 전사 합계</div>
+      <div className="cd-card rounded-lg p-4">
+        <div className="text-[11px] font-medium cd-text-faint mb-1">월별 연차 사용일수</div>
+        <div className="text-[11px] cd-text-faint mb-2">{data.year}년 · 전사 합계</div>
         <ApexChart key={`bar-${data.year}`} options={barOptions} series={[{ name: "연차 사용", data: data.monthlyUsed }]} type="bar" height={200} />
       </div>
-      <div className="cd-card rounded-2xl p-4">
-        <div className="text-[11px] font-bold uppercase tracking-wider cd-text-faint mb-1">월별 연차 소진율</div>
-        <div className="text-[10px] cd-text-faint mb-2">{data.year}년 · 누적 사용 ÷ 부여</div>
+      <div className="cd-card rounded-lg p-4">
+        <div className="text-[11px] font-medium cd-text-faint mb-1">월별 연차 소진율</div>
+        <div className="text-[11px] cd-text-faint mb-2">{data.year}년 · 누적 사용 ÷ 부여</div>
         <ApexChart key={`rate-${data.year}`} options={rateOptions} series={[{ name: "소진율", data: data.monthlyRate }]} type="area" height={200} />
       </div>
-      <div className="cd-card rounded-2xl p-4">
-        <div className="text-[11px] font-bold uppercase tracking-wider cd-text-faint mb-1">연도별 연차 외 휴가</div>
-        <div className="text-[10px] cd-text-faint mb-2">경조·공가·병가 사용일수</div>
+      <div className="cd-card rounded-lg p-4">
+        <div className="text-[11px] font-medium cd-text-faint mb-1">연도별 연차 외 휴가</div>
+        <div className="text-[11px] cd-text-faint mb-2">경조·공가·병가 사용일수</div>
         {data.yearlyOther.length > 0 ? (
           <ApexChart key={`other-${data.yearlyOther.length}`} options={otherOptions} series={[{ name: "연차 외", data: data.yearlyOther.map((y) => y.days) }]} type="bar" height={200} />
         ) : (
-          <p className="text-[11.5px] cd-text-faint py-16 text-center">데이터가 없습니다.</p>
+          <p className="text-[12px] cd-text-faint py-16 text-center">데이터가 없습니다.</p>
         )}
       </div>
     </div>

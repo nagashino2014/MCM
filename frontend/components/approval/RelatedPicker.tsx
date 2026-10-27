@@ -102,7 +102,7 @@ export function RelatedPickerModal({
         {error && <p className="text-xs cd-error-text">{error}</p>}
 
         <section className="grid gap-1">
-          <h3 className="text-xs font-bold cd-text-muted">{q.trim() ? "용역" : "최근 진행 중 용역"}</h3>
+          <h3 className="text-xs font-semibold cd-text-muted">{q.trim() ? "용역" : "최근 진행 중 용역"}</h3>
           {contracts.length === 0 && !loading && <p className="text-xs cd-text-faint">일치하는 용역이 없습니다.</p>}
           <div className="grid gap-1 max-h-[38vh] overflow-y-auto">
             {contracts.map((c) => (
@@ -126,7 +126,7 @@ export function RelatedPickerModal({
 
         {q.trim() && (
           <section className="grid gap-1">
-            <h3 className="text-xs font-bold cd-text-muted">사업장 — 용역이 없을 때(계약 전 영업 출장 등)</h3>
+            <h3 className="text-xs font-semibold cd-text-muted">사업장 — 용역이 없을 때(계약 전 영업 출장 등)</h3>
             {facilities.length === 0 && !loading && <p className="text-xs cd-text-faint">일치하는 사업장이 없습니다.</p>}
             <div className="grid gap-1 max-h-[24vh] overflow-y-auto">
               {facilities.map((f) => (

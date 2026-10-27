@@ -305,9 +305,9 @@ export function ApprovalDocViewer({
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-extrabold cd-text flex-1 min-w-0">
+              <h3 className="text-base font-semibold cd-text flex-1 min-w-0">
                 {detail.urgent && (
-                  <span className="text-[10px] font-extrabold rounded-[5px] px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
+                  <span className="text-[11px] font-semibold rounded-lg px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
                     긴급
                   </span>
                 )}
@@ -364,7 +364,7 @@ export function ApprovalDocViewer({
               {detail.canEdit && (
                 <Link
                   href={approvalEditHref(detail.formId, detail.docId)}
-                  className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-[11.5px] flex items-center gap-1 shrink-0"
+                  className="cd-btn cd-btn-primary rounded-lg px-3 py-1.5 text-[12px] flex items-center gap-1 shrink-0"
                   title={detail.status === "rejected" ? "반려된 문서를 수정해 다시 상신합니다(문서번호 유지)" : "이어서 작성합니다"}
                 >
                   <Pencil className="w-3.5 h-3.5" /> {detail.status === "rejected" ? "수정 후 재상신" : "이어 작성"}
@@ -440,7 +440,7 @@ export function ApprovalDocViewer({
                   <div key={st.key} className="flex items-center" title={st.comment ?? undefined}>
                     <div className="flex items-center gap-2">
                       <span
-                        className="w-[34px] h-[34px] rounded-full inline-flex items-center justify-center text-xs font-bold shrink-0"
+                        className="w-[34px] h-[34px] rounded-full inline-flex items-center justify-center text-xs font-semibold shrink-0"
                         style={{
                           background: `color-mix(in srgb, ${tone} 16%, transparent)`,
                           color: tone,
@@ -450,15 +450,15 @@ export function ApprovalDocViewer({
                         {st.name.slice(0, 1)}
                       </span>
                       <span className="leading-[1.3]">
-                        <span className="block text-xs font-bold cd-text whitespace-nowrap">{st.name}</span>
-                        <span className="block text-[10px] font-semibold whitespace-nowrap" style={{ color: tone }}>
+                        <span className="block text-xs font-semibold cd-text whitespace-nowrap">{st.name}</span>
+                        <span className="block text-[11px] font-semibold whitespace-nowrap" style={{ color: tone }}>
                           {st.label}
                         </span>
                       </span>
                     </div>
                     {i < arr.length - 1 && (
                       <span
-                        className="w-[18px] h-[2px] rounded-sm mx-[7px]"
+                        className="w-[18px] h-[2px] rounded-[2px] mx-[7px]"
                         style={{ background: arr[i + 1].status === "waiting" ? "var(--cd-hairline)" : tone, opacity: 0.7 }}
                       />
                     )}
@@ -471,23 +471,23 @@ export function ApprovalDocViewer({
                 기안자에게는 이어지는 처리(수정 후 재상신 / 삭제)를 함께 안내한다. */}
             {detail.status === "rejected" && (
               <div
-                className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-1"
+                className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-1"
                 style={{ borderColor: "var(--cd-error)", background: "var(--cd-error-soft, rgba(250,137,107,0.1))" }}
               >
                 {(() => {
                   const rej = detail.steps.filter((s) => s.status === "rejected").at(-1);
                   return (
                     <>
-                      <span className="text-[11.5px] font-bold cd-error-text">
+                      <span className="text-[12px] font-semibold cd-error-text">
                         반려됨 — {rej?.assigneeName ?? "결재자"}
                         {rej?.actedAt ? ` · ${short(rej.actedAt)}` : ""}
                       </span>
-                      <p className="text-[12.5px] cd-text">{rej?.comment?.trim() || "반려 사유가 입력되지 않았습니다."}</p>
+                      <p className="text-[13px] cd-text">{rej?.comment?.trim() || "반려 사유가 입력되지 않았습니다."}</p>
                     </>
                   );
                 })()}
                 {detail.canEdit && (
-                  <span className="text-[10.5px] cd-text-faint">
+                  <span className="text-[11px] cd-text-faint">
                     위 [수정 후 재상신]으로 내용을 고쳐 다시 올리거나, [삭제]로 기안을 취소할 수 있습니다. 재상신 시 문서번호는 유지되고 결재선은 처음부터 다시 진행됩니다.
                   </span>
                 )}
@@ -496,8 +496,8 @@ export function ApprovalDocViewer({
 
             {/* 선행 문서 연관(127) — 보고서에 연결된 신청서 표시 */}
             {detail.refDoc && (
-              <p className="text-[11.5px] cd-text-faint flex items-center gap-1.5">
-                <span className="text-[10px] font-bold rounded-full px-2 py-0.5 cd-tint-primary shrink-0">선행 문서</span>
+              <p className="text-[12px] cd-text-faint flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 cd-tint-primary shrink-0">선행 문서</span>
                 <span className="cd-text">
                   {detail.refDoc.docNo ? `${detail.refDoc.docNo} · ` : ""}
                   {detail.refDoc.title}
@@ -516,14 +516,14 @@ export function ApprovalDocViewer({
               if (!rc || typeof rc !== "object" || !Array.isArray(rc.mismatches) || !rc.mismatches.length) return null;
               return (
                 <div
-                  className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
+                  className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-0.5"
                   style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
                 >
-                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
+                  <span className="text-[12px] font-semibold cd-warn-text">
                     ⚠ 선행 문서({rc.refFormName}{rc.refDocNo ? ` ${rc.refDocNo}` : ""})와 일치하지 않는 항목 {rc.mismatches.length}건 — 기안자가 확인 후 상신한 문서입니다
                   </span>
                   {rc.mismatches.map((m, i) => (
-                    <span key={i} className="text-[10.5px] cd-text-faint">
+                    <span key={i} className="text-[11px] cd-text-faint">
                       · {m.label} — 선행: {m.refText} / 이 문서: {m.curText}
                     </span>
                   ))}
@@ -538,11 +538,11 @@ export function ApprovalDocViewer({
                 | undefined;
               if (!la || typeof la !== "object" || !la.days) return null;
               return (
-                <div className="rounded-xl border cd-border-c px-3.5 py-2.5 flex flex-col gap-0.5">
-                  <span className="text-[11.5px] font-bold cd-text">
+                <div className="rounded-lg border cd-border-c px-3.5 py-2.5 flex flex-col gap-0.5">
+                  <span className="text-[12px] font-semibold cd-text">
                     숙박출장수당 {la.days}일 × {Number(la.dailyAmount).toLocaleString()}원({la.rankLabel}) = {Number(la.amount).toLocaleString()}원
                   </span>
-                  <span className="text-[10.5px] cd-text-faint">
+                  <span className="text-[11px] cd-text-faint">
                     출장기간 {la.from} ~ {la.to} · 승인되면{" "}
                     {(la.months ?? []).map((m) => `${m.payYear}년 ${m.payMonth}월 급여 ${m.days}일(${Number(m.amount).toLocaleString()}원)`).join(" · ")} 대장에 자동 산정
                   </span>
@@ -569,17 +569,17 @@ export function ApprovalDocViewer({
               const total = Number(ol.priorRequestedMinutes || 0) + Number(ol.applyMinutes || 0);
               return (
                 <div
-                  className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
+                  className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-0.5"
                   style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
                 >
-                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
+                  <span className="text-[12px] font-semibold cd-warn-text">
                     ⚠ 주 12시간 초과 신청 — {ol.weekStart} 주 합계 {h(total)}h (기존 신청 {h(ol.priorRequestedMinutes)}h + 이 문서 {h(ol.applyMinutes)}h · 한도 {h(ol.limitMinutes)}h)
                   </span>
-                  <span className="text-[10.5px] cd-text-faint">
+                  <span className="text-[11px] cd-text-faint">
                     승인 시 실제 근태 기록과 대조해 주 12시간을 넘는 인정분은 수당 대신 특별휴가(초과근무 대체휴가)로 가산율(1.5·야간 2.0배)을 반영해 시간 단위 자동 산정됩니다.
                   </span>
                   {ol.consent?.agreedAt && (
-                    <span className="text-[10.5px] font-semibold" style={{ color: "var(--cd-success)" }}>
+                    <span className="text-[11px] font-semibold cd-success-text">
                       ✓ 기안자 보상휴가 전환 동의(전자서명) 완료 — {ol.consent.signerName || "기안자"} ·{" "}
                       {ol.consent.agreedAt.slice(0, 16).replace("T", " ")}
                     </span>
@@ -614,13 +614,13 @@ export function ApprovalDocViewer({
               const tone = repeat ? "var(--cd-error)" : "var(--cd-warning)";
               const toneSoft = repeat ? "var(--cd-error-soft, rgba(250,137,107,0.1))" : "var(--cd-warning-soft, rgba(255,174,31,0.1))";
               return (
-                <div className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5" style={{ borderColor: tone, background: toneSoft }}>
-                  <span className="text-[11.5px] font-bold" style={{ color: tone }}>
+                <div className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-0.5" style={{ borderColor: tone, background: toneSoft }}>
+                  <span className="text-[12px] font-semibold" style={{ color: tone }}>
                     ⚠ 식대 인정 기준 미달 {mc.violations.length}건 — 초과근무 신청(평일 2h·휴일 4h) 없이 사용된 식대입니다
                     {repeat ? ` · 과거 경고 ${mc.priorWarningCount}회(재발 — 사용액 반환 청구 검토 대상)` : " · 1차 — 경고 처리 대상"}
                   </span>
                   {mc.violations.map((v, i) => (
-                    <span key={i} className="text-[10.5px] cd-text-faint">
+                    <span key={i} className="text-[11px] cd-text-faint">
                       · {v.usedOn}
                       {v.isOffDay ? "(휴일)" : ""} {v.vendor ?? "사용처 미상"}
                       {v.amount != null ? ` ${Number(v.amount).toLocaleString()}원` : ""}
@@ -632,12 +632,12 @@ export function ApprovalDocViewer({
             })()}
 
             {detail.aiSummary && (detail.aiSummary.lines.length > 0 || detail.aiSummary.figures.length > 0) && (
-              <div className="rounded-xl cd-tint-primary p-3 flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold cd-text-primary flex items-center gap-1">
+              <div className="rounded-lg cd-tint-primary p-3 flex flex-col gap-1.5">
+                <span className="text-[11px] font-semibold cd-text-primary flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" /> AI 요약 <span className="font-normal cd-text-faint">— 참고용, 원문을 확인하세요</span>
                 </span>
                 {detail.aiSummary.lines.map((l, i) => (
-                  <p key={i} className="text-[12.5px] cd-text leading-snug">· {l}</p>
+                  <p key={i} className="text-[13px] cd-text leading-snug">· {l}</p>
                 ))}
                 {detail.aiSummary.figures.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-0.5">
@@ -672,14 +672,14 @@ export function ApprovalDocViewer({
             <>
             {/* 공문 발송 상태·이력(194) — 승인 완료 공문: N차 발송 합산 + 재발송(발주처 사정 등) */}
             {detail.formId === LETTER_FORM_ID && detail.status === "approved" && letter && (
-              <div className="rounded-[14px] px-4 py-3 flex flex-col gap-2" style={{ border: "1px solid var(--cd-active-border)" }}>
+              <div className="rounded-lg px-4 py-3 flex flex-col gap-2" style={{ border: "1px solid var(--cd-active-border)" }}>
                 <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text">
-                  <span className="font-bold">발송</span>
+                  <span className="font-semibold">발송</span>
                   <span className="cd-text-faint">
                     {LETTER_SEND_STATUS_LABEL[letter.sendStatus] ?? letter.sendStatus}
                     {letter.sentAt ? ` · ${letter.sendHistory.length > 1 ? `${letter.sendHistory.length}차 ` : ""}${letter.sentAt.slice(0, 16).replace("T", " ")}` : ""}
                   </span>
-                  {letter.sendError && <span className="text-[11px]" style={{ color: "var(--cd-error)" }}>{letter.sendError}</span>}
+                  {letter.sendError && <span className="text-[11px] cd-error-text">{letter.sendError}</span>}
                   {letter.sendHistory.length > 0 && (
                     <button type="button" className="text-[11px] cd-text-faint underline decoration-dotted" onClick={() => setLetterHistoryOpen((v) => !v)}>
                       {letterHistoryOpen ? "이력 닫기" : `발송 이력(${letter.sendHistory.length})`}
@@ -701,7 +701,7 @@ export function ApprovalDocViewer({
                 </div>
                 {letterHistoryOpen &&
                   letter.sendHistory.map((h, i) => (
-                    <div key={i} className="flex items-baseline gap-2 text-[11.5px]">
+                    <div key={i} className="flex items-baseline gap-2 text-[12px]">
                       <span className="font-mono cd-text shrink-0">{i + 1}차</span>
                       <span className="font-mono cd-text-faint shrink-0">{(h.sentAt ?? "").slice(0, 16).replace("T", " ")}</span>
                       <span className="cd-text-faint truncate">
@@ -715,7 +715,7 @@ export function ApprovalDocViewer({
             {/* 문서 본체 — 다우식 양식(중앙 제목 + 기안 표 + 신청/승인란)을 흰 카드 위에 올린다. */}
             {detail.formId === LETTER_FORM_ID || detail.formId === NOTICE_FORM_ID || detail.formId === QUOTE_FORM_ID || detail.formId === AGREEMENT_FORM_ID ? (
               // 공문(135)·내부고시(266)·견적서(136)·계약서(147) — 결재자도 최종 발송/제출 지면(PDF) 그대로 심사한다.
-              <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
                 <iframe
                   title={detail.formId === QUOTE_FORM_ID ? "견적서 미리보기" : detail.formId === AGREEMENT_FORM_ID ? "계약서 미리보기" : detail.formId === NOTICE_FORM_ID ? "내부고시 미리보기" : "공문 미리보기"}
                   src={`/api/approval/docs/${encodeURIComponent(docId)}/pdf?disposition=inline`}
@@ -725,7 +725,7 @@ export function ApprovalDocViewer({
               </div>
             ) : (
             <div
-              className="rounded-[14px] px-[26px] py-6 flex flex-col gap-4"
+              className="rounded-lg px-[26px] py-6 flex flex-col gap-4"
               style={{
                 background: "var(--cd-active-fill)",
                 border: "1px solid var(--cd-active-border)",
@@ -753,8 +753,8 @@ export function ApprovalDocViewer({
             )}
 
             {detail.steps.some((s) => s.comment) && (
-              <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1">
-                <span className="text-[11px] font-bold cd-text-faint">결재 의견</span>
+              <div className="rounded-lg border cd-border-c p-3 flex flex-col gap-1">
+                <span className="text-[11px] font-semibold cd-text-faint">결재 의견</span>
                 {detail.steps
                   .filter((s) => s.comment)
                   .map((s) => (
@@ -785,7 +785,7 @@ export function ApprovalDocViewer({
                 />
                 <button
                   type="button"
-                  className="cd-btn cd-btn-primary px-[26px] py-2.5 text-[13.5px] disabled:opacity-50"
+                  className="cd-btn cd-btn-primary px-[26px] py-2.5 text-[14px] disabled:opacity-50"
                   disabled={acting}
                   onClick={() => act("approve")}
                 >
@@ -808,8 +808,8 @@ export function ApprovalDocViewer({
 
             {/* 반려 요청(취소 요청, 124) — 일정 메뉴의 휴가/출장/교육 취소·변경 흐름 */}
             {detail.cancelRequest && (
-              <div className="rounded-xl border cd-border-c p-3 flex flex-col gap-1" style={{ borderColor: "var(--cd-warning)" }}>
-                <span className="text-[11px] font-bold" style={{ color: "var(--cd-warning)" }}>
+              <div className="rounded-lg border cd-border-c p-3 flex flex-col gap-1" style={{ borderColor: "var(--cd-warning)" }}>
+                <span className="text-[11px] font-semibold cd-warn-text">
                   반려 요청 처리 대기
                 </span>
                 <p className="text-[12px] cd-text">
@@ -822,7 +822,7 @@ export function ApprovalDocViewer({
                 {detail.canCancel && (
                   <button
                     type="button"
-                    className="cd-btn cd-btn-danger px-[18px] py-2 text-[12.5px] self-start disabled:opacity-50"
+                    className="cd-btn cd-btn-danger px-[18px] py-2 text-[13px] self-start disabled:opacity-50"
                     disabled={acting}
                     onClick={cancelDoc}
                   >
@@ -861,7 +861,7 @@ export function ApprovalDocViewer({
                   <div className="flex items-center gap-1 self-start">
                     <button
                       type="button"
-                      className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[12.5px] cd-text-muted hover:cd-error-text"
+                      className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] cd-text-muted hover:cd-error-text"
                       onClick={() => setCancelReasonOpen(true)}
                     >
                       반려 요청 — {detail.status === "approved" ? "승인 건 취소를 관리자에게 요청" : "결재자에게 반려를 요청"}
@@ -897,7 +897,7 @@ export function ApprovalDocModal({
       <div
         // 문서 렌더러는 273mm(약 1032px) 고정폭 — max-w-3xl(768px)이면 양식이 눌려 좁아 보인다는
         // 피드백(일정 메뉴 문서 팝업). 렌더러+좌우 패딩이 온전히 들어가는 폭으로 상향.
-        className="cdash cdash-vars cd-fields-white rounded-[24px] border cd-border-c w-full max-w-[1100px] max-h-[88vh] overflow-y-auto p-5"
+        className="cdash cdash-vars cd-fields-white rounded-lg border cd-border-c w-full max-w-[1100px] max-h-[88vh] overflow-y-auto p-5"
         style={{ background: "var(--cd-card-solid)" }}
         data-theme={theme}
         onClick={(e) => e.stopPropagation()}

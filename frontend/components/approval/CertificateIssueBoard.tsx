@@ -97,7 +97,7 @@ export function CertificateIssueBoard() {
   const pendingCount = issues.filter((i) => i.status === "pending").length;
 
   return (
-    <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white min-h-full p-4 rounded-lg" data-theme={theme}>
       <div>
         <CdPageHeader
           title="증명서 발급 관리"
@@ -117,7 +117,7 @@ export function CertificateIssueBoard() {
         </div>
 
         {error && (
-          <p className="mb-3 text-[12px]" style={{ color: "var(--cd-error,#FA896B)" }}>{error}</p>
+          <p className="mb-3 text-[12px] cd-error-text">{error}</p>
         )}
 
         <div className="cd-card border cd-border-c p-0 overflow-x-auto">
@@ -125,7 +125,7 @@ export function CertificateIssueBoard() {
             <thead>
               <tr>
                 {["신청자", "문서번호", "증명서", "용도", "귀속연도", "매수", "상태", "발급/전달"].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                  <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -139,7 +139,7 @@ export function CertificateIssueBoard() {
                   <tr key={i.issueId} className="border-b cd-border-c last:border-b-0 align-middle">
                     <td className="px-3 py-2 cd-text whitespace-nowrap">{i.employeeName ?? "-"}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.docNo ?? "-"}</td>
-                    <td className="px-3 py-2 cd-text font-bold whitespace-nowrap">{i.certLabel}</td>
+                    <td className="px-3 py-2 cd-text font-semibold whitespace-nowrap">{i.certLabel}</td>
                     <td className="px-3 py-2 cd-text-muted">{i.purpose ?? "-"}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.targetYear ?? "-"}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.copies}부</td>
@@ -192,7 +192,7 @@ export function CertificateIssueBoard() {
                           </button>
                         )}
                         {i.status === "delivered" && i.deliveredAt && (
-                          <span className="text-[10.5px] cd-text-faint">전달 {i.deliveredAt.slice(0, 10)}</span>
+                          <span className="text-[11px] cd-text-faint">전달 {i.deliveredAt.slice(0, 10)}</span>
                         )}
                       </div>
                     </td>

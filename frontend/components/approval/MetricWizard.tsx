@@ -245,13 +245,13 @@ export function MetricWizard({
       onClick={onClose}
     >
       <div
-        className="cdash cdash-vars cd-fields-white rounded-[24px] border cd-border-c w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4"
+        className="cdash cdash-vars cd-fields-white rounded-lg border cd-border-c w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4"
         style={{ background: "var(--cd-card-solid)" }}
         data-theme={theme}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <h3 className="font-bold cd-text text-[15px]">{stepTitle}</h3>
+          <h3 className="font-semibold cd-text text-base">{stepTitle}</h3>
           <button type="button" className="ml-auto cd-btn cd-btn-soft text-[12px]" onClick={onClose}>
             <X className="w-4 h-4" />
           </button>
@@ -266,31 +266,31 @@ export function MetricWizard({
                 <button
                   key={t.title}
                   type="button"
-                  className="rounded-2xl border cd-border-c px-4 py-3 text-left cd-row-hover"
+                  className="rounded-lg border cd-border-c px-4 py-3 text-left cd-row-hover"
                   onClick={() => start(t.def, t.title)}
                 >
-                  <span className="block text-[13px] font-bold cd-text">{t.title}</span>
+                  <span className="block text-[13px] font-semibold cd-text">{t.title}</span>
                   <span className="block text-[11px] cd-text-faint mt-1 leading-relaxed">{t.desc}</span>
                 </button>
               ))}
               <button
                 type="button"
-                className="rounded-2xl border border-dashed cd-border-c px-4 py-3 text-left cd-row-hover"
+                className="rounded-lg border border-dashed cd-border-c px-4 py-3 text-left cd-row-hover"
                 onClick={() =>
                   start({ kind: "aggregate", source: { type: "approval_docs", forms: "auto", status: ["approved"] }, measure: { agg: "sum", concept: measureConcepts[0]?.key ?? "cost.travel" }, groupBy: ["ref.contract"] })
                 }
               >
-                <span className="block text-[13px] font-bold cd-text">백지에서 시작</span>
+                <span className="block text-[13px] font-semibold cd-text">백지에서 시작</span>
                 <span className="block text-[11px] cd-text-faint mt-1">소스·계산을 직접 구성합니다.</span>
               </button>
             </div>
-            <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
-              <span className="text-[12px] font-bold cd-text flex items-center gap-1.5">
+            <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-2">
+              <span className="text-[12px] font-semibold cd-text flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 cd-text-primary" /> 문장으로 설명하면 AI가 초안을 만듭니다
               </span>
               <div className="flex items-center gap-2">
                 <input
-                  className="cd-input flex-1 text-[12.5px]"
+                  className="cd-input flex-1 text-[13px]"
                   placeholder="예: 부서 회식비가 달마다 얼마나 나가는지 보고 싶어"
                   value={nlPrompt}
                   onChange={(e) => setNlPrompt(e.target.value)}
@@ -300,7 +300,7 @@ export function MetricWizard({
                   {busy ? "생성 중..." : "AI 초안"}
                 </button>
               </div>
-              <p className="text-[10.5px] cd-text-faint">AI는 정의 초안만 제안하고, 계산은 등록된 태그·소스 범위에서만 실행됩니다.</p>
+              <p className="text-[11px] cd-text-faint">AI는 정의 초안만 제안하고, 계산은 등록된 태그·소스 범위에서만 실행됩니다.</p>
             </div>
           </div>
         )}
@@ -311,25 +311,25 @@ export function MetricWizard({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <button
                 type="button"
-                className={`rounded-2xl border px-4 py-3 text-left ${isDocSource ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
+                className={`rounded-lg border px-4 py-3 text-left ${isDocSource ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
                 onClick={() => patchAgg({ source: { type: "approval_docs", forms: "auto", status: ["approved"] }, measure: { agg: "sum", concept: measureConcepts[0]?.key ?? "cost.travel" } })}
               >
-                <span className="block text-[13px] font-bold cd-text">결재 문서</span>
+                <span className="block text-[13px] font-semibold cd-text">결재 문서</span>
                 <span className="block text-[11px] cd-text-faint mt-1">양식에 태깅된 값(출장 경비 등)을 집계 — 태그를 가진 모든 양식이 자동 포함됩니다.</span>
               </button>
               {SYSTEM_SOURCE_CATALOG.map((s) => (
                 <button
                   key={s.key}
                   type="button"
-                  className={`rounded-2xl border px-4 py-3 text-left ${agg.source.type === s.key ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
+                  className={`rounded-lg border px-4 py-3 text-left ${agg.source.type === s.key ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
                   onClick={() => patchAgg({ source: { type: s.key }, measure: { agg: s.measures[0].defaultAgg, field: s.measures[0].key }, groupBy: [s.dims[0].key], timeBy: undefined })}
                 >
-                  <span className="block text-[13px] font-bold cd-text">{s.label}</span>
+                  <span className="block text-[13px] font-semibold cd-text">{s.label}</span>
                   <span className="block text-[11px] cd-text-faint mt-1">{s.measures.map((m) => m.label).join(" · ")}</span>
                 </button>
               ))}
             </div>
-            <label className="text-[11.5px] cd-text-faint flex items-center gap-2 flex-wrap">
+            <label className="text-[12px] cd-text-faint flex items-center gap-2 flex-wrap">
               집계할 값:
               {isDocSource ? (
                 <>
@@ -380,7 +380,7 @@ export function MetricWizard({
         {/* ── STEP 2: 계산(문장형) ── */}
         {step === 2 && agg && (
           <div className="flex flex-col gap-3">
-            <div className="rounded-2xl border cd-border-c p-4 text-[13.5px] cd-text leading-loose">
+            <div className="rounded-lg border cd-border-c p-4 text-[14px] cd-text leading-loose">
               <b className="cd-text-primary">
                 {isDocSource ? measureConcepts.find((c) => c.key === agg.measure.concept)?.label ?? agg.measure.concept : sysSpec?.measures.find((m) => m.key === agg.measure.field)?.label}
               </b>
@@ -466,7 +466,7 @@ export function MetricWizard({
         {step === 3 && agg && (
           <div className="flex flex-col gap-3">
             {!agg.groupBy?.some((g) => g.startsWith("ref.")) || !isDocSource ? (
-              <p className="text-[12.5px] cd-text-faint rounded-2xl border cd-border-c p-4">
+              <p className="text-[13px] cd-text-faint rounded-lg border cd-border-c p-4">
                 {!isDocSource
                   ? "시스템 소스는 마스터 데이터라 연결 확인이 필요 없습니다."
                   : agg.groupBy?.some((g) => g.startsWith("doc."))
@@ -485,17 +485,17 @@ export function MetricWizard({
                 {edges.map((e, i) => {
                   const rate = e.totalDocs ? Math.round((e.linkedDocs / e.totalDocs) * 100) : null;
                   return (
-                    <div key={i} className="rounded-xl border cd-border-c px-3.5 py-2.5 text-[12px] cd-text flex items-center gap-3 flex-wrap">
+                    <div key={i} className="rounded-lg border cd-border-c px-3.5 py-2.5 text-[12px] cd-text flex items-center gap-3 flex-wrap">
                       <b>{e.formName}</b>
                       <span className="cd-text-faint">총 {e.totalDocs}건</span>
-                      <span style={{ color: "var(--cd-primary,#5D87FF)" }}>연결 {e.linkedDocs}</span>
-                      <span style={{ color: "var(--cd-warning)" }}>직접 입력 {e.manualDocs}</span>
-                      <span style={{ color: "var(--cd-error)" }}>미입력 {e.missingDocs}</span>
-                      <span className="ml-auto font-bold">{rate == null ? "-" : `${rate}%`}</span>
+                      <span className="cd-text-primary">연결 {e.linkedDocs}</span>
+                      <span className="cd-warn-text">직접 입력 {e.manualDocs}</span>
+                      <span className="cd-error-text">미입력 {e.missingDocs}</span>
+                      <span className="ml-auto font-semibold">{rate == null ? "-" : `${rate}%`}</span>
                     </div>
                   );
                 })}
-                <p className="text-[10.5px] cd-text-faint">
+                <p className="text-[11px] cd-text-faint">
                   연결률이 낮으면 <a href="/approval/semantics" className="cd-text-primary underline underline-offset-2">데이터 관계 맵</a>에서 미연결 문서를 확인하세요.
                 </p>
               </>
@@ -506,7 +506,7 @@ export function MetricWizard({
         {/* ── STEP 10: 복합 수식 빌더 ── */}
         {step === 10 && comp && (
           <div className="flex flex-col gap-3">
-            <label className="text-[11.5px] cd-text-faint flex items-center gap-2">
+            <label className="text-[12px] cd-text-faint flex items-center gap-2">
               결합 차원:
               <select className="cd-select" style={{ width: 150 }} value={comp.dimensions[0] ?? "ref.contract"} onChange={(e) => patchComp({ dimensions: [e.target.value] })}>
                 {Object.entries(DIMENSION_LABEL).map(([k, l]) => (
@@ -522,14 +522,14 @@ export function MetricWizard({
                 <option value="percent">퍼센트</option>
               </select>
             </label>
-            <div className="rounded-2xl border cd-border-c p-3 min-h-[52px] flex items-center gap-1.5 flex-wrap">
+            <div className="rounded-lg border cd-border-c p-3 min-h-[52px] flex items-center gap-1.5 flex-wrap">
               {comp.formula.length === 0 && <span className="text-[12px] cd-text-faint">아래에서 지표와 연산자를 눌러 수식을 만드세요.</span>}
               {comp.formula.map((t, i) => (
                 <button
                   key={i}
                   type="button"
                   title="클릭하면 제거"
-                  className={`rounded-lg border px-2 py-1 text-[11.5px] font-mono ${/^[a-z]/.test(t) ? "cd-glass-active" : "cd-border-c cd-text"}`}
+                  className={`rounded-lg border px-2 py-1 text-[12px] font-mono ${/^[a-z]/.test(t) ? "cd-glass-active" : "cd-border-c cd-text"}`}
                   onClick={() => patchComp({ formula: comp.formula.filter((_, x) => x !== i) })}
                 >
                   {/^[a-z]/.test(t) ? metrics.find((m) => m.metricKey === t)?.label ?? t : t}
@@ -553,7 +553,7 @@ export function MetricWizard({
                 지우기
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint">참조 지표들은 결합 차원({DIMENSION_LABEL[comp.dimensions[0] ?? ""] ?? comp.dimensions[0]})별 집계여야 하며, 값이 없는 그룹은 0으로 계산됩니다.</p>
+            <p className="text-[11px] cd-text-faint">참조 지표들은 결합 차원({DIMENSION_LABEL[comp.dimensions[0] ?? ""] ?? comp.dimensions[0]})별 집계여야 하며, 값이 없는 그룹은 0으로 계산됩니다.</p>
           </div>
         )}
 
@@ -563,7 +563,7 @@ export function MetricWizard({
             {busy && <p className="text-[12px] cd-text-faint">실데이터로 계산 중...</p>}
             {preview && (
               <>
-                <div className="rounded-xl border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
+                <div className="rounded-lg border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
                   <b className="cd-text">품질 리포트</b> — 소스 {preview.diagnostics.sources.join(", ")}
                   {preview.diagnostics.totalDocs != null && <> · 대상 문서 {preview.diagnostics.totalDocs}건</>} · 사용 {preview.diagnostics.usedRows}행
                   {Object.entries(preview.diagnostics.excluded).length > 0 && (
@@ -573,7 +573,7 @@ export function MetricWizard({
                     <span key={i} className="block">{n}</span>
                   ))}
                 </div>
-                <div className="overflow-x-auto max-h-[240px] overflow-y-auto rounded-xl border cd-border-c">
+                <div className="overflow-x-auto max-h-[240px] overflow-y-auto rounded-lg border cd-border-c">
                   <table className="w-full text-[12px]">
                     <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
@@ -587,7 +587,7 @@ export function MetricWizard({
                         <tr key={i} className="border-t cd-border-c">
                           <td className="py-1.5 px-2 cd-text">{r.groupLabel}</td>
                           {preview.hasTime && <td className="py-1.5 px-2 cd-text-faint">{r.time ?? "-"}</td>}
-                          <td className="py-1.5 px-2 text-right font-bold cd-text">{formatMetricValue(r.value, preview.format)}</td>
+                          <td className="py-1.5 px-2 text-right font-semibold cd-text">{formatMetricValue(r.value, preview.format)}</td>
                         </tr>
                       ))}
                       {preview.rows.length === 0 && (

@@ -92,8 +92,8 @@ function edgeRate(e: RefEdge): number | null {
   return e.totalDocs > 0 ? e.linkedDocs / e.totalDocs : null;
 }
 function rateColor(rate: number | null): string {
-  if (rate == null) return "var(--cd-border, #DFE5EF)";
-  if (rate >= 0.9) return "var(--cd-primary, #5D87FF)";
+  if (rate == null) return "var(--cd-border)";
+  if (rate >= 0.9) return "var(--cd-primary)";
   if (rate >= 0.6) return "var(--cd-warning)";
   return "var(--cd-error)";
 }
@@ -228,7 +228,7 @@ export function ApprovalSemanticsBoard() {
     selected?.kind === "input" && selected.edge.level === "doc" && (selected.edge.entity === "contract" || selected.edge.entity === "company");
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="데이터 관계 맵"
         meta={
@@ -250,7 +250,7 @@ export function ApprovalSemanticsBoard() {
           {/* ── 좌: 관계 맵 + 시스템 소스 ── */}
           <div className="flex flex-col gap-4 min-w-0 xl:overflow-y-auto">
             <div className="cd-card p-5 gap-3">
-              <h3 className="font-bold cd-text text-[13.5px] flex items-center gap-1.5">
+              <h3 className="font-semibold cd-text text-[14px] flex items-center gap-1.5">
                 <Link2 className="w-4 h-4 cd-text-primary" /> 양식 ↔ 마스터 데이터 연결<CdHelp topic="approval-ops.semantics-map" />
                 <button
                   type="button"
@@ -271,15 +271,15 @@ export function ApprovalSemanticsBoard() {
                   {forms.map((f) => (
                     <div key={f.formId} style={{ height: ROW_H }} className="flex items-start">
                       <div
-                        className={`w-full rounded-xl border px-3 py-2 ${selForm === f.formId ? "cd-glass-active" : "cd-border-c"}`}
+                        className={`w-full rounded-lg border px-3 py-2 ${selForm === f.formId ? "cd-glass-active" : "cd-border-c"}`}
                         style={{ height: NODE_H, background: selForm === f.formId ? undefined : "var(--cd-card-solid)" }}
                         title={f.nonLinkReason ?? undefined}
                       >
-                        <span className="block text-[12px] font-bold cd-text truncate">
+                        <span className="block text-[12px] font-semibold cd-text truncate">
                           <FileText className="w-3 h-3 inline mr-1 cd-text-faint" />
                           {f.name}
                         </span>
-                        <span className="block text-[10.5px] cd-text-faint truncate">
+                        <span className="block text-[11px] cd-text-faint truncate">
                           제출 {f.submittedDocs}건 · v{f.version}
                           {f.nonLinkReason && <span> · 연계 대상 아님</span>}
                           {f.refLink && (
@@ -307,7 +307,7 @@ export function ApprovalSemanticsBoard() {
                         key={`r${i}`}
                         d={`M 0 ${y1} C 60 ${y1}, 60 ${y2}, 120 ${y2}`}
                         fill="none"
-                        stroke={e.recordedDocs ? "var(--cd-text-faint, #7C8FAC)" : "var(--cd-border, #DFE5EF)"}
+                        stroke={e.recordedDocs ? "var(--cd-faint)" : "var(--cd-border)"}
                         strokeWidth={on ? 3 : 1.5}
                         strokeDasharray="4 3"
                         opacity={selected && !on ? 0.2 : 0.8}
@@ -358,14 +358,14 @@ export function ApprovalSemanticsBoard() {
                     return (
                       <div key={`${n.kind}:${n.id}`} style={{ height: ROW_H }} className="flex items-start">
                         <div
-                          className={`w-full rounded-xl border px-3 py-2 ${active ? "cd-glass-active" : "cd-border-c"} ${n.kind === "entity" ? "" : "border-dashed"}`}
+                          className={`w-full rounded-lg border px-3 py-2 ${active ? "cd-glass-active" : "cd-border-c"} ${n.kind === "entity" ? "" : "border-dashed"}`}
                           style={{ height: NODE_H, background: active ? undefined : "var(--cd-card-solid)" }}
                         >
-                          <span className="block text-[12px] font-bold cd-text truncate">
+                          <span className="block text-[12px] font-semibold cd-text truncate">
                             <Database className="w-3 h-3 inline mr-1 cd-text-faint" />
                             {n.label}
                           </span>
-                          <span className="block text-[10.5px] cd-text-faint truncate">{sub}</span>
+                          <span className="block text-[11px] cd-text-faint truncate">{sub}</span>
                         </div>
                       </div>
                     );
@@ -384,7 +384,7 @@ export function ApprovalSemanticsBoard() {
                       onClick={() => selectEdge(e)}
                       data-active={!!on}
                       aria-pressed={!!on}
-                      className={`cd-choice rounded-lg border px-2 py-1 text-[10.5px] ${on ? "cd-glass-active" : "cd-border-c cd-text-faint cd-row-hover"}`}
+                      className={`cd-choice rounded-lg border px-2 py-1 text-[11px] ${on ? "cd-glass-active" : "cd-border-c cd-text-faint cd-row-hover"}`}
                     >
                       {e.formName} → {e.entityLabel}
                       {LEVEL_LABEL[e.level] && <span className="ml-0.5">({LEVEL_LABEL[e.level]})</span>}
@@ -397,7 +397,7 @@ export function ApprovalSemanticsBoard() {
                 {data.edges.length === 0 && <span className="text-[11px] cd-text-faint">엔티티 참조 항목을 가진 양식이 없습니다.</span>}
               </div>
               {data.derived.length > 0 && (
-                <p className="text-[10.5px] cd-text-faint leading-relaxed">
+                <p className="text-[11px] cd-text-faint leading-relaxed">
                   기록 없이 승인 문서를 읽어 가는 경로:{" "}
                   {data.derived
                     .map((d) => `${d.label}(${d.forms.map((id) => forms.find((f) => f.formId === id)?.name ?? id).join("·")})`)
@@ -408,23 +408,23 @@ export function ApprovalSemanticsBoard() {
 
             {/* 시스템 소스 카탈로그 */}
             <div className="cd-card p-5 gap-3">
-              <h3 className="font-bold cd-text text-[13.5px] flex items-center gap-1.5">
+              <h3 className="font-semibold cd-text text-[14px] flex items-center gap-1.5">
                 <Database className="w-4 h-4 cd-text-primary" /> 시스템 데이터 소스
               </h3>
               <p className="text-[11px] cd-text-faint -mt-1">결재 문서 밖의 분석 소스 — 지표 마법사에서 결재 지표와 계약·직원·업체·부서 기준으로 결합합니다.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {data.systemSources.map((s) => (
-                  <div key={s.key} className="rounded-xl border cd-border-c px-3 py-2.5">
+                  <div key={s.key} className="rounded-lg border cd-border-c px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-bold cd-text">{s.label}</span>
+                      <span className="text-[12px] font-semibold cd-text">{s.label}</span>
                       <span className="ml-auto text-[11px] font-mono cd-text-faint">{s.key}</span>
                     </div>
-                    <p className="text-[10.5px] cd-text-faint mt-0.5 leading-relaxed">{s.desc}</p>
+                    <p className="text-[11px] cd-text-faint mt-0.5 leading-relaxed">{s.desc}</p>
                     <p className="text-[11px] mt-1">
                       {s.rows == null ? (
                         <span className="text-[color:var(--cd-warning)]">미구축(테이블 없음)</span>
                       ) : (
-                        <span className="cd-text-primary font-bold">{s.rows.toLocaleString("ko-KR")}행</span>
+                        <span className="cd-text-primary font-semibold">{s.rows.toLocaleString("ko-KR")}행</span>
                       )}
                     </p>
                   </div>
@@ -437,7 +437,7 @@ export function ApprovalSemanticsBoard() {
           <div className="flex flex-col gap-4 min-w-0 xl:overflow-y-auto">
             {/* 선택 엣지 상세 */}
             <div className="cd-card p-5 gap-3">
-              <h3 className="font-bold cd-text text-[13.5px]">연결 품질 상세</h3>
+              <h3 className="font-semibold cd-text text-[14px]">연결 품질 상세</h3>
               {!selected ? (
                 <p className="text-[12px] cd-text-faint py-6 text-center">왼쪽 맵에서 연결선(또는 하단 칩)을 클릭하세요.</p>
               ) : selected.kind === "result" ? (
@@ -446,7 +446,7 @@ export function ApprovalSemanticsBoard() {
                 <>
                   <p className="text-[12px] cd-text">
                     <b>{selected.edge.formName}</b>의 <b>{selected.edge.fieldLabel}</b>
-                    <span className="cd-text-faint font-mono text-[10.5px]">
+                    <span className="cd-text-faint font-mono text-[11px]">
                       {" "}({selected.edge.fieldKey}
                       {selected.edge.columnKey ? `.${selected.edge.columnKey}` : ""})
                     </span>{" "}
@@ -459,7 +459,7 @@ export function ApprovalSemanticsBoard() {
                     <>
                       {/* 성공률 바 */}
                       <div className="h-3 rounded-full overflow-hidden flex border cd-border-c">
-                        <div style={{ width: `${(selected.edge.linkedDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-primary,#5D87FF)" }} />
+                        <div style={{ width: `${(selected.edge.linkedDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-primary)" }} />
                         <div style={{ width: `${(selected.edge.manualDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-warning)" }} />
                         <div style={{ width: `${(selected.edge.missingDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-error)" }} />
                       </div>
@@ -468,23 +468,23 @@ export function ApprovalSemanticsBoard() {
                           총 {selected.edge.totalDocs}
                           {unit(selected.edge)}
                         </span>
-                        <span style={{ color: "var(--cd-primary,#5D87FF)" }}>연결 {selected.edge.linkedDocs}</span>
-                        <span style={{ color: "var(--cd-warning)" }}>직접 입력 {selected.edge.manualDocs}</span>
-                        <span style={{ color: "var(--cd-error)" }}>미입력 {selected.edge.missingDocs}</span>
+                        <span className="cd-text-primary">연결 {selected.edge.linkedDocs}</span>
+                        <span className="cd-warn-text">직접 입력 {selected.edge.manualDocs}</span>
+                        <span className="cd-error-text">미입력 {selected.edge.missingDocs}</span>
                       </div>
-                      <p className="text-[10.5px] cd-text-faint leading-relaxed">
+                      <p className="text-[11px] cd-text-faint leading-relaxed">
                         직접 입력·미입력 문서는 이 엔티티 기준 집계(용역별 경비 등)에서 제외됩니다. 문서를 열어 값을 확인하세요.
                       </p>
                       {/* 직접 입력 보정(L2) — 같은 값의 문서를 한 번에 계약·사업장에 연결 */}
                       {canRelink && (manualGroups.length > 0 || relinkMsg) && (
-                        <div className="rounded-xl border border-dashed cd-border-c p-3 flex flex-col gap-2">
-                          <span className="text-[11.5px] font-bold cd-text">직접 입력 값 연결</span>
-                          <span className="text-[10.5px] cd-text-faint -mt-1">
+                        <div className="rounded-lg border border-dashed cd-border-c p-3 flex flex-col gap-2">
+                          <span className="text-[12px] font-semibold cd-text">직접 입력 값 연결</span>
+                          <span className="text-[11px] cd-text-faint -mt-1">
                             같은 값으로 입력된 문서를 한 번에 {selected.edge.entityLabel}에 연결합니다. 원래 입력값은 문서에 보존됩니다.
                           </span>
                           <ul className="flex flex-col gap-1">
                             {manualGroups.map(([text, n]) => (
-                              <li key={text} className="flex items-center gap-2 text-[11.5px]">
+                              <li key={text} className="flex items-center gap-2 text-[12px]">
                                 <span className="cd-text truncate flex-1 min-w-0" title={text}>
                                   {text}
                                 </span>
@@ -508,9 +508,9 @@ export function ApprovalSemanticsBoard() {
                       {missingLoading && <p className="text-[11px] cd-text-faint">미연결 문서 조회 중...</p>}
                       {missingDocs && missingDocs.length > 0 && (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-[11.5px]">
+                          <table className="w-full text-[12px]">
                             <thead className="cd-table-head">
-                              <tr className="text-left cd-text-faint text-[10.5px]">
+                              <tr className="text-left cd-text-faint text-[11px]">
                                 <th className="py-1 pr-2 font-semibold">문서번호</th>
                                 <th className="py-1 pr-2 font-semibold">기안자</th>
                                 <th className="py-1 pr-2 font-semibold">상태</th>
@@ -525,11 +525,11 @@ export function ApprovalSemanticsBoard() {
                                   <td className="py-1.5 pr-2 cd-text-faint">{d.status}</td>
                                   <td className="py-1.5">
                                     {d.manual ? (
-                                      <span style={{ color: "var(--cd-warning)" }} title={d.manualText ?? undefined}>
+                                      <span className="cd-warn-text" title={d.manualText ?? undefined}>
                                         직접 입력
                                       </span>
                                     ) : (
-                                      <span style={{ color: "var(--cd-error)" }}>미입력</span>
+                                      <span className="cd-error-text">미입력</span>
                                     )}
                                   </td>
                                 </tr>
@@ -546,15 +546,15 @@ export function ApprovalSemanticsBoard() {
 
             {/* 경고 패널 */}
             <div className="cd-card p-5 gap-3">
-              <h3 className="font-bold cd-text text-[13.5px] flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning)" }} /> 진단 경고
+              <h3 className="font-semibold cd-text text-[14px] flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 cd-warn-text" /> 진단 경고
               </h3>
               {data.warnings.length === 0 ? (
                 <p className="text-[12px] cd-text-faint">경고가 없습니다 — 태깅·채널 정책·연결이 모두 정상입니다.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {data.warnings.map((w, i) => (
-                    <li key={i} className="rounded-xl border border-dashed cd-border-c px-3 py-2 text-[11.5px] cd-text leading-relaxed">
+                    <li key={i} className="rounded-lg border border-dashed cd-border-c px-3 py-2 text-[12px] cd-text leading-relaxed">
                       <b>{w.formName}</b> — {w.message}
                       {w.kind !== "manual_ratio" && (
                         <a href="/approval/forms" className="ml-1.5 cd-text-primary underline underline-offset-2">
@@ -610,7 +610,7 @@ function ResultDetail({
     <>
       <p className="text-[12px] cd-text">
         <b>{formName}</b> → <b>{ledger?.label ?? edge.ledgerKey}</b>
-        <span className="cd-text-faint font-mono text-[10.5px]"> ({edge.ledgerKey})</span>
+        <span className="cd-text-faint font-mono text-[11px]"> ({edge.ledgerKey})</span>
       </p>
       {edge.recordedDocs == null ? (
         <p className="text-[12px] text-[color:var(--cd-warning)]">원장(또는 문서 번호 칸)이 아직 구축되지 않았습니다.</p>
@@ -620,7 +620,7 @@ function ResultDetail({
           <span className="cd-text-faint"> / 승인 문서 {edge.approvedDocs}건</span>
         </p>
       )}
-      <p className="text-[10.5px] cd-text-faint leading-relaxed">
+      <p className="text-[11px] cd-text-faint leading-relaxed">
         결재가 끝나면(일부는 상신할 때) 이 원장에 문서 번호가 남아 원장에서 원 문서를 찾아갈 수 있습니다. 지출처럼 문서마다 기록이 생기지 않는 원장도 있어 비율은 참고용입니다.
       </p>
     </>

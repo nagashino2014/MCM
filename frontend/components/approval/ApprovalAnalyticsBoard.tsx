@@ -175,7 +175,7 @@ export function ApprovalAnalyticsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="데이터 분석"
         meta={`${metrics.length}개 지표`}
@@ -191,10 +191,10 @@ export function ApprovalAnalyticsBoard() {
       {error && <p className="text-sm cd-error-text">{error}</p>}
       {/* 자연어 질문(NLQ) — reports.nlq 권한 보유자·관리자에게만 노출(AX-P5 어댑터) */}
       {!loading && nlqAllowed && (
-        <div className="rounded-2xl border cd-border-c px-4 py-3 flex items-center gap-2" style={{ background: "var(--cd-card-solid)" }}>
+        <div className="rounded-lg border cd-border-c px-4 py-3 flex items-center gap-2" style={{ background: "var(--cd-card-solid)" }}>
           <Sparkles className="w-4 h-4 cd-text-primary shrink-0" />
           <input
-            className="cd-input flex-1 text-[12.5px]"
+            className="cd-input flex-1 text-[13px]"
             placeholder='말로 물어보세요 — 예: "출장 경비가 제일 많이 든 용역이 어디야?"'
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -216,15 +216,15 @@ export function ApprovalAnalyticsBoard() {
                 key={m.metricKey}
                 type="button"
                 onClick={() => run(m.metricKey)}
-                className={`rounded-2xl border px-3.5 py-3 text-left ${selectedKey === m.metricKey ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
+                className={`rounded-lg border px-3.5 py-3 text-left ${selectedKey === m.metricKey ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
                 style={{ background: selectedKey === m.metricKey ? undefined : "var(--cd-card-solid)" }}
               >
                 <span className="flex items-center gap-2">
                   <BarChart3 className="w-3.5 h-3.5 cd-text-primary shrink-0" />
-                  <span className="text-[13px] font-bold cd-text truncate">{m.label}</span>
-                  <span className="ml-auto text-[10px] rounded-md border cd-border-c px-1.5 py-0.5 cd-text-faint shrink-0">{KIND_LABEL[m.definition.kind]}</span>
+                  <span className="text-[13px] font-semibold cd-text truncate">{m.label}</span>
+                  <span className="ml-auto text-[11px] rounded-lg border cd-border-c px-1.5 py-0.5 cd-text-faint shrink-0">{KIND_LABEL[m.definition.kind]}</span>
                 </span>
-                {m.description && <span className="block text-[10.5px] cd-text-faint mt-1 leading-relaxed">{m.description}</span>}
+                {m.description && <span className="block text-[11px] cd-text-faint mt-1 leading-relaxed">{m.description}</span>}
               </button>
             ))}
             {metrics.length === 0 && <p className="text-[12px] cd-text-faint py-6 text-center">조회 가능한 지표가 없습니다.</p>}
@@ -235,7 +235,7 @@ export function ApprovalAnalyticsBoard() {
             {running && <p className="text-[12px] cd-text-faint">계산 중...</p>}
             {!running && !result && (
               <div className="cd-card p-6">
-                <p className="text-[12.5px] cd-text-faint text-center py-10">
+                <p className="text-[13px] cd-text-faint text-center py-10">
                   <Play className="w-5 h-5 inline mr-1.5 opacity-60" />
                   왼쪽에서 지표를 선택하면 실데이터로 계산해 차트와 표로 보여줍니다.
                 </p>
@@ -244,15 +244,15 @@ export function ApprovalAnalyticsBoard() {
             {result && (
               <div className="cd-card p-5 gap-3">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold cd-text text-[13.5px]">{result.label}</h3>
+                  <h3 className="font-semibold cd-text text-[14px]">{result.label}</h3>
                   <button type="button" className="ml-auto cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1" onClick={exportCsv}>
                     <Download className="w-3.5 h-3.5" /> CSV
                   </button>
                 </div>
                 {answer && (
-                  <p className="rounded-xl px-3.5 py-2.5 text-[13px] cd-text font-semibold cd-tint-primary">{answer}</p>
+                  <p className="rounded-lg px-3.5 py-2.5 text-[13px] cd-text font-semibold cd-tint-primary">{answer}</p>
                 )}
-                <div className="rounded-xl border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
+                <div className="rounded-lg border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
                   소스 {result.diagnostics.sources.join(", ")}
                   {result.diagnostics.totalDocs != null && <> · 대상 문서 {result.diagnostics.totalDocs}건</>} · 사용 {result.diagnostics.usedRows}행
                   {Object.entries(result.diagnostics.excluded).length > 0 && (
@@ -277,7 +277,7 @@ export function ApprovalAnalyticsBoard() {
                         <tr key={i} className="border-t cd-border-c">
                           <td className="py-1.5 pr-2 cd-text">{r.groupLabel}</td>
                           {result.hasTime && <td className="py-1.5 pr-2 cd-text-faint">{r.time ?? "-"}</td>}
-                          <td className="py-1.5 text-right font-bold cd-text">{formatMetricValue(r.value, result.format)}</td>
+                          <td className="py-1.5 text-right font-semibold cd-text">{formatMetricValue(r.value, result.format)}</td>
                         </tr>
                       ))}
                       {result.rows.length === 0 && (

@@ -67,7 +67,7 @@ export function AttendanceBoard() {
 
   return (
     // 다른 화면과 동일한 풀폭 프레임 — max-w-6xl 중앙 정렬이라 넓은 화면에서 좌우 여백만 남았다.
-    <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white min-h-full p-4 rounded-lg" data-theme={theme}>
       <div>
         <CdPageHeader
           icon={<CalendarClock className="w-5 h-5" />}
@@ -93,7 +93,7 @@ export function AttendanceBoard() {
               <>
                 {label}
                 {k === "mapping" && unmatchedCount != null && unmatchedCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: "var(--cd-error)", color: "#fff" }}>
+                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold" style={{ background: "var(--cd-error)", color: "#fff" }}>
                     {unmatchedCount}
                   </span>
                 )}
@@ -225,7 +225,7 @@ function WeeklyPanel() {
         <Kpi icon={<UserRoundCheck className="w-4 h-4" />} label="대상 인원" value={`${kpi.people}명`} />
       </div>
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[13px] cd-error-text">{error}</p>}
       {loading ? (
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : rows.length === 0 ? (
@@ -233,7 +233,7 @@ function WeeklyPanel() {
       ) : (
         <div className="cd-card overflow-hidden">
           {/* 헤더 */}
-          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={gridCols}>
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={gridCols}>
             <span>직원</span>
             <span className="text-center">근무일</span>
             <span className="text-right">실근무</span>
@@ -264,12 +264,12 @@ function WeeklyPanel() {
                 >
                   {r.excluded ? "-" : r.estimatedPay ? `${won(r.estimatedPay)}` : r.overtimeMinutes > 0 ? "계약 필요" : "-"}
                 </span>
-                <span className="text-right font-mono text-[13px] font-bold" style={{ color: r.excessMinutes > 0 ? "var(--cd-error)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
+                <span className="text-right font-mono text-[13px] font-semibold" style={{ color: r.excessMinutes > 0 ? "var(--cd-error)" : "var(--cd-faint)" }}>{r.excessMinutes > 0 ? hm(r.excessMinutes) : "-"}</span>
                 <span className="text-center">
                   {r.excluded ? (
-                    <span className="inline-flex items-center text-[10.5px] font-bold rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">산정 제외</span>
+                    <span className="inline-flex items-center text-[11px] font-semibold rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">산정 제외</span>
                   ) : r.overLimit ? (
-                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-error)", color: "#fff" }}>특별휴가 대상</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--cd-error)", color: "#fff" }}>특별휴가 대상</span>
                   ) : r.overtimeMinutes > 0 ? (
                     <span className="text-[11px] cd-text-faint">정상</span>
                   ) : (
@@ -293,11 +293,11 @@ function WeeklyPanel() {
 const gridCols = { display: "grid", gridTemplateColumns: "minmax(0,2.2fr) 0.6fr 0.9fr 1fr 1fr 1.2fr 0.9fr 1.1fr", gap: "8px" } as const;
 
 function DailyDetail({ rows }: { rows?: DailyRow[] }) {
-  if (!rows) return <p className="text-[11.5px] cd-text-faint py-2">불러오는 중입니다.</p>;
-  if (rows.length === 0) return <p className="text-[11.5px] cd-text-faint py-2">일별 기록이 없습니다.</p>;
+  if (!rows) return <p className="text-[12px] cd-text-faint py-2">불러오는 중입니다.</p>;
+  if (rows.length === 0) return <p className="text-[12px] cd-text-faint py-2">일별 기록이 없습니다.</p>;
   return (
-    <div className="rounded-xl border cd-border-c cd-surface-bg overflow-hidden">
-      <div className="cd-table-head grid px-3 py-1.5 text-[10.5px] font-bold cd-text-faint border-b cd-border-c" style={dailyGrid}>
+    <div className="rounded-lg border cd-border-c cd-surface-bg overflow-hidden">
+      <div className="cd-table-head grid px-3 py-1.5 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={dailyGrid}>
         <span>일자</span>
         <span className="text-center">출근</span>
         <span className="text-center">퇴근</span>
@@ -315,7 +315,7 @@ function DailyDetail({ rows }: { rows?: DailyRow[] }) {
           <span className="text-right font-mono" style={{ color: (d.nightMinutes ?? 0) > 0 ? "var(--cd-primary)" : "var(--cd-faint)" }}>{d.nightMinutes ? hm(d.nightMinutes) : "-"}</span>
           <span className="text-right font-mono cd-text-faint">{d.vendorOverRaw ?? "-"}</span>
           <span className="text-center">
-            {d.isLeaveDay ? <span className="text-[10px] rounded px-1.5 py-0.5 cd-tint-primary cd-text-primary font-semibold">휴가</span> : <span className="cd-text-faint text-[11px]">{d.source}</span>}
+            {d.isLeaveDay ? <span className="text-[11px] rounded px-1.5 py-0.5 cd-tint-primary cd-text-primary font-semibold">휴가</span> : <span className="cd-text-faint text-[11px]">{d.source}</span>}
           </span>
         </div>
       ))}
@@ -415,7 +415,7 @@ function MatchPanel() {
         <select className="cd-select" style={{ width: 100 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
         </select>
-        <span className="text-[11.5px] cd-text-faint">
+        <span className="text-[12px] cd-text-faint">
           귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
         </span>
         <CdHelp topic="hr.attendance-match" />
@@ -431,7 +431,7 @@ function MatchPanel() {
         </div>
       )}
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[13px] cd-error-text">{error}</p>}
       {loading ? (
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : !data || data.rows.length === 0 ? (
@@ -440,24 +440,24 @@ function MatchPanel() {
         <>
           {/* 인원별 요약 */}
           {data.byEmployee.length > 0 && (
-            <div className="rounded-2xl border cd-border-c p-3">
-              <div className="text-[11px] font-bold cd-text-faint mb-2">인원별 산정 결과 — 급여대장에 이 금액이 반영됩니다</div>
+            <div className="rounded-lg border cd-border-c p-3">
+              <div className="text-[11px] font-semibold cd-text-faint mb-2">인원별 산정 결과 — 급여대장에 이 금액이 반영됩니다</div>
               <div className="flex flex-wrap gap-1.5">
                 {data.byEmployee.map((e) => (
                   // 배경을 흰색(카드 solid)으로 — 글라스 배경 위에서 태그 경계가 묻힌다.
                   <span
                     key={e.employeeId}
-                    className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px]"
+                    className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[12px]"
                     style={{ background: "var(--cd-card-solid)" }}
                   >
                     <span className="cd-text font-semibold">{e.name}</span>
-                    <span className="font-mono cd-text-primary font-bold">{won(e.amount)}원</span>
+                    <span className="font-mono cd-text-primary font-semibold">{won(e.amount)}원</span>
                     <span className="cd-text-faint">{toH(e.dayMin + e.nightMin)}h</span>
                     {e.cappedMin > 0 && (
-                      <span className="font-mono" style={{ color: "var(--cd-error)" }}>-{toH(e.cappedMin)}h</span>
+                      <span className="font-mono cd-error-text">-{toH(e.cappedMin)}h</span>
                     )}
                     {e.excessDayMin + e.excessNightMin > 0 && (
-                      <span className="font-mono" style={{ color: "var(--cd-warning)" }} title="주 연장 한도 초과 — 수당 대신 대체휴가로 부여">
+                      <span className="font-mono cd-warn-text" title="주 연장 한도 초과 — 수당 대신 대체휴가로 부여">
                         휴가 {toH(e.excessDayMin + e.excessNightMin)}h
                       </span>
                     )}
@@ -469,7 +469,7 @@ function MatchPanel() {
 
           {/* 건별 대조 */}
           <div className="cd-card overflow-hidden">
-            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={matchGrid}>
+            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={matchGrid}>
               <span>직원</span>
               <span className="text-center">근무일</span>
               <span className="text-center">신청 시간</span>
@@ -489,7 +489,7 @@ function MatchPanel() {
                 : { background: "transparent", color: "var(--cd-faint)" };
               const overridden = r.verdict === "override" || r.verdict === "rejected";
               return (
-                <div key={r.docId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[12.5px]" style={matchGrid}>
+                <div key={r.docId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[13px]" style={matchGrid}>
                   <span className="cd-text font-semibold truncate">{r.name}</span>
                   <span className="text-center font-mono cd-text">{r.workDate.slice(5)} ({dowOf(r.workDate)})</span>
                   <span className="text-center font-mono cd-text">{r.reqStart}~{r.reqEnd}</span>
@@ -498,23 +498,23 @@ function MatchPanel() {
                   </span>
                   <span className="text-center font-mono cd-text-faint">{r.otStartAt}</span>
                   <span className="text-right font-mono cd-text-muted">{hm(r.reqMin)}</span>
-                  <span className="text-right font-mono font-bold" style={{ color: r.actualMin < r.reqMin ? "var(--cd-error)" : "var(--cd-text)" }}>{hm(r.actualMin)}</span>
+                  <span className="text-right font-mono font-semibold" style={{ color: r.actualMin < r.reqMin ? "var(--cd-error)" : "var(--cd-text)" }}>{hm(r.actualMin)}</span>
                   <span className="text-center">
-                    <span className="inline-flex items-center text-[10.5px] font-bold rounded-full px-2 py-0.5" style={tone} title={r.overrideReason ?? undefined}>
+                    <span className="inline-flex items-center text-[11px] font-semibold rounded-full px-2 py-0.5" style={tone} title={r.overrideReason ?? undefined}>
                       {v.text}
                     </span>
                   </span>
                   <span className="flex items-center justify-center gap-1">
                     {overridden ? (
-                      <button type="button" disabled={busy === r.docId} onClick={() => override(r, "clear")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50">
+                      <button type="button" disabled={busy === r.docId} onClick={() => override(r, "clear")} className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50">
                         해제
                       </button>
                     ) : r.verdict === "absent" || r.verdict === "short" ? (
                       <>
-                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "approve")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-primary hover:cd-tint-primary disabled:opacity-50" title="실근무 확인 — 신청 시간 전량 인정">
+                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "approve")} className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c cd-text-primary hover:cd-tint-primary disabled:opacity-50" title="실근무 확인 — 신청 시간 전량 인정">
                           승인
                         </button>
-                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "reject")} className="rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50" title="전량 불인정">
+                        <button type="button" disabled={busy === r.docId} onClick={() => override(r, "reject")} className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50" title="전량 불인정">
                           반려
                         </button>
                       </>
@@ -620,7 +620,7 @@ function MealPanel() {
         <select className="cd-select" style={{ width: 100 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
         </select>
-        <span className="text-[11.5px] cd-text-faint">
+        <span className="text-[12px] cd-text-faint">
           귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
         </span>
       </div>
@@ -635,14 +635,14 @@ function MealPanel() {
         </div>
       )}
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[13px] cd-error-text">{error}</p>}
       {loading ? (
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : !data || data.rows.length === 0 ? (
         <p className="text-[13px] cd-text-faint py-4">해당 월에 검출된 식대 위반 건이 없습니다.</p>
       ) : (
-        <div className="rounded-2xl border cd-border-c overflow-x-auto">
-          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mealGrid}>
+        <div className="rounded-lg border cd-border-c overflow-x-auto">
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={mealGrid}>
             <span>직원</span>
             <span>사용일</span>
             <span>사용처</span>
@@ -654,10 +654,10 @@ function MealPanel() {
             <span>메모</span>
           </div>
           {data.rows.map((r) => (
-            <div key={r.warningId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[12.5px]" style={mealGrid}>
+            <div key={r.warningId} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[13px]" style={mealGrid}>
               <span className="font-semibold cd-text truncate">{r.empName}</span>
               <span className="cd-text">
-                {r.usedOn.slice(5)}({dowOf(r.usedOn)}){r.isOffDay ? <span className="ml-1 text-[10px] font-bold" style={{ color: "var(--cd-error)" }}>휴일</span> : null}
+                {r.usedOn.slice(5)}({dowOf(r.usedOn)}){r.isOffDay ? <span className="ml-1 text-[11px] font-semibold cd-error-text">휴일</span> : null}
               </span>
               <span className="cd-text truncate" title={r.docNo ? `문서 ${r.docNo}` : undefined}>{r.vendor ?? "미상"}</span>
               <span className="cd-text text-right">{r.amount != null ? `${won(r.amount)}원` : "-"}</span>
@@ -666,7 +666,7 @@ function MealPanel() {
                 {toH(r.appliedMinutes)}h <span className="cd-text-faint">/ {toH(r.requiredMinutes)}h</span>
               </span>
               <span
-                className="text-[11px] font-bold"
+                className="text-[11px] font-semibold"
                 style={{ color: r.priorCount > 0 ? "var(--cd-error)" : "var(--cd-warning)" }}
               >
                 {r.priorCount + 1}회차
@@ -787,12 +787,12 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
         <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
       ) : unmatched.length === 0 ? (
         <div className="cd-card p-6 text-center">
-          <UserRoundCheck className="w-7 h-7 mx-auto mb-2" style={{ color: "var(--cd-primary)" }} />
+          <UserRoundCheck className="w-7 h-7 mx-auto mb-2 cd-text-primary" />
           <p className="text-[13px] cd-text">미매칭 항목이 없습니다. 모든 근태가 직원과 연결되어 있습니다.</p>
         </div>
       ) : (
         <div className="cd-card overflow-hidden">
-          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c" style={mapGrid}>
+          <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={mapGrid}>
             <span>ADT 사번 / 성명(스냅샷)</span>
             <span className="text-center">기록</span>
             <span>매핑할 직원</span>
@@ -804,7 +804,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
                 <span className="block text-[13px] font-semibold cd-text font-mono">{u.adtEmpNo}</span>
                 <span className="block text-[11px] cd-text-faint truncate">{u.empName ?? "-"}{u.deptSnapshot ? ` · ${u.deptSnapshot}` : ""}</span>
               </span>
-              <span className="text-center text-[11.5px] cd-text-faint">{u.days}일<br />~{u.lastDate.slice(5)}</span>
+              <span className="text-center text-[12px] cd-text-faint">{u.days}일<br />~{u.lastDate.slice(5)}</span>
               <select className="cd-select" value={sel[u.adtEmpNo] ?? ""} onChange={(e) => setSel((p) => ({ ...p, [u.adtEmpNo]: e.target.value }))}>
                 <option value="">직원 선택…</option>
                 {employees.map((e) => (
@@ -833,11 +833,11 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
       )}
 
       {ignored.length > 0 && (
-        <div className="rounded-2xl border cd-border-c p-3">
-          <div className="text-[11px] font-bold cd-text-faint mb-2">관리대상 아님 ({ignored.length}) — 퇴사자·비직원 출입자. 해제하면 다시 매핑 목록에 나타납니다</div>
+        <div className="rounded-lg border cd-border-c p-3">
+          <div className="text-[11px] font-semibold cd-text-faint mb-2">관리대상 아님 ({ignored.length}) — 퇴사자·비직원 출입자. 해제하면 다시 매핑 목록에 나타납니다</div>
           <div className="flex flex-wrap gap-1.5">
             {ignored.map((g) => (
-              <span key={g.adtEmpNo} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11.5px] opacity-70">
+              <span key={g.adtEmpNo} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[12px] opacity-70">
                 <UserRoundX className="w-3.5 h-3.5 cd-text-faint" />
                 <span className="cd-text font-medium">{g.label ?? "-"}</span>
                 <span className="cd-text-faint font-mono">{g.adtEmpNo}</span>
@@ -846,7 +846,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
                   type="button"
                   disabled={busy === g.adtEmpNo}
                   onClick={() => post({ unignore: { adtEmpNo: g.adtEmpNo } }, g.adtEmpNo)}
-                  className="ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50"
+                  className="ml-1 rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border cd-border-c cd-text-faint hover:cd-tint-primary disabled:opacity-50"
                 >
                   해제
                 </button>
@@ -857,11 +857,11 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
       )}
 
       {alreadyMapped.length > 0 && (
-        <div className="rounded-2xl border cd-border-c p-3">
-          <div className="text-[11px] font-bold cd-text-faint mb-2">매핑된 직원 ({alreadyMapped.length}) — 특수관계인·임원은 "제외"로 지정하면 초과근무 집계에서 빠집니다</div>
+        <div className="rounded-lg border cd-border-c p-3">
+          <div className="text-[11px] font-semibold cd-text-faint mb-2">매핑된 직원 ({alreadyMapped.length}) — 특수관계인·임원은 "제외"로 지정하면 초과근무 집계에서 빠집니다</div>
           <div className="flex flex-wrap gap-1.5">
             {alreadyMapped.map((e) => (
-              <span key={e.employeeId} className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${e.overtimeExcluded ? "cd-border-c opacity-60" : "cd-border-c"}`}>
+              <span key={e.employeeId} className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[12px] ${e.overtimeExcluded ? "cd-border-c opacity-60" : "cd-border-c"}`}>
                 <span className="cd-text font-medium">{e.name}</span>
                 <span className="cd-text-faint font-mono">{e.adtEmpNo}</span>
                 <button
@@ -870,7 +870,7 @@ function MappingPanel({ onCount }: { onCount: (n: number) => void }) {
                   onClick={() => toggleExclude(e)}
                   data-active={e.overtimeExcluded}
                   aria-pressed={e.overtimeExcluded}
-                  className={`cd-choice ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold border disabled:opacity-50 ${e.overtimeExcluded ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text-faint hover:cd-tint-primary"}`}
+                  className={`cd-choice ml-1 rounded-lg px-1.5 py-0.5 text-[11px] font-semibold border disabled:opacity-50 ${e.overtimeExcluded ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text-faint hover:cd-tint-primary"}`}
                   title={e.overtimeExcluded ? "산정 제외 해제" : "초과근무 산정에서 제외"}
                 >
                   {e.overtimeExcluded ? "산정 제외됨" : "제외"}
@@ -907,7 +907,7 @@ function SettingsPanel() {
     <label className="flex flex-col gap-1">
       <span className="text-[12px] font-semibold cd-text">{label}</span>
       <input className="cd-input" inputMode="numeric" value={String(s[k] as number)} onChange={(e) => set(k, Number(e.target.value.replace(/[^\d.]/g, "")) as never)} />
-      {hint && <span className="text-[10.5px] cd-text-faint">{hint}</span>}
+      {hint && <span className="text-[11px] cd-text-faint">{hint}</span>}
     </label>
   );
 
@@ -930,19 +930,19 @@ function SettingsPanel() {
       <div className="flex flex-col gap-6">
       {/* ① 근태 엑셀 업로드 */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
-          <UploadCloud className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 근태 엑셀 업로드
+        <h3 className="text-[14px] font-semibold cd-text flex items-center gap-1.5">
+          <UploadCloud className="w-4 h-4 cd-text-primary" /> 근태 엑셀 업로드
         </h3>
         <UploadPanel />
       </section>
 
       {/* ② 산정 기준 */}
       <section className="flex flex-col gap-3">
-        <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
-          <AlarmClockCheck className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 산정 기준
+        <h3 className="text-[14px] font-semibold cd-text flex items-center gap-1.5">
+          <AlarmClockCheck className="w-4 h-4 cd-text-primary" /> 산정 기준
         </h3>
         <p className="text-[13px] cd-text-muted">사규 기준 자체 산정 정책입니다. 규정 변경 시 여기서 조정하면 다음 재산정부터 반영됩니다.</p>
-      <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-2 gap-4">
+      <div className="rounded-lg border cd-border-c p-4 grid grid-cols-2 gap-4">
         {numField("weeklyStandardMinutes", "주 소정근로(분)", "40h = 2400")}
         {numField("weeklyOvertimeLimitMinutes", "주 연장 한도(분)", "12h = 720, 초과분=수당 대신 특별휴가")}
         {numField("dailyStandardMinutes", "1일 소정(분)", "참고, 8h = 480")}
@@ -950,12 +950,12 @@ function SettingsPanel() {
         <label className="flex flex-col gap-1">
           <span className="text-[12px] font-semibold cd-text">야간 시작 (HHMM)</span>
           <input className="cd-input" value={s.nightStartHhmm} onChange={(e) => set("nightStartHhmm", e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <span className="text-[10.5px] cd-text-faint">2.0배 구간 시작</span>
+          <span className="text-[11px] cd-text-faint">2.0배 구간 시작</span>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[12px] font-semibold cd-text">야간 종료 (HHMM)</span>
           <input className="cd-input" value={s.nightEndHhmm} onChange={(e) => set("nightEndHhmm", e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <span className="text-[10.5px] cd-text-faint">익일, 기본 0600</span>
+          <span className="text-[11px] cd-text-faint">익일, 기본 0600</span>
         </label>
         {numField("overtimeRateDay", "연장 배수(주간)", "기본 1.5")}
         {numField("overtimeRateNight", "연장 배수(야간)", "기본 2.0")}
@@ -974,9 +974,9 @@ function SettingsPanel() {
         <button type="button" disabled={busy} onClick={save} className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50">
           <Save className="w-4 h-4 inline mr-1" /> 정책 저장
         </button>
-        {saved && <span className="text-[12px]" style={{ color: "var(--cd-primary)" }}>저장되었습니다.</span>}
+        {saved && <span className="text-[12px] cd-text-primary">저장되었습니다.</span>}
       </div>
-      <p className="text-[11.5px] cd-text-faint">
+      <p className="text-[12px] cd-text-faint">
         ※ 수당 = 통상시급(최신 근로계약 통상임금 ÷ {s.wageDivisorHours}) × 배수 × 시간(10원 미만 절사). 주별 화면에 예상 수당으로 표시되고,
         신청 대조로 인정된 시간이 급여대장 생성 시(전월 26일~금월 25일분) 초과근무수당으로 반영됩니다. 근로계약이 없는 직원은 금액이 표시되지 않습니다.
       </p>
@@ -1044,8 +1044,8 @@ function SchedulePanel() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-[13.5px] font-bold cd-text flex items-center gap-1.5">
-        <Clock3 className="w-4 h-4" style={{ color: "var(--cd-primary)" }} /> 직원별 출근 시각
+      <h3 className="text-[14px] font-semibold cd-text flex items-center gap-1.5">
+        <Clock3 className="w-4 h-4 cd-text-primary" /> 직원별 출근 시각
       </h3>
       <p className="text-[13px] cd-text-muted">
         초과근무는 <b>개인별 소정근로 종료 시각 이후</b>부터 인정됩니다 — 8시 출근이면 17:00부터가 초과근무입니다.
@@ -1057,7 +1057,7 @@ function SchedulePanel() {
       ) : (
         <>
           <div className="cd-card overflow-hidden max-h-[68vh] overflow-y-auto">
-            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-bold cd-text-faint border-b cd-border-c sticky top-0 z-10" style={schedGrid}>
+            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c sticky top-0 z-10" style={schedGrid}>
               <span>성명</span>
               <span>부서</span>
               <span>직함</span>
@@ -1090,14 +1090,14 @@ function SchedulePanel() {
                     ))}
                   </select>
                   {r.isDefault && !draft[r.employeeId] && (
-                    <span className="text-[10px] cd-text-faint shrink-0">기본값</span>
+                    <span className="text-[11px] cd-text-faint shrink-0">기본값</span>
                   )}
                 </span>
               </div>
             ))}
           </div>
           <div className="flex items-center justify-end gap-3">
-            {saved && <span className="text-[12px]" style={{ color: "var(--cd-primary)" }}>저장되었습니다.</span>}
+            {saved && <span className="text-[12px] cd-text-primary">저장되었습니다.</span>}
             {dirty > 0 && <span className="text-[12px] cd-text-faint">변경 {dirty}건</span>}
             <button type="button" disabled={busy || !dirty} onClick={save} className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50">
               <Save className="w-4 h-4 inline mr-1" /> 출근 시각 저장
@@ -1159,12 +1159,12 @@ function UploadPanel({ onDone }: { onDone?: () => void }) {
 
       {/* 파일 선택 — 배경과 구분되도록 흰 바탕 + 점선 테두리 */}
       <label
-        className="rounded-2xl p-6 flex flex-col items-center gap-2 cursor-pointer hover:cd-tint-primary transition-colors"
+        className="rounded-lg p-6 flex flex-col items-center gap-2 cursor-pointer hover:cd-tint-primary transition-colors"
         style={{ background: "var(--cd-card-solid)", border: "1.5px dashed var(--cd-ring)" }}
       >
-        <UploadCloud className="w-8 h-8" style={{ color: "var(--cd-primary)" }} />
+        <UploadCloud className="w-8 h-8 cd-text-primary" />
         <span className="text-[13px] cd-text font-semibold">엑셀 파일 선택</span>
-        <span className="text-[11.5px] cd-text-faint">여러 개 동시 선택 가능 · .xls / .xlsx</span>
+        <span className="text-[12px] cd-text-faint">여러 개 동시 선택 가능 · .xls / .xlsx</span>
         <input
           type="file"
           multiple
@@ -1177,8 +1177,8 @@ function UploadPanel({ onDone }: { onDone?: () => void }) {
       {files.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {files.map((f, i) => (
-            <div key={i} className="flex items-center gap-2 text-[12.5px] cd-text rounded-lg border cd-border-c px-3 py-2">
-              <FileSpreadsheet className="w-4 h-4 shrink-0" style={{ color: "var(--cd-primary)" }} />
+            <div key={i} className="flex items-center gap-2 text-[13px] cd-text rounded-lg border cd-border-c px-3 py-2">
+              <FileSpreadsheet className="w-4 h-4 shrink-0 cd-text-primary" />
               <span className="truncate flex-1">{f.name}</span>
               <span className="cd-text-faint">{(f.size / 1024).toFixed(0)} KB</span>
             </div>
@@ -1189,13 +1189,13 @@ function UploadPanel({ onDone }: { onDone?: () => void }) {
         </div>
       )}
 
-      {error && <p className="text-[13px]" style={{ color: "var(--cd-error)" }}>{error}</p>}
+      {error && <p className="text-[13px] cd-error-text">{error}</p>}
 
       {result && (
-        <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-3">
+        <div className="rounded-lg border cd-border-c p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5" style={{ color: "var(--cd-primary)" }} />
-            <span className="text-[14px] font-bold cd-text">업로드 완료</span>
+            <CheckCircle2 className="w-5 h-5 cd-text-primary" />
+            <span className="text-[14px] font-semibold cd-text">업로드 완료</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
             <Stat label="스테이징 반영" value={result.collected} />
@@ -1208,12 +1208,12 @@ function UploadPanel({ onDone }: { onDone?: () => void }) {
               <div key={i} className="flex items-center gap-2">
                 <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">{f.name}</span>
-                <span>— {f.error ? <span style={{ color: "var(--cd-error)" }}>{f.error}</span> : `${f.records}건 (스킵 ${f.skipped})`}</span>
+                <span>— {f.error ? <span className="cd-error-text">{f.error}</span> : `${f.records}건 (스킵 ${f.skipped})`}</span>
               </div>
             ))}
           </div>
           {result.unmatched > 0 && (
-            <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2" style={{ color: "var(--cd-primary)" }}>
+            <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2 cd-text-primary">
               직원 자동연결 안 된 {result.unmatched}건이 있습니다 — <b>미매칭 매핑</b> 탭에서 ADT 사번↔직원을 연결하세요.
             </p>
           )}
@@ -1230,9 +1230,9 @@ function UploadPanel({ onDone }: { onDone?: () => void }) {
 
 function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
-    <div className="rounded-xl border cd-border-c p-2.5">
-      <div className="text-[18px] font-extrabold tracking-tight" style={{ color: danger ? "var(--cd-error)" : "var(--cd-text)" }}>{value}</div>
-      <div className="text-[10.5px] cd-text-faint">{label}</div>
+    <div className="rounded-lg border cd-border-c p-2.5">
+      <div className="text-[16px] font-semibold tracking-tight" style={{ color: danger ? "var(--cd-error)" : "var(--cd-text)" }}>{value}</div>
+      <div className="text-[11px] cd-text-faint">{label}</div>
     </div>
   );
 }
@@ -1243,7 +1243,7 @@ function Kpi({ icon, label, value, danger }: { icon: React.ReactNode; label: str
     <div className="cd-card p-3.5">
       <span className="flex items-center gap-3">
         <span
-          className="inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
           style={{
             background: danger ? "var(--cd-error)" : "var(--cd-primary-soft)",
             color: danger ? "#fff" : "var(--cd-primary)",
@@ -1253,7 +1253,7 @@ function Kpi({ icon, label, value, danger }: { icon: React.ReactNode; label: str
         </span>
         <span className="min-w-0">
           <span className="block text-[11px] cd-text-faint">{label}</span>
-          <span className="block text-[17px] font-extrabold cd-text tracking-tight">{value}</span>
+          <span className="block text-[16px] font-semibold cd-text tracking-tight">{value}</span>
         </span>
       </span>
     </div>

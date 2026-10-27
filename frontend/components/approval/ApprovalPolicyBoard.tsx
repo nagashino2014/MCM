@@ -108,7 +108,7 @@ export function ApprovalPolicyBoard() {
   const numFields = fields.filter((f) => f.type === "currency" || f.type === "number");
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<ShieldCheck className="w-5 h-5" />}
         eyebrow="Approval · Precheck"
@@ -122,7 +122,7 @@ export function ApprovalPolicyBoard() {
         }
       />
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-[11px] cd-text-faint flex items-center gap-1.5 whitespace-nowrap">
             양식
@@ -144,7 +144,7 @@ export function ApprovalPolicyBoard() {
         ) : (
           <div className="flex flex-col gap-2">
             {policies.map((p, i) => (
-              <div key={i} className="rounded-xl border cd-border-c p-3 flex flex-wrap items-center gap-2">
+              <div key={i} className="rounded-lg border cd-border-c p-3 flex flex-wrap items-center gap-2">
                 <select className="cd-select" style={{ width: 180 }} value={p.kind} onChange={(e) => update(i, { kind: e.target.value, fieldKey: NEEDS_FIELD.has(e.target.value) ? p.fieldKey : null })}>
                   {KIND_OPTIONS.map(([k, l]) => (
                     <option key={k} value={k} disabled={UNEVALUATED.has(k) && p.kind !== k}>
@@ -201,7 +201,7 @@ export function ApprovalPolicyBoard() {
           </div>
         )}
         {msg && <p className="text-[12px] cd-text-faint">{msg}</p>}
-        <p className="text-[10.5px] cd-text-faint">
+        <p className="text-[11px] cd-text-faint">
           연차 잔여·연간 예산·본인 결재 규칙은 정책이 없어도 기본 경고로 동작합니다. 여기서 등록하면 수준(경고/차단)을 지정할 수 있습니다. 초과근무 한도는 아직 평가하지 않아 새로 고를 수 없습니다.
         </p>
       </div>

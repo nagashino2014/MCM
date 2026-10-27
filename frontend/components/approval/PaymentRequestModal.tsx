@@ -178,9 +178,9 @@ export default function PaymentRequestModal({
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-h-[88vh] flex flex-col overflow-hidden shadow-2xl" style={{ maxWidth: 640 }}>
+      <div className="relative cd-solid-bg border cd-border-c rounded-lg w-full max-h-[88vh] flex flex-col overflow-hidden shadow-[var(--cd-shadow-dialog)]" style={{ maxWidth: 640 }}>
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b cd-border-c">
-          <h3 className="font-bold cd-text flex items-center gap-2">
+          <h3 className="font-semibold cd-text flex items-center gap-2">
             <FileText className="w-4 h-4" /> 대금청구서 작성
           </h3>
           <button type="button" onClick={onClose} className="cd-text-muted hover:cd-text">
@@ -193,7 +193,7 @@ export default function PaymentRequestModal({
           <div className="relative">
             <span className="text-[11px] cd-text-faint font-semibold">계약</span>
             {contract ? (
-              <div className="flex items-center gap-2 mt-1 rounded-xl border cd-border-c px-3 py-2">
+              <div className="flex items-center gap-2 mt-1 rounded-lg border cd-border-c px-3 py-2">
                 <span className="cd-text font-medium truncate flex-1">{contract.title}</span>
                 <span className="text-xs cd-text-faint shrink-0">{contract.ordererName}</span>
                 <button
@@ -223,7 +223,7 @@ export default function PaymentRequestModal({
                   />
                 </div>
                 {contracts.length > 0 && (
-                  <div className="absolute z-10 left-0 right-0 mt-1 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                  <div className="absolute z-10 left-0 right-0 mt-1 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-56 overflow-y-auto">
                     {contracts.map((c) => (
                       <button
                         key={c.contractId}
@@ -247,7 +247,7 @@ export default function PaymentRequestModal({
                 <span className="text-[11px] cd-text-faint font-semibold">
                   청구 단계 — 복수 선택 시 한 장으로 합산 청구되고 단계별 금액이 표에 표기됩니다
                 </span>
-                <div className="rounded-xl border cd-border-c max-h-44 overflow-y-auto">
+                <div className="rounded-lg border cd-border-c max-h-44 overflow-y-auto">
                   {milestones.length === 0 && (
                     <div className="px-3 py-2.5 text-xs cd-text-faint">등록된 대금지급단계가 없습니다 — 계약금액 전액으로 청구됩니다.</div>
                   )}
@@ -267,7 +267,7 @@ export default function PaymentRequestModal({
                       />
                       <span className="cd-text font-medium truncate flex-1">{m.stageLabel || `${m.stageOrder}차`}</span>
                       {m.invoiceIssued && (
-                        <span className="rounded-full border cd-border-c px-1.5 py-0.5 text-[10px] cd-text-faint shrink-0">발행됨</span>
+                        <span className="rounded-full border cd-border-c px-1.5 py-0.5 text-[11px] cd-text-faint shrink-0">발행됨</span>
                       )}
                       <span className="tabular-nums cd-text-muted shrink-0">{fmt(m.amount)}원</span>
                     </label>
@@ -305,7 +305,7 @@ export default function PaymentRequestModal({
               </div>
 
               {/* 청구 요약 */}
-              <div className="rounded-xl border cd-border-c px-3.5 py-2.5 flex items-center gap-3">
+              <div className="rounded-lg border cd-border-c px-3.5 py-2.5 flex items-center gap-3">
                 {loadingCtx ? (
                   <span className="text-xs cd-text-faint flex items-center gap-1.5">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" /> 금액 계산 중…
@@ -324,7 +324,7 @@ export default function PaymentRequestModal({
             </>
           )}
 
-          {error && <div className="text-xs text-rose-600">{error}</div>}
+          {error && <div className="text-xs cd-error-text">{error}</div>}
           <p className="text-[11px] cd-text-faint">
             생성하면 대금청구서 PDF(통장 사본 병합 포함)가 이 공문의 첨부에 추가되고, 제목·본문·붙임이 비어 있으면
             대금 청구 문구로 채워집니다. 준공계와 함께 보내려면 준공계 작성 메뉴에서 서식에 대금청구서를 추가하세요.
@@ -332,12 +332,12 @@ export default function PaymentRequestModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t cd-border-c">
-          <button type="button" className="rounded-xl border cd-border-c px-3.5 py-2 text-sm cd-text-muted" onClick={onClose}>
+          <button type="button" className="rounded-lg border cd-border-c px-3.5 py-2 text-sm cd-text-muted" onClick={onClose}>
             취소
           </button>
           <button
             type="button"
-            className="rounded-xl px-3.5 py-2 text-sm text-white cd-fill-primary disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="rounded-lg px-3.5 py-2 text-sm text-white cd-fill-primary disabled:opacity-50 inline-flex items-center gap-1.5"
             disabled={busy || !contract || loadingCtx || !serverValues}
             onClick={() => void create()}
           >

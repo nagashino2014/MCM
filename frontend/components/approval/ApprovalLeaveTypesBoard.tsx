@@ -118,7 +118,7 @@ export function ApprovalLeaveTypesBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="휴가 종류 규정"
         helpTopic="hr.leave-types"
@@ -146,7 +146,7 @@ export function ApprovalLeaveTypesBoard() {
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
           {/* 그룹 선택 */}
           <div className="lg:w-[345px] shrink-0 flex flex-col gap-2 lg:overflow-y-auto">
-            <p className="text-[11px] font-bold cd-text-faint px-0.5">휴가 그룹 선택</p>
+            <p className="text-[11px] font-semibold cd-text-faint px-0.5">휴가 그룹 선택</p>
             <div className="grid grid-cols-2 gap-2">
               {groups.map((g) => {
                 const list = items.filter((x) => x.group === g);
@@ -159,7 +159,7 @@ export function ApprovalLeaveTypesBoard() {
                     onClick={() => setActiveGroup(g)}
                     data-active={on}
                     aria-pressed={on}
-                    className={`cd-choice rounded-2xl px-3.5 py-[18px] text-left border transition-all ${
+                    className={`cd-choice rounded-lg px-3.5 py-[18px] text-left border transition-all ${
                       on ? "cd-glass-active" : "cd-border-c cd-row-hover"
                     }`}
                     style={{
@@ -167,8 +167,8 @@ export function ApprovalLeaveTypesBoard() {
                       boxShadow: on ? undefined : "var(--cd-shadow)",
                     }}
                   >
-                    <span className="block text-[10px] font-bold cd-text-faint">휴가 그룹</span>
-                    <span className={`block text-[14.5px] font-extrabold truncate ${on ? "" : "cd-text"}`}>{g}</span>
+                    <span className="block text-[11px] font-semibold cd-text-faint">휴가 그룹</span>
+                    <span className={`block text-[14px] font-semibold truncate ${on ? "" : "cd-text"}`}>{g}</span>
                     <span className="block mt-1 text-[11px] cd-text-faint">
                       {list.length}개 · 사용 {list.filter((x) => x.active).length}
                     </span>
@@ -183,13 +183,13 @@ export function ApprovalLeaveTypesBoard() {
                   addItem(name.trim());
                   setActiveGroup(name.trim());
                 }}
-                className="rounded-2xl px-3.5 py-[18px] border border-dashed cd-border-c cd-text-faint flex flex-col items-center justify-center gap-1 cd-row-hover"
+                className="rounded-lg px-3.5 py-[18px] border border-dashed cd-border-c cd-text-faint flex flex-col items-center justify-center gap-1 cd-row-hover"
               >
                 <Plus className="w-4 h-4" />
-                <span className="text-[11px] font-bold">그룹 추가</span>
+                <span className="text-[11px] font-semibold">그룹 추가</span>
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint leading-relaxed px-0.5 mt-1">
+            <p className="text-[11px] cd-text-faint leading-relaxed px-0.5 mt-1">
               차감: 연차·반차만 연차 대장에서 차감됩니다. 경조·출산·조의는 부여일수 고정, 공가·병가는 부여일수를 비워 실사용 기간만큼 처리됩니다.
             </p>
           </div>
@@ -201,7 +201,7 @@ export function ApprovalLeaveTypesBoard() {
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold cd-text-faint">그룹명</span>
+                  <span className="text-[11px] font-semibold cd-text-faint">그룹명</span>
                   <input
                     className="cd-input"
                     style={{ width: 200 }}
@@ -212,7 +212,7 @@ export function ApprovalLeaveTypesBoard() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[12.5px]">
+                  <table className="w-full text-[13px]">
                     <thead className="cd-table-head">
                       <tr className="text-left cd-text-faint text-[11px]">
                         <th className="py-1.5 pr-2 font-semibold">라벨</th>
@@ -284,7 +284,7 @@ export function ApprovalLeaveTypesBoard() {
                       ))}
                       {groupItems.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="py-6 text-center text-[12.5px] cd-text-faint">
+                          <td colSpan={6} className="py-6 text-center text-[13px] cd-text-faint">
                             이 그룹에 항목이 없습니다.
                           </td>
                         </tr>
@@ -295,12 +295,12 @@ export function ApprovalLeaveTypesBoard() {
 
                 <button
                   type="button"
-                  className="cd-btn rounded-xl border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex items-center gap-1.5 self-start"
+                  className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-xs cd-text-faint flex items-center gap-1.5 self-start"
                   onClick={() => addItem(activeGroup)}
                 >
                   <Plus className="w-3.5 h-3.5" /> 이 그룹에 항목 추가
                 </button>
-                <p className="text-[10.5px] cd-text-faint">
+                <p className="text-[11px] cd-text-faint">
                   비활성(사용 해제) 항목은 휴가신청 선택지에서 숨겨집니다. 삭제한 항목을 참조하던 기존 문서는 키로 표시됩니다. 순서는 선택지 표시 순서입니다.
                 </p>
               </>

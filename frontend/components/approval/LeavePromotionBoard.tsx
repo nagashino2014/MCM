@@ -149,7 +149,7 @@ export function LeavePromotionBoard() {
     : "";
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<BellRing className="w-5 h-5" />}
         eyebrow="Approval · Leave Promotion"
@@ -191,20 +191,20 @@ export function LeavePromotionBoard() {
           {KPIS.map((k) => {
             const Icon = k.icon;
             return (
-              <div key={k.label} className={`rounded-2xl p-4 border cd-border-c ${k.primary ? "cd-tint-primary shadow-sm" : "cd-card-bg"}`}>
+              <div key={k.label} className={`rounded-lg p-4 border cd-border-c ${k.primary ? "cd-tint-primary" : "cd-card-bg"}`}>
                 <div className="flex items-center gap-2">
                   <Icon className={`w-4 h-4 shrink-0 ${k.primary ? "cd-text-primary" : "cd-text-faint"}`} />
-                  <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint truncate">{k.label}</div>
+                  <div className="text-[11px] font-medium cd-text-faint truncate">{k.label}</div>
                 </div>
-                <div className="mt-2 text-3xl font-extrabold leading-tight cd-text">{k.value}</div>
-                <div className="text-[10px] cd-text-faint font-medium mt-1 truncate">{k.hint}</div>
+                <div className="mt-2 text-2xl font-semibold leading-tight cd-text">{k.value}</div>
+                <div className="text-[11px] cd-text-faint font-medium mt-1 truncate">{k.hint}</div>
               </div>
             );
           })}
         </section>
       )}
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(e.target.value)}>
             {Array.from({ length: 4 }, (_, i) => String(thisYear + 1 - i)).map((y) => (
@@ -228,7 +228,7 @@ export function LeavePromotionBoard() {
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
+            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 px-3 py-2 text-[11px] font-medium cd-text-faint">
               <span>직원</span>
               <span className="text-right">소진율</span>
               <span className="pl-10">부서</span>
@@ -239,11 +239,11 @@ export function LeavePromotionBoard() {
               <span>2차 고지</span>
             </div>
             {rows.map((r) => (
-              <div key={r.employeeId} className="grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 items-center px-3 py-2.5 rounded-2xl border cd-border-c">
+              <div key={r.employeeId} className="grid grid-cols-[1.6fr_0.7fr_1fr_repeat(3,0.7fr)_1.2fr_1.2fr] gap-2 items-center px-3 py-2.5 rounded-lg border cd-border-c">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={34} />
                   <div className="min-w-0">
-                    <div className="text-[13px] font-bold cd-text truncate">
+                    <div className="text-[13px] font-semibold cd-text truncate">
                       {r.name}
                       {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
                     </div>
@@ -252,11 +252,11 @@ export function LeavePromotionBoard() {
                     </div>
                   </div>
                 </div>
-                <span className="text-right font-mono text-[13px] cd-text-primary font-bold">{r.rate.toFixed(0)}%</span>
+                <span className="text-right font-mono text-[13px] cd-text-primary font-semibold">{r.rate.toFixed(0)}%</span>
                 <span className="pl-10 text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
                 <span className="text-right font-mono text-[13px] cd-text">{fmt(r.granted)}</span>
                 <span className="text-right font-mono text-[13px] cd-text">{fmt(r.used)}</span>
-                <span className={`text-right font-mono text-[13px] font-bold ${r.remaining > 0 ? "cd-text" : "cd-text-faint"}`}>{fmt(r.remaining)}</span>
+                <span className={`text-right font-mono text-[13px] font-semibold ${r.remaining > 0 ? "cd-text" : "cd-text-faint"}`}>{fmt(r.remaining)}</span>
                 <div className="pl-10">
                   <NoticeCell notice={r.round1} empty={r.remaining <= 0 ? "대상 아님" : "미발송"} />
                 </div>
@@ -265,7 +265,7 @@ export function LeavePromotionBoard() {
             ))}
           </div>
         )}
-        <p className="text-[10.5px] cd-text-faint">
+        <p className="text-[11px] cd-text-faint">
           잔여 연차가 있는 직원이 고지 대상입니다. 1차 발송분은 직원 홈의 수신 문서함에 도착하며, 사용예정일 회신 시 &lsquo;제출&rsquo;로 표시됩니다. 2차 고지 발송은 다음 단계에서 활성화됩니다.
         </p>
       </div>
@@ -360,10 +360,10 @@ function SecondNoticeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
-      <div className="cd-card rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="cd-card rounded-lg w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
           <Send className="w-4 h-4 cd-text-primary" />
-          <h3 className="text-sm font-bold cd-text">2차 고지 발송</h3>
+          <h3 className="text-sm font-semibold cd-text">2차 고지 발송</h3>
           <span className="text-[11px] cd-text-faint">1차 미제출자에게 회사가 사용일자를 지정해 통보합니다.</span>
           <button type="button" className="cd-text-faint hover:cd-text ml-auto" onClick={onClose} title="닫기">
             <X className="w-4 h-4" />
@@ -376,7 +376,7 @@ function SecondNoticeModal({
           <div className="flex-1 min-h-0 grid lg:grid-cols-[6fr_6fr]">
             {/* 좌: 미제출자 명단 */}
             <div className="overflow-y-auto p-4 border-b lg:border-b-0 lg:border-r cd-border-c">
-              <div className="cd-table-head hidden md:grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 px-2 py-2 text-[10px] font-bold uppercase tracking-wider cd-text-faint">
+              <div className="cd-table-head hidden md:grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 px-2 py-2 text-[11px] font-medium cd-text-faint">
                 <span>성명/직함</span>
                 <span>부서</span>
                 <span className="text-right">소진율</span>
@@ -393,23 +393,23 @@ function SecondNoticeModal({
                       key={r.employeeId}
                       type="button"
                       onClick={() => setSelectedId(r.employeeId)}
-                      className={`grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 items-center px-2 py-2 rounded-xl border text-left ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                      className={`grid grid-cols-[1.7fr_1fr_repeat(4,0.7fr)] gap-2 items-center px-2 py-2 rounded-lg border text-left ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={26} />
                         <span className="min-w-0">
-                          <span className="block text-[12.5px] font-bold cd-text truncate">
+                          <span className="block text-[13px] font-semibold cd-text truncate">
                             {r.name}
                             {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
                           </span>
-                          <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${done ? "cd-tint-primary cd-text-primary" : "border border-[color:var(--cd-warning)] cd-text-faint"}`}>
+                          <span className={`text-[11px] rounded-full px-1.5 py-0.5 ${done ? "cd-tint-primary cd-text-primary" : "border border-[color:var(--cd-warning)] cd-text-faint"}`}>
                             {done ? "지정 완료" : "지정 필요"}
                           </span>
                         </span>
                       </span>
-                      <span className="text-[11.5px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
-                      <span className="text-right font-mono text-[12px] cd-text-primary font-bold">{r.rate.toFixed(0)}%</span>
-                      <span className="text-right font-mono text-[12px] font-bold cd-text">{fmt(r.remaining)}</span>
+                      <span className="text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
+                      <span className="text-right font-mono text-[12px] cd-text-primary font-semibold">{r.rate.toFixed(0)}%</span>
+                      <span className="text-right font-mono text-[12px] font-semibold cd-text">{fmt(r.remaining)}</span>
                       <span className="text-right font-mono text-[12px] cd-text">{fmt(r.used)}</span>
                       <span className="text-right font-mono text-[12px] cd-text">{fmt(r.granted)}</span>
                     </button>
@@ -421,7 +421,7 @@ function SecondNoticeModal({
             {/* 우: 회사 지정일 입력 */}
             <div className="overflow-y-auto p-5 flex flex-col gap-4">
               {!sel ? (
-                <p className="rounded-2xl border cd-border-c p-8 text-center text-sm cd-text-faint">좌측 명단에서 인원을 선택하세요.</p>
+                <p className="rounded-lg border cd-border-c p-8 text-center text-sm cd-text-faint">좌측 명단에서 인원을 선택하세요.</p>
               ) : (
                 (() => {
                   const total = need(sel);
@@ -432,7 +432,7 @@ function SecondNoticeModal({
                       <div className="flex items-center gap-2">
                         <EmployeeAvatar employeeId={sel.employeeId} photoPath={sel.photoPath} size={34} />
                         <div>
-                          <div className="text-[14px] font-bold cd-text">
+                          <div className="text-[14px] font-semibold cd-text">
                             {sel.name}
                             {sel.positionName && <span className="cd-text-faint font-normal text-[12px]"> {sel.positionName}</span>}
                           </div>
@@ -441,18 +441,18 @@ function SecondNoticeModal({
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border cd-border-c p-3 text-center">
-                          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint">미사용일수</div>
-                          <div className="mt-1 text-2xl font-extrabold cd-text">{fmt(sel.remaining)}</div>
+                        <div className="rounded-lg border cd-border-c p-3 text-center">
+                          <div className="text-[11px] font-medium cd-text-faint">미사용일수</div>
+                          <div className="mt-1 text-2xl font-semibold cd-text">{fmt(sel.remaining)}</div>
                         </div>
-                        <div className={`rounded-2xl border p-3 text-center ${rest <= 0 ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}>
-                          <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint">잔여일수</div>
-                          <div className={`mt-1 text-2xl font-extrabold ${rest <= 0 ? "cd-text-primary" : "cd-text"}`}>{rest}</div>
+                        <div className={`rounded-lg border p-3 text-center ${rest <= 0 ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}>
+                          <div className="text-[11px] font-medium cd-text-faint">잔여일수</div>
+                          <div className={`mt-1 text-2xl font-semibold ${rest <= 0 ? "cd-text-primary" : "cd-text"}`}>{rest}</div>
                         </div>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[11px] font-bold cd-text-faint">회사 지정 사용일자 <span className="font-normal">(총 {total}일 · YYYYMMDD)</span></span>
+                        <span className="text-[11px] font-semibold cd-text-faint">회사 지정 사용일자 <span className="font-normal">(총 {total}일 · YYYYMMDD)</span></span>
                         <div className="grid grid-cols-4 xl:grid-cols-8 gap-1.5">
                           {Array.from({ length: total }).map((_, i) => (
                             <AutoDateInput
@@ -632,10 +632,10 @@ function BackfillModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
-      <div className="cd-card rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="cd-card rounded-lg w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
           <FileUp className="w-4 h-4 cd-text-primary" />
-          <h3 className="text-sm font-bold cd-text">서면 고지 사후 등록</h3>
+          <h3 className="text-sm font-semibold cd-text">서면 고지 사후 등록</h3>
           <span className="text-[11px] cd-text-faint">서면으로 진행한 1차 고지의 사용계획서를 인원별로 등록합니다.</span>
           <button type="button" className="cd-text-faint hover:cd-text ml-auto" onClick={onClose} title="닫기">
             <X className="w-4 h-4" />
@@ -645,7 +645,7 @@ function BackfillModal({
         <div className="flex-1 min-h-0 grid lg:grid-cols-[5fr_7fr]">
           {/* 좌: 조직도 트리(1명 선택) */}
           <div className="p-4 border-b lg:border-b-0 lg:border-r cd-border-c overflow-y-auto">
-            <div className="rounded-2xl border cd-border-c">
+            <div className="rounded-lg border cd-border-c">
               <OrganizationTree snapshot={snapshot} onSelectEmployee={pick} selectedEmployeeId={selectedId} title="조직도" embedded />
             </div>
           </div>
@@ -653,15 +653,15 @@ function BackfillModal({
           {/* 우: 공통 입력 + 선택 인원 카드 */}
           <div className="p-5 flex flex-col gap-4 overflow-y-auto">
             {/* 공통: 통지일 + 업로드 */}
-            <div className="rounded-2xl border cd-border-c p-4 flex items-center gap-3 flex-wrap">
-              <span className="text-[11px] font-bold cd-text-faint">서면 통지일</span>
+            <div className="rounded-lg border cd-border-c p-4 flex items-center gap-3 flex-wrap">
+              <span className="text-[11px] font-semibold cd-text-faint">서면 통지일</span>
               <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input !w-40" placeholder="YYYYMMDD" />
-              <span className="text-[11px] font-bold cd-text-faint ml-2">연차 사용계획서 업로드</span>
+              <span className="text-[11px] font-semibold cd-text-faint ml-2">연차 사용계획서 업로드</span>
               <label className="cd-btn cd-btn-soft rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1.5">
                 <FileUp className="w-3.5 h-3.5" /> 업로드
                 <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
               </label>
-              <span className="text-[10.5px] cd-text-faint w-full">파일명에 포함된 성명으로 인원을 자동 매칭합니다(공통 통지일 적용).</span>
+              <span className="text-[11px] cd-text-faint w-full">파일명에 포함된 성명으로 인원을 자동 매칭합니다(공통 통지일 적용).</span>
             </div>
 
             {/* 준비된 인원 칩 */}
@@ -674,7 +674,7 @@ function BackfillModal({
                   return (
                     <span
                       key={id}
-                      className={`cd-action inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] cursor-pointer ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                      className={`cd-action inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[12px] cursor-pointer ${active ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"}`}
                       onClick={() => setSelectedId(id)}
                     >
                       <span className="cd-text font-semibold">{r?.name ?? id}</span>
@@ -690,18 +690,18 @@ function BackfillModal({
             )}
 
             {unmatched.length > 0 && (
-              <div className="rounded-xl border border-[color:var(--cd-warning)] px-3 py-2 text-[11px] cd-text">
+              <div className="rounded-lg border border-[color:var(--cd-warning)] px-3 py-2 text-[11px] cd-text">
                 자동 매칭 실패 {unmatched.length}건: <span className="cd-text-faint">{unmatched.join(", ")}</span> — 좌측 트리에서 직접 선택 후 첨부하세요.
               </div>
             )}
 
             {/* 선택 인원 카드 */}
             {!sel ? (
-              <p className="rounded-2xl border cd-border-c p-8 text-center text-sm cd-text-faint">
+              <p className="rounded-lg border cd-border-c p-8 text-center text-sm cd-text-faint">
                 좌측 조직도에서 인원을 선택하거나 계획서를 업로드하면 여기에서 사용예정일을 입력합니다.
               </p>
             ) : (
-              <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-4">
+              <div className="rounded-lg border cd-border-c p-4 flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="성명/직급" value={`${sel.name}${sel.positionName ? ` ${sel.positionName}` : ""}`} />
                   <Field label="부서" value={sel.deptName ?? "-"} />
@@ -709,7 +709,7 @@ function BackfillModal({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-bold cd-text-faint">사용 예정일 <span className="font-normal">(계획서 기재분)</span></span>
+                  <span className="text-[11px] font-semibold cd-text-faint">사용 예정일 <span className="font-normal">(계획서 기재분)</span></span>
                   <div className="flex flex-wrap items-center gap-2">
                     {selEntry.dates.map((d, i) => (
                       <div key={i} className="flex items-center gap-1">
@@ -726,7 +726,7 @@ function BackfillModal({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-bold cd-text-faint">사용계획서 스캔본</span>
+                  <span className="text-[11px] font-semibold cd-text-faint">사용계획서 스캔본</span>
                   {selEntry.files.length > 0 ? (
                     <div className="flex flex-col gap-1">
                       {selEntry.files.map((f, i) => (
@@ -769,7 +769,7 @@ function BackfillModal({
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[11px] font-bold cd-text-faint">{label}</span>
+      <span className="text-[11px] font-semibold cd-text-faint">{label}</span>
       <div className="rounded-lg border cd-border-c px-3 py-2 text-[13px] cd-text truncate">{value}</div>
     </div>
   );
@@ -836,10 +836,10 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
-      <div className="cd-card rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="cd-card rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b cd-border-c">
           <FileCog className="w-4 h-4 cd-text-primary" />
-          <h3 className="text-sm font-bold cd-text">연차 고지 양식 관리</h3>
+          <h3 className="text-sm font-semibold cd-text">연차 고지 양식 관리</h3>
           <div className="ml-auto flex items-center gap-1 rounded-lg border cd-border-c p-0.5">
             {[1, 2].map((r) => (
               <button
@@ -847,7 +847,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
                 type="button"
                 data-active={round === r}
                 aria-pressed={round === r}
-                className={`cd-choice px-3 py-1 text-xs font-semibold rounded-md ${round === r ? "cd-fill-primary text-white" : "cd-text-faint"}`}
+                className={`cd-choice px-3 py-1 text-xs font-semibold rounded-lg ${round === r ? "cd-fill-primary text-white" : "cd-text-faint"}`}
                 onClick={() => setRound(r)}
               >
                 {r}차
@@ -866,14 +866,14 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
             {/* 편집 패널 */}
             <div className="overflow-y-auto p-5 flex flex-col gap-4 border-b lg:border-b-0 lg:border-r cd-border-c">
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold cd-text-faint">제목</span>
+                <span className="text-[11px] font-semibold cd-text-faint">제목</span>
                 <input className="cd-input" value={cur.title} onChange={(e) => setCur({ title: e.target.value })} />
               </label>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[12px] font-bold cd-text-faint mr-1">치환 토큰</span>
+                <span className="text-[12px] font-semibold cd-text-faint mr-1">치환 토큰</span>
                 {NOTICE_TOKENS.map((t) => (
-                  <span key={t.token} className="inline-flex items-center gap-1 rounded-md border cd-border-c px-2 py-1 text-[12px] cd-text-faint">
+                  <span key={t.token} className="inline-flex items-center gap-1 rounded-lg border cd-border-c px-2 py-1 text-[12px] cd-text-faint">
                     <code className="text-[12px] cd-text-primary font-semibold">{t.token}</code>
                     {t.label}
                   </span>
@@ -881,9 +881,9 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-bold cd-text-faint">본문 문단</span>
+                <span className="text-[11px] font-semibold cd-text-faint">본문 문단</span>
                 {cur.body.map((p, i) => (
-                  <div key={i} className="rounded-xl border cd-border-c p-2.5 flex flex-col gap-1.5">
+                  <div key={i} className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-1.5">
                     <textarea
                       className="cd-input w-full text-[13px] leading-relaxed resize-y"
                       rows={2}
@@ -925,7 +925,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
 
             {/* 문서 미리보기 패널 */}
             <div className="overflow-y-auto p-5 cd-surface-bg">
-              <div className="text-[11px] font-bold cd-text-faint mb-3 flex items-center gap-1.5">
+              <div className="text-[11px] font-semibold cd-text-faint mb-3 flex items-center gap-1.5">
                 <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--cd-primary)" }} />
                 실제 고지서 미리보기 (샘플 값)
               </div>
@@ -945,7 +945,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex items-center gap-2 px-5 py-3 border-t cd-border-c">
-          <span className="text-[10.5px] cd-text-faint">표·구조는 고정이며 문구(제목·문단)만 편집됩니다.</span>
+          <span className="text-[11px] cd-text-faint">표·구조는 고정이며 문구(제목·문단)만 편집됩니다.</span>
           <button type="button" className="cd-btn cd-btn-ghost text-xs px-3 py-2 ml-auto" onClick={onClose}>
             닫기
           </button>
@@ -968,11 +968,11 @@ function NoticeCell({ notice, empty }: { notice: { noticeDate: string; status: s
   const submitted = SUBMITTED.has(notice.status);
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-[11.5px] cd-text flex items-center gap-1">
+      <span className="font-mono text-[12px] cd-text flex items-center gap-1">
         {notice.noticeDate}
-        {notice.paper && <span className="text-[9px] rounded px-1 py-0.5 border cd-border-c cd-text-faint">서면</span>}
+        {notice.paper && <span className="text-[11px] rounded px-1 py-0.5 border cd-border-c cd-text-faint">서면</span>}
       </span>
-      <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 w-fit ${submitted ? "cd-tint-primary" : "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"}`}>
+      <span className={`text-[11px] rounded-full px-1.5 py-0.5 w-fit ${submitted ? "cd-tint-primary" : "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"}`}>
         {submitted ? "제출" : "미제출"}
       </span>
     </div>

@@ -193,7 +193,7 @@ export function MyLeaveSection() {
       {/* 섹션 타이틀 + 연도 탐색 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <div className="text-[15px] font-extrabold cd-text">내 휴가</div>
+          <div className="text-base font-semibold cd-text">내 휴가</div>
           <CdHelp topic="hr.my-leave" />
         </div>
         <div className="flex items-center gap-1">
@@ -223,11 +223,11 @@ export function MyLeaveSection() {
       {/* KPI 2×2 */}
       <div className="grid grid-cols-2 gap-3">
         {kpis.map((k) => (
-          <div key={k.label} className="cd-card p-4 rounded-2xl">
+          <div key={k.label} className="cd-card p-4 rounded-lg">
             <div className="flex items-center gap-2 text-xs cd-text-muted mb-1.5">
               <k.icon className="w-3.5 h-3.5" /> {k.label}
             </div>
-            <div className="text-lg font-extrabold cd-text tabular-nums">{k.value}</div>
+            <div className="text-base font-semibold cd-text tabular-nums">{k.value}</div>
             {"gauge" in k && k.gauge !== undefined ? (
               <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--cd-hairline)" }}>
                 <div className="h-full rounded-full cd-grad-fill" style={{ width: `${k.gauge}%` }} />
@@ -238,11 +238,11 @@ export function MyLeaveSection() {
           </div>
         ))}
         {loading && kpis.length === 0 &&
-          Array.from({ length: 4 }, (_, i) => <div key={i} className="cd-card p-4 rounded-2xl h-[88px] animate-pulse" />)}
+          Array.from({ length: 4 }, (_, i) => <div key={i} className="cd-card p-4 rounded-lg h-[88px] animate-pulse" />)}
       </div>
 
       {/* 월 캘린더 — 공휴일·대체휴일 붉은 표기(홈 캘린더 관례), 도트 4유형 */}
-      <div className="cd-card p-4 rounded-2xl">
+      <div className="cd-card p-4 rounded-lg">
         <div className="flex items-center justify-between mb-2">
           <div className="cd-card-title">
             {year}년 {calMonth}월
@@ -260,7 +260,7 @@ export function MyLeaveSection() {
           {WEEKDAYS.map((w, i) => (
             <span
               key={w}
-              className="text-center text-[10px] font-bold py-0.5"
+              className="text-center text-[11px] font-semibold py-0.5"
               style={{ color: i === 0 ? "var(--cd-error)" : i === 6 ? "var(--cd-secondary)" : "var(--cd-faint)" }}
             >
               {w}
@@ -291,7 +291,7 @@ export function MyLeaveSection() {
                     title={[holiday, ...uses.map((u) => u.leaveLabel ?? "연차")].filter(Boolean).join(", ") || undefined}
                   >
                     <span
-                      className="w-[21px] h-[21px] rounded-full inline-flex items-center justify-center text-[11.5px] shrink-0"
+                      className="w-[21px] h-[21px] rounded-full inline-flex items-center justify-center text-[12px] shrink-0"
                       style={{
                         fontWeight: isToday ? 800 : 500,
                         color: dayColor,
@@ -301,7 +301,7 @@ export function MyLeaveSection() {
                       {c.day}
                     </span>
                     {holiday && (
-                      <span className="text-[8.5px] leading-tight truncate max-w-full" style={{ color: "var(--cd-error)" }}>
+                      <span className="text-[11px] leading-tight truncate max-w-full cd-error-text">
                         {holiday}
                       </span>
                     )}
@@ -318,7 +318,7 @@ export function MyLeaveSection() {
             )
           )}
         </div>
-        <div className="flex items-center gap-2.5 mt-2 text-[10.5px] cd-text-faint flex-wrap">
+        <div className="flex items-center gap-2.5 mt-2 text-[11px] cd-text-faint flex-wrap">
           {(Object.keys(DOT_COLOR) as DotKind[]).map((k) => (
             <span key={k} className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full" style={{ background: DOT_COLOR[k] }} /> {DOT_LABEL[k]}
@@ -328,13 +328,13 @@ export function MyLeaveSection() {
       </div>
 
       {/* 사용 내역 — 월 그룹 2열. 카드가 좌측 컬럼의 남은 높이를 채우고(메뉴 바 하단 정렬) 내용이 많으면 카드 안에서 스크롤(스크롤바 숨김). */}
-      <div className="cd-card p-4 rounded-2xl 2xl:flex-1 min-h-[180px] flex flex-col">
+      <div className="cd-card p-4 rounded-lg 2xl:flex-1 min-h-[180px] flex flex-col">
         <div className="cd-card-title mb-2 shrink-0">사용 내역</div>
         {usesByMonth.length === 0 && <div className="text-sm cd-text-muted py-5 text-center">{year}년 휴가 사용 내역이 없습니다.</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 content-start 2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
           {usesByMonth.map((g) => (
             <div key={g.month} className="mb-3 last:mb-0 min-w-0">
-              <div className="flex items-center gap-2 text-xs font-bold cd-text-muted mb-1">
+              <div className="flex items-center gap-2 text-xs font-semibold cd-text-muted mb-1">
                 {Number(g.month.slice(5, 7))}월
                 <span className="cd-text-faint font-medium">연차 차감 {fmtDays(g.days)}일</span>
               </div>
@@ -342,7 +342,7 @@ export function MyLeaveSection() {
                 const d = new Date(e.usedOn! + "T00:00:00");
                 const kind = dotKind(e);
                 return (
-                  <div key={e.entryId} className="flex items-center gap-2 text-[12.5px] py-[9.5px] border-t cd-hairline-row-c">
+                  <div key={e.entryId} className="flex items-center gap-2 text-[13px] py-[9.5px] border-t cd-hairline-row-c">
                     <span className="tabular-nums cd-text w-[84px] shrink-0">
                       {e.usedOn!.slice(5)} ({WEEKDAYS[d.getDay()]})
                     </span>
@@ -365,8 +365,8 @@ export function MyLeaveSection() {
 
       {/* 특별휴가 — 부여·이력이 있을 때만 */}
       {data && (data.special.remaining.length > 0 || data.special.entries.length > 0) && (
-        <div className="cd-card p-4 rounded-2xl">
-          <div className="flex items-center gap-2 text-sm font-bold cd-text mb-2 flex-wrap">
+        <div className="cd-card p-4 rounded-lg">
+          <div className="flex items-center gap-2 text-sm font-semibold cd-text mb-2 flex-wrap">
             <Sparkles className="w-4 h-4" /> 특별휴가
             {data.special.remaining.map((r) => (
               <span key={r.kind} className="cd-pill cd-pill-info">

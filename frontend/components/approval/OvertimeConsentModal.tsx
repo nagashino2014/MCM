@@ -60,11 +60,11 @@ export function OvertimeConsentModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" style={{ background: "rgba(23,28,44,0.42)" }}>
       <div
-        className="w-full max-w-[560px] max-h-[88vh] overflow-y-auto rounded-2xl p-6 flex flex-col gap-4"
+        className="w-full max-w-[560px] max-h-[88vh] overflow-y-auto rounded-lg p-6 flex flex-col gap-4"
         style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow-hover)" }}
       >
         <div className="flex items-start gap-2">
-          <h2 className="text-[16px] font-extrabold cd-text leading-snug">
+          <h2 className="text-[16px] font-semibold cd-text leading-snug">
             연장근로(주 12시간 초과) 및 보상휴가 전환 동의서
           </h2>
           <button type="button" className="ml-auto cd-text-faint hover:text-[color:var(--cd-text)]" aria-label="닫기" onClick={onClose}>
@@ -72,21 +72,21 @@ export function OvertimeConsentModal({
           </button>
         </div>
 
-        <p className="text-[12.5px] cd-text-body">본인은 아래 초과근무 신청과 관련하여 다음 사항을 확인하고 동의합니다.</p>
+        <p className="text-[13px] cd-text-body">본인은 아래 초과근무 신청과 관련하여 다음 사항을 확인하고 동의합니다.</p>
 
         <div className="flex flex-col gap-3">
           {sections.map((s) => (
             <div key={s.heading}>
-              <p className="text-[12.5px] font-bold cd-text mb-1">{s.heading}</p>
-              <p className="text-[12.5px] cd-text-body leading-relaxed">{s.body}</p>
+              <p className="text-[13px] font-semibold cd-text mb-1">{s.heading}</p>
+              <p className="text-[13px] cd-text-body leading-relaxed">{s.body}</p>
             </div>
           ))}
         </div>
 
-        <p className="text-[11.5px] cd-text-faint">{CONSENT_FOOTER}</p>
+        <p className="text-[12px] cd-text-faint">{CONSENT_FOOTER}</p>
 
-        <div className="rounded-xl border cd-border-c p-3.5 flex flex-col gap-2.5">
-          <label className="flex items-start gap-2 text-[12.5px] cd-text cursor-pointer">
+        <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-2.5">
+          <label className="flex items-start gap-2 text-[13px] cd-text cursor-pointer">
             <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
             위 내용을 모두 확인하였으며, 자유로운 의사에 따라 동의합니다.
           </label>
@@ -114,7 +114,7 @@ export function OvertimeConsentModal({
           </div>
         </div>
 
-        <p className="text-[10.5px] cd-text-faint">
+        <p className="text-[11px] cd-text-faint">
           동의하지 않으면 상신할 수 없습니다. 신청 시간을 조정해 주 한도(12시간) 이내로 변경하면 동의 없이 상신할 수 있습니다.
         </p>
       </div>

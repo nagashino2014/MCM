@@ -161,7 +161,7 @@ export function QuoteItemTreeEditor({
                   </td>
                 ))}
                 <td className="border cd-border-c text-center">
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" aria-label="행 삭제" onClick={() => onRowsChange(rows.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" aria-label="행 삭제" onClick={() => onRowsChange(rows.filter((_, xi) => xi !== i))}>
                     <X className="w-3 h-3" />
                   </button>
                 </td>

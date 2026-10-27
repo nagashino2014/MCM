@@ -140,7 +140,7 @@ export function LetterReviewModal({
                     </span>
                     <button
                       type="button"
-                      className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                      className="cd-text-faint hover:text-[color:var(--cd-error)]"
                       title="제외"
                       onClick={() => setReviewers((prev) => prev.filter((x) => x.userId !== r.userId))}
                     >
@@ -186,7 +186,7 @@ export function LetterReviewModal({
                     {h.ok ? (
                       <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 cd-text-primary" />
                     ) : (
-                      <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "var(--cd-danger,#FA896B)" }} />
+                      <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "var(--cd-error)" }} />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="cd-text">
@@ -194,7 +194,7 @@ export function LetterReviewModal({
                         <span className="cd-text-faint"> · {h.createdAt.slice(0, 16).replace("T", " ")}</span>
                       </div>
                       {h.note && <div className="cd-text-faint truncate">{h.note}</div>}
-                      {!h.ok && h.error && <div style={{ color: "var(--cd-danger,#FA896B)" }}>{h.error}</div>}
+                      {!h.ok && h.error && <div style={{ color: "var(--cd-error)" }}>{h.error}</div>}
                     </div>
                   </div>
                 ))}

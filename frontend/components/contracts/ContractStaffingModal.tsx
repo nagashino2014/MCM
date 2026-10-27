@@ -49,14 +49,14 @@ export default function ContractStaffingModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden shadow-2xl">
+      <div className="relative cd-solid-bg border cd-border-c rounded-lg w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden shadow-[var(--cd-shadow-dialog)]">
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b cd-border-c">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setTab("process")}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold",
+                "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold",
                 tab === "process" ? "cd-soft-primary" : "cd-text-muted cd-row-hover"
               )}
             >
@@ -66,7 +66,7 @@ export default function ContractStaffingModal({
               type="button"
               onClick={() => setTab("staffing")}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold",
+                "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold",
                 tab === "staffing" ? "cd-soft-primary" : "cd-text-muted cd-row-hover"
               )}
             >
@@ -76,7 +76,7 @@ export default function ContractStaffingModal({
               type="button"
               onClick={() => setTab("changes")}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold",
+                "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold",
                 tab === "changes" ? "cd-soft-primary" : "cd-text-muted cd-row-hover"
               )}
             >

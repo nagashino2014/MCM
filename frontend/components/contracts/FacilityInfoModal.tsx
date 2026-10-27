@@ -145,14 +145,14 @@ export default function FacilityInfoModal({
     .join(" · ");
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[color:var(--cd-overlay)] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="cd-card rounded-3xl w-[min(720px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden"
+        className="cd-card rounded-lg w-[min(720px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-32px))] shadow-[var(--cd-shadow-dialog)] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-lg font-bold cd-text inline-flex items-center gap-2">
+            <h3 className="text-base font-semibold cd-text inline-flex items-center gap-2">
               <Building2 className="w-4 h-4 cd-text-primary" />
               {title}
             </h3>
@@ -171,9 +171,9 @@ export default function FacilityInfoModal({
                 type="button"
                 onClick={() => setActiveId(facility.facilityId)}
                 className={
-                  "rounded-lg px-3 py-1.5 text-xs font-bold " +
+                  "rounded-lg px-3 py-1.5 text-xs font-semibold " +
                   (activeId === facility.facilityId
-                    ? "cd-fill-primary text-white shadow-sm"
+                    ? "cd-fill-primary text-white"
                     : "border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)]")
                 }
               >
@@ -193,9 +193,9 @@ export default function FacilityInfoModal({
           ) : (
             <div className="grid gap-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base font-bold cd-text">{info.companyName}</span>
+                <span className="text-base font-semibold cd-text">{info.companyName}</span>
                 {info.isClosed && (
-                  <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                  <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
                     폐업
                   </span>
                 )}
@@ -233,7 +233,7 @@ export default function FacilityInfoModal({
           {activeId ? (
             <Link
               href={`/facilities?focus=${encodeURIComponent(activeId)}`}
-              className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-primary inline-flex items-center gap-1.5"
+              className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs cd-text-primary inline-flex items-center gap-1.5"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               사업장 화면에서 보기
@@ -241,7 +241,7 @@ export default function FacilityInfoModal({
           ) : (
             <span />
           )}
-          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">
             닫기
           </button>
         </div>
@@ -280,7 +280,7 @@ function DepositBanksField({
   const banks = deposits?.banks ?? [];
   const hasRows = (deposits?.rows.length ?? 0) > 0;
   return (
-    <div className="rounded-2xl border cd-border-c p-3">
+    <div className="rounded-lg border cd-border-c p-3">
       <p className="text-[11px] cd-text-faint">거래 은행</p>
       <div className="mt-1 flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
@@ -292,7 +292,7 @@ function DepositBanksField({
             banks.map((bank) => (
               <span
                 key={bank.bankName}
-                className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] font-bold cd-text-primary"
+                className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[11px] font-semibold cd-text-primary"
                 title={`${bank.bankName} 입금 ${bank.count}건 · ${formatAmount(bank.totalAmount)}`}
               >
                 <FinLogo kind="bank" code={bank.bankCode ?? ""} label={bank.bankName} size={16} />
@@ -305,7 +305,7 @@ function DepositBanksField({
           <button
             type="button"
             onClick={onOpenDetail}
-            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-bold cd-text-primary shrink-0 inline-flex items-center gap-1"
+            className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-semibold cd-text-primary shrink-0 inline-flex items-center gap-1"
           >
             <Landmark className="w-3 h-3" />
             상세 보기
@@ -344,14 +344,14 @@ function DepositHistoryModal({
   const uncollectedTotal = uncollectedRows.reduce((acc, row) => acc + row.remaining, 0);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-stone-950/30 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+    <div className="fixed inset-0 z-[60] bg-[color:var(--cd-overlay)] flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div
-        className="cd-card rounded-3xl w-[min(980px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden"
+        className="cd-card rounded-lg w-[min(980px,calc(100vw-32px))] max-h-[min(720px,calc(100vh-32px))] shadow-[var(--cd-shadow-dialog)] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-lg font-bold cd-text inline-flex items-center gap-2">
+            <h3 className="text-base font-semibold cd-text inline-flex items-center gap-2">
               <Landmark className="w-4 h-4 cd-text-primary" />
               {companyName} 입금 내역
             </h3>
@@ -375,18 +375,18 @@ function DepositHistoryModal({
           {rows.length === 0 ? (
             <p className="py-10 text-center text-sm cd-text-faint">이 거래처의 청구·수금 내역이 없습니다.</p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border cd-border-c">
+            <div className="overflow-x-auto rounded-lg border cd-border-c">
               <table className="w-full text-sm min-w-[860px]">
                 <thead className="cd-table-head">
                   <tr className="text-left text-[11px] cd-text-faint border-b cd-border-c">
-                    <th className="px-3 py-2 font-bold">용역명</th>
-                    <th className="px-3 py-2 font-bold">청구 단계</th>
-                    <th className="px-3 py-2 font-bold">계산서 발행일</th>
-                    <th className="px-3 py-2 font-bold text-right">입금액</th>
-                    <th className="px-3 py-2 font-bold">입금일자</th>
-                    <th className="px-3 py-2 font-bold">입금은행</th>
-                    <th className="px-3 py-2 font-bold">지급 방식</th>
-                    <th className="px-3 py-2 font-bold">상태</th>
+                    <th className="px-3 py-2 font-semibold">용역명</th>
+                    <th className="px-3 py-2 font-semibold">청구 단계</th>
+                    <th className="px-3 py-2 font-semibold">계산서 발행일</th>
+                    <th className="px-3 py-2 font-semibold text-right">입금액</th>
+                    <th className="px-3 py-2 font-semibold">입금일자</th>
+                    <th className="px-3 py-2 font-semibold">입금은행</th>
+                    <th className="px-3 py-2 font-semibold">지급 방식</th>
+                    <th className="px-3 py-2 font-semibold">상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -426,13 +426,13 @@ function DepositHistoryModal({
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {uncollected ? (
-                            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "#FCEBEB", color: "#791F1F" }}>
                               미수
                             </span>
                           ) : row.collected ? (
-                            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold cd-tint-primary cd-text-primary">수금</span>
+                            <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold cd-tint-primary cd-text-primary">수금</span>
                           ) : (
-                            <span className="rounded-full border cd-border-c px-2 py-0.5 text-[11px] font-bold cd-text-muted">부분입금</span>
+                            <span className="rounded-full border cd-border-c px-2 py-0.5 text-[11px] font-semibold cd-text-muted">부분입금</span>
                           )}
                         </td>
                       </tr>
@@ -445,7 +445,7 @@ function DepositHistoryModal({
         </div>
 
         <div className="p-5 border-t cd-border-c flex justify-end">
-          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">
             닫기
           </button>
         </div>
@@ -473,7 +473,7 @@ function IndustryField({
       ? [{ code: fallbackCode, name: fallbackName }]
       : [];
   return (
-    <div className="rounded-2xl border cd-border-c p-3 col-span-2">
+    <div className="rounded-lg border cd-border-c p-3 col-span-2">
       <p className="text-[11px] cd-text-faint">업종</p>
       {rows.length === 0 ? (
         <p className="text-sm mt-1 cd-text">-</p>
@@ -493,7 +493,7 @@ function IndustryField({
 
 function Field({ label, value, wide }: { label: string; value: string | null | undefined; wide?: boolean }) {
   return (
-    <div className={"rounded-2xl border cd-border-c p-3 " + (wide ? "col-span-2" : "")}>
+    <div className={"rounded-lg border cd-border-c p-3 " + (wide ? "col-span-2" : "")}>
       <p className="text-[11px] cd-text-faint">{label}</p>
       <p className="text-sm mt-1 cd-text break-words">{value || "-"}</p>
     </div>

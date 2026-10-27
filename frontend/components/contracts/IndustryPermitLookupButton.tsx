@@ -72,16 +72,16 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
 
   const modal = (
     <div
-      className="cdash-vars cd-fields-white fixed inset-0 z-[80] bg-stone-950/20 flex items-center justify-center p-4"
+      className="cdash-vars cd-fields-white fixed inset-0 z-[80] bg-[color:var(--cd-overlay)] flex items-center justify-center p-4"
       data-theme={theme}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="cd-card rounded-3xl p-5 w-[min(720px,calc(100vw-32px))] max-h-[min(760px,calc(100vh-32px))] flex flex-col shadow-2xl">
+      <div className="cd-card rounded-lg p-5 w-[min(720px,calc(100vw-32px))] max-h-[min(760px,calc(100vh-32px))] flex flex-col shadow-[var(--cd-shadow-dialog)]">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-xl font-bold cd-text flex items-center gap-2">
+            <h3 className="text-base font-semibold cd-text flex items-center gap-2">
               <Search className="w-5 h-5 cd-text-primary" /> 업종 조회 — 통합허가 대상 판정
             </h3>
             <p className="text-xs cd-text-faint mt-1">
@@ -89,14 +89,14 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
               대상 업종이면 [적용]으로 계약 업종을 바로 선택할 수 있습니다.
             </p>
           </div>
-          <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-xl px-2.5 py-2 cd-text-muted" aria-label="닫기">
+          <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-2 cd-text-muted" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* 검색 모드 토글 */}
         <div className="flex items-center gap-1 mb-2">
-          <div className="inline-flex rounded-xl border cd-border-c cd-surface-bg p-0.5">
+          <div className="inline-flex rounded-lg border cd-border-c cd-surface-bg p-0.5">
             {([
               ["name", "업종명"],
               ["code", "코드"],
@@ -105,7 +105,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
                 key={k}
                 type="button"
                 onClick={() => setMode(k)}
-                className={"rounded-lg px-3 py-1.5 text-xs font-bold " + (mode === k ? "cd-fill-primary text-white" : "cd-text-muted")}
+                className={"rounded-lg px-3 py-1.5 text-xs font-semibold " + (mode === k ? "cd-fill-primary text-white" : "cd-text-muted")}
               >
                 {label}
               </button>
@@ -125,7 +125,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
           />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide border cd-border-c rounded-2xl">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide border cd-border-c rounded-lg">
           {loading ? (
             <div className="py-10 text-center text-sm cd-text-faint">불러오는 중…</div>
           ) : error ? (
@@ -138,19 +138,19 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
                 const category = industryCategoryForCode(entry.code);
                 return (
                   <li key={entry.code} className="flex items-center gap-3 px-3 py-2 border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)]">
-                    <span className="font-mono text-xs font-bold cd-text-primary w-14 shrink-0">{entry.code}</span>
+                    <span className="font-mono text-xs font-semibold cd-text-primary w-14 shrink-0">{entry.code}</span>
                     <span className="flex-1 text-sm cd-text truncate" title={entry.name}>
                       {entry.name}
                     </span>
                     {category ? (
                       <>
-                        <span className="shrink-0 rounded-full cd-tint-primary cd-text-primary px-2.5 py-0.5 text-[11px] font-bold flex items-center gap-1">
+                        <span className="shrink-0 rounded-full cd-tint-primary cd-text-primary px-2.5 py-0.5 text-[11px] font-semibold flex items-center gap-1">
                           <BadgeCheck className="w-3 h-3" /> {category.label}(통합허가)
                         </span>
                         <button
                           type="button"
                           onClick={() => apply(category.label)}
-                          className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold cd-fill-primary text-white"
+                          className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold cd-fill-primary text-white"
                           title="이 업종을 계약 업종으로 선택"
                         >
                           적용
@@ -172,7 +172,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
               ? ""
               : `${results.length.toLocaleString()}건 표시${results.length >= MAX_RESULTS ? ` (상위 ${MAX_RESULTS}건, 검색어를 좁혀주세요)` : ""}`}
           </span>
-          <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-xs font-bold cd-text-muted">
+          <button type="button" onClick={() => setOpen(false)} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-xs font-semibold cd-text-muted">
             닫기
           </button>
         </div>

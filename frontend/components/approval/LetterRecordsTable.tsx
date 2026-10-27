@@ -18,12 +18,12 @@ const short = (s: string | null) => (s ? s.slice(0, 10) : "-");
 function statusBadge(status: LetterSendStatus) {
   const color =
     status === "sent"
-      ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+      ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
       : status === "failed"
-        ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+        ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
         : status === "archived"
           ? "cd-border-c cd-text-faint"
-          : "border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]";
+          : "border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]";
   return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{LETTER_SEND_STATUS_LABEL[status] ?? status}</span>;
 }
 
@@ -162,7 +162,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
                 </button>
               )}
               {letter?.source === "imported" && <span>과거 이관 문서</span>}
-              {letter?.sendError && <span className="text-[color:var(--cd-danger,#FA896B)]">{letter.sendError}</span>}
+              {letter?.sendError && <span className="text-[color:var(--cd-error)]">{letter.sendError}</span>}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -207,7 +207,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 disabled:opacity-50"
-                style={{ color: "var(--cd-danger, #FA896B)" }}
+                style={{ color: "var(--cd-error)" }}
                 disabled={busy != null}
                 onClick={removeImported}
                 title="이관 등록 취소(오등록 정정) — 번호가 다시 결번이 됩니다."
@@ -379,7 +379,7 @@ export function LetterRecordsTable({
                 <td className="py-[11.5px] pr-3">
                   {statusBadge(l.sendStatus)}
                   {l.sendHistory.length > 1 && <span className="ml-1.5 text-[10.5px] cd-text-faint">{l.sendHistory.length}차</span>}
-                  {l.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">클릭 후 재발송</span>}
+                  {l.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
                 </td>
               </tr>
             ))}

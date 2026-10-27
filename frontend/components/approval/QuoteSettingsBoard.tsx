@@ -688,7 +688,7 @@ export function QuoteSettingsBoard() {
                       <h3 className="font-bold cd-text text-sm">{isFacilityTab && facility ? `${facility.name} · ` : ""}{detail.serviceType} &gt; {detail.serviceSubtype}</h3>
                       <span className="text-[10.5px] cd-text-faint">수정해도 기존 견적서의 산정 스냅샷은 유지됩니다</span>
                       <div className="ml-auto flex items-center gap-2">
-                        <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" disabled={busy} onClick={() => void deleteSet()}>
+                        <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-error)]" disabled={busy} onClick={() => void deleteSet()}>
                           <Trash2 className="w-3 h-3 inline" /> 세트 삭제
                         </button>
                         <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy} onClick={() => void saveSet()}>
@@ -778,7 +778,7 @@ export function QuoteSettingsBoard() {
                           {simResult.ok ? (
                             <span className="text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">제약 OK (초과 {won(simResult.over)}원 &lt; {won(simResult.cap)}원)</span>
                           ) : (
-                            <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">⚠ 제약 위반</span>
+                            <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">⚠ 제약 위반</span>
                           )}
                         </div>
                       )}
@@ -867,7 +867,7 @@ export function QuoteSettingsBoard() {
                   <label className="flex items-center gap-1 text-[11.5px] cd-text-faint whitespace-nowrap shrink-0">
                     <input type="checkbox" className="shrink-0" checked={c.enabled} onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, enabled: e.target.checked } : x)))} /> 사용
                   </label>
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setCodes((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setCodes((prev) => prev.filter((_, xi) => xi !== i))}>
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

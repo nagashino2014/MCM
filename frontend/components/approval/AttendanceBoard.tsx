@@ -485,7 +485,7 @@ function MatchPanel() {
               const tone =
                 v.tone === "ok" ? { background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
                 : v.tone === "bad" ? { background: "var(--cd-error)", color: "#fff" }
-                : v.tone === "warn" ? { background: "var(--cd-warning, #FFAE1F)", color: "#fff" }
+                : v.tone === "warn" ? { background: "var(--cd-warning)", color: "#fff" }
                 : { background: "transparent", color: "var(--cd-faint)" };
               const overridden = r.verdict === "override" || r.verdict === "rejected";
               return (
@@ -667,7 +667,7 @@ function MealPanel() {
               </span>
               <span
                 className="text-[11px] font-bold"
-                style={{ color: r.priorCount > 0 ? "var(--cd-error)" : "var(--cd-warning,#FFAE1F)" }}
+                style={{ color: r.priorCount > 0 ? "var(--cd-error)" : "var(--cd-warning)" }}
               >
                 {r.priorCount + 1}회차
               </span>

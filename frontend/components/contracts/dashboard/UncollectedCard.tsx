@@ -119,7 +119,7 @@ export function UncollectedCard({
       ) : (
         <div className="flex flex-col text-[11px] flex-1 min-h-0">
           <div
-            className="grid grid-cols-[70px_1fr_56px_84px] gap-x-2 px-2 py-2 rounded-lg font-bold shrink-0"
+            className="grid grid-cols-[70px_1fr_56px_84px] gap-x-2 px-2 py-2 rounded-lg font-semibold shrink-0"
             style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
           >
             <span>발행일</span>
@@ -146,12 +146,12 @@ export function UncollectedCard({
                   <span className="tabular-nums" style={{ color: "var(--cd-faint)" }}>
                     {item.invoiceIssuedAt ?? "-"}
                   </span>
-                  <span className="truncate font-bold" style={{ color }}>
+                  <span className="truncate font-semibold" style={{ color }}>
                     {item.contractTitle}
                   </span>
                   <span style={{ color: "var(--cd-muted)" }}>{item.stageLabel}</span>
                   {/* 부분입금이 있으면 잔액을 보여준다(2026-08-26 사용자 요청) — 원 발행액은 보조 표기 */}
-                  <span className="text-right tabular-nums font-extrabold" style={{ color }}>
+                  <span className="text-right tabular-nums font-semibold" style={{ color }}>
                     {fmtFull(item.outstandingAmount)}
                     {item.outstandingAmount < item.amount && (
                       <span className="block font-normal" style={{ fontSize: "0.6875rem", color: "var(--cd-faint)" }}>

@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* KESI Precision 글꼴(2026-10-27 결정): Pretendard Variable 하나로 한글·숫자·영문을 맞춘다.
+   public/fonts/PretendardVariable.woff2 — v1.3.9, SIL OFL 1.1. */
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Precision 전역 폴백. 앱 내부는 같은 의미의 --cd-* 토큰을 사용한다. */
 :root {
   --mcm-action-radius: 8px;
@@ -14,7 +24,7 @@
 html, body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Inter, "Noto Sans KR", Pretendard, "Malgun Gothic", system-ui, sans-serif;
+  font-family: "Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
 }
 
 /* 이전 클래스 이름도 무광 표면으로 연결한다. 신규 화면은 cd-card 사용. */

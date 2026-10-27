@@ -248,7 +248,7 @@ export function LeavePromotionBoard() {
                       {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
                     </div>
                     <div className="mt-1 h-1.5 rounded-full cd-surface-bg overflow-hidden w-28">
-                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.rate)}%`, background: r.rate >= 90 ? "var(--cd-danger,#FA896B)" : "var(--cd-primary)" }} />
+                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, r.rate)}%`, background: r.rate >= 90 ? "var(--cd-error)" : "var(--cd-primary)" }} />
                     </div>
                   </div>
                 </div>
@@ -402,7 +402,7 @@ function SecondNoticeModal({
                             {r.name}
                             {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
                           </span>
-                          <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${done ? "cd-tint-primary cd-text-primary" : "border border-[color:var(--cd-warning,#FFAE1F)] cd-text-faint"}`}>
+                          <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${done ? "cd-tint-primary cd-text-primary" : "border border-[color:var(--cd-warning)] cd-text-faint"}`}>
                             {done ? "지정 완료" : "지정 필요"}
                           </span>
                         </span>
@@ -680,7 +680,7 @@ function BackfillModal({
                       <span className="cd-text font-semibold">{r?.name ?? id}</span>
                       {e.files.length > 0 && <Paperclip className="w-3 h-3 cd-text-primary" />}
                       {e.dates.some((d) => d.trim()) && <span className="cd-text-faint">{e.dates.filter((d) => d.trim()).length}일</span>}
-                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={(ev) => { ev.stopPropagation(); removeEntry(id); }} title="제외">
+                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={(ev) => { ev.stopPropagation(); removeEntry(id); }} title="제외">
                         <X className="w-3 h-3" />
                       </button>
                     </span>
@@ -690,7 +690,7 @@ function BackfillModal({
             )}
 
             {unmatched.length > 0 && (
-              <div className="rounded-xl border border-[color:var(--cd-warning,#FFAE1F)] px-3 py-2 text-[11px] cd-text">
+              <div className="rounded-xl border border-[color:var(--cd-warning)] px-3 py-2 text-[11px] cd-text">
                 자동 매칭 실패 {unmatched.length}건: <span className="cd-text-faint">{unmatched.join(", ")}</span> — 좌측 트리에서 직접 선택 후 첨부하세요.
               </div>
             )}
@@ -714,7 +714,7 @@ function BackfillModal({
                     {selEntry.dates.map((d, i) => (
                       <div key={i} className="flex items-center gap-1">
                         <AutoDateInput value={d} onChange={(v) => setDate(sel.employeeId, i, v)} className="cd-input !w-36" placeholder="YYYYMMDD" />
-                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-30" onClick={() => delDate(sel.employeeId, i)} disabled={selEntry.dates.length <= 1} title="삭제">
+                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)] disabled:opacity-30" onClick={() => delDate(sel.employeeId, i)} disabled={selEntry.dates.length <= 1} title="삭제">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -733,7 +733,7 @@ function BackfillModal({
                         <div key={i} className="flex items-center gap-2 text-[12px] cd-text">
                           <Paperclip className="w-3.5 h-3.5 cd-text-primary shrink-0" />
                           <span className="truncate flex-1">{f.name}</span>
-                          <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => delFile(sel.employeeId, i)} title="첨부 삭제">
+                          <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => delFile(sel.employeeId, i)} title="첨부 삭제">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -904,7 +904,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
                       ))}
                       <button
                         type="button"
-                        className="ml-auto cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                        className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)]"
                         onClick={() => delPara(i)}
                         title="문단 삭제"
                       >
@@ -972,7 +972,7 @@ function NoticeCell({ notice, empty }: { notice: { noticeDate: string; status: s
         {notice.noticeDate}
         {notice.paper && <span className="text-[9px] rounded px-1 py-0.5 border cd-border-c cd-text-faint">서면</span>}
       </span>
-      <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 w-fit ${submitted ? "cd-tint-primary" : "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"}`}>
+      <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 w-fit ${submitted ? "cd-tint-primary" : "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"}`}>
         {submitted ? "제출" : "미제출"}
       </span>
     </div>

@@ -88,9 +88,9 @@ export function DocAttachmentViewer({ docId, items }: { docId: string; items: Do
       {convertError ? (
         <div
           className="rounded-xl border px-3.5 py-3 flex flex-col gap-1"
-          style={{ borderColor: "var(--cd-warning,#FFAE1F)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+          style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
         >
-          <span className="text-[11.5px] font-bold flex items-center gap-1.5" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+          <span className="text-[11.5px] font-bold flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
             <FileWarning className="w-4 h-4" /> 미리보기를 표시할 수 없습니다
           </span>
           <p className="text-[12px] cd-text">{convertError}</p>

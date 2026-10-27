@@ -203,7 +203,7 @@ export function ApprovalLeaveBoard() {
           </button>
         }
       />
-      {error && <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>}
+      {error && <p className="text-sm text-[color:var(--cd-error)]">{error}</p>}
 
       {/* KPI (modernize) */}
       {KPIS.length > 0 && (
@@ -343,14 +343,14 @@ function RowBlock({
             </div>
             {/* 소진율 미니바 */}
             <div className="mt-1 h-1.5 rounded-full cd-surface-bg overflow-hidden w-28">
-              <div className="h-full rounded-full" style={{ width: `${rate}%`, background: rate >= 90 ? "var(--cd-danger,#FA896B)" : "var(--cd-primary)" }} />
+              <div className="h-full rounded-full" style={{ width: `${rate}%`, background: rate >= 90 ? "var(--cd-error)" : "var(--cd-primary)" }} />
             </div>
           </div>
         </div>
         <span className="text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
         <span className="text-right font-mono text-[13px] cd-text">{fmtDays(r.granted)}</span>
         <span className="text-right font-mono text-[13px] cd-text">{fmtDays(r.usedAnnual)}</span>
-        <span className={`text-right font-mono text-[13px] font-bold ${r.remaining < 0 ? "text-[color:var(--cd-danger,#FA896B)]" : "cd-text-primary"}`}>{fmtDays(r.remaining)}</span>
+        <span className={`text-right font-mono text-[13px] font-bold ${r.remaining < 0 ? "text-[color:var(--cd-error)]" : "cd-text-primary"}`}>{fmtDays(r.remaining)}</span>
         <span className="text-right font-mono text-[12px] cd-text-faint">{r.accrual != null ? fmtDays(r.accrual) : "-"}</span>
         <span className="text-right font-mono text-[12px] cd-text-faint">{r.otherUsed > 0 ? fmtDays(r.otherUsed) : "-"}</span>
       </button>
@@ -521,7 +521,7 @@ function MonthGrouped({
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-[11px] cd-text">{e.usedOn?.slice(5) ?? ""}</span>
                     <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 shrink-0 ${e.deduct ? "cd-tint-primary" : "border cd-border-c cd-text-faint"}`}>{e.leaveLabel ?? e.leaveTypeKey}</span>
-                    <button type="button" className="ml-auto cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => onDelete(e.entryId)}>
+                    <button type="button" className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => onDelete(e.entryId)}>
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
@@ -631,7 +631,7 @@ function SpecialLeaveSection({
                   자동
                 </span>
               ) : (
-                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => del(e.entryId)}>
+                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => del(e.entryId)}>
                   <Trash2 className="w-3 h-3" />
                 </button>
               )}
@@ -727,7 +727,7 @@ function GrantAdjust({
               <span className="cd-text-faint">{ENTRY_LABEL[e.entryType] ?? e.entryType}</span>
               <span className="font-mono cd-text">{fmtDays(e.days)}일</span>
               {e.note && <span className="cd-text-faint truncate max-w-[160px]">{e.note}</span>}
-              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => del(e.entryId)}>
+              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => del(e.entryId)}>
                 <Trash2 className="w-3 h-3" />
               </button>
             </span>

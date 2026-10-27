@@ -452,7 +452,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
       {/* 필터 바: 용역 선택 + 연도 선택 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
             용역 선택
           </span>
           <button
@@ -481,7 +481,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             기준 연도
           </span>
           <select
@@ -502,7 +502,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
 
       {error && (
         <p
-          className="text-[11px] font-bold px-3 py-2 rounded-lg"
+          className="text-[11px] font-semibold px-3 py-2 rounded-lg"
           style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
         >
           불러오기 실패: {error}
@@ -548,15 +548,15 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
 
           {/* 총 건수 / 미발행 총액 */}
           <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
-            <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
               총 건수{" "}
-              <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                 {listRows.length.toLocaleString()}건
               </span>
             </span>
-            <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
               미발행액 총액{" "}
-              <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                 {listTotal > 0 ? `${fmtFull(listTotal)}원` : "-"}
               </span>
             </span>
@@ -564,7 +564,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
 
           {/* 열 레이블 */}
           <div
-            className="cdb-unbilled-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            className="cdb-unbilled-row cd-table-head !cursor-default text-[11px] font-semibold"
             style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
@@ -592,10 +592,10 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
                   onClick={() => openContract(row)}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                    <span className="block truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                       {row.contractTitle}
                     </span>
-                    <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                    <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                       <span
                         className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                         style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -609,7 +609,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
                   <span className="truncate text-[11px]" style={{ color: "var(--cd-muted)" }} title={row.stageLabel || undefined}>
                     {row.stageLabel || "-"}
                   </span>
-                  <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                  <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                     {row.amount > 0 ? fmtFull(row.amount) : "-"}
                   </span>
                 </div>
@@ -626,7 +626,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
             </span>
             연도별 미발행액 추이
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             계약일 기준 · 막대 = 미발행액, 선 = 수주액 대비 미발행 비율
           </p>
           <ApexChart
@@ -646,7 +646,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
             </span>
             {yearLabel} 용역별 미발행 비율
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             {isAllYears ? "전체 기간" : "해당 연도"} 용역별 수주액 대비
           </p>
           {ratioByCategory.length === 0 ? (
@@ -672,7 +672,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-extrabold mb-2 text-center" style={{ color: "var(--cd-faint)" }}>
+              <p className="text-[11px] font-semibold mb-2 text-center" style={{ color: "var(--cd-faint)" }}>
                 {category ? `${category} 비중` : "용역별 비중"}
               </p>
               {shareDonut.series.reduce((a, b) => a + b, 0) <= 0 ? (
@@ -688,7 +688,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
               )}
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-extrabold mb-2 text-center" style={{ color: "var(--cd-faint)" }}>
+              <p className="text-[11px] font-semibold mb-2 text-center" style={{ color: "var(--cd-faint)" }}>
                 세분류별 비중
               </p>
               {!category ? (
@@ -723,7 +723,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
           </p>
           <div className="text-[11px] mt-1">
             <div
-              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
+              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-semibold"
               style={{ color: "var(--cd-faint)" }}
             >
               <span>연도</span>
@@ -740,14 +740,14 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
                 key={y}
                 className="cd-row-hover grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-2 rounded-lg"
               >
-                <span className="font-bold" style={{ color: "var(--cd-muted)" }}>
+                <span className="font-semibold" style={{ color: "var(--cd-muted)" }}>
                   {y}
                 </span>
-                <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                   {fmtFull(unbilledByYear.get(y)?.total ?? 0)}
                 </span>
                 <span
-                  className="text-right tabular-nums font-extrabold"
+                  className="text-right tabular-nums font-semibold"
                   style={{ color: category ? categoryColor : "var(--cd-faint)" }}
                 >
                   {category ? fmtFull(unbilledByYear.get(y)?.byCategory[category] ?? 0) : "-"}
@@ -781,7 +781,7 @@ function subtypePalette(index: number): string {
 function EmptyHint({ label, height }: { label: string; height: number }) {
   return (
     <div
-      className="flex items-center justify-center rounded-xl text-[11px] font-bold text-center px-3"
+      className="flex items-center justify-center rounded-lg text-[11px] font-semibold text-center px-3"
       style={{
         height,
         background: "var(--cd-surface)",

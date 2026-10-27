@@ -256,7 +256,7 @@ export function YearlyTrendCard({
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-x-4 gap-y-3">
         {/* (a) 10개년 수주액 추이 */}
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold mb-1" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
             연도별 수주액 추이 (10개년)
           </p>
           <ApexChart
@@ -270,7 +270,7 @@ export function YearlyTrendCard({
 
         {/* (b) 기준연도(또는 전체 기간) 용역별 비율 도넛 */}
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold mb-1" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
             {donutLabel} 용역별 수주 비율
           </p>
           {donutSeries.length === 0 ? (
@@ -288,7 +288,7 @@ export function YearlyTrendCard({
 
         {/* (c) 선택 용역 비율 추이 */}
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold mb-1" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
             {category ? `${category} — 전체 수주액 대비 비율 추이 (7개년)` : "전체 수주액 대비 비율 추이 (7개년)"}
           </p>
           {category ? (
@@ -306,12 +306,12 @@ export function YearlyTrendCard({
 
         {/* (d) 3개년 수주액 표 */}
         <div className="min-w-0">
-          <p className="text-[11px] font-extrabold mb-1" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
             3개년 수주액
           </p>
           <div className="cd-table-section text-[11px]">
             <div
-              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-bold"
+              className="cd-table-head grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-1.5 font-semibold"
               style={{ color: "var(--cd-faint)" }}
             >
               <span>연도</span>
@@ -328,14 +328,14 @@ export function YearlyTrendCard({
                 key={entry.year}
                 className="cd-row-hover grid grid-cols-[56px_1fr_1fr] gap-x-2 items-center px-2 py-2 rounded-lg"
               >
-                <span className="font-bold" style={{ color: "var(--cd-muted)" }}>
+                <span className="font-semibold" style={{ color: "var(--cd-muted)" }}>
                   {entry.year}
                 </span>
-                <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                   {fmtFull(entry.total)}
                 </span>
                 <span
-                  className="text-right tabular-nums font-extrabold"
+                  className="text-right tabular-nums font-semibold"
                   style={{ color: category ? categoryColor : "var(--cd-faint)" }}
                 >
                   {category ? fmtFull(entry.byCategory[category] ?? 0) : "-"}
@@ -352,7 +352,7 @@ export function YearlyTrendCard({
 function EmptyHint({ label }: { label: string }) {
   return (
     <div
-      className="flex items-center justify-center h-[150px] rounded-xl text-[11px] font-bold"
+      className="flex items-center justify-center h-[150px] rounded-lg text-[11px] font-semibold"
       style={{ background: "var(--cd-surface)", color: "var(--cd-faint)", border: "1px dashed var(--cd-border)" }}
     >
       {label}

@@ -110,7 +110,7 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="shrink-0 rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-xs font-bold cd-text-muted hover:bg-[color:var(--cd-card)]"
+        className="shrink-0 rounded-lg border cd-border-c cd-surface-bg px-3 py-2 text-xs font-semibold cd-text-muted hover:bg-[color:var(--cd-card)]"
       >
         업종 수정
       </button>
@@ -138,11 +138,11 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
               />
               통합허가
             </label>
-            <button type="button" disabled={saving} onClick={addOption} className="cd-btn cd-btn-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="button" disabled={saving} onClick={addOption} className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
               추가
             </button>
           </div>
-          <div className="max-h-80 overflow-y-auto rounded-2xl border cd-border-c cd-surface-bg">
+          <div className="max-h-80 overflow-y-auto rounded-lg border cd-border-c cd-surface-bg">
             {options.map((option) => (
               <div key={option} className="flex items-center justify-between gap-3 border-b cd-border-c px-3 py-2 last:border-b-0">
                 <span className="text-sm font-semibold cd-text-muted">{option}</span>
@@ -150,7 +150,7 @@ export function IndustryOptionsEditorButton({ options, onOptionsChange }: Props)
                   type="button"
                   disabled={saving}
                   onClick={() => removeOption(option)}
-                  className="rounded-lg px-2 py-1 text-xs font-bold cd-error-text hover:bg-[color:var(--cd-error-soft)] disabled:opacity-50"
+                  className="rounded-lg px-2 py-1 text-xs font-semibold cd-error-text hover:bg-[color:var(--cd-error-soft)] disabled:opacity-50"
                 >
                   삭제
                 </button>

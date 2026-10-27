@@ -66,7 +66,7 @@ export function useAutosave(opts: {
 export function AutosaveStatus({ lastSavedAt, lastError }: { lastSavedAt: Date | null; lastError: string | null }) {
   if (lastError) {
     return (
-      <span className="text-[10.5px] whitespace-nowrap" style={{ color: "var(--cd-danger, #FA896B)" }} title={lastError}>
+      <span className="text-[10.5px] whitespace-nowrap" style={{ color: "var(--cd-error)" }} title={lastError}>
         자동 저장 실패
       </span>
     );

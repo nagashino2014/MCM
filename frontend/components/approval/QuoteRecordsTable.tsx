@@ -29,12 +29,12 @@ const won = (n: number | null) => (n != null ? n.toLocaleString("ko-KR") : "-");
 function statusBadge(status: QuoteSendStatus) {
   const color =
     status === "sent"
-      ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+      ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
       : status === "failed"
-        ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+        ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
         : status === "generated"
           ? "border-[color:var(--cd-primary,#5D87FF)] text-[color:var(--cd-primary,#5D87FF)]"
-          : "border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]";
+          : "border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]";
   return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{QUOTE_SEND_STATUS_LABEL[status] ?? status}</span>;
 }
 
@@ -43,9 +43,9 @@ const RESULT_LABEL = QUOTE_RESULT_LABEL;
 function resultBadge(result: QuotationRow["result"]) {
   const color =
     result === "won"
-      ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+      ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
       : result === "lost"
-        ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+        ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
         : "cd-border-c cd-text-faint";
   return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{RESULT_LABEL[result]}</span>;
 }
@@ -69,7 +69,7 @@ function RecipientEditGrid({ label, list, onChange }: { label: string; list: Quo
           <input className="cd-input" placeholder="직함" value={r.title ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, title: e.target.value } : x)))} />
           <div className="flex items-center gap-1">
             <input className="cd-input flex-1" placeholder="메일주소" value={r.email ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, email: e.target.value } : x)))} />
-            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
+            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -213,7 +213,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
               )}
               {quote?.validUntil && <span>유효 {quote.validUntil}까지</span>}
               {quote?.sentAt ? <span>발송 {short(quote.sentAt)}</span> : null}
-              {quote?.sendError && <span className="text-[color:var(--cd-danger,#FA896B)]">{quote.sendError}</span>}
+              {quote?.sendError && <span className="text-[color:var(--cd-error)]">{quote.sendError}</span>}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -410,7 +410,7 @@ export function QuoteRecordsTable({
                 <td className="py-2 pr-3 font-mono text-[11px] cd-text-faint">{q.issueDate ?? "-"}</td>
                 <td className="py-2 pr-3">
                   {statusBadge(q.sendStatus)}
-                  {q.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">클릭 후 재발송</span>}
+                  {q.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
                 </td>
                 <td className="py-2 pr-3">{resultBadge(q.result)}</td>
                 {/* 재견적(269) — 이 건의 최신 버전을 복사해 새 버전으로 작성한다. 행 클릭(뷰어)과 분리 */}

@@ -193,7 +193,7 @@ export function ApprovalPolicyBoard() {
                     <option value="block">차단</option>
                   </select>
                 </label>
-                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => remove(i)} title="삭제">
+                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => remove(i)} title="삭제">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>

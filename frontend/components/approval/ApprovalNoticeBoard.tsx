@@ -579,9 +579,9 @@ export function ApprovalNoticeBoard() {
                 ) : manualCheck == null ? (
                   <span className="text-[10.5px] cd-text-faint">중복 확인 중...</span>
                 ) : manualCheck.available ? (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능한 번호입니다</span>
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-success)" }}>사용 가능한 번호입니다</span>
                 ) : (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>
                     이미 사용 중 — {manualCheck.usedBy}
                   </span>
                 ))}
@@ -676,7 +676,7 @@ export function ApprovalNoticeBoard() {
                     placeholder="예: ○○ 규정  1부"
                     onChange={(e) => setAttachItems((prev) => prev.map((x, xi) => (xi === i ? e.target.value : x)))}
                   />
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setAttachItems((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setAttachItems((prev) => prev.filter((_, xi) => xi !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -745,7 +745,7 @@ export function ApprovalNoticeBoard() {
                         <span className="text-[10.5px] cd-text-faint shrink-0">{(f.size / 1024 / 1024).toFixed(2)}MB</span>
                         <button
                           type="button"
-                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                          className="cd-text-faint hover:text-[color:var(--cd-error)]"
                           onClick={() => setFileAttachments((prev) => prev.filter((_, xi) => xi !== i))}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -773,7 +773,7 @@ export function ApprovalNoticeBoard() {
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
-                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
                       ×
                     </button>
                   </span>
@@ -799,7 +799,7 @@ export function ApprovalNoticeBoard() {
                     {s.assigneeName}
                     {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                   </span>
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -833,7 +833,7 @@ export function ApprovalNoticeBoard() {
                     <option value="view">열람</option>
                   </select>
                   <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>

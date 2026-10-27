@@ -160,14 +160,14 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
         </div>
         {open && items.length > 0 && (
           <div
-            className="absolute z-20 mt-1 w-full rounded-xl overflow-hidden border max-h-52 overflow-y-auto scrollbar-hide"
+            className="absolute z-20 mt-1 w-full rounded-lg overflow-hidden border max-h-52 overflow-y-auto scrollbar-hide"
             style={{ background: "var(--cd-card)", borderColor: "var(--cd-border)", boxShadow: "var(--cd-shadow)" }}
           >
             {items.map((item) => (
               <button
                 key={item.facilityId}
                 type="button"
-                className="cd-row-hover w-full text-left px-3 py-2 text-xs font-bold flex items-center justify-between gap-2"
+                className="cd-row-hover w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between gap-2"
                 style={{ color: "var(--cd-text)" }}
                 onClick={() => {
                   setOpen(false);
@@ -187,7 +187,7 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
 
       {!detail && !loadingDetail && (
         <div
-          className="flex-1 rounded-xl flex items-center justify-center text-xs font-semibold text-center px-4 py-10"
+          className="flex-1 rounded-lg flex items-center justify-center text-xs font-semibold text-center px-4 py-10"
           style={{ background: "var(--cd-surface)", color: "var(--cd-faint)" }}
         >
           업체명을 검색해 발주처를 선택하면
@@ -197,7 +197,7 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
       )}
       {loadingDetail && (
         <div
-          className="flex-1 rounded-xl flex items-center justify-center text-xs font-semibold py-10 animate-pulse"
+          className="flex-1 rounded-lg flex items-center justify-center text-xs font-semibold py-10 animate-pulse"
           style={{ background: "var(--cd-surface)", color: "var(--cd-faint)" }}
         >
           발주처 데이터를 불러오는 중…
@@ -205,7 +205,7 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
       )}
       {error && !loadingDetail && (
         <div
-          className="flex-1 rounded-xl flex items-center justify-center text-xs font-semibold py-10"
+          className="flex-1 rounded-lg flex items-center justify-center text-xs font-semibold py-10"
           style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
         >
           조회 실패: {error}
@@ -216,7 +216,7 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           {/* 연도별 추이 */}
           <div>
-            <p className="text-[11px] font-bold mb-1" style={{ color: "var(--cd-faint)" }}>
+            <p className="text-[11px] font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
               연도별 수주/매출 추이
             </p>
             <ApexChart options={chartOptions} series={chartSeries} type="bar" height={170} />
@@ -224,7 +224,7 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
 
           {/* 기준연도 현황 */}
           <div className="text-[11px] flex flex-col gap-1">
-            <p className="font-bold" style={{ color: "var(--cd-faint)" }}>
+            <p className="font-semibold" style={{ color: "var(--cd-faint)" }}>
               수주/매출 현황({detail.current.year}년)
             </p>
             <InfoRow label="업체명" value={detail.name} />
@@ -238,11 +238,11 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
 
           {/* 수주실적 상세 */}
           <div className="flex-1 min-h-0 flex flex-col text-[11px]">
-            <p className="font-bold mb-1" style={{ color: "var(--cd-faint)" }}>
+            <p className="font-semibold mb-1" style={{ color: "var(--cd-faint)" }}>
               수주실적 상세({detail.current.year}년)
             </p>
             <div
-              className="grid grid-cols-[64px_1fr_72px] gap-x-2 px-2 py-1.5 rounded-lg font-bold"
+              className="grid grid-cols-[64px_1fr_72px] gap-x-2 px-2 py-1.5 rounded-lg font-semibold"
               style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
             >
               <span>계약일</span>
@@ -259,10 +259,10 @@ export function CounterpartyCard({ theme, year }: { theme: CdTheme; year: string
                   <span className="tabular-nums" style={{ color: "var(--cd-faint)" }}>
                     {c.contractDate?.slice(2) ?? "-"}
                   </span>
-                  <span className="truncate font-bold" style={{ color: "var(--cd-text)" }} title={c.contractTitle}>
+                  <span className="truncate font-semibold" style={{ color: "var(--cd-text)" }} title={c.contractTitle}>
                     {c.contractTitle}
                   </span>
-                  <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                  <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                     {fmtFull(c.amount)}
                   </span>
                 </Link>
@@ -297,10 +297,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       className="grid grid-cols-[64px_1fr] gap-2 items-center px-2.5 py-1.5 rounded-lg"
       style={{ background: "var(--cd-surface)" }}
     >
-      <span className="font-bold" style={{ color: "var(--cd-muted)" }}>
+      <span className="font-semibold" style={{ color: "var(--cd-muted)" }}>
         {label}
       </span>
-      <span className="text-right font-extrabold truncate tabular-nums" style={{ color: "var(--cd-text)" }}>
+      <span className="text-right font-semibold truncate tabular-nums" style={{ color: "var(--cd-text)" }}>
         {value}
       </span>
     </div>

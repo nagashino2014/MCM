@@ -140,7 +140,7 @@ export function LeaveNoticeInboxCard() {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    sent: { label: "회신 필요", cls: "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]" },
+    sent: { label: "회신 필요", cls: "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]" },
     submitted: { label: "제출 완료", cls: "cd-tint-primary cd-text-primary" },
     assigned: { label: "지정 통보", cls: "cd-tint-primary cd-text-primary" },
   };
@@ -202,7 +202,7 @@ function ReplyForm({ notice, onDone, onCancel }: { notice: MyNotice; onDone: () 
             />
             <button
               type="button"
-              className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-30"
+              className="cd-text-faint hover:text-[color:var(--cd-error)] disabled:opacity-30"
               onClick={() => delDate(i)}
               disabled={dates.length <= 1}
               title="삭제"

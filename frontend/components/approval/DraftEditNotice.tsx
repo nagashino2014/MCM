@@ -77,7 +77,7 @@ export function DeleteDraftButton({
   return (
     <button
       type="button"
-      className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-50"
+      className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5 cd-text-faint hover:text-[color:var(--cd-error)] disabled:opacity-50"
       disabled={busy}
       title="이 기안을 완전히 삭제합니다 — 되돌릴 수 없습니다"
       onClick={async () => {

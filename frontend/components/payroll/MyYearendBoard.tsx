@@ -222,7 +222,7 @@ export function MyYearendBoard() {
           {(error || notice) && (
             <div className="shrink-0">
               {error && <div className="cd-error-text text-sm">{error}</div>}
-              {notice && <div className="text-sm" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+              {notice && <div className="text-sm" style={{ color: "var(--cd-success)" }}>{notice}</div>}
             </div>
           )}
 
@@ -438,7 +438,7 @@ export function MyYearendBoard() {
 }
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "info" | "danger" }) {
-  const color = tone === "info" ? "var(--cd-info,#539BFF)" : tone === "danger" ? "var(--cd-danger,#FA896B)" : undefined;
+  const color = tone === "info" ? "var(--cd-info,#539BFF)" : tone === "danger" ? "var(--cd-error)" : undefined;
   return (
     <div className="border cd-border-c rounded-xl px-3.5 py-3 min-w-0">
       <div className="text-[11.5px] cd-text-faint">{label}</div>
@@ -462,7 +462,7 @@ function ReportTable({
       <table className="w-full text-[13px]">
         <tbody>
           {rows.map((row, i) => {
-            const color = row.tone === "info" ? "var(--cd-info,#539BFF)" : row.tone === "danger" ? "var(--cd-danger,#FA896B)" : undefined;
+            const color = row.tone === "info" ? "var(--cd-info,#539BFF)" : row.tone === "danger" ? "var(--cd-error)" : undefined;
             return (
               <tr
                 key={i}

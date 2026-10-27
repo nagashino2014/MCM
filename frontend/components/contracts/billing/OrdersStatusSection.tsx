@@ -295,7 +295,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
       {/* 필터 바: 용역 선택 / 업종 선택 / 연도 선택 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
             용역 선택
           </span>
           <button
@@ -324,7 +324,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             업종 선택
           </span>
           <select
@@ -349,7 +349,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             기준 연도
           </span>
           <select
@@ -370,7 +370,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
 
       {error && (
         <p
-          className="text-[11px] font-bold px-3 py-2 rounded-lg"
+          className="text-[11px] font-semibold px-3 py-2 rounded-lg"
           style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
         >
           불러오기 실패: {error}
@@ -404,7 +404,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
           {/* 선택 지역 */}
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
             <span
-              className="inline-flex items-center gap-1.5 text-[12px] font-extrabold px-3 py-1.5 rounded-lg"
+              className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
             >
               <MapPin className="w-3.5 h-3.5" />
@@ -462,7 +462,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
             />
             {/* 범례 */}
             <div className="absolute right-0 top-1 flex flex-col items-end gap-1">
-              <span className="text-[10px] font-bold" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                 수주액
               </span>
               <div
@@ -472,7 +472,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
                   border: "1px solid var(--cd-border)",
                 }}
               />
-              <span className="text-[9px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-[11px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
                 {maxAmount > 0 ? fmtFull(maxAmount) : "0"}
               </span>
             </div>
@@ -491,7 +491,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
               수주 계약 리스트
             </p>
             <span
-              className="ml-auto text-[11px] font-extrabold px-3 py-1.5 rounded-lg"
+              className="ml-auto text-[11px] font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: "var(--cd-surface)", color: "var(--cd-muted)", border: "1px solid var(--cd-border)" }}
             >
               총 수주 건수{" "}
@@ -500,7 +500,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
               </span>
             </span>
             <span
-              className="text-[11px] font-extrabold px-3 py-1.5 rounded-lg"
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: "var(--cd-surface)", color: "var(--cd-muted)", border: "1px solid var(--cd-border)" }}
             >
               총 수주 금액{" "}
@@ -536,7 +536,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
 
           {/* 열 레이블 */}
           <div
-            className="cdb-list-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            className="cdb-list-row cd-table-head !cursor-default text-[11px] font-semibold"
             style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
@@ -592,10 +592,10 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
                   }}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                    <span className="block truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                       {row.contractTitle}
                     </span>
-                    <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                    <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                       <span
                         className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                         style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -606,7 +606,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
                   <span className="text-center tabular-nums text-[11px]" style={{ color: "var(--cd-muted)" }}>
                     {row.contractDate ?? "-"}
                   </span>
-                  <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                  <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                     {row.amount > 0 ? fmtFull(row.amount) : "-"}
                   </span>
                 </div>
@@ -695,18 +695,18 @@ function OrdersMapSummary({
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: "var(--cd-primary)" }}>
+          <p className="text-[11px] font-medium" style={{ color: "var(--cd-primary)" }}>
             Orders Index
           </p>
-          <p className="text-[15px] font-extrabold truncate" style={{ color: "var(--cd-text)" }}>
+          <p className="text-[14px] font-semibold truncate" style={{ color: "var(--cd-text)" }}>
             {yearLabel} 수주 현황({regionLabel})
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[10px] font-bold" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             총 수주액
           </p>
-          <p className="text-[13px] font-extrabold tabular-nums" style={{ color: "var(--cd-text)" }}>
+          <p className="text-[13px] font-semibold tabular-nums" style={{ color: "var(--cd-text)" }}>
             {totalAmount > 0 ? `${fmtCompact(totalAmount)}원` : "-"}
           </p>
         </div>
@@ -842,12 +842,12 @@ function MiniDonut({
   );
 
   return (
-    <div className="rounded-2xl px-2 py-2" style={{ background: "var(--cd-surface)" }}>
-      <p className="text-[10px] font-extrabold mb-1 truncate" style={{ color: "var(--cd-muted)" }}>
+    <div className="rounded-lg px-2 py-2" style={{ background: "var(--cd-surface)" }}>
+      <p className="text-[11px] font-semibold mb-1 truncate" style={{ color: "var(--cd-muted)" }}>
         {title}
       </p>
       {total <= 0 ? (
-        <div className="h-[88px] flex items-center justify-center text-[10px] font-bold text-center px-2" style={{ color: "var(--cd-faint)" }}>
+        <div className="h-[88px] flex items-center justify-center text-[11px] font-semibold text-center px-2" style={{ color: "var(--cd-faint)" }}>
           {emptyLabel}
         </div>
       ) : (
@@ -865,12 +865,12 @@ function MiniDonut({
             {legendLabels.slice(0, 5).map((label, idx) => {
               const pct = total > 0 ? Math.round((series[idx] / total) * 100) : 0;
               return (
-                <div key={`${label}-${idx}`} className="flex items-center gap-1 min-w-0 text-[9px] leading-tight">
+                <div key={`${label}-${idx}`} className="flex items-center gap-1 min-w-0 text-[11px] leading-tight">
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: colors[idx] ?? "var(--cd-faint)" }} />
-                  <span className="truncate font-bold" style={{ color: "var(--cd-muted)" }} title={labels[idx]}>
+                  <span className="truncate font-semibold" style={{ color: "var(--cd-muted)" }} title={labels[idx]}>
                     {label}
                   </span>
-                  <span className="ml-auto tabular-nums font-bold" style={{ color: "var(--cd-faint)" }}>
+                  <span className="ml-auto tabular-nums font-semibold" style={{ color: "var(--cd-faint)" }}>
                     {pct}%
                   </span>
                 </div>

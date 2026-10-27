@@ -131,7 +131,7 @@ export function RateCardEditor({
 
       {/* ① 단가 기준표 — 항목·단가만 */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold cd-text-muted flex items-center gap-1">
+        <span className="text-xs font-semibold cd-text-muted flex items-center gap-1">
           ① 단가 기준표 (항목·단가)
           <CdHelp topic="contracts.rate-card" />
         </span>
@@ -195,7 +195,7 @@ export function RateCardEditor({
           />
           <button
             type="button"
-            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50"
+            className="rounded-lg p-1.5 cd-error-text hover:cd-error-bg"
             title="이 항목 삭제(모든 차수에서 제거)"
             onClick={() => removeItem(it.id)}
           >
@@ -213,7 +213,7 @@ export function RateCardEditor({
 
       <button
         type="button"
-        className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-sm cd-text-muted inline-flex items-center gap-2 justify-center"
+        className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-sm cd-text-muted inline-flex items-center gap-2 justify-center"
         onClick={() =>
           onChange({ ...data, items: [...data.items, createRateCardItem(data.items[data.items.length - 1]?.groupName ?? "")] })
         }
@@ -224,15 +224,15 @@ export function RateCardEditor({
 
       {/* ② 차수표 — 수량·금액 산출 전담 */}
       <div className="flex flex-wrap items-center gap-1.5 border-t cd-border-c pt-3">
-        <span className="text-xs font-bold cd-text-muted mr-1">② 차수표 (산정 수량·금액)</span>
+        <span className="text-xs font-semibold cd-text-muted mr-1">② 차수표 (산정 수량·금액)</span>
         {data.rounds.map((r) => (
           <button
             key={r.id}
             type="button"
             className={
-              "rounded-full px-3 py-1 text-[11px] font-bold border " +
+              "rounded-full px-3 py-1 text-[11px] font-semibold border " +
               (r.id === activeRound?.id
-                ? "cd-fill-primary text-white border-transparent shadow-sm"
+                ? "cd-fill-primary text-white border-transparent"
                 : "cd-border-c cd-text-muted hover:cd-tint-primary")
             }
             onClick={() => setActiveRoundId(r.id)}
@@ -242,7 +242,7 @@ export function RateCardEditor({
         ))}
         <button
           type="button"
-          className="rounded-full px-2.5 py-1 text-[11px] font-bold border border-dashed cd-border-c cd-text-faint hover:cd-tint-primary inline-flex items-center gap-1"
+          className="rounded-full px-2.5 py-1 text-[11px] font-semibold border border-dashed cd-border-c cd-text-faint hover:cd-tint-primary inline-flex items-center gap-1"
           onClick={addRound}
         >
           <Plus className="w-3 h-3" />
@@ -251,7 +251,7 @@ export function RateCardEditor({
       </div>
 
       {data.rounds.length === 0 && (
-        <p className="rounded-xl border cd-border-c p-3 text-xs cd-text-muted">
+        <p className="rounded-lg border cd-border-c p-3 text-xs cd-text-muted">
           아직 차수가 없습니다. <b>차수 추가</b>를 눌러 산정 수량을 입력하면 금액이 계산되고, 청구·수금 단계
           목록이 만들어집니다. (일반 단가 계약도 차수 1개를 만들어 수량을 입력합니다.)
         </p>
@@ -260,10 +260,10 @@ export function RateCardEditor({
       {activeRound && (
         <>
           {/* 선택 차수 상세 — 차수명·기준일 + 지급 단위(선급/중도/준공) 목록 */}
-          <div className="rounded-xl border cd-border-c p-2.5 grid gap-2">
+          <div className="rounded-lg border cd-border-c p-2.5 grid gap-2">
             <div className="grid grid-cols-[minmax(0,1fr)_150px_28px] gap-2 items-end">
               <label className="grid gap-1 text-[11px]">
-                <span className="cd-text-faint font-bold">차수명</span>
+                <span className="cd-text-faint font-semibold">차수명</span>
                 <input
                   className="cd-input"
                   value={activeRound.label}
@@ -272,7 +272,7 @@ export function RateCardEditor({
                 />
               </label>
               <label className="grid gap-1 text-[11px]">
-                <span className="cd-text-faint font-bold">견적 기준일</span>
+                <span className="cd-text-faint font-semibold">견적 기준일</span>
                 <AutoDateInput
                   className="cd-input tabular-nums"
                   value={activeRound.date}
@@ -281,7 +281,7 @@ export function RateCardEditor({
               </label>
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 mb-0.5"
+                className="rounded-lg p-1.5 cd-error-text hover:cd-error-bg mb-0.5"
                 title="이 차수 삭제"
                 onClick={() => removeRound(activeRound.id)}
               >
@@ -290,7 +290,7 @@ export function RateCardEditor({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] cd-text-faint font-bold mr-0.5">지급 단위</span>
+              <span className="text-[11px] cd-text-faint font-semibold mr-0.5">지급 단위</span>
               {activeRound.payments.map((p, idx) => (
                 <span key={idx} className="inline-flex items-center gap-1 rounded-lg border cd-border-c px-1.5 py-1">
                   <input
@@ -313,10 +313,10 @@ export function RateCardEditor({
                       updateRound(activeRound.id, { payments });
                     }}
                   />
-                  <span className="text-[10px] cd-text-faint">%</span>
+                  <span className="text-[11px] cd-text-faint">%</span>
                   <button
                     type="button"
-                    className="text-rose-600 hover:opacity-70"
+                    className="cd-error-text hover:opacity-70"
                     title="이 지급 단위 삭제"
                     onClick={() => updateRound(activeRound.id, { payments: activeRound.payments.filter((_, i) => i !== idx) })}
                   >
@@ -326,7 +326,7 @@ export function RateCardEditor({
               ))}
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-[11px] font-bold border border-dashed cd-border-c cd-text-faint hover:cd-tint-primary inline-flex items-center gap-1"
+                className="rounded-lg px-2 py-1 text-[11px] font-semibold border border-dashed cd-border-c cd-text-faint hover:cd-tint-primary inline-flex items-center gap-1"
                 title="중도금 등 지급 단위 추가 — 마지막 단위(준공금) 앞에 끼워 넣습니다."
                 onClick={() => {
                   const payments = activeRound.payments.slice();
@@ -339,7 +339,7 @@ export function RateCardEditor({
                 <Plus className="w-3 h-3" />
                 지급 단위 추가
               </button>
-              <span className="text-[10px] cd-text-faint">
+              <span className="text-[11px] cd-text-faint">
                 마지막 단위 금액은 잔액으로 맞춰집니다. 모두 지우면 구분별 청구.
               </span>
             </div>
@@ -397,7 +397,7 @@ export function RateCardEditor({
                     )}
                     <input
                       className={
-                        "cd-input text-right tabular-nums " + (overridden ? "text-amber-600 font-bold" : "opacity-80")
+                        "cd-input text-right tabular-nums " + (overridden ? "cd-warn-text font-semibold" : "opacity-80")
                       }
                       inputMode="numeric"
                       title={
@@ -418,15 +418,15 @@ export function RateCardEditor({
 
       {/* 요약 — 구분 소계 모드(단일 차수·선급률 없음) / 차수별 소계·선급/준공 분해 */}
       {groupMode && groups.length > 0 && (
-        <div className="rounded-2xl border cd-border-c p-3 grid gap-1 text-xs">
-          <div className="font-bold cd-text-muted mb-1">구분별 소계 (청구 단계 금액)</div>
+        <div className="rounded-lg border cd-border-c p-3 grid gap-1 text-xs">
+          <div className="font-semibold cd-text-muted mb-1">구분별 소계 (청구 단계 금액)</div>
           {groups.map((g) => (
             <div key={g} className="flex items-center justify-between">
               <span className="cd-text-muted">{g}</span>
               <span className="tabular-nums cd-text">{rateCardGroupTotal(data, g).toLocaleString("ko-KR")}원</span>
             </div>
           ))}
-          <div className="flex items-center justify-between border-t cd-border-c pt-1 mt-1 font-bold">
+          <div className="flex items-center justify-between border-t cd-border-c pt-1 mt-1 font-semibold">
             <span className="cd-text">총계</span>
             <span className="tabular-nums cd-text-primary">{rateCardTotal(data).toLocaleString("ko-KR")}원</span>
           </div>
@@ -434,15 +434,15 @@ export function RateCardEditor({
       )}
 
       {!groupMode && data.rounds.length > 0 && (
-        <div className="rounded-2xl border cd-border-c p-3 grid gap-1.5 text-xs">
-          <div className="font-bold cd-text-muted mb-0.5">차수별 소계 · 지급 단위 분해</div>
+        <div className="rounded-lg border cd-border-c p-3 grid gap-1.5 text-xs">
+          <div className="font-semibold cd-text-muted mb-0.5">차수별 소계 · 지급 단위 분해</div>
           {data.rounds.map((r) => {
             const total = roundTotal(data, r);
             if (total <= 0) return null;
             const split = paymentSplit(total, r.payments);
             return (
               <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="cd-text-muted font-bold min-w-[92px]">
+                <span className="cd-text-muted font-semibold min-w-[92px]">
                   {r.label || "차수"}
                   {r.date ? <span className="cd-text-faint font-normal"> {r.date}</span> : null}
                 </span>
@@ -455,7 +455,7 @@ export function RateCardEditor({
                 {onAddStages && (
                   <button
                     type="button"
-                    className="ml-auto cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] font-bold cd-text-primary"
+                    className="ml-auto cd-btn cd-btn-ghost rounded-lg px-2.5 py-1 text-[11px] font-semibold cd-text-primary"
                     onClick={() => onAddStages(r, roundStageOptions(data, r))}
                   >
                     청구·수금 단계로 추가
@@ -464,7 +464,7 @@ export function RateCardEditor({
               </div>
             );
           })}
-          <div className="flex items-center justify-between border-t cd-border-c pt-1 mt-1 font-bold">
+          <div className="flex items-center justify-between border-t cd-border-c pt-1 mt-1 font-semibold">
             <span className="cd-text">총계</span>
             <span className="tabular-nums cd-text-primary">{rateCardTotal(data).toLocaleString("ko-KR")}원</span>
           </div>

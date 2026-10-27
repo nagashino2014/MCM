@@ -491,7 +491,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
       {/* 필터 바 1행: 용역 선택 + 연도 선택 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
             용역 선택
           </span>
           <button
@@ -520,7 +520,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             기준 연도
           </span>
           <select
@@ -541,7 +541,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
       {/* 필터 바 2행: 용역 세분류 (통합환경허가 선택 시에만 활성화) */}
       <div className="flex items-center gap-1.5 flex-wrap -mt-1.5">
-        <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+        <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
           용역 세분류
         </span>
         {INTEGRATED_SUBTYPES.map((sub) => (
@@ -558,7 +558,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
           </button>
         ))}
         {!subtypeEnabled && (
-          <span className="text-[10px] font-bold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             — 통합환경허가 선택 시 활성화
           </span>
         )}
@@ -566,7 +566,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
       {error && (
         <p
-          className="text-[11px] font-bold px-3 py-2 rounded-lg"
+          className="text-[11px] font-semibold px-3 py-2 rounded-lg"
           style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
         >
           불러오기 실패: {error}
@@ -612,9 +612,9 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
           {/* 총 완료 건수 */}
           <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
-            <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
               총 완료 건수{" "}
-              <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                 {listRows.length.toLocaleString()}건
               </span>
             </span>
@@ -622,7 +622,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
           {/* 열 레이블 */}
           <div
-            className="cdb-completion-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            className="cdb-completion-row cd-table-head !cursor-default text-[11px] font-semibold"
             style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
@@ -650,10 +650,10 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
                   onClick={() => openContract(row)}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                    <span className="block truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                       {row.contractTitle}
                     </span>
-                    <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                    <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                       <span
                         className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                         style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -666,13 +666,13 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
                     {row.contractDate ?? "-"}
                   </span>
                   <span
-                    className="text-center tabular-nums text-[11px] font-bold"
+                    className="text-center tabular-nums text-[11px] font-semibold"
                     style={{ color: row.permitDate ? "var(--cd-text)" : "var(--cd-faint)" }}
                   >
                     {row.permitDate ?? "-"}
                   </span>
                   <span
-                    className="text-center tabular-nums text-[11px] font-bold"
+                    className="text-center tabular-nums text-[11px] font-semibold"
                     style={{ color: row.invoiceDoneDate ? "var(--cd-text)" : "var(--cd-faint)" }}
                   >
                     {row.invoiceDoneDate ?? "-"}
@@ -691,7 +691,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
             </span>
             연도별 완료 건수 추이
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             계약일 기준 · 완료일(허가일) 혹은 완료일(발행일) 존재 건
           </p>
           <ApexChart
@@ -711,7 +711,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
             </span>
             {yearLabel} 용역별 완료 비율
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             {isAllYears ? "전체 기간" : "해당 연도"} 용역별 계약 건수 대비
           </p>
           {ratioByCategory.length === 0 ? (
@@ -735,7 +735,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
             </span>
             7개년도 평균 완료 소요기간
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             계약일 → 완료일(허가일 우선, 없으면 발행일)까지의 평균 기간
           </p>
           {periodStats.every((e) => e.all === 0) ? (
@@ -759,7 +759,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
             </span>
             {yearLabel} 세부분류별 완료 비율
           </p>
-          <p className="text-[10px] font-bold mb-4" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-4" style={{ color: "var(--cd-faint)" }}>
             선택 용역의 세분류별 계약 건수 대비
           </p>
           {!category ? (
@@ -822,7 +822,7 @@ function subtypePalette(baseHex: string, index: number): string {
 function EmptyHint({ label, height }: { label: string; height: number }) {
   return (
     <div
-      className="flex items-center justify-center rounded-xl text-[11px] font-bold text-center px-3"
+      className="flex items-center justify-center rounded-lg text-[11px] font-semibold text-center px-3"
       style={{
         height,
         background: "var(--cd-surface)",

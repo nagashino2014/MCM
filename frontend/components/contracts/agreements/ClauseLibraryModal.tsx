@@ -70,13 +70,13 @@ export function ClauseLibraryModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={onClose}>
       <div
-        className="cdash cd-fields-white rounded-2xl cd-solid-bg shadow-2xl w-full max-w-[1000px] h-[86vh] flex flex-col overflow-hidden"
+        className="cdash cd-fields-white rounded-lg cd-solid-bg shadow-[var(--cd-shadow-dialog)] w-full max-w-[1000px] h-[86vh] flex flex-col overflow-hidden"
         data-theme={theme}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-5 py-3 border-b cd-border-c">
           <BookOpen className="w-4 h-4 cd-text-primary" />
-          <span className="text-sm font-bold cd-text">조항 라이브러리</span>
+          <span className="text-sm font-semibold cd-text">조항 라이브러리</span>
           <span className="text-[11px] cd-text-faint">과거 계약서·표준 셋의 조문을 골라 삽입합니다</span>
           <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -117,7 +117,7 @@ export function ClauseLibraryModal({
                 <button
                   key={c.clauseId}
                   type="button"
-                  className={`rounded-xl border px-3 py-2 text-left flex items-start gap-2 ${
+                  className={`rounded-lg border px-3 py-2 text-left flex items-start gap-2 ${
                     preview?.clauseId === c.clauseId ? "cd-tint-primary border-transparent" : "cd-solid-bg cd-border-c"
                   }`}
                   onClick={() => setPreview(c)}
@@ -134,10 +134,10 @@ export function ClauseLibraryModal({
                     {picked[c.clauseId] && <Check className="w-3 h-3 text-white" />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[12.5px] font-semibold cd-text truncate">{c.title}</span>
+                    <span className="block text-[13px] font-semibold cd-text truncate">{c.title}</span>
                     <span className="block text-[11px] cd-text-faint truncate">{c.body.replace(/\s+/g, " ").slice(0, 60)}</span>
                   </span>
-                  <span className="text-[10px] cd-text-faint shrink-0">{c.category}</span>
+                  <span className="text-[11px] cd-text-faint shrink-0">{c.category}</span>
                 </button>
               ))
             )}
@@ -148,23 +148,23 @@ export function ClauseLibraryModal({
             {preview ? (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-bold cd-text">{preview.title}</h4>
-                  <span className="text-[10.5px] rounded-full border cd-border-c px-1.5 py-0.5 cd-text-faint">{preview.category}</span>
-                  {preview.usageCount > 0 && <span className="text-[10.5px] cd-text-faint">{preview.usageCount}회 사용</span>}
+                  <h4 className="text-sm font-semibold cd-text">{preview.title}</h4>
+                  <span className="text-[11px] rounded-full border cd-border-c px-1.5 py-0.5 cd-text-faint">{preview.category}</span>
+                  {preview.usageCount > 0 && <span className="text-[11px] cd-text-faint">{preview.usageCount}회 사용</span>}
                   <button
                     type="button"
                     data-active={!!picked[preview.clauseId]}
                     aria-pressed={!!picked[preview.clauseId]}
-                    className={`cd-choice ml-auto cd-btn rounded-lg px-3 py-1.5 text-[11.5px] font-semibold ${picked[preview.clauseId] ? "cd-btn-primary" : "border cd-border-c"}`}
+                    className={`cd-choice ml-auto cd-btn rounded-lg px-3 py-1.5 text-[12px] font-semibold ${picked[preview.clauseId] ? "cd-btn-primary" : "border cd-border-c"}`}
                     onClick={() => toggle(preview)}
                   >
                     {picked[preview.clauseId] ? "선택됨" : "선택"}
                   </button>
                 </div>
-                <pre className="text-[12px] cd-text whitespace-pre-wrap leading-relaxed font-sans rounded-xl border cd-border-c p-3">
+                <pre className="text-[12px] cd-text whitespace-pre-wrap leading-relaxed font-sans rounded-lg border cd-border-c p-3">
                   {preview.body}
                 </pre>
-                <p className="text-[10.5px] cd-text-faint">
+                <p className="text-[11px] cd-text-faint">
                   {"{{contract.title}}"} 같은 토큰은 삽입 후 문서 값으로 자동 치환됩니다.
                 </p>
               </div>

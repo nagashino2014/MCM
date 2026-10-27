@@ -176,7 +176,7 @@ function FieldCell({
     <div className="flex min-w-0 border-t md:border-t-0 md:border-l first:border-l-0 first:border-t-0 cd-border-c" style={{ flex: span }}>
       <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-bold cd-surface-bg cd-text flex items-center">
         <span>
-          {f.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
+          {f.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
           {f.label}
           {autoFilled && <span className="ml-1 text-[10px] font-medium cd-text-primary">자동</span>}
         </span>
@@ -953,7 +953,7 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
         <span
           className={`text-[11.5px] rounded-full px-2.5 py-1 shrink-0 ${
             badge.tone === "ok"
-              ? "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+              ? "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
               : badge.tone === "primary"
                 ? "cd-tint-primary"
                 : "border cd-border-c cd-text-faint"
@@ -1178,7 +1178,7 @@ function TableInput({
                 className="border cd-border-c px-2 py-1.5 cd-surface-bg cd-text font-bold whitespace-nowrap"
                 style={c.width ? { width: c.width } : undefined}
               >
-                {c.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
+                {c.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
                 {/* 조건부 필수(연관 용역/사업장) — 지출 목적에 따라 필수라 흐린 * 로 구분한다 */}
                 {!c.required && c.requiredWhen && (
                   <span className="cd-text-faint mr-0.5" title={`${c.requiredWhen.values.join(", ")} 이면 필수`}>*</span>
@@ -1392,7 +1392,7 @@ function TableInput({
                 <td className="w-7 text-center">
                   <button
                     type="button"
-                    className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    className="cd-text-faint hover:text-[color:var(--cd-error)]"
                     title="행 삭제"
                     onClick={() => onSet(rows.filter((_, i) => i !== ri))}
                   >
@@ -1403,7 +1403,7 @@ function TableInput({
             </tr>
             {rowIssue && (
               <tr>
-                <td colSpan={cols.length + 1} className="px-2 py-1 text-[11.5px]" style={{ color: "var(--cd-danger,#FA896B)" }}>
+                <td colSpan={cols.length + 1} className="px-2 py-1 text-[11.5px]" style={{ color: "var(--cd-error)" }}>
                   {ri + 1}행: {rowIssue} — 행을 삭제하고 불러오기로 다시 담으세요.
                 </td>
               </tr>

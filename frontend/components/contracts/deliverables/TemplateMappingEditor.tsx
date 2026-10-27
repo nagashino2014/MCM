@@ -254,7 +254,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
         <div className="min-w-0">
           <button
             type="button"
-            className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
+            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[13px] flex items-center gap-1.5"
             onClick={close}
           >
             <ArrowLeft className="w-3.5 h-3.5" /> 매핑 확인으로
@@ -266,7 +266,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
           </span>
           <button
             type="button"
-            className="cd-btn cd-fill-primary rounded-xl px-4 py-2 text-[13px] flex items-center gap-1.5"
+            className="cd-btn cd-fill-primary rounded-lg px-4 py-2 text-[13px] flex items-center gap-1.5"
             onClick={() => void save()}
             disabled={saving || loading}
           >
@@ -275,14 +275,14 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
         </div>
       </div>
 
-      <div className="rounded-xl border cd-border-c px-3.5 py-2 text-[11.5px] cd-text-faint">
+      <div className="rounded-lg border cd-border-c px-3.5 py-2 text-[12px] cd-text-faint">
         <b className="cd-text">{name}</b> — 왼쪽 원본에서 값이 들어갈 자리를 누르면 오른쪽에 매핑이 붙습니다. 문단 자리는{" "}
         <b className="cd-text">라벨 뒤부터 접미어 앞까지</b>가 값으로 바뀝니다(라벨의 자간 공백은 무시하고 찾습니다). 표 자리는
         칸 전체가 값으로 바뀝니다.
       </div>
 
       {msg && (
-        <div className="rounded-xl px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-tint)", color: "var(--cd-text)" }}>
+        <div className="rounded-lg px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-tint)", color: "var(--cd-text)" }}>
           {msg}
         </div>
       )}
@@ -292,15 +292,15 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
       ) : (
         <div className="flex flex-col xl:flex-row gap-5 items-start">
           {/* 좌: 원본 구조 */}
-          <section className="cd-card rounded-3xl overflow-hidden w-full xl:flex-[6] min-w-0">
+          <section className="cd-card rounded-lg overflow-hidden w-full xl:flex-[6] min-w-0">
             <div className="p-4 border-b cd-border-c">
-              <h2 className="font-bold cd-text text-sm">원본 문서</h2>
+              <h2 className="font-semibold cd-text text-sm">원본 문서</h2>
               <p className="text-[11px] cd-text-faint mt-0.5">
                 연번은 원본의 문단·표 순서입니다. 색이 들어간 줄이 값 자리로 잡힌 곳입니다.
               </p>
             </div>
             <div className="p-3 overflow-auto" style={{ maxHeight: "calc(100vh - 320px)" }}>
-              {!outline && <p className="text-[12.5px] cd-text-faint py-8 text-center">원본 개요가 없습니다.</p>}
+              {!outline && <p className="text-[13px] cd-text-faint py-8 text-center">원본 개요가 없습니다.</p>}
               {outline?.paras.map((p) => {
                 const head = docStartAt.get(p.index);
                 const key = `p${p.index}`;
@@ -310,7 +310,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                   <div key={p.index}>
                     {head && (
                       <div className="mt-3 mb-1.5 flex items-center gap-2">
-                        <span className="text-[11.5px] font-semibold cd-text-primary">{head.title}</span>
+                        <span className="text-[12px] font-semibold cd-text-primary">{head.title}</span>
                         <span className="flex-1 border-t cd-border-c" />
                       </div>
                     )}
@@ -366,12 +366,12 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                                             } ${con ? "border-[color:var(--cd-primary)]" : ""}`}
                                             onClick={() => pick({ target: "cell", table: t.index, row: c.row, col: c.col }, c.text)}
                                           >
-                                            <div className="text-[10px] cd-text-faint tabular-nums">
+                                            <div className="text-[11px] cd-text-faint tabular-nums">
                                               {c.row}·{c.col}
                                             </div>
-                                            <div className="text-[11.5px] cd-text break-words">{c.text || " "}</div>
+                                            <div className="text-[12px] cd-text break-words">{c.text || " "}</div>
                                             {chit && (
-                                              <div className="text-[10.5px] cd-text-primary mt-0.5">
+                                              <div className="text-[11px] cd-text-primary mt-0.5">
                                                 {chit.slot.binding ? BINDING_LABEL[chit.slot.binding] ?? chit.slot.binding : "자리(미지정)"}
                                               </div>
                                             )}
@@ -393,15 +393,15 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
           </section>
 
           {/* 우: 매핑 편집 */}
-          <section className="cd-card rounded-3xl overflow-hidden w-full xl:flex-[4] min-w-0">
+          <section className="cd-card rounded-lg overflow-hidden w-full xl:flex-[4] min-w-0">
             <div className="p-4 border-b cd-border-c flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="font-bold cd-text text-sm">값 자리</h2>
+                <h2 className="font-semibold cd-text text-sm">값 자리</h2>
                 <p className="text-[11px] cd-text-faint mt-0.5">새 자리는 <b className="cd-text">선택된 서식</b>에 붙습니다.</p>
               </div>
               <button
                 type="button"
-                className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5 shrink-0"
+                className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[13px] flex items-center gap-1.5 shrink-0"
                 onClick={addDoc}
               >
                 <Plus className="w-3.5 h-3.5" /> 서식 추가
@@ -409,7 +409,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
             </div>
             <div className="p-3 overflow-auto flex flex-col gap-3" style={{ maxHeight: "calc(100vh - 320px)" }}>
               {docs.length === 0 && (
-                <p className="text-[12.5px] cd-text-faint py-8 text-center">
+                <p className="text-[13px] cd-text-faint py-8 text-center">
                   서식이 없습니다. 왼쪽에서 자리를 누르면 서식이 하나 만들어집니다.
                 </p>
               )}
@@ -418,13 +418,13 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                 return (
                   <div
                     key={d.docType}
-                    className={`rounded-2xl border ${on ? "border-[color:var(--cd-primary)]" : "cd-border-c"}`}
+                    className={`rounded-lg border ${on ? "border-[color:var(--cd-primary)]" : "cd-border-c"}`}
                     onClick={() => setActiveDoc(d.docType)}
                   >
                     <div className="p-3 border-b cd-border-c flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <input
-                          className="cd-input text-[12.5px] flex-1 min-w-0"
+                          className="cd-input text-[13px] flex-1 min-w-0"
                           value={d.title}
                           placeholder="서식 이름(작성 화면의 선택 항목)"
                           onChange={(e) => updateDoc(d.docType, { title: e.target.value })}
@@ -438,7 +438,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <div className="flex items-center gap-2 text-[11.5px] cd-text-faint">
+                      <div className="flex items-center gap-2 text-[12px] cd-text-faint">
                         <span className="shrink-0">문단 구간</span>
                         <input
                           className="cd-input text-[12px]"
@@ -479,14 +479,14 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                         return (
                           <div
                             key={s.uid}
-                            className={`rounded-xl border p-2.5 flex flex-col gap-2 ${
+                            className={`rounded-lg border p-2.5 flex flex-col gap-2 ${
                               s.uid === selected ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c"
                             }`}
                           >
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                className="text-[11.5px] cd-text-primary shrink-0 underline-offset-2 hover:underline"
+                                className="text-[12px] cd-text-primary shrink-0 underline-offset-2 hover:underline"
                                 onClick={() => revealInSource(s)}
                               >
                                 {s.target === "cell" ? `표 ${s.table} · ${s.row}행 ${s.col}열` : `문단 ${s.para}`}
@@ -566,7 +566,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
               })}
 
               <div className="pt-1">
-                <label className="text-[11.5px] cd-text-faint">메모(확인이 필요한 점)</label>
+                <label className="text-[12px] cd-text-faint">메모(확인이 필요한 점)</label>
                 <textarea
                   className="cd-input text-[12px] mt-1"
                   rows={2}

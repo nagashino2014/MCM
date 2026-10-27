@@ -400,9 +400,9 @@ export function ApprovalArchiveBoard() {
                         <span
                           className={`text-[10.5px] rounded-full px-2 py-0.5 border ${
                             d.status === "approved"
-                              ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                              ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                               : d.status === "rejected"
-                                ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+                                ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
                                 : "cd-border-c cd-text-faint"
                           }`}
                         >
@@ -412,7 +412,7 @@ export function ApprovalArchiveBoard() {
                       <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{short(d.completedAt)}</td>
                       <td className="py-[11.5px] font-mono text-[11px]">
                         {exp ? (
-                          <span className={exp.expired ? "text-[color:var(--cd-danger,#FA896B)] font-bold" : "cd-text-faint"}>
+                          <span className={exp.expired ? "text-[color:var(--cd-error)] font-bold" : "cd-text-faint"}>
                             {exp.text}
                             {exp.expired ? " (만료)" : ""}
                           </span>

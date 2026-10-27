@@ -389,7 +389,7 @@ export default function BonusEvaluationsBoard() {
                       className="h-full rounded-full"
                       style={{
                         width: `${Math.min(100, share)}%`,
-                        background: over ? "var(--cd-danger, #FA896B)" : "var(--cd-primary, #5D87FF)",
+                        background: over ? "var(--cd-error)" : "var(--cd-primary, #5D87FF)",
                       }}
                     />
                   </div>
@@ -610,7 +610,7 @@ export default function BonusEvaluationsBoard() {
                           {tab === "participation" && r.participants.length > 0 && (
                             <span
                               className="block text-[10px] mt-0.5"
-                              style={pctSum !== 100 ? { color: "var(--cd-danger, #FA896B)", fontWeight: 700 } : undefined}
+                              style={pctSum !== 100 ? { color: "var(--cd-error)", fontWeight: 700 } : undefined}
                             >
                               비율 합 {pctSum}%
                             </span>

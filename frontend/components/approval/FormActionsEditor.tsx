@@ -220,7 +220,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                   </label>
                   <button
                     type="button"
-                    className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    className="cd-text-faint hover:text-[color:var(--cd-error)]"
                     title="연계 삭제"
                     onClick={() => removeAction(idx)}
                   >

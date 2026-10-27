@@ -25,7 +25,7 @@ function FileSlot({ slot, file, onPick }: { slot: Slot; file: File | null; onPic
       {file && (
         <button
           type="button"
-          className="ml-auto cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+          className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)]"
           onClick={(e) => {
             e.preventDefault();
             onPick(null);
@@ -155,11 +155,11 @@ export function LetterImportModal({
             <span className="text-[11px] cd-text-faint">공문번호 *</span>
             <input className="cd-input font-mono" placeholder="2026-대외-01034" value={letterNo} onChange={(e) => setLetterNo(e.target.value)} />
             {letterNo.trim() && !LETTER_NO_RE.test(letterNo.trim()) ? (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>형식: 2026-대외-01034</span>
+              <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>형식: 2026-대외-01034</span>
             ) : check == null ? null : check.available ? (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-success, #13DEB9)" }}>등록 가능한 번호입니다</span>
+              <span className="text-[10.5px]" style={{ color: "var(--cd-success)" }}>등록 가능한 번호입니다</span>
             ) : (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>이미 사용 중 — {check.usedBy}</span>
+              <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>이미 사용 중 — {check.usedBy}</span>
             )}
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">

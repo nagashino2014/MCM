@@ -166,9 +166,9 @@ export function AmendmentHistorySection({
   };
 
   return (
-    <div className="rounded-2xl border cd-border-c p-4">
+    <div className="rounded-lg border cd-border-c p-4">
       <div className="flex items-baseline gap-2 mb-3">
-        <h3 className="font-bold cd-text">변경 이력</h3>
+        <h3 className="font-semibold cd-text">변경 이력</h3>
         <span className="text-[11px] cd-text-faint">
           변경계약 {rounds.length}회{corrections.length ? ` · 정보 정정 ${corrections.length}건` : ""}
         </span>
@@ -192,11 +192,11 @@ export function AmendmentHistorySection({
           const amount = roundAmountChange(r.events);
           const open = !!openRounds[r.id];
           return (
-            <div key={r.id} className="rounded-xl border cd-border-c cd-surface-bg">
+            <div key={r.id} className="rounded-lg border cd-border-c cd-surface-bg">
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <button
                   type="button"
-                  className="cd-action flex items-center gap-1 font-bold cd-text"
+                  className="cd-action flex items-center gap-1 font-semibold cd-text"
                   onClick={() => setOpenRounds((prev) => ({ ...prev, [r.id]: !open }))}
                   aria-expanded={open}
                 >
@@ -270,7 +270,7 @@ export function AmendmentHistorySection({
         <div className="mt-3">
           <button
             type="button"
-            className="cd-action flex items-center gap-1 text-xs font-bold cd-text-muted"
+            className="cd-action flex items-center gap-1 text-xs font-semibold cd-text-muted"
             onClick={() => setCorrectionsOpen((v) => !v)}
             aria-expanded={correctionsOpen}
           >
@@ -310,7 +310,7 @@ export function AmendmentHistorySection({
                         />
                       </label>
                   </>,
-                  "rounded-xl border cd-border-c px-3 py-2"
+                  "rounded-lg border cd-border-c px-3 py-2"
                 );
               })}
             </div>

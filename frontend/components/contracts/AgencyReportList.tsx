@@ -246,7 +246,7 @@ export function AgencyReportList({
     <div className="mt-4 border-t cd-border-c pt-4">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-baseline gap-2">
-          <h4 className="font-bold cd-text text-sm">신고 이력</h4>
+          <h4 className="font-semibold cd-text text-sm">신고 이력</h4>
           <span className="text-[11px] cd-text-faint">
             IEPS 실적보고 출력(PDF)을 체결 → 변경 → 완료 순으로 보관 · PDF 를 붙이면 실무자에게 발송
           </span>
@@ -254,7 +254,7 @@ export function AgencyReportList({
         <button
           type="button"
           onClick={editing === "" ? close : openNew}
-          className="cd-btn px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1"
+          className="cd-btn px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1"
         >
           {editing === "" ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
           {editing === "" ? "취소" : "이력 추가"}
@@ -286,7 +286,7 @@ export function AgencyReportList({
               defaultMode={defaultMode}
             />
           ) : (
-            <div key={row.reportId} className="rounded-xl border cd-border-c px-3 py-2">
+            <div key={row.reportId} className="rounded-lg border cd-border-c px-3 py-2">
               <div className="flex items-center gap-2">
                 <CdBadge tone={KIND_TONE[row.reportKind]} className="shrink-0">
                   {AGENCY_REPORT_KIND_LABEL[row.reportKind]}
@@ -333,7 +333,7 @@ export function AgencyReportList({
                           e.preventDefault();
                           launchFilingsAssist(e.currentTarget.href, () => toast.show(FILINGS_ASSIST_MISSING_MESSAGE, "error"));
                         }}
-                        className="cd-action cd-btn ml-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold cd-text-primary"
+                        className="cd-action cd-btn ml-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold cd-text-primary"
                         title="이 PC 의 MCM 신고 보조로 IEPS 실적 보고서를 받아 붙입니다(패널의 [실적보고서 받기])"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -350,7 +350,7 @@ export function AgencyReportList({
                       type="button"
                       onClick={() => send(row)}
                       disabled={sendingId === row.reportId}
-                      className="cd-btn px-2.5 py-1 text-xs font-bold inline-flex items-center gap-1 disabled:opacity-50"
+                      className="cd-btn px-2.5 py-1 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
                       title="실무자에게 실적 보고서를 보냅니다"
                     >
                       <Send className="w-3.5 h-3.5" />
@@ -368,7 +368,7 @@ export function AgencyReportList({
                   <button
                     type="button"
                     onClick={() => remove(row)}
-                    className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-error)]"
                     title="이력 삭제"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -385,7 +385,7 @@ export function AgencyReportList({
                     <button
                       type="button"
                       onClick={onOpenStaffing}
-                      className="cd-btn cd-btn-primary ml-auto px-3 py-1 text-xs font-bold inline-flex items-center gap-1"
+                      className="cd-btn cd-btn-primary ml-auto px-3 py-1 text-xs font-semibold inline-flex items-center gap-1"
                     >
                       <UserCog className="w-3.5 h-3.5" />
                       수행인력 설정
@@ -394,7 +394,7 @@ export function AgencyReportList({
                 </div>
               )}
               {row.deliveryStatus === "failed" && row.deliveryError && (
-                <p className="mt-2 text-xs text-[color:var(--cd-danger,#FA896B)]">발송 실패: {row.deliveryError}</p>
+                <p className="mt-2 text-xs text-[color:var(--cd-error)]">발송 실패: {row.deliveryError}</p>
               )}
             </div>
           )
@@ -450,10 +450,10 @@ function ReportForm({
       ? "첨부 해제됨"
       : currentFileName || "선택된 파일 없음";
   return (
-    <div className="mb-2 grid gap-3 rounded-xl border cd-border-c p-3">
+    <div className="mb-2 grid gap-3 rounded-lg border cd-border-c p-3">
       <div className="grid grid-cols-1 md:grid-cols-[140px_180px_minmax(0,1fr)] gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">신고 구분</span>
+          <span className="font-semibold cd-text-muted">신고 구분</span>
           <select
             className="cd-input"
             value={form.reportKind}
@@ -467,11 +467,11 @@ function ReportForm({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">신고일</span>
+          <span className="font-semibold cd-text-muted">신고일</span>
           <CdDateInput value={form.reportedOn} onChange={(v) => setForm({ ...form, reportedOn: v })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">접수번호 (선택)</span>
+          <span className="font-semibold cd-text-muted">접수번호 (선택)</span>
           <input
             type="text"
             className="cd-input"
@@ -483,7 +483,7 @@ function ReportForm({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_200px_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">비고 (선택)</span>
+          <span className="font-semibold cd-text-muted">비고 (선택)</span>
           <input
             type="text"
             className="cd-input"
@@ -492,7 +492,7 @@ function ReportForm({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">실무자 발송</span>
+          <span className="font-semibold cd-text-muted">실무자 발송</span>
           <select
             className="cd-input"
             value={form.deliveryMode}
@@ -507,7 +507,7 @@ function ReportForm({
           </select>
         </label>
         <div className="flex items-center gap-2">
-          <label className="cd-action cd-btn px-3 py-2 text-xs font-bold cursor-pointer inline-flex items-center gap-1">
+          <label className="cd-action cd-btn px-3 py-2 text-xs font-semibold cursor-pointer inline-flex items-center gap-1">
             <Paperclip className="w-3.5 h-3.5" />
             신고서 PDF
             <input
@@ -536,14 +536,14 @@ function ReportForm({
           {form.file ? " — 저장하면 실무자 발송 설정에 따라 바로 보냅니다" : ""}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={onCancel} className="cd-btn px-3 py-1.5 text-xs font-bold">
+          <button type="button" onClick={onCancel} className="cd-btn px-3 py-1.5 text-xs font-semibold">
             취소
           </button>
           <button
             type="button"
             onClick={onSave}
             disabled={saving}
-            className="cd-btn cd-btn-primary px-4 py-1.5 text-xs font-bold disabled:opacity-50"
+            className="cd-btn cd-btn-primary px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
           >
             {saving ? "저장 중…" : "저장"}
           </button>

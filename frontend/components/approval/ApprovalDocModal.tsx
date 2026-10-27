@@ -294,7 +294,7 @@ export function ApprovalDocViewer({
     <div className="flex flex-col gap-4 max-w-[1032px]">
         {error ? (
           <div className="flex items-center gap-2">
-            <p className="text-sm text-[color:var(--cd-danger,#FA896B)] flex-1">{error}</p>
+            <p className="text-sm text-[color:var(--cd-error)] flex-1">{error}</p>
             {headerRight}
           </div>
         ) : !detail ? (
@@ -373,7 +373,7 @@ export function ApprovalDocViewer({
               {detail.canDelete && (
                 <button
                   type="button"
-                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
                   title="문서 완전 삭제 — 되돌릴 수 없습니다"
                   disabled={acting}
                   onClick={async () => {
@@ -517,9 +517,9 @@ export function ApprovalDocViewer({
               return (
                 <div
                   className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
-                  style={{ borderColor: "var(--cd-warning,#FFAE1F)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+                  style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
                 >
-                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
                     ⚠ 선행 문서({rc.refFormName}{rc.refDocNo ? ` ${rc.refDocNo}` : ""})와 일치하지 않는 항목 {rc.mismatches.length}건 — 기안자가 확인 후 상신한 문서입니다
                   </span>
                   {rc.mismatches.map((m, i) => (
@@ -570,9 +570,9 @@ export function ApprovalDocViewer({
               return (
                 <div
                   className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5"
-                  style={{ borderColor: "var(--cd-warning,#FFAE1F)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+                  style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
                 >
-                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                  <span className="text-[11.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
                     ⚠ 주 12시간 초과 신청 — {ol.weekStart} 주 합계 {h(total)}h (기존 신청 {h(ol.priorRequestedMinutes)}h + 이 문서 {h(ol.applyMinutes)}h · 한도 {h(ol.limitMinutes)}h)
                   </span>
                   <span className="text-[10.5px] cd-text-faint">
@@ -611,8 +611,8 @@ export function ApprovalDocViewer({
                 const v = Math.round((Number(min || 0) / 60) * 10) / 10;
                 return Number.isInteger(v) ? String(v) : v.toFixed(1);
               };
-              const tone = repeat ? "var(--cd-danger,#FA896B)" : "var(--cd-warning,#FFAE1F)";
-              const toneSoft = repeat ? "var(--cd-danger-soft, rgba(250,137,107,0.1))" : "var(--cd-warning-soft, rgba(255,174,31,0.1))";
+              const tone = repeat ? "var(--cd-error)" : "var(--cd-warning)";
+              const toneSoft = repeat ? "var(--cd-error-soft, rgba(250,137,107,0.1))" : "var(--cd-warning-soft, rgba(255,174,31,0.1))";
               return (
                 <div className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-0.5" style={{ borderColor: tone, background: toneSoft }}>
                   <span className="text-[11.5px] font-bold" style={{ color: tone }}>
@@ -679,7 +679,7 @@ export function ApprovalDocViewer({
                     {LETTER_SEND_STATUS_LABEL[letter.sendStatus] ?? letter.sendStatus}
                     {letter.sentAt ? ` · ${letter.sendHistory.length > 1 ? `${letter.sendHistory.length}차 ` : ""}${letter.sentAt.slice(0, 16).replace("T", " ")}` : ""}
                   </span>
-                  {letter.sendError && <span className="text-[11px]" style={{ color: "var(--cd-danger, #FA896B)" }}>{letter.sendError}</span>}
+                  {letter.sendError && <span className="text-[11px]" style={{ color: "var(--cd-error)" }}>{letter.sendError}</span>}
                   {letter.sendHistory.length > 0 && (
                     <button type="button" className="text-[11px] cd-text-faint underline decoration-dotted" onClick={() => setLetterHistoryOpen((v) => !v)}>
                       {letterHistoryOpen ? "이력 닫기" : `발송 이력(${letter.sendHistory.length})`}

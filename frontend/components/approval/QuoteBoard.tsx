@@ -1113,7 +1113,7 @@ export function QuoteBoard() {
                         {revisionReason ? (
                           <span className="text-[10.5px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[revisionReason]}</span>
                         ) : (
-                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">사유 미선택</span>
+                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">사유 미선택</span>
                         )}
                       </span>
                     </li>
@@ -1148,9 +1148,9 @@ export function QuoteBoard() {
                         ) : manualCheck == null ? (
                           <span>중복 확인 중...</span>
                         ) : manualCheck.available ? (
-                          <span style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능</span>
+                          <span style={{ color: "var(--cd-success)" }}>사용 가능</span>
                         ) : (
-                          <span style={{ color: "var(--cd-danger, #FA896B)" }}>이미 사용 중 — {manualCheck.usedBy}</span>
+                          <span style={{ color: "var(--cd-error)" }}>이미 사용 중 — {manualCheck.usedBy}</span>
                         )}
                       </>
                     ) : (
@@ -1286,7 +1286,7 @@ export function QuoteBoard() {
                   {sites.length > 1 && (
                     <button
                       type="button"
-                      className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                      className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] cd-text-faint hover:text-[color:var(--cd-error)]"
                       onClick={() => {
                         if (!confirm(`[${site.siteLabel}] 사업장을 삭제할까요?`)) return;
                         setSites((prev) => prev.filter((_, i) => i !== activeSite));
@@ -1385,7 +1385,7 @@ export function QuoteBoard() {
                               <span className="cd-text-faint">회</span>
                               <button
                                 type="button"
-                                className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                                className="cd-text-faint hover:text-[color:var(--cd-error)]"
                                 aria-label={`${w.subtype} 제거`}
                                 onClick={() => updateSite(activeSite, { works: (site.works ?? []).filter((_, xi) => xi !== wi) })}
                               >
@@ -1593,7 +1593,7 @@ export function QuoteBoard() {
                                     return c.ok ? (
                                       <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 cd-tint-primary" title={`합계-견적가 초과 ${won(c.over)}원 < 상한 ${won(c.cap)}원`}>제약 OK</span>
                                     ) : (
-                                      <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">
+                                      <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">
                                         ⚠ 제약 위반 — 합계-견적가 {won(c.over)}원 (0 초과 {won(c.cap)}원 미만이어야 상신 가능)
                                       </span>
                                     );
@@ -1829,7 +1829,7 @@ export function QuoteBoard() {
                                 next[i] = { ...next[i], note: e.target.value };
                                 updateSite(activeSite, { freeItems: next });
                               }} />
-                              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => {
+                              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => {
                                 const next = (site.freeItems ?? []).filter((_, xi) => xi !== i);
                                 const sum = next.reduce((a, x) => a + x.amount, 0);
                                 updateSite(activeSite, { freeItems: next, amounts: { ...site.amounts, sum, final: Number(priceInputs[site.siteSeq] ?? 0) || sum } });
@@ -1881,7 +1881,7 @@ export function QuoteBoard() {
                       </span>%
                     </label>
                     <input className="cd-input text-sm flex-1 min-w-[160px] md:min-w-0" value={s.memo ?? ""} placeholder="사유 (예: 경쟁사 OO 저가 투찰 예상)" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, memo: e.target.value } : x)))} />
-                    <button type="button" className="shrink-0 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setSituation((prev) => prev.filter((_, xi) => xi !== i))}>
+                    <button type="button" className="shrink-0 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setSituation((prev) => prev.filter((_, xi) => xi !== i))}>
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1932,7 +1932,7 @@ export function QuoteBoard() {
                   {presets.map((p) => (
                     <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                       <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
-                      <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
+                      <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                     </span>
                   ))}
                 </div>
@@ -1950,7 +1950,7 @@ export function QuoteBoard() {
                       {s.assigneeName}
                       {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                     </span>
-                    <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
+                    <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1983,7 +1983,7 @@ export function QuoteBoard() {
                         {w.name}
                         {w.position ? <span className="cd-text-faint text-[11px]"> {w.position}</span> : null}
                       </span>
-                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
+                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

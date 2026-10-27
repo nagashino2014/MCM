@@ -41,7 +41,7 @@ export function ServiceDetailCard({
           <div className="flex flex-col gap-2">
             {/* 선택된 용역분류 강조 — 흰 배경 + 용역 아이콘 색 테두리 */}
             <div
-              className="rounded-xl px-2 py-2 text-center text-[13px] font-extrabold"
+              className="rounded-lg px-2 py-2 text-center text-[13px] font-semibold"
               style={{
                 background: "var(--cd-card)",
                 color: "var(--cd-muted)",
@@ -51,15 +51,15 @@ export function ServiceDetailCard({
               {category ?? "-"}
             </div>
             <div
-              className="rounded-xl px-2 py-2.5 text-center flex-1 flex flex-col items-center justify-center gap-3"
+              className="rounded-lg px-2 py-2.5 text-center flex-1 flex flex-col items-center justify-center gap-3"
               style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
             >
-              <span className="text-[12px] font-extrabold leading-tight">
+              <span className="text-[12px] font-semibold leading-tight">
                 총 수주 건수
                 <br />
-                <span className="text-[10px] font-bold opacity-90">({year}년)</span>
+                <span className="text-[11px] font-semibold opacity-90">({year}년)</span>
               </span>
-              <span className="text-3xl font-extrabold tabular-nums" style={{ color: "#FFC000" }}>
+              <span className="text-2xl font-semibold tabular-nums" style={{ color: "#FFC000" }}>
                 {totalCount.toLocaleString()}
               </span>
             </div>
@@ -81,7 +81,7 @@ function DetailTable({ rows }: { rows: Array<{ label: string; count: number; amo
   return (
     <div className="min-w-0 flex flex-col text-[11px]">
       <div
-        className="grid grid-cols-[1fr_36px_1fr] gap-x-1.5 px-2 py-1.5 rounded-lg font-bold"
+        className="grid grid-cols-[1fr_36px_1fr] gap-x-1.5 px-2 py-1.5 rounded-lg font-semibold"
         style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
       >
         <span>용역분류</span>
@@ -94,13 +94,13 @@ function DetailTable({ rows }: { rows: Array<{ label: string; count: number; amo
             key={row.label || `empty-${idx}`}
             className="cd-row-hover grid grid-cols-[1fr_36px_1fr] gap-x-1.5 items-center px-2 py-1 rounded-lg"
           >
-            <span className="font-bold truncate" style={{ color: "var(--cd-text)" }} title={row.label}>
+            <span className="font-semibold truncate" style={{ color: "var(--cd-text)" }} title={row.label}>
               {row.label || "-"}
             </span>
-            <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-muted)" }}>
               {row.label ? row.count.toLocaleString() : "-"}
             </span>
-            <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+            <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
               {row.label ? fmtFull(row.amount) : "-"}
             </span>
           </div>

@@ -19,7 +19,7 @@ export function RecipientEditGrid({ label, list, onChange }: { label: string; li
           <input className="cd-input" placeholder="직함" value={r.title ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, title: e.target.value } : x)))} />
           <div className="flex items-center gap-1">
             <input className="cd-input flex-1" placeholder="메일주소" value={r.email ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, email: e.target.value } : x)))} />
-            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
+            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>

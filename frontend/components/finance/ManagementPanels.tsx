@@ -251,7 +251,7 @@ export function CashPanel() {
                       <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.outflow)}</td>
                       <td
                         className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium"
-                        style={m.net < 0 ? { color: "var(--cd-error,#FA896B)" } : { color: "var(--cd-success,#13DEB9)" }}
+                        style={m.net < 0 ? { color: "var(--cd-error,#FA896B)" } : { color: "var(--cd-success)" }}
                       >
                         {won(m.net)}
                       </td>

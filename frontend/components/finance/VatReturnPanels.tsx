@@ -495,7 +495,7 @@ export function HometaxPanel() {
           {" "}합계(제외 건 제외): {totals.count}건 · 공급가액 {won(totals.supply)}원 · 세액 {won(totals.tax)}원
         </div>
         {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="cd-table-head">
@@ -1153,7 +1153,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
           const body = JSON.parse(pendingRequest.current!.payload) as Record<string, unknown>;
           void post(body, body.action === "save" ? "신고서 저장 결과를 확인했습니다." : "내부 확정 요청 결과를 확인했습니다.");
         }}>같은 요청 재확인</button>}
-        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
 
         {!savedId && form && <p className="text-sm mb-2">현재 계산 미리보기입니다. 초안을 저장하면 고유 저장본을 선택하여 내부 확정할 수 있습니다.</p>}
         {savedForCurrent && <p role="status" className="text-sm mb-2">저장본 {savedForCurrent.returnId}{savedForCurrent.revision ? ` · ${savedForCurrent.revision}판` : ""}을 읽기 전용으로 표시합니다. 현재 원천으로 과거 내용을 바꾸지 않습니다.{savedForCurrent.origin === "legacy" ? " 기존 형식은 조회·출력만 지원합니다." : " 새 계산은 봉인 근거를 다시 선택하세요."}</p>}
@@ -1175,7 +1175,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
           <div className="mb-3 p-3 rounded border cd-border-c space-y-1">
             {form.warnings.map((w, i) => (
               <div key={i} className="text-sm flex items-start gap-1.5">
-                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
+                <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "var(--cd-warning)" }} />
                 <span>{w}</span>
               </div>
             ))}
@@ -1296,7 +1296,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
                 </tr>
                 <tr className="border-t cd-hairline-row-c font-medium">
                   <td className="py-1.5 pr-3">차이</td>
-                  <td className="py-1.5 text-right" style={form.recon.salesDiff !== 0 ? { color: "var(--cd-danger,#FA896B)" } : undefined}>
+                  <td className="py-1.5 text-right" style={form.recon.salesDiff !== 0 ? { color: "var(--cd-error)" } : undefined}>
                     {won(form.recon.salesDiff)}
                   </td>
                 </tr>
@@ -1310,7 +1310,7 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
                 </tr>
                 <tr className="border-t cd-hairline-row-c font-medium">
                   <td className="py-1.5 pr-3">차이</td>
-                  <td className="py-1.5 text-right" style={form.recon.vatInDiff !== 0 ? { color: "var(--cd-danger,#FA896B)" } : undefined}>
+                  <td className="py-1.5 text-right" style={form.recon.vatInDiff !== 0 ? { color: "var(--cd-error)" } : undefined}>
                     {won(form.recon.vatInDiff)}
                   </td>
                 </tr>

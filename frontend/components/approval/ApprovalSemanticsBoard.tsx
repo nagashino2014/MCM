@@ -94,8 +94,8 @@ function edgeRate(e: RefEdge): number | null {
 function rateColor(rate: number | null): string {
   if (rate == null) return "var(--cd-border, #DFE5EF)";
   if (rate >= 0.9) return "var(--cd-primary, #5D87FF)";
-  if (rate >= 0.6) return "var(--cd-warning, #FFAE1F)";
-  return "var(--cd-danger, #FA896B)";
+  if (rate >= 0.6) return "var(--cd-warning)";
+  return "var(--cd-error)";
 }
 const sameInput = (a: RefEdge, b: RefEdge) =>
   a.formId === b.formId && a.fieldKey === b.fieldKey && (a.columnKey ?? "") === (b.columnKey ?? "") && a.entity === b.entity;
@@ -287,7 +287,7 @@ export function ApprovalSemanticsBoard() {
                               {" "}· 선행 연결 {f.refLink.linkedDocs}/{f.submittedDocs}
                             </span>
                           )}
-                          {f.untaggedCount > 0 && <span className="text-[color:var(--cd-warning,#FFAE1F)]"> · 미태깅 {f.untaggedCount}</span>}
+                          {f.untaggedCount > 0 && <span className="text-[color:var(--cd-warning)]"> · 미태깅 {f.untaggedCount}</span>}
                         </span>
                       </div>
                     </div>
@@ -422,7 +422,7 @@ export function ApprovalSemanticsBoard() {
                     <p className="text-[10.5px] cd-text-faint mt-0.5 leading-relaxed">{s.desc}</p>
                     <p className="text-[11px] mt-1">
                       {s.rows == null ? (
-                        <span className="text-[color:var(--cd-warning,#FFAE1F)]">미구축(테이블 없음)</span>
+                        <span className="text-[color:var(--cd-warning)]">미구축(테이블 없음)</span>
                       ) : (
                         <span className="cd-text-primary font-bold">{s.rows.toLocaleString("ko-KR")}행</span>
                       )}
@@ -460,8 +460,8 @@ export function ApprovalSemanticsBoard() {
                       {/* 성공률 바 */}
                       <div className="h-3 rounded-full overflow-hidden flex border cd-border-c">
                         <div style={{ width: `${(selected.edge.linkedDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-primary,#5D87FF)" }} />
-                        <div style={{ width: `${(selected.edge.manualDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-warning,#FFAE1F)" }} />
-                        <div style={{ width: `${(selected.edge.missingDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-danger,#FA896B)" }} />
+                        <div style={{ width: `${(selected.edge.manualDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-warning)" }} />
+                        <div style={{ width: `${(selected.edge.missingDocs / selected.edge.totalDocs) * 100}%`, background: "var(--cd-error)" }} />
                       </div>
                       <div className="flex items-center gap-3 text-[11px] cd-text-faint flex-wrap">
                         <span>
@@ -469,8 +469,8 @@ export function ApprovalSemanticsBoard() {
                           {unit(selected.edge)}
                         </span>
                         <span style={{ color: "var(--cd-primary,#5D87FF)" }}>연결 {selected.edge.linkedDocs}</span>
-                        <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>직접 입력 {selected.edge.manualDocs}</span>
-                        <span style={{ color: "var(--cd-danger,#FA896B)" }}>미입력 {selected.edge.missingDocs}</span>
+                        <span style={{ color: "var(--cd-warning)" }}>직접 입력 {selected.edge.manualDocs}</span>
+                        <span style={{ color: "var(--cd-error)" }}>미입력 {selected.edge.missingDocs}</span>
                       </div>
                       <p className="text-[10.5px] cd-text-faint leading-relaxed">
                         직접 입력·미입력 문서는 이 엔티티 기준 집계(용역별 경비 등)에서 제외됩니다. 문서를 열어 값을 확인하세요.
@@ -525,11 +525,11 @@ export function ApprovalSemanticsBoard() {
                                   <td className="py-1.5 pr-2 cd-text-faint">{d.status}</td>
                                   <td className="py-1.5">
                                     {d.manual ? (
-                                      <span style={{ color: "var(--cd-warning,#FFAE1F)" }} title={d.manualText ?? undefined}>
+                                      <span style={{ color: "var(--cd-warning)" }} title={d.manualText ?? undefined}>
                                         직접 입력
                                       </span>
                                     ) : (
-                                      <span style={{ color: "var(--cd-danger,#FA896B)" }}>미입력</span>
+                                      <span style={{ color: "var(--cd-error)" }}>미입력</span>
                                     )}
                                   </td>
                                 </tr>
@@ -547,7 +547,7 @@ export function ApprovalSemanticsBoard() {
             {/* 경고 패널 */}
             <div className="cd-card p-5 gap-3">
               <h3 className="font-bold cd-text text-[13.5px] flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning,#FFAE1F)" }} /> 진단 경고
+                <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning)" }} /> 진단 경고
               </h3>
               {data.warnings.length === 0 ? (
                 <p className="text-[12px] cd-text-faint">경고가 없습니다 — 태깅·채널 정책·연결이 모두 정상입니다.</p>
@@ -613,7 +613,7 @@ function ResultDetail({
         <span className="cd-text-faint font-mono text-[10.5px]"> ({edge.ledgerKey})</span>
       </p>
       {edge.recordedDocs == null ? (
-        <p className="text-[12px] text-[color:var(--cd-warning,#FFAE1F)]">원장(또는 문서 번호 칸)이 아직 구축되지 않았습니다.</p>
+        <p className="text-[12px] text-[color:var(--cd-warning)]">원장(또는 문서 번호 칸)이 아직 구축되지 않았습니다.</p>
       ) : (
         <p className="text-[12px] cd-text">
           기록된 문서 <b>{edge.recordedDocs}건</b>

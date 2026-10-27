@@ -1294,7 +1294,7 @@ export function ApprovalDraftBoard() {
       {loading ? (
         <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
       ) : error ? (
-        <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>
+        <p className="text-sm text-[color:var(--cd-error)]">{error}</p>
       ) : form ? (
         <>
         <div className="max-w-[1032px]">
@@ -1321,8 +1321,8 @@ export function ApprovalDraftBoard() {
                 <span
                   className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
                     leaveHint.includes("⚠") || leaveHint.includes("빠릅니다")
-                      ? "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
-                      : "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                      ? "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
+                      : "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                   }`}
                 >
                   {leaveHint}
@@ -1332,8 +1332,8 @@ export function ApprovalDraftBoard() {
                 <span
                   className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
                     otHint.includes("⚠")
-                      ? "border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
-                      : "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                      ? "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
+                      : "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                   }`}
                 >
                   {otHint}
@@ -1346,7 +1346,7 @@ export function ApprovalDraftBoard() {
               )}
               {/* 같은 날 추가 신청(2026-08-28) — 원 신청에 자동 연동, 시간대 겹침은 상신 불가 */}
               {isOvertimeForm && (otUsage?.sameDay?.length ?? 0) > 0 && (
-                <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning,#FFAE1F)] text-[color:var(--cd-warning,#FFAE1F)]">
+                <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]">
                   이 날 기존 신청 {otUsage!.sameDay!.length}건(
                   {otUsage!.sameDay!.map((r) => (r.start && r.end ? `${r.start}~${r.end}` : "시간 미기재")).join(", ")}
                   ) — 추가 신청은 원 신청에 자동 연동되며, 시간대가 겹치면 상신할 수 없습니다.
@@ -1357,7 +1357,7 @@ export function ApprovalDraftBoard() {
             {form.refFormId && (
               <div
                 className={`rounded-xl border px-3.5 py-2.5 flex flex-col gap-1.5 ${refDoc ? "cd-border-c" : "border-dashed cd-border-c"}`}
-                style={refDoc && refMismatches.length > 0 ? { borderColor: "var(--cd-warning,#FFAE1F)" } : undefined}
+                style={refDoc && refMismatches.length > 0 ? { borderColor: "var(--cd-warning)" } : undefined}
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <Link2 className="w-4 h-4 cd-text-primary shrink-0" />
@@ -1386,7 +1386,7 @@ export function ApprovalDraftBoard() {
                     <>
                       <span className="text-[12.5px] cd-text">선행 문서 미연결</span>
                       {refCandidates.length > 0 && (
-                        <span className="text-[11.5px]" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                        <span className="text-[11.5px]" style={{ color: "var(--cd-warning)" }}>
                           최근 기안한 {refCandidates[0].formName} {refCandidates.length}건이 있습니다 — 해당 건이면 연결하세요.
                         </span>
                       )}
@@ -1403,7 +1403,7 @@ export function ApprovalDraftBoard() {
                 {refDoc && refMismatches.length > 0 && (
                   <div className="flex flex-col gap-1">
                     {refMismatches.map((m, i) => (
-                      <p key={i} className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+                      <p key={i} className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                         {m.label} 불일치 — 선행 문서: {m.refText} / 현재 입력: {m.curText}
                       </p>
@@ -1444,7 +1444,7 @@ export function ApprovalDraftBoard() {
                     title="클릭하면 결근 기간이 입력됩니다"
                     onClick={() => setValues((prev) => ({ ...prev, absence_period: { from: r.dateFrom, to: r.dateTo } }))}
                   >
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning)" }} />
                     결근사유서 제출 요청 — {r.dateFrom}
                     {r.dateTo !== r.dateFrom ? ` ~ ${r.dateTo}` : ""}
                     {r.note ? <span className="cd-text-faint">({r.note})</span> : null}
@@ -1566,7 +1566,7 @@ export function ApprovalDraftBoard() {
                         <span className="text-[10.5px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
                         <button
                           type="button"
-                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                          className="cd-text-faint hover:text-[color:var(--cd-error)]"
                           title="첨부 제거"
                           onClick={() => setFileAttachments((prev) => prev.filter((_, xi) => xi !== i))}
                         >
@@ -1597,7 +1597,7 @@ export function ApprovalDraftBoard() {
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
-                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
                       ×
                     </button>
                   </span>
@@ -1630,7 +1630,7 @@ export function ApprovalDraftBoard() {
                   </span>
                   <button
                     type="button"
-                    className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    className="cd-text-faint hover:text-[color:var(--cd-error)]"
                     title="제거"
                     onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}
                   >
@@ -1680,7 +1680,7 @@ export function ApprovalDraftBoard() {
                     <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
                     <button
                       type="button"
-                      className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                      className="cd-text-faint hover:text-[color:var(--cd-error)]"
                       title="제거"
                       onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}
                     >
@@ -1746,9 +1746,9 @@ export function ApprovalDraftBoard() {
                   const isBlock = f.level === "block";
                   const isWarn = f.level === "warn";
                   const color = isBlock
-                    ? "var(--cd-danger,#FA896B)"
+                    ? "var(--cd-error)"
                     : isWarn
-                      ? "var(--cd-warning,#FFAE1F)"
+                      ? "var(--cd-warning)"
                       : "var(--cd-primary)";
                   const Icon = isBlock ? Ban : isWarn ? AlertTriangle : Info;
                   return (
@@ -1771,7 +1771,7 @@ export function ApprovalDraftBoard() {
                         <p className="text-[12px] cd-text">
                           <span
                             className="text-[10px] font-bold mr-1.5"
-                            style={{ color: s.status === "rejected" ? "var(--cd-danger,#FA896B)" : "var(--cd-success,#13DEB9)" }}
+                            style={{ color: s.status === "rejected" ? "var(--cd-error)" : "var(--cd-success)" }}
                           >
                             {s.status === "rejected" ? "반려" : "승인"}
                           </span>
@@ -1826,7 +1826,7 @@ export function ApprovalDraftBoard() {
                 <span
                   className={`text-[10.5px] rounded-full px-2 py-0.5 shrink-0 ${
                     c.status === "approved"
-                      ? "border border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                      ? "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                       : "border cd-border-c cd-text-faint"
                   }`}
                 >

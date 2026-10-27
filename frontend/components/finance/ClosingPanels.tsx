@@ -191,7 +191,7 @@ export function BalanceSheetPanel() {
       </div>
       {bs && !bs.hasOpening && (
         <div className="text-sm mb-2 flex items-center gap-1.5">
-          <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning,#FFAE1F)" }} />
+          <AlertTriangle className="w-4 h-4" style={{ color: "var(--cd-warning)" }} />
           기초 잔액이 없어 당기 발생분만 표시합니다. 전기 재무상태표의 계정별 잔액을 인수하고 원천자료 검토를 마쳐야 합니다.
         </div>
       )}
@@ -208,7 +208,7 @@ export function BalanceSheetPanel() {
             <div className="flex justify-between"><span>당기순이익</span><span className="font-medium">{won(bs.netIncome)}</span></div>
             <div className="flex justify-between font-semibold">
               <span>자산 {won(bs.assetTotal)} = 부채 {won(bs.liabilityTotal)} + 자본 {won(bs.equityTotal)}</span>
-              <span style={{ color: bs.balanced ? "var(--cd-success,#13DEB9)" : "var(--cd-danger,#FA896B)" }}>{bs.balanced ? "대차 일치" : `차이 ${won(bs.assetTotal - bs.liabilityTotal - bs.equityTotal)}`}</span>
+              <span style={{ color: bs.balanced ? "var(--cd-success)" : "var(--cd-error)" }}>{bs.balanced ? "대차 일치" : `차이 ${won(bs.assetTotal - bs.liabilityTotal - bs.equityTotal)}`}</span>
             </div>
             {!bs.hasOpening && <div className="text-xs cd-text-muted">기초 미인수 상태에서는 차이가 전기이월 몫입니다 — 기초 입력 후 일치해야 정상.</div>}
           </div>
@@ -312,7 +312,7 @@ export function ClosingPanel() {
         세무조정 후보는 자동 감지 결과이므로 신고 전에 근거와 적용 여부를 검토해야 합니다.
       </div>
       {(error || actionError) && <div role="alert" className="cd-error-text text-sm mb-2">{actionError ?? error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       {data && <CompletenessNotice data={data} />}
 
       {data && (

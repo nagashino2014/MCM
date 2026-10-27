@@ -69,27 +69,27 @@ export function DashboardShell() {
   };
 
   return (
-    <div className="cdash min-h-full rounded-3xl p-4 md:p-5" data-theme={theme}>
+    <div className="cdash min-h-full rounded-lg p-4 md:p-5" data-theme={theme}>
       {/* 헤더 */}
       <header className="flex items-center justify-between gap-3 flex-wrap mb-4 reveal">
         <div className="flex items-center gap-3">
           <span
-            className="inline-flex items-center justify-center w-10 h-10 rounded-xl"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-lg"
             style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
           >
             <LayoutDashboard className="w-5 h-5" />
           </span>
           <div>
             <p
-              className="text-[10px] font-extrabold tracking-[0.22em] uppercase"
+              className="text-[11px] font-medium"
               style={{ color: "var(--cd-primary)" }}
             >
               Contract Dashboard
             </p>
-            <h1 className="text-xl font-extrabold tracking-tight" style={{ color: "var(--cd-text)" }}>
+            <h1 className="text-[22px] font-semibold tracking-tight" style={{ color: "var(--cd-text)" }}>
               계약 Dashboard
               {data && (
-                <span className="ml-2 text-sm font-bold" style={{ color: "var(--cd-faint)" }}>
+                <span className="ml-2 text-sm font-semibold" style={{ color: "var(--cd-faint)" }}>
                   {data.year}년
                 </span>
               )}
@@ -99,7 +99,7 @@ export function DashboardShell() {
         <div className="flex items-center gap-2">
           {error && (
             <span
-              className="text-[11px] font-bold px-3 py-1.5 rounded-lg"
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
             >
               불러오기 실패: {error}

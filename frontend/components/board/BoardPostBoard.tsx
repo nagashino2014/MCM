@@ -81,7 +81,7 @@ export function BoardPostBoard({ postId }: { postId: string }) {
       />
 
       {error ? (
-        <p className="text-sm text-[color:var(--cd-danger,#FA896B)] p-4">{error}</p>
+        <p className="text-sm text-[color:var(--cd-error)] p-4">{error}</p>
       ) : !post ? (
         <p className="text-sm cd-text-faint p-4">불러오는 중입니다.</p>
       ) : (

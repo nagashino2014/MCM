@@ -296,7 +296,7 @@ export function ReceivableActionsCard({
             href={doc.publicPath ?? "#"}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold hover:underline"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold hover:underline"
             style={{ color: "var(--cd-primary)" }}
           >
             <Paperclip className="w-3 h-3 shrink-0" />
@@ -318,7 +318,7 @@ export function ReceivableActionsCard({
           <Paperclip className="w-3 h-3" />
           증빙 서류 첨부
         </button>
-        <span className="text-[10px]" style={{ color: "var(--cd-faint)" }}>
+        <span className="text-[11px]" style={{ color: "var(--cd-faint)" }}>
           내용 증명 공문, 법원 결정문, 회생절차 통지문 등 (20MB 이하)
         </span>
       </div>
@@ -327,7 +327,7 @@ export function ReceivableActionsCard({
           {pendingFiles.map((file, idx) => (
             <span
               key={`${file.name}-${idx}`}
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold"
               style={{ color: "var(--cd-muted)" }}
             >
               <Paperclip className="w-3 h-3 shrink-0" />
@@ -359,7 +359,7 @@ export function ReceivableActionsCard({
           <CdHelp topic="contracts.receivable-actions" />
         </div>
         {selected && (
-          <span className="text-[11px] font-bold truncate max-w-[55%]" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold truncate max-w-[55%]" style={{ color: "var(--cd-faint)" }}>
             <span
               className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
               style={{ background: CATEGORY_META[selected.category]?.color ?? "var(--cd-faint)" }}
@@ -422,7 +422,7 @@ export function ReceivableActionsCard({
 
           {error && (
             <p
-              className="text-[11px] font-bold px-3 py-2 rounded-lg"
+              className="text-[11px] font-semibold px-3 py-2 rounded-lg"
               style={{ background: "var(--cd-error-soft, rgba(250,137,107,0.14))", color: "var(--cd-error, #fa896b)" }}
             >
               {error}
@@ -444,12 +444,12 @@ export function ReceivableActionsCard({
                 entries.map((entry) => (
                   <div key={entry.actionId} className="cdb-action-entry">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-extrabold tabular-nums" style={{ color: "var(--cd-text)" }}>
+                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: "var(--cd-text)" }}>
                         {entry.actionDate ?? "일자 미입력"}
                       </span>
                       {entry.progressStage && (
                         <span
-                          className="text-[10px] font-extrabold px-2 py-0.5 rounded-md"
+                          className="text-[11px] font-semibold px-2 py-0.5 rounded-lg"
                           style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
                         >
                           {entry.progressStage}
@@ -459,7 +459,7 @@ export function ReceivableActionsCard({
                         {meta.hasDocs && (
                           <button
                             type="button"
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-lg"
                             style={{ color: "var(--cd-muted)" }}
                             title="증빙 서류 업로드"
                             disabled={uploading === entry.actionId}
@@ -470,7 +470,7 @@ export function ReceivableActionsCard({
                         )}
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-lg"
                           style={{ color: "var(--cd-muted)" }}
                           title="수정"
                           onClick={() => beginEdit(entry)}
@@ -479,7 +479,7 @@ export function ReceivableActionsCard({
                         </button>
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-lg"
                           style={{ color: "#FF7575" }}
                           title="삭제"
                           onClick={() => void remove(entry)}
@@ -504,7 +504,7 @@ export function ReceivableActionsCard({
           {!isDebt && (
             <div className="cdb-action-entry">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-muted)" }}>
+                <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
                   {editingActionId ? `${meta.label} 수정` : `${meta.label} 추가`}
                 </span>
                 {editingActionId && (
@@ -521,14 +521,14 @@ export function ReceivableActionsCard({
                 }
               >
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+                  <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                     {meta.dateLabel}
                   </span>
                   <AutoDateInput className="cd-input" value={formDate} onChange={setFormDate} />
                 </label>
                 {meta.hasStageField && (
                   <label className="grid gap-1">
-                    <span className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+                    <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                       진행 단계
                     </span>
                     <input
@@ -542,7 +542,7 @@ export function ReceivableActionsCard({
                   </label>
                 )}
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+                  <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                     {meta.noteLabel}
                   </span>
                   <textarea
@@ -579,14 +579,14 @@ export function ReceivableActionsCard({
               ) : (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-muted)" }}>
+                    <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
                       {debtEntry ? "채권 추심 진행 현황" : "채권 추심 진행 등록"}
                     </span>
                     {debtEntry && (
                       <span className="ml-auto flex items-center gap-1">
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-lg"
                           style={{ color: "var(--cd-muted)" }}
                           title="증빙 서류 업로드"
                           disabled={uploading === debtEntry.actionId}
@@ -596,7 +596,7 @@ export function ReceivableActionsCard({
                         </button>
                         <button
                           type="button"
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-md"
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-lg"
                           style={{ color: "#FF7575" }}
                           title="삭제"
                           onClick={() => void remove(debtEntry)}
@@ -611,7 +611,7 @@ export function ReceivableActionsCard({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {DEBT_COLLECTION_STAGES.map((stage, idx) => (
                       <label key={stage} className="grid gap-1">
-                        <span className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+                        <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                           {stage}
                           {idx === 0 ? " (신청일)" : ""}
                         </span>
@@ -628,7 +628,7 @@ export function ReceivableActionsCard({
                   </div>
 
                   <label className="grid gap-1">
-                    <span className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+                    <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                       진행 경과
                     </span>
                     <textarea

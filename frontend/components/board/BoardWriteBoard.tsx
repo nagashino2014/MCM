@@ -183,7 +183,7 @@ export function BoardWriteBoard() {
         }
       />
 
-      {loadError && <p className="text-sm text-[color:var(--cd-danger,#FA896B)] px-1 pb-2">{loadError}</p>}
+      {loadError && <p className="text-sm text-[color:var(--cd-error)] px-1 pb-2">{loadError}</p>}
       {!loaded && !loadError && <p className="text-sm cd-text-faint px-1 pb-2">공지를 불러오는 중입니다.</p>}
 
       <div className="flex flex-col gap-3 w-full">

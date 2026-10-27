@@ -339,7 +339,7 @@ export default function ApprovalFormsBoard() {
         }
       />
 
-      {error && <p className="text-sm text-[color:var(--cd-danger,#FA896B)]">{error}</p>}
+      {error && <p className="text-sm text-[color:var(--cd-error)]">{error}</p>}
 
       <div className="flex flex-col xl:flex-row gap-4 items-start min-h-0">
         {/* 양식 목록 */}
@@ -432,7 +432,7 @@ export default function ApprovalFormsBoard() {
                     // 마스터 연계 점검(L4, 2026-10-21) — 저장은 막지 않고 알려만 준다. 근거는 lib/approval/linkage.ts
                     const linkWarnings = linkageWarningsOf(draft.formId || "", draft.fields);
                     return linkWarnings.length > 0 ? (
-                      <span className="text-[11px] text-[color:var(--cd-warning,#FFAE1F)] cursor-help" title={linkWarnings.join("\n")}>
+                      <span className="text-[11px] text-[color:var(--cd-warning)] cursor-help" title={linkWarnings.join("\n")}>
                         마스터 연계 점검 {linkWarnings.length}건
                       </span>
                     ) : null;
@@ -681,7 +681,7 @@ function CanvasCell({
         <>
           <div className="w-28 shrink-0 px-2.5 py-2.5 text-[12px] font-bold cd-surface-bg cd-text flex items-center">
             <span className="truncate">
-              {f.required && <span className="text-[color:var(--cd-danger,#FA896B)] mr-0.5">*</span>}
+              {f.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
               {f.label}
             </span>
           </div>
@@ -745,7 +745,7 @@ function FieldProps({
         <span className="text-[12px] font-bold cd-text">선택 항목 속성</span>
         <button
           type="button"
-          className="ml-auto cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] flex items-center gap-1 text-[11.5px]"
+          className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)] flex items-center gap-1 text-[11.5px]"
           onClick={onRemove}
         >
           <Trash2 className="w-3.5 h-3.5" /> 삭제
@@ -775,11 +775,11 @@ function FieldProps({
       <label className="text-[11px] cd-text-faint flex flex-col gap-1">
         필드 키 (구조화 저장 키 — 영문 소문자·숫자·_)
         <input
-          className={`cd-input font-mono ${dupKey ? "border-[color:var(--cd-danger,#FA896B)]" : ""}`}
+          className={`cd-input font-mono ${dupKey ? "border-[color:var(--cd-error)]" : ""}`}
           value={f.key}
           onChange={(e) => onChange({ key: e.target.value })}
         />
-        {dupKey && <span className="text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">키가 중복됩니다.</span>}
+        {dupKey && <span className="text-[10.5px] text-[color:var(--cd-error)]">키가 중복됩니다.</span>}
       </label>
       <div className="flex items-center gap-3">
         <label className="text-[11px] cd-text-faint flex items-center gap-1.5">
@@ -975,7 +975,7 @@ function FillMapEditor({
           </select>
           <button
             type="button"
-            className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+            className="cd-text-faint hover:text-[color:var(--cd-error)]"
             title="규칙 삭제"
             onClick={() => onChange({ fillMap: rules.filter((_, x) => x !== i) })}
           >
@@ -1040,7 +1040,7 @@ function TableColumnsEditor({
           )}
           <button
             type="button"
-            className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+            className="cd-text-faint hover:text-[color:var(--cd-error)]"
             title="열 삭제"
             onClick={() => onChange({ tableColumns: cols.filter((_, x) => x !== i) })}
           >

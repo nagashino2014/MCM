@@ -26,7 +26,7 @@ export function FilterCard({
     >
       <div className="flex flex-col gap-3">
         <div>
-          <p className="text-[11px] font-bold mb-1.5" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1.5" style={{ color: "var(--cd-faint)" }}>
             용역분류
           </p>
           {/* 상호 배타적 단일 선택 (라디오 동작) */}
@@ -46,7 +46,7 @@ export function FilterCard({
           </div>
         </div>
         <div>
-          <p className="text-[11px] font-bold mb-1.5" style={{ color: "var(--cd-faint)" }}>
+          <p className="text-[11px] font-semibold mb-1.5" style={{ color: "var(--cd-faint)" }}>
             기준연도
           </p>
           <div className="grid grid-cols-4 gap-1.5">

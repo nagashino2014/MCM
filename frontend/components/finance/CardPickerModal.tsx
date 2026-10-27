@@ -351,7 +351,7 @@ export function CardPickerModal({
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
         {tripLikeSelected && (
-          <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+          <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--cd-warning)" }}>
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             출장성 지출(교통·숙박·유류)이 선택돼 있습니다 — 출장 경비는 출장보고서의 경비 내역 사용을 권장합니다.
           </div>

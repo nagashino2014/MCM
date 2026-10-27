@@ -156,12 +156,12 @@ export function PersonalDocsBoard() {
             <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--cd-border)" }}>
               <div
                 className="h-full rounded-full"
-                style={{ width: `${pct}%`, background: pct >= 90 ? "var(--cd-danger, #FA896B)" : "var(--cd-primary)" }}
+                style={{ width: `${pct}%`, background: pct >= 90 ? "var(--cd-error)" : "var(--cd-primary)" }}
               />
             </div>
             <p className="text-[11px] cd-text-faint mt-1">
               {formatBytes(usedBytes)} 사용 · {formatBytes(Math.max(0, quotaBytes - usedBytes))} 남음
-              {pct >= 90 && <span className="ml-1.5 text-[color:var(--cd-danger,#FA896B)] font-semibold">용량이 거의 찼습니다</span>}
+              {pct >= 90 && <span className="ml-1.5 text-[color:var(--cd-error)] font-semibold">용량이 거의 찼습니다</span>}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -541,7 +541,7 @@ function SendModal({ open, onClose, docs }: { open: boolean; onClose: () => void
             </div>
             {targetKind === "contact" && <p className="text-[10.5px] cd-text-faint">거래처 담당자는 메일로만 전송할 수 있습니다.</p>}
             {mailOverLimit && (
-              <p className="text-[10.5px] text-[color:var(--cd-danger,#FA896B)]">
+              <p className="text-[10.5px] text-[color:var(--cd-error)]">
                 메일 첨부 총량(25MB)을 초과합니다 — 메일 작성창에서 일부 파일이 제외될 수 있습니다.
               </p>
             )}

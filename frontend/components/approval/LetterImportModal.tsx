@@ -18,10 +18,10 @@ const SLOT_ACCEPT: Record<Slot, string> = { pdf: ".pdf", hwp: ".hwp", hwpx: ".hw
 
 function FileSlot({ slot, file, onPick }: { slot: Slot; file: File | null; onPick: (f: File | null) => void }) {
   return (
-    <label className="cd-action flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer min-w-0">
+    <label className="cd-action flex items-center gap-2 rounded-lg border border-dashed cd-border-c px-3 py-2 cursor-pointer min-w-0">
       <Upload className="w-3.5 h-3.5 cd-text-faint shrink-0" />
       <span className="text-[11px] cd-text-faint shrink-0">{SLOT_LABEL[slot]}</span>
-      <span className="text-[11.5px] cd-text truncate">{file ? file.name : "선택"}</span>
+      <span className="text-[12px] cd-text truncate">{file ? file.name : "선택"}</span>
       {file && (
         <button
           type="button"
@@ -139,11 +139,11 @@ export function LetterImportModal({
       onClick={onClose}
     >
       <div
-        className="cd-card rounded-3xl w-full max-w-[860px] max-h-[90vh] overflow-y-auto flex flex-col gap-4 p-5"
+        className="cd-card rounded-lg w-full max-w-[860px] max-h-[90vh] overflow-y-auto flex flex-col gap-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <h3 className="text-[15px] font-bold cd-text">공문 이관 등록</h3>
+          <h3 className="text-base font-semibold cd-text">공문 이관 등록</h3>
           <span className="text-[11px] cd-text-faint">앱 밖에서 발송된 공문을 대장에 올립니다(결번 메우기).</span>
           <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -155,11 +155,11 @@ export function LetterImportModal({
             <span className="text-[11px] cd-text-faint">공문번호 *</span>
             <input className="cd-input font-mono" placeholder="2026-대외-01034" value={letterNo} onChange={(e) => setLetterNo(e.target.value)} />
             {letterNo.trim() && !LETTER_NO_RE.test(letterNo.trim()) ? (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>형식: 2026-대외-01034</span>
+              <span className="text-[11px] cd-error-text">형식: 2026-대외-01034</span>
             ) : check == null ? null : check.available ? (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-success)" }}>등록 가능한 번호입니다</span>
+              <span className="text-[11px] cd-success-text">등록 가능한 번호입니다</span>
             ) : (
-              <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>이미 사용 중 — {check.usedBy}</span>
+              <span className="text-[11px] cd-error-text">이미 사용 중 — {check.usedBy}</span>
             )}
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">
@@ -182,7 +182,7 @@ export function LetterImportModal({
                 ["proof", "내용증명"],
               ] as const
             ).map(([k, label]) => (
-              <label key={k} className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer pb-1.5">
+              <label key={k} className="flex items-center gap-1.5 text-[13px] cd-text cursor-pointer pb-1.5">
                 <input type="radio" name="importLetterKind" checked={letterKind === k} onChange={() => setLetterKind(k)} /> {label}
               </label>
             ))}
@@ -193,16 +193,16 @@ export function LetterImportModal({
         <RecipientEditGrid label="참조(담당자)" list={ccRefs} onChange={setCcRefs} />
 
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-bold cd-text">원본 파일</span>
+          <span className="text-[11px] font-semibold cd-text">원본 파일</span>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {(["pdf", "hwp", "hwpx"] as Slot[]).map((slot) => (
               <FileSlot key={slot} slot={slot} file={files[slot]} onPick={(f) => setFiles((prev) => ({ ...prev, [slot]: f }))} />
             ))}
           </div>
-          <label className="cd-action flex items-center gap-2 rounded-xl border border-dashed cd-border-c px-3 py-2 cursor-pointer">
+          <label className="cd-action flex items-center gap-2 rounded-lg border border-dashed cd-border-c px-3 py-2 cursor-pointer">
             <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" />
             <span className="text-[11px] cd-text-faint shrink-0">동봉 첨부(복수)</span>
-            <span className="text-[11.5px] cd-text truncate">{attaches.length ? attaches.map((f) => f.name).join(", ") : "선택"}</span>
+            <span className="text-[12px] cd-text truncate">{attaches.length ? attaches.map((f) => f.name).join(", ") : "선택"}</span>
             <input
               type="file"
               multiple
@@ -218,7 +218,7 @@ export function LetterImportModal({
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-[10.5px] cd-text-faint">
+          <span className="text-[11px] cd-text-faint">
             등록 후에는 목록에서 수신처·메일주소를 보완할 수 있습니다. 잘못 등록하면 상세에서 삭제하세요.
           </span>
           <button type="button" className="ml-auto cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs" onClick={onClose}>

@@ -94,7 +94,7 @@ export function ApprovalFinalRulesBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl overflow-y-auto" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg overflow-y-auto" data-theme={theme}>
       <CdPageHeader
         icon={<Gavel className="w-5 h-5" />}
         eyebrow="Approval · Final rules"
@@ -102,7 +102,7 @@ export function ApprovalFinalRulesBoard() {
         help="전결은 승인 단계의 결재자가 뒤에 남은 결재자를 생략하고 최종 승인하는 것입니다. 여기에 등록된 사람만 결재 화면에서 [전결] 버튼을 볼 수 있습니다. 규정이 하나도 없으면 아무도 전결할 수 없습니다. 대결로 받은 결재와 합의 단계에서는 전결할 수 없고, 결재자 부재는 전결을 일으키지 않습니다."
       />
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <h2 className="text-[14px] font-semibold cd-text">규정 추가</h2>
         <div className="max-w-md">
           <CdSelect label="양식" value={formId} onChange={(e) => setFormId(e.target.value)}>
@@ -116,7 +116,7 @@ export function ApprovalFinalRulesBoard() {
         </div>
         <fieldset className="flex flex-col gap-2">
           <legend className="text-[12px] font-semibold cd-text mb-1">전결할 수 있는 사람</legend>
-          <label className="flex items-center gap-2 text-[12.5px] cd-text">
+          <label className="flex items-center gap-2 text-[13px] cd-text">
             <input type="radio" name="final-target" checked={target === "user"} onChange={() => setTarget("user")} />
             지정 인원
             {target === "user" && (
@@ -128,7 +128,7 @@ export function ApprovalFinalRulesBoard() {
               </>
             )}
           </label>
-          <label className="flex items-center gap-2 text-[12.5px] cd-text">
+          <label className="flex items-center gap-2 text-[13px] cd-text">
             <input type="radio" name="final-target" checked={target === "deptHead"} onChange={() => setTarget("deptHead")} />
             기안 부서장 — 문서를 기안한 부서의 부서장
           </label>
@@ -141,21 +141,21 @@ export function ApprovalFinalRulesBoard() {
         </div>
         {msg && <p className="text-[12px] cd-text">{msg}</p>}
         {error && (
-          <p className="text-[12px]" style={{ color: "var(--cd-error)" }}>
+          <p className="text-[12px] cd-error-text">
             {error}
           </p>
         )}
       </div>
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
         <h2 className="text-[14px] font-semibold cd-text">등록된 전결 규정</h2>
         {loading ? (
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : rules.length === 0 ? (
-          <p className="text-[12.5px] cd-text-faint">등록된 규정이 없습니다 — 지금은 아무도 전결할 수 없습니다.</p>
+          <p className="text-[13px] cd-text-faint">등록된 규정이 없습니다 — 지금은 아무도 전결할 수 없습니다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13px]">
               <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">양식</th>

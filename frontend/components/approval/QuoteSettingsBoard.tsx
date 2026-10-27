@@ -79,14 +79,14 @@ const pct = (v: number | null) => (v == null ? "-" : `${(v * 100).toFixed(1)}%`)
  * 고정 최소폭을 두면 가로 스크롤이 생기므로 table-fixed + 비율 열폭 + 축소 타이포로 맞춘다.
  */
 function BucketTable({ title, buckets, compact = false }: { title: string; buckets: QuoteReportBucket[]; compact?: boolean }) {
-  const fs = compact ? "text-[10.5px]" : "text-[11.5px]";
+  const fs = compact ? "text-[11px]" : "text-[12px]";
   const pad = compact ? "px-1.5 py-1" : "px-2 py-1.5";
   // 구분 / 건수 / 수주 / 실주 / 수주율 / 견적 총액 / 낙찰가 갭
   const widths = compact
     ? ["26%", "8%", "8%", "8%", "12%", "24%", "14%"]
     : [undefined, "56px", "56px", "56px", "80px", "112px", "96px"];
   return (
-    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3 min-w-0">
+    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-3 min-w-0">
       <p className="text-[12px] font-semibold cd-text">{title}</p>
       <div className={compact ? "" : "overflow-x-auto"}>
         <table className={`w-full ${fs} border-collapse table-fixed ${compact ? "" : "min-w-[560px]"}`}>
@@ -479,7 +479,7 @@ export function QuoteSettingsBoard() {
 
   return (
     // h-full 을 두면 세분류 목록(50여 항목)이 카드 높이를 넘어 밖으로 삐져나온다 → 콘텐츠 높이를 따른다
-    <div className="cdash cd-fields-white flex min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       {/* 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)·견적서 작성과 동일 */}
       <div className="flex flex-col gap-5 min-h-0 w-full max-w-[1032px]">
         <CdPageHeader
@@ -488,13 +488,13 @@ export function QuoteSettingsBoard() {
           actions={
             <Link
               href="/approval/quote"
-              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
             >
               <ArrowLeft className="w-4 h-4" /> 견적서 작성으로
             </Link>
           }
         />
-        <div className="cd-card rounded-3xl p-5 flex flex-col gap-4 min-h-0">
+        <div className="cd-card rounded-lg p-5 flex flex-col gap-4 min-h-0">
           {/* 탭 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
           <CdTabs<Tab>
             active={tab}
@@ -514,15 +514,15 @@ export function QuoteSettingsBoard() {
 
           {/* 기준 세트(개별) 상단 — 전용 세트가 있는 사업장 태그 목록(탭 전체 너비). 사업장 태그 안에 세분류별 세트 태그 */}
           {tab === "fsets" && (
-            <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2.5">
+            <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-2.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-[12px] font-semibold cd-text">사업장 전용 기준 세트</p>
-                <span className="text-[10.5px] cd-text-faint">
+                <span className="text-[11px] cd-text-faint">
                   전용 세트가 있는 사업장은 견적서 작성 시 표준 세트 대신 적용할 수 있습니다(수신처 사업장 기준).
                 </span>
               </div>
               {facilityTags.length === 0 ? (
-                <p className="text-[11.5px] cd-text-faint">전용 기준 세트가 설정된 사업장이 없습니다. 아래에서 사업장을 검색해 추가하세요.</p>
+                <p className="text-[12px] cd-text-faint">전용 기준 세트가 설정된 사업장이 없습니다. 아래에서 사업장을 검색해 추가하세요.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {facilityTags.map((f) => {
@@ -544,13 +544,13 @@ export function QuoteSettingsBoard() {
                           <Building2 className="w-3.5 h-3.5 cd-text-primary" /> {f.name}
                         </button>
                         {f.sets.length === 0 ? (
-                          <span className="text-[10px] rounded-lg px-1.5 py-0.5 border border-dashed cd-border-c cd-text-faint">세트 없음</span>
+                          <span className="text-[11px] rounded-lg px-1.5 py-0.5 border border-dashed cd-border-c cd-text-faint">세트 없음</span>
                         ) : (
                           f.sets.map((s) => (
                             <button
                               key={s.setId}
                               type="button"
-                              className="cd-action text-[10px] rounded-lg px-1.5 py-0.5 border cd-border-c cd-text"
+                              className="cd-action text-[11px] rounded-lg px-1.5 py-0.5 border cd-border-c cd-text"
                               title={`${s.serviceType} > ${s.serviceSubtype} — 기준 ${s.itemCount}행`}
                               onClick={() => {
                                 // 사업장을 바꾸면 setOf 가 다음 렌더에 갱신되므로 선택만 걸어 두고 세트 로드는 effect 가 한다
@@ -612,8 +612,8 @@ export function QuoteSettingsBoard() {
               {/* 좌: 세분류 리스트 */}
               <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-2.5">
                 {QUOTE_SERVICE_OPTIONS.map((g) => (
-                  <div key={g.type} className="rounded-2xl border cd-border-c p-2.5">
-                    <p className="text-[11px] font-bold cd-text-faint px-1 mb-1">{g.type}</p>
+                  <div key={g.type} className="rounded-lg border cd-border-c p-2.5">
+                    <p className="text-[11px] font-semibold cd-text-faint px-1 mb-1">{g.type}</p>
                     <div className="flex flex-col">
                       {/* 개별 탭에는 '복수 업무'도 둔다 — 견적서 작성에서 저장한 사업장 전용 복수 업무 세트 */}
                       {(isFacilityTab ? [...g.subtypes, QUOTE_MULTI_SUBTYPE] : g.subtypes).map((s) => {
@@ -630,9 +630,9 @@ export function QuoteSettingsBoard() {
                             {active ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3 cd-text-faint" />}
                             <span className="flex-1">{s}</span>
                             {has ? (
-                              <span className="text-[9.5px] rounded-full px-1.5 py-0.5 cd-tint-primary">기준 {has.itemCount}행</span>
+                              <span className="text-[11px] rounded-full px-1.5 py-0.5 cd-tint-primary">기준 {has.itemCount}행</span>
                             ) : (
-                              <span className="text-[9.5px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">{isFacilityTab ? "표준 적용" : "자유입력"}</span>
+                              <span className="text-[11px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint">{isFacilityTab ? "표준 적용" : "자유입력"}</span>
                             )}
                           </button>
                         );
@@ -653,7 +653,7 @@ export function QuoteSettingsBoard() {
                       : "좌측에서 세분류를 선택하세요. 기준 세트가 없는 세분류는 자유 입력형(품목 직접 입력)으로 동작합니다."}
                   </p>
                 ) : !detail ? (
-                  <div className="rounded-2xl border border-dashed cd-border-c p-8 flex flex-col items-center gap-3">
+                  <div className="rounded-lg border border-dashed cd-border-c p-8 flex flex-col items-center gap-3">
                     <p className="text-sm cd-text">
                       {isFacilityTab && <b>{facility?.name} · </b>}
                       <b>{selected.serviceType} &gt; {selected.serviceSubtype}</b> — {isFacilityTab ? "전용 기준 세트가 없습니다(표준 세트 적용)." : "기준 세트가 없습니다(자유 입력형)."}
@@ -685,8 +685,8 @@ export function QuoteSettingsBoard() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold cd-text text-sm">{isFacilityTab && facility ? `${facility.name} · ` : ""}{detail.serviceType} &gt; {detail.serviceSubtype}</h3>
-                      <span className="text-[10.5px] cd-text-faint">수정해도 기존 견적서의 산정 스냅샷은 유지됩니다</span>
+                      <h3 className="font-semibold cd-text text-sm">{isFacilityTab && facility ? `${facility.name} · ` : ""}{detail.serviceType} &gt; {detail.serviceSubtype}</h3>
+                      <span className="text-[11px] cd-text-faint">수정해도 기존 견적서의 산정 스냅샷은 유지됩니다</span>
                       <div className="ml-auto flex items-center gap-2">
                         <button type="button" className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-error)]" disabled={busy} onClick={() => void deleteSet()}>
                           <Trash2 className="w-3 h-3 inline" /> 세트 삭제
@@ -699,7 +699,7 @@ export function QuoteSettingsBoard() {
 
                     {/* 요율 기본값 */}
                     {/* 요율 4종 — 입력 박스 기준 2열 정렬(라벨 길이가 달라도 입력이 한 줄에 맞도록) */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 text-[12px]">
+                    <div className="rounded-lg border cd-border-c p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 text-[12px]">
                       {(
                         [
                           ["제경비 요율", "overheadRate", true, Math.round(detail.overheadRate * 100)],
@@ -736,7 +736,7 @@ export function QuoteSettingsBoard() {
                     </div>
 
                     {/* 항목 트리(base_md) */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-3">
                       <p className="text-[12px] font-semibold cd-text">업무 항목 트리 (별첨1) — 표준 MD = 역산 분배 가중치</p>
                       <QuoteItemTreeEditor
                         grades={detail.grades}
@@ -747,13 +747,13 @@ export function QuoteSettingsBoard() {
                     </div>
 
                     {/* 특이사항 템플릿 */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-1.5">
+                    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-1.5">
                       <p className="text-[12px] font-semibold cd-text">특이사항 기본 문구 (작성 화면 프리필)</p>
                       <textarea className="cd-input text-[12px] min-h-[76px]" value={detail.remarksTemplate} onChange={(e) => setDetail({ ...detail, remarksTemplate: e.target.value })} />
                     </div>
 
                     {/* 시뮬레이터 */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-2">
                       <p className="text-[12px] font-semibold cd-text flex items-center gap-1.5">
                         <Calculator className="w-3.5 h-3.5 cd-text-primary" /> 역산 시뮬레이터 — 편집 중인 기준·최신 노임단가로 즉석 검증
                       </p>
@@ -833,7 +833,7 @@ export function QuoteSettingsBoard() {
               </div>
               <button
                 type="button"
-                className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start"
+                className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint self-start"
                 onClick={() => {
                   const y = window.prompt("추가할 연도(YYYY)를 입력하세요.", String(new Date().getFullYear() + 1));
                   if (y && /^\d{4}$/.test(y) && !laborYears[y]) setLaborYears((prev) => ({ ...prev, [y]: { rates: {}, sourceNote: "" } }));
@@ -841,13 +841,13 @@ export function QuoteSettingsBoard() {
               >
                 ＋ 연도 추가
               </button>
-              <div className="rounded-2xl border cd-border-c p-3.5">
+              <div className="rounded-lg border cd-border-c p-3.5">
                 <p className="text-[12px] font-semibold cd-text mb-1.5">자동 수집 로그 — 매년 1월 당해 연도 확보까지 하루 1회 시도</p>
                 {syncLog.length === 0 ? (
-                  <p className="text-[11.5px] cd-text-faint">아직 자동 수집 시도 이력이 없습니다.</p>
+                  <p className="text-[12px] cd-text-faint">아직 자동 수집 시도 이력이 없습니다.</p>
                 ) : (
                   syncLog.map((l, i) => (
-                    <p key={i} className="text-[11.5px] cd-text-faint">
+                    <p key={i} className="text-[12px] cd-text-faint">
                       {l.triedDate} · {l.year}년 · {l.ok ? <span className="cd-text-primary font-semibold">성공</span> : "실패"}
                       {l.sourceUrl ? ` · ${l.sourceUrl}` : ""}{l.detail ? ` · ${l.detail}` : ""}
                     </p>
@@ -864,7 +864,7 @@ export function QuoteSettingsBoard() {
                 <div key={i} className="flex items-center gap-2">
                   <input className="cd-input font-mono text-[12px] shrink-0" style={{ width: "9rem" }} value={c.code} placeholder="코드" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, code: e.target.value } : x)))} />
                   <input className="cd-input text-sm flex-1 min-w-0" style={{ width: "auto" }} value={c.label} placeholder="라벨" onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
-                  <label className="flex items-center gap-1 text-[11.5px] cd-text-faint whitespace-nowrap shrink-0">
+                  <label className="flex items-center gap-1 text-[12px] cd-text-faint whitespace-nowrap shrink-0">
                     <input type="checkbox" className="shrink-0" checked={c.enabled} onChange={(e) => setCodes((prev) => prev.map((x, xi) => (xi === i ? { ...x, enabled: e.target.checked } : x)))} /> 사용
                   </label>
                   <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setCodes((prev) => prev.filter((_, xi) => xi !== i))}>
@@ -873,7 +873,7 @@ export function QuoteSettingsBoard() {
                 </div>
               ))}
               <div className="flex items-center gap-2">
-                <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint" onClick={() => setCodes((prev) => [...prev, { code: "", label: "", enabled: true }])}>
+                <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint" onClick={() => setCodes((prev) => [...prev, { code: "", label: "", enabled: true }])}>
                   ＋ 코드 추가
                 </button>
                 <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-50" disabled={busy} onClick={() => void saveCodes()}>
@@ -926,10 +926,10 @@ export function QuoteSettingsBoard() {
                         ["평균 결정 소요", report.kpi.avgDecideDays != null ? `${report.kpi.avgDecideDays}일` : "-", "견적일→결과 확정일"],
                       ] as const
                     ).map(([label, value, hint]) => (
-                      <div key={label} className="rounded-2xl border cd-border-c p-3 flex flex-col gap-0.5">
-                        <span className="text-[10.5px] cd-text-faint">{label}</span>
-                        <span className="text-[16px] font-bold cd-text">{value}</span>
-                        <span className="text-[10px] cd-text-faint">{hint}</span>
+                      <div key={label} className="rounded-lg border cd-border-c p-3 flex flex-col gap-0.5">
+                        <span className="text-[11px] cd-text-faint">{label}</span>
+                        <span className="text-[16px] font-semibold cd-text">{value}</span>
+                        <span className="text-[11px] cd-text-faint">{hint}</span>
                       </div>
                     ))}
                   </div>
@@ -944,10 +944,10 @@ export function QuoteSettingsBoard() {
                   </div>
 
                   {/* 보정계수 제안 */}
-                  <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                  <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-3">
                     <p className="text-[12px] font-semibold cd-text">시장 보정계수 제안 — 실주 건의 (경쟁 낙찰가 / 자사 견적가) 중앙값 기반</p>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-[11.5px] border-collapse min-w-[720px]">
+                      <table className="w-full text-[12px] border-collapse min-w-[720px]">
                         <thead className="cd-table-head">
                           <tr>
                             <th className="border cd-border-c px-2 py-1.5 text-left cd-text-faint font-semibold">세분류</th>
@@ -970,7 +970,7 @@ export function QuoteSettingsBoard() {
                                 {s.setId && s.suggestAdjust != null && (
                                   <button
                                     type="button"
-                                    className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[10.5px] disabled:opacity-50"
+                                    className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] disabled:opacity-50"
                                     disabled={busy}
                                     onClick={() => void applySuggestion(s.setId as string, s.suggestAdjust as number)}
                                   >

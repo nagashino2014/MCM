@@ -81,7 +81,7 @@ export function ApprovalInsightsBoard() {
     : [];
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<BarChart3 className="w-5 h-5" />}
         eyebrow="Approval · Insights"
@@ -97,37 +97,37 @@ export function ApprovalInsightsBoard() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {kpiCards.map((k) => (
-              <div key={k.label} className="cd-card rounded-2xl p-4 flex flex-col gap-1">
+              <div key={k.label} className="cd-card rounded-lg p-4 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5 cd-text-primary">
                   <span className="rounded-lg cd-tint-primary p-1.5">{k.icon}</span>
                   <span className="text-[11px] font-semibold cd-text-faint">{k.label}</span>
                 </div>
-                <div className="text-2xl font-bold cd-text mt-1">{k.value}</div>
-                <div className="text-[10.5px] cd-text-faint">{k.hint}</div>
+                <div className="text-2xl font-semibold cd-text mt-1">{k.value}</div>
+                <div className="text-[11px] cd-text-faint">{k.hint}</div>
               </div>
             ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="cd-card rounded-2xl p-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider cd-text-faint mb-1">월별 반려율</div>
-              <div className="text-[10px] cd-text-faint mb-2">최근 12개월 · 상신 대비 반려</div>
+            <div className="cd-card rounded-lg p-4">
+              <div className="text-[11px] font-medium cd-text-faint mb-1">월별 반려율</div>
+              <div className="text-[11px] cd-text-faint mb-2">최근 12개월 · 상신 대비 반려</div>
               <ApexChart key="reject" options={rejectOptions} series={[{ name: "반려율", data: data.monthly.map((m) => m.rejectRatePct) }]} type="line" height={210} />
             </div>
-            <div className="cd-card rounded-2xl p-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider cd-text-faint mb-1">월별 평균 결재 소요</div>
-              <div className="text-[10px] cd-text-faint mb-2">최근 12개월 · 상신→완료(시간)</div>
+            <div className="cd-card rounded-lg p-4">
+              <div className="text-[11px] font-medium cd-text-faint mb-1">월별 평균 결재 소요</div>
+              <div className="text-[11px] cd-text-faint mb-2">최근 12개월 · 상신→완료(시간)</div>
               <ApexChart key="proc" options={procOptions} series={[{ name: "평균 소요", data: data.monthly.map((m) => m.avgProcessingHours ?? 0) }]} type="bar" height={210} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="cd-card rounded-2xl p-5">
-              <h3 className="font-bold cd-text text-sm mb-3">결재자별 평균 체류 (최근 90일)</h3>
+            <div className="cd-card rounded-lg p-5">
+              <h3 className="font-semibold cd-text text-sm mb-3">결재자별 평균 체류 (최근 90일)</h3>
               {data.approvers.length === 0 ? (
                 <p className="text-[12px] cd-text-faint">데이터가 없습니다.</p>
               ) : (
-                <table className="w-full text-[12.5px]">
+                <table className="w-full text-[13px]">
                   <thead className="cd-table-head">
                     <tr className="text-left cd-text-faint text-[11px]">
                       <th className="py-1.5 pr-3 font-semibold">결재자</th>
@@ -147,12 +147,12 @@ export function ApprovalInsightsBoard() {
                 </table>
               )}
             </div>
-            <div className="cd-card rounded-2xl p-5">
-              <h3 className="font-bold cd-text text-sm mb-3">양식별 건수·소요 (최근 90일)</h3>
+            <div className="cd-card rounded-lg p-5">
+              <h3 className="font-semibold cd-text text-sm mb-3">양식별 건수·소요 (최근 90일)</h3>
               {data.forms.length === 0 ? (
                 <p className="text-[12px] cd-text-faint">데이터가 없습니다.</p>
               ) : (
-                <table className="w-full text-[12.5px]">
+                <table className="w-full text-[13px]">
                   <thead className="cd-table-head">
                     <tr className="text-left cd-text-faint text-[11px]">
                       <th className="py-1.5 pr-3 font-semibold">양식</th>

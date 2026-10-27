@@ -457,7 +457,7 @@ export function ApprovalNoticeBoard() {
   );
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<Megaphone className="w-5 h-5" />}
         eyebrow="Approval · Internal Notice"
@@ -490,13 +490,13 @@ export function ApprovalNoticeBoard() {
           <RejectedBanner meta={editMeta} />
           {/* 회수 문서(2026-09-22) — 승인 후 회수하면 draft 인데 확정 번호가 있다 */}
           {editMeta?.status === "draft" && docNo && recalled && (
-            <div className="rounded-xl border cd-border-c px-3.5 py-2.5 mb-3 text-[12px] cd-text flex items-center gap-2">
+            <div className="rounded-lg border cd-border-c px-3.5 py-2.5 mb-3 text-[12px] cd-text flex items-center gap-2">
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
               회수된 내부고시입니다 — 내용을 고쳐 재상신하면 <b className="font-mono mx-1">{docNo}</b> 번호 그대로 다시 결재를 받습니다.
             </div>
           )}
           {noticeDrafts.length > 0 && (
-            <div className="rounded-xl border cd-border-c cd-solid-bg px-3.5 py-2.5 mb-3 text-[12px]">
+            <div className="rounded-lg border cd-border-c cd-solid-bg px-3.5 py-2.5 mb-3 text-[12px]">
               <button
                 type="button"
                 className="flex items-center gap-1.5 font-semibold cd-text w-full text-left"
@@ -525,11 +525,11 @@ export function ApprovalNoticeBoard() {
                         <FileText className="w-3.5 h-3.5 cd-text-faint shrink-0" />
                         <span className="cd-text truncate flex-1">{d.title || "(제목 없음)"}</span>
                         {d.status === "rejected" && (
-                          <span className="rounded-full px-1.5 py-0.5 text-[10px] cd-error-text border border-current shrink-0">반려</span>
+                          <span className="rounded-full px-1.5 py-0.5 text-[11px] cd-error-text border border-current shrink-0">반려</span>
                         )}
-                        {d.docNo && <span className="font-mono text-[10.5px] cd-text-faint shrink-0">{d.docNo}</span>}
-                        <span className="text-[10.5px] cd-text-faint shrink-0">{d.updatedAt.slice(0, 10)}</span>
-                        {current && <span className="text-[10.5px] cd-text-primary shrink-0">편집 중</span>}
+                        {d.docNo && <span className="font-mono text-[11px] cd-text-faint shrink-0">{d.docNo}</span>}
+                        <span className="text-[11px] cd-text-faint shrink-0">{d.updatedAt.slice(0, 10)}</span>
+                        {current && <span className="text-[11px] cd-text-primary shrink-0">편집 중</span>}
                       </button>
                     );
                   })}
@@ -540,14 +540,14 @@ export function ApprovalNoticeBoard() {
         </div>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 좌: 고시 내용 — 폭은 공문 작성과 동일 */}
-          <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
+          <div className="cd-card rounded-lg p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
             {/* 문서번호 + 직인 날인 + 시행일을 한 줄에 — 문서번호 칸이 남는 폭을 채워 시행일 오른쪽 끝이
                 아래 발신 칸 오른쪽 끝과 맞는다(2026-09-22 사용자 요청) */}
             <div className="flex items-center gap-x-4 gap-y-2 flex-wrap md:flex-nowrap">
-            <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3.5 py-2 flex-wrap min-w-0 flex-1">
+            <div className="flex items-center gap-2 rounded-lg border cd-border-c px-3.5 py-2 flex-wrap min-w-0 flex-1">
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
               {manualOn && !noLocked && canAssign ? (
-                <span className="text-[12.5px] cd-text flex items-center gap-1.5 whitespace-nowrap">
+                <span className="text-[13px] cd-text flex items-center gap-1.5 whitespace-nowrap">
                   문서번호
                   <span className="font-mono cd-text-faint">내부고시-</span>
                   <input
@@ -563,31 +563,31 @@ export function ApprovalNoticeBoard() {
                   <span className="font-mono cd-text-faint">호</span>
                 </span>
               ) : (
-                <span className="text-[12.5px] cd-text">
+                <span className="text-[13px] cd-text">
                   문서번호 <b className="font-mono">{docNo ?? nextNo ?? "조회 중..."}</b>
                 </span>
               )}
               <CdHelp topic="notice.number" />
               {!docNo && !manualOn && (
-                <span className="text-[10.5px] cd-text-faint" title="먼저 상신되는 문서가 이 번호를 가져갈 수 있습니다">채번 예정 · 상신 시 확정</span>
+                <span className="text-[11px] cd-text-faint" title="먼저 상신되는 문서가 이 번호를 가져갈 수 있습니다">채번 예정 · 상신 시 확정</span>
               )}
               {manualOn &&
                 !noLocked &&
                 canAssign &&
                 (!manualNo ? (
-                  <span className="text-[10.5px] cd-text-faint">번호 입력(자동 예정 {nextNo ?? "-"})</span>
+                  <span className="text-[11px] cd-text-faint">번호 입력(자동 예정 {nextNo ?? "-"})</span>
                 ) : manualCheck == null ? (
-                  <span className="text-[10.5px] cd-text-faint">중복 확인 중...</span>
+                  <span className="text-[11px] cd-text-faint">중복 확인 중...</span>
                 ) : manualCheck.available ? (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-success)" }}>사용 가능한 번호입니다</span>
+                  <span className="text-[11px] cd-success-text">사용 가능한 번호입니다</span>
                 ) : (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>
+                  <span className="text-[11px] cd-error-text">
                     이미 사용 중 — {manualCheck.usedBy}
                   </span>
                 ))}
               {canAssign && !noLocked && (
                 <label
-                  className="ml-2 flex items-center gap-1.5 text-[11.5px] cd-text cursor-pointer whitespace-nowrap"
+                  className="ml-2 flex items-center gap-1.5 text-[12px] cd-text cursor-pointer whitespace-nowrap"
                   title="수기로 먼저 발번한 내부고시 번호를 건너뛰고 번호를 직접 지정합니다(관리자)."
                 >
                   <input
@@ -634,7 +634,7 @@ export function ApprovalNoticeBoard() {
                 발신(문서 명의)
                 <input className="cd-input" value={senderText} onChange={(e) => setSenderText(e.target.value)} placeholder="예: 대표이사" />
               </label>
-              <p className="md:col-span-2 text-[10.5px] cd-text-faint -mt-1">
+              <p className="md:col-span-2 text-[11px] cd-text-faint -mt-1">
                 발신은 고시 지면에 찍히는 명의이고, 기안자는 결재 문서에 기록되는 작성자입니다
                 {drafterName ? ` — 이 문서의 기안자: ${drafterName}` : ""}.
               </p>
@@ -659,7 +659,7 @@ export function ApprovalNoticeBoard() {
                   </button>
                 </span>
               </div>
-              <div className="rounded-xl border cd-border-c overflow-hidden">
+              <div className="rounded-lg border cd-border-c overflow-hidden">
                 <MailEditor ref={editorRef} onInput={() => {}} minHeightPx={340} />
               </div>
             </div>
@@ -689,12 +689,12 @@ export function ApprovalNoticeBoard() {
             {/* 첨부서류 — 결재자·열람자가 문서 뷰어에서 함께 확인한다 */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] cd-text-faint">첨부서류 — 붙임 문서 원본 등(결재 문서에 첨부되어 함께 열람)</span>
-              <span className="text-[10.5px] cd-text-faint">
+              <span className="text-[11px] cd-text-faint">
                 결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <label
-                  className={`rounded-xl border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
+                  className={`rounded-lg border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
                     dragOver ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"
                   }`}
                   onDragOver={(e) => {
@@ -721,9 +721,9 @@ export function ApprovalNoticeBoard() {
                     }}
                   />
                 </label>
-                <div className="rounded-xl border cd-border-c p-2.5 min-h-[104px] flex flex-col gap-1 overflow-auto">
+                <div className="rounded-lg border cd-border-c p-2.5 min-h-[104px] flex flex-col gap-1 overflow-auto">
                   {fileAttachments.length === 0 ? (
-                    <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
+                    <p className="text-[12px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
                   ) : (
                     fileAttachments.map((f, i) => (
                       <div
@@ -733,7 +733,7 @@ export function ApprovalNoticeBoard() {
                         title="끌어서 첨부 순서를 바꿉니다"
                       >
                         <GripVertical className="w-3.5 h-3.5 cd-text-faint shrink-0 cursor-grab" aria-hidden />
-                        <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                        <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
                           className="text-[12px] cd-text truncate flex-1 text-left hover:underline"
@@ -742,7 +742,7 @@ export function ApprovalNoticeBoard() {
                         >
                           {f.name}
                         </button>
-                        <span className="text-[10.5px] cd-text-faint shrink-0">{(f.size / 1024 / 1024).toFixed(2)}MB</span>
+                        <span className="text-[11px] cd-text-faint shrink-0">{(f.size / 1024 / 1024).toFixed(2)}MB</span>
                         <button
                           type="button"
                           className="cd-text-faint hover:text-[color:var(--cd-error)]"
@@ -759,21 +759,21 @@ export function ApprovalNoticeBoard() {
           </div>
 
           {/* 우: 결재선(공문 작성 화면 이식) */}
-          <div className="cd-card rounded-3xl p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
-            <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+          <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+            <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
               <Users className="w-4 h-4 cd-text-primary" /> 결재선
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
 
             {presets.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
+                <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
                 {presets.map((p) => (
                   <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
-                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                    <button type="button" className="text-[11px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
                       ×
                     </button>
                   </span>
@@ -784,8 +784,8 @@ export function ApprovalNoticeBoard() {
             {line.length === 0 && <p className="text-[12px] cd-text-faint">아래 버튼으로 합의/승인 결재자를 추가하세요.</p>}
             <div className="flex flex-col gap-1.5">
               {line.map((s, i) => (
-                <div key={`${s.assigneeUserId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                  <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                <div key={`${s.assigneeUserId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                  <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                   <select
                     className="cd-select"
                     style={{ width: 70 }}
@@ -795,7 +795,7 @@ export function ApprovalNoticeBoard() {
                     <option value="agree">합의</option>
                     <option value="approve">승인</option>
                   </select>
-                  <span className="text-[12.5px] cd-text truncate flex-1">
+                  <span className="text-[13px] cd-text truncate flex-1">
                     {s.assigneeName}
                     {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                   </span>
@@ -816,13 +816,13 @@ export function ApprovalNoticeBoard() {
 
             {/* 참조/열람자 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
-              <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
+              <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
-                <span className="ml-auto text-[10px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
               </h4>
               <p className="text-[11px] cd-text-faint leading-relaxed">여기에 지정한 사내 인원은 결재 문서(고시 지면)를 함께 열람합니다(선택).</p>
               {watchers.map((w, i) => (
-                <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
+                <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">
                   <select
                     className="cd-select"
                     style={{ width: 66 }}
@@ -870,7 +870,7 @@ export function ApprovalNoticeBoard() {
                 <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint">상신 시 문서번호(내부고시-NNNN호)가 확정되고, 결재 완료 문서는 문서함에서 PDF 로 열람·출력합니다.</p>
+            <p className="text-[11px] cd-text-faint">상신 시 문서번호(내부고시-NNNN호)가 확정되고, 결재 완료 문서는 문서함에서 PDF 로 열람·출력합니다.</p>
           </div>
         </div>
         </>
@@ -878,13 +878,13 @@ export function ApprovalNoticeBoard() {
 
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-lg bg-[color:var(--cd-card)] shadow-[var(--cd-shadow-dialog)] w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
-              <h4 className="font-bold cd-text text-[13px]">내부고시 미리보기</h4>
+              <h4 className="font-semibold cd-text text-[13px]">내부고시 미리보기</h4>
               <span className="ml-auto flex items-center gap-1.5">
                 <button
                   type="button"
-                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1 disabled:opacity-50"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1 disabled:opacity-50"
                   disabled={exporting != null}
                   onClick={() => void exportFile("pdf")}
                 >
@@ -892,7 +892,7 @@ export function ApprovalNoticeBoard() {
                 </button>
                 <button
                   type="button"
-                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11.5px] flex items-center gap-1 disabled:opacity-50"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1 disabled:opacity-50"
                   disabled={exporting != null}
                   onClick={() => void exportFile("hwpx")}
                   title="한글에서 고칠 수 있는 편집용 사본입니다(공식 지면은 PDF)"

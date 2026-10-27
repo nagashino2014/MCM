@@ -1275,7 +1275,7 @@ export function ApprovalDraftBoard() {
   }, [form, persist]);
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Draft"
@@ -1303,7 +1303,7 @@ export function ApprovalDraftBoard() {
         <div className="flex flex-col xl:flex-row gap-4 items-start">
           {/* 본문 카드는 렌더러 고정폭(273mm ≈ 1032px)에 맞춘다 — 공문·견적서 작성 화면과 동일 규칙.
               제한이 없으면 넓은 화면에서 양식 좌우로 빈 여백만 커진다. */}
-          <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
+          <div className="cd-card rounded-lg p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[260px]">
                 제목
@@ -1313,13 +1313,13 @@ export function ApprovalDraftBoard() {
                 <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} /> 긴급
               </label>
               {leaveRemaining && (
-                <span className="mt-4 text-[11.5px] rounded-full px-2.5 py-1 cd-tint-primary" title={`부여 ${leaveRemaining.granted} · 사용 ${leaveRemaining.used}`}>
+                <span className="mt-4 text-[12px] rounded-full px-2.5 py-1 cd-tint-primary" title={`부여 ${leaveRemaining.granted} · 사용 ${leaveRemaining.used}`}>
                   올해 잔여 연차 {leaveRemaining.remaining}일
                 </span>
               )}
               {leaveHint && (
                 <span
-                  className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
+                  className={`mt-4 text-[12px] rounded-full px-2.5 py-1 ${
                     leaveHint.includes("⚠") || leaveHint.includes("빠릅니다")
                       ? "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
                       : "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
@@ -1330,7 +1330,7 @@ export function ApprovalDraftBoard() {
               )}
               {otHint && (
                 <span
-                  className={`mt-4 text-[11.5px] rounded-full px-2.5 py-1 ${
+                  className={`mt-4 text-[12px] rounded-full px-2.5 py-1 ${
                     otHint.includes("⚠")
                       ? "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
                       : "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
@@ -1346,7 +1346,7 @@ export function ApprovalDraftBoard() {
               )}
               {/* 같은 날 추가 신청(2026-08-28) — 원 신청에 자동 연동, 시간대 겹침은 상신 불가 */}
               {isOvertimeForm && (otUsage?.sameDay?.length ?? 0) > 0 && (
-                <span className="mt-1.5 text-[11.5px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]">
+                <span className="mt-1.5 text-[12px] rounded-full px-2.5 py-1 border border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]">
                   이 날 기존 신청 {otUsage!.sameDay!.length}건(
                   {otUsage!.sameDay!.map((r) => (r.start && r.end ? `${r.start}~${r.end}` : "시간 미기재")).join(", ")}
                   ) — 추가 신청은 원 신청에 자동 연동되며, 시간대가 겹치면 상신할 수 없습니다.
@@ -1356,17 +1356,17 @@ export function ApprovalDraftBoard() {
             {/* 선행 문서 연결(127) — 신청서→보고서 연관. 배너는 렌더러 위에 상시 표시된다. */}
             {form.refFormId && (
               <div
-                className={`rounded-xl border px-3.5 py-2.5 flex flex-col gap-1.5 ${refDoc ? "cd-border-c" : "border-dashed cd-border-c"}`}
+                className={`rounded-lg border px-3.5 py-2.5 flex flex-col gap-1.5 ${refDoc ? "cd-border-c" : "border-dashed cd-border-c"}`}
                 style={refDoc && refMismatches.length > 0 ? { borderColor: "var(--cd-warning)" } : undefined}
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <Link2 className="w-4 h-4 cd-text-primary shrink-0" />
                   {refDoc ? (
                     <>
-                      <span className="text-[12.5px] cd-text">
+                      <span className="text-[13px] cd-text">
                         선행 문서: <b>{refDoc.docNo ? `${refDoc.docNo} · ` : ""}{refDoc.title}</b>
                       </span>
-                      <span className="text-[10.5px] cd-text-faint">
+                      <span className="text-[11px] cd-text-faint">
                         {refDoc.formName} · {refDoc.status === "approved" ? "승인 완료" : "결재 진행 중"}
                       </span>
                       <span className="ml-auto flex items-center gap-1.5">
@@ -1384,15 +1384,15 @@ export function ApprovalDraftBoard() {
                     </>
                   ) : (
                     <>
-                      <span className="text-[12.5px] cd-text">선행 문서 미연결</span>
+                      <span className="text-[13px] cd-text">선행 문서 미연결</span>
                       {refCandidates.length > 0 && (
-                        <span className="text-[11.5px]" style={{ color: "var(--cd-warning)" }}>
+                        <span className="text-[12px] cd-warn-text">
                           최근 기안한 {refCandidates[0].formName} {refCandidates.length}건이 있습니다 — 해당 건이면 연결하세요.
                         </span>
                       )}
                       <button
                         type="button"
-                        className="ml-auto cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"
+                        className="ml-auto cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[12px] flex items-center gap-1.5"
                         onClick={() => setRefModal(true)}
                       >
                         <Link2 className="w-3.5 h-3.5" /> 선행 문서 선택
@@ -1403,7 +1403,7 @@ export function ApprovalDraftBoard() {
                 {refDoc && refMismatches.length > 0 && (
                   <div className="flex flex-col gap-1">
                     {refMismatches.map((m, i) => (
-                      <p key={i} className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
+                      <p key={i} className="text-[12px] flex items-center gap-1.5 cd-warn-text">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                         {m.label} 불일치 — 선행 문서: {m.refText} / 현재 입력: {m.curText}
                       </p>
@@ -1415,7 +1415,7 @@ export function ApprovalDraftBoard() {
                 )}
                 {/* 숙박출장수당 안내(224) — 숙박 출장신청서를 연결한 출장보고서 */}
                 {lodgingRef && (
-                  <p className="text-[11.5px] flex items-center gap-1.5 cd-text">
+                  <p className="text-[12px] flex items-center gap-1.5 cd-text">
                     <BedDouble className="w-3.5 h-3.5 shrink-0 cd-text-primary" />
                     {lodgingPreview ? (
                       <>
@@ -1444,7 +1444,7 @@ export function ApprovalDraftBoard() {
                     title="클릭하면 결근 기간이 입력됩니다"
                     onClick={() => setValues((prev) => ({ ...prev, absence_period: { from: r.dateFrom, to: r.dateTo } }))}
                   >
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning)" }} />
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 cd-warn-text" />
                     결근사유서 제출 요청 — {r.dateFrom}
                     {r.dateTo !== r.dateFrom ? ` ~ ${r.dateTo}` : ""}
                     {r.note ? <span className="cd-text-faint">({r.note})</span> : null}
@@ -1514,7 +1514,7 @@ export function ApprovalDraftBoard() {
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <label
-                  className={`rounded-xl border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
+                  className={`rounded-lg border-2 border-dashed px-4 py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center ${
                     dragOver ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"
                   }`}
                   onDragOver={(e) => {
@@ -1530,7 +1530,7 @@ export function ApprovalDraftBoard() {
                 >
                   <Paperclip className="w-5 h-5 cd-text-faint" />
                   <span className="text-[12px] cd-text">{uploading ? "업로드 중..." : "파일을 끌어다 놓거나 클릭해 선택"}</span>
-                  <span className="text-[10.5px] cd-text-faint">영수증·증빙·참고자료</span>
+                  <span className="text-[11px] cd-text-faint">영수증·증빙·참고자료</span>
                   <input
                     type="file"
                     multiple
@@ -1542,9 +1542,9 @@ export function ApprovalDraftBoard() {
                     }}
                   />
                 </label>
-                <div className="rounded-xl border cd-border-c p-2.5 min-h-[104px] flex flex-col gap-1 overflow-auto">
+                <div className="rounded-lg border cd-border-c p-2.5 min-h-[104px] flex flex-col gap-1 overflow-auto">
                   {fileAttachments.length === 0 ? (
-                    <p className="text-[11.5px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
+                    <p className="text-[12px] cd-text-faint m-auto">첨부된 파일이 없습니다.</p>
                   ) : (
                     fileAttachments.map((f, i) => (
                       <div
@@ -1554,7 +1554,7 @@ export function ApprovalDraftBoard() {
                         title="끌어서 첨부 순서를 바꿉니다"
                       >
                         <GripVertical className="w-3.5 h-3.5 cd-text-faint shrink-0 cursor-grab" aria-hidden />
-                        <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                        <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                         <button
                           type="button"
                           className="text-[12px] cd-text truncate flex-1 text-left hover:underline"
@@ -1563,7 +1563,7 @@ export function ApprovalDraftBoard() {
                         >
                           {f.name}
                         </button>
-                        <span className="text-[10.5px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
+                        <span className="text-[11px] cd-text-faint shrink-0">{formatBytes(f.size)}</span>
                         <button
                           type="button"
                           className="cd-text-faint hover:text-[color:var(--cd-error)]"
@@ -1581,8 +1581,8 @@ export function ApprovalDraftBoard() {
           </div>
 
           {/* 결재선 */}
-          <div className="cd-card rounded-3xl p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
-            <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+          <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+            <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
               <Users className="w-4 h-4 cd-text-primary" /> 결재선
               <CdHelp topic="approval.draft-line" />
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
@@ -1591,13 +1591,13 @@ export function ApprovalDraftBoard() {
             {/* 나의 결재선 프리셋 */}
             {presets.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
+                <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
                 {presets.map((p) => (
                   <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
-                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                    <button type="button" className="text-[11px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
                       ×
                     </button>
                   </span>
@@ -1608,8 +1608,8 @@ export function ApprovalDraftBoard() {
             {line.length === 0 && <p className="text-[12px] cd-text-faint">아래 버튼으로 합의/승인 결재자를 추가하세요.</p>}
             <div className="flex flex-col gap-1.5">
               {line.map((s, i) => (
-                <div key={`${s.assigneeUserId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                  <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                <div key={`${s.assigneeUserId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                  <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                   <select
                     className="cd-select"
                     style={{ width: 70 }}
@@ -1621,7 +1621,7 @@ export function ApprovalDraftBoard() {
                     <option value="agree">합의</option>
                     <option value="approve">승인</option>
                   </select>
-                  <span className="text-[12.5px] cd-text truncate flex-1">
+                  <span className="text-[13px] cd-text truncate flex-1">
                     {s.assigneeName}
                     {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                     {lineAbsences[s.assigneeUserId] && (
@@ -1652,22 +1652,22 @@ export function ApprovalDraftBoard() {
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
-            <p className="text-[10.5px] cd-text-faint">
+            <p className="text-[11px] cd-text-faint">
               결재자가 부재 중이면 본인이 정해 둔 대결자에게 넘어가거나 다음 결재자로 건너뜁니다(대결·부재 표기). 최종 결재자는 복귀 후 직접 결재해야 결재가 끝납니다.
             </p>
 
             {/* 참조/열람자 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
-              <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
+              <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                 <CdHelp topic="approval.draft-watchers" />
-                <span className="ml-auto text-[10px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
               </h4>
               {watchers.length === 0 ? (
                 <p className="text-[11px] cd-text-faint">필요 시 참조/열람자를 지정하세요(선택).</p>
               ) : (
                 watchers.map((w, i) => (
-                  <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
+                  <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">
                     <select
                       className="cd-select"
                       style={{ width: 66 }}
@@ -1726,9 +1726,9 @@ export function ApprovalDraftBoard() {
 
         {/* 사전검토 결과 패널 */}
         {precheck && (
-          <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+          <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+              <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 cd-text-primary" /> 사전검토 결과
               </h3>
               {precheck.llmAvailable === false && (
@@ -1739,7 +1739,7 @@ export function ApprovalDraftBoard() {
               </button>
             </div>
             {precheck.findings.length === 0 && precheck.similar.length === 0 ? (
-              <p className="text-[12.5px] cd-text-faint">지적 사항이 없습니다.</p>
+              <p className="text-[13px] cd-text-faint">지적 사항이 없습니다.</p>
             ) : (
               <>
                 {precheck.findings.map((f, i) => {
@@ -1752,11 +1752,11 @@ export function ApprovalDraftBoard() {
                       : "var(--cd-primary)";
                   const Icon = isBlock ? Ban : isWarn ? AlertTriangle : Info;
                   return (
-                    <div key={i} className="flex items-start gap-2 rounded-xl border cd-border-c px-3 py-2" style={{ borderColor: color }}>
+                    <div key={i} className="flex items-start gap-2 rounded-lg border cd-border-c px-3 py-2" style={{ borderColor: color }}>
                       <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
                       <div className="flex flex-col">
-                        <span className="text-[12.5px] cd-text">{f.message}</span>
-                        <span className="text-[10px] cd-text-faint">
+                        <span className="text-[13px] cd-text">{f.message}</span>
+                        <span className="text-[11px] cd-text-faint">
                           {isBlock ? "차단" : isWarn ? "경고" : "참고"} · {f.source}
                         </span>
                       </div>
@@ -1765,12 +1765,12 @@ export function ApprovalDraftBoard() {
                 })}
                 {precheck.similar.length > 0 && (
                   <div className="flex flex-col gap-1.5 mt-1">
-                    <span className="text-[11px] font-bold cd-text-faint">유사 과거 문서</span>
+                    <span className="text-[11px] font-semibold cd-text-faint">유사 과거 문서</span>
                     {precheck.similar.map((s, i) => (
-                      <div key={i} className="rounded-xl border cd-border-c px-3 py-2">
+                      <div key={i} className="rounded-lg border cd-border-c px-3 py-2">
                         <p className="text-[12px] cd-text">
                           <span
-                            className="text-[10px] font-bold mr-1.5"
+                            className="text-[11px] font-semibold mr-1.5"
                             style={{ color: s.status === "rejected" ? "var(--cd-error)" : "var(--cd-success)" }}
                           >
                             {s.status === "rejected" ? "반려" : "승인"}
@@ -1786,7 +1786,7 @@ export function ApprovalDraftBoard() {
               </>
             )}
             {precheck.llmError && <p className="text-[11px] cd-text-faint">{precheck.llmError}</p>}
-            <p className="text-[10.5px] cd-text-faint">
+            <p className="text-[11px] cd-text-faint">
               AI·규칙 검토는 참고용입니다. 차단 항목 외에는 상신을 강제하지 않습니다(최종 판단은 기안자).
             </p>
           </div>
@@ -1798,7 +1798,7 @@ export function ApprovalDraftBoard() {
       <CdModal open={refModal} onClose={() => setRefModal(false)} title="선행 문서 선택 — 최근 기안한 문서" size="md">
         <div className="flex flex-col gap-1.5">
           {refCandidates.length === 0 ? (
-            <p className="text-[12.5px] cd-text-faint py-6 text-center">
+            <p className="text-[13px] cd-text-faint py-6 text-center">
               연결할 수 있는 선행 문서가 없습니다.
               <br />
               선행 문서(신청서)를 먼저 기안·상신한 뒤 보고서를 작성하세요.
@@ -1808,23 +1808,23 @@ export function ApprovalDraftBoard() {
               <button
                 key={c.docId}
                 type="button"
-                className={`text-left rounded-xl border px-3.5 py-2.5 flex items-center gap-2.5 ${
+                className={`text-left rounded-lg border px-3.5 py-2.5 flex items-center gap-2.5 ${
                   refDoc?.docId === c.docId ? "cd-tint-primary border-transparent" : "cd-border-c hover:bg-[color:var(--cd-surface)]"
                 }`}
                 onClick={() => pickRefDoc(c)}
               >
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-[12.5px] cd-text truncate">
+                  <span className="text-[13px] cd-text truncate">
                     {c.docNo ? <span className="font-mono text-[11px] cd-text-faint mr-1.5">{c.docNo}</span> : null}
                     {c.title}
                   </span>
-                  <span className="text-[10.5px] cd-text-faint">
+                  <span className="text-[11px] cd-text-faint">
                     {c.formName}
                     {c.submittedAt ? ` · 상신 ${c.submittedAt.slice(0, 10)}` : ""}
                   </span>
                 </div>
                 <span
-                  className={`text-[10.5px] rounded-full px-2 py-0.5 shrink-0 ${
+                  className={`text-[11px] rounded-full px-2 py-0.5 shrink-0 ${
                     c.status === "approved"
                       ? "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                       : "border cd-border-c cd-text-faint"
@@ -1835,7 +1835,7 @@ export function ApprovalDraftBoard() {
               </button>
             ))
           )}
-          <p className="text-[10px] cd-text-faint mt-1">
+          <p className="text-[11px] cd-text-faint mt-1">
             선택하면 이 문서와 연관 관계가 설정됩니다. 업체명·방문일시·계약명이 입력 값과 다르면 경고가 표시됩니다.
           </p>
         </div>
@@ -1978,7 +1978,7 @@ function LineAbsenceBadge({ absence, isFinal }: { absence: LineAbsence; isFinal:
   const period = `${absence.active ? "부재 중" : "부재 예정"} ${md(absence.startDate)}~${md(absence.endDate)}`;
   if (isFinal) {
     return (
-      <span className="block text-[10.5px] font-semibold whitespace-normal" style={{ color: "var(--cd-warning)" }}>
+      <span className="block text-[11px] font-semibold whitespace-normal cd-warn-text">
         {period} · 최종 결재자라 넘어가지 않습니다 —{" "}
         {absence.active ? `${md(absence.endDate)} 복귀 후 결재가 끝납니다` : "이 기간에 차례가 오면 복귀 후 결재합니다"}
       </span>
@@ -1992,5 +1992,5 @@ function LineAbsenceBadge({ absence, isFinal }: { absence: LineAbsence; isFinal:
         : absence.mode === "leave"
           ? "휴가(대결자 미지정 — 넘어가지 않음)"
           : "대결";
-  return <span className="block text-[10.5px] cd-text-faint whitespace-normal">{period} · {how}</span>;
+  return <span className="block text-[11px] cd-text-faint whitespace-normal">{period} · {how}</span>;
 }

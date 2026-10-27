@@ -249,7 +249,7 @@ export function ApprovalHomeBoard() {
       </CdButton>
       {(["inbox", "mine"] as const).map((group) => (
         <div key={group} className="flex flex-col gap-0.5">
-          <p className="px-2 pt-1 pb-1 text-[10.5px] font-bold cd-text-faint tracking-wide">
+          <p className="px-2 pt-1 pb-1 text-[11px] font-medium cd-text-faint">
             {group === "inbox" ? "결재함" : "기안함"}
           </p>
           {BOXES.filter((b) => b.group === group).map((b) => {
@@ -259,8 +259,8 @@ export function ApprovalHomeBoard() {
               <button
                 key={b.key}
                 type="button"
-                className={`flex items-center gap-2 rounded-lg px-2.5 py-[13px] text-[12.5px] text-left transition-colors ${
-                  box === b.key ? "cd-glass-active font-bold" : "cd-text-muted cd-row-hover"
+                className={`flex items-center gap-2 rounded-lg px-2.5 py-[13px] text-[13px] text-left transition-colors ${
+                  box === b.key ? "cd-glass-active font-semibold" : "cd-text-muted cd-row-hover"
                 }`}
                 onClick={() => {
                   setBox(b.key);
@@ -277,7 +277,7 @@ export function ApprovalHomeBoard() {
           })}
         </div>
       ))}
-      <p className="mt-auto px-2 text-[10px] cd-text-faint leading-relaxed">
+      <p className="mt-auto px-2 text-[11px] cd-text-faint leading-relaxed">
         결재 예정 문서는 앞 순번 처리 후 차례가 옵니다. 완료 문서의 부서·전사 조회는 문서함에서.
       </p>
     </div>
@@ -296,7 +296,7 @@ export function ApprovalHomeBoard() {
   ) : null;
 
   const urgentTag = (
-    <span className="text-[10px] font-extrabold rounded-[5px] px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
+    <span className="text-[11px] font-semibold rounded-lg px-1.5 py-0.5 mr-1.5 cd-error-bg cd-error-text align-[1px]">
       긴급
     </span>
   );
@@ -304,7 +304,7 @@ export function ApprovalHomeBoard() {
   const listPane = (
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex items-center gap-2 px-3 py-2 border-b cd-hairline-c shrink-0">
-        <span className="text-[13px] font-bold cd-text">{boxLabel}</span>
+        <span className="text-[13px] font-semibold cd-text">{boxLabel}</span>
         {(box === "pending" || box === "upcoming") && <CdHelp topic="approval.inbox-boxes" />}
         <span className="text-[11px] cd-text-faint">{total}건</span>
         <span className="ml-auto flex items-center gap-1">
@@ -330,7 +330,7 @@ export function ApprovalHomeBoard() {
               title={DOC_STATUS_LABEL[d.status] ?? d.status}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_DOT[d.status] ?? "var(--cd-faint)" }} aria-hidden />
-              <span className="flex-1 min-w-0 truncate text-[13.5px] font-bold cd-text leading-[1.4]" title={d.title}>
+              <span className="flex-1 min-w-0 truncate text-[14px] font-semibold cd-text leading-[1.4]" title={d.title}>
                 {d.urgent && urgentTag}
                 {d.title}
                 {d.aiSummary && d.aiSummary.lines.length > 0 && (
@@ -342,10 +342,10 @@ export function ApprovalHomeBoard() {
                 {d.drafterName ?? "-"}
                 {d.deptName ? ` · ${d.deptName}` : ""}
               </span>
-              <span className="hidden xl:block w-36 shrink-0 truncate text-[12px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
+              <span className="hidden xl:block w-36 shrink-0 truncate text-[12px] tabular-nums cd-text-faint">
                 {d.docNo ?? ""}
               </span>
-              <span className="w-32 shrink-0 text-right text-[12px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
+              <span className="w-32 shrink-0 text-right text-[12px] tabular-nums cd-text-faint">
                 {short(d.submittedAt ?? d.updatedAt)}
               </span>
             </button>
@@ -369,14 +369,14 @@ export function ApprovalHomeBoard() {
                 aria-hidden
               />
               <span className="flex-1 min-w-0">
-                <span className="block text-[13.5px] font-bold cd-text leading-[1.4] truncate" title={d.title}>
+                <span className="block text-[14px] font-semibold cd-text leading-[1.4] truncate" title={d.title}>
                   {d.urgent && urgentTag}
                   {d.title}
                   {d.aiSummary && d.aiSummary.lines.length > 0 && (
                     <Sparkles className="inline w-3 h-3 ml-1 cd-text-primary" aria-label="AI 요약 있음" />
                   )}
                 </span>
-                <span className="block mt-[3px] text-[11.5px] truncate" style={{ color: "var(--cd-faint)" }}>
+                <span className="block mt-[3px] text-[12px] truncate cd-text-faint">
                   {d.formName} · {d.drafterName ?? "-"}
                   {d.deptName ? ` · ${d.deptName}` : ""} · {short(d.submittedAt ?? d.updatedAt)}
                   {d.docNo ? ` · ${d.docNo}` : ""}
@@ -420,7 +420,7 @@ export function ApprovalHomeBoard() {
   );
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="전자결재"
         meta={`결재 대기 ${counts.pending} · 결재 예정 ${counts.upcoming}`}
@@ -517,7 +517,7 @@ export function ApprovalHomeBoard() {
             if (!sec.list.length) return null;
             return (
               <div key={sec.key}>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint mb-1">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold cd-text-faint mb-1">
                   {sec.favorite ? <Star className="w-3.5 h-3.5" /> : <FolderOpen className="w-3.5 h-3.5" />} {sec.name}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 mb-2">
@@ -525,11 +525,11 @@ export function ApprovalHomeBoard() {
                     <button
                       key={f.formId}
                       type="button"
-                      className="text-left rounded-xl border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)]"
+                      className="text-left rounded-lg border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)]"
                       onClick={() => router.push(approvalNewHref(f.formId))}
                     >
-                      <span className="text-[12.5px] cd-text font-semibold">{f.name}</span>
-                      {f.description && <p className="text-[10.5px] cd-text-faint truncate">{f.description}</p>}
+                      <span className="text-[13px] cd-text font-semibold">{f.name}</span>
+                      {f.description && <p className="text-[11px] cd-text-faint truncate">{f.description}</p>}
                     </button>
                   ))}
                 </div>

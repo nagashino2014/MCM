@@ -43,15 +43,15 @@ export function RejectedBanner({ meta }: { meta: EditDocMeta | null }) {
   if (!meta || meta.status !== "rejected") return null;
   return (
     <div
-      className="rounded-xl border px-3.5 py-2.5 flex flex-col gap-1"
+      className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-1"
       style={{ borderColor: "var(--cd-error)", background: "var(--cd-error-soft, rgba(250,137,107,0.1))" }}
     >
-      <span className="text-[11.5px] font-bold cd-error-text">
+      <span className="text-[12px] font-semibold cd-error-text">
         반려된 문서를 수정 중입니다 — {meta.rejected?.assigneeName ?? "결재자"}
         {meta.rejected?.actedAt ? ` · ${short(meta.rejected.actedAt)}` : ""}
       </span>
-      <p className="text-[12.5px] cd-text">{meta.rejected?.comment?.trim() || "반려 사유가 입력되지 않았습니다."}</p>
-      <span className="text-[10.5px] cd-text-faint">
+      <p className="text-[13px] cd-text">{meta.rejected?.comment?.trim() || "반려 사유가 입력되지 않았습니다."}</p>
+      <span className="text-[11px] cd-text-faint">
         상신하면 기존 문서번호를 유지한 채 결재선 첫 단계부터 다시 진행됩니다.
       </span>
     </div>

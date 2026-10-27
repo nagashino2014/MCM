@@ -177,9 +177,9 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
   };
 
   return (
-    <div className="rounded-2xl border cd-border-c p-4 flex flex-col gap-3">
+    <div className="rounded-lg border cd-border-c p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
+        <p className="text-[13px] font-semibold cd-text flex items-center gap-1.5">
           <Workflow className="w-4 h-4" /> 연계 — 승인/상신 시 자동 처리<CdHelp topic="approval-ops.actions" />
           {actions.length > 0 && <span className="cd-chip">{actions.length}</span>}
         </p>
@@ -191,7 +191,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
         </button>
       </div>
 
-      {error && <p className="text-[12px]" style={{ color: "var(--cd-error,#FA896B)" }}>{error}</p>}
+      {error && <p className="text-[12px] cd-error-text">{error}</p>}
 
       {loading ? (
         <p className="text-[12px] cd-text-faint">불러오는 중…</p>
@@ -201,9 +201,9 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
             const connector = connectorOf(action.actionKind);
             const dry = dryResults[idx];
             return (
-              <div key={action.actionId ?? `new-${idx}`} className="rounded-xl border cd-border-c p-3 flex flex-col gap-2.5">
+              <div key={action.actionId ?? `new-${idx}`} className="rounded-lg border cd-border-c p-3 flex flex-col gap-2.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[12.5px] font-bold cd-text">{connector?.label ?? action.actionKind}</span>
+                  <span className="text-[13px] font-semibold cd-text">{connector?.label ?? action.actionKind}</span>
                   <span className="text-[11px] cd-text-faint flex-1 min-w-[160px]">{connector?.description}</span>
                   <select
                     className="cd-select"
@@ -215,7 +215,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                       <option key={k} value={k}>{label}</option>
                     ))}
                   </select>
-                  <label className="flex items-center gap-1 text-[11.5px] cd-text cursor-pointer">
+                  <label className="flex items-center gap-1 text-[12px] cd-text cursor-pointer">
                     <input type="checkbox" checked={action.active} onChange={(e) => patchAction(idx, { active: e.target.checked })} /> 사용
                   </label>
                   <button
@@ -232,10 +232,10 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                 {connector && connector.slots.length > 0 && (
                   <div className="grid md:grid-cols-2 gap-x-4 gap-y-1.5">
                     {connector.slots.map((slot) => (
-                      <label key={slot.key} className="flex items-center gap-2 text-[11.5px] cd-text-muted min-w-0" title={slot.hint}>
+                      <label key={slot.key} className="flex items-center gap-2 text-[12px] cd-text-muted min-w-0" title={slot.hint}>
                         <span className="w-[120px] shrink-0 truncate">
                           {slot.label}
-                          {slot.required && <span style={{ color: "var(--cd-error,#FA896B)" }}> *</span>}
+                          {slot.required && <span className="cd-error-text"> *</span>}
                         </span>
                         <select
                           className="cd-select flex-1 min-w-0"
@@ -292,7 +292,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                     <div className="flex flex-col gap-0.5">
                       {dry.slots.map((s) => (
                         <p key={s.key} className="text-[11px] cd-text-muted">
-                          <span className={s.ok ? "" : "font-bold"} style={s.ok ? undefined : { color: "var(--cd-error,#FA896B)" }}>
+                          <span className={s.ok ? "" : "font-semibold cd-error-text"}>
                             {s.label}
                           </span>
                           {" ← "}
@@ -301,13 +301,13 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                       ))}
                     </div>
                     {dry.error ? (
-                      <p className="text-[12px] font-bold" style={{ color: "var(--cd-error,#FA896B)" }}>{dry.error}</p>
+                      <p className="text-[12px] font-semibold cd-error-text">{dry.error}</p>
                     ) : dry.preview ? (
                       <p className="text-[12px] cd-text">▶ {dry.preview}</p>
                     ) : (
                       <p className="text-[12px] cd-text-faint">필수 슬롯이 모두 해석됩니다 — 실행 가능한 설정입니다.</p>
                     )}
-                    {dirty && <p className="text-[10.5px] cd-text-faint">※ 드라이런은 화면의 현재 매핑 기준입니다 — 실제 적용은 [연계 저장] 후.</p>}
+                    {dirty && <p className="text-[11px] cd-text-faint">※ 드라이런은 화면의 현재 매핑 기준입니다 — 실제 적용은 [연계 저장] 후.</p>}
                   </div>
                 )}
               </div>

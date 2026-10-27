@@ -10,7 +10,7 @@ import type { LetterRecipient } from "@/lib/letter/types";
 export function RecipientEditGrid({ label, list, onChange }: { label: string; list: LetterRecipient[]; onChange: (next: LetterRecipient[]) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold cd-text">{label}</span>
+      <span className="text-[11px] font-semibold cd-text">{label}</span>
       {list.map((r, i) => (
         <div key={i} className="grid grid-cols-2 md:grid-cols-5 gap-1.5 items-center">
           <input className="cd-input" placeholder="업체/기관" value={r.facilityName ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, facilityName: e.target.value } : x)))} />

@@ -237,7 +237,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
       {/* 섹션 타이틀 + 연·월 탐색 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1">
-          <div className="text-[15px] font-extrabold cd-text">내 근태·초과근무</div>
+          <div className="text-base font-semibold cd-text">내 근태·초과근무</div>
           <CdHelp topic="hr.my-attendance" />
         </div>
         <div className="flex items-center gap-1">
@@ -290,11 +290,11 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
               : `${Number(prevMonthKey.slice(5, 7))}월분${pay?.hourlyWage == null ? " · 근로계약 미등록" : ""}`,
           },
         ].map((k) => (
-          <div key={k.label} className="cd-card p-4 rounded-2xl">
+          <div key={k.label} className="cd-card p-4 rounded-lg">
             <div className="flex items-center gap-2 text-xs cd-text-muted mb-1.5">
               <k.icon className="w-3.5 h-3.5" /> {k.label}
             </div>
-            <div className="text-lg font-extrabold cd-text tabular-nums">{loading && !data ? "…" : k.value}</div>
+            <div className="text-base font-semibold cd-text tabular-nums">{loading && !data ? "…" : k.value}</div>
             {k.sub && <div className="text-[11px] cd-text-faint mt-1">{k.sub}</div>}
           </div>
         ))}
@@ -302,10 +302,10 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
 
       {/* 경고·요구 배너 — 해당 있을 때만 */}
       {(yearWarnings.length > 0 || pendingAbsence.length > 0) && (
-        <div className="rounded-2xl border p-3.5 space-y-2" style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
+        <div className="rounded-lg border p-3.5 space-y-2" style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
           {yearWarnings.length > 0 && (
             <div className="text-sm">
-              <div className="flex items-center gap-1.5 font-bold cd-text mb-1">
+              <div className="flex items-center gap-1.5 font-semibold cd-text mb-1">
                 <AlertTriangle className="w-4 h-4" /> 초과근무 식대 경고 {yearWarnings.length}건 ({year}년)
               </div>
               <div className="grid gap-1">
@@ -324,7 +324,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           )}
           {pendingAbsence.length > 0 && (
             <div className="text-sm">
-              <div className="flex items-center gap-1.5 font-bold cd-text mb-1">
+              <div className="flex items-center gap-1.5 font-semibold cd-text mb-1">
                 <FileWarning className="w-4 h-4" /> 결근사유서 제출 요구 {pendingAbsence.length}건
               </div>
               <div className="grid gap-1">
@@ -353,7 +353,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
       {/* 1행: 추이 차트 2개(같은 너비) / 2행: 주별 근무·초과근무 + 주별 초과근무수당(같은 너비, 남은 높이 채움 — 메뉴 바 하단 정렬) */}
       <div className="flex flex-col gap-4 2xl:flex-1 2xl:min-h-0">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 shrink-0">
-          <div className="cd-card p-4 rounded-2xl min-w-0">
+          <div className="cd-card p-4 rounded-lg min-w-0">
             <div className="cd-card-title mb-1">초과근무 추이 (최근 12개월)</div>
             {(data?.trend ?? []).length === 0 ? (
               <div className="text-sm cd-text-muted py-6 text-center">근태 기록이 없습니다.</div>
@@ -361,7 +361,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
               <ApexChart key={`t-${theme}`} options={trendOptions} series={trendSeries} type="bar" height={190} />
             )}
           </div>
-          <div className="cd-card p-4 rounded-2xl min-w-0">
+          <div className="cd-card p-4 rounded-lg min-w-0">
             <div className="cd-card-title mb-1">초과근무수당 추이 (최근 12개월)</div>
             {hidePay ? (
               <div className="text-sm cd-text-muted py-6 text-center">초과근무수당 산정 제외 대상입니다.</div>
@@ -377,7 +377,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 2xl:flex-1 2xl:min-h-0">
           {/* 주별 근무·초과근무 — 카드는 남은 높이를 채우고 행 목록만 스크롤(스크롤바 숨김) */}
-          <div className="cd-card p-4 rounded-2xl min-w-0 flex flex-col min-h-[220px]">
+          <div className="cd-card p-4 rounded-lg min-w-0 flex flex-col min-h-[220px]">
             <div className="cd-card-title mb-2 shrink-0">주별 근무 · 초과근무{month ? ` — ${year}년 ${Number(month.slice(5, 7))}월` : ""}</div>
             <div className="grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 text-[11px] cd-text-faint px-1 pb-1 shrink-0">
               <span>주 시작일</span>
@@ -397,7 +397,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                   <button
                     type="button"
                     onClick={() => void toggleWeek(w.weekStart)}
-                    className="w-full grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 items-center px-1 py-[11.5px] text-[12.5px] cd-row-hover rounded-lg text-left"
+                    className="w-full grid grid-cols-[1fr_0.9fr_0.9fr_0.9fr_1.2fr_0.9fr] gap-2 items-center px-1 py-[11.5px] text-[13px] cd-row-hover rounded-lg text-left"
                   >
                     <span className="tabular-nums cd-text font-medium">{w.weekStart} 주</span>
                     <span className="tabular-nums text-right cd-text">{hm(w.workedMinutes)}</span>
@@ -410,14 +410,14 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                           style={{ width: `${pct}%`, background: w.overLimit ? "var(--cd-error)" : "var(--cd-primary)" }}
                         />
                       </span>
-                      <span className="text-[10px] cd-text-faint tabular-nums w-8">{Math.round(pct)}%</span>
+                      <span className="text-[11px] cd-text-faint tabular-nums w-8">{Math.round(pct)}%</span>
                     </span>
                     <span className="text-right">
                       {w.overLimit ? <span className="cd-pill cd-pill-error">초과 {hm(w.excessMinutes)}</span> : <span className="cd-pill cd-pill-idle">—</span>}
                     </span>
                   </button>
                   {open && (
-                    <div className="mx-1 mb-2 rounded-xl border cd-border-c p-2">
+                    <div className="mx-1 mb-2 rounded-lg border cd-border-c p-2">
                       <div className="grid grid-cols-[1.1fr_0.8fr_0.8fr_0.9fr_0.9fr_0.9fr] gap-2 text-[11px] cd-text-faint pb-1">
                         <span>날짜</span>
                         <span>출근</span>
@@ -456,7 +456,7 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
           </div>
 
           {/* 주별 초과근무수당 — 우상단에 시급·1.5배·2.0배 기준액 */}
-          <div className="cd-card p-4 rounded-2xl min-w-0 flex flex-col min-h-[220px]">
+          <div className="cd-card p-4 rounded-lg min-w-0 flex flex-col min-h-[220px]">
             <div className="flex items-start justify-between gap-3 mb-2 flex-wrap shrink-0">
               <div className="cd-card-title flex items-center gap-1.5">
                 주별 초과근무수당
@@ -502,11 +502,11 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
             </div>
             <div className="2xl:flex-1 2xl:min-h-0 2xl:overflow-y-auto scrollbar-hide">
             {(data?.weeks ?? []).map((w) => (
-              <div key={w.weekStart} className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 items-center px-1 py-[9.5px] text-[12.5px] border-t cd-hairline-row-c">
+              <div key={w.weekStart} className="grid grid-cols-[1fr_0.9fr_0.9fr_1.1fr] gap-2 items-center px-1 py-[9.5px] text-[13px] border-t cd-hairline-row-c">
                 <span className="tabular-nums cd-text">{w.weekStart} 주</span>
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeDayMinutes)}</span>
                 <span className="tabular-nums text-right cd-text-muted">{hm(w.overtimeNightMinutes)}</span>
-                <span className="tabular-nums text-right font-bold cd-text">
+                <span className="tabular-nums text-right font-semibold cd-text">
                   {!hidePay && w.estimatedPay != null ? `${Math.round(w.estimatedPay).toLocaleString("ko-KR")}원` : "—"}
                 </span>
               </div>

@@ -1046,7 +1046,7 @@ export function QuoteBoard() {
   const tier: "calc" | "free" = isMulti || (activeSet?.items?.length ?? 0) > 0 ? "calc" : "free";
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader
           title="견적서 작성"
@@ -1069,7 +1069,7 @@ export function QuoteBoard() {
           }
         />
         {loading ? (
-          <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
+          <div className="cd-card rounded-lg p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
           <>
           <div className="max-w-[1032px]">
@@ -1080,25 +1080,25 @@ export function QuoteBoard() {
             <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
               {/* 견적 이력(재견적, 269) — 같은 용역 건의 상신된 버전 + 지금 작성 중인 버전. 금액변동·사유 태그 */}
               {revision && (
-                <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                <div className="cd-card rounded-lg p-5 flex flex-col gap-2.5">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                     <History className="w-4 h-4 cd-text-primary" /> 견적 이력
-                    <span className="text-[10.5px] font-normal cd-text-faint">같은 용역 건의 견적 버전 — 기안하면 v{nextVersion}으로 등록됩니다</span>
+                    <span className="text-[11px] font-normal cd-text-faint">같은 용역 건의 견적 버전 — 기안하면 v{nextVersion}으로 등록됩니다</span>
                   </h3>
-                  <ul className="rounded-xl border cd-border-c overflow-hidden">
+                  <ul className="rounded-lg border cd-border-c overflow-hidden">
                     {revision.items.map((it) => (
                       <li key={it.docId} className="flex items-center gap-3 px-3 py-[11.5px] text-[12px] border-b cd-border-c flex-wrap">
                         <span className="font-mono font-semibold cd-text w-7">v{it.version}</span>
                         <span className="font-mono text-[11px] cd-text-faint">{it.quoteNo ?? "-"}</span>
                         <span className="cd-text-faint">발송일 {shortDate(it.sentAt ?? it.issueDate ?? it.submittedAt)}</span>
                         <span className="cd-text">{it.drafterName ?? "-"}</span>
-                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{DOC_STATUS_LABEL[it.status] ?? "결재 중"}</span>
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{DOC_STATUS_LABEL[it.status] ?? "결재 중"}</span>
                         <span className="ml-auto flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
+                          <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
                             {it.prevTotalAmount != null ? `금액변동 : ${won(it.prevTotalAmount)}원 → ${won(it.totalAmount)}원` : `최초 견적 ${won(it.totalAmount)}원`}
                           </span>
                           {it.revisionReason && (
-                            <span className="text-[10.5px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[it.revisionReason] ?? it.revisionReason}</span>
+                            <span className="text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[it.revisionReason] ?? it.revisionReason}</span>
                           )}
                         </span>
                       </li>
@@ -1107,13 +1107,13 @@ export function QuoteBoard() {
                       <span className="font-mono font-semibold cd-text-primary w-7">v{nextVersion}</span>
                       <span className="cd-text-faint">작성 중 · 견적일 {issueDate}</span>
                       <span className="ml-auto flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
                           금액변동 : {won(prevTotalAmount ?? 0)}원 → {won(currentTotal)}원
                         </span>
                         {revisionReason ? (
-                          <span className="text-[10.5px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[revisionReason]}</span>
+                          <span className="text-[11px] rounded-full px-2 py-0.5 cd-tint-primary">{QUOTE_REVISION_REASON_LABEL[revisionReason]}</span>
                         ) : (
-                          <span className="text-[10.5px] rounded-full px-2 py-0.5 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">사유 미선택</span>
+                          <span className="text-[11px] rounded-full px-2 py-0.5 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">사유 미선택</span>
                         )}
                       </span>
                     </li>
@@ -1121,9 +1121,9 @@ export function QuoteBoard() {
                 </div>
               )}
               {/* 기본정보 */}
-              <div className="cd-card rounded-3xl p-5 flex flex-col gap-3.5">
+              <div className="cd-card rounded-lg p-5 flex flex-col gap-3.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                     <FileText className="w-4 h-4 cd-text-primary" /> 기본 정보
                   </h3>
                   {/* cd-input 은 width:100% 라 고정폭은 감싸는 span 에 준다(상황 변수 행과 같은 패턴) — 한 줄 유지 */}
@@ -1148,9 +1148,9 @@ export function QuoteBoard() {
                         ) : manualCheck == null ? (
                           <span>중복 확인 중...</span>
                         ) : manualCheck.available ? (
-                          <span style={{ color: "var(--cd-success)" }}>사용 가능</span>
+                          <span className="cd-success-text">사용 가능</span>
                         ) : (
-                          <span style={{ color: "var(--cd-error)" }}>이미 사용 중 — {manualCheck.usedBy}</span>
+                          <span className="cd-error-text">이미 사용 중 — {manualCheck.usedBy}</span>
                         )}
                       </>
                     ) : (
@@ -1159,7 +1159,7 @@ export function QuoteBoard() {
                     {canAssign && !noLocked && (
                       <button
                         type="button"
-                        className="cd-btn rounded-lg border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-faint"
+                        className="cd-btn rounded-lg border cd-border-c px-2 py-0.5 text-[11px] cd-text-faint"
                         title="관리자 — 자동 채번 대신 번호를 직접 지정합니다(공문과 동일)"
                         onClick={() => {
                           setManualOn((v) => !v);
@@ -1220,11 +1220,11 @@ export function QuoteBoard() {
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] cd-text-faint">발송 방식 — 승인 완료 후 처리</span>
                   <div className="flex items-center gap-4 h-9">
-                    <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
+                    <label className="flex items-center gap-1.5 text-[13px] cd-text cursor-pointer">
                       <input type="radio" checked={sendMode === "mail"} onChange={() => setSendMode("mail")} />
                       메일 발송 <span className="cd-text-faint text-[11px]">(참조자 메일로 PDF 자동 발송)</span>
                     </label>
-                    <label className="flex items-center gap-1.5 text-[12.5px] cd-text cursor-pointer">
+                    <label className="flex items-center gap-1.5 text-[13px] cd-text cursor-pointer">
                       <input type="radio" checked={sendMode === "direct"} onChange={() => setSendMode("direct")} />
                       발송 안 함 · 직접 제출 <span className="cd-text-faint text-[11px]">(PDF 다운로드 → 전자조달시스템 등)</span>
                     </label>
@@ -1242,9 +1242,9 @@ export function QuoteBoard() {
               </div>
 
               {/* 사업장 탭 */}
-              <div className="cd-card rounded-3xl p-5 flex flex-col gap-3.5">
+              <div className="cd-card rounded-lg p-5 flex flex-col gap-3.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2 mr-1">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2 mr-1">
                     <Calculator className="w-4 h-4 cd-text-primary" /> 사업장별 견적
                   </h3>
                   {sites.map((s, i) => (
@@ -1253,7 +1253,7 @@ export function QuoteBoard() {
                       type="button"
                       data-active={i === activeSite}
                       aria-pressed={i === activeSite}
-                      className={`cd-choice cd-btn rounded-lg border px-2.5 py-1 text-[11.5px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
+                      className={`cd-choice cd-btn rounded-lg border px-2.5 py-1 text-[12px] ${i === activeSite ? "cd-tint-primary font-semibold" : "cd-border-c cd-text-faint"}`}
                       onClick={() => setActiveSite(i)}
                     >
                       {s.siteLabel}
@@ -1261,7 +1261,7 @@ export function QuoteBoard() {
                   ))}
                   <button
                     type="button"
-                    className="cd-btn rounded-lg border border-dashed cd-border-c px-2 py-1 text-[11.5px] cd-text-faint"
+                    className="cd-btn rounded-lg border border-dashed cd-border-c px-2 py-1 text-[12px] cd-text-faint"
                     onClick={() => {
                       const seq = Math.max(0, ...sites.map((s) => s.siteSeq)) + 1;
                       const base = emptySite(seq, subject);
@@ -1296,7 +1296,7 @@ export function QuoteBoard() {
                       <Trash2 className="w-3 h-3 inline" /> 삭제
                     </button>
                   )}
-                  <span className="ml-auto text-[10.5px] cd-text-faint">
+                  <span className="ml-auto text-[11px] cd-text-faint">
                     {sites.length >= SUMMARY_SHEET_MIN_SITES ? "사업장 4개 이상 — 총괄 견적서 자동 생성" : `사업장 ${sites.length}개`}
                   </span>
                 </div>
@@ -1329,7 +1329,7 @@ export function QuoteBoard() {
 
                     {/* 복수 업무 — 구성 업무(세분류×횟수) 태그 + 업무 항목 입력(수동/자동). 세분류가 '복수 업무'일 때만 보인다 */}
                     {isMulti && (
-                      <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                      <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* cd-select 는 width:100% 라 고정폭은 감싸는 요소에 준다 */}
                           {/* 용역 대분류 — 오른쪽 구성 업무 목록은 여기서 고른 대분류의 세분류(2026-10-01: 다른 대분류 업무 혼합) */}
@@ -1361,7 +1361,7 @@ export function QuoteBoard() {
                           {(site.works ?? []).map((w, wi) => (
                             <span
                               key={`${w.serviceType ?? serviceType}/${w.subtype}`}
-                              className="cd-action inline-flex items-center gap-1.5 rounded-lg border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text"
+                              className="cd-action inline-flex items-center gap-1.5 rounded-lg border cd-border-c pl-2.5 pr-1.5 py-1 text-[12px] cd-text"
                               title={`${w.serviceType ?? serviceType} > ${w.subtype}`}
                             >
                               {/* 기본 정보의 용역 분류와 다른 대분류의 업무는 대분류를 함께 적는다 */}
@@ -1369,7 +1369,7 @@ export function QuoteBoard() {
                               <span className="font-semibold">{w.subtype}</span>
                               <span className="w-10 shrink-0">
                                 <input
-                                  className="cd-input text-center text-[11.5px] px-1 py-0.5"
+                                  className="cd-input text-center text-[12px] px-1 py-0.5"
                                   inputMode="numeric"
                                   aria-label={`${w.subtype} 횟수`}
                                   value={w.count ? String(w.count) : ""}
@@ -1393,7 +1393,7 @@ export function QuoteBoard() {
                               </button>
                             </span>
                           ))}
-                          <span className="text-[10.5px] cd-text-faint">
+                          <span className="text-[11px] cd-text-faint">
                             {(site.works ?? []).length === 0 ? `이 용역을 구성하는 업무를 선택하세요(최대 ${QUOTE_MULTI_WORK_MAX}개)` : `${(site.works ?? []).length}/${QUOTE_MULTI_WORK_MAX}`}
                           </span>
                         </div>
@@ -1491,7 +1491,7 @@ export function QuoteBoard() {
                               onRowsChange={(next) => updateSite(activeSite, { customItems: next })}
                             />
                             {site.mdMatrix.length > 0 && (
-                              <span className="text-[10.5px] cd-text-faint">항목을 바꾼 뒤에는 [견적가 역산 실행] 또는 [MD 역산 실행]을 다시 눌러야 아래 MD 표와 금액에 반영됩니다.</span>
+                              <span className="text-[11px] cd-text-faint">항목을 바꾼 뒤에는 [견적가 역산 실행] 또는 [MD 역산 실행]을 다시 눌러야 아래 MD 표와 금액에 반영됩니다.</span>
                             )}
                           </div>
                         )}
@@ -1500,7 +1500,7 @@ export function QuoteBoard() {
 
                     {/* 사업장 전용 기준 세트(270) — 수신처 사업장에 전용 세트가 있을 때만. 표준 세트로 전환 가능 */}
                     {!isMulti && rateData?.facilitySet && (
-                      <div className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2 flex-wrap text-[11.5px]">
+                      <div className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2 flex-wrap text-[12px]">
                         <Building2 className="w-3.5 h-3.5 cd-text-primary" />
                         <span className="cd-text">
                           {useFacilitySet ? (
@@ -1516,12 +1516,12 @@ export function QuoteBoard() {
                         >
                           {useFacilitySet ? "표준 기준으로 전환" : "전용 기준으로 전환"}
                         </button>
-                        {site.mdMatrix.length > 0 && <span className="w-full text-[10.5px] cd-text-faint">전환 후 [MD 역산 실행]을 다시 눌러야 산정에 반영됩니다.</span>}
+                        {site.mdMatrix.length > 0 && <span className="w-full text-[11px] cd-text-faint">전환 후 [MD 역산 실행]을 다시 눌러야 산정에 반영됩니다.</span>}
                       </div>
                     )}
 
                     {/* 견적가 입력 → 역산 (T1/T2) 또는 자유 품목 (T3) */}
-                    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-3">
                       {/* 좌 40%: 제출 견적가 → 역산 → 금액 요약 / 우 60%: 요율 + 직접경비 산식 */}
                       <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4 items-start">
                         <div className="min-w-0 flex flex-col gap-2.5">
@@ -1598,7 +1598,7 @@ export function QuoteBoard() {
                                       </span>
                                     );
                                   })()}
-                                <span className="ml-auto text-[16px] leading-6 font-bold cd-text-primary tabular-nums text-right">최종 견적 {won(site.amounts.final)}원</span>
+                                <span className="ml-auto text-[16px] leading-6 font-semibold cd-text-primary tabular-nums text-right">최종 견적 {won(site.amounts.final)}원</span>
                               </div>
                             </div>
                           )}
@@ -1730,7 +1730,7 @@ export function QuoteBoard() {
                                   </label>
                                 </div>
                                 {on && (
-                                  <span className="text-[10.5px] cd-text-faint tabular-nums">
+                                  <span className="text-[11px] cd-text-faint tabular-nums">
                                     {price > 0
                                       ? `1단계 ${won(calc.stage1)}원 + 2단계(견적가 × ${ENG_DEDUCTION_STAGE2_RATE}%) ${won(calc.stage2)}원 · 천원 미만 절사 · 순계약금액 = 제출 견적가`
                                       : "제출 견적가를 입력하면 계산됩니다 · 순계약금액 = 제출 견적가"}
@@ -1740,7 +1740,7 @@ export function QuoteBoard() {
                               </div>
                             );
                           })()}
-                          <span className="text-[10.5px] cd-text-faint text-right">
+                          <span className="text-[11px] cd-text-faint text-right">
                             {tier === "free" ? "자유 입력 견적은 직접경비를 품목으로 입력하세요 · " : ""}V.A.T 별도 · 유효기간 견적일로부터 1개월
                           </span>
                         </div>
@@ -1750,7 +1750,7 @@ export function QuoteBoard() {
                       {tier === "calc" && site.mdMatrix.length > 0 && (
                         <div className="overflow-x-auto">
                           {/* 등급 축은 산정에 쓰인 세트 스냅샷을 따른다(가변, 143). 열 총폭은 개수와 무관하게 40% */}
-                          <table className="w-full text-[11.5px] border-collapse min-w-[680px] table-fixed">
+                          <table className="w-full text-[12px] border-collapse min-w-[680px] table-fixed">
                             <colgroup>
                               <col />
                               {siteGrades(site).map((g) => (
@@ -1772,7 +1772,7 @@ export function QuoteBoard() {
                                   <tr key={r.itemId} className={isParent ? "cd-tint-primary/40 font-semibold" : ""}>
                                     <td className={`border cd-border-c px-2 py-1 ${r.parentId ? "pl-5" : "font-semibold"}`}>
                                       {r.label}
-                                      {r.overridden && <span className="ml-1 text-[9px] cd-text-primary" title="수동 조정됨">●</span>}
+                                      {r.overridden && <span className="ml-1 text-[11px] cd-text-primary" title="수동 조정됨">●</span>}
                                     </td>
                                     {siteGrades(site).map((g) => (
                                       <td key={g} className="border cd-border-c px-1 py-0.5 text-center">
@@ -1790,7 +1790,7 @@ export function QuoteBoard() {
                                   </tr>
                                 );
                               })}
-                              <tr className="font-bold">
+                              <tr className="font-semibold">
                                 <td className="border cd-border-c px-2 py-1.5">총 계(MD)</td>
                                 {(() => {
                                   const t = gradeTotals(site.mdMatrix);
@@ -1801,7 +1801,7 @@ export function QuoteBoard() {
                               </tr>
                             </tbody>
                           </table>
-                          <p className="text-[10.5px] cd-text-faint mt-1">
+                          <p className="text-[11px] cd-text-faint mt-1">
                             총 {mdVectorTotal(gradeTotals(site.mdMatrix))}MD · 셀을 직접 수정할 수 있습니다(수정 후에도 합계-견적가 제약을 지켜야 상신 가능).
                           </p>
                         </div>
@@ -1838,7 +1838,7 @@ export function QuoteBoard() {
                               </button>
                             </div>
                           ))}
-                          <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start" onClick={() => {
+                          <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint self-start" onClick={() => {
                             updateSite(activeSite, { freeItems: [...(site.freeItems ?? []), { label: "", amount: 0 }] });
                           }}>
                             ＋ 품목 추가
@@ -1851,7 +1851,7 @@ export function QuoteBoard() {
                     <div className="flex flex-col gap-1">
                       <span className="text-[11px] cd-text-faint">특이사항 (견적서 시트 하단)</span>
                       {/* 높이는 cdash.css 의 textarea.cd-input{min-height:64px} 보다 우선하도록 inline(2026-09-30 사용자 요청: 종전의 2.5배) */}
-                      <textarea className="cd-input text-[12.5px]" style={{ minHeight: 210 }} value={site.remarks} onChange={(e) => updateSite(activeSite, { remarks: e.target.value })} />
+                      <textarea className="cd-input text-[13px]" style={{ minHeight: 210 }} value={site.remarks} onChange={(e) => updateSite(activeSite, { remarks: e.target.value })} />
                     </div>
                   </div>
                 )}
@@ -1860,10 +1860,10 @@ export function QuoteBoard() {
               {/* 하단: 상황 변수(절반) + 재견적 사유(절반, 2026-10-01) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* 상황 변수 (건별 상황 조정 레이어 — 내부 기록용, 문서에 표기되지 않음) */}
-              <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5 min-w-0">
-                <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+              <div className="cd-card rounded-lg p-5 flex flex-col gap-2.5 min-w-0">
+                <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                   <Copy className="w-4 h-4 cd-text-primary" /> 상황 변수
-                  <span className="text-[10.5px] font-normal cd-text-faint">가격 결정 배경 기록(내부용) — 수주율 분석의 원료가 됩니다</span>
+                  <span className="text-[11px] font-normal cd-text-faint">가격 결정 배경 기록(내부용) — 수주율 분석의 원료가 됩니다</span>
                 </h3>
                 {situation.map((s, i) => (
                   // 목록·조정률·사유 한 줄 — cd-select/cd-input 이 width:100% 라 고정폭은 감싸는 요소에 준다
@@ -1875,7 +1875,7 @@ export function QuoteBoard() {
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-1 shrink-0 text-[11.5px] cd-text-faint whitespace-nowrap">조정률
+                    <label className="flex items-center gap-1 shrink-0 text-[12px] cd-text-faint whitespace-nowrap">조정률
                       <span className="w-16">
                         <input className="cd-input text-right text-[12px]" value={s.rate != null ? String(Math.round(s.rate * 100)) : ""} placeholder="-5" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, rate: e.target.value === "" ? undefined : Number(e.target.value) / 100 } : x)))} />
                       </span>%
@@ -1886,16 +1886,16 @@ export function QuoteBoard() {
                     </button>
                   </div>
                 ))}
-                <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint self-start" onClick={() => setSituation((prev) => [...prev, { code: rateData?.situationCodes?.[0]?.code ?? "nego", scope: "doc" }])}>
+                <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint self-start" onClick={() => setSituation((prev) => [...prev, { code: rateData?.situationCodes?.[0]?.code ?? "nego", scope: "doc" }])}>
                   ＋ 상황 변수 추가
                 </button>
               </div>
 
               {/* 재견적 사유 — 재견적 작성 시에만 활성화. 견적 이력의 부연 태그(용역 범위 증가/축소·네고 요청) */}
-              <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5 min-w-0">
-                <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+              <div className="cd-card rounded-lg p-5 flex flex-col gap-2.5 min-w-0">
+                <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                   <History className="w-4 h-4 cd-text-primary" /> 재견적 사유
-                  <span className="text-[10.5px] font-normal cd-text-faint">재견적 작성 시에만 활성화 — 견적 이력의 부연 태그로 표시</span>
+                  <span className="text-[11px] font-normal cd-text-faint">재견적 작성 시에만 활성화 — 견적 이력의 부연 태그로 표시</span>
                 </h3>
                 <select
                   className="cd-select"
@@ -1921,18 +1921,18 @@ export function QuoteBoard() {
             </div>
 
             {/* 우: 결재선 (ApprovalLetterBoard/DraftBoard 이식) */}
-            <div className="cd-card rounded-3xl p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
-              <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+            <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+              <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                 <Users className="w-4 h-4 cd-text-primary" /> 결재선
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
               </h3>
               {presets.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
+                  <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
                   {presets.map((p) => (
                     <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                       <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
-                      <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
+                      <button type="button" className="text-[11px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                     </span>
                   ))}
                 </div>
@@ -1940,13 +1940,13 @@ export function QuoteBoard() {
               {line.length === 0 && <p className="text-[12px] cd-text-faint">아래 버튼으로 합의/승인 결재자를 추가하세요.</p>}
               <div className="flex flex-col gap-1.5">
                 {line.map((s, i) => (
-                  <div key={`${s.assigneeUserId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                    <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                  <div key={`${s.assigneeUserId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                    <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                     <select className="cd-select" style={{ width: 70 }} value={s.stepType} onChange={(e) => setLine((prev) => prev.map((x, xi) => (xi === i ? { ...x, stepType: e.target.value as "agree" | "approve" } : x)))}>
                       <option value="agree">합의</option>
                       <option value="approve">승인</option>
                     </select>
-                    <span className="text-[12.5px] cd-text truncate flex-1">
+                    <span className="text-[13px] cd-text truncate flex-1">
                       {s.assigneeName}
                       {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                     </span>
@@ -1965,21 +1965,21 @@ export function QuoteBoard() {
                 </button>
               </div>
               <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
-                <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
+                <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                   <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
-                  <span className="ml-auto text-[10px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
+                  <span className="ml-auto text-[11px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
                 </h4>
                 {watchers.length === 0 ? (
                   <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
                 ) : (
                   watchers.map((w, i) => (
-                    <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                      <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                    <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                      <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                       <select className="cd-select" style={{ width: 70 }} value={w.kind} onChange={(e) => setWatchers((prev) => prev.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as "ref" | "view" } : x)))}>
                         <option value="ref">참조</option>
                         <option value="view">열람</option>
                       </select>
-                      <span className="text-[12.5px] cd-text truncate flex-1">
+                      <span className="text-[13px] cd-text truncate flex-1">
                         {w.name}
                         {w.position ? <span className="cd-text-faint text-[11px]"> {w.position}</span> : null}
                       </span>
@@ -2004,7 +2004,7 @@ export function QuoteBoard() {
                   <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
                 </button>
               </div>
-              <p className="text-[10.5px] cd-text-faint">
+              <p className="text-[11px] cd-text-faint">
                 상신 시 견적번호 확정 → 승인 완료 시 xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
               </p>
             </div>
@@ -2016,9 +2016,9 @@ export function QuoteBoard() {
       {/* PDF 미리보기 모달 */}
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1400px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-lg bg-[color:var(--cd-card)] shadow-[var(--cd-shadow-dialog)] w-full max-w-[1400px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
-              <span className="text-sm font-bold cd-text">견적서 미리보기</span>
+              <span className="text-sm font-semibold cd-text">견적서 미리보기</span>
               <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setPreviewOpen(false)}>
                 <X className="w-4 h-4" />
               </button>

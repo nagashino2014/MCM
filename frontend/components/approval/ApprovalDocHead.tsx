@@ -45,7 +45,7 @@ const LINE_STRONG = "var(--cd-form-line-strong)";
 function Stamp({ label = "승인" }: { label?: string }) {
   return (
     <span
-      className="w-[30px] h-[30px] rounded-full inline-flex items-center justify-center text-[9.5px] font-extrabold"
+      className="w-[30px] h-[30px] rounded-full inline-flex items-center justify-center text-[11px] font-semibold"
       style={{ border: `2px solid var(--cd-stamp)`, color: "var(--cd-stamp)", transform: "rotate(-8deg)" }}
     >
       {label}
@@ -58,7 +58,7 @@ function SignBox({ label, cells }: { label: string; cells: DocHeadStep[] }) {
   return (
     <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: `1px solid ${LINE_STRONG}` }}>
       <span
-        className="w-[26px] flex items-center justify-center text-[11.5px] font-extrabold text-center leading-[1.5] whitespace-pre-line"
+        className="w-[26px] flex items-center justify-center text-[12px] font-semibold text-center leading-[1.5] whitespace-pre-line"
         style={{ background: "var(--cd-form-label)", color: "var(--cd-body)", borderRight: `1px solid ${LINE}` }}
       >
         {label.split("").join("\n")}
@@ -90,16 +90,16 @@ function SignBox({ label, cells }: { label: string; cells: DocHeadStep[] }) {
             >
               {(approved || rejected) && <Stamp label={disp.stamp ?? undefined} />}
               {s.status === "skipped" && disp.statusLabel !== "생략" && (
-                <span className="text-[10px] font-bold cd-text-faint">{disp.statusLabel}</span>
+                <span className="text-[11px] font-semibold cd-text-faint">{disp.statusLabel}</span>
               )}
-              <span className="text-[10.5px] font-bold" style={{ color: approved || rejected ? "var(--cd-text)" : "var(--cd-faint)" }}>
+              <span className="text-[11px] font-semibold" style={{ color: approved || rejected ? "var(--cd-text)" : "var(--cd-faint)" }}>
                 {s.assigneeName ?? s.assigneeUserId}
               </span>
-              {disp.proxyOf && <span className="text-[9px] cd-text-faint whitespace-nowrap">{disp.proxyOf} 대결</span>}
-              {mine && <span className="text-[9px] font-extrabold cd-text-primary">내 차례</span>}
+              {disp.proxyOf && <span className="text-[11px] cd-text-faint whitespace-nowrap">{disp.proxyOf} 대결</span>}
+              {mine && <span className="text-[11px] font-semibold cd-text-primary">내 차례</span>}
             </span>
             <span
-              className="py-1 text-[10px] text-center tabular-nums min-h-[21px] box-border"
+              className="py-1 text-[11px] text-center tabular-nums min-h-[21px] box-border"
               style={{ color: "var(--cd-muted)" }}
             >
               {stampDate(s.actedAt)}
@@ -132,7 +132,7 @@ export function ApprovalDocHead({ info }: { info: DocHeadInfo }) {
     <div className="flex flex-col gap-4">
       {info.formName && (
         <h2
-          className="m-0 text-center text-[21px] font-extrabold cd-text"
+          className="m-0 text-center text-[22px] font-semibold cd-text"
           style={{ letterSpacing: "0.35em", textIndent: "0.35em" }}
         >
           {info.formName}
@@ -151,7 +151,7 @@ export function ApprovalDocHead({ info }: { info: DocHeadInfo }) {
           ).map(([l, v], i) => (
             <div key={l} className="flex" style={{ borderTop: i > 0 ? `1px solid ${LINE}` : undefined }}>
               <span
-                className="w-[74px] shrink-0 px-2.5 py-[7px] text-[11.5px] font-extrabold text-center box-border"
+                className="w-[74px] shrink-0 px-2.5 py-[7px] text-[12px] font-semibold text-center box-border"
                 style={{ background: "var(--cd-form-label)", color: "var(--cd-body)", borderRight: `1px solid ${LINE}` }}
               >
                 {l}

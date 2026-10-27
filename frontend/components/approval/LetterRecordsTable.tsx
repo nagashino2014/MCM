@@ -24,7 +24,7 @@ function statusBadge(status: LetterSendStatus) {
         : status === "archived"
           ? "cd-border-c cd-text-faint"
           : "border-[color:var(--cd-warning)] text-[color:var(--cd-warning)]";
-  return <span className={`text-[10.5px] rounded-full px-2 py-0.5 border ${color}`}>{LETTER_SEND_STATUS_LABEL[status] ?? status}</span>;
+  return <span className={`text-[11px] rounded-full px-2 py-0.5 border ${color}`}>{LETTER_SEND_STATUS_LABEL[status] ?? status}</span>;
 }
 
 function recipientsSummary(list: LetterRecipient[]): string {
@@ -142,10 +142,10 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   return createPortal(
     // 포털 모달 — .cdash 밖이라 cdash-vars + cd-fields-white + data-theme 부여(UI 규칙)
     <div className="cdash-vars cd-fields-white fixed inset-0 z-[80] flex items-center justify-center p-4" data-theme={theme} style={{ background: "rgba(15,20,34,0.45)" }} onClick={onClose}>
-      <div className="rounded-2xl bg-[color:var(--cd-card)] shadow-2xl w-full max-w-[1400px] max-h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="rounded-lg bg-[color:var(--cd-card)] shadow-[var(--cd-shadow-dialog)] w-full max-w-[1400px] max-h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b cd-border-c">
           <div className="flex flex-col min-w-0">
-            <span className="text-[13.5px] font-bold cd-text truncate">
+            <span className="text-[14px] font-semibold cd-text truncate">
               {letter ? `${letter.letterNo ?? "미채번"} · ${letter.title ?? ""}` : "불러오는 중..."}
             </span>
             <span className="text-[11px] cd-text-faint flex items-center gap-1.5">
@@ -223,9 +223,9 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
 
         {historyOpen && letter && letter.sendHistory.length > 0 && (
           <div className="px-5 py-3 border-b cd-border-c flex flex-col gap-1.5 max-h-[26vh] overflow-auto">
-            <span className="text-[11px] font-bold cd-text">발송 이력 — 이 공문의 모든 발송이 한 건으로 합산 관리됩니다</span>
+            <span className="text-[11px] font-semibold cd-text">발송 이력 — 이 공문의 모든 발송이 한 건으로 합산 관리됩니다</span>
             {letter.sendHistory.map((h, i) => (
-              <div key={i} className="flex items-baseline gap-2 text-[11.5px]">
+              <div key={i} className="flex items-baseline gap-2 text-[12px]">
                 <span className="font-mono cd-text shrink-0">{i + 1}차</span>
                 <span className="font-mono cd-text-faint shrink-0">{(h.sentAt ?? "").slice(0, 16).replace("T", " ")}</span>
                 <span className="cd-text-faint truncate">
@@ -255,7 +255,7 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
               >
                 취소
               </button>
-              <span className="text-[10.5px] cd-text-faint">과거 이관 공문은 원본에 메일주소가 없으므로 여기서 보완 입력합니다.</span>
+              <span className="text-[11px] cd-text-faint">과거 이관 공문은 원본에 메일주소가 없으므로 여기서 보완 입력합니다.</span>
             </div>
           </div>
         )}
@@ -327,7 +327,7 @@ export function LetterRecordsTable({
         <div className="flex items-center gap-2 flex-wrap pb-3">
           <button
             type="button"
-            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] flex items-center gap-1"
+            className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[12px] flex items-center gap-1"
             onClick={() => openImport(null)}
             title="앱 밖에서 발송된 공문을 대장에 등록합니다(파일·수신처 포함)."
           >
@@ -340,14 +340,14 @@ export function LetterRecordsTable({
                 <button
                   key={no}
                   type="button"
-                  className="cd-btn rounded-full border border-dashed cd-border-c px-2.5 py-1 text-[10.5px] font-mono cd-text-faint"
+                  className="cd-btn rounded-full border border-dashed cd-border-c px-2.5 py-1 text-[11px] font-mono cd-text-faint"
                   onClick={() => openImport(no)}
                   title="이 번호로 이관 등록"
                 >
                   {no}
                 </button>
               ))}
-              {gaps.length > 12 && <span className="text-[10.5px] cd-text-faint">외 {gaps.length - 12}건</span>}
+              {gaps.length > 12 && <span className="text-[11px] cd-text-faint">외 {gaps.length - 12}건</span>}
             </>
           )}
         </div>
@@ -378,8 +378,8 @@ export function LetterRecordsTable({
                 <td className="py-[11.5px] pr-3 font-mono text-[11px] cd-text-faint">{l.issueDate ?? "-"}</td>
                 <td className="py-[11.5px] pr-3">
                   {statusBadge(l.sendStatus)}
-                  {l.sendHistory.length > 1 && <span className="ml-1.5 text-[10.5px] cd-text-faint">{l.sendHistory.length}차</span>}
-                  {l.sendStatus === "failed" && <span className="ml-1.5 text-[10.5px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
+                  {l.sendHistory.length > 1 && <span className="ml-1.5 text-[11px] cd-text-faint">{l.sendHistory.length}차</span>}
+                  {l.sendStatus === "failed" && <span className="ml-1.5 text-[11px] text-[color:var(--cd-error)]">클릭 후 재발송</span>}
                 </td>
               </tr>
             ))}

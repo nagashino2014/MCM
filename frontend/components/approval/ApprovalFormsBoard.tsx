@@ -321,7 +321,7 @@ export default function ApprovalFormsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Forms"
@@ -343,12 +343,12 @@ export default function ApprovalFormsBoard() {
 
       <div className="flex flex-col xl:flex-row gap-4 items-start min-h-0">
         {/* 양식 목록 */}
-        <div className="cd-card rounded-3xl p-5 w-full xl:w-[260px] shrink-0 flex flex-col gap-3">
+        <div className="cd-card rounded-lg p-5 w-full xl:w-[260px] shrink-0 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold cd-text text-sm">양식 목록</h3>
+            <h3 className="font-semibold cd-text text-sm">양식 목록</h3>
             <button
               type="button"
-              className="cd-btn rounded-lg px-2.5 py-1.5 text-[11.5px] border cd-border-c flex items-center gap-1"
+              className="cd-btn rounded-lg px-2.5 py-1.5 text-[12px] border cd-border-c flex items-center gap-1"
               onClick={() => {
                 setDraft({ ...NEW_FORM, folderId: folders[0]?.folderId ?? null });
                 setSelectedKey(null);
@@ -366,7 +366,7 @@ export default function ApprovalFormsBoard() {
               if (!list.length) return null;
               return (
                 <div key={fold.folderId}>
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint mb-1">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold cd-text-faint mb-1">
                     <FolderOpen className="w-3.5 h-3.5" /> {fold.name}
                   </div>
                   <div className="flex flex-col gap-1 mb-2">
@@ -380,16 +380,16 @@ export default function ApprovalFormsBoard() {
                           setPreview(false);
                           setSavedAt(null);
                         }}
-                        className={`text-left rounded-xl border px-3 py-2 text-[12.5px] flex items-center gap-2 ${
+                        className={`text-left rounded-lg border px-3 py-2 text-[13px] flex items-center gap-2 ${
                           draft?.formId === f.formId
                             ? "cd-tint-primary border-transparent"
                             : "cd-border-c cd-text hover:bg-[color:var(--cd-surface)]"
                         }`}
                       >
                         <span className="truncate flex-1">{f.name}</span>
-                        <span className="text-[10px] cd-text-faint shrink-0">v{f.version}</span>
+                        <span className="text-[11px] cd-text-faint shrink-0">v{f.version}</span>
                         {!f.useYn && (
-                          <span className="text-[10px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint shrink-0">중지</span>
+                          <span className="text-[11px] rounded-full px-1.5 py-0.5 border cd-border-c cd-text-faint shrink-0">중지</span>
                         )}
                       </button>
                     ))}
@@ -401,7 +401,7 @@ export default function ApprovalFormsBoard() {
         </div>
 
         {/* 편집기 */}
-        <div className="cd-card rounded-3xl p-5 flex-1 min-w-0 flex flex-col gap-4">
+        <div className="cd-card rounded-lg p-5 flex-1 min-w-0 flex flex-col gap-4">
           {!draft ? (
             <p className="text-sm cd-text-faint py-10 text-center">
               좌측에서 양식을 선택하거나 새 양식을 만드세요. 기본 제공 양식(출장신청·출장보고·초과근무·지출결의·휴가신청 등)도 여기서 수정할 수 있습니다.
@@ -409,7 +409,7 @@ export default function ApprovalFormsBoard() {
           ) : (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold cd-text flex items-center gap-2">
+                <h3 className="font-semibold cd-text flex items-center gap-2">
                   <Pencil className="w-4 h-4 cd-text-primary" />
                   {draft.formId ? `양식 편집 — ${draft.name || "(이름 없음)"}` : "새 양식"}
                   {draft.formId && (
@@ -534,7 +534,7 @@ export default function ApprovalFormsBoard() {
               </div>
 
               {preview ? (
-                <div className="rounded-2xl border cd-border-c p-4">
+                <div className="rounded-lg border cd-border-c p-4">
                   <p className="text-[11px] cd-text-faint mb-3">기안 화면 미리보기 — 값 입력을 테스트할 수 있습니다(저장되지 않음).</p>
                   <ApprovalFormRenderer
                     fields={draft.fields}
@@ -545,7 +545,7 @@ export default function ApprovalFormsBoard() {
                 <div className="flex flex-col lg:flex-row gap-3 items-start">
                   {/* 필드 팔레트 */}
                   {/* 128px이면 칸이 52px로 좁아 '옵션(단일)'·'담당자 검색'이 글자 단위로 줄바꿈된다(FHD 실사 10-21) */}
-                  <div className="w-full lg:w-[152px] shrink-0 rounded-2xl border cd-border-c p-2 grid grid-cols-4 lg:grid-cols-2 gap-1.5">
+                  <div className="w-full lg:w-[152px] shrink-0 rounded-lg border cd-border-c p-2 grid grid-cols-4 lg:grid-cols-2 gap-1.5">
                     {PALETTE.map(({ type, icon: Icon }) => (
                       <button
                         key={type}
@@ -558,7 +558,7 @@ export default function ApprovalFormsBoard() {
                         onDragEnd={() => setDrag(null)}
                         onClick={() => addAtEnd(type)}
                         title={`${FIELD_TYPE_LABEL[type]} — 클릭하면 맨 아래에 추가, 끌어서 원하는 위치에 삽입`}
-                        className="rounded-xl border cd-border-c px-1 py-2 flex flex-col items-center gap-1 text-[10px] cd-text-muted hover:cd-text hover:border-[color:var(--cd-primary)] cursor-grab active:cursor-grabbing"
+                        className="rounded-lg border cd-border-c px-1 py-2 flex flex-col items-center gap-1 text-[11px] cd-text-muted hover:cd-text hover:border-[color:var(--cd-primary)] cursor-grab active:cursor-grabbing"
                       >
                         <Icon className="w-4 h-4" />
                         {FIELD_TYPE_LABEL[type]}
@@ -568,7 +568,7 @@ export default function ApprovalFormsBoard() {
 
                   {/* 캔버스 — 실제 양식 모양 위에서 선택·드래그 배치 */}
                   <div className="flex-1 min-w-0">
-                    <div className="rounded-xl border cd-border-c overflow-hidden">
+                    <div className="rounded-lg border cd-border-c overflow-hidden">
                       <RowGap index={0} active={!!drag} onDrop={() => handleDrop({ newRowAt: 0 })} />
                       {rows.map((rowFields, ri) => (
                         <div key={ri}>
@@ -606,7 +606,7 @@ export default function ApprovalFormsBoard() {
                         concepts={concepts}
                       />
                     ) : (
-                      <div className="rounded-2xl border border-dashed cd-border-c p-4 text-[12px] cd-text-faint">
+                      <div className="rounded-lg border border-dashed cd-border-c p-4 text-[12px] cd-text-faint">
                         캔버스에서 항목을 클릭하면 여기서 라벨·필드 키·옵션·폭 등을 편집할 수 있습니다.
                       </div>
                     )}
@@ -676,23 +676,23 @@ function CanvasCell({
       title="클릭 = 속성 편집 · 끌기 = 이동"
     >
       {f.type === "static" ? (
-        <div className="px-3 py-2.5 text-[11.5px] cd-text-faint whitespace-pre-wrap flex-1">{f.content ?? ""}</div>
+        <div className="px-3 py-2.5 text-[12px] cd-text-faint whitespace-pre-wrap flex-1">{f.content ?? ""}</div>
       ) : (
         <>
-          <div className="w-28 shrink-0 px-2.5 py-2.5 text-[12px] font-bold cd-surface-bg cd-text flex items-center">
+          <div className="w-28 shrink-0 px-2.5 py-2.5 text-[12px] font-semibold cd-surface-bg cd-text flex items-center">
             <span className="truncate">
               {f.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
               {f.label}
             </span>
           </div>
           <div className="flex-1 min-w-0 px-2.5 py-2 flex items-center gap-1.5">
-            <span className="text-[10px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{FIELD_TYPE_LABEL[f.type]}</span>
+            <span className="text-[11px] rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0">{FIELD_TYPE_LABEL[f.type]}</span>
             <span className="text-[11px] cd-text-faint font-mono truncate">{f.key}</span>
             {f.type === "table" && (
-              <span className="text-[10.5px] cd-text-faint truncate">{(f.tableColumns ?? []).map((c) => c.label).join("·")}</span>
+              <span className="text-[11px] cd-text-faint truncate">{(f.tableColumns ?? []).map((c) => c.label).join("·")}</span>
             )}
             {["select", "radio", "checkbox"].includes(f.type) && (
-              <span className="text-[10.5px] cd-text-faint truncate">{(f.options ?? []).join("/")}</span>
+              <span className="text-[11px] cd-text-faint truncate">{(f.options ?? []).join("/")}</span>
             )}
           </div>
         </>
@@ -740,12 +740,12 @@ function FieldProps({
   const hasOptions = ["select", "radio", "checkbox"].includes(f.type);
   const dupKey = allFields.filter((x) => x.key === f.key).length > 1;
   return (
-    <div className="rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2.5">
+    <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
-        <span className="text-[12px] font-bold cd-text">선택 항목 속성</span>
+        <span className="text-[12px] font-semibold cd-text">선택 항목 속성</span>
         <button
           type="button"
-          className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)] flex items-center gap-1 text-[11.5px]"
+          className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)] flex items-center gap-1 text-[12px]"
           onClick={onRemove}
         >
           <Trash2 className="w-3.5 h-3.5" /> 삭제
@@ -779,7 +779,7 @@ function FieldProps({
           value={f.key}
           onChange={(e) => onChange({ key: e.target.value })}
         />
-        {dupKey && <span className="text-[10.5px] text-[color:var(--cd-error)]">키가 중복됩니다.</span>}
+        {dupKey && <span className="text-[11px] text-[color:var(--cd-error)]">키가 중복됩니다.</span>}
       </label>
       <div className="flex items-center gap-3">
         <label className="text-[11px] cd-text-faint flex items-center gap-1.5">
@@ -854,7 +854,7 @@ function FieldProps({
             <option value="room">회의실</option>
             <option value="etc">기타</option>
           </select>
-          <span className="text-[10.5px]">선택지는 자산 관리 화면(/assets)의 활성 자산에서 자동 제공됩니다(옵션 편집 불필요).</span>
+          <span className="text-[11px]">선택지는 자산 관리 화면(/assets)의 활성 자산에서 자동 제공됩니다(옵션 편집 불필요).</span>
         </label>
       )}
       {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} concepts={concepts} />}
@@ -985,7 +985,7 @@ function FillMapEditor({
       ))}
       <button
         type="button"
-        className="text-[11.5px] cd-text-primary flex items-center gap-1 self-start"
+        className="text-[12px] cd-text-primary flex items-center gap-1 self-start"
         onClick={() => onChange({ fillMap: [...rules, { source: sources[0]?.key ?? "", target: "" }] })}
       >
         <Plus className="w-3.5 h-3.5" /> 규칙 추가
@@ -1055,7 +1055,7 @@ function TableColumnsEditor({
             />
           )}
           {conceptsForType(concepts, c.type).length > 0 && (
-            <label className="w-full flex items-center gap-1.5 text-[10.5px] cd-text-faint min-w-0">
+            <label className="w-full flex items-center gap-1.5 text-[11px] cd-text-faint min-w-0">
               의미
               <select
                 className="cd-select flex-1"
@@ -1077,7 +1077,7 @@ function TableColumnsEditor({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="text-[11.5px] cd-text-primary flex items-center gap-1"
+          className="text-[12px] cd-text-primary flex items-center gap-1"
           onClick={() => onChange({ tableColumns: [...cols, { key: `col_${cols.length + 1}`, label: `열 ${cols.length + 1}`, type: "text" }] })}
         >
           <Plus className="w-3.5 h-3.5" /> 열 추가

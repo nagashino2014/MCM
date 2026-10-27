@@ -149,7 +149,7 @@ export function ApprovalMetricsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="데이터 지표"
         meta={`${metrics.length}개 지표`}
@@ -172,19 +172,19 @@ export function ApprovalMetricsBoard() {
                 key={m.metricKey}
                 type="button"
                 onClick={() => select(m)}
-                className={`rounded-2xl border px-3.5 py-3 text-left ${selectedKey === m.metricKey ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
+                className={`rounded-lg border px-3.5 py-3 text-left ${selectedKey === m.metricKey ? "cd-glass-active" : "cd-border-c cd-row-hover"}`}
                 style={{ background: selectedKey === m.metricKey ? undefined : "var(--cd-card-solid)" }}
               >
                 <span className="flex items-center gap-2">
                   <BarChart3 className="w-3.5 h-3.5 cd-text-primary shrink-0" />
-                  <span className="text-[13px] font-bold cd-text truncate">{m.label}</span>
-                  <span className="ml-auto text-[10px] rounded-md border cd-border-c px-1.5 py-0.5 cd-text-faint shrink-0">
+                  <span className="text-[13px] font-semibold cd-text truncate">{m.label}</span>
+                  <span className="ml-auto text-[11px] rounded-lg border cd-border-c px-1.5 py-0.5 cd-text-faint shrink-0">
                     {KIND_LABEL[m.definition.kind]}
                   </span>
                 </span>
-                <span className="block text-[10.5px] cd-text-faint font-mono mt-0.5">{m.metricKey}</span>
-                {m.description && <span className="block text-[10.5px] cd-text-faint mt-0.5 leading-relaxed">{m.description}</span>}
-                <span className="block text-[10px] cd-text-faint mt-1">공개: {VIS_LABEL[m.visibility]} · v{m.version}</span>
+                <span className="block text-[11px] cd-text-faint font-mono mt-0.5">{m.metricKey}</span>
+                {m.description && <span className="block text-[11px] cd-text-faint mt-0.5 leading-relaxed">{m.description}</span>}
+                <span className="block text-[11px] cd-text-faint mt-1">공개: {VIS_LABEL[m.visibility]} · v{m.version}</span>
               </button>
             ))}
             {metrics.length === 0 && <p className="text-[12px] cd-text-faint py-6 text-center">지표가 없습니다. 마이그레이션 117 시드를 확인하세요.</p>}
@@ -194,15 +194,15 @@ export function ApprovalMetricsBoard() {
           <div className="flex flex-col gap-4 min-w-0 xl:overflow-y-auto">
             {!editMeta ? (
               <div className="cd-card p-6">
-                <p className="text-[12.5px] cd-text-faint text-center py-8">왼쪽에서 지표를 선택하면 실행·편집할 수 있습니다.</p>
+                <p className="text-[13px] cd-text-faint text-center py-8">왼쪽에서 지표를 선택하면 실행·편집할 수 있습니다.</p>
               </div>
             ) : (
               <>
                 {/* 정의 편집(관리자 시험대 — 마법사는 SW-P3) */}
                 <div className="cd-card p-5 gap-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <input className="cd-input font-bold" style={{ width: 220 }} value={editMeta.label} onChange={(e) => setEditMeta({ ...editMeta, label: e.target.value })} />
-                    <span className="text-[10.5px] cd-text-faint font-mono">{editMeta.metricKey}</span>
+                    <input className="cd-input font-semibold" style={{ width: 220 }} value={editMeta.label} onChange={(e) => setEditMeta({ ...editMeta, label: e.target.value })} />
+                    <span className="text-[11px] cd-text-faint font-mono">{editMeta.metricKey}</span>
                     <select
                       className="cd-select"
                       style={{ width: 110 }}
@@ -245,12 +245,12 @@ export function ApprovalMetricsBoard() {
                     onChange={(e) => setEditMeta({ ...editMeta, description: e.target.value })}
                   />
                   <textarea
-                    className="cd-input font-mono text-[11.5px] min-h-[150px] leading-relaxed"
+                    className="cd-input font-mono text-[12px] min-h-[150px] leading-relaxed"
                     spellCheck={false}
                     value={editJson}
                     onChange={(e) => setEditJson(e.target.value)}
                   />
-                  <p className="text-[10.5px] cd-text-faint leading-relaxed">
+                  <p className="text-[11px] cd-text-faint leading-relaxed">
                     JSON으로 정의합니다. 복합 수식에는 지표 키·사칙연산·괄호만 사용할 수 있습니다.
                   </p>
                 </div>
@@ -259,9 +259,9 @@ export function ApprovalMetricsBoard() {
                 {runError && <p className="text-sm cd-error-text">{runError}</p>}
                 {result && (
                   <div className="cd-card p-5 gap-3">
-                    <h3 className="font-bold cd-text text-[13.5px]">{result.label} — 실행 결과</h3>
+                    <h3 className="font-semibold cd-text text-[14px]">{result.label} — 실행 결과</h3>
                     {/* 진단 메타 — 근거 없는 숫자 금지(§3-3) */}
-                    <div className="rounded-xl border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
+                    <div className="rounded-lg border border-dashed cd-border-c px-3 py-2 text-[11px] cd-text-faint leading-relaxed">
                       소스: {result.diagnostics.sources.join(", ")}
                       {result.diagnostics.totalDocs != null && <> · 대상 문서 {result.diagnostics.totalDocs}건</>}
                       {" · "}사용 {result.diagnostics.usedRows}행
@@ -291,7 +291,7 @@ export function ApprovalMetricsBoard() {
                             <tr key={i} className="border-t cd-border-c">
                               <td className="py-1.5 pr-2 cd-text">{r.groupLabel}</td>
                               {result.hasTime && <td className="py-1.5 pr-2 cd-text-faint">{r.time ?? "-"}</td>}
-                              <td className="py-1.5 text-right font-bold cd-text">{formatMetricValue(r.value, result.format)}</td>
+                              <td className="py-1.5 text-right font-semibold cd-text">{formatMetricValue(r.value, result.format)}</td>
                             </tr>
                           ))}
                           {result.rows.length === 0 && (

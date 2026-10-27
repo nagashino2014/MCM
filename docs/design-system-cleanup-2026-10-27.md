@@ -43,6 +43,16 @@
   - `cd-text-faint` 는 `--cd-faint: var(--cd-muted)` 라 이미 muted 와 같은 색 — 클래스 일괄 치환은 전 모듈 마무리 때.
   - 남음: R6 10 + R12 6(`FacilityOrdersModal` 용역 분류색·수금 링 `#9BC2E6`·해지/중지 배지 — 계약 트리 `contracts/page.tsx` 와 같은 값이라 두 곳을 함께 옮길 때 처리),
     R12 계산된 위치·분류색 3, R9 `FacilityQualityPanel` `<table>` 1.
+  - PR #53 머지(ea32815c), next:734 배포.
+
+- **2026-10-27 결재 모듈** — `app/(app)/approval` + `components/approval` (79개 파일, 위반 1,271 → 186) — 브랜치 `claude/precision-approval`
+  - codemod C1·C2·C3·C5(`--weights`) 49개 파일. 수동: 15px 창·구역 제목 5곳이 14px 로 내려가 `text-base`(16)로 보정, 드롭다운 `--cd-shadow-popover`,
+    모달 `--cd-shadow-dialog`, KPI 강조 칸 `shadow-sm` 제거, KPI 이름표 `uppercase tracking-wider` 제거·`font-medium`, 모달 `rounded-[24px]` → `rounded-lg`,
+    작은 태그형 버튼 `rounded` → `rounded-lg`(버튼 반경 8px 규칙), `text-rose-600` → `cd-error-text`.
+  - 인라인 `style={{ color: "var(--cd-error|warning|primary|success|faint)" }}` 71곳 → 같은 색 클래스(한 줄 안에 className 이 있는 경우만, `cd-btn`·`cd-choice` 와 겹친 곳 없음). 여러 줄에 걸친 `cd-btn` 3곳은 특이도 때문에 인라인 유지.
+  - 결함 수정: `ApprovalSemanticsBoard` 의 `var(--cd-text-faint, #7C8FAC)` — 정의되지 않은 토큰이라 폴백 hex 가 그려지고 있었음 → `var(--cd-faint)`. 정의된 토큰의 hex 폴백 제거.
+  - 그대로 둔 것: `LeaveNoticePreview`(연차사용촉진 고지서 — 인쇄 서식, 흰 종이 고정), `ApprovalDocHead` 문서 제목(21→22px 만),
+    R8 `py-[11.5px]` 등 38건(10-21 목록 행 51px 결정과 묶인 값), R9 `<table>` 25, R12 표 열 너비 등 102, R6 21(차트 팔레트·흰 글자·휴무일 빨강 `#EF4444`).
 
 ## 순서 (모듈 단위, 한 번에 하나)
 

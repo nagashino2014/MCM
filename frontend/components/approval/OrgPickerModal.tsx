@@ -69,7 +69,7 @@ export function OrgPickerModal({
         ) : (
           <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
         )}
-        {hint && <p className="text-[10px] cd-text-faint">{hint}</p>}
+        {hint && <p className="text-[11px] cd-text-faint">{hint}</p>}
       </div>
     </CdModal>
   );

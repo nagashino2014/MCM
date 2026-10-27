@@ -190,7 +190,7 @@ export function ApprovalLeaveBoard() {
     : [];
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<CalendarCheck2 className="w-5 h-5" />}
         eyebrow="Approval · Leave"
@@ -211,13 +211,13 @@ export function ApprovalLeaveBoard() {
           {KPIS.map((k) => {
             const Icon = k.icon;
             return (
-              <div key={k.label} className={`rounded-2xl p-4 border cd-border-c transition-shadow ${k.primary ? "cd-tint-primary shadow-sm" : "cd-card-bg"}`}>
+              <div key={k.label} className={`rounded-lg p-4 border cd-border-c transition-shadow ${k.primary ? "cd-tint-primary" : "cd-card-bg"}`}>
                 <div className="flex items-center gap-2">
                   <Icon className={`w-4 h-4 shrink-0 ${k.primary ? "cd-text-primary" : "cd-text-faint"}`} />
-                  <div className="text-[10px] font-bold uppercase tracking-wider cd-text-faint truncate">{k.label}</div>
+                  <div className="text-[11px] font-medium cd-text-faint truncate">{k.label}</div>
                 </div>
-                <div className={`mt-2 text-3xl font-extrabold leading-tight ${k.primary ? "cd-text" : "cd-text"}`}>{k.value}</div>
-                <div className="text-[10px] cd-text-faint font-medium mt-1 truncate">{k.hint}</div>
+                <div className={`mt-2 text-2xl font-semibold leading-tight ${k.primary ? "cd-text" : "cd-text"}`}>{k.value}</div>
+                <div className="text-[11px] cd-text-faint font-medium mt-1 truncate">{k.hint}</div>
               </div>
             );
           })}
@@ -227,7 +227,7 @@ export function ApprovalLeaveBoard() {
       {/* 인포그래픽 (LM-P4) */}
       {!loading && rows.length > 0 && <LeaveCharts year={year} theme={theme as CdTheme} />}
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(e.target.value)}>
             {Array.from({ length: 4 }, (_, i) => String(thisYear + 1 - i)).map((y) => (
@@ -236,7 +236,7 @@ export function ApprovalLeaveBoard() {
               </option>
             ))}
           </select>
-          <div className="ml-auto flex items-center gap-1.5 text-[11.5px] cd-text-faint">
+          <div className="ml-auto flex items-center gap-1.5 text-[12px] cd-text-faint">
             연차 발생 기준
             <select className="cd-select" style={{ width: 150 }} value={basis} onChange={(e) => changeBasis(e.target.value as AccrualBasis)}>
               <option value="jan1">회계연도(매년 1/1)</option>
@@ -250,7 +250,7 @@ export function ApprovalLeaveBoard() {
         ) : (
           <div className="flex flex-col gap-1.5">
             {/* 헤더 */}
-            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_1fr_repeat(5,0.7fr)] gap-2 px-3 py-2 text-[10.5px] font-bold uppercase tracking-wider cd-text-faint">
+            <div className="cd-table-head hidden md:grid grid-cols-[1.6fr_1fr_repeat(5,0.7fr)] gap-2 px-3 py-2 text-[11px] font-medium cd-text-faint">
               <span>직원</span>
               <span>부서</span>
               <span className="text-right">부여</span>
@@ -278,7 +278,7 @@ export function ApprovalLeaveBoard() {
             ))}
           </div>
         )}
-        <p className="text-[10.5px] cd-text-faint">
+        <p className="text-[11px] cd-text-faint">
           &apos;규정 발생&apos;은 근로기준법 기준 자동 계산값(참고)입니다.
         </p>
       </div>
@@ -317,7 +317,7 @@ function RowBlock({
 }) {
   const rate = r.granted > 0 ? Math.min(100, (r.usedAnnual / r.granted) * 100) : 0;
   return (
-    <div className={`rounded-2xl border cd-border-c overflow-hidden ${expanded ? "cd-card-bg" : ""}`}>
+    <div className={`rounded-lg border cd-border-c overflow-hidden ${expanded ? "cd-card-bg" : ""}`}>
       {/* 행 헤더 */}
       <button
         type="button"
@@ -327,13 +327,13 @@ function RowBlock({
         <div className="flex items-center gap-2.5 min-w-0">
           <EmployeeAvatar employeeId={r.employeeId} photoPath={r.photoPath} size={34} />
           <div className="min-w-0">
-            <div className="text-[13px] font-bold cd-text truncate">
+            <div className="text-[13px] font-semibold cd-text truncate">
               {r.name}
               {r.positionName && <span className="cd-text-faint font-normal text-[11px]"> {r.positionName}</span>}
               {/* 특별휴가 잔여 배지 — 있는 직원만(툴팁에 유형별 상세) */}
               {special && special.length > 0 && (
                 <span
-                  className="ml-1.5 align-[1px] text-[9.5px] font-bold rounded-full px-1.5 py-0.5"
+                  className="ml-1.5 align-[1px] text-[11px] font-semibold rounded-full px-1.5 py-0.5"
                   style={{ background: "var(--cd-warning-soft)", color: "var(--cd-warning)" }}
                   title={special.map((s) => `${s.label} ${fmtQty(s.remaining, s.unit)}`).join(" · ")}
                 >
@@ -350,7 +350,7 @@ function RowBlock({
         <span className="text-[12px] cd-text-faint truncate">{r.deptName ?? "-"}</span>
         <span className="text-right font-mono text-[13px] cd-text">{fmtDays(r.granted)}</span>
         <span className="text-right font-mono text-[13px] cd-text">{fmtDays(r.usedAnnual)}</span>
-        <span className={`text-right font-mono text-[13px] font-bold ${r.remaining < 0 ? "text-[color:var(--cd-error)]" : "cd-text-primary"}`}>{fmtDays(r.remaining)}</span>
+        <span className={`text-right font-mono text-[13px] font-semibold ${r.remaining < 0 ? "text-[color:var(--cd-error)]" : "cd-text-primary"}`}>{fmtDays(r.remaining)}</span>
         <span className="text-right font-mono text-[12px] cd-text-faint">{r.accrual != null ? fmtDays(r.accrual) : "-"}</span>
         <span className="text-right font-mono text-[12px] cd-text-faint">{r.otherUsed > 0 ? fmtDays(r.otherUsed) : "-"}</span>
       </button>
@@ -408,10 +408,10 @@ function UsageHistory({
   };
 
   return (
-    <div className="rounded-xl border cd-border-c p-3">
-      <div className="text-[11px] font-bold cd-text-faint mb-2.5">날짜별 휴가 사용 이력</div>
+    <div className="rounded-lg border cd-border-c p-3">
+      <div className="text-[11px] font-semibold cd-text-faint mb-2.5">날짜별 휴가 사용 이력</div>
       {!entries ? (
-        <p className="text-[11.5px] cd-text-faint">불러오는 중입니다.</p>
+        <p className="text-[12px] cd-text-faint">불러오는 중입니다.</p>
       ) : (
         <div className="flex flex-col md:flex-row gap-4">
           {/* 연차(3) */}
@@ -487,11 +487,11 @@ function MonthGrouped({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1.5 text-[11px]">
-        <span className="font-bold cd-text">{title}</span>
+        <span className="font-semibold cd-text">{title}</span>
         <span className="cd-text-faint">{fmtDays(total)}일</span>
       </div>
       {months.length === 0 ? (
-        <p className="text-[11.5px] cd-text-faint py-2">이력이 없습니다.</p>
+        <p className="text-[12px] cd-text-faint py-2">이력이 없습니다.</p>
       ) : (
         <>
           <div style={gridCols(cols)}>
@@ -505,7 +505,7 @@ function MonthGrouped({
                   onClick={() => setSel(active ? null : m)}
                   data-active={active}
                   aria-pressed={active}
-                  className={`cd-choice rounded-lg border px-1.5 py-1 text-[10.5px] font-mono flex flex-col items-center ${active ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text hover:cd-tint-primary"}`}
+                  className={`cd-choice rounded-lg border px-1.5 py-1 text-[11px] font-mono flex flex-col items-center ${active ? "cd-fill-primary border-transparent text-white" : "cd-border-c cd-text hover:cd-tint-primary"}`}
                   title={`${m} · ${fmtDays(days)}일`}
                 >
                   <span>{m}</span>
@@ -520,12 +520,12 @@ function MonthGrouped({
                 <div key={e.entryId} className="rounded-lg border cd-border-c p-2 flex flex-col gap-1 cd-card-bg">
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-[11px] cd-text">{e.usedOn?.slice(5) ?? ""}</span>
-                    <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 shrink-0 ${e.deduct ? "cd-tint-primary" : "border cd-border-c cd-text-faint"}`}>{e.leaveLabel ?? e.leaveTypeKey}</span>
+                    <span className={`text-[11px] rounded-full px-1.5 py-0.5 shrink-0 ${e.deduct ? "cd-tint-primary" : "border cd-border-c cd-text-faint"}`}>{e.leaveLabel ?? e.leaveTypeKey}</span>
                     <button type="button" className="ml-auto cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => onDelete(e.entryId)}>
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
-                  <div className="flex items-center gap-1 text-[10.5px]">
+                  <div className="flex items-center gap-1 text-[11px]">
                     <input
                       className="cd-input text-right"
                       style={{ width: 44, padding: "2px 4px" }}
@@ -536,7 +536,7 @@ function MonthGrouped({
                       }}
                     />
                     <span className="cd-text-faint">일</span>
-                    <span className="ml-auto text-[9.5px] cd-text-faint">({SOURCE_LABEL[e.source]})</span>
+                    <span className="ml-auto text-[11px] cd-text-faint">({SOURCE_LABEL[e.source]})</span>
                   </div>
                 </div>
               ))}
@@ -604,11 +604,11 @@ function SpecialLeaveSection({
   };
 
   return (
-    <div className="rounded-xl border cd-border-c p-3">
+    <div className="rounded-lg border cd-border-c p-3">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[11px] font-bold cd-text-faint">특별휴가 (장기근속 · 초과근무 대체)</span>
+        <span className="text-[11px] font-semibold cd-text-faint">특별휴가 (장기근속 · 초과근무 대체)</span>
         {special && special.length > 0 && (
-          <span className="text-[10.5px] font-bold" style={{ color: "var(--cd-warning)" }}>
+          <span className="text-[11px] font-semibold cd-warn-text">
             잔여 {special.map((s) => `${s.label} ${fmtQty(s.remaining, s.unit)}`).join(" · ")}
           </span>
         )}
@@ -617,17 +617,17 @@ function SpecialLeaveSection({
         <div className="flex flex-wrap gap-1.5 mb-2">
           {entries.map((e) => (
             <span key={e.entryId} className="inline-flex items-center gap-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11px]">
-              <span className={`text-[9.5px] rounded-full px-1.5 py-0.5 ${e.entryType === "use" ? "border cd-border-c cd-text-faint" : "cd-tint-primary"}`}>
+              <span className={`text-[11px] rounded-full px-1.5 py-0.5 ${e.entryType === "use" ? "border cd-border-c cd-text-faint" : "cd-tint-primary"}`}>
                 {SPECIAL_KIND_LABEL[e.kind] ?? e.kind}
               </span>
               <span className="cd-text-faint">{ENTRY_LABEL[e.entryType] ?? e.entryType}</span>
               <span className="font-mono cd-text">{fmtQty(e.days, e.unit)}</span>
-              {e.effectiveOn && <span className="font-mono text-[10px] cd-text-faint">{e.effectiveOn}</span>}
-              {e.expiresOn && <span className="text-[10px] cd-text-faint">~{e.expiresOn} 소멸</span>}
+              {e.effectiveOn && <span className="font-mono text-[11px] cd-text-faint">{e.effectiveOn}</span>}
+              {e.expiresOn && <span className="text-[11px] cd-text-faint">~{e.expiresOn} 소멸</span>}
               {e.note && <span className="cd-text-faint truncate max-w-[200px]" title={e.note}>{e.note}</span>}
               {e.source === "auto_overtime" ? (
                 // 자동 적재분은 근태 재산정으로 갱신·회수된다 — 수동 삭제하면 다음 재산정 때 부활하므로 막는다.
-                <span className="text-[9.5px] rounded-full px-1.5 py-0.5" style={{ background: "var(--cd-success-soft)", color: "var(--cd-success)" }}>
+                <span className="text-[11px] rounded-full px-1.5 py-0.5" style={{ background: "var(--cd-success-soft)", color: "var(--cd-success)" }}>
                   자동
                 </span>
               ) : (
@@ -676,7 +676,7 @@ function SpecialLeaveSection({
           <Plus className="w-3.5 h-3.5 inline" /> 추가
         </button>
       </div>
-      <p className="text-[10px] cd-text-faint mt-2">
+      <p className="text-[11px] cd-text-faint mt-2">
         홈 &apos;내 연차·초과근무&apos; 카드에 본인 잔여가 표시됩니다. 초과근무 대체휴가는 근태와 대조해 인정된 주 12h 초과분(수당 제외분)에 대해
         시간 단위로 자동 부여됩니다(자동 표시 — 근태 재산정 시 갱신·회수). 사용(소진)은 &apos;사용&apos;으로 직접 기록하세요.
       </p>
@@ -718,8 +718,8 @@ function GrantAdjust({
     if (await post({ deleteEntryId: entryId })) onChanged();
   };
   return (
-    <div className="rounded-xl border cd-border-c p-3">
-      <div className="text-[11px] font-bold cd-text-faint mb-2">부여 · 조정</div>
+    <div className="rounded-lg border cd-border-c p-3">
+      <div className="text-[11px] font-semibold cd-text-faint mb-2">부여 · 조정</div>
       {other.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {other.map((e) => (

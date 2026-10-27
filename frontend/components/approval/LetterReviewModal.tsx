@@ -127,13 +127,13 @@ export function LetterReviewModal({
           <div className="flex flex-col gap-1.5">
             <span className="text-[11px] cd-text-faint">검수자 — 조직도에서 선택(복수 가능)</span>
             {reviewers.length === 0 ? (
-              <p className="text-[12px] cd-text-faint rounded-xl border border-dashed cd-border-c px-3 py-3 text-center">
+              <p className="text-[12px] cd-text-faint rounded-lg border border-dashed cd-border-c px-3 py-3 text-center">
                 아직 선택된 검수자가 없습니다.
               </p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {reviewers.map((r) => (
-                  <div key={r.userId} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
+                  <div key={r.userId} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">
                     <span className="text-[12px] cd-text truncate flex-1">
                       {r.name}
                       {r.position ? <span className="cd-text-faint"> · {r.position}</span> : null}
@@ -182,11 +182,11 @@ export function LetterReviewModal({
               <span className="text-[11px] cd-text-faint">지난 검수 요청 {history.length}건</span>
               <div className="flex flex-col gap-1.5 max-h-[190px] overflow-y-auto">
                 {history.map((h, i) => (
-                  <div key={h.reviewId} className="rounded-xl border cd-border-c px-3 py-2 text-[11.5px] flex items-start gap-2">
+                  <div key={h.reviewId} className="rounded-lg border cd-border-c px-3 py-2 text-[12px] flex items-start gap-2">
                     {h.ok ? (
                       <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 cd-text-primary" />
                     ) : (
-                      <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: "var(--cd-error)" }} />
+                      <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 cd-error-text" />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="cd-text">
@@ -194,7 +194,7 @@ export function LetterReviewModal({
                         <span className="cd-text-faint"> · {h.createdAt.slice(0, 16).replace("T", " ")}</span>
                       </div>
                       {h.note && <div className="cd-text-faint truncate">{h.note}</div>}
-                      {!h.ok && h.error && <div style={{ color: "var(--cd-error)" }}>{h.error}</div>}
+                      {!h.ok && h.error && <div className="cd-error-text">{h.error}</div>}
                     </div>
                   </div>
                 ))}

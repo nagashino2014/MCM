@@ -71,7 +71,7 @@ export function ApprovalNotifySettingsBoard() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<BellRing className="w-5 h-5" />}
         eyebrow="Approval · Settings"
@@ -85,12 +85,12 @@ export function ApprovalNotifySettingsBoard() {
         }
       />
 
-      <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
         {loading ? (
           <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[12.5px]">
+            <table className="w-full text-[13px]">
               <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint text-[11px]">
                   <th className="py-1.5 pr-3 font-semibold">이벤트</th>
@@ -107,7 +107,7 @@ export function ApprovalNotifySettingsBoard() {
                     <tr key={r.event} className="border-t cd-border-c">
                       <td className="py-2.5 pr-3">
                         <p className="cd-text font-semibold">{label.title}</p>
-                        <p className="text-[10.5px] cd-text-faint">{label.desc}</p>
+                        <p className="text-[11px] cd-text-faint">{label.desc}</p>
                       </td>
                       <td className="py-2.5 pr-3 text-center">
                         <input type="checkbox" checked={r.emailEnabled} onChange={(e) => update(r.event, { emailEnabled: e.target.checked })} />
@@ -120,7 +120,7 @@ export function ApprovalNotifySettingsBoard() {
                       </td>
                       <td className="py-2.5">
                         {r.event === "remind" ? (
-                          <span className="flex items-center gap-1.5 text-[11.5px] cd-text-faint">
+                          <span className="flex items-center gap-1.5 text-[12px] cd-text-faint">
                             대기
                             <input
                               type="number"
@@ -144,7 +144,7 @@ export function ApprovalNotifySettingsBoard() {
           </div>
         )}
         {msg && <p className="text-[12px] cd-text-faint">{msg}</p>}
-        <p className="text-[10.5px] cd-text-faint">
+        <p className="text-[11px] cd-text-faint">
           알림톡은 솔라피 발신프로필·승인 템플릿(SOLAPI_*) 등록, 이메일은 SES 발신주소(BID_NOTIFY_EMAIL_FROM) 설정이 있어야 실제 발송됩니다. 미설정 채널은 자동 건너뜁니다.
         </p>
       </div>

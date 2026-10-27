@@ -44,13 +44,13 @@ export default function AttachmentPreviewModal({ item, onClose }: { item: DocAtt
   return (
     <div className="fixed inset-0 z-[97] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative cd-solid-bg border cd-border-c rounded-3xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl" style={{ maxWidth: 960 }}>
+      <div className="relative cd-solid-bg border cd-border-c rounded-lg w-full max-h-[92vh] flex flex-col overflow-hidden shadow-[var(--cd-shadow-dialog)]" style={{ maxWidth: 960 }}>
         <div className="flex items-center gap-2 px-5 py-3 border-b cd-border-c">
-          <span className="text-[13px] font-bold cd-text truncate">{item.name}</span>
-          <span className="text-[10.5px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint shrink-0">{attachmentTypeLabel(item.name)}</span>
+          <span className="text-[13px] font-semibold cd-text truncate">{item.name}</span>
+          <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint shrink-0">{attachmentTypeLabel(item.name)}</span>
           {item.size > 0 && <span className="text-[11px] cd-text-faint shrink-0">{formatBytes(item.size)}</span>}
           {kind === "convert" && !convertError && (
-            <span className="text-[10.5px] cd-text-faint hidden md:inline">원본을 PDF 로 변환해 표시합니다 — 서식이 일부 다를 수 있습니다.</span>
+            <span className="text-[11px] cd-text-faint hidden md:inline">원본을 PDF 로 변환해 표시합니다 — 서식이 일부 다를 수 있습니다.</span>
           )}
           <a
             href={`${base}&download=1`}
@@ -66,22 +66,22 @@ export default function AttachmentPreviewModal({ item, onClose }: { item: DocAtt
         <div className="flex-1 overflow-y-auto p-4">
           {convertError ? (
             <div
-              className="rounded-xl border px-3.5 py-3 flex flex-col gap-1"
+              className="rounded-lg border px-3.5 py-3 flex flex-col gap-1"
               style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
             >
-              <span className="text-[11.5px] font-bold flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
+              <span className="text-[12px] font-semibold flex items-center gap-1.5 cd-warn-text">
                 <FileWarning className="w-4 h-4" /> 미리보기를 표시할 수 없습니다
               </span>
               <p className="text-[12px] cd-text">{convertError}</p>
-              <span className="text-[10.5px] cd-text-faint">위 [원본 내려받기]로 파일을 확인해 주세요.</span>
+              <span className="text-[11px] cd-text-faint">위 [원본 내려받기]로 파일을 확인해 주세요.</span>
             </div>
           ) : kind === "image" ? (
-            <div className="rounded-[14px] p-3 flex justify-center" style={{ border: "1px solid var(--cd-active-border)", background: "var(--cd-active-fill)" }}>
+            <div className="rounded-lg p-3 flex justify-center" style={{ border: "1px solid var(--cd-active-border)", background: "var(--cd-active-fill)" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt={item.name} className="max-w-full" style={{ maxHeight: "76vh" }} />
             </div>
           ) : (
-            <div className="rounded-[14px] overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
+            <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-active-border)" }}>
               <iframe title={item.name} src={src} className="w-full" style={{ height: "76vh", background: "#fff" }} />
             </div>
           )}

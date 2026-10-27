@@ -102,9 +102,9 @@ const CANVAS_CSS = `
 [contenteditable="false"][data-chip] { cursor: default; background: rgba(74,99,216,.10); border-radius: 2px; }
 .st-overlay { position: absolute; inset: 0; pointer-events: none; }
 .st-box { position: absolute; box-sizing: border-box; }
-.st-box--hover { outline: 1px dashed rgba(74,99,216,.55); }
+.st-box--hover, .st-box--group { outline: 1px dashed rgba(74,99,216,.55); }
 .st-box--sel { outline: 1.5px solid #4a63d8; }
-.st-box--group { outline: 1px dashed #4a63d8; outline-offset: 3px; }
+.st-box--group { outline-offset: 3px; }
 .st-box--warn { outline: 1.5px dashed #d64545; }
 .st-box--note { outline: 1.5px dashed #c47f00; }
 .st-handle { position: absolute; width: 9px; height: 9px; background: #fff; border: 1.5px solid #4a63d8; border-radius: 2px; pointer-events: auto; box-sizing: border-box; }

@@ -207,7 +207,7 @@ export function FacilityListPanel({
 
       {/* 필터 범위와 선택 해제를 같은 영역에서 제공한다. */}
       <div className="flex flex-col gap-2.5 mb-4">
-        <div className="flex items-center gap-2 rounded-xl border cd-line-c cd-surface-bg px-3 py-1.5">
+        <div className="flex items-center gap-2 rounded-lg border cd-line-c cd-surface-bg px-3 py-1.5">
           <Search className="w-4 h-4 cd-text-faint shrink-0" />
           <input
             type="text"
@@ -304,7 +304,7 @@ export function FacilityListPanel({
           {/* 거래 이력 업체 — 위 필터 조건에 해당하는 사업장 중 계약 건(해지·완료 포함)이
               1건 이상 있는 업체만 남긴다. 내보내기(엑셀·PDF)에도 같은 조건이 전달된다. */}
           <label
-            className="flex items-center gap-1.5 text-xs font-bold cd-text-muted shrink-0 cursor-pointer select-none"
+            className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted shrink-0 cursor-pointer select-none"
             title="설정한 필터 조건 중 계약 건이 존재하는 업체만 표시"
           >
             <input
@@ -344,7 +344,7 @@ export function FacilityListPanel({
       </div>
 
       {error && (
-        <div className="text-sm font-bold mb-3" style={{ color: "var(--cd-error)" }}>
+        <div className="text-sm font-semibold mb-3 cd-error-text">
           조회 실패: {error}
         </div>
       )}
@@ -365,7 +365,7 @@ export function FacilityListPanel({
             key={f.facilityId}
             type="button"
             onClick={() => onSelect(f.facilityId)}
-            className="text-left p-3 rounded-xl cd-listitem"
+            className="text-left p-3 rounded-lg cd-listitem"
             data-active={selectedId === f.facilityId}
           >
             {/* 3층 제한(Soft Glass Ink): 태그 / 상호 / 지역·업종.
@@ -384,8 +384,7 @@ export function FacilityListPanel({
                   ))}
                 </div>
                 <div
-                  className="flex min-w-0 items-center gap-1.5 text-[14px] font-semibold"
-                  style={{ color: "var(--cd-text)" }}
+                  className="flex min-w-0 items-center gap-1.5 text-[14px] font-semibold cd-text"
                   title={f.siteAddress ?? undefined}
                 >
                   <span className="min-w-0 truncate">{formatCompanyName(f.companyName)}</span>
@@ -395,7 +394,7 @@ export function FacilityListPanel({
                     </span>
                   )}
                 </div>
-                <div className="text-[12px] mt-0.5 break-words" style={{ color: "var(--cd-muted)" }}>
+                <div className="text-[12px] mt-0.5 break-words cd-text-muted">
                   {f.regionSido || "—"} {f.regionSigungu ?? ""}{" · "}
                   {f.industryCode || "—"} {f.industryName ?? ""}
                 </div>
@@ -415,7 +414,7 @@ export function FacilityListPanel({
           </button>
         ))}
       </div>
-      <div className="pt-4 mt-3 border-t shrink-0" style={{ borderColor: "var(--cd-border)" }}>
+      <div className="pt-4 mt-3 border-t shrink-0 border-[color:var(--cd-border)]">
         <PaginationControls
           total={total}
           limit={limit}

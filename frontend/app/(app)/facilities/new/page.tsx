@@ -244,7 +244,7 @@ function Inner() {
   };
 
   return (
-    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-lg min-h-full" data-theme={theme}>
       <CdPageHeader
         icon={<FileText className="w-5 h-5" />}
         eyebrow="Facility · New"
@@ -260,7 +260,7 @@ function Inner() {
         }
       />
 
-      <section className="cd-card rounded-3xl p-6 cd-reveal delay-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="cd-card rounded-lg p-6 cd-reveal delay-1 grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="상호 *">
           <input
             className="cd-input"
@@ -287,7 +287,7 @@ function Inner() {
               placeholder="경기도 화성시 ..."
             />
           </Field>
-          <label className="flex items-center gap-1.5 text-xs font-bold cd-text-muted select-none">
+          <label className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted select-none">
             <input
               type="checkbox"
               checked={hasMultipleSites}
@@ -302,8 +302,8 @@ function Inner() {
             복수 사업장 (동일 사업자등록번호로 소재지가 2개 이상)
           </label>
           {hasMultipleSites && (
-            <div className="grid gap-2 rounded-2xl border cd-border-c cd-surface-bg p-3">
-              <div className="text-[11px] font-bold cd-text-faint">
+            <div className="grid gap-2 rounded-lg border cd-border-c cd-surface-bg p-3">
+              <div className="text-[11px] font-semibold cd-text-faint">
                 대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준으로 동작합니다.)
               </div>
               {additionalSiteAddresses.map((addr, index) => (
@@ -329,7 +329,7 @@ function Inner() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
+                      className="rounded-lg border cd-error-border cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                       onClick={() =>
                         setAdditionalSiteAddresses((prev) =>
                           prev.length <= 1 ? [""] : prev.filter((_, idx) => idx !== index)
@@ -362,9 +362,9 @@ function Inner() {
             rows={2}
           />
         </Field>
-        <div className="md:col-span-2 rounded-2xl border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2 rounded-lg border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <h2 className="text-sm font-black cd-text flex items-center gap-2">
+            <h2 className="text-sm font-semibold cd-text flex items-center gap-2">
               <FileText className="w-4 h-4 cd-text-primary" />
               업종 코드 기반
             </h2>
@@ -411,7 +411,7 @@ function Inner() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
+                    className="rounded-lg border cd-error-border cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                     onClick={() => removeIndustryRow(index)}
                     title="업종 행 삭제"
                   >
@@ -422,10 +422,10 @@ function Inner() {
             ))}
           </div>
         </div>
-        <div className="md:col-span-2 rounded-2xl border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2 rounded-lg border cd-border-c cd-surface-bg p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2 flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-sm font-black cd-text flex items-center gap-2">
+              <h2 className="text-sm font-semibold cd-text flex items-center gap-2">
                 <FileText className="w-4 h-4 cd-text-primary" />
                 사업자등록증 기반
               </h2>
@@ -433,7 +433,7 @@ function Inner() {
                 사업자등록증 PDF의 사업의 종류 항목에서 업태·종목을, 등록증의 법인등록번호를 자동 추출합니다.
               </p>
             </div>
-            <label className="cd-action rounded-xl px-3 py-2 text-xs font-bold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
+            <label className="cd-action rounded-lg px-3 py-2 text-xs font-semibold text-white cd-fill-primary cursor-pointer inline-flex items-center gap-1">
               <Upload className="w-3.5 h-3.5" />
               {certificateParsing ? "추출 중..." : "PDF 첨부·추출"}
               <input
@@ -457,7 +457,7 @@ function Inner() {
                   type="button"
                   disabled={certificateParsing}
                   onClick={() => parseBusinessCertificate(certificateFile, { highQuality: true })}
-                  className="rounded-lg px-2.5 py-1 text-[11px] font-bold border cd-border-c cd-text-muted inline-flex items-center gap-1 disabled:opacity-50"
+                  className="rounded-lg px-2.5 py-1 text-[11px] font-semibold border cd-border-c cd-text-muted inline-flex items-center gap-1 disabled:opacity-50"
                   title="저화질 스캔 등 추출이 부정확할 때 Opus로 정밀 재분석(기존 값 덮어씀)"
                 >
                   {certificateParsing ? "재분석 중…" : "고정밀 재분석 (Opus)"}
@@ -466,12 +466,12 @@ function Inner() {
             </div>
           )}
           {certificateWarning && (
-            <div className="md:col-span-2 text-xs font-bold text-amber-700 cd-warn-bg border border-amber-200 rounded-xl px-3 py-2">
+            <div className="md:col-span-2 text-xs font-semibold cd-warn-text cd-warn-bg border cd-warn-border rounded-lg px-3 py-2">
               {certificateWarning}
             </div>
           )}
           <div className="md:col-span-2 grid gap-2">
-            <div className="text-[11px] font-bold cd-text-faint">
+            <div className="text-[11px] font-semibold cd-text-faint">
               사업자등록증의 업태·종목이 여러 행으로 기재된 경우 각각 행을 나눠 보정하세요.
             </div>
             {certificateBusinessKinds.map((row, index) => (
@@ -503,7 +503,7 @@ function Inner() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-red-100 cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
+                    className="rounded-lg border cd-error-border cd-error-bg px-2 py-2 cd-error-text hover:cd-error-bg"
                     onClick={() => removeCertificateKind(index)}
                     title="업태/종목 행 삭제"
                   >
@@ -547,7 +547,7 @@ function Inner() {
           <Field label="대상 용역 카테고리">
             <div className="flex flex-wrap gap-2">
               {FACILITY_SERVICE_ORDER.map((category) => (
-                <label key={category} className="flex items-center gap-1.5 text-xs font-bold cd-text-muted">
+                <label key={category} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
                   <input
                     type="checkbox"
                     checked={serviceCategories.includes(category)}
@@ -591,13 +591,13 @@ function Inner() {
         </div>
 
         {error && (
-          <div className="md:col-span-2 text-xs font-bold cd-error-text cd-error-bg border cd-error-border rounded-xl px-3 py-2">
+          <div className="md:col-span-2 text-xs font-semibold cd-error-text cd-error-bg border cd-error-border rounded-lg px-3 py-2">
             {error}
           </div>
         )}
         {duplicateFacility && (
-          <div className="md:col-span-2 rounded-2xl border border-amber-200 cd-warn-bg px-4 py-3 text-sm text-amber-900">
-            <div className="font-black mb-1">기존 등록 사업장이 확인되었습니다.</div>
+          <div className="md:col-span-2 rounded-lg border cd-warn-border cd-warn-bg px-4 py-3 text-sm cd-warn-text">
+            <div className="font-semibold mb-1">기존 등록 사업장이 확인되었습니다.</div>
             <div className="text-xs leading-relaxed">
               {duplicateFacility.companyName ?? "상호 미기재"}
               {duplicateFacility.businessRegistrationNo ? ` · ${duplicateFacility.businessRegistrationNo}` : ""}
@@ -606,7 +606,7 @@ function Inner() {
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <Link
                 href={`/facilities?focus=${encodeURIComponent(duplicateFacility.facilityId)}`}
-                className="inline-flex text-xs font-black cd-text-primary hover:underline"
+                className="inline-flex text-xs font-semibold cd-text-primary hover:underline"
               >
                 기존 사업장으로 이동
               </Link>
@@ -615,7 +615,7 @@ function Inner() {
                   type="button"
                   onClick={() => handleSubmit({ allowDuplicateBrn: true })}
                   disabled={pending}
-                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 cd-card-bg px-3 py-1.5 text-xs font-black text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-lg border cd-warn-border cd-card-bg px-3 py-1.5 text-xs font-semibold cd-warn-text hover:opacity-90 disabled:opacity-50"
                 >
                   <Save className="w-3.5 h-3.5" />
                   {pending ? "저장 중…" : "사업자번호 중복 확인 후 그래도 등록"}
@@ -623,7 +623,7 @@ function Inner() {
               )}
             </div>
             {duplicateFacility.matchType === "businessRegistrationNo" && (
-              <p className="mt-2 text-[11px] leading-relaxed text-amber-700">
+              <p className="mt-2 text-[11px] leading-relaxed cd-warn-text">
                 동일 법인의 본사·공장 등 같은 사업자등록번호를 사용하는 별도 사업장이면 그대로 등록한 뒤 관계 법인으로 묶을 수 있습니다.
               </p>
             )}
@@ -633,7 +633,7 @@ function Inner() {
         <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2 border-t cd-border-c/70">
           <Link
             href="/facilities"
-            className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted"
+            className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted"
           >
             취소
           </Link>
@@ -641,7 +641,7 @@ function Inner() {
             type="button"
             onClick={() => handleSubmit()}
             disabled={pending || !companyName.trim()}
-            className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm flex items-center gap-1 disabled:opacity-50"
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary flex items-center gap-1 disabled:opacity-50"
           >
             <Save className="w-3.5 h-3.5" />
             {pending ? "저장 중…" : "등록"}
@@ -655,7 +655,7 @@ function Inner() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
+      <span className="text-[11px] font-medium cd-text-faint">
         {label}
       </span>
       {children}

@@ -20,7 +20,7 @@ import type {
 export default function FacilitiesPage() {
   return (
     <ToastProvider>
-      <Suspense fallback={<div className="p-6 text-stone-400 text-sm">불러오는 중…</div>}>
+      <Suspense fallback={<div className="p-6 cd-text-muted text-sm">불러오는 중…</div>}>
         <Inner />
       </Suspense>
     </ToastProvider>
@@ -124,7 +124,7 @@ function Inner() {
 
   return (
     <div
-      className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl h-full min-h-0"
+      className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-lg h-full min-h-0"
       data-theme={theme}
     >
       <CdPageHeader

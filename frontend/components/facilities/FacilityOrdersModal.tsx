@@ -144,11 +144,11 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
   );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/30 p-4">
-      <div className="cd-solid-bg rounded-3xl w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-2xl flex flex-col overflow-hidden border cd-border-c">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[color:var(--cd-overlay)] p-4">
+      <div className="cd-solid-bg rounded-lg w-[min(1120px,calc(100vw-32px))] max-h-[min(880px,calc(100vh-32px))] shadow-[var(--cd-shadow-dialog)] flex flex-col overflow-hidden border cd-border-c">
         <div className="p-5 border-b cd-border-c flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-bold cd-text flex items-center gap-2">
+            <h3 className="text-base font-semibold cd-text flex items-center gap-2">
               <FolderTree className="w-5 h-5 cd-text-primary" />
               {facilityName} 수주 현황
             </h3>
@@ -162,7 +162,7 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden p-5 flex flex-col gap-4">
-          <div className="rounded-2xl border cd-border-c cd-card-bg overflow-hidden flex-1 min-h-[260px] flex flex-col">
+          <div className="rounded-lg border cd-border-c cd-card-bg overflow-hidden flex-1 min-h-[260px] flex flex-col">
             <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
               {loading ? (
                 <div className="p-10 text-center text-sm cd-text-faint">불러오는 중…</div>
@@ -203,7 +203,7 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
 
           <div className="shrink-0 grid grid-cols-1 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)] gap-4 items-stretch">
             <OrdersOverviewCard tree={tree} />
-            <div className="rounded-2xl border cd-border-c cd-card-bg p-4 min-h-[320px] flex flex-col">
+            <div className="rounded-lg border cd-border-c cd-card-bg p-4 min-h-[320px] flex flex-col">
               {!selected ? (
                 <div className="flex-1 flex items-center justify-center text-sm cd-text-faint">
                   위 트리에서 수주 건을 선택하세요.
@@ -223,7 +223,7 @@ export function FacilityOrdersModal({ facilityId, facilityName, onClose }: Props
           <button
             type="button"
             onClick={onClose}
-            className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted"
+            className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted"
           >
             닫기
           </button>
@@ -259,8 +259,8 @@ function ContractSummary({
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-[11px] cd-text-faint uppercase tracking-wide">계약명</p>
-        <h4 className="text-lg font-bold cd-text mt-0.5">{node.contractTitle}</h4>
+        <p className="text-[11px] cd-text-faint">계약명</p>
+        <h4 className="text-base font-semibold cd-text mt-0.5">{node.contractTitle}</h4>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(198px,234px)] gap-3">
@@ -317,14 +317,14 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
   }, [tree]);
 
   return (
-    <div className="rounded-2xl border cd-border-c cd-card-bg p-4 flex flex-col">
-      <p className="text-[11px] cd-text-faint uppercase tracking-wide">전체 용역 수주 현황</p>
+    <div className="rounded-lg border cd-border-c cd-card-bg p-4 flex flex-col">
+      <p className="text-[11px] cd-text-faint">전체 용역 수주 현황</p>
       <div className="mt-3 grid content-start gap-2.5 flex-1">
         {rows.map((row) => {
           return (
             <div
               key={row.label}
-              className="flex items-center gap-1.5 rounded-xl border cd-border-c py-2 px-3"
+              className="flex items-center gap-1.5 rounded-lg border cd-border-c py-2 px-3"
             >
               <span
                 className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-lg"
@@ -364,9 +364,9 @@ function OrdersOverviewCard({ tree }: { tree: ContractTreePayload | null }) {
 function Kpi({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
   const isEmpty = value == null || value === "";
   return (
-    <div className="rounded-2xl border cd-border-c cd-card-bg p-3">
+    <div className="rounded-lg border cd-border-c cd-card-bg p-3">
       <p className="text-[11px] cd-text-faint">{label}</p>
-      <p className={"text-sm mt-1 truncate " + (accent ? "cd-text-primary font-bold" : "cd-text")}>
+      <p className={"text-sm mt-1 truncate " + (accent ? "cd-text-primary font-semibold" : "cd-text")}>
         {isEmpty ? "-" : value}
       </p>
     </div>
@@ -385,8 +385,8 @@ function CollectionProgressCard({
   const percent = Math.round(rate * 100);
   const today = formatKoreanDate(new Date());
   return (
-    <div className="rounded-2xl border cd-border-c cd-card-bg p-4 min-h-[180px] flex flex-col items-center justify-center relative">
-      <p className="absolute left-4 top-3 text-[11px] font-bold cd-text-faint">수금 진척도</p>
+    <div className="rounded-lg border cd-border-c cd-card-bg p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-semibold cd-text-faint">수금 진척도</p>
       {/* 계약 상세(CollectionProgressCard)와 동일 — SVG 링으로 가운데를 비우고 호 끝을 둥글린다. */}
       <div className="relative w-28 h-28 flex items-center justify-center">
         <svg width="112" height="112" viewBox="0 0 112 112" className="absolute inset-0">
@@ -406,7 +406,7 @@ function CollectionProgressCard({
             />
           )}
         </svg>
-        <span className="relative text-2xl font-bold text-[#9BC2E6]">{percent}%</span>
+        <span className="relative text-2xl font-semibold text-[#9BC2E6]">{percent}%</span>
       </div>
       <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
@@ -483,12 +483,12 @@ function TreeChildRow({
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
         <span className="truncate cd-text">{contract.contractTitle}</span>
         {contract.contractStatus === "terminated" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-white" style={{ background: "#FF7171" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] text-white" style={{ background: "#FF7171" }}>
             계약해지
           </span>
         )}
         {contract.contractStatus === "suspended" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] cd-text" style={{ background: "#FFD966" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] cd-text" style={{ background: "#FFD966" }}>
             계약중지
           </span>
         )}
@@ -501,10 +501,10 @@ function TreeChildRow({
           />
         )}
       </span>
-      <span className="w-[96px] text-right text-[10px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
+      <span className="w-[96px] text-right text-[11px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
-      <span className="w-[80px] text-right text-[10px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
+      <span className="w-[80px] text-right text-[11px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
         {formatMoney(contract.currentAmount)}
       </span>
     </button>

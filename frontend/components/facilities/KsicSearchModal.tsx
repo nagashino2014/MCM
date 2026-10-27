@@ -86,16 +86,16 @@ export default function KsicSearchModal({
 
   const modal = (
     <div
-      className="cdash-vars cd-fields-white fixed inset-0 z-[80] bg-stone-950/20 flex items-center justify-center p-4"
+      className="cdash-vars cd-fields-white fixed inset-0 z-[80] bg-[color:var(--cd-overlay)] flex items-center justify-center p-4"
       data-theme={theme}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="cd-card rounded-3xl p-5 w-[min(680px,calc(100vw-32px))] max-h-[min(760px,calc(100vh-32px))] flex flex-col shadow-2xl">
+      <div className="cd-card rounded-lg p-5 w-[min(680px,calc(100vw-32px))] max-h-[min(760px,calc(100vh-32px))] flex flex-col shadow-[var(--cd-shadow-dialog)]">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-xl font-bold cd-text flex items-center gap-2">
+            <h3 className="text-base font-semibold cd-text flex items-center gap-2">
               <Search className="w-5 h-5 cd-text-primary" /> 업종 검색
             </h3>
             <p className="text-xs cd-text-faint mt-1">
@@ -105,7 +105,7 @@ export default function KsicSearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="cd-btn cd-btn-ghost rounded-xl px-2.5 py-2 cd-text-muted"
+            className="cd-btn cd-btn-ghost rounded-lg px-2.5 py-2 cd-text-muted"
             aria-label="닫기"
           >
             <X className="w-4 h-4" />
@@ -114,12 +114,12 @@ export default function KsicSearchModal({
 
         {/* 검색 모드 토글 */}
         <div className="flex items-center gap-1 mb-2">
-          <div className="inline-flex rounded-xl border cd-border-c cd-surface-bg p-0.5">
+          <div className="inline-flex rounded-lg border cd-border-c cd-surface-bg p-0.5">
             <button
               type="button"
               onClick={() => setMode("name")}
               className={
-                "rounded-lg px-3 py-1.5 text-xs font-bold " +
+                "rounded-lg px-3 py-1.5 text-xs font-semibold " +
                 (mode === "name" ? "cd-fill-primary text-white" : "cd-text-muted")
               }
             >
@@ -129,7 +129,7 @@ export default function KsicSearchModal({
               type="button"
               onClick={() => setMode("code")}
               className={
-                "rounded-lg px-3 py-1.5 text-xs font-bold " +
+                "rounded-lg px-3 py-1.5 text-xs font-semibold " +
                 (mode === "code" ? "cd-fill-primary text-white" : "cd-text-muted")
               }
             >
@@ -154,7 +154,7 @@ export default function KsicSearchModal({
         </div>
 
         {/* 결과 */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide border cd-border-c rounded-2xl">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide border cd-border-c rounded-lg">
           {loading ? (
             <div className="py-10 text-center text-sm cd-text-faint">불러오는 중…</div>
           ) : error ? (
@@ -172,7 +172,7 @@ export default function KsicSearchModal({
                     key={entry.code}
                     className="flex items-center gap-3 px-3 py-2 border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)]"
                   >
-                    <span className="font-mono text-xs font-bold cd-text-primary w-14 shrink-0">
+                    <span className="font-mono text-xs font-semibold cd-text-primary w-14 shrink-0">
                       {entry.code}
                     </span>
                     <span className="flex-1 text-sm cd-text truncate" title={entry.name}>
@@ -183,7 +183,7 @@ export default function KsicSearchModal({
                       onClick={() => handleAdd(entry)}
                       disabled={isAdded}
                       className={
-                        "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 " +
+                        "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold flex items-center gap-1 " +
                         (isAdded
                           ? "cd-tint-primary cd-text-primary cursor-default"
                           : "cd-fill-primary text-white")
@@ -217,7 +217,7 @@ export default function KsicSearchModal({
           <button
             type="button"
             onClick={onClose}
-            className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-xs font-bold cd-text-muted"
+            className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-xs font-semibold cd-text-muted"
           >
             완료
           </button>

@@ -35,6 +35,15 @@
     `py-[11.5px]`→`py-3`, 스와치 `rounded-[2px]`, 팔레트 → `cd-error-text`·`cd-error-bg`·`cd-warn-text`·`cd-fill-error`·`--cd-overlay`.
   - 린트: R1·R2·R3·R4·R8·R11 0건. 남음 R5 5(전자발행 노란 버튼은 2026-08-24 사용자 요청이라 유지, 미처리 배지 `bg-red-600`), R6 hex 111, R9 `<table>` 4, R12 인라인 style 310.
 
+- **2026-10-27 시설 모듈** — `app/(app)/facilities` + `components/facilities` (11개 파일, 위반 560 → 20) — 브랜치 `claude/precision-facilities`
+  - codemod C1·C2·C3(`--weights`) 9개 파일. 수동: 모달 제목 6곳 22→16px(`text-base`), 드롭다운 `--cd-shadow-popover`, 모달 5곳 `--cd-shadow-dialog`, 버튼·칩 `shadow-sm` 제거,
+    항목 이름표 72곳 `font-semibold uppercase tracking-wide` → `font-medium`(11px 유지 — 상세 양식 칸 넘침 방지),
+    팔레트 → `cd-error-border`·`cd-warn-text`·`cd-warn-border`·`--cd-overlay`. cdash 에 `.cd-warn-border` 추가(`.cd-error-border` 와 같은 35% 혼합).
+    `FacilityListPanel` 토큰 인라인 style → 클래스.
+  - `cd-text-faint` 는 `--cd-faint: var(--cd-muted)` 라 이미 muted 와 같은 색 — 클래스 일괄 치환은 전 모듈 마무리 때.
+  - 남음: R6 10 + R12 6(`FacilityOrdersModal` 용역 분류색·수금 링 `#9BC2E6`·해지/중지 배지 — 계약 트리 `contracts/page.tsx` 와 같은 값이라 두 곳을 함께 옮길 때 처리),
+    R12 계산된 위치·분류색 3, R9 `FacilityQualityPanel` `<table>` 1.
+
 ## 순서 (모듈 단위, 한 번에 하나)
 
 1. **C4 전체 적용** — 위험 없음(미정의 토큰 교체). `node scripts/ds-codemod.mjs --only C4 --write`

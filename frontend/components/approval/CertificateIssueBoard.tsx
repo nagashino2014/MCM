@@ -144,7 +144,7 @@ export function CertificateIssueBoard() {
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.targetYear ?? "-"}</td>
                     <td className="px-3 py-2 cd-text-muted whitespace-nowrap">{i.copies}부</td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="cd-chip" style={i.status === "pending" ? { color: "var(--cd-warning,#FFAE1F)" } : undefined}>
+                      <span className="cd-chip" style={i.status === "pending" ? { color: "var(--cd-warning)" } : undefined}>
                         {STATUS_LABEL[i.status] ?? i.status}
                       </span>
                     </td>

@@ -30,7 +30,7 @@
 
 **버튼 반경 후속 지시:** `frontend/app/globals.css`의 `--mcm-action-radius: 8px`를 일반·작은·아이콘·태그형·필터·탭 버튼 모두의 네 모서리에 적용한다. `--cd-radius-control`도 이 값에 연결한다. 반경 속성만 공용 `!important` 규칙으로 고정해 `rounded-xl`, `rounded-full`, 페이지 CSS, 인라인 스타일이 덮어쓰지 못하게 한다. 버튼으로 쓰는 링크·업로드 label 등에는 `cd-action`을 부여한다. 연결형/밑줄형 탭의 배치·테두리·선택 방식은 보존하면서 반경만 통일한다. 표시 전용 배지, 아바타, 스위치 노브, 도표, 문서 콘텐츠는 동작 버튼으로 취급하지 않는다.
 
-글꼴은 Inter / Noto Sans KR / Pretendard / Malgun Gothic / system-ui 폴백을 사용한다. 이번 작업에는 폰트 다운로드·새 라이선스 의존성을 추가하지 않는다. 제품 기기에서 사용된 실제 폰트와 200% 확대 판독성을 검증 기록에 남긴다.
+글꼴은 **Pretendard Variable** 하나다(2026-10-27 KESI Precision 디자인 시스템 결정 — 종전 "폰트 다운로드 없음" 방침을 대체). `frontend/public/fonts/PretendardVariable.woff2`(v1.3.9, SIL OFL 1.1)를 `font-display: swap`으로 싣고, 스택은 `"Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif`. Inter·Noto Sans KR은 스택에서 뺀다. 주 버튼은 블루→바이올렛 그라데이션 대신 `--cd-primary-fill`(깊은 남색) + `--cd-primary-fill-edge` 1px 테두리다. 세부 규칙(닫힌 글자 스케일·굵기 600 상한·반경 8px/pill)과 모듈별 정리 순서는 [design-system-cleanup-2026-10-27.md](design-system-cleanup-2026-10-27.md).
 
 ## 2. 메뉴
 

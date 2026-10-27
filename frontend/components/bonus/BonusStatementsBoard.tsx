@@ -771,7 +771,7 @@ export default function BonusStatementsBoard() {
                     <span className="block text-[11px] cd-text-faint">영업/지원부서 할당액</span>
                     <span className="cd-text font-extrabold text-lg">{fmtAmount(board.supportQuota)}원</span>
                     <span className={`block text-[11px] ${allocUsed.support > board.supportQuota ? "font-bold" : "cd-text-faint"}`}
-                      style={allocUsed.support > board.supportQuota ? { color: "var(--cd-danger, #FA896B)" } : undefined}>
+                      style={allocUsed.support > board.supportQuota ? { color: "var(--cd-error)" } : undefined}>
                       배분 {fmtAmount(allocUsed.support)}원 · 잔여 {fmtAmount(board.supportQuota - allocUsed.support)}원
                     </span>
                   </div>
@@ -779,7 +779,7 @@ export default function BonusStatementsBoard() {
                     <span className="block text-[11px] cd-text-faint">임원 할당액</span>
                     <span className="cd-text font-extrabold text-lg">{fmtAmount(board.execQuota)}원</span>
                     <span className={`block text-[11px] ${allocUsed.exec > board.execQuota ? "font-bold" : "cd-text-faint"}`}
-                      style={allocUsed.exec > board.execQuota ? { color: "var(--cd-danger, #FA896B)" } : undefined}>
+                      style={allocUsed.exec > board.execQuota ? { color: "var(--cd-error)" } : undefined}>
                       배분 {fmtAmount(allocUsed.exec)}원 · 잔여 {fmtAmount(board.execQuota - allocUsed.exec)}원
                     </span>
                   </div>

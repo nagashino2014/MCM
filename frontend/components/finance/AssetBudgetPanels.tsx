@@ -138,7 +138,7 @@ export function FixedAssetPanel() {
         누계액을 "기초 누계"로 넣고 기준일 다음 달부터 앱이 이어서 상각합니다. 건물은 정액법만 허용됩니다.
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       <div className="overflow-x-auto mb-3">
         <table className="w-full text-sm">
           <thead className="cd-table-head">
@@ -368,7 +368,7 @@ export function TripLogPanel() {
         ))}
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="cd-table-head">
@@ -508,7 +508,7 @@ export function BudgetPanel() {
         기준이라 법인카드·계좌 지출이 모두 반영됩니다.
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       <div className="overflow-x-auto mb-3">
         <table className="w-full text-sm max-w-[760px]">
           <thead className="cd-table-head">
@@ -530,14 +530,14 @@ export function BudgetPanel() {
                   <td className="py-[11.5px] pr-3">{b.categoryLabel}</td>
                   <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(b.amount)}</td>
                   <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(b.spent)}</td>
-                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={over ? { color: "var(--cd-danger,#FA896B)" } : undefined}>
+                  <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={over ? { color: "var(--cd-error)" } : undefined}>
                     {won(b.remaining)}
                   </td>
                   <td className="py-[11.5px] pr-3">
                     <div className="h-2 rounded-full overflow-hidden border cd-border-c">
                       <div
                         className="h-full"
-                        style={{ width: `${Math.round(ratio * 100)}%`, background: over ? "var(--cd-danger,#FA896B)" : "var(--cd-primary,#5D87FF)" }}
+                        style={{ width: `${Math.round(ratio * 100)}%`, background: over ? "var(--cd-error)" : "var(--cd-primary,#5D87FF)" }}
                       />
                     </div>
                   </td>

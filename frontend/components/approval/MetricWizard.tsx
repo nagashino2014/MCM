@@ -489,8 +489,8 @@ export function MetricWizard({
                       <b>{e.formName}</b>
                       <span className="cd-text-faint">총 {e.totalDocs}건</span>
                       <span style={{ color: "var(--cd-primary,#5D87FF)" }}>연결 {e.linkedDocs}</span>
-                      <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>직접 입력 {e.manualDocs}</span>
-                      <span style={{ color: "var(--cd-danger,#FA896B)" }}>미입력 {e.missingDocs}</span>
+                      <span style={{ color: "var(--cd-warning)" }}>직접 입력 {e.manualDocs}</span>
+                      <span style={{ color: "var(--cd-error)" }}>미입력 {e.missingDocs}</span>
                       <span className="ml-auto font-bold">{rate == null ? "-" : `${rate}%`}</span>
                     </div>
                   );

@@ -229,7 +229,7 @@ export function ExpenseSettlementPanel() {
           </button>
         </div>
         {noAccount.length > 0 && (
-          <p className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning,#FFAE1F)" }}>
+          <p className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
             <TriangleAlert className="w-3.5 h-3.5 shrink-0" />
             계좌 미등록: {noAccount.map((p) => p.employeeName).join(", ")} — 사용자 등록/수정의 인사관리 탭에서 은행코드·계좌번호를 등록하면 CMS에 자동 기입됩니다.
           </p>
@@ -272,7 +272,7 @@ export function ExpenseSettlementPanel() {
                         <span className="cd-text font-bold">{comma(p.amount)}원</span>
                       </span>
                     </td>
-                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning,#FFAE1F)" }}>미등록</span>}</td>
+                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning)" }}>미등록</span>}</td>
                     <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankAccount ?? "-"}</td>
                   </tr>
                 ))
@@ -287,7 +287,7 @@ export function ExpenseSettlementPanel() {
         <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
           <button type="button" className="cd-action text-[13px] font-bold cd-text flex items-center gap-1.5 text-left" onClick={() => setOutOpen((v) => !v)}>
             {outOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            <TriangleAlert className="w-4 h-4" style={{ color: "var(--cd-warning,#FFAE1F)" }} /> 정산 범위 밖 과거 지출 {outOfScope.length}건 ·{" "}
+            <TriangleAlert className="w-4 h-4" style={{ color: "var(--cd-warning)" }} /> 정산 범위 밖 과거 지출 {outOfScope.length}건 ·{" "}
             {comma(outOfScope.reduce((a, r) => a + r.amount, 0))}원
           </button>
           <p className="text-[11.5px] cd-text-muted">
@@ -405,7 +405,7 @@ export function ExpenseSettlementPanel() {
                       <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">
                         {comma(i.amount)}원
                         {i.mealDeduct && (
-                          <span className="ml-1.5 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning,#FFAE1F)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
+                          <span className="ml-1.5 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
                             급여 차감
                           </span>
                         )}

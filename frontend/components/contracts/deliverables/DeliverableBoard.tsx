@@ -853,7 +853,7 @@ export function DeliverableBoard() {
                         <span className="text-[10.5px] cd-text-faint font-mono shrink-0">{ph.size ? `${(ph.size / 1024 / 1024).toFixed(1)}MB` : ""}</span>
                         <button
                           type="button"
-                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                          className="cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
                           onClick={() => setPhotoRefs(photoRefs.filter((_, xi) => xi !== i))}
                           title="사진 제거"
                         >

@@ -473,7 +473,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                   {/* 잔액 = 발행금액 - 부분입금(2026-08-26) — 부분입금이 있으면 강조해 구분한다 */}
                   <span
                     className="text-right tabular-nums font-extrabold"
-                    style={{ color: row.outstandingAmount < row.invoiceAmount ? "var(--cd-warning, #FFAE1F)" : "var(--cd-text)" }}
+                    style={{ color: row.outstandingAmount < row.invoiceAmount ? "var(--cd-warning)" : "var(--cd-text)" }}
                     title={
                       row.outstandingAmount < row.invoiceAmount
                         ? `부분입금 ${fmtFull(row.invoiceAmount - row.outstandingAmount)}원 차감`

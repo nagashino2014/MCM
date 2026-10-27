@@ -640,7 +640,7 @@ export function JournalPanel() {
         </div>
       )}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
       {sourceWarnings.length > 0 && <details className="text-sm mb-3" open><summary>원천 대조 확인사항 {sourceWarnings.length}건</summary><ul className="list-disc pl-5">{sourceWarnings.map((w,i)=><li key={`${w.sourceKind}:${w.sourceId}:${i}`}>{SOURCE_LABEL[w.sourceKind] ?? w.sourceKind} · {w.sourceId}: {SOURCE_WARNING[w.reason] ?? w.reason}</li>)}</ul></details>}
 
       <div className="overflow-x-auto">
@@ -1193,7 +1193,7 @@ function BacktestCard() {
         같은 연도의 앱 자동분개와 계정별로 비교해 차이를 보여줍니다. 차이 원인을 분류 규칙에 반영해 오차를 줄여가는 것이 목적입니다.
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
 
       {batches.length > 0 && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">

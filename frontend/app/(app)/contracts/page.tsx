@@ -1543,7 +1543,7 @@ function ContractDetailPanel({
               {/* 개별 삭제(2026-08-26 사용자 요청) — 단계가 이미 지워져 고아로 남은 파일 정리용 */}
               <button
                 type="button"
-                className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0"
+                className="cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
                 title="이 세금계산서 파일 삭제"
                 onClick={() => onDeleteInvoice(String(invoice.invoice_id), title)}
               >

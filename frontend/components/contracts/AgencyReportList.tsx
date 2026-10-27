@@ -368,7 +368,7 @@ export function AgencyReportList({
                   <button
                     type="button"
                     onClick={() => remove(row)}
-                    className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                    className="cd-icon-button p-1.5 cd-text-faint hover:text-[color:var(--cd-error)]"
                     title="이력 삭제"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -394,7 +394,7 @@ export function AgencyReportList({
                 </div>
               )}
               {row.deliveryStatus === "failed" && row.deliveryError && (
-                <p className="mt-2 text-xs text-[color:var(--cd-danger,#FA896B)]">발송 실패: {row.deliveryError}</p>
+                <p className="mt-2 text-xs text-[color:var(--cd-error)]">발송 실패: {row.deliveryError}</p>
               )}
             </div>
           )

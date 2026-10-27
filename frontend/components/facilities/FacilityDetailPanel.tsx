@@ -1593,7 +1593,7 @@ function FacilityContactsModal({
                 ))}
               </select>
               {!orgCategory && (
-                <span className="text-[11px] text-[color:var(--cd-warning,#FFAE1F)]">
+                <span className="text-[11px] text-[color:var(--cd-warning)]">
                   주소록 분류를 위해 지정해 주세요
                 </span>
               )}

@@ -143,7 +143,7 @@ export function AbsenceRequestPanel() {
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span
                       className="cd-chip"
-                      style={r.status === "pending" ? { color: "var(--cd-warning,#FFAE1F)" } : undefined}
+                      style={r.status === "pending" ? { color: "var(--cd-warning)" } : undefined}
                     >
                       {STATUS_LABEL[r.status] ?? r.status}
                     </span>
@@ -154,7 +154,7 @@ export function AbsenceRequestPanel() {
                     {r.status === "pending" && (
                       <button
                         type="button"
-                        className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                        className="cd-text-faint hover:text-[color:var(--cd-error)]"
                         title="요청 취소"
                         onClick={() => void cancel(r.requestId)}
                       >

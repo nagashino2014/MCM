@@ -113,7 +113,7 @@ function StatusPill({
 }) {
   const tone: Record<string, { bg: string; fg: string; dot: string }> = {
     ok: { bg: "rgba(93,135,255,0.13)", fg: "var(--cd-primary)", dot: "var(--cd-primary)" },
-    bad: { bg: "rgba(250,137,107,0.15)", fg: "var(--cd-danger, #FA896B)", dot: "var(--cd-danger, #FA896B)" },
+    bad: { bg: "rgba(250,137,107,0.15)", fg: "var(--cd-error)", dot: "var(--cd-error)" },
     busy: { bg: "rgba(255,174,31,0.16)", fg: "#B7791F", dot: "#FFAE1F" },
     idle: { bg: "rgba(120,130,160,0.12)", fg: "var(--cd-muted)", dot: "var(--cd-faint)" },
   };
@@ -906,7 +906,7 @@ export function AgreementBoard() {
                           )}
                           <button
                             type="button"
-                            className="cd-btn rounded-lg border cd-border-c px-2 py-1.5 text-[11px] inline-flex items-center align-middle ml-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] disabled:opacity-40"
+                            className="cd-btn rounded-lg border cd-border-c px-2 py-1.5 text-[11px] inline-flex items-center align-middle ml-1 cd-text-faint hover:text-[color:var(--cd-error)] disabled:opacity-40"
                             disabled={deleteBusy === row.docId}
                             title="계약서 삭제(전자결재 문서도 함께 삭제)"
                             onClick={() => removeAgreement(row)}
@@ -1027,7 +1027,7 @@ export function AgreementBoard() {
                       <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3 py-2">
                         <Link2 className="w-3.5 h-3.5 cd-text-primary" />
                         <span className="text-[12.5px] cd-text truncate flex-1">{linkLabel}</span>
-                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => { setContractId(null); setQuotationId(null); setLinkLabel(null); }}>
+                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => { setContractId(null); setQuotationId(null); setLinkLabel(null); }}>
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1096,7 +1096,7 @@ export function AgreementBoard() {
                     <div className="flex flex-col gap-1">
                       <span className="text-[11px] cd-text-faint">계약서 양식 — 세분류의 표준 셋 자동 선택</span>
                       <div className="flex items-center gap-2">
-                        <div className={`flex-1 rounded-xl border cd-border-c px-3 py-2 text-[12.5px] ${template ? "cd-text" : "text-[color:var(--cd-danger,#FA896B)]"}`}>
+                        <div className={`flex-1 rounded-xl border cd-border-c px-3 py-2 text-[12.5px] ${template ? "cd-text" : "text-[color:var(--cd-error)]"}`}>
                           {template ? (
                             <>
                               {template.name}
@@ -1221,7 +1221,7 @@ export function AgreementBoard() {
                         ＋ 지급 단계 추가
                       </button>
                       {amounts.supply > 0 && payments.reduce((a, p) => a + p.amount, 0) !== amounts.supply && (
-                        <p className="text-[11px] text-[color:var(--cd-danger,#FA896B)]">
+                        <p className="text-[11px] text-[color:var(--cd-error)]">
                           지급 단계 합계 {won(payments.reduce((a, p) => a + p.amount, 0))} ≠ 공급가 {won(amounts.supply)}
                         </p>
                       )}
@@ -1285,7 +1285,7 @@ export function AgreementBoard() {
                             <div className="md:col-span-2 flex justify-end">
                               <button
                                 type="button"
-                                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] flex items-center gap-1"
+                                className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint hover:text-[color:var(--cd-error)] flex items-center gap-1"
                                 onClick={() => {
                                   setPayments((prev) => prev.filter((_, xi) => xi !== i));
                                   setPayTab((t) => Math.max(0, Math.min(t, payments.length - 2)));
@@ -1384,7 +1384,7 @@ export function AgreementBoard() {
                                 <button type="button" className="cd-text-faint hover:cd-text-primary" title="이 조항을 라이브러리에 저장" onClick={() => saveClauseToLibrary(c)}>
                                   <BookmarkPlus className="w-3.5 h-3.5" />
                                 </button>
-                                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => { removeClause(i); setClauseTab(Math.max(0, i - 1)); }}>
+                                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => { removeClause(i); setClauseTab(Math.max(0, i - 1)); }}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -1427,7 +1427,7 @@ export function AgreementBoard() {
                     {presets.map((p) => (
                       <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                         <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
-                        <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
+                        <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                       </span>
                     ))}
                   </div>
@@ -1445,7 +1445,7 @@ export function AgreementBoard() {
                         {s.assigneeName}
                         {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                       </span>
-                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
+                      <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1473,7 +1473,7 @@ export function AgreementBoard() {
                           <option value="view">열람</option>
                         </select>
                         <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
-                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
+                        <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

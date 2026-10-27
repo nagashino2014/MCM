@@ -293,7 +293,7 @@ export default function YearendBoard() {
           전환기에는 세무법인 정산 결과와 병행 대사하세요(§7).
         </div>
         {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success,#13DEB9)" }}>{notice}</div>}
+        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="cd-table-head">
@@ -320,7 +320,7 @@ export default function YearendBoard() {
                     </td>
                     <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{won(r.prepaidTax)}</td>
                     <td className="py-[11.5px] pr-3 text-right whitespace-nowrap">{r.result ? won(r.result.determinedTax) : "-"}</td>
-                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" } : undefined}>
+                    <td className="py-[11.5px] pr-3 text-right whitespace-nowrap font-medium" style={r.result ? { color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-error)" } : undefined}>
                       {r.result ? `${r.result.balance < 0 ? "환급 " : "추납 "}${won(Math.abs(r.result.balance))}` : "-"}
                     </td>
                     <td className="py-[11.5px] pr-3 text-right whitespace-nowrap cd-text-muted">
@@ -380,7 +380,7 @@ export default function YearendBoard() {
                                 <span className="cd-text-muted whitespace-nowrap">{u.kindLabel}</span>
                                 <a className="font-medium truncate" style={{ color: "var(--cd-primary)" }} href={`/api/payroll/yearend/uploads/${u.uploadId}`} target="_blank" rel="noreferrer">{u.fileName}</a>
                                 <span className="cd-text-muted whitespace-nowrap">{u.createdAt.slice(0, 10)}</span>
-                                <span className="whitespace-nowrap" style={{ color: u.applied ? "var(--cd-success,#13DEB9)" : undefined }}>{u.applied ? "계산 반영" : "보관"}</span>
+                                <span className="whitespace-nowrap" style={{ color: u.applied ? "var(--cd-success)" : undefined }}>{u.applied ? "계산 반영" : "보관"}</span>
                               </div>
                             ))}
                           </div>
@@ -471,7 +471,7 @@ export default function YearendBoard() {
                             <div>
                               <div className="font-medium mb-1 text-sm">
                                 결정세액 {won(r.result.determinedTax)} · 기납부 {won(r.result.prepaidTax)} →{" "}
-                                <span style={{ color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-danger,#FA896B)" }}>
+                                <span style={{ color: r.result.balance < 0 ? "var(--cd-info,#539BFF)" : "var(--cd-error)" }}>
                                   {r.result.balance < 0 ? "환급" : "추납"} {won(Math.abs(r.result.balance))}
                                 </span>{" "}
                                 (지방소득세 {won(Math.abs(r.result.localTax))} 별도)

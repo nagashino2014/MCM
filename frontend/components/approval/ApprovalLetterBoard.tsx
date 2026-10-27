@@ -140,7 +140,7 @@ export function FacilityRecipientPicker({
             <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.name || r.facilityName}</span>
               {r.bizNo && <span className="cd-text-faint">{r.bizNo}</span>}
-              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
+              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -234,7 +234,7 @@ export function QuickFacilityModal({ theme, onClose, onCreated }: { theme: strin
             <X className="w-4 h-4" />
           </button>
         </div>
-        {err && <div className="rounded-lg px-3 py-2 text-xs mb-3 border border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]">{err}</div>}
+        {err && <div className="rounded-lg px-3 py-2 text-xs mb-3 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">{err}</div>}
         <p className="cd-text-faint text-[11px] mb-3">등록 즉시 수신처로 지정됩니다. 상세 정보는 사업장 메뉴에서 보강할 수 있습니다.</p>
         <label className="text-[11px] cd-text-faint flex flex-col gap-1 mb-2.5">
           사업장명 *
@@ -311,8 +311,8 @@ export function RecipientPicker({
           {list.map((r, i) => (
             <span key={i} className="cd-action inline-flex items-center gap-1.5 rounded-full border cd-border-c pl-2.5 pr-1.5 py-1 text-[11.5px] cd-text">
               <span className="font-semibold">{r.facilityName ? `${r.facilityName} · ` : ""}{r.name}{r.title ? ` ${r.title}` : ""}</span>
-              <span className={r.email ? "cd-text-faint" : "text-[color:var(--cd-danger,#FA896B)]"}>{r.email || "메일 없음"}</span>
-              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
+              <span className={r.email ? "cd-text-faint" : "text-[color:var(--cd-error)]"}>{r.email || "메일 없음"}</span>
+              <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => onChange(list.filter((_, xi) => xi !== i))}>
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -360,7 +360,7 @@ export function RecipientPicker({
               >
                 <span className="font-semibold truncate">{it.facilityName ?? "-"}</span>
                 <span className="truncate">{it.departmentName ? `${it.departmentName} ` : ""}{it.personName}{it.title ? ` ${it.title}` : ""}</span>
-                <span className={`ml-auto shrink-0 ${it.email ? "cd-text-faint" : "text-[color:var(--cd-danger,#FA896B)]"}`}>{it.email ?? "메일 없음"}</span>
+                <span className={`ml-auto shrink-0 ${it.email ? "cd-text-faint" : "text-[color:var(--cd-error)]"}`}>{it.email ?? "메일 없음"}</span>
               </button>
             ))}
           </div>
@@ -1143,9 +1143,9 @@ export function ApprovalLetterBoard() {
                 ) : manualCheck == null ? (
                   <span className="text-[10.5px] cd-text-faint">중복 확인 중...</span>
                 ) : manualCheck.available ? (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-success, #13DEB9)" }}>사용 가능한 번호입니다</span>
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-success)" }}>사용 가능한 번호입니다</span>
                 ) : (
-                  <span className="text-[10.5px]" style={{ color: "var(--cd-danger, #FA896B)" }}>
+                  <span className="text-[10.5px]" style={{ color: "var(--cd-error)" }}>
                     이미 사용 중 — {manualCheck.usedBy}
                   </span>
                 ))}
@@ -1284,7 +1284,7 @@ export function ApprovalLetterBoard() {
                     placeholder="예: 대금청구서  1부"
                     onChange={(e) => setAttachItems((prev) => prev.map((x, xi) => (xi === i ? e.target.value : x)))}
                   />
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setAttachItems((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setAttachItems((prev) => prev.filter((_, xi) => xi !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1395,7 +1395,7 @@ export function ApprovalLetterBoard() {
                         <span className="text-[10.5px] cd-text-faint shrink-0">{(f.size / 1024 / 1024).toFixed(2)}MB</span>
                         <button
                           type="button"
-                          className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]"
+                          className="cd-text-faint hover:text-[color:var(--cd-error)]"
                           onClick={() => setFileAttachments((prev) => prev.filter((_, xi) => xi !== i))}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1423,7 +1423,7 @@ export function ApprovalLetterBoard() {
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
                     </button>
-                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                    <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
                       ×
                     </button>
                   </span>
@@ -1449,7 +1449,7 @@ export function ApprovalLetterBoard() {
                     {s.assigneeName}
                     {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                   </span>
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setLine((prev) => prev.filter((_, xi) => xi !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1486,7 +1486,7 @@ export function ApprovalLetterBoard() {
                       <option value="view">열람</option>
                     </select>
                     <span className="text-[12px] cd-text truncate flex-1">{w.name}</span>
-                    <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
+                    <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="제거" onClick={() => setWatchers((prev) => prev.filter((_, xi) => xi !== i))}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>

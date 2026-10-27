@@ -233,7 +233,7 @@ export function AgreementTemplateBoard() {
                           {cell.clauseCount > 0 && <span className="text-[10.5px] cd-text-faint shrink-0">{cell.clauseCount}개조</span>}
                         </>
                       ) : (
-                        <span className="text-[12px] text-[color:var(--cd-danger,#FA896B)] flex-1">미지정 — 클릭해 등록</span>
+                        <span className="text-[12px] text-[color:var(--cd-error)] flex-1">미지정 — 클릭해 등록</span>
                       )}
                     </button>
                   ))}
@@ -319,7 +319,7 @@ export function AgreementTemplateBoard() {
                             <button type="button" className="cd-text-faint hover:cd-text" title="아래에 삽입" onClick={() => { setClauses((prev) => { const next = [...prev]; next.splice(i + 1, 0, { id: newClauseId(), title: "새 조항", body: "" }); return next; }); setClauseTab(i + 1); }}>
                               <Plus className="w-3.5 h-3.5" />
                             </button>
-                            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" title="삭제" onClick={() => { setClauses((prev) => prev.filter((_, ci) => ci !== i)); setClauseTab(Math.max(0, i - 1)); }}>
+                            <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" title="삭제" onClick={() => { setClauses((prev) => prev.filter((_, ci) => ci !== i)); setClauseTab(Math.max(0, i - 1)); }}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -578,7 +578,7 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
                 원본 서식 보존 · 값 자리 <b className="cd-text">{draft.slotCount ?? 0}곳</b> 매핑됨. 조문과 표 서식은 원본 그대로 유지됩니다.
               </p>
               {(draft.unmapped?.length ?? 0) > 0 && (
-                <p className="text-[11.5px] rounded-lg px-3 py-2" style={{ background: "rgba(250,137,107,0.15)", color: "var(--cd-danger, #FA896B)" }}>
+                <p className="text-[11.5px] rounded-lg px-3 py-2" style={{ background: "rgba(250,137,107,0.15)", color: "var(--cd-error)" }}>
                   매핑되지 않은 항목: {draft.unmapped!.join(", ")} — 이 값은 계약서에 채워지지 않습니다.
                   양식에 해당 자리가 없으면 정상이고, 있는데 못 찾았다면 spec(조문 편집형)으로 다시 분석해 보세요.
                 </p>
@@ -606,7 +606,7 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10.5px] font-mono cd-text-faint w-12 shrink-0">제 {i + 1} 조</span>
                   <input className="cd-input text-[12.5px] flex-1 font-medium" value={c.title} onChange={(e) => setClauses((prev) => prev.map((x, xi) => (xi === i ? { ...x, title: e.target.value } : x)))} />
-                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)]" onClick={() => setClauses((prev) => prev.filter((_, ci) => ci !== i))}>
+                  <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => setClauses((prev) => prev.filter((_, ci) => ci !== i))}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -788,7 +788,7 @@ function ClauseLibraryTab() {
                 </button>
                 <span className="text-[10px] cd-text-faint shrink-0">{r.category}</span>
                 {r.usageCount > 0 && <span className="text-[10px] cd-text-faint shrink-0">{r.usageCount}회</span>}
-                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-danger,#FA896B)] shrink-0" onClick={() => remove(r)}>
+                <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)] shrink-0" onClick={() => remove(r)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

@@ -432,9 +432,9 @@ export function ApprovalRecordsBoard() {
                       <span
                         className={`text-[10.5px] rounded-full px-2 py-0.5 border ${
                           d.status === "approved"
-                            ? "border-[color:var(--cd-success,#13DEB9)] text-[color:var(--cd-success,#13DEB9)]"
+                            ? "border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
                             : d.status === "rejected"
-                              ? "border-[color:var(--cd-danger,#FA896B)] text-[color:var(--cd-danger,#FA896B)]"
+                              ? "border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
                               : "cd-border-c cd-text-faint"
                         }`}
                       >

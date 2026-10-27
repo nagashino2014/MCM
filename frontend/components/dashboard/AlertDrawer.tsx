@@ -99,7 +99,7 @@ export function AlertDrawer({ open, onClose, canAck, onChanged }: AlertDrawerPro
       </div>
 
       <div className="space-y-3">
-        {error && <div className="text-[11px] font-bold text-[color:var(--cd-danger,#FA896B)]">로딩 실패: {error}</div>}
+        {error && <div className="text-[11px] font-bold text-[color:var(--cd-error)]">로딩 실패: {error}</div>}
         {loading && !alerts && <div className="text-[12px] cd-text-faint">로딩 중...</div>}
         {alerts && alerts.length === 0 && (
           <div className="text-[12px] cd-text-faint">
@@ -129,15 +129,15 @@ function AlertCard({
     alert.severity === "error" ? AlertCircle : alert.severity === "warn" ? AlertTriangle : Info;
   const toneBorder =
     alert.severity === "error"
-      ? "border-[color:var(--cd-danger,#FA896B)]"
+      ? "border-[color:var(--cd-error)]"
       : alert.severity === "warn"
-        ? "border-[color:var(--cd-warning,#FFAE1F)]"
+        ? "border-[color:var(--cd-warning)]"
         : "cd-border-c";
   const accent =
     alert.severity === "error"
-      ? "text-[color:var(--cd-danger,#FA896B)]"
+      ? "text-[color:var(--cd-error)]"
       : alert.severity === "warn"
-        ? "text-[color:var(--cd-warning,#FFAE1F)]"
+        ? "text-[color:var(--cd-warning)]"
         : "cd-text-primary";
   const isAcked = !!alert.acknowledgedAt;
 

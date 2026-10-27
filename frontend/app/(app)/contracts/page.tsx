@@ -520,7 +520,7 @@ function ContractsInner() {
   }, [tree, selectedId]);
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<FileSignature className="w-5 h-5" />}
         eyebrow="Contract · Ledger"
@@ -548,16 +548,16 @@ function ContractsInner() {
       />
 
       {error ? (
-        <div className="cd-card rounded-2xl p-6 text-sm text-rose-600">
+        <div className="cd-card rounded-lg p-6 text-sm cd-error-text">
           계약 데이터를 불러오지 못했습니다. <code>infra/aws/005_contract_management_round2.sql</code> 적용 여부와 DB 연결을 확인하세요.
           <div className="mt-2 font-mono text-xs cd-text-muted">{error}</div>
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(560px,1.4fr)] gap-5">
-          <section className="cd-card rounded-3xl overflow-hidden cd-reveal delay-2 flex min-h-0 flex-col">
+          <section className="cd-card rounded-lg overflow-hidden cd-reveal delay-2 flex min-h-0 flex-col">
             <div className="p-4 border-b cd-border-c flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-bold cd-text flex items-center gap-2">
+                <h2 className="font-semibold cd-text flex items-center gap-2">
                   <WalletCards className="w-4 h-4 cd-text-primary" />
                   계약 원장
                 </h2>
@@ -637,7 +637,7 @@ function ContractsInner() {
             </div>
           </section>
 
-          <section className="cd-card rounded-3xl p-5 cd-reveal delay-3 min-h-0 overflow-y-auto scrollbar-hide">
+          <section className="cd-card rounded-lg p-5 cd-reveal delay-3 min-h-0 overflow-y-auto scrollbar-hide">
             {!selected ? (
               <div className="h-full flex items-center justify-center text-sm cd-text-faint">계약을 선택하세요.</div>
             ) : detailLoading || !detail ? (
@@ -1039,10 +1039,10 @@ function ContractDetailPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold cd-text">{String(contract.contract_title ?? "")}</h2>
+            <h2 className="text-[22px] font-semibold cd-text">{String(contract.contract_title ?? "")}</h2>
             {overdueTag && (
               <span
-                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold cd-text shadow-sm"
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold cd-text"
                 style={{ backgroundColor: overdueTag.color }}
                 title={overdueTag.tooltip}
               >
@@ -1053,7 +1053,7 @@ function ContractDetailPanel({
               <button
                 type="button"
                 onClick={onBackToBilling}
-                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1 shadow-sm"
+                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold border cd-border-c cd-text-muted hover:bg-[color:var(--cd-surface)] inline-flex items-center gap-1"
                 title="수주 현황 화면으로 돌아갑니다"
               >
                 <Undo2 className="w-3 h-3" />
@@ -1068,7 +1068,7 @@ function ContractDetailPanel({
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <button
             type="button"
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
+            className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
             onClick={() => {
               // Prefer the most recent contract/amendment PDF stored in
               // contract_documents; the legacy fallback to invoice[0] is kept
@@ -1092,7 +1092,7 @@ function ContractDetailPanel({
               });
             }}
           >
-            <span className="inline-flex items-center justify-center rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-black tracking-tight text-white shadow-sm">
+            <span className="inline-flex items-center justify-center rounded-lg bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold tracking-tight text-white">
               PDF
             </span>
             계약서 보기
@@ -1103,7 +1103,7 @@ function ContractDetailPanel({
               setStaffingInitialTab("process");
               setStaffingModalOpen(true);
             }}
-            className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
+            className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs cd-text-muted flex shrink-0 items-center gap-1 whitespace-nowrap"
           >
             <GitCommitHorizontal className="w-3.5 h-3.5" />
             공정표/수행인력
@@ -1112,7 +1112,7 @@ function ContractDetailPanel({
             <button
               type="button"
               onClick={onOpenChange}
-              className="rounded-xl px-3 py-2 text-xs text-white cd-fill-primary shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
+              className="rounded-lg px-3 py-2 text-xs text-white cd-fill-primary flex shrink-0 items-center gap-1 whitespace-nowrap"
             >
               <Pencil className="w-3.5 h-3.5" />
               변경계약 입력
@@ -1122,7 +1122,7 @@ function ContractDetailPanel({
             <button
               type="button"
               onClick={onDeleteContract}
-              className="rounded-xl px-3 py-2 text-xs text-white bg-rose-500 hover:bg-rose-600 shadow-sm flex shrink-0 items-center gap-1 whitespace-nowrap"
+              className="rounded-lg px-3 py-2 text-xs cd-fill-error hover:opacity-90 flex shrink-0 items-center gap-1 whitespace-nowrap"
             >
               <Trash2 className="w-3.5 h-3.5" />
               계약 삭제
@@ -1253,11 +1253,11 @@ function ContractDetailPanel({
       )}
 
       {outsourcingCount > 0 && (
-        <div className="rounded-2xl border cd-border-c cd-surface-bg p-4">
-          <h3 className="font-bold cd-text mb-3">외주 용역</h3>
+        <div className="rounded-lg border cd-border-c cd-surface-bg p-4">
+          <h3 className="font-semibold cd-text mb-3">외주 용역</h3>
           <div className="grid gap-2">
             {detail.outsourcing.map((item) => (
-              <div key={String(item.outsourcing_id)} className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm">
+              <div key={String(item.outsourcing_id)} className="rounded-lg border cd-border-c cd-surface-bg px-3 py-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="cd-text">{String(item.outsourcing_title ?? "-")}</span>
                   <span className="font-mono text-xs cd-text-faint">
@@ -1277,7 +1277,7 @@ function ContractDetailPanel({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-baseline gap-2">
-            <h3 className="font-bold cd-text flex items-center gap-1">
+            <h3 className="font-semibold cd-text flex items-center gap-1">
               청구·수금 단계
               <CdHelp topic="contracts.stages" />
             </h3>
@@ -1286,13 +1286,13 @@ function ContractDetailPanel({
           <button
             type="button"
             onClick={onOpenNewStage}
-            className="rounded-lg px-3 py-1.5 text-xs text-white cd-fill-primary shadow-sm flex items-center gap-1"
+            className="rounded-lg px-3 py-1.5 text-xs text-white cd-fill-primary flex items-center gap-1"
           >
             <Plus className="w-3 h-3" />
             단계 추가
           </button>
         </div>
-        <div className="overflow-x-auto rounded-2xl border cd-border-c">
+        <div className="overflow-x-auto rounded-lg border cd-border-c">
           <table className="w-full min-w-[1200px] whitespace-nowrap text-xs">
             <thead className="cd-surface-bg cd-text-muted text-[11px]">
               <tr>
@@ -1364,8 +1364,8 @@ function ContractDetailPanel({
                       <td className="p-2.5 text-right font-mono tabular-nums">
                         {hasSettlement ? (
                           <span className="inline-flex items-center gap-1.5">
-                            <span className="text-rose-600">{formatExactAmount(deductionAmount)}</span>
-                            <span className="rounded-md border cd-border-c px-1 py-0.5 text-[10px] cd-text-faint">
+                            <span className="cd-error-text">{formatExactAmount(deductionAmount)}</span>
+                            <span className="rounded-lg border cd-border-c px-1 py-0.5 text-[11px] cd-text-faint">
                               {stageAmount > 0 ? `${Math.round((deductionAmount / stageAmount) * 1000) / 10}%` : "-"}
                             </span>
                           </span>
@@ -1385,7 +1385,7 @@ function ContractDetailPanel({
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] text-white cd-fill-primary shadow-sm inline-flex items-center gap-1"
+                          className="rounded-lg px-2 py-1 text-[11px] text-white cd-fill-primary inline-flex items-center gap-1"
                           onClick={() =>
                             onOpenInvoice({
                               milestoneId,
@@ -1412,7 +1412,7 @@ function ContractDetailPanel({
                             노란색 강조(2026-08-24 사용자 요청 — 무채색 아웃라인이라 눈에 안 띄던 문제) */}
                         <button
                           type="button"
-                          className="rounded-lg px-2 py-1 text-[11px] border border-amber-400 bg-amber-400 text-amber-950 font-semibold shadow-sm hover:bg-amber-300 inline-flex items-center gap-1"
+                          className="rounded-lg px-2 py-1 text-[11px] border border-amber-400 bg-amber-400 text-amber-950 font-semibold hover:bg-amber-300 inline-flex items-center gap-1"
                           onClick={() => onOpenTaxInvoice(milestoneId)}
                           title="전자세금계산서 발행(바로빌)"
                         >
@@ -1453,7 +1453,7 @@ function ContractDetailPanel({
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg p-1 text-[11px] text-rose-600 hover:bg-rose-50"
+                          className="rounded-lg p-1 text-[11px] cd-error-text hover:cd-error-bg"
                           onClick={() => onDeleteStage(milestoneId)}
                           title="단계 삭제"
                         >
@@ -1521,7 +1521,7 @@ function ContractDetailPanel({
       )}
 
       <div>
-        <h3 className="font-bold cd-text mb-3">세금계산서 파일</h3>
+        <h3 className="font-semibold cd-text mb-3">세금계산서 파일</h3>
         <div className="grid gap-2">
           {detail.invoices.map((invoice) => {
             const title = String(invoice.document_display_name ?? invoice.invoice_id);
@@ -1529,7 +1529,7 @@ function ContractDetailPanel({
             return (
             <div
               key={String(invoice.invoice_id)}
-              className="rounded-xl border cd-border-c cd-surface-bg px-3 py-2 text-sm flex items-center justify-between gap-3"
+              className="rounded-lg border cd-border-c cd-surface-bg px-3 py-2 text-sm flex items-center justify-between gap-3"
             >
               <button
                 type="button"
@@ -1629,14 +1629,14 @@ function AgencyReportInfoSection({
   };
 
   return (
-    <div className="rounded-2xl border cd-border-c p-4">
+    <div className="rounded-lg border cd-border-c p-4">
       <div className="flex items-baseline gap-2 mb-3">
-        <h3 className="font-bold cd-text">대행 실적 보고 정보</h3>
+        <h3 className="font-semibold cd-text">대행 실적 보고 정보</h3>
         <span className="text-[11px] cd-text-faint">IEPS 대행 실적 보고 양식 항목 — 준공일자는 허가일을 사용</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">(변경)낙찰률(%)</span>
+          <span className="font-semibold cd-text-muted">(변경)낙찰률(%)</span>
           <input
             type="text"
             className="cd-input tabular-nums"
@@ -1647,7 +1647,7 @@ function AgencyReportInfoSection({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">사전협의 통보일자</span>
+          <span className="font-semibold cd-text-muted">사전협의 통보일자</span>
           <DateInput value={notifiedAt} onChange={setNotifiedAt} />
         </label>
         <span className="text-[11px] cd-text-faint md:pb-2.5">신고 대기열의 대행 실적 보고 항목에 자동 반영됩니다.</span>
@@ -1655,7 +1655,7 @@ function AgencyReportInfoSection({
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="cd-btn cd-btn-primary rounded-xl px-4 py-2 text-sm font-bold disabled:opacity-50"
+          className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
         >
           {saving ? "저장 중…" : "저장"}
         </button>
@@ -1790,18 +1790,18 @@ function PermitInfoSection({
   };
 
   return (
-    <div className="rounded-2xl border cd-border-c p-4">
+    <div className="rounded-lg border cd-border-c p-4">
       <div className="flex items-baseline gap-2 mb-3">
-        <h3 className="font-bold cd-text">허가 정보</h3>
+        <h3 className="font-semibold cd-text">허가 정보</h3>
         <span className="text-[11px] cd-text-faint">해당 계약 건으로 진행된 허가 완료 내역</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">허가일</span>
+          <span className="font-semibold cd-text-muted">허가일</span>
           <DateInput value={issuedAt} onChange={setIssuedAt} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">허가번호</span>
+          <span className="font-semibold cd-text-muted">허가번호</span>
           <input
             type="text"
             className="cd-input disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1813,7 +1813,7 @@ function PermitInfoSection({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">비고</span>
+          <span className="font-semibold cd-text-muted">비고</span>
           <input
             type="text"
             className="cd-input"
@@ -1826,7 +1826,7 @@ function PermitInfoSection({
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="rounded-xl px-4 py-2 text-xs text-white cd-fill-primary shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-lg px-4 py-2 text-xs text-white cd-fill-primary disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {saving ? "저장 중…" : "저장"}
         </button>
@@ -1834,7 +1834,7 @@ function PermitInfoSection({
           type="button"
           onClick={() => reviewFileRef.current?.click()}
           disabled={uploading}
-          className="rounded-xl border cd-border-c px-4 py-2 text-xs cd-text-muted hover:cd-soft-primary disabled:opacity-50 inline-flex items-center gap-1.5 whitespace-nowrap"
+          className="rounded-lg border cd-border-c px-4 py-2 text-xs cd-text-muted hover:cd-soft-primary disabled:opacity-50 inline-flex items-center gap-1.5 whitespace-nowrap"
           title="허가 검토결과서 PDF 를 업로드하면 허가번호·허가일·종규모·생산품을 자동 인식해 계약·사업장 허가 정보에 기입합니다"
         >
           <Paperclip className="w-3.5 h-3.5" />
@@ -1987,10 +1987,10 @@ function InvoiceUploadModal({
       <div className="p-5 grid gap-3 grid-cols-2">
         <div className="col-span-2 flex items-end gap-3 flex-wrap">
           <label className="grid gap-1 text-sm" style={{ width: 220 }}>
-            <span className="font-bold cd-text-muted">계산서 발행일</span>
+            <span className="font-semibold cd-text-muted">계산서 발행일</span>
             <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
           </label>
-          <label className="flex items-center gap-2 text-sm font-bold cd-text-muted pb-2">
+          <label className="flex items-center gap-2 text-sm font-semibold cd-text-muted pb-2">
             <input
               type="checkbox"
               checked={bulkMode}
@@ -2008,7 +2008,7 @@ function InvoiceUploadModal({
           )}
         </div>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">발행금액</span>
+          <span className="font-semibold cd-text-muted">발행금액</span>
           <input
             type="text"
             inputMode="numeric"
@@ -2018,17 +2018,17 @@ function InvoiceUploadModal({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         {bulkMode && (
           <div className="col-span-2 grid gap-1 text-sm">
-            <span className="font-bold cd-text-muted">복수 등록 대상 대금 지급 단계</span>
-            <div className="rounded-xl border cd-border-c divide-y max-h-44 overflow-y-auto">
+            <span className="font-semibold cd-text-muted">복수 등록 대상 대금 지급 단계</span>
+            <div className="rounded-lg border cd-border-c divide-y max-h-44 overflow-y-auto">
               <div className="flex items-center gap-2 px-3 py-2 text-xs cd-text-muted">
                 <input type="checkbox" checked readOnly />
-                <span className="font-bold cd-text">{state.stageLabel}</span>
+                <span className="font-semibold cd-text">{state.stageLabel}</span>
                 <span className="tabular-nums ml-auto">{formatExactAmount(state.baseAmount)}</span>
                 <span className="rounded-full border cd-border-c px-2 py-0.5">대표</span>
               </div>
@@ -2062,7 +2062,7 @@ function InvoiceUploadModal({
         {state.settlementEligible && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">실적 정산</span>
+              <span className="font-semibold cd-text-muted">실적 정산</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -2087,7 +2087,7 @@ function InvoiceUploadModal({
               </span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">차감액</span>
+              <span className="font-semibold cd-text-muted">차감액</span>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -2099,7 +2099,7 @@ function InvoiceUploadModal({
                       : ""
                   }
                 />
-                <span className="shrink-0 rounded-lg border cd-border-c px-2 py-2 text-[11px] font-bold cd-text-muted tabular-nums">
+                <span className="shrink-0 rounded-lg border cd-border-c px-2 py-2 text-[11px] font-semibold cd-text-muted tabular-nums">
                   {state.settlementAmount && state.baseAmount > 0
                     ? `${Math.round((Math.max(0, state.baseAmount - Number(state.settlementAmount || "0")) / state.baseAmount) * 1000) / 10}%`
                     : "-"}
@@ -2110,7 +2110,7 @@ function InvoiceUploadModal({
           </>
         )}
         <div className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold cd-text-muted">계산서 PDF 첨부</span>
+          <span className="font-semibold cd-text-muted">계산서 PDF 첨부</span>
           <input
             ref={fileInputRef}
             type="file"
@@ -2126,25 +2126,25 @@ function InvoiceUploadModal({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg cd-fill-primary px-3 py-2 text-xs font-bold text-white shadow-sm"
+              className="rounded-lg cd-fill-primary px-3 py-2 text-xs font-semibold text-white"
             >
               파일 선택
             </button>
             <span className="text-xs cd-text-faint">{fileName ? `선택됨: ${fileName}` : "선택된 파일 없음"}</span>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm font-bold cd-text-muted col-span-2">
+        <label className="flex items-center gap-2 text-sm font-semibold cd-text-muted col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보 등록
         </label>
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">수금일</span>
+              <span className="font-semibold cd-text-muted">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">누적 수금금액</span>
+              <span className="font-semibold cd-text-muted">누적 수금금액</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -2163,7 +2163,7 @@ function InvoiceUploadModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">부분입금 사유</span>
+              <span className="font-semibold cd-text-muted">부분입금 사유</span>
               <textarea
                 className="cd-input min-h-[84px]"
                 placeholder="예: 업체 자금 사정으로 일부만 입금, 착오입금 후 잔액 추후 입금 예정 등"
@@ -2178,8 +2178,8 @@ function InvoiceUploadModal({
         </p>
       </div>
       <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary disabled:opacity-60">
           {saving ? "저장 중..." : "입력"}
         </button>
       </div>
@@ -2670,12 +2670,12 @@ function NewContractModal({
         {tab === "basic" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">계약명</span>
+              <span className="font-semibold cd-text-muted">계약명</span>
               <div className="flex items-center gap-2">
                 <input className="cd-input min-w-0 flex-1" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
                 <button
                   type="button"
-                  className="rounded-xl border cd-border-c px-3 py-2 text-xs cd-text-muted whitespace-nowrap hover:cd-soft-primary disabled:opacity-50"
+                  className="rounded-lg border cd-border-c px-3 py-2 text-xs cd-text-muted whitespace-nowrap hover:cd-soft-primary disabled:opacity-50"
                   disabled={checkingTitle || !state.contractTitle.trim()}
                   title="같은 계약명이 있으면 (YYYY년)·(YYYY년 N차)를 붙여 자동 수정합니다"
                   onClick={() => void checkTitle()}
@@ -2685,7 +2685,7 @@ function NewContractModal({
               </div>
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-bold cd-text-muted">계약상대 업체</span>
+              <span className="font-semibold cd-text-muted">계약상대 업체</span>
               <input
                 className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
@@ -2694,7 +2694,7 @@ function NewContractModal({
               />
               {state.counterpartyName && <p className="text-xs cd-text-primary">선택됨: {state.counterpartyName}</p>}
               {entityOptions.length > 0 && !state.counterpartyFacilityId && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-56 overflow-y-auto">
                   {entityOptions.map((entity) => (
                     <button
                       key={entity.facilityId}
@@ -2720,7 +2720,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm relative">
-              <span className="font-bold cd-text-muted">{buildTargetFacilityLabel(state.serviceType)}</span>
+              <span className="font-semibold cd-text-muted">{buildTargetFacilityLabel(state.serviceType)}</span>
               <input
                 className="cd-input disabled:opacity-60"
                 placeholder={
@@ -2772,7 +2772,7 @@ function NewContractModal({
                 </div>
               )}
               {state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT && facilityOptions.length > 0 && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-56 overflow-y-auto">
                   {facilityOptions
                     .filter((facility) => !state.selectedFacilities.some((selected) => selected.facilityId === facility.facilityId))
                     .map((facility) => (
@@ -2791,7 +2791,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">발주 주체 구분</span>
+              <span className="font-semibold cd-text-muted">발주 주체 구분</span>
               <select
                 className="cd-select"
                 value={state.orderingSubjectType}
@@ -2806,7 +2806,7 @@ function NewContractModal({
               </span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">용역분류</span>
+              <span className="font-semibold cd-text-muted">용역분류</span>
               <select
                 className="cd-select"
                 value={state.serviceType}
@@ -2828,7 +2828,7 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">용역세분류</span>
+              <span className="font-semibold cd-text-muted">용역세분류</span>
               <select
                 className="cd-select"
                 value={state.serviceSubtype}
@@ -2840,14 +2840,14 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약 종류</span>
+              <span className="font-semibold cd-text-muted">계약 종류</span>
               <select className="cd-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
                 <option value="standard">일반 계약</option>
                 <option value="unit_price">단가 계약</option>
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">대금 지급 방식</span>
+              <span className="font-semibold cd-text-muted">대금 지급 방식</span>
               <select className="cd-select" value={state.paymentMethod} onChange={(e) => onChange({ ...state, paymentMethod: e.target.value })}>
                 {PAYMENT_METHOD_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -2855,7 +2855,7 @@ function NewContractModal({
               </select>
             </label>
             <div className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">업종</span>
+              <span className="font-semibold cd-text-muted">업종</span>
               <div className="flex items-center gap-2">
                 <select className="cd-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
                   <option value="">업종 선택</option>
@@ -2873,7 +2873,7 @@ function NewContractModal({
               </div>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약금액</span>
+              <span className="font-semibold cd-text-muted">계약금액</span>
               {/* 청구·수금 단계 금액 합계가 자동 반영된다(이중 입력 제거, 2026-08-24) — 직접 입력 불가 */}
               <input
                 className="cd-input tabular-nums opacity-70 cursor-not-allowed"
@@ -2886,16 +2886,16 @@ function NewContractModal({
               <span className="text-[11px] cd-text-faint">청구·수금 단계 탭의 금액 합계가 자동 반영됩니다.</span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약일</span>
+              <span className="font-semibold cd-text-muted">계약일</span>
               {/* 착수일은 화면에 칸이 없어 저장 시 계약일로 채운다 — 입력 중 부분 값("2")이 착수일에 굳어 등록이 거절되던 문제(2026-10-12) */}
               <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">준공일</span>
+              <span className="font-semibold cd-text-muted">준공일</span>
               <DateInput value={state.endedAt} onChange={(endedAt) => onChange({ ...state, endedAt })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">메모</span>
+              <span className="font-semibold cd-text-muted">메모</span>
               <textarea className="cd-input min-h-[90px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
             </label>
           </div>
@@ -2908,7 +2908,7 @@ function NewContractModal({
         {tab === "milestones" && (
           <div className="grid gap-3">
             {state.contractKind === "unit_price" && rateStageOptions.length === 0 && (
-              <p className="rounded-xl border cd-border-c p-3 text-xs cd-text-muted">
+              <p className="rounded-lg border cd-border-c p-3 text-xs cd-text-muted">
                 단가 계약은 <b>단가 계약</b> 탭에서 단가 기준표와 차수표(산정 수량)를 먼저 작성하세요. 차수별 지급
                 단위(선급금/중도금/준공금 — 지급 단위를 비운 단일 차수는 구분 소계)가 아래 단계명 목록으로 나오고,
                 선택하면 금액이 자동 적용됩니다.
@@ -2917,7 +2917,7 @@ function NewContractModal({
             {state.contractKind === "unit_price" && rateStageOptions.length > 0 && (
               <button
                 type="button"
-                className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs font-bold cd-text-primary justify-self-start"
+                className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs font-semibold cd-text-primary justify-self-start"
                 title="단가 기준표에서 파생된 단계 전체로 아래 목록을 다시 구성합니다."
                 onClick={() =>
                   onChange({
@@ -2934,7 +2934,7 @@ function NewContractModal({
               </button>
             )}
             {state.milestones.map((m, idx) => (
-              <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-2xl border cd-border-c cd-surface-bg p-3">
+              <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-lg border cd-border-c cd-surface-bg p-3">
                 <div className="text-xs cd-text-faint pb-2">{idx + 1}차</div>
                 <label className="grid gap-1 text-xs">
                   <span className="cd-text-faint">단계명</span>
@@ -2973,14 +2973,14 @@ function NewContractModal({
                   <span className="cd-text-faint">대금 지급 조건</span>
                   <input className="cd-input" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 발행 후 30일 이내" />
                 </label>
-                <button type="button" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50" onClick={() => onChange({ ...state, milestones: state.milestones.filter((item) => item.id !== m.id) })}>
+                <button type="button" className="rounded-lg p-2 cd-error-text hover:cd-error-bg" onClick={() => onChange({ ...state, milestones: state.milestones.filter((item) => item.id !== m.id) })}>
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
             <button
               type="button"
-              className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-sm cd-text-muted inline-flex items-center gap-2 justify-center"
+              className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-sm cd-text-muted inline-flex items-center gap-2 justify-center"
               onClick={() => onChange({ ...state, milestones: [...state.milestones, createMilestoneDraft()] })}
             >
               <Plus className="w-4 h-4" />
@@ -2992,7 +2992,7 @@ function NewContractModal({
         {tab === "outsourcing" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">외주 계약명</span>
+              <span className="font-semibold cd-text-muted">외주 계약명</span>
               <input
                 className="cd-input"
                 value={state.outsourcing.outsourcingTitle}
@@ -3000,7 +3000,7 @@ function NewContractModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-bold cd-text-muted">계약상대 업체</span>
+              <span className="font-semibold cd-text-muted">계약상대 업체</span>
               <input
                 className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
@@ -3017,7 +3017,7 @@ function NewContractModal({
               />
               {state.outsourcing.counterpartyName && <p className="text-xs cd-text-primary">선택됨: {state.outsourcing.counterpartyName}</p>}
               {outsourcingEntityOptions.length > 0 && !state.outsourcing.counterpartyFacilityId && (
-                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-xl border cd-border-c cd-card-bg shadow-lg max-h-56 overflow-y-auto">
+                <div className="absolute z-10 top-[70px] left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-56 overflow-y-auto">
                   {outsourcingEntityOptions.map((entity) => (
                     <button
                       key={entity.facilityId}
@@ -3043,7 +3043,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">용역분류</span>
+              <span className="font-semibold cd-text-muted">용역분류</span>
               <select
                 className="cd-select max-w-[220px]"
                 value={state.outsourcing.serviceType}
@@ -3057,7 +3057,7 @@ function NewContractModal({
             <div className="flex items-end justify-start">
               <button
                 type="button"
-                className="cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs cd-text-muted"
+                className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs cd-text-muted"
                 onClick={() => {
                   const next = prompt("추가할 외주 용역 분류명을 입력하세요.");
                   if (!next?.trim()) return;
@@ -3069,7 +3069,7 @@ function NewContractModal({
               </button>
               <button
                 type="button"
-                className="ml-2 cd-btn cd-btn-ghost rounded-xl px-3 py-2 text-xs text-rose-600"
+                className="ml-2 cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs cd-error-text"
                 onClick={() => {
                   if (outsourcingTypeOptions.length <= 1) return;
                   const next = outsourcingTypeOptions.filter((type) => type !== state.outsourcing.serviceType);
@@ -3081,7 +3081,7 @@ function NewContractModal({
               </button>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약금액</span>
+              <span className="font-semibold cd-text-muted">계약금액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3090,15 +3090,15 @@ function NewContractModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약일</span>
+              <span className="font-semibold cd-text-muted">계약일</span>
               <DateInput value={state.outsourcing.contractDate} onChange={(contractDate) => onChange({ ...state, outsourcing: { ...state.outsourcing, contractDate } })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">준공일</span>
+              <span className="font-semibold cd-text-muted">준공일</span>
               <DateInput value={state.outsourcing.endedAt} onChange={(endedAt) => onChange({ ...state, outsourcing: { ...state.outsourcing, endedAt } })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">메모</span>
+              <span className="font-semibold cd-text-muted">메모</span>
               <textarea
                 className="cd-input min-h-[90px]"
                 value={state.outsourcing.memo}
@@ -3106,11 +3106,11 @@ function NewContractModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">외주 계약서 PDF 첨부</span>
+              <span className="font-semibold cd-text-muted">외주 계약서 PDF 첨부</span>
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
                   outsourcingFileRef.current = nextFile;
@@ -3125,11 +3125,11 @@ function NewContractModal({
         {tab === "document" && (
           <div className="grid gap-4">
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">계약서 PDF 첨부</span>
+              <span className="font-semibold cd-text-muted">계약서 PDF 첨부</span>
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
                 onChange={(e) => {
                   const nextFile = e.target.files?.[0] ?? null;
                   documentFileRef.current = nextFile;
@@ -3146,8 +3146,8 @@ function NewContractModal({
       </div>
 
       <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary disabled:opacity-60">
           {saving ? "저장 중..." : "계약 등록"}
         </button>
       </div>
@@ -3258,31 +3258,31 @@ function EditMilestoneModal({
     <ModalShell title={`${state.stageLabel} 단계 수정`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">단계명</span>
+          <span className="font-semibold cd-text-muted">단계명</span>
           <input className="cd-input" value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">청구금액</span>
+          <span className="font-semibold cd-text-muted">청구금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
           <input className="cd-input" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">계산서 발행일</span>
+          <span className="font-semibold cd-text-muted">계산서 발행일</span>
           <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">계산서 발행금액</span>
+          <span className="font-semibold cd-text-muted">계산서 발행금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-bold cd-text-muted">세금계산서 교체 PDF</span>
+          <span className="font-semibold cd-text-muted">세금계산서 교체 PDF</span>
           <input
             type="file"
             accept="application/pdf,.pdf"
-            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-bold file:text-white"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
             onChange={(e) => {
               const nextFile = e.target.files?.[0] ?? null;
               invoiceFileRef.current = nextFile;
@@ -3293,8 +3293,8 @@ function EditMilestoneModal({
           <span className="text-xs cd-text-faint">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
         </label>
         {isNotePayment && (
-          <div className="col-span-2 rounded-2xl border cd-border-c p-3 grid gap-3 grid-cols-2">
-            <p className="col-span-2 text-xs font-bold cd-text-muted">
+          <div className="col-span-2 rounded-lg border cd-border-c p-3 grid gap-3 grid-cols-2">
+            <p className="col-span-2 text-xs font-semibold cd-text-muted">
               어음 수금 상세
               <span className="block mt-0.5 font-normal cd-text-faint">
                 만기일·대출 실행일을 입력하면 해당 일자의 입금이 발주처명 없이 들어와도 수금 자동대조 후보로 잡힙니다.
@@ -3302,7 +3302,7 @@ function EditMilestoneModal({
               </span>
             </p>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">어음 종류</span>
+              <span className="font-semibold cd-text-muted">어음 종류</span>
               <input
                 className="cd-input"
                 placeholder="예: 전자어음 / 외담대 / 상생협력론"
@@ -3317,7 +3317,7 @@ function EditMilestoneModal({
               </datalist>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">어음 취급 은행</span>
+              <span className="font-semibold cd-text-muted">어음 취급 은행</span>
               <select className="cd-select" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })}>
                 <option value="">선택</option>
                 {/* select 도입 전 자유 입력으로 저장된 값 — 목록에 없어도 값이 사라지지 않게 옵션으로 유지 */}
@@ -3330,15 +3330,15 @@ function EditMilestoneModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">어음 발행일</span>
+              <span className="font-semibold cd-text-muted">어음 발행일</span>
               <DateInput value={state.noteIssuedDate} onChange={(noteIssuedDate) => onChange({ ...state, noteIssuedDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">어음 만기일</span>
+              <span className="font-semibold cd-text-muted">어음 만기일</span>
               <DateInput value={state.noteMaturityDate} onChange={(noteMaturityDate) => onChange({ ...state, noteMaturityDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">어음 수수료</span>
+              <span className="font-semibold cd-text-muted">어음 수수료</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3347,7 +3347,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">담보 대출 이자율(%)</span>
+              <span className="font-semibold cd-text-muted">담보 대출 이자율(%)</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="decimal"
@@ -3357,7 +3357,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">담보 대출 이자액</span>
+              <span className="font-semibold cd-text-muted">담보 대출 이자액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3366,23 +3366,23 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">대출 실행일</span>
+              <span className="font-semibold cd-text-muted">대출 실행일</span>
               <DateInput value={state.noteLoanExecutedDate} onChange={(noteLoanExecutedDate) => onChange({ ...state, noteLoanExecutedDate })} />
             </label>
           </div>
         )}
-        <label className="flex items-center gap-2 text-sm font-bold cd-text-muted col-span-2">
+        <label className="flex items-center gap-2 text-sm font-semibold cd-text-muted col-span-2">
           <input type="checkbox" checked={state.paymentCollected} onChange={(e) => onChange({ ...state, paymentCollected: e.target.checked })} />
           수금 정보 등록
         </label>
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">수금일</span>
+              <span className="font-semibold cd-text-muted">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-bold cd-text-muted">수금금액</span>
+              <span className="font-semibold cd-text-muted">수금금액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3397,15 +3397,15 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-bold cd-text-muted">부분입금 사유</span>
+              <span className="font-semibold cd-text-muted">부분입금 사유</span>
               <textarea className="cd-input min-h-[84px]" value={state.partialPaymentMemo} onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })} />
             </label>
           </>
         )}
       </div>
       <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary disabled:opacity-60">
           {saving ? "저장 중..." : "수정"}
         </button>
       </div>
@@ -3482,7 +3482,7 @@ function NewStageModal({
     <ModalShell title="청구·수금 단계 추가" onClose={onClose}>
       <div className="p-5 grid gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">단계명</span>
+          <span className="font-semibold cd-text-muted">단계명</span>
           {isUnitPrice ? (
             <>
               <select
@@ -3518,18 +3518,18 @@ function NewStageModal({
           )}
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">청구금액</span>
+          <span className="font-semibold cd-text-muted">청구금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">대금 지급 조건</span>
+          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
       </div>
       <div className="p-5 pt-0 border-t cd-border-c flex justify-end gap-2 mt-2">
-        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">닫기</button>
-        <button type="button" onClick={submit} disabled={saving} className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm disabled:opacity-60">
+        <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">닫기</button>
+        <button type="button" onClick={submit} disabled={saving} className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary disabled:opacity-60">
           {saving ? "저장 중..." : "추가"}
         </button>
       </div>
@@ -3586,7 +3586,7 @@ function DraggablePdfViewer({
 
   return (
     <div
-      className="fixed z-[60] rounded-3xl border cd-border-c cd-card-bg shadow-2xl overflow-hidden flex flex-col"
+      className="fixed z-[60] rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-dialog)] overflow-hidden flex flex-col"
       style={{
         left: position.x,
         top: position.y,
@@ -3673,7 +3673,7 @@ function ContractDeleteModal({
           <span className="cd-text">{contractTitle}</span> 계약을 휴지통으로 이동합니다. 계약 데이터는 목록에서 제외되며, admin만 휴지통에서 영구 삭제할 수 있습니다.
         </p>
         <label className="grid gap-1 text-sm">
-          <span className="font-bold cd-text-muted">삭제 사유</span>
+          <span className="font-semibold cd-text-muted">삭제 사유</span>
           <select className="cd-select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}>
             <option value="중복 입력 삭제">중복 입력 삭제</option>
             <option value="계약 무산">계약 무산</option>
@@ -3681,7 +3681,7 @@ function ContractDeleteModal({
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-2 border-t cd-border-c">
-          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted">
+          <button type="button" onClick={onClose} className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted">
             닫기
           </button>
           <button
@@ -3695,7 +3695,7 @@ function ContractDeleteModal({
                 setSaving(false);
               }
             }}
-            className="rounded-xl px-4 py-2 text-sm font-bold text-white bg-rose-500 hover:bg-rose-600 disabled:opacity-60"
+            className="rounded-lg px-4 py-2 text-sm font-semibold cd-fill-error hover:opacity-90 disabled:opacity-60"
           >
             {saving ? "삭제 중..." : "삭제"}
           </button>
@@ -3707,10 +3707,10 @@ function ContractDeleteModal({
 
 function ModalShell({ title, onClose, children, wide }: { title: React.ReactNode; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 bg-stone-950/20 flex items-center justify-center p-4">
-      <div className={"cd-card rounded-3xl max-h-[min(840px,calc(100vh-32px))] shadow-2xl overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>
+    <div className="fixed inset-0 z-50 bg-[color:var(--cd-overlay)] flex items-center justify-center p-4">
+      <div className={"cd-card rounded-lg max-h-[min(840px,calc(100vh-32px))] shadow-[var(--cd-shadow-dialog)] overflow-hidden flex flex-col " + (wide ? "w-[min(960px,calc(100vw-32px))]" : "w-[min(640px,calc(100vw-32px))]")}>
         <div className="p-5 border-b cd-border-c flex items-start justify-between gap-3">
-          <h3 className="text-xl font-bold cd-text">{title}</h3>
+          <h3 className="text-base font-semibold cd-text">{title}</h3>
           <button type="button" onClick={onClose} className="cd-text-faint hover:opacity-70">
             <X className="w-5 h-5" />
           </button>
@@ -3724,7 +3724,7 @@ function ModalShell({ title, onClose, children, wide }: { title: React.ReactNode
 function Info({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
   const isEmpty = value == null || value === "";
   return (
-    <div className={"rounded-2xl border p-3 " + (highlight ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c")}>
+    <div className={"rounded-lg border p-3 " + (highlight ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c")}>
       <p className="text-[11px] cd-text-faint">{label}</p>
       <p className={"text-sm mt-1 truncate " + (highlight ? "cd-text-primary" : "cd-text")}>
         {isEmpty ? "-" : value}
@@ -3748,8 +3748,8 @@ function CollectionProgressCard({
   const percent = Math.round(rate * 100);
   const today = formatKoreanDate(new Date());
   return (
-    <div className="rounded-2xl border cd-border-c p-4 min-h-[180px] flex flex-col items-center justify-center relative">
-      <p className="absolute left-4 top-3 text-[11px] font-bold cd-text-faint">수금 진척도</p>
+    <div className="rounded-lg border cd-border-c p-4 min-h-[180px] flex flex-col items-center justify-center relative">
+      <p className="absolute left-4 top-3 text-[11px] font-semibold cd-text-faint">수금 진척도</p>
       {/* conic-gradient + 가운데 원 방식은 가운데가 카드색으로 '덮인' 것이라 반투명 토큰에서 뒤가 비쳤고,
           호(arc) 양 끝도 각지게 잘렸다 → SVG 링으로 그려 가운데를 실제로 비우고 끝을 둥글린다. */}
       <div className="relative w-28 h-28 flex items-center justify-center">
@@ -3777,13 +3777,13 @@ function CollectionProgressCard({
             />
           )}
         </svg>
-        <span className="relative text-xl font-bold text-[#9BC2E6]">{percent}%</span>
+        <span className="relative text-[22px] font-semibold text-[#9BC2E6]">{percent}%</span>
       </div>
       <p className="mt-3 text-xs font-mono cd-text-muted">
         {formatExactAmount(collectedAmount)} / {formatExactAmount(baseAmount)}
       </p>
       {settlementRate != null && (
-        <p className="mt-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11px] font-bold cd-text-muted">
+        <p className="mt-1.5 rounded-lg border cd-border-c px-2 py-1 text-[11px] font-semibold cd-text-muted">
           실적 정산 반영 비율 {Math.round(settlementRate * 1000) / 10}%
         </p>
       )}
@@ -3893,12 +3893,12 @@ const TreeChildRow = memo(function TreeChildRow({
       <span className="flex items-center gap-1.5 flex-1 min-w-0">
         <span className="truncate cd-text">{contract.contractTitle}</span>
         {contract.contractStatus === "terminated" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] text-white" style={{ background: "#FF7171" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] text-white" style={{ background: "#FF7171" }}>
             계약해지
           </span>
         )}
         {contract.contractStatus === "suspended" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] cd-text" style={{ background: "#FFD966" }}>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] cd-text" style={{ background: "#FFD966" }}>
             계약중지
           </span>
         )}
@@ -3911,10 +3911,10 @@ const TreeChildRow = memo(function TreeChildRow({
           />
         )}
       </span>
-      <span className="w-[88px] text-right text-[10px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
+      <span className="w-[88px] text-right text-[11px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
         {contract.contractDate ?? "-"}
       </span>
-      <span className="w-[72px] text-right text-[10px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
+      <span className="w-[72px] text-right text-[11px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
         {formatMoney(contract.currentAmount)}
       </span>
     </button>

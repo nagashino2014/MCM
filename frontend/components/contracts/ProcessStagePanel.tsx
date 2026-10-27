@@ -130,9 +130,9 @@ export default function ProcessStagePanel({
   };
 
   return (
-    <div className="rounded-2xl border cd-border-c cd-surface-bg p-4">
+    <div className="rounded-lg border cd-border-c cd-surface-bg p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="font-bold cd-text flex items-center gap-2">
+        <h3 className="font-semibold cd-text flex items-center gap-2">
           <GitCommitHorizontal className="w-4 h-4 cd-text-primary" /> 용역 공정표
           <span className="text-[11px] font-normal cd-text-faint">{stages.length}단계</span>
         </h3>
@@ -159,8 +159,8 @@ export default function ProcessStagePanel({
                   border: s.status === "pending" ? "1.5px solid var(--cd-border)" : `2px solid ${s.status === "in_progress" ? "#854F0B" : "#0F6E56"}`,
                 }}
               />
-              <span className="text-[10px] cd-text-faint text-center leading-tight truncate w-full">{s.stageName || "—"}</span>
-              {s.status === "in_progress" && <span className="text-[9px] cd-text-primary font-bold">{Math.round(s.progressPct)}%</span>}
+              <span className="text-[11px] cd-text-faint text-center leading-tight truncate w-full">{s.stageName || "—"}</span>
+              {s.status === "in_progress" && <span className="text-[11px] cd-text-primary font-semibold">{Math.round(s.progressPct)}%</span>}
             </div>
           ))}
         </div>
@@ -169,13 +169,13 @@ export default function ProcessStagePanel({
       {/* 단계 편집 리스트 */}
       <div className="grid gap-2">
         {stages.length === 0 ? (
-          <p className="p-5 text-center text-sm cd-text-faint rounded-xl border cd-border-c">
+          <p className="p-5 text-center text-sm cd-text-faint rounded-lg border cd-border-c">
             공정 단계가 없습니다. [표준 공정 적용]으로 시작하거나 [단계 추가]로 직접 구성하세요.
           </p>
         ) : (
           stages.map((s, index) => (
-            <div key={s.key} className="rounded-xl border cd-border-c p-2.5 flex flex-wrap items-center gap-2">
-              <span className="w-5 h-5 shrink-0 rounded cd-soft-primary text-[10px] font-bold flex items-center justify-center">{index + 1}</span>
+            <div key={s.key} className="rounded-lg border cd-border-c p-2.5 flex flex-wrap items-center gap-2">
+              <span className="w-5 h-5 shrink-0 rounded cd-soft-primary text-[11px] font-semibold flex items-center justify-center">{index + 1}</span>
               <input
                 className="cd-input text-xs flex-1 min-w-[120px] font-semibold"
                 placeholder="단계명"

@@ -142,7 +142,7 @@ export default function ProcessStageTabs({
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="font-bold cd-text">용역 공정표 <span className="text-[11px] font-normal cd-text-faint">{stages.length}단계</span></h3>
+        <h3 className="font-semibold cd-text">용역 공정표 <span className="text-[11px] font-normal cd-text-faint">{stages.length}단계</span></h3>
         <div className="flex items-center gap-2">
           {msg && <span className="text-[11px] cd-text-faint">{msg}</span>}
           <button type="button" onClick={applyTemplate} className="cd-btn cd-btn-ghost rounded-lg px-3 py-1.5 text-xs cd-text-muted inline-flex items-center gap-1">
@@ -189,11 +189,11 @@ export default function ProcessStageTabs({
 
       {/* 활성 단계 폼 */}
       {!active ? (
-        <p className="p-6 text-center text-sm cd-text-faint rounded-xl border cd-border-c">
+        <p className="p-6 text-center text-sm cd-text-faint rounded-lg border cd-border-c">
           공정 단계가 없습니다. [표준 공정 적용] 또는 우측 + 로 단계를 추가하세요.
         </p>
       ) : (
-        <div className="rounded-2xl border cd-border-c p-4 grid gap-3">
+        <div className="rounded-lg border cd-border-c p-4 grid gap-3">
           <Field label="단계명">
             <input className="cd-input text-sm w-full" value={active.stageName} onChange={(e) => update(active.key, { stageName: e.target.value })} />
           </Field>
@@ -228,9 +228,9 @@ export default function ProcessStageTabs({
                   value={active.progressPct}
                   onChange={(e) => update(active.key, { progressPct: Number(e.target.value) })}
                 />
-                <div className="flex items-center justify-between text-[10px] cd-text-faint">
+                <div className="flex items-center justify-between text-[11px] cd-text-faint">
                   <span>0%</span>
-                  <span className="text-xs font-bold cd-text-primary">{active.progressPct}%</span>
+                  <span className="text-xs font-semibold cd-text-primary">{active.progressPct}%</span>
                   <span>100%</span>
                 </div>
               </div>

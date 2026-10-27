@@ -166,7 +166,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
     <div className="flex flex-col gap-4">
       {/* 필터 바: 용역 선택 */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+        <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
           용역 선택
         </span>
         <button
@@ -196,7 +196,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
 
       {error && (
         <p
-          className="text-[11px] font-bold px-3 py-2 rounded-lg"
+          className="text-[11px] font-semibold px-3 py-2 rounded-lg"
           style={{ background: "var(--cd-error-soft, rgba(250,137,107,0.14))", color: "var(--cd-error, #fa896b)" }}
         >
           불러오기 실패: {error}
@@ -273,13 +273,13 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                 </span>
                 3개월 이상 장기 미수금 리스트
               </p>
-              <span className="text-[11px] font-extrabold tabular-nums" style={{ color: AGING_OVER2_COLOR }}>
+              <span className="text-[11px] font-semibold tabular-nums" style={{ color: AGING_OVER2_COLOR }}>
                 {longTermRows.length.toLocaleString()}건
               </span>
             </div>
 
             <div
-              className="cdb-longterm-row cd-table-head !cursor-default text-[10px] font-extrabold"
+              className="cdb-longterm-row cd-table-head !cursor-default text-[11px] font-semibold"
               style={{ color: "var(--cd-faint)" }}
             >
               <span>용역명</span>
@@ -309,11 +309,11 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                     }
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                      <span className="block truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                         {row.contractTitle}
                       </span>
                       <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                        <span className="truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                           <span
                             className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                             style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -334,13 +334,13 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                         )}
                       </span>
                     </span>
-                    <span className="truncate text-[10px]" style={{ color: "var(--cd-muted)" }} title={row.stageLabel || undefined}>
+                    <span className="truncate text-[11px]" style={{ color: "var(--cd-muted)" }} title={row.stageLabel || undefined}>
                       {row.stageLabel || "-"}
                     </span>
-                    <span className="text-center tabular-nums text-[10px]" style={{ color: "var(--cd-muted)" }}>
+                    <span className="text-center tabular-nums text-[11px]" style={{ color: "var(--cd-muted)" }}>
                       {row.invoiceIssuedAt ?? "-"}
                     </span>
-                    <span className="text-right tabular-nums font-bold" style={{ color: "var(--cd-text)" }}>
+                    <span className="text-right tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                       {fmtFull(row.outstandingAmount)}
                     </span>
                   </div>
@@ -398,19 +398,19 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                 data-active={aging === f.id}
                 onClick={() => setAging(f.id)}
               >
-                <span className="w-2.5 h-2.5 rounded-[4px] inline-block" style={{ background: f.color }} />
+                <span className="w-2.5 h-2.5 rounded-[2px] inline-block" style={{ background: f.color }} />
                 {f.label}
               </button>
             ))}
-            <span className="ml-auto text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="ml-auto text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
               총 미수금 건수{" "}
-              <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                 {listRows.length.toLocaleString()}건
               </span>
             </span>
-            <span className="text-[11px] font-bold" style={{ color: "var(--cd-muted)" }}>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>
               총 미수금 금액{" "}
-              <span className="tabular-nums font-extrabold" style={{ color: "var(--cd-text)" }}>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cd-text)" }}>
                 {listTotal > 0 ? `${fmtFull(listTotal)}원` : "-"}
               </span>
             </span>
@@ -418,7 +418,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
 
           {/* 열 레이블 */}
           <div
-            className="cdb-recv-row cd-table-head !cursor-default text-[11px] font-extrabold"
+            className="cdb-recv-row cd-table-head !cursor-default text-[11px] font-semibold"
             style={{ color: "var(--cd-faint)" }}
           >
             <span>용역명</span>
@@ -448,12 +448,12 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                      <span className="truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                         {row.contractTitle}
                       </span>
                       {agingTag(row)}
                     </span>
-                    <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                    <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                       <span
                         className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                         style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -472,7 +472,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
                   </span>
                   {/* 잔액 = 발행금액 - 부분입금(2026-08-26) — 부분입금이 있으면 강조해 구분한다 */}
                   <span
-                    className="text-right tabular-nums font-extrabold"
+                    className="text-right tabular-nums font-semibold"
                     style={{ color: row.outstandingAmount < row.invoiceAmount ? "var(--cd-warning)" : "var(--cd-text)" }}
                     title={
                       row.outstandingAmount < row.invoiceAmount

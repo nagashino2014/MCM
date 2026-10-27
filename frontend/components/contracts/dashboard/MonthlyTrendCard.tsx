@@ -107,11 +107,11 @@ export function MonthlyTrendCard({
           {/* 비교 테이블 */}
           <div className="mt-3 text-[11px] leading-tight">
             <div
-              className="grid grid-cols-[minmax(76px,0.9fr)_1fr_1.15fr_1.15fr_46px] gap-x-2 items-center px-2 py-2 rounded-lg font-bold"
+              className="grid grid-cols-[minmax(76px,0.9fr)_1fr_1.15fr_1.15fr_46px] gap-x-2 items-center px-2 py-2 rounded-lg font-semibold"
               style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
             >
               <span>{year}년 {totalLabel}</span>
-              <span className="text-right font-extrabold" style={{ color: totalColor }}>
+              <span className="text-right font-semibold" style={{ color: totalColor }}>
                 {fmtFull(block.total)}
               </span>
               <span className="text-right">D-2 Year</span>
@@ -124,7 +124,7 @@ export function MonthlyTrendCard({
                   key={row.category}
                   className="cd-row-hover grid grid-cols-[minmax(76px,0.9fr)_1fr_1.15fr_1.15fr_46px] gap-x-2 items-center px-2 py-1.5 rounded-lg"
                 >
-                  <span className="font-bold truncate inline-flex items-center gap-1.5" style={{ color: "var(--cd-muted)" }}>
+                  <span className="font-semibold truncate inline-flex items-center gap-1.5" style={{ color: "var(--cd-muted)" }}>
                     {CATEGORY_META[row.category] && (
                       <ServiceIcon
                         color={CATEGORY_META[row.category].color}
@@ -134,12 +134,12 @@ export function MonthlyTrendCard({
                     )}
                     {row.category}
                   </span>
-                  <span className="text-right font-bold tabular-nums" style={{ color: "var(--cd-text)" }}>
+                  <span className="text-right font-semibold tabular-nums" style={{ color: "var(--cd-text)" }}>
                     {fmtFull(row.current)}
                   </span>
                   <CompareCell current={row.current} base={row.d2} />
                   <CompareCell current={row.current} base={row.d1} />
-                  <span className="text-right font-extrabold tabular-nums" style={{ color: barColor }}>
+                  <span className="text-right font-semibold tabular-nums" style={{ color: barColor }}>
                     {row.share > 0 ? `${Math.round(row.share)}%` : "-"}
                   </span>
                 </div>
@@ -162,7 +162,7 @@ function CompareCell({ current, base }: { current: number; base: number }) {
     >
       <span className="text-right">{fmtFull(base)}</span>
       <span
-        className="text-right font-extrabold"
+        className="text-right font-semibold"
         style={{ color: pct == null ? undefined : pct < 0 ? "var(--cd-error)" : "var(--cd-success)" }}
       >
         {pct != null ? `${pct > 0 ? "+" : ""}${pct}%` : ""}

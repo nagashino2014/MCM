@@ -277,7 +277,7 @@ export function TemplateBoard() {
         actions={
           <button
             type="button"
-            className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+            className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
             onClick={() => router.push("/contracts/deliverables")}
           >
             <ArrowLeft className="w-4 h-4" /> 작성 화면
@@ -286,7 +286,7 @@ export function TemplateBoard() {
       />
 
       {msg && (
-        <div className="mb-4 rounded-xl px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-tint)", color: "var(--cd-text)" }}>
+        <div className="mb-4 rounded-lg px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-tint)", color: "var(--cd-text)" }}>
           {msg}
         </div>
       )}
@@ -301,9 +301,9 @@ export function TemplateBoard() {
       ) : (
       <div className="flex flex-col xl:flex-row gap-5 items-start">
         {/* 좌: 업로드 + 목록 */}
-        <section className="cd-card rounded-3xl overflow-hidden w-full xl:flex-[5] min-w-0">
+        <section className="cd-card rounded-lg overflow-hidden w-full xl:flex-[5] min-w-0">
           <div className="p-4 border-b cd-border-c">
-            <h2 className="font-bold cd-text flex items-center gap-2 text-sm">
+            <h2 className="font-semibold cd-text flex items-center gap-2 text-sm">
               <FileUp className="w-4 h-4 cd-text-primary" /> 양식 등록
             </h2>
             <p className="text-[11px] cd-text-faint mt-0.5">
@@ -344,14 +344,14 @@ export function TemplateBoard() {
               />
               {facilityHits.length > 0 && (
                 <div
-                  className="absolute z-20 left-0 right-0 mt-1 rounded-xl border cd-border-c overflow-hidden"
+                  className="absolute z-20 left-0 right-0 mt-1 rounded-lg border cd-border-c overflow-hidden"
                   style={{ background: "var(--cd-card-solid)" }}
                 >
                   {facilityHits.map((f) => (
                     <button
                       key={f.facility_id}
                       type="button"
-                      className="w-full text-left px-3 py-2 text-[12.5px] cd-text hover:cd-tint-primary"
+                      className="w-full text-left px-3 py-2 text-[13px] cd-text hover:cd-tint-primary"
                       onClick={() => {
                         setFacility(f);
                         setFacilityHits([]);
@@ -368,12 +368,12 @@ export function TemplateBoard() {
               <input
                 type="file"
                 accept=".hwpx,.pdf"
-                className="cd-input text-[12.5px] flex-1 min-w-0"
+                className="cd-input text-[13px] flex-1 min-w-0"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
               <button
                 type="button"
-                className="cd-btn cd-fill-primary rounded-xl px-4 py-2 text-[13px] shrink-0"
+                className="cd-btn cd-fill-primary rounded-lg px-4 py-2 text-[13px] shrink-0"
                 onClick={upload}
                 disabled={busy}
               >
@@ -384,28 +384,28 @@ export function TemplateBoard() {
 
           <div className="px-4 pb-4">
             <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
-              {templates.length === 0 && <p className="text-[12.5px] cd-text-faint py-6 text-center">등록된 양식이 없습니다.</p>}
+              {templates.length === 0 && <p className="text-[13px] cd-text-faint py-6 text-center">등록된 양식이 없습니다.</p>}
               {templates.map((t) => {
                 const on = t.templateId === selected;
                 return (
                   <button
                     key={t.templateId}
                     type="button"
-                    className={`text-left rounded-xl border px-3.5 py-2.5 ${
+                    className={`text-left rounded-lg border px-3.5 py-2.5 ${
                       on ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c"
                     }`}
                     onClick={() => void openTemplate(t.templateId)}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[13px] font-semibold cd-text">{t.name}</span>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-md border cd-border-c cd-text-faint">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-lg border cd-border-c cd-text-faint">
                         {DELIVERABLE_KIND_LABEL[t.kind]}
                       </span>
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-md border cd-border-c cd-text-faint">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-lg border cd-border-c cd-text-faint">
                         {t.renderMode === "overlay" ? "원본 서식 유지" : "서식 재구축"}
                       </span>
                     </div>
-                    <div className="text-[11.5px] cd-text-faint mt-1">
+                    <div className="text-[12px] cd-text-faint mt-1">
                       {t.ownerFacilityName ?? "발주처 미지정"} · 서식 {t.docs.length}종 ·{" "}
                       {t.docs.reduce((a, d) => a + d.slotCount, 0)}개 자리 · 분석 {fmtDate(t.analyzedAt)}
                     </div>
@@ -417,10 +417,10 @@ export function TemplateBoard() {
         </section>
 
         {/* 우: 매핑 확인 */}
-        <section className="cd-card rounded-3xl overflow-hidden w-full xl:flex-[5] min-w-0">
+        <section className="cd-card rounded-lg overflow-hidden w-full xl:flex-[5] min-w-0">
           <div className="p-4 border-b cd-border-c flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="font-bold cd-text text-sm truncate">{current ? current.name : "매핑 확인"}</h2>
+              <h2 className="font-semibold cd-text text-sm truncate">{current ? current.name : "매핑 확인"}</h2>
               <p className="text-[11px] cd-text-faint mt-0.5">
                 {current ? "값이 들어갈 자리입니다. 원본과 대조해 확인하세요." : "왼쪽에서 양식을 선택하세요."}
               </p>
@@ -430,7 +430,7 @@ export function TemplateBoard() {
                 {current.renderMode === "overlay" && (
                   <button
                     type="button"
-                    className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
+                    className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[13px] flex items-center gap-1.5"
                     onClick={() => setEditing(true)}
                     disabled={busy}
                   >
@@ -439,7 +439,7 @@ export function TemplateBoard() {
                 )}
                 <button
                   type="button"
-                  className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
+                  className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[13px] flex items-center gap-1.5"
                   onClick={() => void reanalyze(current.templateId)}
                   disabled={busy}
                 >
@@ -447,7 +447,7 @@ export function TemplateBoard() {
                 </button>
                 <button
                   type="button"
-                  className="cd-btn rounded-xl border cd-border-c px-3 py-1.5 text-[12.5px] flex items-center gap-1.5"
+                  className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[13px] flex items-center gap-1.5"
                   onClick={() => void remove(current.templateId)}
                   disabled={busy}
                 >
@@ -460,14 +460,14 @@ export function TemplateBoard() {
           {current && (
             <div className="p-4">
               {current.analyzeNote && (
-                <p className="text-[12px] cd-text-faint mb-3 rounded-xl border cd-border-c px-3 py-2">{current.analyzeNote}</p>
+                <p className="text-[12px] cd-text-faint mb-3 rounded-lg border cd-border-c px-3 py-2">{current.analyzeNote}</p>
               )}
               {current.docs.map((d) => (
                 <div key={d.docType} className="mb-4">
-                  <div className="text-[12.5px] font-semibold cd-text mb-1.5">
+                  <div className="text-[13px] font-semibold cd-text mb-1.5">
                     {d.title} <span className="cd-text-faint font-normal">· {d.slotCount}개 자리</span>
                   </div>
-                  <div className="rounded-xl border cd-border-c overflow-hidden">
+                  <div className="rounded-lg border cd-border-c overflow-hidden">
                     {(currentSlots[d.docType] ?? []).map((s, i) => (
                       <div
                         key={`${d.docType}-${i}`}
@@ -477,7 +477,7 @@ export function TemplateBoard() {
                           {s.where}
                         </span>
                         <span className="cd-text truncate flex-1 min-w-0">{s.label}</span>
-                        <span className="cd-text-primary shrink-0 text-[11.5px]">
+                        <span className="cd-text-primary shrink-0 text-[12px]">
                           {s.binding ? BINDING_LABEL[s.binding] ?? s.binding : ""}
                         </span>
                       </div>
@@ -489,7 +489,7 @@ export function TemplateBoard() {
                 </div>
               ))}
               {current.docs.length === 0 && (
-                <p className="text-[12.5px] cd-text-faint py-8 text-center">
+                <p className="text-[13px] cd-text-faint py-8 text-center">
                   분석된 서식이 없습니다. 재분석을 눌러보세요.
                 </p>
               )}

@@ -538,7 +538,7 @@ export function DeliverableBoard() {
             {/* 발주처가 자기네 양식을 고집하는 경우 여기서 등록한다(D4) */}
             <button
               type="button"
-              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={() => router.push("/contracts/deliverables/templates")}
               title="발주처 자체양식 업로드·매핑 관리"
             >
@@ -548,7 +548,7 @@ export function DeliverableBoard() {
             <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
             <button
               type="button"
-              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={saveOnly}
               disabled={busy || !contract}
               title="기재 사항을 저장합니다. 5분마다 자동 저장됩니다"
@@ -556,12 +556,12 @@ export function DeliverableBoard() {
               <Save className="w-4 h-4" /> {saved ? "저장됨" : "저장"}
             </button>
             {/* 미리보기는 우측 카드의 '미리보기' 탭이 담당한다(버튼 중복 제거 — 사용자 확정) */}
-            <button type="button" className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5" onClick={download} disabled={busy}>
+            <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5" onClick={download} disabled={busy}>
               <Download className="w-4 h-4" /> PDF
             </button>
             <button
               type="button"
-              className="cd-btn rounded-xl border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={downloadHwpx}
               disabled={busy}
               title={
@@ -574,7 +574,7 @@ export function DeliverableBoard() {
             </button>
             <button
               type="button"
-              className="cd-btn cd-fill-primary rounded-xl px-3 py-2 text-[13px] flex items-center gap-1.5"
+              className="cd-btn cd-fill-primary rounded-lg px-3 py-2 text-[13px] flex items-center gap-1.5"
               onClick={goLetter}
               disabled={busy}
               title="공문 작성 화면으로 이동해 이 문서를 첨부합니다"
@@ -586,16 +586,16 @@ export function DeliverableBoard() {
       />
 
       {msg && (
-        <div className="mb-4 rounded-xl px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
+        <div className="mb-4 rounded-lg px-4 py-2.5 text-[13px]" style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}>
           {msg}
         </div>
       )}
 
       <div className="flex flex-col xl:flex-row gap-5 items-stretch" style={{ height: paneHeight }}>
         {/* 좌: 계약 트리(다운로드/증명서 생성과 동일 구조) */}
-        <section className="cd-card rounded-3xl overflow-hidden flex flex-col w-full xl:flex-[4.5] min-w-0 min-h-0">
+        <section className="cd-card rounded-lg overflow-hidden flex flex-col w-full xl:flex-[4.5] min-w-0 min-h-0">
           <div className="p-4 border-b cd-border-c">
-            <h2 className="font-bold cd-text flex items-center gap-2 text-sm">
+            <h2 className="font-semibold cd-text flex items-center gap-2 text-sm">
               <CheckSquare className="w-4 h-4 cd-text-primary" /> 계약 선택
             </h2>
             <p className="text-[11px] cd-text-faint mt-0.5">
@@ -662,14 +662,14 @@ export function DeliverableBoard() {
                     >
                       {isOpen ? <ChevronDown className="w-3.5 h-3.5 cd-text-faint" /> : <ChevronRight className="w-3.5 h-3.5 cd-text-faint" />}
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: style.parentColor }} />
-                      <span className="text-[12.5px] cd-text font-semibold">{group.serviceType}</span>
+                      <span className="text-[13px] cd-text font-semibold">{group.serviceType}</span>
                       <span className="ml-auto text-[11px] cd-text-faint">{group.contracts.length}건</span>
                     </button>
                     {isOpen &&
                       group.contracts.map((c) => (
                         <label
                           key={c.contractId}
-                          className={`flex items-center gap-2 px-4 py-[11.5px] text-[12px] cursor-pointer border-b cd-border-c ${
+                          className={`flex items-center gap-2 px-4 py-3 text-[12px] cursor-pointer border-b cd-border-c ${
                             contract?.contractId === c.contractId ? "cd-tint-primary" : "hover:bg-[color:var(--cd-surface)]"
                           }`}
                           onClick={() => void pickContract(c)}
@@ -682,7 +682,7 @@ export function DeliverableBoard() {
                             onClick={(e) => e.stopPropagation()}
                           />
                           <span className="truncate cd-text" title={c.contractTitle}>{c.contractTitle}</span>
-                          <span className="ml-auto shrink-0 text-[10px] font-mono cd-text-faint">{c.contractDate ?? "-"}</span>
+                          <span className="ml-auto shrink-0 text-[11px] font-mono cd-text-faint">{c.contractDate ?? "-"}</span>
                         </label>
                       ))}
                   </div>
@@ -693,14 +693,14 @@ export function DeliverableBoard() {
         </section>
 
         {/* 우: 종류·양식·서식 + 기재 사항(탭) */}
-        <section className="cd-card rounded-3xl overflow-hidden xl:flex-[5.5] min-w-0 flex flex-col min-h-0">
+        <section className="cd-card rounded-lg overflow-hidden xl:flex-[5.5] min-w-0 flex flex-col min-h-0">
           <div className="p-4 border-b cd-border-c flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
               {(["start", "completion"] as DeliverableKind[]).map((k) => (
                 <button
                   key={k}
                   type="button"
-                  className={`rounded-xl px-3.5 py-1.5 text-[13px] font-semibold border ${
+                  className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold border ${
                     kind === k ? "cd-fill-primary border-transparent" : "cd-border-c cd-text"
                   }`}
                   onClick={() => void changeKind(k)}
@@ -744,7 +744,7 @@ export function DeliverableBoard() {
                   <button
                     key={o.docType}
                     type="button"
-                    className={`rounded-xl px-3 py-1.5 text-[12.5px] border ${on ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c cd-text"}`}
+                    className={`rounded-lg px-3 py-1.5 text-[13px] border ${on ? "cd-tint-primary border-[color:var(--cd-primary)]" : "cd-border-c cd-text"}`}
                     onClick={() => toggleDocType(o.docType)}
                   >
                     {o.title}
@@ -799,18 +799,18 @@ export function DeliverableBoard() {
 
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {!contract ? (
-              <p className="text-[12.5px] cd-text-faint">좌측 트리에서 계약을 선택하세요.</p>
+              <p className="text-[13px] cd-text-faint">좌측 트리에서 계약을 선택하세요.</p>
             ) : tab === "미리보기" ? (
               previewUrl ? (
-                <iframe src={previewUrl} className="w-full h-full min-h-[560px] rounded-xl border cd-border-c" title="미리보기" />
+                <iframe src={previewUrl} className="w-full h-full min-h-[560px] rounded-lg border cd-border-c" title="미리보기" />
               ) : (
-                <div className="h-full min-h-[240px] rounded-xl border border-dashed cd-border-c flex flex-col items-center justify-center gap-3 text-center px-6">
+                <div className="h-full min-h-[240px] rounded-lg border border-dashed cd-border-c flex flex-col items-center justify-center gap-3 text-center px-6">
                   <span className="text-[12px] cd-text-faint">
                     {busy ? "미리보기를 생성하는 중입니다." : "기재 사항을 고친 뒤에는 아래 버튼으로 다시 생성하세요."}
                   </span>
                   <button
                     type="button"
-                    className="cd-btn cd-fill-primary rounded-xl px-3.5 py-2 text-[12.5px] flex items-center gap-1.5 disabled:opacity-50"
+                    className="cd-btn cd-fill-primary rounded-lg px-3.5 py-2 text-[13px] flex items-center gap-1.5 disabled:opacity-50"
                     onClick={preview}
                     disabled={busy || !contract}
                   >
@@ -837,8 +837,8 @@ export function DeliverableBoard() {
                 {/* 성과품 사진 별첨(2026-08-19 사용자 확정) — 용역결과보고서 뒤에 사진 1장 = 별첨 1페이지
                     (좌상단 '첨부자료' 표기 + 명칭 + 1x1 표 박스에 사진 fit) */}
                 {tab === "준공" && docTypes.includes("service_result_report") && (
-                  <div className="md:col-span-2 flex flex-col gap-2 rounded-xl border cd-border-c p-3">
-                    <span className="text-[11px] font-bold cd-text">
+                  <div className="md:col-span-2 flex flex-col gap-2 rounded-lg border cd-border-c p-3">
+                    <span className="text-[11px] font-semibold cd-text">
                       성과품 사진 별첨 <span className="font-normal cd-text-faint">— 용역결과보고서 뒤에 사진 1장당 별첨 1페이지로 붙습니다</span>
                     </span>
                     {photoRefs.map((ph, i) => (
@@ -850,7 +850,7 @@ export function DeliverableBoard() {
                           value={ph.name}
                           onChange={(e) => setPhotoRefs(photoRefs.map((x, xi) => (xi === i ? { ...x, name: e.target.value } : x)))}
                         />
-                        <span className="text-[10.5px] cd-text-faint font-mono shrink-0">{ph.size ? `${(ph.size / 1024 / 1024).toFixed(1)}MB` : ""}</span>
+                        <span className="text-[11px] cd-text-faint font-mono shrink-0">{ph.size ? `${(ph.size / 1024 / 1024).toFixed(1)}MB` : ""}</span>
                         <button
                           type="button"
                           className="cd-text-faint hover:text-[color:var(--cd-error)] shrink-0"
@@ -861,7 +861,7 @@ export function DeliverableBoard() {
                         </button>
                       </div>
                     ))}
-                    <label className="flex items-center gap-2 rounded-lg border border-dashed cd-border-c px-3 py-2 cursor-pointer text-[11.5px] cd-text-faint self-start">
+                    <label className="flex items-center gap-2 rounded-lg border border-dashed cd-border-c px-3 py-2 cursor-pointer text-[12px] cd-text-faint self-start">
                       {photoUploading ? "업로드 중..." : "＋ 사진 추가(PNG·JPG)"}
                       <input
                         type="file"

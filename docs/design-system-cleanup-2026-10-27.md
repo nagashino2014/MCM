@@ -29,6 +29,12 @@
   - C4 전체 적용(54개 파일 210줄) — `--cd-danger` 0건.
   - 남은 것: 홈 위젯 장식 hex(`#6A83EF`·`#8E86EE`, ApprovalPendingCard·InvoiceInboxCard·LeaveGaugeCard), 좌측 내비 현재 항목 굵기, `survey/NoticeCanvas` 캔버스 글꼴 스택(이미지 출력이라 보류).
 
+- **2026-10-27 계약 관리 모듈 1차** — `app/(app)/contracts` + `components/contracts`
+  - codemod C1·C2·C3(`--weights`) 39개 파일. 이어서 수동: 모달 제목 20→16px(`text-base`, 모달 제목=section), 계약 상세 제목 24→22px,
+    그림자(버튼·배지 `shadow-sm` 제거, 드롭다운 `--cd-shadow-popover`, 모달 `--cd-shadow-dialog`), 눈썹 레이블 uppercase·자간 제거,
+    `py-[11.5px]`→`py-3`, 스와치 `rounded-[2px]`, 팔레트 → `cd-error-text`·`cd-error-bg`·`cd-warn-text`·`cd-fill-error`·`--cd-overlay`.
+  - 린트: R1·R2·R3·R4·R8·R11 0건. 남음 R5 5(전자발행 노란 버튼은 2026-08-24 사용자 요청이라 유지, 미처리 배지 `bg-red-600`), R6 hex 111, R9 `<table>` 4, R12 인라인 style 310.
+
 ## 순서 (모듈 단위, 한 번에 하나)
 
 1. **C4 전체 적용** — 위험 없음(미정의 토큰 교체). `node scripts/ds-codemod.mjs --only C4 --write`

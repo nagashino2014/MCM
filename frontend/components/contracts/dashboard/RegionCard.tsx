@@ -145,7 +145,7 @@ export function RegionCard({
             )}
             {/* 범례 */}
             <div className="absolute right-0 top-1 flex flex-col items-end gap-1">
-              <span className="text-[10px] font-bold" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
                 수주액
               </span>
               <div
@@ -155,7 +155,7 @@ export function RegionCard({
                   border: "1px solid var(--cd-border)",
                 }}
               />
-              <span className="text-[9px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-[11px] tabular-nums" style={{ color: "var(--cd-faint)" }}>
                 {maxAmount > 0 ? fmtFull(maxAmount) : "0"}
               </span>
             </div>
@@ -164,7 +164,7 @@ export function RegionCard({
           {/* 시도별 수주현황 리스트 */}
           <div className="shrink-0">
             <p
-              className="text-[11px] font-bold px-2 py-1.5 rounded-lg mb-1 inline-block"
+              className="text-[11px] font-semibold px-2 py-1.5 rounded-lg mb-1 inline-block"
               style={{ background: "var(--cd-region-accent-soft)", color: "var(--cd-region-accent)" }}
             >
               시도별 수주현황
@@ -173,13 +173,13 @@ export function RegionCard({
               {listRows.map((row) => (
                 <div
                   key={row.short}
-                  className="cd-row-hover grid grid-cols-[auto_1fr] gap-2 items-center px-2 py-1 rounded-md"
+                  className="cd-row-hover grid grid-cols-[auto_1fr] gap-2 items-center px-2 py-1 rounded-lg"
                 >
-                  <span className="font-bold" style={{ color: "var(--cd-muted)" }}>
+                  <span className="font-semibold" style={{ color: "var(--cd-muted)" }}>
                     {row.label}
                   </span>
                   <span
-                    className="text-right tabular-nums font-bold"
+                    className="text-right tabular-nums font-semibold"
                     style={{ color: row.amount > 0 ? "var(--cd-text)" : "var(--cd-faint)" }}
                   >
                     {row.amount > 0 ? fmtFull(row.amount) : "-"}

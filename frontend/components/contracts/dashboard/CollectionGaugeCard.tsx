@@ -39,7 +39,7 @@ export function CollectionGaugeCard({
             <AmountRow label={`수금액(${short})`} value={collection.collectedCategory} />
             <AmountRow label="D-1 Year(총액)" value={collection.prevCollectedTotal} />
             <AmountRow label={`D-1 Year(${short})`} value={collection.prevCollectedCategory} />
-            <p className="mt-0.5 px-1 text-[10px]" style={{ color: "var(--cd-faint)" }}>
+            <p className="mt-0.5 px-1 text-[11px]" style={{ color: "var(--cd-faint)" }}>
               {year}년 계약 기준 수금 완료액
             </p>
           </div>
@@ -60,11 +60,11 @@ function AmountRow({ label, value }: { label: string; value: number }) {
   } as const;
   return (
     <div className="grid grid-cols-[118px_1fr] gap-1.5 items-stretch">
-      <span className="flex items-center px-2.5 py-1 rounded-lg font-bold whitespace-nowrap" style={tagStyle}>
+      <span className="flex items-center px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap" style={tagStyle}>
         {label}
       </span>
       <span
-        className="flex items-center justify-end px-2.5 py-1 rounded-lg tabular-nums font-extrabold whitespace-nowrap"
+        className="flex items-center justify-end px-2.5 py-1 rounded-lg tabular-nums font-semibold whitespace-nowrap"
         style={tagStyle}
       >
         {fmtFull(value)}
@@ -130,7 +130,7 @@ function GaugeChart({
     // 고정 폭 차트로 셀 밖 오버플로우 방지
     <div className="flex flex-col items-center min-w-0 overflow-hidden">
       <ApexChart options={options} series={[clamped]} type="radialBar" height={148} width={162} />
-      <span className="text-[11px] font-bold -mt-2 whitespace-nowrap" style={{ color: "var(--cd-muted)" }}>
+      <span className="text-[11px] font-semibold -mt-2 whitespace-nowrap" style={{ color: "var(--cd-muted)" }}>
         {label}
       </span>
     </div>

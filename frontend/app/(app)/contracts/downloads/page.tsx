@@ -523,7 +523,7 @@ export default function ContractDownloadsPage() {
   const amendmentDocs = detail?.documents.filter((doc) => String(doc.document_type) === "amendment") ?? [];
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <CdPageHeader
         icon={<Archive className="w-5 h-5" />}
         eyebrow="Contract · Documents"
@@ -532,10 +532,10 @@ export default function ContractDownloadsPage() {
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(620px,1.4fr)] gap-5">
-        <section className="cd-card rounded-3xl overflow-hidden cd-reveal delay-1 flex min-h-0 flex-col">
+        <section className="cd-card rounded-lg overflow-hidden cd-reveal delay-1 flex min-h-0 flex-col">
           <div className="p-4 border-b cd-border-c flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-bold cd-text flex items-center gap-2">
+              <h2 className="font-semibold cd-text flex items-center gap-2">
                 <CheckSquare className="w-4 h-4 cd-text-primary" />
                 계약 선택
               </h2>
@@ -608,7 +608,7 @@ export default function ContractDownloadsPage() {
                           onClick={(e) => e.stopPropagation()}
                         />
                         <span className="truncate cd-text">{contract.contractTitle}</span>
-                        <span className="ml-auto w-[80px] shrink-0 text-right text-[10px] font-mono cd-text-faint">{contract.contractDate ?? "-"}</span>
+                        <span className="ml-auto w-[80px] shrink-0 text-right text-[11px] font-mono cd-text-faint">{contract.contractDate ?? "-"}</span>
                       </label>
                     ))}
                   </div>
@@ -618,10 +618,10 @@ export default function ContractDownloadsPage() {
           </div>
         </section>
 
-        <section className="cd-card rounded-3xl p-5 cd-reveal delay-2 min-h-0 flex flex-col">
+        <section className="cd-card rounded-lg p-5 cd-reveal delay-2 min-h-0 flex flex-col">
           <div className="flex items-start justify-between gap-4 mb-5 shrink-0">
             <div>
-              <h2 className="text-xl font-bold cd-text">파일 병합 및 증명서/명단 생성</h2>
+              <h2 className="text-[22px] font-semibold cd-text">파일 병합 및 증명서/명단 생성</h2>
               <p className="text-xs cd-text-faint mt-1">
                 {isSingleTarget ? "단일 계약은 개별 문서 또는 전체 증빙을 다운로드할 수 있습니다." : "복수 계약은 전체 증빙 다운로드만 가능합니다."}
               </p>
@@ -631,8 +631,8 @@ export default function ContractDownloadsPage() {
 
           {/* 좌: [병합옵션·병합대상] 위 / [증명서 생성] 아래(하단까지) · 우: [선택 계약 리스트] 위 / [실적증명서 송부] 아래 */}
           <div className="grid grid-cols-1 2xl:grid-cols-4 2xl:grid-rows-[360px_1fr_auto] gap-4 flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-y-auto 2xl:col-start-1 2xl:row-start-1">
-              <h3 className="font-bold cd-text mb-3">병합 옵션</h3>
+            <div className="rounded-lg border cd-border-c p-3 h-[360px] overflow-y-auto 2xl:col-start-1 2xl:row-start-1">
+              <h3 className="font-semibold cd-text mb-3">병합 옵션</h3>
               <div className="grid grid-cols-1 gap-2">
                 <OptionCard
                   title="병합 없이 개별 저장"
@@ -665,8 +665,8 @@ export default function ContractDownloadsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col 2xl:col-start-2 2xl:row-start-1">
-              <h3 className="font-bold cd-text mb-3">병합 대상 파일 목록</h3>
+            <div className="rounded-lg border cd-border-c p-3 h-[360px] overflow-hidden flex flex-col 2xl:col-start-2 2xl:row-start-1">
+              <h3 className="font-semibold cd-text mb-3">병합 대상 파일 목록</h3>
               {isSingleTarget && detail ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
@@ -706,7 +706,7 @@ export default function ContractDownloadsPage() {
                 </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="rounded-2xl border cd-border-c p-6 text-sm cd-text-faint">
+                  <div className="rounded-lg border cd-border-c p-6 text-sm cd-text-faint">
                     {targetIds.length > 1 ? "복수 계약 선택 중입니다. 전체 다운로드 버튼만 사용할 수 있습니다." : "좌측 트리에서 계약을 선택하세요."}
                   </div>
                 </div>
@@ -714,8 +714,8 @@ export default function ContractDownloadsPage() {
             </div>
 
             {/* 선택 계약 리스트 — 트리뷰에서 체크/선택한 계약 전체. 우클릭으로 목록에서 제거 */}
-            <div className="rounded-2xl border cd-border-c p-3 h-full min-h-[360px] overflow-hidden flex flex-col 2xl:col-start-3 2xl:col-span-2 2xl:row-start-1 2xl:row-span-2">
-              <h3 className="font-bold cd-text mb-3 flex items-center gap-2">
+            <div className="rounded-lg border cd-border-c p-3 h-full min-h-[360px] overflow-hidden flex flex-col 2xl:col-start-3 2xl:col-span-2 2xl:row-start-1 2xl:row-span-2">
+              <h3 className="font-semibold cd-text mb-3 flex items-center gap-2">
                 <ListChecks className="w-4 h-4 cd-text-primary" />
                 선택 계약 리스트
                 <span className="text-[11px] font-normal cd-text-faint ml-auto">{targetIds.length.toLocaleString()}건</span>
@@ -728,7 +728,7 @@ export default function ContractDownloadsPage() {
                   선택 해제
                 </button>
               </h3>
-              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-xl border cd-border-c">
+              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide rounded-lg border cd-border-c">
                 {targetIds.length === 0 ? (
                   <p className="p-6 text-sm cd-text-faint">트리뷰에서 계약을 체크하면 여기에 표시됩니다.</p>
                 ) : (
@@ -746,12 +746,12 @@ export default function ContractDownloadsPage() {
                         }}
                       >
                         <p className="truncate cd-text">{node?.contractTitle ?? "(현재 필터 목록에 없는 계약)"}</p>
-                        <p className="mt-0.5 flex items-center gap-2 text-[10px] cd-text-faint">
+                        <p className="mt-0.5 flex items-center gap-2 text-[11px] cd-text-faint">
                           <span className="truncate">{node?.counterpartyName ?? id}</span>
                           <span className="ml-auto shrink-0 font-mono">{node?.contractDate ?? ""}</span>
                           {rosterPdfs[id] && (
                             <span
-                              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[9px] font-semibold"
+                              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[11px] font-semibold"
                               title={`명단 PDF 저장됨: ${rosterPdfs[id].fileName}`}
                             >
                               <Check className="w-3 h-3" /> 명단 기저장
@@ -759,14 +759,14 @@ export default function ContractDownloadsPage() {
                           )}
                           {signedCerts[id] && (
                             <span
-                              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[9px] font-semibold"
+                              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[color:var(--cd-primary)] cd-tint-primary cd-text-primary px-1.5 py-0.5 text-[11px] font-semibold"
                               title={`증명서 저장됨: ${signedCerts[id].fileName}`}
                             >
                               <Check className="w-3 h-3" /> 증명서 기첨부
                             </span>
                           )}
                           <label
-                            className="shrink-0 inline-flex items-center gap-1 rounded-md border cd-border-c cd-text-faint hover:bg-[color:var(--cd-surface)] px-1.5 py-0.5 cursor-pointer text-[9px] font-semibold"
+                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border cd-border-c cd-text-faint hover:bg-[color:var(--cd-surface)] px-1.5 py-0.5 cursor-pointer text-[11px] font-semibold"
                             title={signedCerts[id] ? "증명서 PDF 교체(새 파일 첨부)" : "서명 증명서 PDF 첨부"}
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -817,10 +817,10 @@ export default function ContractDownloadsPage() {
             </div>
 
             {/* 수행실적 증명서 생성 카드 (좌측 하단 — 카드 하단까지 확장) */}
-            <div className="rounded-2xl border cd-border-c p-5 flex flex-col gap-4 overflow-y-auto scrollbar-hide 2xl:col-start-1 2xl:col-span-2 2xl:row-start-2 2xl:row-span-2">
+            <div className="rounded-lg border cd-border-c p-5 flex flex-col gap-4 overflow-y-auto scrollbar-hide 2xl:col-start-1 2xl:col-span-2 2xl:row-start-2 2xl:row-span-2">
               {/* 수행실적 증명서 */}
               <div>
-                <h3 className="font-bold cd-text flex items-center gap-2">
+                <h3 className="font-semibold cd-text flex items-center gap-2">
                   <BadgeCheck className="w-4 h-4 cd-text-primary" />
                   수행실적 증명서 생성
                   <span className="ml-auto text-[11px] font-normal cd-text-faint">통합허가 {certEligibleIds.length}건</span>
@@ -835,7 +835,7 @@ export default function ContractDownloadsPage() {
                     <label
                       key={opt.v}
                       className={
-                        "cd-action flex items-center justify-center gap-2 rounded-xl border px-2 py-2 text-xs text-center cursor-pointer " +
+                        "cd-action flex items-center justify-center gap-2 rounded-lg border px-2 py-2 text-xs text-center cursor-pointer " +
                         (certOption === opt.v ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c")
                       }
                     >
@@ -865,7 +865,7 @@ export default function ContractDownloadsPage() {
                 {certEligibleIds.some((id) => contactsByContract[id]) && (
                   <div className="mt-3">
                     <span className="text-[11px] cd-text-faint">발급기관 담당자 선택</span>
-                    <div className="mt-1 rounded-xl border cd-border-c divide-y cd-border-c max-h-[460px] overflow-y-auto scrollbar-hide">
+                    <div className="mt-1 rounded-lg border cd-border-c divide-y cd-border-c max-h-[460px] overflow-y-auto scrollbar-hide">
                       {certEligibleIds.map((id) => {
                         const data = contactsByContract[id];
                         if (!data) return null;
@@ -921,8 +921,8 @@ export default function ContractDownloadsPage() {
             </div>
 
             {/* 실적증명서 송부 카드 (선택 계약 리스트 하단) — 메일 자동작성·수신/답신 확인·첨부 S3 보관 예정 */}
-            <div className="rounded-2xl border cd-border-c p-5 flex flex-col gap-3 2xl:col-start-3 2xl:col-span-2 2xl:row-start-3">
-              <h3 className="font-bold cd-text flex items-center gap-2">
+            <div className="rounded-lg border cd-border-c p-5 flex flex-col gap-3 2xl:col-start-3 2xl:col-span-2 2xl:row-start-3">
+              <h3 className="font-semibold cd-text flex items-center gap-2">
                 <Mail className="w-4 h-4 cd-text-primary" />
                 실적증명서 송부
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">준비 중</span>
@@ -939,7 +939,7 @@ export default function ContractDownloadsPage() {
       {/* 선택 계약 리스트 우클릭 컨텍스트 메뉴 */}
       {contextMenu && (
         <div
-          className="fixed z-[80] rounded-xl border cd-border-c cd-card-bg shadow-xl py-1 min-w-[160px]"
+          className="fixed z-[80] rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] py-1 min-w-[160px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -976,7 +976,7 @@ function OptionCard({
       disabled={disabled}
       onClick={onClick}
       className={
-        "rounded-xl border px-3 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed " +
+        "rounded-lg border px-3 py-2.5 text-left transition disabled:opacity-40 disabled:cursor-not-allowed " +
         (active ? "border-[color:var(--cd-primary)] cd-tint-primary" : "cd-border-c hover:bg-[color:var(--cd-surface)]")
       }
     >
@@ -1034,7 +1034,7 @@ function DownloadButton({
       disabled={disabled}
       onClick={onClick}
       className={
-        "rounded-xl px-3 py-2 text-xs shadow-sm inline-flex items-center gap-1 disabled:opacity-50 " +
+        "rounded-lg px-3 py-2 text-xs inline-flex items-center gap-1 disabled:opacity-50 " +
         (primary ? "text-white cd-fill-primary" : "cd-text-muted border cd-border-c hover:bg-[color:var(--cd-surface)]")
       }
     >

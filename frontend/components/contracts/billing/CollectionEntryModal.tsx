@@ -97,13 +97,13 @@ export function CollectionEntryModal({
         {/* 헤더 */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: "var(--cd-primary)" }}>
+            <p className="text-[11px] font-medium" style={{ color: "var(--cd-primary)" }}>
               수금 정보 입력
             </p>
-            <h3 className="text-sm font-extrabold truncate" style={{ color: "var(--cd-text)" }}>
+            <h3 className="text-sm font-semibold truncate" style={{ color: "var(--cd-text)" }}>
               {row.contractTitle}
             </h3>
-            <p className="text-[11px] font-bold truncate" style={{ color: "var(--cd-faint)" }}>
+            <p className="text-[11px] font-semibold truncate" style={{ color: "var(--cd-faint)" }}>
               <span
                 className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
                 style={{ background: CATEGORY_META[row.category]?.color ?? "var(--cd-faint)" }}
@@ -124,30 +124,30 @@ export function CollectionEntryModal({
 
         {/* 발행 정보 요약 */}
         <div
-          className="grid grid-cols-3 gap-2 rounded-xl p-3 mb-3"
+          className="grid grid-cols-3 gap-2 rounded-lg p-3 mb-3"
           style={{ background: "var(--cd-surface)", border: "1px solid var(--cd-border)" }}
         >
           <div>
-            <p className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>발행일</p>
-            <p className="text-[12px] font-bold tabular-nums" style={{ color: "var(--cd-text)" }}>
+            <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>발행일</p>
+            <p className="text-[12px] font-semibold tabular-nums" style={{ color: "var(--cd-text)" }}>
               {row.invoiceIssuedAt ?? "-"}
             </p>
           </div>
           <div>
-            <p className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>발행금액</p>
-            <p className="text-[12px] font-bold tabular-nums" style={{ color: "var(--cd-text)" }}>
+            <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>발행금액</p>
+            <p className="text-[12px] font-semibold tabular-nums" style={{ color: "var(--cd-text)" }}>
               {fmtFull(row.invoiceAmount)}원
             </p>
           </div>
           <div>
-            <p className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>미수금액</p>
-            <p className="text-[12px] font-extrabold tabular-nums" style={{ color: "#FF7575" }}>
+            <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>미수금액</p>
+            <p className="text-[12px] font-semibold tabular-nums" style={{ color: "#FF7575" }}>
               {fmtFull(row.outstandingAmount)}원
             </p>
           </div>
           <div className="col-span-3">
-            <p className="text-[10px] font-extrabold" style={{ color: "var(--cd-faint)" }}>대금지급조건</p>
-            <p className="text-[12px] font-bold" style={{ color: "var(--cd-text)" }}>
+            <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>대금지급조건</p>
+            <p className="text-[12px] font-semibold" style={{ color: "var(--cd-text)" }}>
               {row.paymentTerms || "-"}
             </p>
           </div>
@@ -156,11 +156,11 @@ export function CollectionEntryModal({
         {/* 입력 폼 */}
         <div className="grid grid-cols-2 gap-3">
           <label className="grid gap-1">
-            <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-muted)" }}>수금일</span>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>수금일</span>
             <AutoDateInput className="cd-input" value={collectedAt} onChange={setCollectedAt} />
           </label>
           <label className="grid gap-1">
-            <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-muted)" }}>수금금액</span>
+            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>수금금액</span>
             <input
               type="text"
               inputMode="numeric"
@@ -169,7 +169,7 @@ export function CollectionEntryModal({
               onChange={(e) => setCollectedAmount(stripDigits(e.target.value))}
             />
           </label>
-          <label className="col-span-2 flex items-center gap-2 text-[12px] font-bold" style={{ color: "var(--cd-text)" }}>
+          <label className="col-span-2 flex items-center gap-2 text-[12px] font-semibold" style={{ color: "var(--cd-text)" }}>
             <input
               type="checkbox"
               checked={markCollected}
@@ -180,7 +180,7 @@ export function CollectionEntryModal({
           </label>
           {isPartial && (
             <label className="col-span-2 grid gap-1">
-              <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-muted)" }}>부분입금 사유</span>
+              <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>부분입금 사유</span>
               <textarea
                 className="cd-input min-h-[70px]"
                 placeholder="예: 업체 자금 사정으로 일부만 입금, 잔액 추후 입금 예정 등"
@@ -193,7 +193,7 @@ export function CollectionEntryModal({
 
         {error && (
           <p
-            className="mt-3 text-[11px] font-bold px-3 py-2 rounded-lg"
+            className="mt-3 text-[11px] font-semibold px-3 py-2 rounded-lg"
             style={{ background: "var(--cd-error-soft, rgba(250,137,107,0.14))", color: "var(--cd-error, #fa896b)" }}
           >
             {error}

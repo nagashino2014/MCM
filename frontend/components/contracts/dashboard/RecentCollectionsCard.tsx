@@ -67,7 +67,7 @@ export function RecentCollectionsCard({
       icon={<ShoppingBasket className="w-4 h-4" />}
       title="수금내역"
       titleSuffix={
-        <span className="text-[11px] font-bold" style={{ color: "var(--cd-faint)" }}>
+        <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
           (2개월 내)
         </span>
       }
@@ -115,7 +115,7 @@ export function RecentCollectionsCard({
       ) : (
         <div className="flex flex-col text-[11px] flex-1 min-h-0">
           <div
-            className="grid grid-cols-[70px_1fr_64px_52px_80px] gap-x-2 px-2 py-2 rounded-lg font-bold shrink-0"
+            className="grid grid-cols-[70px_1fr_64px_52px_80px] gap-x-2 px-2 py-2 rounded-lg font-semibold shrink-0"
             style={{ background: "var(--cd-surface)", color: "var(--cd-muted)" }}
           >
             <span>수금일</span>
@@ -143,14 +143,14 @@ export function RecentCollectionsCard({
                   <span className="tabular-nums" style={{ color: "var(--cd-faint)" }}>
                     {item.collectedAt || "-"}
                   </span>
-                  <span className="truncate font-bold" style={{ color }}>
+                  <span className="truncate font-semibold" style={{ color }}>
                     {item.contractTitle}
                   </span>
                   <span className="truncate" style={{ color: "var(--cd-muted)" }}>
                     {item.category}
                   </span>
                   <span style={{ color: "var(--cd-muted)" }}>{item.stageLabel}</span>
-                  <span className="text-right tabular-nums font-extrabold" style={{ color }}>
+                  <span className="text-right tabular-nums font-semibold" style={{ color }}>
                     {fmtFull(item.amount)}
                   </span>
                 </div>

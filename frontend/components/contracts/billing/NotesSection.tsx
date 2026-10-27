@@ -137,7 +137,7 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
       {/* 필터 바: 연도 + 단위 + 세부 기간 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-extrabold" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
             기준 연도
           </span>
           <select
@@ -154,7 +154,7 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
           </select>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-extrabold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
             기간 단위
           </span>
           {NOTE_PERIOD_UNITS.map(({ unit: u, label }) => (
@@ -172,14 +172,14 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
             ))}
           </div>
         )}
-        <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: "var(--cd-muted)" }}>
+        <span className="ml-auto text-[11px] font-semibold tabular-nums" style={{ color: "var(--cd-muted)" }}>
           {period.label} ({period.from} ~ {period.to})
         </span>
       </div>
 
       {error && (
         <p
-          className="text-[11px] font-bold px-3 py-2 rounded-lg"
+          className="text-[11px] font-semibold px-3 py-2 rounded-lg"
           style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
         >
           불러오기 실패: {error}
@@ -235,7 +235,7 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
         />
       </div>
 
-      <p className="text-[10px] font-bold" style={{ color: "var(--cd-faint)" }}>
+      <p className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
         금액은 청구 공급가액 기준이며, 액면 환산은 공급가액 ×1.1(VAT 포함)로 표기합니다. 어음 발행일이 입력되지 않은 건은
         계산서 발행일을 발행 기준일로 사용합니다(® 표시). 어음 정보는 계약 상세의 단계 수정에서 입력합니다.
       </p>
@@ -265,16 +265,16 @@ function StatBox({
   return (
     <div className="cdb-box p-4 flex items-center gap-3">
       <span
-        className="inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
+        className="inline-flex items-center justify-center w-9 h-9 rounded-lg shrink-0"
         style={{ background: danger && count > 0 ? "var(--cd-error-soft)" : "var(--cd-primary-soft)", color: accent }}
       >
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-extrabold truncate" style={{ color: "var(--cd-faint)" }}>
+        <p className="text-[11px] font-semibold truncate" style={{ color: "var(--cd-faint)" }}>
           {label}
         </p>
-        <p className="text-sm font-extrabold tabular-nums" style={{ color: danger && count > 0 ? "var(--cd-error)" : "var(--cd-text)" }}>
+        <p className="text-sm font-semibold tabular-nums" style={{ color: danger && count > 0 ? "var(--cd-error)" : "var(--cd-text)" }}>
           {count.toLocaleString()}건 · {amount > 0 ? `${fmtFull(amount)}원` : "-"}
         </p>
       </div>
@@ -311,7 +311,7 @@ function NoteList({
           {title}
         </p>
         <div className="flex items-center gap-1 ml-auto">
-          <span className="text-[11px] font-bold mr-1 tabular-nums" style={{ color: "var(--cd-muted)" }}>
+          <span className="text-[11px] font-semibold mr-1 tabular-nums" style={{ color: "var(--cd-muted)" }}>
             {rows.length.toLocaleString()}건 · {total > 0 ? `${fmtFull(total)}원` : "-"}
           </span>
           <button
@@ -341,7 +341,7 @@ function NoteList({
 
       {/* 열 레이블 */}
       <div
-        className="cd-table-head grid grid-cols-[minmax(0,1fr)_92px_76px_96px_58px] gap-2 items-center px-2 py-1.5 text-[11px] font-extrabold"
+        className="cd-table-head grid grid-cols-[minmax(0,1fr)_92px_76px_96px_58px] gap-2 items-center px-2 py-1.5 text-[11px] font-semibold"
         style={{ color: "var(--cd-faint)" }}
       >
         <span>발주처 · 용역명</span>
@@ -372,10 +372,10 @@ function NoteList({
                 onClick={() => onOpen(row)}
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-bold" style={{ color: "var(--cd-text)" }}>
+                  <span className="block truncate font-semibold" style={{ color: "var(--cd-text)" }}>
                     {row.counterpartyName || "-"}
                   </span>
-                  <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                  <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                     {row.contractTitle}
                     {row.stageLabel ? ` · ${row.stageLabel}` : ""}
                   </span>
@@ -384,7 +384,7 @@ function NoteList({
                   <span className="block truncate text-[11px]" style={{ color: "var(--cd-muted)" }}>
                     {row.noteKind ?? "-"}
                   </span>
-                  <span className="block truncate text-[10px]" style={{ color: "var(--cd-faint)" }}>
+                  <span className="block truncate text-[11px]" style={{ color: "var(--cd-faint)" }}>
                     {row.noteBank ?? "-"}
                   </span>
                 </span>
@@ -397,7 +397,7 @@ function NoteList({
                   {fallback ? "®" : ""}
                 </span>
                 <span
-                  className="text-right tabular-nums font-bold"
+                  className="text-right tabular-nums font-semibold"
                   style={{ color: "var(--cd-text)" }}
                   title={row.amount > 0 ? `액면 환산(VAT 포함) ${fmtFull(withVat(row.amount))}원` : undefined}
                 >
@@ -405,12 +405,12 @@ function NoteList({
                 </span>
                 <span className="text-center">
                   {row.collected ? (
-                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold cd-tint-primary" style={{ color: "var(--cd-primary)" }}>
+                    <span className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold cd-tint-primary" style={{ color: "var(--cd-primary)" }}>
                       수금
                     </span>
                   ) : (
                     <span
-                      className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                      className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
                       style={{ background: "var(--cd-error-soft)", color: "var(--cd-error)" }}
                     >
                       미수

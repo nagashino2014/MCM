@@ -780,7 +780,7 @@ export function AgreementBoard() {
 
   if (mode === "list") {
     return (
-      <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+      <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
         <CdPageHeader
           title="계약서 작성"
           helpTopic="contracts.agreements"
@@ -796,7 +796,7 @@ export function AgreementBoard() {
           }
         />
         {/* 목록은 표시 항목이 많아 메뉴 전체 폭을 쓴다(작성 화면만 1032px 지면 규칙 적용) */}
-        <div className="cd-card rounded-3xl p-5 flex flex-col gap-3 w-full">
+        <div className="cd-card rounded-lg p-5 flex flex-col gap-3 w-full">
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -820,7 +820,7 @@ export function AgreementBoard() {
             <div className="p-8 text-center text-sm cd-text-faint">작성된 계약서가 없습니다. [새 계약서]로 시작하세요.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
+              <table className="w-full text-[13px]">
                 <thead className="cd-table-head">
                   <tr className="text-left cd-text-faint text-[11px] border-b cd-border-c">
                     <th className="py-2 pr-3 font-medium">계약명</th>
@@ -926,9 +926,9 @@ export function AgreementBoard() {
         {/* 발주처 발송 다이얼로그 — 수신 담당자·첨부 구성 확정(① 수동 발송 확정) */}
         {sendTarget && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setSendTarget(null)}>
-            <div className="cdash cd-fields-white rounded-2xl cd-solid-bg shadow-2xl w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+            <div className="cdash cd-fields-white rounded-lg cd-solid-bg shadow-[var(--cd-shadow-dialog)] w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center px-5 py-3 border-b cd-border-c">
-                <span className="text-sm font-bold cd-text">발주처 발송 — {sendTarget.title}</span>
+                <span className="text-sm font-semibold cd-text">발주처 발송 — {sendTarget.title}</span>
                 <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setSendTarget(null)}>
                   <X className="w-4 h-4" />
                 </button>
@@ -942,18 +942,18 @@ export function AgreementBoard() {
                 />
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11px] cd-text-faint">첨부 구성 — 초안 협의는 편집 가능한 HWPX 가 기본입니다</span>
-                  <label className="flex items-center gap-2 text-[12.5px] cd-text">
+                  <label className="flex items-center gap-2 text-[13px] cd-text">
                     <input type="checkbox" checked={sendIncludeHwpx} onChange={(e) => setSendIncludeHwpx(e.target.checked)} />
                     계약서 HWPX (한글 편집본 — 기본)
                   </label>
-                  <label className="flex items-center gap-2 text-[12.5px] cd-text">
+                  <label className="flex items-center gap-2 text-[13px] cd-text">
                     <input type="checkbox" checked={sendIncludePdf} onChange={(e) => setSendIncludePdf(e.target.checked)} />
                     계약서 PDF (열람본)
                   </label>
                 </div>
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] cd-text-faint">추가 안내 문구 (선택 — 메일 본문에 삽입)</span>
-                  <textarea className="cd-input text-[12.5px] min-h-[64px]" value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="예: 5조 지급 조건은 협의 결과를 반영했습니다. 확인 부탁드립니다." />
+                  <textarea className="cd-input text-[13px] min-h-[64px]" value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="예: 5조 지급 조건은 협의 결과를 반영했습니다. 확인 부탁드립니다." />
                 </label>
                 <p className="text-[11px] cd-text-faint">
                   발신은 기안자 계정 메일로 나가며, 결재선의 참조/열람자가 내부 참조(Cc)로 함께 받습니다.
@@ -975,7 +975,7 @@ export function AgreementBoard() {
   }
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
       <div className="flex flex-col gap-5 min-h-0">
         <CdPageHeader
           title="계약서 작성"
@@ -1000,7 +1000,7 @@ export function AgreementBoard() {
           }
         />
         {loading ? (
-          <div className="cd-card rounded-3xl p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
+          <div className="cd-card rounded-lg p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
           <>
             <div className="max-w-[1032px]">
@@ -1010,9 +1010,9 @@ export function AgreementBoard() {
               {/* 좌: 작성 카드들 — 폭은 견적·공문 작성(1032px)과 동일 */}
               <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
                 {/* 기본 정보 */}
-                <div className="cd-card rounded-3xl p-5 flex flex-col gap-3.5">
+                <div className="cd-card rounded-lg p-5 flex flex-col gap-3.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                    <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                       <FileSignature className="w-4 h-4 cd-text-primary" /> 기본 정보
                     </h3>
                     <a href="/contracts/agreements/templates" className="ml-auto text-[11px] cd-text-faint hover:cd-text flex items-center gap-1">
@@ -1024,9 +1024,9 @@ export function AgreementBoard() {
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[11px] cd-text-faint">연동 (선택) — 수주 견적·기존 계약에서 자동 채움</span>
                     {linkLabel ? (
-                      <div className="flex items-center gap-2 rounded-xl border cd-border-c px-3 py-2">
+                      <div className="flex items-center gap-2 rounded-lg border cd-border-c px-3 py-2">
                         <Link2 className="w-3.5 h-3.5 cd-text-primary" />
-                        <span className="text-[12.5px] cd-text truncate flex-1">{linkLabel}</span>
+                        <span className="text-[13px] cd-text truncate flex-1">{linkLabel}</span>
                         <button type="button" className="cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => { setContractId(null); setQuotationId(null); setLinkLabel(null); }}>
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -1044,18 +1044,18 @@ export function AgreementBoard() {
                           onChange={(e) => setSrcQ(e.target.value)}
                         />
                         {srcOpen && (srcContracts.length > 0 || srcQuotes.length > 0) && (
-                          <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border cd-border-c cd-solid-bg shadow-xl p-1.5">
-                            {srcQuotes.length > 0 && <div className="px-2 py-1 text-[10.5px] cd-text-faint">수주 확정 견적</div>}
+                          <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-lg border cd-border-c cd-solid-bg shadow-[var(--cd-shadow-popover)] p-1.5">
+                            {srcQuotes.length > 0 && <div className="px-2 py-1 text-[11px] cd-text-faint">수주 확정 견적</div>}
                             {srcQuotes.map((q) => (
                               <button key={q.quoteId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onMouseDown={(e) => e.preventDefault()} onClick={() => applyQuote(q)}>
-                                <span className="text-[12.5px] cd-text">{q.title ?? "(무제)"}</span>
+                                <span className="text-[13px] cd-text">{q.title ?? "(무제)"}</span>
                                 <span className="text-[11px] cd-text-faint ml-1.5">{q.quoteNo} · {q.facilityName ?? "—"} · {won(q.totalAmount)}</span>
                               </button>
                             ))}
-                            {srcContracts.length > 0 && <div className="px-2 py-1 text-[10.5px] cd-text-faint">기존 계약</div>}
+                            {srcContracts.length > 0 && <div className="px-2 py-1 text-[11px] cd-text-faint">기존 계약</div>}
                             {srcContracts.map((c) => (
                               <button key={c.contractId} type="button" className="w-full text-left rounded-lg px-2.5 py-1.5 hover:cd-tint-primary" onMouseDown={(e) => e.preventDefault()} onClick={() => applyContract(c)}>
-                                <span className="text-[12.5px] cd-text">{c.title || "(무제)"}</span>
+                                <span className="text-[13px] cd-text">{c.title || "(무제)"}</span>
                                 <span className="text-[11px] cd-text-faint ml-1.5">
                                   {[c.ordererName || c.siteName || "—", c.serviceType, c.contractDate?.slice(0, 10)].filter(Boolean).join(" · ")}
                                 </span>
@@ -1096,13 +1096,13 @@ export function AgreementBoard() {
                     <div className="flex flex-col gap-1">
                       <span className="text-[11px] cd-text-faint">계약서 양식 — 세분류의 표준 셋 자동 선택</span>
                       <div className="flex items-center gap-2">
-                        <div className={`flex-1 rounded-xl border cd-border-c px-3 py-2 text-[12.5px] ${template ? "cd-text" : "text-[color:var(--cd-error)]"}`}>
+                        <div className={`flex-1 rounded-lg border cd-border-c px-3 py-2 text-[13px] ${template ? "cd-text" : "text-[color:var(--cd-error)]"}`}>
                           {template ? (
                             <>
                               {template.name}
-                              {template.seeded ? <span className="cd-text-faint text-[10.5px] ml-1.5">(기본 시드)</span> : null}
+                              {template.seeded ? <span className="cd-text-faint text-[11px] ml-1.5">(기본 시드)</span> : null}
                               {template.kind === "custom" ? (
-                                <span className="cd-text-faint text-[10.5px] ml-1.5">
+                                <span className="cd-text-faint text-[11px] ml-1.5">
                                   (발주처 자체양식{template.renderMode === "overlay" ? " · 원본 서식 보존" : ""})
                                 </span>
                               ) : null}
@@ -1114,7 +1114,7 @@ export function AgreementBoard() {
                       </div>
                       {customTemplates.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                          <span className="text-[10.5px] cd-text-faint">이 발주처 자체양식:</span>
+                          <span className="text-[11px] cd-text-faint">이 발주처 자체양식:</span>
                           {customTemplates.map((t) => (
                             <button
                               key={t.templateId}
@@ -1150,10 +1150,10 @@ export function AgreementBoard() {
                 </div>
 
                 {/* 발주처 정보 */}
-                <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                     <Building2 className="w-4 h-4 cd-text-primary" /> 발주처 (계약 상대방)
-                    <span className="text-[10.5px] font-normal cd-text-faint">사업장을 검색해 선택하면 주소·사업자번호가 자동 채움됩니다</span>
+                    <span className="text-[11px] font-normal cd-text-faint">사업장을 검색해 선택하면 주소·사업자번호가 자동 채움됩니다</span>
                   </h3>
                   <FacilityRecipientPicker list={ordererList} onChange={onOrdererChange} onNewFacility={() => setFacilityModal(true)} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -1181,10 +1181,10 @@ export function AgreementBoard() {
                 </div>
 
                 {/* 금액·지급 조건 */}
-                <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                     <FileText className="w-4 h-4 cd-text-primary" /> 계약금액 · 대금 지급 조건
-                    <span className="text-[10.5px] font-normal cd-text-faint">지급 단계는 갑지 문구와 「지급방법」 조문 양쪽에 자동 반영됩니다</span>
+                    <span className="text-[11px] font-normal cd-text-faint">지급 단계는 갑지 문구와 「지급방법」 조문 양쪽에 자동 반영됩니다</span>
                   </h3>
                   {/* 좌: 금액 요약 + 단계 추가 / 우: 지급 단계 탭페이지 (2026-08-11 사용자 요청 — 세로 나열의 공간 낭비 제거) */}
                   <div className="flex flex-col md:flex-row gap-4 items-start">
@@ -1212,7 +1212,7 @@ export function AgreementBoard() {
                       {amounts.supply > 0 && <p className="text-[11px] cd-text-faint">{amountLine(amounts.supply)}</p>}
                       <button
                         type="button"
-                        className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-[11.5px] cd-text-faint"
+                        className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-[12px] cd-text-faint"
                         onClick={() => {
                           setPayments((prev) => [...prev, { label: "잔금", ratio: null, amount: 0, condition: "" }]);
                           setPayTab(payments.length);
@@ -1227,9 +1227,9 @@ export function AgreementBoard() {
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-3">
+                    <div className="flex-1 min-w-0 w-full rounded-lg border cd-border-c p-3.5 flex flex-col gap-3">
                       {/* 단계 탭 — 활성=그라데이션, 비활성=불투명 흰색(업무추진계획 세그먼트 패턴) */}
-                      <div className="inline-flex self-start rounded-xl border cd-border-c overflow-hidden text-[12px] font-semibold flex-wrap">
+                      <div className="inline-flex self-start rounded-lg border cd-border-c overflow-hidden text-[12px] font-semibold flex-wrap">
                         {payments.map((p, i) => (
                           <button
                             key={i}
@@ -1302,8 +1302,8 @@ export function AgreementBoard() {
                 </div>
 
                 {/* 기간·용역범위 */}
-                <div className="cd-card rounded-3xl p-5 flex flex-col gap-3">
-                  <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+                  <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                     <FileText className="w-4 h-4 cd-text-primary" /> 계약기간 · 용역범위
                   </h3>
                   <label className="flex flex-col gap-1">
@@ -1312,16 +1312,16 @@ export function AgreementBoard() {
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-[11px] cd-text-faint">용역범위(업무범위) — 갑지·「업무범위」 조문에 삽입됩니다</span>
-                    <textarea className="cd-input text-[12.5px] min-h-[110px]" value={scopeText} placeholder={"예: 회로정면(S/E) 1기 등 인허가 대상설비 List 시설이 반영된 통합환경관리계획서 작성 및 통합환경 변경허가 취득"} onChange={(e) => setScopeText(e.target.value)} />
+                    <textarea className="cd-input text-[13px] min-h-[110px]" value={scopeText} placeholder={"예: 회로정면(S/E) 1기 등 인허가 대상설비 List 시설이 반영된 통합환경관리계획서 작성 및 통합환경 변경허가 취득"} onChange={(e) => setScopeText(e.target.value)} />
                   </label>
                 </div>
 
                 {/* 조문 편집 */}
                 {hasClausePage && (
-                  <div className="cd-card rounded-3xl p-5 flex flex-col gap-2.5">
-                    <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+                  <div className="cd-card rounded-lg p-5 flex flex-col gap-2.5">
+                    <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                       <ListPlus className="w-4 h-4 cd-text-primary" /> 용역계약 조건 (조문)
-                      <span className="text-[10.5px] font-normal cd-text-faint">번호는 순서대로 자동 부여 — 삽입·삭제해도 어긋나지 않습니다</span>
+                      <span className="text-[11px] font-normal cd-text-faint">번호는 순서대로 자동 부여 — 삽입·삭제해도 어긋나지 않습니다</span>
                     </h3>
                     {/* 좌: 조 목록 / 우: 선택 조 편집 — 세로 스크롤 최소화(2026-08-11 사용자 요청) */}
                     <div className="flex flex-col md:flex-row gap-4 items-start">
@@ -1338,14 +1338,14 @@ export function AgreementBoard() {
                               }`}
                               onClick={() => setClauseTab(i)}
                             >
-                              <span className={`font-mono text-[10.5px] shrink-0 ${clauseTab === i ? "opacity-80" : "cd-text-faint"}`}>{i + 1}</span>
+                              <span className={`font-mono text-[11px] shrink-0 ${clauseTab === i ? "opacity-80" : "cd-text-faint"}`}>{i + 1}</span>
                               <span className="truncate">{c.title || "(제목 없음)"}</span>
                             </button>
                           ))}
                         </div>
                         <button
                           type="button"
-                          className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11.5px] cd-text-faint"
+                          className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[12px] cd-text-faint"
                           onClick={() => {
                             insertClause(clauses.length - 1);
                             setClauseTab(clauses.length);
@@ -1356,14 +1356,14 @@ export function AgreementBoard() {
                         {/* 조항 라이브러리(149) — 과거 계약서·표준 셋 조문을 검색해 삽입 */}
                         <button
                           type="button"
-                          className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[11.5px] cd-text-primary font-semibold flex items-center justify-center gap-1"
+                          className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-[12px] cd-text-primary font-semibold flex items-center justify-center gap-1"
                           onClick={() => setLibraryOpen(true)}
                         >
                           <BookOpen className="w-3.5 h-3.5" /> 라이브러리에서 추가
                         </button>
                       </div>
 
-                      <div className="flex-1 min-w-0 w-full rounded-2xl border cd-border-c p-3.5 flex flex-col gap-2">
+                      <div className="flex-1 min-w-0 w-full rounded-lg border cd-border-c p-3.5 flex flex-col gap-2">
                         {clauses[Math.min(clauseTab, clauses.length - 1)] && (() => {
                           const i = Math.min(clauseTab, clauses.length - 1);
                           const c = clauses[i];
@@ -1389,11 +1389,11 @@ export function AgreementBoard() {
                                 </button>
                               </div>
                               {c.binding === "payment" ? (
-                                <div className="rounded-lg cd-tint-primary px-3 py-2 text-[11.5px] whitespace-pre-wrap">
+                                <div className="rounded-lg cd-tint-primary px-3 py-2 text-[12px] whitespace-pre-wrap">
                                   {payments.length
                                     ? paymentClauseBody(payments, template?.spec.terms ?? { orderer: "발주자", contractor: "과업수행자" })
                                     : "지급 단계를 입력하면 본문이 자동 생성됩니다."}
-                                  <div className="text-[10px] cd-text-faint mt-1">위 「계약금액 · 대금 지급 조건」에서 자동 생성 — 직접 수정하려면 조를 삭제하고 새 조항으로 작성하세요.</div>
+                                  <div className="text-[11px] cd-text-faint mt-1">위 「계약금액 · 대금 지급 조건」에서 자동 생성 — 직접 수정하려면 조를 삭제하고 새 조항으로 작성하세요.</div>
                                 </div>
                               ) : (
                                 /* 조문 본문은 여러 항을 한눈에 봐야 한다 — 실측 54px 의 5배(2026-09-11 사용자 요청).
@@ -1416,18 +1416,18 @@ export function AgreementBoard() {
               </div>
 
               {/* 우: 결재선 (QuoteBoard 이식) */}
-              <div className="cd-card rounded-3xl p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
-                <h3 className="font-bold cd-text text-sm flex items-center gap-2">
+              <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+                <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                   <Users className="w-4 h-4 cd-text-primary" /> 결재선 (검토)
                   <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
                 </h3>
                 {presets.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-[10.5px] cd-text-faint mr-0.5">불러오기</span>
+                    <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
                     {presets.map((p) => (
                       <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                         <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>
-                        <button type="button" className="text-[10px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
+                        <button type="button" className="text-[11px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">×</button>
                       </span>
                     ))}
                   </div>
@@ -1435,13 +1435,13 @@ export function AgreementBoard() {
                 {line.length === 0 && <p className="text-[12px] cd-text-faint">임원·부서장 등 검토자를 결재선에 추가하세요.</p>}
                 <div className="flex flex-col gap-1.5">
                   {line.map((s, i) => (
-                    <div key={`${s.assigneeUserId}-${i}`} className="rounded-xl border cd-border-c px-3 py-2 flex items-center gap-2">
-                      <span className="text-[10px] font-mono cd-text-faint w-4">{i + 1}</span>
+                    <div key={`${s.assigneeUserId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
+                      <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
                       <select className="cd-select" style={{ width: 70 }} value={s.stepType} onChange={(e) => setLine((prev) => prev.map((x, xi) => (xi === i ? { ...x, stepType: e.target.value as "agree" | "approve" } : x)))}>
                         <option value="agree">합의</option>
                         <option value="approve">승인</option>
                       </select>
-                      <span className="text-[12.5px] cd-text truncate flex-1">
+                      <span className="text-[13px] cd-text truncate flex-1">
                         {s.assigneeName}
                         {s.assigneePosition ? <span className="cd-text-faint text-[11px]"> {s.assigneePosition}</span> : null}
                       </span>
@@ -1460,14 +1460,14 @@ export function AgreementBoard() {
                   </button>
                 </div>
                 <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
-                  <h4 className="font-bold cd-text text-[12.5px] flex items-center gap-1.5">
+                  <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                     <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                   </h4>
                   {watchers.length === 0 ? (
                     <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
                   ) : (
                     watchers.map((w, i) => (
-                      <div key={`${w.userId}-${i}`} className="rounded-xl border cd-border-c px-3 py-1.5 flex items-center gap-2">
+                      <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">
                         <select className="cd-select" style={{ width: 66 }} value={w.kind} onChange={(e) => setWatchers((prev) => prev.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as "ref" | "view" } : x)))}>
                           <option value="ref">참조</option>
                           <option value="view">열람</option>
@@ -1494,7 +1494,7 @@ export function AgreementBoard() {
                     <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
                   </button>
                 </div>
-                <p className="text-[10.5px] cd-text-faint">
+                <p className="text-[11px] cd-text-faint">
                   승인 완료 후 목록에서 [발주처 발송] 버튼으로 담당자에게 발송합니다(자동 발송 없음). 초안은 기본 HWPX 첨부로 발송됩니다.
                 </p>
               </div>
@@ -1506,9 +1506,9 @@ export function AgreementBoard() {
       {/* PDF 미리보기 모달 */}
       {previewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setPreviewOpen(false)}>
-          <div className="rounded-2xl cd-solid-bg shadow-2xl w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-lg cd-solid-bg shadow-[var(--cd-shadow-dialog)] w-full max-w-[1100px] h-[94vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-2.5 border-b cd-border-c">
-              <span className="text-sm font-bold cd-text">계약서 미리보기</span>
+              <span className="text-sm font-semibold cd-text">계약서 미리보기</span>
               <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setPreviewOpen(false)}>
                 <X className="w-4 h-4" />
               </button>

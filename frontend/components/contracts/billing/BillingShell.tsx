@@ -48,28 +48,28 @@ export function BillingShell() {
   return (
     // 100vh - (본문 상단 오프셋 128px + 페이지 상단 패딩 8px) = 좌측 메뉴 바 하단과 동일 높이
     <div
-      className="cdash min-h-[calc(100vh-136px)] flex flex-col rounded-3xl p-4 md:p-5"
+      className="cdash min-h-[calc(100vh-136px)] flex flex-col rounded-lg p-4 md:p-5"
       data-theme={theme}
     >
       {/* 헤더 */}
       <header className="flex items-center justify-between gap-3 flex-wrap mb-4 reveal">
         <div className="flex items-center gap-3">
           <span
-            className="inline-flex items-center justify-center w-10 h-10 rounded-xl"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-lg"
             style={{ background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }}
           >
             <ReceiptText className="w-5 h-5" />
           </span>
           <div>
             <p
-              className="text-[10px] font-extrabold tracking-[0.22em] uppercase"
+              className="text-[11px] font-medium"
               style={{ color: "var(--cd-primary)" }}
             >
               Orders · Collections · Invoicing
             </p>
-            <h1 className="text-xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: "var(--cd-text)" }}>
+            <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2" style={{ color: "var(--cd-text)" }}>
               수주/수금/발행 현황
-              <span className="text-sm font-bold" style={{ color: "var(--cd-faint)" }}>
+              <span className="text-sm font-semibold" style={{ color: "var(--cd-faint)" }}>
                 {activeMeta.label}
               </span>
               <CdHelp topic="contracts.billing" />

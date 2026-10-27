@@ -419,7 +419,7 @@ function Inner() {
   }
 
   return (
-    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-3xl min-h-full" data-theme={theme}>
+    <div className="cdash cd-fields-white flex flex-col gap-5 p-4 md:p-5 rounded-lg min-h-full" data-theme={theme}>
       <CdPageHeader
         icon={<GitMerge className="w-5 h-5" />}
         eyebrow="Facility Merge"
@@ -438,10 +438,10 @@ function Inner() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:h-[calc(100vh-260px)] lg:min-h-[520px]">
-        <section className="cd-card rounded-3xl p-6 cd-reveal delay-1 flex flex-col gap-5 min-h-0 overflow-hidden">
+        <section className="cd-card rounded-lg p-6 cd-reveal delay-1 flex flex-col gap-5 min-h-0 overflow-hidden">
           <div className="flex flex-col gap-3 min-h-0 flex-1">
-            <h3 className="font-bold cd-text-muted mb-3">중복 후보 그룹 ({groups.length})</h3>
-            {error && <div className="cd-error-text text-sm font-bold mb-3">조회 실패: {error}</div>}
+            <h3 className="font-semibold cd-text-muted mb-3">중복 후보 그룹 ({groups.length})</h3>
+            {error && <div className="cd-error-text text-sm font-semibold mb-3">조회 실패: {error}</div>}
             {loading && <div className="cd-text-faint text-sm py-10 text-center">로딩 중…</div>}
             {!loading && groups.length === 0 && !error && (
               <div className="cd-text-faint text-sm py-10 text-center flex flex-col items-center gap-2">
@@ -450,27 +450,27 @@ function Inner() {
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-[195px_1fr] gap-3 min-h-0 flex-1">
-              <div className="cd-card-bg/35 border cd-border-c rounded-2xl p-3 flex flex-col gap-2">
+              <div className="cd-card-bg/35 border cd-border-c rounded-lg p-3 flex flex-col gap-2">
                 {(["brn", "company", "address"] as const).map((matchType) => (
                   <button
                     key={matchType}
                     type="button"
                     onClick={() => setSelectedMatchType(matchType)}
                     className={cn(
-                      "text-left rounded-xl px-3.5 py-2.5 border transition-colors",
+                      "text-left rounded-lg px-3.5 py-2.5 border transition-colors",
                       selectedMatchType === matchType
-                        ? "cd-fill-primary text-white border-[color:var(--cd-primary)] shadow-sm"
+                        ? "cd-fill-primary text-white border-[color:var(--cd-primary)]"
                         : "cd-surface-bg cd-text-muted cd-border-c hover:bg-[color:var(--cd-card)]"
                     )}
                   >
-                    <span className="block text-xs font-bold">{MATCH_LABEL[matchType]}</span>
+                    <span className="block text-xs font-semibold">{MATCH_LABEL[matchType]}</span>
                     <span className="block text-[11px] opacity-80 mt-0.5">
                       {matchCounts[matchType]}개 그룹
                     </span>
                   </button>
                 ))}
               </div>
-              <div className="cd-card-bg/35 border cd-border-c rounded-2xl p-3 min-h-0 overflow-y-auto scrollbar-hide">
+              <div className="cd-card-bg/35 border cd-border-c rounded-lg p-3 min-h-0 overflow-y-auto scrollbar-hide">
                 <div className="flex flex-col gap-2">
                   {selectedCandidateMatches.length === 0 && !loading && (
                     <div className="cd-text-faint text-sm py-10 text-center">
@@ -492,13 +492,13 @@ function Inner() {
                         type="button"
                         onClick={() => selectAutoMatch(groupIdx, matchIdx)}
                         className={cn(
-                          "text-left p-3 rounded-xl border transition-colors",
+                          "text-left p-3 rounded-lg border transition-colors",
                           selected
                             ? "cd-tint-primary border-[color:var(--cd-primary)]"
                             : "cd-surface-bg hover:bg-[color:var(--cd-surface)] cd-border-c"
                         )}
                       >
-                        <div className="text-sm font-bold cd-text truncate">
+                        <div className="text-sm font-semibold cd-text truncate">
                           {match.matchValue || "(빈 값)"}
                         </div>
                         <div className="text-[11px] cd-text-faint mt-1">
@@ -521,7 +521,7 @@ function Inner() {
           </div>
 
           <div className="border-t cd-border-c/70 pt-5 shrink-0">
-            <h3 className="font-bold cd-text-muted mb-2">직접 검색 병합</h3>
+            <h3 className="font-semibold cd-text-muted mb-2">직접 검색 병합</h3>
             <div className="flex gap-2">
               <input
                 className="cd-input text-sm min-w-0 flex-1"
@@ -536,7 +536,7 @@ function Inner() {
                 type="button"
                 onClick={searchManualFacilities}
                 disabled={manualLoading}
-                className="rounded-xl min-w-[64px] px-3 py-2 text-xs font-bold text-white cd-fill-primary shadow-sm flex shrink-0 items-center justify-center gap-1 whitespace-nowrap disabled:opacity-60"
+                className="rounded-lg min-w-[64px] px-3 py-2 text-xs font-semibold text-white cd-fill-primary flex shrink-0 items-center justify-center gap-1 whitespace-nowrap disabled:opacity-60"
               >
                 <Search className="w-3.5 h-3.5" />
                 {manualLoading ? "검색 중…" : "검색"}
@@ -548,7 +548,7 @@ function Inner() {
                 <button
                   type="button"
                   onClick={clearManualSelection}
-                  className="font-bold cd-text-faint hover:cd-error-text flex items-center gap-1"
+                  className="font-semibold cd-text-faint hover:cd-error-text flex items-center gap-1"
                 >
                   <X className="w-3 h-3" /> 선택 해제
                 </button>
@@ -572,7 +572,7 @@ function Inner() {
                       className="mt-1"
                     />
                     <span className="min-w-0">
-                      <span className="block text-xs font-bold cd-text truncate">
+                      <span className="block text-xs font-semibold cd-text truncate">
                         {formatCompanyName(facility.companyName) ?? facility.companyName}
                       </span>
                       <span className="block text-[11px] cd-text-faint truncate">
@@ -586,7 +586,7 @@ function Inner() {
           </div>
         </section>
 
-        <section className="cd-card rounded-3xl p-6 cd-reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
+        <section className="cd-card rounded-lg p-6 cd-reveal delay-2 min-h-0 overflow-y-auto scrollbar-hide">
           {activeFacilities.length < 2 && (
             <div className="cd-text-faint text-sm py-10 text-center">
               좌측에서 자동 후보 태그를 선택하거나 직접 검색으로 2개 이상 선택하세요.
@@ -596,7 +596,7 @@ function Inner() {
             <div className="flex flex-col gap-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-bold cd-text-muted flex items-center gap-1">
+                  <h3 className="font-semibold cd-text-muted flex items-center gap-1">
                     병합 대상 선택 ({activeFacilities.length}건)
                     <CdHelp topic="facilities.merge" />
                   </h3>
@@ -615,7 +615,7 @@ function Inner() {
                       type="button"
                       onClick={handleExcludeSelectedFacility}
                       disabled={excludingSingle || !targetId}
-                      className="rounded-xl px-3 py-2 text-xs font-bold text-amber-700 cd-warn-bg hover:bg-amber-100 border border-amber-200 disabled:opacity-60"
+                      className="rounded-lg px-3 py-2 text-xs font-semibold cd-warn-text cd-warn-bg hover:opacity-90 border cd-warn-border disabled:opacity-60"
                     >
                       {excludingSingle ? "제외 중…" : "개별 업체 제외"}
                     </button>
@@ -623,7 +623,7 @@ function Inner() {
                       type="button"
                       onClick={handleExcludeActiveCandidate}
                       disabled={excluding}
-                      className="rounded-xl px-3 py-2 text-xs font-bold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border disabled:opacity-60"
+                      className="rounded-lg px-3 py-2 text-xs font-semibold cd-error-text cd-error-bg hover:cd-error-bg border cd-error-border disabled:opacity-60"
                     >
                       {excluding ? "제외 중…" : "전체 업체 제외"}
                     </button>
@@ -639,7 +639,7 @@ function Inner() {
                     <label
                       key={facility.facilityId}
                       className={cn(
-                        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors",
+                        "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
                         isTarget
                           ? "cd-tint-primary border-[color:var(--cd-primary)]"
                           : "cd-surface-bg hover:bg-[color:var(--cd-surface)] cd-border-c"
@@ -653,13 +653,13 @@ function Inner() {
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold cd-text flex items-center gap-2 truncate">
+                        <div className="text-sm font-semibold cd-text flex items-center gap-2 truncate">
                           {formatCompanyName(facility.companyName) ?? facility.companyName}
-                          <span className="text-[9px] font-bold uppercase tracking-wide cd-surface-bg cd-text-muted px-1.5 py-0.5 rounded">
+                          <span className="text-[11px] font-medium cd-surface-bg cd-text-muted px-1.5 py-0.5 rounded">
                             {facility.source}
                           </span>
                           {isTarget && (
-                            <span className="text-[9px] font-bold uppercase tracking-wide cd-fill-primary text-white px-1.5 py-0.5 rounded">
+                            <span className="text-[11px] font-medium cd-fill-primary text-white px-1.5 py-0.5 rounded">
                               TARGET
                             </span>
                           )}
@@ -680,7 +680,7 @@ function Inner() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-bold cd-text-muted">병합 이유</span>
+                <span className="text-xs font-semibold cd-text-muted">병합 이유</span>
                 <select
                   className="cd-select text-xs"
                   value={mergeReason}
@@ -695,7 +695,7 @@ function Inner() {
               </div>
 
               <div>
-                <h4 className="font-bold cd-text-muted text-sm">필드별 우선순위</h4>
+                <h4 className="font-semibold cd-text-muted text-sm">필드별 우선순위</h4>
                 <p className="text-xs cd-text-faint mt-0.5">
                   각 필드를 어느 facility 의 값으로 채울지 선택합니다. 미선택 시 target 의 현재 값을 유지합니다.
                 </p>
@@ -705,9 +705,9 @@ function Inner() {
                 {MERGEABLE_FIELDS.map((field) => (
                   <div
                     key={field.key}
-                    className="flex items-center gap-3 cd-surface-bg border cd-border-c rounded-xl p-3"
+                    className="flex items-center gap-3 cd-surface-bg border cd-border-c rounded-lg p-3"
                   >
-                    <span className="text-xs font-bold cd-text-muted w-32 shrink-0">
+                    <span className="text-xs font-semibold cd-text-muted w-32 shrink-0">
                       {field.label}
                     </span>
                     <select
@@ -744,7 +744,7 @@ function Inner() {
                     setTargetId(null);
                     setOverrides({});
                   }}
-                  className="cd-btn cd-btn-ghost rounded-xl px-4 py-2 text-sm font-bold cd-text-muted"
+                  className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted"
                 >
                   취소
                 </button>
@@ -752,7 +752,7 @@ function Inner() {
                   type="button"
                   onClick={handleMerge}
                   disabled={!targetId || merging}
-                  className="rounded-xl px-4 py-2 text-sm font-bold text-white cd-fill-primary shadow-sm flex items-center gap-1 disabled:opacity-50"
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-white cd-fill-primary flex items-center gap-1 disabled:opacity-50"
                 >
                   <GitMerge className="w-3.5 h-3.5" />
                   {merging ? "병합 중…" : "병합 실행"}

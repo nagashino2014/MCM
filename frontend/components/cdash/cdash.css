@@ -227,6 +227,7 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
 .cd-success-text { color: var(--cd-success); }
 .cd-warn-bg { background: var(--cd-warning-soft); }
 .cd-warn-text { color: var(--cd-warning); }
+.cd-warn-border { border-color: color-mix(in srgb, var(--cd-warning) 35%, var(--cd-card)); }
 
 /* ---------------- 카드 프레임 ---------------- */
 .cd-card {

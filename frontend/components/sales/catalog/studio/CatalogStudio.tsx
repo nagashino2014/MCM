@@ -22,6 +22,7 @@ import { spanWidth } from "@/lib/catalog/studio/design-system";
 import { pageState } from "@/lib/catalog/studio/doc";
 import {
   addElement,
+  duplicateNode,
   hideNode,
   listItemOp,
   patchNodeStyle,
@@ -42,7 +43,7 @@ import { applySlotText, placeholderContent, type IllustSlotRole } from "@/lib/ca
 import { illustrationRender } from "@/lib/catalog/render/infographic/illustration";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { renderNode } from "@/lib/catalog/studio/render-tree";
-import { capabilities, resolveSelection } from "@/lib/catalog/studio/select";
+import { capabilities, outermost, resolveSelection, type Selection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalogFetch } from "../catalogFetch";
@@ -123,7 +124,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const [baseKit, setKit] = useState<StudioKit | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
   const [curKey, setCurKey] = useState<string>("c01");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 고른 요소 — 마지막이 주 선택(패널이 고치는 대상). Shift·Ctrl+클릭으로 여러 개
+  const [selection, setSelection] = useState<string[]>([]);
+  const selectedId = selection[selection.length - 1] ?? null;
+  const setSelectedId = useCallback((id: string | null) => setSelection(id ? [id] : []), []);
+  const toggleSelect = useCallback((id: string) => setSelection((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id])), []);
   const [tab, setTab] = useState<PanelTab>("content");
   const [zoomMode, setZoomMode] = useState<"fit" | number>("fit");
   const [showGuides, setShowGuides] = useState(false);
@@ -192,9 +197,16 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const tree = composed?.tree ?? null;
   const sel = useMemo(() => (tree && selectedId ? resolveSelection(tree, selectedId) : null), [tree, selectedId]);
   const caps = useMemo(() => (sel && item ? capabilities(sel, item.maxLevel) : null), [sel, item]);
+  const multiSel = useMemo(
+    () => (tree && selection.length > 1 ? selection.map((id) => resolveSelection(tree, id)).filter((s): s is Selection => s != null) : []),
+    [tree, selection]
+  );
+  // 지우거나 숨겨 트리에서 사라진 요소는 선택에서 뺀다
   useEffect(() => {
-    if (selectedId && tree && !sel) setSelectedId(null);
-  }, [selectedId, tree, sel]);
+    if (!tree || !selection.length) return;
+    const alive = selection.filter((id) => resolveSelection(tree, id));
+    if (alive.length !== selection.length) setSelection(alive);
+  }, [tree, selection]);
 
   const zoom = zoomMode === "fit" ? Math.max(0.3, Math.min(1.5, (mainW - 48) / 842)) : zoomMode;
   const visibleIndex = useMemo(() => {
@@ -214,18 +226,48 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
 
   // ── 편집 조작 ──
   const itemKey = item?.key;
+  const itemLevel = item?.maxLevel;
   const setPageEdits = studio.setPageEdits;
   const pe = useCallback((fn: (e: PageEdits) => PageEdits, merge?: string) => itemKey && setPageEdits(itemKey, fn, merge), [itemKey, setPageEdits]);
   const ops: StudioOps = useMemo(() => {
     const derived = tree as CNode;
     return {
       select: setSelectedId,
+      toggleSelect,
       commitText: (id, children) => pe((e) => setNodeContent(e, derived, id, children)),
       patchStyle: (id, patch) => pe((e) => patchNodeStyle(e, derived, id, patch)),
       setType: (id, step) => pe((e) => setNodeType(e, derived, id, step)),
       hide: (id) => {
         pe((e) => hideNode(e, derived, id));
         setSelectedId(null);
+      },
+      hideMany: (ids) => {
+        const hideable = outermost(derived, ids).filter((id) => {
+          const s = resolveSelection(derived, id);
+          return s && itemLevel ? capabilities(s, itemLevel).hide : false;
+        });
+        if (!hideable.length) return;
+        pe((e) => hideable.reduce((acc, id) => hideNode(acc, derived, id), e));
+        setSelection([]);
+      },
+      duplicate: (ids) => {
+        const made: string[] = [];
+        let skipped = 0;
+        pe((e) =>
+          outermost(derived, ids).reduce((acc, id) => {
+            const s = resolveSelection(derived, id);
+            const g = canvasHandle.current?.geometry(id);
+            const r = s && g && itemLevel && capabilities(s, itemLevel).duplicate ? duplicateNode(acc, derived, id, g) : null;
+            if (!r) {
+              skipped += 1;
+              return acc;
+            }
+            made.push(r.id);
+            return r.edits;
+          }, e)
+        );
+        if (made.length) setSelection(made);
+        if (skipped) toast(made.length ? `${skipped}개는 복제할 수 없어 건너뛰었습니다(데이터 영역·도식, 또는 추가 요소 40개 한도).` : "복제할 수 없는 요소입니다(데이터 영역·도식, 또는 추가 요소 40개 한도).", "error");
       },
       unhide: (id) => pe((e) => unhideNode(e, id)),
       reset: (id, parts) => pe((e) => resetNode(e, id, parts ?? "all")),
@@ -267,7 +309,13 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
     };
-  }, [tree, pe, composed, itemKey, setBindTarget]);
+  }, [tree, pe, composed, itemKey, itemLevel, setBindTarget, setSelectedId, toggleSelect, toast]);
+
+  // 묶음 옮기기 — 여러 요소 스타일을 한 번에(실행 취소 한 단계)
+  const patchStyles = useCallback(
+    (list: Array<{ id: string; patch: Record<string, string> }>) => tree && pe((e) => list.reduce((acc, it) => patchNodeStyle(acc, tree, it.id, it.patch), e)),
+    [tree, pe]
+  );
 
   // ── 지표 넣기 — 표식 자리에 칩을 넣는다(실행 취소 한 단계) ──
   const insertBind = useCallback(
@@ -303,6 +351,19 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         return true;
       }
       if (!selectedId) return false;
+      if (mod && e.code === "KeyD") {
+        ops.duplicate(selection);
+        return true;
+      }
+      if (selection.length > 1) {
+        if (key === "Escape") setSelection([]);
+        else if (key === "Delete" || key === "Backspace") ops.hideMany(selection);
+        else if (key.startsWith("Arrow") && item?.maxLevel === 3) {
+          const step = e.shiftKey ? 16 : 4;
+          canvasHandle.current?.nudge(key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0, key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0);
+        } else return false;
+        return true;
+      }
       if (mod && e.code === "KeyK" && caps?.editText) {
         const t = canvasHandle.current?.captureBind();
         if (t) setBindTarget(t);
@@ -326,7 +387,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       }
       return false;
     },
-    [undo, redo, selectedId, caps, ops, setBindTarget]
+    [undo, redo, selectedId, selection, item, caps, ops, setBindTarget, setSelectedId]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -589,7 +650,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 </select>
               </span>
             </div>
-            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고릅니다. 방향키 옮기기, Delete 숨기기, Esc 선택 해제">
+            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고릅니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기, Delete 숨기기, Ctrl+D 복제, Esc 선택 해제">
               <StudioCanvas
                 kit={kit}
                 fontSet={studio.fontSet}
@@ -598,14 +659,16 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 maxLevel={item.maxLevel}
                 flow={item.flow}
                 folio={visibleIndex}
-                selectedId={selectedId}
+                selectedIds={selection}
                 zoom={zoom}
                 showGuides={showGuides}
                 checks={checks}
                 onSelect={setSelectedId}
+                onToggleSelect={toggleSelect}
                 onCommitText={ops.commitText}
                 onCommitSlot={ops.commitSlot}
                 onPatchStyle={ops.patchStyle}
+                onPatchStyles={patchStyles}
                 onKeyCommand={onKeyCommand}
                 onRequestBind={setBindTarget}
                 onChecks={setChecks}
@@ -663,7 +726,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
             </div>
             <div id="st-panel" role="tabpanel" className="flex-1 min-h-0 overflow-y-auto p-3">
               {(() => {
-                const props = { studio, kit, item, composed, sel, caps, ops, checks, assets, onAiShrink: (ids: string[]) => void aiShrink(ids), onRemoveCustomArea: (id: string) => void removeCustomArea(id) };
+                const props = { studio, kit, item, composed, sel: multiSel.length ? null : sel, caps: multiSel.length ? null : caps, multi: multiSel, ops, checks, assets, onAiShrink: (ids: string[]) => void aiShrink(ids), onRemoveCustomArea: (id: string) => void removeCustomArea(id) };
                 if (tab === "content") return <PanelContent {...props} />;
                 if (tab === "design") return <PanelDesign {...props} />;
                 if (tab === "fonts")

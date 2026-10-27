@@ -14,10 +14,16 @@ import type { Studio } from "./useStudio";
 
 export interface StudioOps {
   select: (id: string | null) => void;
+  /** Shift·Ctrl+클릭 — 고른 묶음에 더하거나 뺀다 */
+  toggleSelect: (id: string) => void;
   commitText: (id: string, children: CNode[]) => void;
   patchStyle: (id: string, patch: Record<string, string>) => void;
   setType: (id: string, step: string | null) => void;
   hide: (id: string) => void;
+  /** 고른 여러 요소 숨기기·지우기(실행 취소 한 단계) */
+  hideMany: (ids: string[]) => void;
+  /** 복제(Ctrl+D) — 사본을 오른쪽 아래에 놓고 사본들을 고른다 */
+  duplicate: (ids: string[]) => void;
   unhide: (id: string) => void;
   reset: (id: string, parts?: Array<"content" | "style" | "type" | "hidden" | "info" | "image">) => void;
   setInfo: (id: string, info: InfoOverride | null, slot?: string) => void;
@@ -46,6 +52,8 @@ export interface PanelProps {
   composed: ComposedPage;
   sel: Selection | null;
   caps: Capabilities | null;
+  /** 여러 개 고른 경우의 전체(2개 이상일 때만, 이때 sel·caps 는 null) */
+  multi: Selection[];
   ops: StudioOps;
   checks: CheckItem[];
   assets: StudioImageAsset[];

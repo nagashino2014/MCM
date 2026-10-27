@@ -4,7 +4,8 @@
 //   글 블록: 바로 눌러 고친다(contentEditable). 지표 값·아이콘·쪽 번호 링크는 칩(고칠 수 없음, 지울 수는 있음)
 //     Ctrl+K = 지표 넣기(커서 자리), 글을 고치지 않은 채 Ctrl+Z/Y = 스튜디오 실행 취소/다시(칩 넣기 되돌리기)
 //   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 오른쪽·아래·모서리 손잡이로 크기 — 12열 그리드·4pt 기준선에 맞춘다(L3 쪽만)
-//   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt), Delete = 숨기기, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
+//   여러 개 고르기: Shift·Ctrl+클릭으로 더하고 뺀다 → 묶음 손잡이로 함께 옮기고(상대 위치 유지, 묶음 왼쪽 위를 그리드에 맞춤) Delete·Ctrl+D 도 함께
+//   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt), Delete = 숨기기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
 //   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도(주황)
 
 import {
@@ -31,7 +32,7 @@ import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, toEdit
 import { stripDerived } from "@/lib/catalog/studio/edits";
 import { findNode, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { nodeProps, renderNode, resolvedChildren, type TreeEnv } from "@/lib/catalog/studio/render-tree";
-import { capabilities, isTextBlock, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
+import { capabilities, isTextBlock, outermost, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
 import type { DomLike } from "@/lib/doc-tree/inline-core";
 import { checkSheet, type CheckItem } from "./checks";
 import { PortalFrame } from "./Frames";
@@ -44,6 +45,8 @@ export interface CanvasHandle {
   captureBind: () => BindTarget | null;
   /** 넣은 칩 뒤로 커서를 옮겨 이어서 고치게 한다 */
   focusChip: (blockId: string, chipId: string) => void;
+  /** 요소가 쪽에 그려진 상자(쪽 기준 px)·글자 크기 — 복제 자리 */
+  geometry: (id: string) => (Rect & { fontPx: number }) | null;
 }
 
 /** 지표 넣기 대상 — 글 블록 id 와 표식(caret)이 든 자식 */
@@ -61,6 +64,29 @@ interface Rect {
   h: number;
 }
 
+/** 요소의 지금 위치 방식·left·top(computed) */
+interface ElPos {
+  position: string;
+  left: number;
+  top: number;
+}
+
+interface GroupItem {
+  id: string;
+  el: HTMLElement;
+  rect: Rect;
+  cs: ElPos;
+  transform: string;
+}
+
+/** 상자들을 감싸는 상자 */
+const unionRect = (list: Rect[]): Rect | null => {
+  if (!list.length) return null;
+  const x = Math.min(...list.map((r) => r.x));
+  const y = Math.min(...list.map((r) => r.y));
+  return { x, y, w: Math.max(...list.map((r) => r.x + r.w)) - x, h: Math.max(...list.map((r) => r.y + r.h)) - y };
+};
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const px = (v: number) => `${Math.round(v * 100) / 100}px`;
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -76,8 +102,9 @@ const CANVAS_CSS = `
 [contenteditable="false"][data-chip] { cursor: default; background: rgba(74,99,216,.10); border-radius: 2px; }
 .st-overlay { position: absolute; inset: 0; pointer-events: none; }
 .st-box { position: absolute; box-sizing: border-box; }
-.st-box--hover { outline: 1px dashed rgba(74,99,216,.55); }
+.st-box--hover, .st-box--group { outline: 1px dashed rgba(74,99,216,.55); }
 .st-box--sel { outline: 1.5px solid #4a63d8; }
+.st-box--group { outline-offset: 3px; }
 .st-box--warn { outline: 1.5px dashed #d64545; }
 .st-box--note { outline: 1.5px dashed #c47f00; }
 .st-handle { position: absolute; width: 9px; height: 9px; background: #fff; border: 1.5px solid #4a63d8; border-radius: 2px; pointer-events: auto; box-sizing: border-box; }
@@ -97,14 +124,16 @@ export function StudioCanvas({
   maxLevel,
   flow,
   folio,
-  selectedId,
+  selectedIds,
   zoom,
   showGuides,
   checks,
   onSelect,
+  onToggleSelect,
   onCommitText,
   onCommitSlot,
   onPatchStyle,
+  onPatchStyles,
   onKeyCommand,
   onRequestBind,
   onChecks,
@@ -117,15 +146,20 @@ export function StudioCanvas({
   maxLevel: EditLevel;
   flow: boolean;
   folio: number;
-  selectedId: string | null;
+  /** 고른 요소(마지막 = 주 선택, 패널이 고치는 대상) */
+  selectedIds: string[];
   zoom: number;
   showGuides: boolean;
   checks: CheckItem[];
   onSelect: (id: string | null) => void;
+  /** Shift·Ctrl+클릭 — 고른 묶음에 더하거나 뺀다 */
+  onToggleSelect: (id: string) => void;
   onCommitText: (id: string, children: CNode[]) => void;
   /** 일러스트 글자 자리(313) 고치기 — 평문 → 그 인포그래픽 내용 */
   onCommitSlot?: (slotNodeId: string, text: string) => void;
   onPatchStyle: (id: string, patch: Record<string, string>) => void;
+  /** 여러 요소를 한 번에(실행 취소 한 단계) — 묶음 옮기기 */
+  onPatchStyles: (list: Array<{ id: string; patch: Record<string, string> }>) => void;
   /** 캔버스에서 누른 단축키(실행 취소 등) — 처리하면 true */
   onKeyCommand: (key: string, e: KeyboardEvent) => boolean;
   /** 글 고치는 중 Ctrl+K — 지표 넣기 창을 연다 */
@@ -134,10 +168,13 @@ export function StudioCanvas({
   handleRef?: MutableRefObject<CanvasHandle | null>;
 }) {
   const [frame, setFrame] = useState<{ doc: Document; win: Window } | null>(null);
-  const [rects, setRects] = useState<{ sel: Rect | null; hover: Rect | null; warn: Array<{ r: Rect; kind: string }> }>({ sel: null, hover: null, warn: [] });
+  const [rects, setRects] = useState<{ sel: Rect | null; others: Rect[]; group: Rect | null; hover: Rect | null; warn: Array<{ r: Rect; kind: string }> }>({ sel: null, others: [], group: null, hover: null, warn: [] });
+  const selectedId = selectedIds[selectedIds.length - 1] ?? null;
+  const multi = selectedIds.length > 1;
   const [hoverId, setHoverId] = useState<string | null>(null);
   const scaleRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<null | { mode: "move" | "e" | "s" | "se"; id: string; startX: number; startY: number; rect: Rect; el: HTMLElement; cs: { position: string; left: number; top: number }; orig: { transform: string; width: string; height: string } }>(null);
+  const groupDragRef = useRef<null | { startX: number; startY: number; rect: Rect; items: GroupItem[] }>(null);
 
   // 글 블록(고칠 수 있는 노드) — 위젯 안은 빼고
   const textBlocks = useMemo(() => {
@@ -258,6 +295,10 @@ export function StudioCanvas({
               // 친 글이 없으면 스튜디오 실행 취소(칩 넣기·글 반영 되돌리기)
               e.preventDefault();
               onKeyCommand(e.code === "KeyZ" ? "z" : "y", e.nativeEvent);
+            } else if (mod && !e.altKey && e.code === "KeyD" && !dirtyRef.current.has(n.id)) {
+              // 커서가 글 안이어도 Ctrl+D = 스튜디오 복제(브라우저 책갈피 대신). 친 글이 있으면 먼저 Esc·바깥 누르기로 반영한 뒤
+              e.preventDefault();
+              onKeyCommand("d", e.nativeEvent);
             } else if (e.key === "Enter") {
               e.preventDefault();
               d.execCommand("insertLineBreak");
@@ -300,8 +341,15 @@ export function StudioCanvas({
       const r = rectOf(elOf(c.nodeId));
       if (r) warn.push({ r, kind: c.kind });
     }
-    setRects({ sel: rectOf(elOf(selectedId)), hover: hoverId && hoverId !== selectedId ? rectOf(elOf(hoverId)) : null, warn });
-  }, [checks, elOf, rectOf, selectedId, hoverId]);
+    const others = multi ? selectedIds.map((id) => rectOf(elOf(id))).filter((r): r is Rect => r != null) : [];
+    setRects({
+      sel: multi ? null : rectOf(elOf(selectedId)),
+      others,
+      group: unionRect(others),
+      hover: hoverId && !selectedIds.includes(hoverId) ? rectOf(elOf(hoverId)) : null,
+      warn,
+    });
+  }, [checks, elOf, rectOf, selectedId, selectedIds, multi, hoverId]);
 
   useLayoutEffect(() => {
     measure();
@@ -355,26 +403,45 @@ export function StudioCanvas({
     return sel ? capabilities(sel, maxLevel) : null;
   }, [tree, selectedId, maxLevel]);
 
+  // 함께 옮길 요소 — 다른 고른 요소 안에 든 것·옮길 수 없는 것은 뺀다
+  const groupIds = useMemo(() => {
+    if (!multi) return [];
+    return outermost(tree, selectedIds).filter((id) => {
+      const sel = resolveSelection(tree, id);
+      return sel ? capabilities(sel, maxLevel).move : false;
+    });
+  }, [tree, selectedIds, multi, maxLevel]);
+
   // ── 옮기기·크기(그리드 맞춤) ──
   const commitMove = useCallback(
-    (id: string, el: HTMLElement, rect: Rect, cs: { position: string; left: number; top: number }, dx: number, dy: number) => {
-      const tx = snapX(rect.x + dx);
-      const ty = snapY(rect.y + dy);
-      const ddx = tx - rect.x;
-      const ddy = ty - rect.y;
-      if (Math.abs(ddx) < 0.01 && Math.abs(ddy) < 0.01) return;
-      if (cs.position === "absolute") onPatchStyle(id, { left: px(cs.left + ddx), top: px(cs.top + ddy), right: "", bottom: "", width: px(rect.w) });
-      else onPatchStyle(id, { position: "relative", left: px(cs.left + ddx), top: px(cs.top + ddy) });
+    (id: string, el: HTMLElement, rect: Rect, cs: ElPos, dx: number, dy: number) => {
+      const patch = movePatch(rect, cs, snapX(rect.x + dx) - rect.x, snapY(rect.y + dy) - rect.y);
+      if (patch) onPatchStyle(id, patch);
       void el;
     },
     [onPatchStyle]
   );
 
-  const readCs = (el: HTMLElement, win: Window) => {
-    const cs = win.getComputedStyle(el);
-    const num = (v: string) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
-    return { position: cs.position, left: cs.position === "static" ? 0 : num(cs.left), top: cs.position === "static" ? 0 : num(cs.top) };
-  };
+  // 묶음 옮기기 — 묶음 왼쪽 위만 그리드에 맞추고 같은 거리만큼 모두 옮긴다(서로의 자리 유지)
+  const groupItems = useCallback((): GroupItem[] => {
+    if (!frame) return [];
+    return groupIds.flatMap((id) => {
+      const el = elOf(id);
+      const rect = rectOf(el);
+      return el && rect ? [{ id, el, rect, cs: readCs(el, frame.win), transform: el.style.transform }] : [];
+    });
+  }, [frame, groupIds, elOf, rectOf]);
+
+  const commitGroup = useCallback(
+    (items: GroupItem[], ddx: number, ddy: number) => {
+      const list = items.flatMap((it) => {
+        const patch = movePatch(it.rect, it.cs, ddx, ddy);
+        return patch ? [{ id: it.id, patch }] : [];
+      });
+      if (list.length) onPatchStyles(list);
+    },
+    [onPatchStyles]
+  );
 
   const onHandleDown = (mode: "move" | "e" | "s" | "se") => (e: RPointerEvent<HTMLElement>) => {
     if (!frame || !selectedId) return;
@@ -406,6 +473,39 @@ export function StudioCanvas({
     }
   };
 
+  const onGroupDown = (e: RPointerEvent<HTMLElement>) => {
+    const items = groupItems();
+    const rect = unionRect(items.map((it) => it.rect));
+    if (!rect) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    groupDragRef.current = { startX: e.clientX, startY: e.clientY, rect, items };
+  };
+
+  const groupDelta = (g: { startX: number; startY: number; rect: Rect }, e: RPointerEvent<HTMLElement>) => ({
+    ddx: snapX(g.rect.x + (e.clientX - g.startX) / zoom) - g.rect.x,
+    ddy: snapY(g.rect.y + (e.clientY - g.startY) / zoom) - g.rect.y,
+  });
+
+  const onGroupMove = (e: RPointerEvent<HTMLElement>) => {
+    const g = groupDragRef.current;
+    if (!g) return;
+    const { ddx, ddy } = groupDelta(g, e);
+    for (const it of g.items) it.el.style.transform = `${it.transform} translate(${ddx}px, ${ddy}px)`;
+    const moved = g.items.map((it) => ({ ...it.rect, x: it.rect.x + ddx, y: it.rect.y + ddy }));
+    setRects((r) => ({ ...r, others: moved, group: { ...g.rect, x: g.rect.x + ddx, y: g.rect.y + ddy } }));
+  };
+
+  const onGroupUp = (e: RPointerEvent<HTMLElement>) => {
+    const g = groupDragRef.current;
+    if (!g) return;
+    groupDragRef.current = null;
+    const { ddx, ddy } = groupDelta(g, e);
+    for (const it of g.items) it.el.style.transform = it.transform;
+    commitGroup(g.items, ddx, ddy);
+  };
+
   const onHandleUp = (e: RPointerEvent<HTMLElement>) => {
     const d = dragRef.current;
     if (!d) return;
@@ -431,6 +531,12 @@ export function StudioCanvas({
     if (!handleRef) return;
     handleRef.current = {
       nudge: (dir, dy) => {
+        if (multi) {
+          const items = groupItems();
+          const g = unionRect(items.map((it) => it.rect));
+          if (g) commitGroup(items, dir === 0 ? 0 : snapX(g.x + dir * COL_STEP) - g.x, snapY(g.y + dy) - g.y);
+          return;
+        }
         if (!frame || !selectedId || !selCaps?.move) return;
         const el = elOf(selectedId);
         const rect = rectOf(el);
@@ -446,6 +552,12 @@ export function StudioCanvas({
         if (!n) return null;
         return captureAt(n, editing && editing.getAttribute("data-cn") === n.id ? editing : null);
       },
+      geometry: (id) => {
+        const el = elOf(id);
+        const r = rectOf(el);
+        if (!el || !r || !frame) return null;
+        return { ...r, fontPx: parseFloat(frame.win.getComputedStyle(el).fontSize) || 0 };
+      },
       focusChip: (blockId, chipId) => {
         const el = elOf(blockId);
         if (!el || !frame) return;
@@ -460,7 +572,7 @@ export function StudioCanvas({
         s?.addRange(r);
       },
     };
-  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt]);
+  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt, multi, groupItems, commitGroup]);
 
   // iframe 안의 단축키 → 화면 쪽 처리기
   useEffect(() => {
@@ -507,7 +619,14 @@ export function StudioCanvas({
         style={{ width: stageW, height: stageH, margin: "24px 16px 16px" }}
         onMouseDown={(e) => {
           if ((e.target as HTMLElement).closest(".st-handle, .st-grip")) return;
-          onSelect(hitTest(e.target));
+          const id = hitTest(e.target);
+          if (id && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+            // 묶음에 더하기·빼기 — 글 블록에 초점이 가서 한 개 선택으로 돌아가지 않게
+            e.preventDefault();
+            onToggleSelect(id);
+            return;
+          }
+          onSelect(id);
         }}
         onMouseMove={(e) => {
           const id = hitTest(e.target);
@@ -528,6 +647,18 @@ export function StudioCanvas({
             ) : null}
             {rects.warn.map((w, i) => box(w.r, w.kind === "overflow" ? "st-box--warn" : "st-box--note", null, `w${i}`))}
             {rects.hover ? box(rects.hover, "st-box--hover") : null}
+            {rects.others.map((r, i) => box(r, "st-box--sel", null, `m${i}`))}
+            {rects.group
+              ? box(
+                  rects.group,
+                  "st-box--group",
+                  groupIds.length ? (
+                    <span className="st-grip" onPointerDown={onGroupDown} onPointerMove={onGroupMove} onPointerUp={onGroupUp}>
+                      ⠿ {groupIds.length}개 옮기기
+                    </span>
+                  ) : null
+                )
+              : null}
             {rects.sel
               ? box(
                   rects.sel,
@@ -551,6 +682,19 @@ export function StudioCanvas({
       </div>
     </PortalFrame>
   );
+}
+
+function readCs(el: HTMLElement, win: Window): ElPos {
+  const cs = win.getComputedStyle(el);
+  const num = (v: string) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : 0);
+  return { position: cs.position, left: cs.position === "static" ? 0 : num(cs.left), top: cs.position === "static" ? 0 : num(cs.top) };
+}
+
+/** 옮긴 거리(그리드에 맞춘 값) → 스타일 덧씌우기. 움직임이 없으면 null */
+function movePatch(rect: Rect, cs: ElPos, ddx: number, ddy: number): Record<string, string> | null {
+  if (Math.abs(ddx) < 0.01 && Math.abs(ddy) < 0.01) return null;
+  if (cs.position === "absolute") return { left: px(cs.left + ddx), top: px(cs.top + ddy), right: "", bottom: "", width: px(rect.w) };
+  return { position: "relative", left: px(cs.left + ddx), top: px(cs.top + ddy) };
 }
 
 /** 안내선 폭 설명(디자인 탭) */

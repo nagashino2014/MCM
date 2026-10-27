@@ -250,13 +250,14 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "왼쪽에서 쪽을 고르고, 가운데 캔버스에서 요소를 눌러 고칩니다. 글은 바로 고칩니다.",
+        "Shift·Ctrl+클릭으로 여러 개 골라 함께 옮기거나 숨기고, Ctrl+D 로 복제합니다.",
         "고친 것은 자동 저장되고 데이터가 바뀌어도 남습니다. 고치지 않은 숫자·목록은 계속 새 데이터로 바뀝니다.",
         "[[미리보기]]·[[PDF 받기]]는 저장된 편집본으로 만듭니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "layout" },
     sources: ["components/sales/catalog/studio/CatalogStudio.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-27",
   },
   {
     id: "catalog.studio-levels",

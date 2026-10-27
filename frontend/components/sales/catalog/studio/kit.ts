@@ -25,7 +25,8 @@ let kitPromise: Promise<StudioKit> | null = null;
 export function loadStudioKit(): Promise<StudioKit> {
   kitPromise ??= Promise.all(
     ["/print-kit/sheet.css", "/catalog-kit/kesi-catalog.css", "/print-kit/paginate.js"].map((u) =>
-      fetch(u, { cache: "force-cache" }).then((r) => {
+      // no-cache = 매번 ETag 로 재검증(바뀌지 않았으면 304). force-cache 는 배포 뒤에도 옛 CSS 를 써서 새 모양(일러스트 등)이 깨졌다
+      fetch(u, { cache: "no-cache" }).then((r) => {
         if (!r.ok) throw new Error(`지면 키트를 읽지 못했습니다(${u})`);
         return r.text();
       })

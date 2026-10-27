@@ -34,11 +34,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".next-receipts/types/**/*.ts",
     ".next-ui/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-ill/types/**/*.ts"
+    ".next-receipts/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

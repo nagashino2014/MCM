@@ -30,7 +30,6 @@ export const WithTabs = () => (
     help="먼저 권한 템플릿을 구성한 뒤 개별 계정에 적용합니다."
     tabs={
       <CdTabs
-        variant="underline"
         active="accounts"
         onChange={() => {}}
         items={[

@@ -2,6 +2,7 @@
   "compilerOptions": {
     "baseUrl": "..",
     "paths": {
+      "@/content/manual": ["./content/manual/index.ts"],
       "@/*": ["./*"],
       "next/link": [".design-sync/shims/next-link"]
     }

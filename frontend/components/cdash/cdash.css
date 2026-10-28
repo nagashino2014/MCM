@@ -135,14 +135,18 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   .cd-canvas[data-theme="light"] {
     background-color: #f9f6f0;
   }
+  /* 빛 점은 루트 안에 가둔다(absolute + overflow clip). 앱 셸은 화면 전체 크기라 fixed 와 같고,
+     디자인 미리보기처럼 루트가 화면보다 작을 때 빛이 루트 밖으로 번지지 않는다. */
   .cd-shell.cd-canvas[data-theme="light"] {
     background: linear-gradient(160deg, #f4f6fb 0%, #eef1f8 55%, #f6f2ec 100%);
+    position: relative;
+    overflow: clip;
     isolation: isolate;
   }
   .cd-shell.cd-canvas[data-theme="light"]::before,
   .cd-shell.cd-canvas[data-theme="light"]::after {
     content: "";
-    position: fixed;
+    position: absolute;
     z-index: -1;
     pointer-events: none;
     border-radius: 9999px;

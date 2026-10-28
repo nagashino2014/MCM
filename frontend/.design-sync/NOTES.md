@@ -16,7 +16,8 @@
 - Playwright: 캐시에 chromium-1217 이 있어 `.ds-sync` 에 `playwright@1.59.1` 설치(1217 을 pin).
 
 ## Known render warns
-- `[FONT_MISSING]` Inter·Pretendard·Pretendard Variable — 사용자 결정으로 시스템 글꼴 대체 수용(아래 Re-sync risks).
+- ~~`[FONT_MISSING]` 시스템 글꼴 대체~~ — 2026-10-28 해소. 앱이 10-27부터 Pretendard Variable 을 직접 싣는다(아래 Re-sync risks).
+- `[GRID_OVERFLOW]`(2026-10-28 새 검사) — 12개 컴포넌트에 `cardMode: column` 을 넣어 해소했다. 한 줄에 여러 칩·필드를 늘어놓는 미리보기는 처음부터 column 으로 둔다.
 - `CdDropdown`·`CdHelp` 의 `Open` 은 마운트 직후 트리거를 `click()` 해 열린 상태를 보여준다(정적 렌더 불가 상태). `CdHelp` 는 `cardMode: single` + `primaryStory: Open`.
 - 오버레이 카드: `CdModal`·`CdDrawer`·`CdToastProvider` 는 `cardMode: single` + viewport 지정. 표·헤더·분할·버튼은 `cardMode: column`.
 - 미리보기 작성 시 셸 heredoc 한 번에 여러 `.tsx` 를 쓰면 bash 인용 파싱이 깨졌다 — 파일별로 쓴다.
@@ -31,11 +32,13 @@
 ## Re-sync risks
 - `pkg/ds.css` 는 앱 전체 Tailwind 유틸리티를 포함(약 136KB) — 앱 코드가 바뀌면 buildCmd 재실행 필요.
 - `next-link` 대체 모듈은 prefetch·client 라우팅을 흉내내지 않는다(디자인 렌더용).
-- 폰트: CSS 가 Inter·Noto Sans KR·Pretendard·Malgun Gothic 순으로 지정하지만 앱은 웹폰트를 싣지 않는다(UI 기준: 폰트 다운로드 추가 금지). **사용자 결정(2026-09-16): 시스템 글꼴 대체를 수용한다** — 디자인 렌더가 실제 직원 화면(맑은 고딕 등)과 같아야 하므로 웹폰트를 싣지 않는다. `[FONT_MISSING]`(Inter·Pretendard·Pretendard Variable) 경고는 이 결정에 따른 알려진 경고다.
+- 폰트(2026-10-28 갱신): 09-16 "시스템 글꼴 대체 수용" 결정은 10-27 KESI Precision 결정(Pretendard Variable 웹폰트, `public/fonts/PretendardVariable.woff2`)으로 대체됐다. `globals.css` 의 `@font-face` 는 절대경로(`/fonts/...`)라 변환기가 버리므로, `.design-sync/fonts.css` 에 같은 정의를 상대경로로 두고 `cfg.extraFonts` 로 싣는다. 폴백 이름(Pretendard·Malgun Gothic 등)은 `runtimeFontPrefixes`. 앱의 폰트 파일·굵기 범위가 바뀌면 `fonts.css` 도 같이 고친다.
+- 셸 바탕: `CdashRoot` 는 앱 루트와 같은 `cd-shell` 을 쓴다(라이트 = 그라데이션 + 빛 두 점). 빛 점은 `.cd-shell` 안에 `absolute` + `overflow: clip` 으로 가둔다 — `fixed` 였을 때 미리보기 칸에서 루트 밖으로 번졌다.
+- `CdHelp` 는 `@/content/manual`(폴더 배럴)을 import 한다. esbuild 가 Windows 에서 별칭 경로의 폴더를 파일로 읽다 실패("Incorrect function")해서 `tsconfig.bundle.json` paths 에 `index.ts` 를 명시했다. cdash 가 다른 폴더 배럴을 새로 import 하면 같은 방식으로 추가한다.
 
 ## 재동기화 절차 (첫 업로드 2026-09-17, 프로젝트 `MCM cdash` e8a1a0a1-9597-4f05-931b-7bc32ac81f34)
 1. `frontend/` 에서 스크립트 재배치: 스킬 base 의 `package-build.mjs package-validate.mjs package-capture.mjs resync.mjs lib storybook` 을 `.ds-sync/` 로 복사 → `(cd .ds-sync && npm i esbuild ts-morph @types/react playwright@<캐시 chromium 에 맞는 버전>)`.
-2. 사전 빌드: `node .design-sync/build.mjs` (Tailwind CSS + 선언 파일).
+2. 사전 빌드: `node .design-sync/build.mjs` (Tailwind CSS + 선언 파일). **드라이버는 이 단계를 대신하지 않는다** — 빠뜨리면 `pkg/types` 가 없어 `[DTS] parsed 0` 로 실패한다. cdash CSS 를 고칠 때마다 다시 돌린다.
 3. 원격 기준 파일을 `DesignSync get_file _ds_sync.json` → `.design-sync/.cache/remote-sync.json` 저장.
 4. `node .ds-sync/resync.mjs --config .design-sync/config.json --node-modules ./node_modules --entry ./.design-sync/pkg/index.ts --out ./ds-bundle --remote .design-sync/.cache/remote-sync.json`
 5. 판정 대기분만 캡처 시트를 보고 채점 → 업로드는 원자적 경로(finalize_plan 쓰기 전체, deletes 는 `.sync-diff.json` upload.deletePaths 그대로).
@@ -45,3 +48,4 @@
 ## 재동기화 기록
 - 2026-09-17 1차 재동기화(탭 규칙): conventions 에 Tab rule 추가, CdTabs 미리보기를 PageTabsWithFilter/Underline/FilterPill 로 교체. 검증 대상 2개(CdTabs·CdPageHeader), 19개는 업로드 검증분으로 통과. 원자적 업로드 113파일, 삭제 0.
 - ⚠ 저장소 `core.autocrlf=true` 라 체크아웃하면 `.design-sync` 파일이 CRLF 로 바뀌고 미리보기 해시가 달라져 전 컴포넌트가 재검증 대상이 됐다. `.design-sync/.gitattributes`(`* text eol=lf`)로 고정했다. 이미 CRLF 인 작업본은 LF 로 변환한 뒤 드라이버를 돌린다.
+- 2026-10-28 2차 재동기화(shadcn 결정판 P1): C Frosted Shell·반경 10·세그먼트 탭·카드 그림자·주 버튼 #4a63d8. CdTabs 미리보기를 PageTabsWithFilter/PageTabsSegment/InCardUnderline/FilterPill 로, CdPageHeader WithTabs 를 기본(세그먼트)으로 교체, conventions 의 탭·배치·효과 규칙 개정. 21/21 렌더 정상·채점 good, 원자적 업로드 115파일(삭제 0). 인증은 터미널 `claude`(PowerShell 에서 그냥 `claude`) 안에서 `/design-login`.

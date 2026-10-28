@@ -53,6 +53,17 @@
   - 결함 수정: `ApprovalSemanticsBoard` 의 `var(--cd-text-faint, #7C8FAC)` — 정의되지 않은 토큰이라 폴백 hex 가 그려지고 있었음 → `var(--cd-faint)`. 정의된 토큰의 hex 폴백 제거.
   - 그대로 둔 것: `LeaveNoticePreview`(연차사용촉진 고지서 — 인쇄 서식, 흰 종이 고정), `ApprovalDocHead` 문서 제목(21→22px 만),
     R8 `py-[11.5px]` 등 38건(10-21 목록 행 51px 결정과 묶인 값), R9 `<table>` 25, R12 표 열 너비 등 102, R6 21(차트 팔레트·흰 글자·휴무일 빨강 `#EF4444`).
+  - PR #54 머지(49def16e), next:735 배포.
+
+- **2026-10-28 재무 모듈** — `app/(app)/finance` + `components/finance` (28개 파일, 위반 506 → 333) — 브랜치 `claude/precision-finance`
+  - codemod C1·C2·C3(`--weights`) 17개 파일. 숫자 요약 값 18px → 16px(가장 가까운 단계), `text-lg` 구역 제목 → `text-base`. 그림자·uppercase 는 원래 0건.
+  - 상태색: 인라인 `style={{ color: "var(--cd-…)" }}` 34곳 + 조건부 색(음수 금액·대차 일치) 5곳 → 클래스, 오류·경고·안내 상자 7곳 → `cd-error-text cd-error-bg`·`cd-warn-text cd-warn-bg`·`cd-text-primary cd-tint-primary`·`cd-surface-bg`,
+    `text-amber-700` 3곳 → `cd-warn-text`, 정의된 토큰의 hex 폴백 제거.
+  - 연결 상태 점(`StatusDot`): `#22c55e`·`#f59e0b` + 번짐 그림자 → `--cd-success`·`--cd-warning` 단색.
+  - 결함 수정: `ManagementPanels` 합계 행이 클래스 이름인 `var(--cd-tint-primary, rgba(…))` 를 변수로 써서 늘 폴백이 그려지고 있었음 → `cd-tint-primary` 클래스.
+    `CardMerchantCorrectionPanel` 주 버튼이 인라인 `background: var(--cd-primary)` 로 남색 단색 규칙을 덮고 있었음 → 인라인 제거.
+  - 그대로 둔 것: R8 267(`py-[9.5px]`·`py-[11.5px]` — 10-21 목록 행 +7px 결정 `9ba54a68`), R9 `<table>` 57, R5 2(`SupplyGroupReviewPanel` 문서 이미지 위 영역 표시 — 흰 종이 고정),
+    R12 7(`cd-btn` 위 색 1·계산된 크기·로고 흰 바탕).
 
 ## 순서 (모듈 단위, 한 번에 하나)
 

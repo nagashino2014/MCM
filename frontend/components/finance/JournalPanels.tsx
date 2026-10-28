@@ -427,7 +427,7 @@ export function JournalPanel() {
       </div>
 
       {/* 필터 — 좌: 기간·구분·상태 / 우: 계좌·카드(로고 태그) / 하단: 계정 과목(전체 폭) */}
-      <div className="rounded-xl border cd-border-c p-3 mb-3">
+      <div className="rounded-lg border cd-border-c p-3 mb-3">
         {/* 좌 3 : 우 7 — 컨셉 도면 비율(좌측 기간·구분 블록이 전체 폭의 30%) */}
         <div className="grid grid-cols-1 xl:grid-cols-10 gap-x-8 gap-y-4">
           <div className="min-w-0 xl:col-span-3">
@@ -505,7 +505,7 @@ export function JournalPanel() {
                       onClick={() => setPick(active ? { type: "none" } : { type: "account", id: c.id })}
                       data-active={active}
                       aria-pressed={active}
-                      className="cd-choice w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                      className="cd-choice w-full flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                       style={
                         active
                           ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -535,7 +535,7 @@ export function JournalPanel() {
                         onClick={() => setPick(active ? { type: "none" } : { type: "cardCompany", code })}
                         data-active={active}
                         aria-pressed={active}
-                        className="cd-choice w-full flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                        className="cd-choice w-full flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                         style={
                           active
                             ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -613,7 +613,7 @@ export function JournalPanel() {
       {/* 카드 사용내역 구분 사후 지정 — 결재문서에 귀속되지 않은 카드 건을 골라 출장경비/지출결의로 라벨링한다.
           (귀속 문서가 생기면 그 값이 우선하므로 여기 지정은 자동으로 덮인다) */}
       {assignable.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap rounded-xl border cd-border-c p-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap rounded-lg border cd-border-c p-2 mb-3">
           <span className="text-xs cd-text-muted">
             카드 사용내역 구분 지정 — 이 페이지에 문서 미귀속 카드 전표 {assignable.length}건
             {checked.size > 0 && <span className="cd-text"> · 선택 {checked.size}건</span>}
@@ -640,7 +640,7 @@ export function JournalPanel() {
         </div>
       )}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2 cd-success-text">{notice}</div>}
       {sourceWarnings.length > 0 && <details className="text-sm mb-3" open><summary>원천 대조 확인사항 {sourceWarnings.length}건</summary><ul className="list-disc pl-5">{sourceWarnings.map((w,i)=><li key={`${w.sourceKind}:${w.sourceId}:${i}`}>{SOURCE_LABEL[w.sourceKind] ?? w.sourceKind} · {w.sourceId}: {SOURCE_WARNING[w.reason] ?? w.reason}</li>)}</ul></details>}
 
       <div className="overflow-x-auto">
@@ -800,8 +800,8 @@ export function JournalPanel() {
         {bulk && (
           <div>
             <div className="text-sm mb-3">
-              <span className="font-bold">{bulk.base.partyName}</span> 건이 <span className="font-bold">{bulkAccountName}</span> 으로 확정됩니다.
-              현재 목록에 입금/출금처가 같은 미확정 전표가 <span className="font-bold">{bulk.targets.length}건</span> 더 있습니다 — 함께 확정할까요?
+              <span className="font-semibold">{bulk.base.partyName}</span> 건이 <span className="font-semibold">{bulkAccountName}</span> 으로 확정됩니다.
+              현재 목록에 입금/출금처가 같은 미확정 전표가 <span className="font-semibold">{bulk.targets.length}건</span> 더 있습니다 — 함께 확정할까요?
             </div>
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setBulkOff(new Set())}>
@@ -1193,7 +1193,7 @@ function BacktestCard() {
         같은 연도의 앱 자동분개와 계정별로 비교해 차이를 보여줍니다. 차이 원인을 분류 규칙에 반영해 오차를 줄여가는 것이 목적입니다.
       </div>
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2 cd-success-text">{notice}</div>}
 
       {batches.length > 0 && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">

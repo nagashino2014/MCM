@@ -202,13 +202,13 @@ export function ExpenseSettlementPanel() {
         ].map(([label, value]) => (
           <div key={label} className="cd-card border cd-border-c p-4">
             <p className="text-[11px] cd-text-faint">{label}</p>
-            <p className="text-[18px] font-bold cd-text mt-1">{value}</p>
+            <p className="text-[16px] font-semibold cd-text mt-1">{value}</p>
           </div>
         ))}
       </div>
 
       {(error || notice) && (
-        <div className="rounded-lg border cd-border-c px-3 py-2 text-[12px] whitespace-pre-line" style={{ color: error ? "var(--cd-error,#FA896B)" : undefined }}>
+        <div className={`rounded-lg border cd-border-c px-3 py-2 text-[12px] whitespace-pre-line ${error ? "cd-error-text" : ""}`}>
           {error ?? notice}
         </div>
       )}
@@ -216,7 +216,7 @@ export function ExpenseSettlementPanel() {
       {/* 미정산 현황(인별) */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
+          <p className="text-[13px] font-semibold cd-text flex items-center gap-1.5">
             <Banknote className="w-4 h-4" /> 미정산 개인 지출 (인별)<CdHelp topic="finance.expsettle" />
           </p>
           <button
@@ -229,13 +229,13 @@ export function ExpenseSettlementPanel() {
           </button>
         </div>
         {noAccount.length > 0 && (
-          <p className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--cd-warning)" }}>
+          <p className="text-[12px] flex items-center gap-1.5 cd-warn-text">
             <TriangleAlert className="w-3.5 h-3.5 shrink-0" />
             계좌 미등록: {noAccount.map((p) => p.employeeName).join(", ")} — 사용자 등록/수정의 인사관리 탭에서 은행코드·계좌번호를 등록하면 CMS에 자동 기입됩니다.
           </p>
         )}
         {withheld.count > 0 && (
-          <p className="text-[11.5px] cd-text-muted">
+          <p className="text-[12px] cd-text-muted">
             근태 관리의 식대 경고에서 불지급 처분한 {withheld.count}건({comma(withheld.amount)}원)은 정산에서 제외됩니다.
           </p>
         )}
@@ -244,7 +244,7 @@ export function ExpenseSettlementPanel() {
             <thead>
               <tr>
                 {["성명", "직급", "건수", "지급대상액", "은행코드", "계좌번호"].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                  <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -263,16 +263,16 @@ export function ExpenseSettlementPanel() {
                       <span className="inline-flex items-center gap-2">
                         <button
                           type="button"
-                          className="rounded-full border cd-border-c px-2 py-0.5 text-[10.5px] cd-text-muted hover:cd-tint-primary inline-flex items-center gap-1"
+                          className="rounded-full border cd-border-c px-2 py-0.5 text-[11px] cd-text-muted hover:cd-tint-primary inline-flex items-center gap-1"
                           title="지출 항목별 내역 보기"
                           onClick={() => setPersonDetail(p)}
                         >
                           <ListTree className="w-3 h-3" /> 상세
                         </button>
-                        <span className="cd-text font-bold">{comma(p.amount)}원</span>
+                        <span className="cd-text font-semibold">{comma(p.amount)}원</span>
                       </span>
                     </td>
-                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankCode ?? <span style={{ color: "var(--cd-warning)" }}>미등록</span>}</td>
+                    <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankCode ?? <span className="cd-warn-text">미등록</span>}</td>
                     <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{p.bankAccount ?? "-"}</td>
                   </tr>
                 ))
@@ -285,12 +285,12 @@ export function ExpenseSettlementPanel() {
       {/* 정산 범위 밖 과거 지출(G-8) — 직접 입력이 막히기 전 승인분. 조회만, 이체는 은행에서 개별 처리 */}
       {outOfScope.length > 0 && (
         <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
-          <button type="button" className="cd-action text-[13px] font-bold cd-text flex items-center gap-1.5 text-left" onClick={() => setOutOpen((v) => !v)}>
+          <button type="button" className="cd-action text-[13px] font-semibold cd-text flex items-center gap-1.5 text-left" onClick={() => setOutOpen((v) => !v)}>
             {outOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            <TriangleAlert className="w-4 h-4" style={{ color: "var(--cd-warning)" }} /> 정산 범위 밖 과거 지출 {outOfScope.length}건 ·{" "}
+            <TriangleAlert className="w-4 h-4 cd-warn-text" /> 정산 범위 밖 과거 지출 {outOfScope.length}건 ·{" "}
             {comma(outOfScope.reduce((a, r) => a + r.amount, 0))}원
           </button>
-          <p className="text-[11.5px] cd-text-muted">
+          <p className="text-[12px] cd-text-muted">
             직접 입력이 막히기 전에 승인된 출장보고서의 수기 행과 지출결의서(법인카드)의 카드 외 행입니다. 일괄 정산에 넣지 않습니다 —
             법인카드 사용분을 손으로 적은 행일 수 있으니 원본 문서를 확인하고, 개인 지출이 맞으면 은행에서 개별 이체하세요.
           </p>
@@ -300,7 +300,7 @@ export function ExpenseSettlementPanel() {
                 <thead>
                   <tr>
                     {["결재 종결일", "기안자", "문서", "사용일", "상호", "금액", "구분"].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                      <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -312,7 +312,7 @@ export function ExpenseSettlementPanel() {
                       <td className="px-3 py-[11.5px] cd-text-faint whitespace-nowrap">{(FORM_LABEL[r.formId] ?? r.formId) + (r.docNo ? ` · ${r.docNo}` : "")}</td>
                       <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{r.usedOn ?? "-"}</td>
                       <td className="px-3 py-[11.5px] cd-text">{r.vendor ?? "-"}</td>
-                      <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">{comma(r.amount)}원</td>
+                      <td className="px-3 py-[11.5px] cd-text font-semibold whitespace-nowrap text-right">{comma(r.amount)}원</td>
                       <td className="px-3 py-[11.5px] cd-text-faint whitespace-nowrap">{r.kind === "shop" ? "카드 미매칭 전표" : "수기"}</td>
                     </tr>
                   ))}
@@ -325,7 +325,7 @@ export function ExpenseSettlementPanel() {
 
       {/* 정산 이력 */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
-        <p className="text-[13px] font-bold cd-text flex items-center gap-1.5">
+        <p className="text-[13px] font-semibold cd-text flex items-center gap-1.5">
           <FileSpreadsheet className="w-4 h-4" /> 정산 이력
         </p>
         <div className="overflow-x-auto">
@@ -333,7 +333,7 @@ export function ExpenseSettlementPanel() {
             <thead>
               <tr>
                 {["", "정산일", "대상 기간", "건수", "인원", "총액", "CMS", "부가세 자료", "메모"].map((h, i) => (
-                  <th key={i} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                  <th key={i} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -361,16 +361,16 @@ export function ExpenseSettlementPanel() {
 
       {/* 월별 추이(정산 완료 기준) */}
       <div className="cd-card border cd-border-c p-4 flex flex-col gap-3">
-        <p className="text-[13px] font-bold cd-text">{new Date().getFullYear()}년 월별 개인 지출 추이</p>
+        <p className="text-[13px] font-semibold cd-text">{new Date().getFullYear()}년 월별 개인 지출 추이</p>
         {trend.length === 0 ? (
           <p className="text-[12px] cd-text-faint">정산 완료 데이터가 쌓이면 표시됩니다.</p>
         ) : (
           <div className="flex items-end gap-2 h-32">
             {trend.map((t) => (
               <div key={t.month} className="flex flex-col items-center gap-1 flex-1 min-w-0" title={`${t.month}: ${comma(t.amount)}원 (${t.count}건)`}>
-                <span className="text-[10px] cd-text-faint">{comma(t.amount)}</span>
+                <span className="text-[11px] cd-text-faint">{comma(t.amount)}</span>
                 <div className="w-full max-w-[36px] rounded-t cd-fill-primary" style={{ height: `${Math.max(4, (t.amount / trendMax) * 90)}px` }} />
-                <span className="text-[10px] cd-text-muted">{t.month.slice(5)}월</span>
+                <span className="text-[11px] cd-text-muted">{t.month.slice(5)}월</span>
               </div>
             ))}
           </div>
@@ -390,7 +390,7 @@ export function ExpenseSettlementPanel() {
               <thead>
                 <tr>
                   {["사용일시", "분류", "상호", "금액", "지출 목적", "출처"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left cd-surface-bg cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -402,10 +402,10 @@ export function ExpenseSettlementPanel() {
                       <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{i.usedOn ?? "-"}</td>
                       <td className="px-3 py-[11.5px] cd-text-muted whitespace-nowrap">{i.category ?? "-"}</td>
                       <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{i.vendor ?? "-"}</td>
-                      <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">
+                      <td className="px-3 py-[11.5px] cd-text font-semibold whitespace-nowrap text-right">
                         {comma(i.amount)}원
                         {i.mealDeduct && (
-                          <span className="ml-1.5 text-[10px] font-bold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
+                          <span className="ml-1.5 text-[11px] font-semibold rounded-full px-2 py-0.5" style={{ background: "var(--cd-warning)", color: "#fff" }} title="급여대장 '식대환수' 공제로 회수됩니다">
                             급여 차감
                           </span>
                         )}
@@ -456,7 +456,7 @@ function SettlementRowView({
         </td>
         <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{s.itemCount}건</td>
         <td className="px-3 py-[11.5px] cd-text whitespace-nowrap">{s.personCount}명</td>
-        <td className="px-3 py-[11.5px] cd-text font-bold whitespace-nowrap text-right">{comma(s.totalAmount)}원</td>
+        <td className="px-3 py-[11.5px] cd-text font-semibold whitespace-nowrap text-right">{comma(s.totalAmount)}원</td>
         <td className="px-3 py-[11.5px] whitespace-nowrap">
           <span className="inline-flex items-center gap-1.5">
             <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy === `cms-${s.settlementId}`} onClick={onCms}>
@@ -475,7 +475,7 @@ function SettlementRowView({
               <Mail className="w-3.5 h-3.5" /> {busy === `vat-${s.settlementId}` ? "생성·발송 중…" : "부가세 자료 발송"}
             </button>
             {s.vatBundleSentAt && (
-              <span className="text-[10.5px] cd-text-faint">
+              <span className="text-[11px] cd-text-faint">
                 {s.vatBundleSentAt.slice(0, 10)} → {s.vatBundleSentTo}
               </span>
             )}
@@ -490,15 +490,15 @@ function SettlementRowView({
               <p className="text-[12px] cd-text-faint">불러오는 중…</p>
             ) : (
               <div className="flex flex-col gap-3">
-                <p className="text-[11.5px] cd-text-faint">
+                <p className="text-[12px] cd-text-faint">
                   인별: {detail.persons.map((p) => `${p.employeeName} ${comma(p.amount)}원(${p.count}건)`).join(" · ")}
                 </p>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[11.5px]">
+                  <table className="w-full text-[12px]">
                     <thead className="cd-table-head">
                       <tr>
                         {["성명", "문서", "양식", "사용일", "분류", "상호", "금액", "지출 목적"].map((h) => (
-                          <th key={h} className="px-2 py-1.5 text-left cd-text font-bold whitespace-nowrap border-b cd-border-c">{h}</th>
+                          <th key={h} className="px-2 py-1.5 text-left cd-text font-semibold whitespace-nowrap border-b cd-border-c">{h}</th>
                         ))}
                       </tr>
                     </thead>

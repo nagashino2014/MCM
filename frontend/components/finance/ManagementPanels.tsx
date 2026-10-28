@@ -62,7 +62,7 @@ export function PnlPanel() {
   const months = Array.from({ length: 12 }, (_, i) => i);
   const section = (label: string, type: "revenue" | "expense", totals: number[], total: number) => (
     <>
-      <tr className="font-medium" style={{ background: "var(--cd-tint-primary, rgba(93,135,255,.06))" }}>
+      <tr className="font-medium cd-tint-primary">
         <td className="py-1.5 pr-3">{label}</td>
         {months.map((m) => (
           <td key={m} className="py-1.5 pr-3 text-right whitespace-nowrap">{totals[m] ? won(totals[m]) : ""}</td>
@@ -123,18 +123,17 @@ export function PnlPanel() {
             {data && section("수익", "revenue", data.revenueByMonth, data.revenueTotal)}
             {data && section("비용", "expense", data.expenseByMonth, data.expenseTotal)}
             {data && (
-              <tr className="border-t-2 cd-hairline-row-c font-bold">
+              <tr className="border-t-2 cd-hairline-row-c font-semibold">
                 <td className="py-2 pr-3">당기 손익</td>
                 {months.map((m) => (
                   <td
                     key={m}
-                    className="py-2 pr-3 text-right whitespace-nowrap"
-                    style={data.netByMonth[m] < 0 ? { color: "var(--cd-error,#FA896B)" } : undefined}
+                    className={`py-2 pr-3 text-right whitespace-nowrap ${data.netByMonth[m] < 0 ? "cd-error-text" : ""}`}
                   >
                     {data.netByMonth[m] ? won(data.netByMonth[m]) : ""}
                   </td>
                 ))}
-                <td className="py-2 text-right whitespace-nowrap" style={data.netTotal < 0 ? { color: "var(--cd-error,#FA896B)" } : undefined}>
+                <td className={`py-2 text-right whitespace-nowrap ${data.netTotal < 0 ? "cd-error-text" : ""}`}>
                   {won(data.netTotal)}
                 </td>
               </tr>
@@ -191,9 +190,9 @@ export function CashPanel() {
   }, []);
 
   const kpi = (label: string, value: string, sub?: string, tone?: string) => (
-    <div className="border cd-border-c rounded-2xl px-4 py-3 min-w-[180px]">
+    <div className="border cd-border-c rounded-lg px-4 py-3 min-w-[180px]">
       <div className="text-xs cd-text-muted mb-1">{label}</div>
-      <div className="text-lg font-bold whitespace-nowrap" style={tone ? { color: tone } : undefined}>{value}</div>
+      <div className="text-base font-semibold whitespace-nowrap" style={tone ? { color: tone } : undefined}>{value}</div>
       {sub && <div className="text-[11px] cd-text-faint mt-0.5">{sub}</div>}
     </div>
   );
@@ -209,15 +208,15 @@ export function CashPanel() {
               {kpi("현재 예금 잔액", `${won(data.totalBalance)}원`, `기준: 계좌 원장 최종 거래`)}
               {kpi("오늘 입금 / 출금", `${won(data.today.inflow)} / ${won(data.today.outflow)}`, data.today.date)}
               {kpi("이번 달 입금 / 출금", `${won(data.thisMonth.inflow)} / ${won(data.thisMonth.outflow)}`)}
-              {kpi("발행 미수 잔액", `${won(data.receivableTotal)}원`, `${data.receivableCount}건 — 수금 예정 유입`, "var(--cd-primary,#5D87FF)")}
+              {kpi("발행 미수 잔액", `${won(data.receivableTotal)}원`, `${data.receivableCount}건 — 수금 예정 유입`, "var(--cd-primary)")}
             </div>
             <div className="flex gap-2 flex-wrap">
               {data.balances.map((b) => (
-                <span key={b.accountId} className="inline-flex items-center gap-1.5 border cd-border-c rounded-xl px-3 py-1.5 text-sm">
+                <span key={b.accountId} className="inline-flex items-center gap-1.5 border cd-border-c rounded-lg px-3 py-1.5 text-sm">
                   <Landmark className="w-3.5 h-3.5 cd-text-muted" />
                   {b.alias ?? b.bankName}
                   <b className="ml-1">{won(b.balance)}원</b>
-                  <span className="text-[10px] cd-text-faint">({b.asOf})</span>
+                  <span className="text-[11px] cd-text-faint">({b.asOf})</span>
                 </span>
               ))}
             </div>
@@ -250,8 +249,7 @@ export function CashPanel() {
                       <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.inflow)}</td>
                       <td className="py-[9.5px] pr-3 text-right whitespace-nowrap">{won(m.outflow)}</td>
                       <td
-                        className="py-[9.5px] pr-3 text-right whitespace-nowrap font-medium"
-                        style={m.net < 0 ? { color: "var(--cd-error,#FA896B)" } : { color: "var(--cd-success)" }}
+                        className={`py-[9.5px] pr-3 text-right whitespace-nowrap font-medium ${m.net < 0 ? "cd-error-text" : "cd-success-text"}`}
                       >
                         {won(m.net)}
                       </td>

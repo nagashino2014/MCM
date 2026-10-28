@@ -378,7 +378,7 @@ export function ReceiptCollectPanel() {
       <div className="space-y-4">
         <div className="cd-card p-6">
           <div className="flex items-start gap-3">
-            <AlertTriangle size={20} className="mt-0.5 shrink-0" style={{ color: "var(--cd-warning)" }} />
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 cd-warn-text" />
             <div className="space-y-2">
               <div className="cd-card-title">이 기능은 내 PC 에서 실행한 앱에서만 쓸 수 있습니다</div>
               <p className="text-sm cd-text-muted leading-relaxed">
@@ -515,7 +515,7 @@ export function ReceiptCollectPanel() {
             {shops.map((shop) => {
               const checked = selected.has(shop.key);
               return (
-                <div key={shop.key} className="border cd-border-c rounded-xl p-3 flex flex-col">
+                <div key={shop.key} className="border cd-border-c rounded-lg p-3 flex flex-col">
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"

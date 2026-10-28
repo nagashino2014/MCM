@@ -152,7 +152,7 @@ export function ShopReceiptPickerModal({
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
 
-        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-xl">
+        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-lg">
           <table className="w-full text-sm">
             <thead className="cd-table-head sticky top-0">
               <tr className="cd-text-muted text-left">
@@ -187,10 +187,10 @@ export function ShopReceiptPickerModal({
                     <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.siteName}</td>
                     <td className="py-[9.5px] pr-3 max-w-[280px] truncate" title={item.title}>
                       {item.title || `주문 ${item.orderNo}`}
-                      {existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
-                      {item.docId && !existing.has(item.receiptId) && <span className="ml-1.5 text-[10px] cd-text-faint">(다른 문서에 사용)</span>}
-                      {attachOnly && !used && <span className="ml-1.5 text-[10px] cd-text-primary">(카드 행에 첨부만)</span>}
-                      {unmatched && !used && <span className="ml-1.5 text-[10px] cd-text-faint">(카드 미매칭)</span>}
+                      {existing.has(item.receiptId) && <span className="ml-1.5 text-[11px] cd-text-faint">(이미 담김)</span>}
+                      {item.docId && !existing.has(item.receiptId) && <span className="ml-1.5 text-[11px] cd-text-faint">(다른 문서에 사용)</span>}
+                      {attachOnly && !used && <span className="ml-1.5 text-[11px] cd-text-primary">(카드 행에 첨부만)</span>}
+                      {unmatched && !used && <span className="ml-1.5 text-[11px] cd-text-faint">(카드 미매칭)</span>}
                     </td>
                     <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{item.amount.toLocaleString("ko-KR")}</td>
                     <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.cardLast4 ? `****${item.cardLast4}` : "-"}</td>

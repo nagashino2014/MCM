@@ -232,7 +232,7 @@ export function CardPickerModal({
           <span className="text-xs cd-text-muted mr-auto">
             {selected.size}건 선택
             {incomplete.length > 0 && (
-              <span className="ml-1.5" style={{ color: "var(--cd-error)" }}>
+              <span className="ml-1.5 cd-error-text">
                 · 입력 필요 {incomplete.length}건
               </span>
             )}
@@ -290,9 +290,9 @@ export function CardPickerModal({
         {/* 카드 태그 — 내 부서 카드를 먼저, 그 아래 타 부서(태그를 누르면 그 부서 카드가 펼쳐진다).
             옆 부서 카드를 빌려 쓰는 경우가 있어 다른 부서도 고를 수 있어야 한다(사용자 요구). */}
         {cards.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-xl border cd-border-c px-3 py-2.5">
+          <div className="flex flex-col gap-1.5 rounded-lg border cd-border-c px-3 py-2.5">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-bold cd-text whitespace-nowrap">{myDept?.deptName ?? "내 부서"}</span>
+              <span className="text-xs font-semibold cd-text whitespace-nowrap">{myDept?.deptName ?? "내 부서"}</span>
               {myCards.length ? (
                 myCards.map((c) => (
                   <button
@@ -323,7 +323,7 @@ export function CardPickerModal({
                   type="button"
                   data-active={openDept === d.deptId}
                   aria-pressed={openDept === d.deptId}
-                  className={`cd-choice cd-btn cd-btn-sm ${openDept === d.deptId ? "cd-btn-soft font-bold" : "cd-btn-ghost"}`}
+                  className={`cd-choice cd-btn cd-btn-sm ${openDept === d.deptId ? "cd-btn-soft font-semibold" : "cd-btn-ghost"}`}
                   onClick={() => setOpenDept((prev) => (prev === d.deptId ? null : d.deptId))}
                 >
                   {d.label}
@@ -351,13 +351,13 @@ export function CardPickerModal({
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
         {tripLikeSelected && (
-          <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--cd-warning)" }}>
+          <div className="flex items-center gap-1.5 text-xs cd-warn-text">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             출장성 지출(교통·숙박·유류)이 선택돼 있습니다 — 출장 경비는 출장보고서의 경비 내역 사용을 권장합니다.
           </div>
         )}
 
-        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-xl">
+        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-lg">
           <table className="w-full text-sm">
             <thead className="cd-table-head sticky top-0">
               <tr className="cd-text-muted text-left">
@@ -388,7 +388,7 @@ export function CardPickerModal({
                     <td className="py-[9.5px] pr-3 whitespace-nowrap text-xs">{item.cardLabel}</td>
                     <td className="py-[9.5px] pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
-                      {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
+                      {used && <span className="ml-1.5 text-[11px] cd-text-faint">(이미 담김)</span>}
                     </td>
                     <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{item.amountTotal.toLocaleString("ko-KR")}</td>
                     {/* 지출 목적·연관 용역/사업장 — 칸을 눌러도 행 선택은 토글하지 않는다 */}
@@ -425,7 +425,7 @@ export function CardPickerModal({
                         label={relatedOf(item)?.label ?? ""}
                         disabled={used || relatedLocked}
                         missing={purposeNeedsRelated(purposeOf(item))}
-                        className={relatedLocked ? "cd-text-muted" : "rounded-md border cd-border-c"}
+                        className={relatedLocked ? "cd-text-muted" : "rounded-lg border cd-border-c"}
                         onPick={(ref) => editRow(item.cardTxnId, { related: ref })}
                       />
                     </td>

@@ -307,7 +307,7 @@ export function FinanceBoard() {
   const group = TAB_GROUPS.find((g) => g.tabs.some(([k]) => k === tab)) ?? TAB_GROUPS[0];
 
   return (
-    <div className="cdash cd-fields-white min-h-full p-4 rounded-3xl" data-theme={theme}>
+    <div className="cdash cd-fields-white min-h-full p-4 rounded-lg" data-theme={theme}>
       <div>
         <CdPageHeader title={`재무 · ${group.title}`} />
 
@@ -359,12 +359,8 @@ export function FinanceBoard() {
 function StatusDot({ ok }: { ok: boolean }) {
   return (
     <span
-      className="inline-block rounded-full shrink-0"
-      style={
-        ok
-          ? { width: 8, height: 8, background: "#22c55e", boxShadow: "0 0 6px 2px rgba(34,197,94,0.55)" }
-          : { width: 8, height: 8, background: "#f59e0b", boxShadow: "0 0 6px 2px rgba(245,158,11,0.55)" }
-      }
+      className="inline-block w-2 h-2 rounded-full shrink-0"
+      style={{ background: ok ? "var(--cd-success)" : "var(--cd-warning)" }}
     />
   );
 }
@@ -461,10 +457,10 @@ function StatementUploadCard({ onImported }: { onImported: () => void }) {
       </div>
 
       {error && <div className="text-xs cd-error-text mt-2">{error}</div>}
-      {done && <div className="text-xs mt-2" style={{ color: "var(--cd-success)" }}>{done}</div>}
+      {done && <div className="text-xs mt-2 cd-success-text">{done}</div>}
 
       {summary && (
-        <div className="mt-3 rounded-xl border cd-border-c p-3 text-xs space-y-3">
+        <div className="mt-3 rounded-lg border cd-border-c p-3 text-xs space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="cd-pill cd-pill-info">{summary.profileLabel}</span>
             <span className="cd-text-muted">{period}</span>
@@ -829,7 +825,7 @@ function ConnectionsPanel() {
 
       {error && <div className="cd-card p-3 cd-error-text text-sm">{error}</div>}
       {notice && (
-        <div className="cd-card p-3 text-sm" style={{ color: "var(--cd-success)" }}>{notice}</div>
+        <div className="cd-card p-3 text-sm cd-success-text">{notice}</div>
       )}
 
       {/* 등록 안내 */}
@@ -1313,7 +1309,7 @@ function BankLedgerPanel() {
                   onClick={() => toggleAccount(acc.id)}
                   data-active={selectedAccount === acc.id}
                   aria-pressed={selectedAccount === acc.id}
-                  className="cd-choice flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                  className="cd-choice flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                   style={
                     selectedAccount === acc.id
                       ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1352,11 +1348,11 @@ function BankLedgerPanel() {
       <div className="flex items-center gap-4 mb-3 text-sm flex-wrap">
         <span>
           <span className="cd-text-muted mr-1.5">입금 총계</span>
-          <b style={{ color: "var(--cd-success)" }}>{fmtAmount(totals.deposit)}원</b>
+          <b className="cd-success-text">{fmtAmount(totals.deposit)}원</b>
         </span>
         <span>
           <span className="cd-text-muted mr-1.5">출금 총계</span>
-          <b style={{ color: "var(--cd-error)" }}>{fmtAmount(totals.withdraw)}원</b>
+          <b className="cd-error-text">{fmtAmount(totals.withdraw)}원</b>
         </span>
         <span className="text-xs cd-text-faint">{filter.from || filter.to ? `${filter.from || "…"} ~ ${filter.to || "…"} 기준` : "전체 기간 기준"}</span>
       </div>
@@ -1570,7 +1566,7 @@ function CardLedgerPanel() {
                     onClick={() => toggleCompany(company.code)}
                     data-active={selectedCompany === company.code}
                     aria-pressed={selectedCompany === company.code}
-                    className="cd-choice flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm text-left transition-colors"
+                    className="cd-choice flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                     style={
                       selectedCompany === company.code
                         ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1627,7 +1623,7 @@ function CardLedgerPanel() {
         </span>
         <span>
           <span className="cd-text-muted mr-1.5">부가세</span>
-          <b style={{ color: "var(--cd-primary)" }}>{fmtAmount(cardTotals.taxAmount)}원</b>
+          <b className="cd-text-primary">{fmtAmount(cardTotals.taxAmount)}원</b>
         </span>
         <span className="text-xs cd-text-faint">
           {selectedCompany ? (selectedCards.size ? `선택 카드 ${selectedCards.size}장` : "카드사 전체") : "등록 카드 전체"} ·{" "}
@@ -1714,7 +1710,7 @@ function CardLedgerPanel() {
                 <td className="py-[9.5px] pr-3 text-right font-medium whitespace-nowrap">{fmtAmount(r.amountTotal)}</td>
                 <td className="py-[9.5px] pr-3 text-right whitespace-nowrap cd-text-muted">{r.taxAmount != null ? fmtAmount(r.taxAmount) : ""}</td>
                 <td className="py-[9.5px] pr-3 max-w-[240px]" title={r.storeName ?? ""}>
-                  <div className="truncate">{r.storeName ?? ""}{r.docId && <span className="ml-1 text-[10px] cd-text-faint">결의서</span>}</div>
+                  <div className="truncate">{r.storeName ?? ""}{r.docId && <span className="ml-1 text-[11px] cd-text-faint">결의서</span>}</div>
                   {r.merchantCorrection ? <div className="text-xs cd-text-muted mt-1 space-y-1"><div>원본 {r.merchantCorrection.originalCorpNum ? fmtCorpNum(r.merchantCorrection.originalCorpNum) : "번호 없음"}</div><div>적용 {r.merchantCorrection.effectiveCorpNum ? fmtCorpNum(r.merchantCorrection.effectiveCorpNum) : "번호 없음"}<span className={`ml-1 cd-pill ${r.merchantCorrection.status === "review_required" ? "cd-pill-warn" : "cd-pill-info"}`}>{r.merchantCorrection.status === "corrected" ? "정정" : r.merchantCorrection.status === "original" ? "원본" : "재검토"}</span></div></div> : <div className="text-xs cd-text-muted mt-1">수집 원본 {r.storeCorpNum ? fmtCorpNum(r.storeCorpNum) : "번호 없음"}</div>}
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm mt-1" onClick={() => setMerchantTarget(r)}>사업자번호 정정</button>
                 </td>
@@ -1911,7 +1907,7 @@ function StoreRuleModal({
       }
     >
       <div className="text-sm cd-text space-y-3">
-        <div className="rounded-xl border cd-border-c p-3">
+        <div className="rounded-lg border cd-border-c p-3">
           <div className="font-medium">{txn?.storeName || "(상호 없음)"}</div>
           <div className="text-xs cd-text-muted mt-0.5">
             사업자번호 {txn?.storeCorpNum || "—"} · 업태 {txn?.storeBizType || "—"}
@@ -1957,7 +1953,7 @@ function StoreRuleModal({
         </div>
 
         {preview && (
-          <div className="rounded-xl border cd-border-c p-3 text-xs space-y-1">
+          <div className="rounded-lg border cd-border-c p-3 text-xs space-y-1">
             <div>
               매칭 <b>{preview.total}건</b> · 이번에 적용 <b>{preview.applicable}건</b>
               {preview.lockedByDoc > 0 && <span className="cd-text-muted"> (결의서 귀속 {preview.lockedByDoc}건 제외)</span>}
@@ -1975,7 +1971,7 @@ function StoreRuleModal({
         )}
 
         {risky && (
-          <div className="rounded-xl border p-3 text-xs" style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
+          <div className="rounded-lg border p-3 text-xs cd-warn-border cd-warn-bg">
             <div className="flex items-center gap-1.5 font-medium mb-1">
               <AlertTriangle className="w-3.5 h-3.5" /> 일괄 지정을 권장하지 않는 매입처입니다
             </div>
@@ -2204,7 +2200,7 @@ function ReconPanel() {
         <p className="text-[11px] cd-text-faint mb-2">
           {lastRunAt ? `마지막 대조 실행: ${lastRunAt}` : "아직 대조를 실행하지 않았습니다."} · 매칭 규칙이 바뀌면 <b>대조 실행</b>을 다시 눌러야 목록이 갱신됩니다.
         </p>
-        {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
+        {notice && <div className="text-sm mb-2 cd-success-text">{notice}</div>}
         {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
         {loading && <div className="text-sm cd-text-muted py-4">불러오는 중…</div>}
         {!loading && items.length === 0 && (
@@ -2215,7 +2211,7 @@ function ReconPanel() {
 
         <div className="space-y-2">
           {items.map((item) => (
-            <div key={item.matchId} className="rounded-xl border cd-border-c p-3">
+            <div key={item.matchId} className="rounded-lg border cd-border-c p-3">
               <div className="flex items-start gap-3 flex-wrap">
                 {bucket !== "confirmed" && bucket !== "rejected" && (
                   <input
@@ -2377,7 +2373,7 @@ function RejectReasonModal({
       }
     >
       <div className="text-sm cd-text space-y-3">
-        <div className="rounded-xl border cd-border-c p-3">
+        <div className="rounded-lg border cd-border-c p-3">
           <div className="font-medium">{item ? fmtAmount(item.amount) : 0}원</div>
           <div className="text-xs cd-text-muted">
             {item?.txnAt} · 입금자 {item?.remitterRaw || "—"}
@@ -2504,14 +2500,14 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
       }
     >
       <div className="text-sm cd-text space-y-3">
-        <div className="rounded-xl border cd-border-c p-3">
+        <div className="rounded-lg border cd-border-c p-3">
           <div className="font-medium">{item ? fmtAmount(item.amount) : 0}원 입금</div>
           <div className="text-xs cd-text-muted">
             {item?.txnAt} · 입금자 {item?.remitterRaw || "—"}
           </div>
         </div>
         <input className="cd-input" placeholder="거래처·계약명 검색" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-        <div className="max-h-[320px] overflow-y-auto rounded-xl border cd-border-c divide-y">
+        <div className="max-h-[320px] overflow-y-auto rounded-lg border cd-border-c divide-y">
           {filtered.map((r) => {
             // 실적 정산이 있으면 실제 청구액은 정산액 — 채우기·표시 모두 이 기준을 쓴다.
             // 이미 수금된 단계는 잔액이 0 이므로 기록된 수금액을 보여준다(정산이 있으면 정산액).
@@ -2537,7 +2533,7 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
                   <div className="text-[11px] cd-text-faint font-mono">VAT 포함 {fmtAmount(Math.round(due * 1.1))}</div>
                   {r.collected && <span className="cd-pill cd-pill-idle mt-0.5 inline-block">수금 완료</span>}
                   {r.settlementAmount != null && r.settlementAmount > 0 && (
-                    <span className="block text-[10px] cd-text-faint">실적 정산액</span>
+                    <span className="block text-[11px] cd-text-faint">실적 정산액</span>
                   )}
                 </div>
                 {r.collected ? (
@@ -2590,7 +2586,7 @@ function ManualMatchModal({ item, onClose, onSaved }: { item: ReconItem | null; 
           )}
           {item && comparedTotal !== item.amount && (
             Math.abs(Math.round(comparedTotal * 1.1) - item.amount) <= 1 ? (
-              <span className="ml-1" style={{ color: "var(--cd-success)" }}>VAT 포함액이 입금액과 일치합니다</span>
+              <span className="ml-1 cd-success-text">VAT 포함액이 입금액과 일치합니다</span>
             ) : (
               <span className="ml-1 cd-warn-text">입금액과 다릅니다({fmtAmount(item.amount - comparedTotal)}원 차이)</span>
             )
@@ -2732,20 +2728,20 @@ function VatPanel() {
                 <td className="py-[9.5px] pr-3 text-right font-medium">{fmtAmount(r.amountTotal)}</td>
                 <td className="py-[9.5px] pr-3 text-right cd-text-muted">{fmtAmount(r.supplyAmount)}</td>
                 <td className="py-[9.5px] pr-3 text-right">{fmtAmount(r.taxAmount)}</td>
-                <td className="py-[9.5px] pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(r.deductibleTax)}</td>
-                <td className="py-[9.5px] text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(r.nonDeductibleTax)}</td><td className="py-[9.5px] text-right">{fmtAmount(r.undecidedTax)}</td>
+                <td className="py-[9.5px] pr-3 text-right cd-success-text">{fmtAmount(r.deductibleTax)}</td>
+                <td className="py-[9.5px] text-right cd-warn-text">{fmtAmount(r.nonDeductibleTax)}</td><td className="py-[9.5px] text-right">{fmtAmount(r.undecidedTax)}</td>
                 <td className="py-[9.5px] text-right">{fmtAmount(r.linkedTax ?? 0)}</td>
               </tr>
             ))}
             {totals && rows.length > 0 && (
-              <tr className="border-t-2 cd-border-c font-bold">
+              <tr className="border-t-2 cd-border-c font-semibold">
                 <td className="py-[11.5px] pr-3">합계</td>
                 <td className="py-[11.5px] pr-3 text-right">{totals.count.toLocaleString()}</td>
                 <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.amountTotal)}</td>
                 <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.supplyAmount)}</td>
                 <td className="py-[11.5px] pr-3 text-right">{fmtAmount(totals.taxAmount)}</td>
-                <td className="py-[11.5px] pr-3 text-right" style={{ color: "var(--cd-success)" }}>{fmtAmount(totals.deductibleTax)}</td>
-                <td className="py-[11.5px] text-right" style={{ color: "var(--cd-warning)" }}>{fmtAmount(totals.nonDeductibleTax)}</td><td className="py-[11.5px] text-right">{fmtAmount(totals.undecidedTax)}</td>
+                <td className="py-[11.5px] pr-3 text-right cd-success-text">{fmtAmount(totals.deductibleTax)}</td>
+                <td className="py-[11.5px] text-right cd-warn-text">{fmtAmount(totals.nonDeductibleTax)}</td><td className="py-[11.5px] text-right">{fmtAmount(totals.undecidedTax)}</td>
                 <td className="py-[11.5px] text-right">{fmtAmount(totals.linkedTax ?? 0)}</td>
               </tr>
             )}
@@ -2980,7 +2976,7 @@ function TaxInvoicePanel() {
         <br />
         발급된 계산서는 취소할 수 없습니다 — 금액·내용을 정정하려면 국세청 전송완료 건의 <b>수정발행</b>으로 수정세금계산서를 발행합니다.
       </p>
-      {notice && <div className="text-sm mb-2" style={{ color: "var(--cd-success)" }}>{notice}</div>}
+      {notice && <div className="text-sm mb-2 cd-success-text">{notice}</div>}
       {error && <div className="cd-error-text text-sm mb-2">{error}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -3162,7 +3158,7 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
       }
     >
       <div className="text-sm cd-text space-y-3">
-        <div className="rounded-xl border cd-border-c p-3 text-xs">
+        <div className="rounded-lg border cd-border-c p-3 text-xs">
           <div className="font-medium cd-text mb-0.5">원본: {origin?.invoiceeCorpName} · {origin ? fmtAmount(origin.totalAmount) : 0}원 ({origin?.writeDate})</div>
           <div className="cd-text-muted">승인번호 {origin?.ntsSendKey} — 수정분은 이 승인번호에 연결되어 국세청에 전송됩니다.</div>
         </div>

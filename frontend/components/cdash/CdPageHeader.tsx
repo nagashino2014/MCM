@@ -42,7 +42,7 @@ export function CdPageHeader({
   /** 현재 개수·범위 같은 짧은 업무 요약. */
   meta?: ReactNode;
   actions?: ReactNode;
-  /** 헤더 하단 탭 슬롯(보통 <CdTabs variant="underline"/>). */
+  /** 헤더 하단 탭 슬롯(보통 <CdTabs/> — 기본 세그먼트형). */
   tabs?: ReactNode;
 }) {
   return (

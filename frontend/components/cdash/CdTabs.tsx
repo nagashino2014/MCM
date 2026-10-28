@@ -1,7 +1,8 @@
 "use client";
 
 // cdash 공통 탭 — 폴더/보기 전환(G0). 제어 컴포넌트(활성 키는 부모 state).
-// variant: "underline"(페이지 섹션) | "pill"(카드 내부 필터). 카운트 뱃지 슬롯 지원.
+// variant: "segment"(페이지 탭, 기본 — 2026-10-28 결정판: 흰 묶음 + 남색 틴트 선택) | "underline"(카드 안 섹션) | "pill"(카드 내부 필터).
+// 카운트 뱃지 슬롯 지원.
 
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -21,11 +22,11 @@ export interface CdTabsProps<K extends string = string> {
   items: CdTabItem<K>[];
   active: K;
   onChange: (key: K) => void;
-  variant?: "underline" | "pill";
+  variant?: "segment" | "underline" | "pill";
   className?: string;
 }
 
-export function CdTabs<K extends string = string>({ items, active, onChange, variant = "underline", className }: CdTabsProps<K>) {
+export function CdTabs<K extends string = string>({ items, active, onChange, variant = "segment", className }: CdTabsProps<K>) {
   const id = useId();
   const enabled = items.filter((item) => !item.disabled);
   const tabStop = enabled.some((item) => item.key === active) ? active : enabled[0]?.key;

@@ -32,8 +32,8 @@ export function AppShell({ perms, userName, userEmail, children }: AppShellProps
   return (
     <CdToastProvider>
       <ManualProvider perms={perms}>
-      {/* 루트 = 앰비언트 글로우 캔버스(Soft Glass Ink). 프레임 패딩·gap 16px. */}
-      <div className="cdash cd-canvas cd-fields-white flex h-dvh p-4 gap-4" data-theme={theme}>
+      {/* 루트 = 셸 캔버스(2026-10-28 C Frosted Shell: 은은한 그라데이션 + 빛 두 점, cd-shell 에만). 프레임 패딩·gap 16px. */}
+      <div className="cdash cd-canvas cd-shell cd-fields-white flex h-dvh p-4 gap-4" data-theme={theme}>
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:z-[200] cd-card p-2">본문으로 건너뛰기</a>
         <Sidebar perms={perms} badges={badges} />
         <div className="flex-1 flex flex-col min-w-0 min-h-0 gap-4">

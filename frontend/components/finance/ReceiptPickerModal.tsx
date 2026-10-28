@@ -319,7 +319,7 @@ export function ReceiptPickerModal({
             <span className="text-xs cd-text-muted mr-auto">
               새 증빙 {activeDrafts.length}건 입력 · 목록 {selectedItems.length}건 선택 — 증빙 PDF가 첨부서류에 함께 추가됩니다
               {incomplete.length > 0 && (
-                <span className="ml-1.5" style={{ color: "var(--cd-error)" }}>
+                <span className="ml-1.5 cd-error-text">
                   · 입력 필요 {incomplete.length}건
                 </span>
               )}
@@ -339,7 +339,7 @@ export function ReceiptPickerModal({
             <span className="text-xs cd-text-muted mr-auto">
               {selectedItems.length}건 선택 — 영수증 PDF가 첨부서류에 함께 추가됩니다
               {incomplete.length > 0 && (
-                <span className="ml-1.5" style={{ color: "var(--cd-error)" }}>
+                <span className="ml-1.5 cd-error-text">
                   · 입력 필요 {incomplete.length}건
                 </span>
               )}
@@ -356,9 +356,9 @@ export function ReceiptPickerModal({
     >
       <div className="space-y-3">
         {tab === "manual" && (
-          <div className="rounded-xl border cd-border-c px-3.5 py-3 space-y-2">
+          <div className="rounded-lg border cd-border-c px-3.5 py-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold cd-text">새로 등록</span>
+              <span className="text-xs font-semibold cd-text">새로 등록</span>
               <span className="text-[11px] cd-text-faint">
                 계좌이체 확인증·수기 영수증 등 카드 영수증이 아닌 증빙의 스캔본(이미지·PDF)을 건별로 올리고 내역을 입력하세요. 개인카드 영수증은 모바일 앱으로 촬영합니다.
               </span>
@@ -431,7 +431,7 @@ export function ReceiptPickerModal({
                           label={(relatedLocked ? defaultRelated?.label : d.related?.label) ?? ""}
                           disabled={relatedLocked}
                           missing={purposeNeedsRelated(d.purpose)}
-                          className="rounded-md border cd-border-c"
+                          className="rounded-lg border cd-border-c"
                           onPick={(ref) => patchDraft(d.id, { related: ref })}
                         />
                       </td>
@@ -487,13 +487,13 @@ export function ReceiptPickerModal({
 
         {error && <div className="cd-error-text text-sm">{error}</div>}
         {tripLikeSelected && (
-          <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--cd-warning)" }}>
+          <div className="flex items-center gap-1.5 text-xs cd-warn-text">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             출장성 지출(교통·숙박·유류)이 선택돼 있습니다 — 출장 경비는 출장보고서의 경비 내역 사용을 권장합니다.
           </div>
         )}
 
-        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-xl">
+        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto border cd-border-c rounded-lg">
           <table className="w-full text-sm">
             <thead className="cd-table-head sticky top-0">
               <tr className="cd-text-muted text-left">
@@ -559,7 +559,7 @@ export function ReceiptPickerModal({
                     </td>
                     <td className="py-[9.5px] pr-3 max-w-[220px] truncate" title={item.storeName ?? ""}>
                       {item.storeName ?? "-"}
-                      {used && <span className="ml-1.5 text-[10px] cd-text-faint">(이미 담김)</span>}
+                      {used && <span className="ml-1.5 text-[11px] cd-text-faint">(이미 담김)</span>}
                       {tab === "manual" && !used && (
                         <button
                           type="button"
@@ -613,7 +613,7 @@ export function ReceiptPickerModal({
                         label={relatedOf(item)?.label ?? ""}
                         disabled={blocked || relatedLocked}
                         missing={purposeNeedsRelated(purposeOf(item))}
-                        className={relatedLocked ? "cd-text-muted" : "rounded-md border cd-border-c"}
+                        className={relatedLocked ? "cd-text-muted" : "rounded-lg border cd-border-c"}
                         onPick={(ref) => editRow(item.receiptId, { related: ref })}
                       />
                     </td>
@@ -649,7 +649,7 @@ export function ReceiptPickerModal({
           <img
             src={`/api/receipts/${preview}/image`}
             alt="영수증 원본"
-            className="max-h-[40vh] mx-auto rounded-xl border cd-border-c cursor-zoom-out"
+            className="max-h-[40vh] mx-auto rounded-lg border cd-border-c cursor-zoom-out"
             onClick={() => setPreview(null)}
           />
         )}

@@ -29,7 +29,7 @@ export function FinLogo({ kind, code, label, size = 36, version = 0 }: { kind: "
   if (failed || !code) {
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full font-bold shrink-0"
+        className="inline-flex items-center justify-center rounded-full font-semibold shrink-0"
         style={{ width: size, height: size, background: "var(--cd-primary-soft)", color: "var(--cd-primary)", fontSize: size * 0.38 }}
       >
         {label.slice(0, 1)}

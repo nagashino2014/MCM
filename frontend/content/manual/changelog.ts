@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-28",
+    kind: "변경",
+    title: "재무 화면 글자 크기·굵기·모서리 정리",
+    body: "계좌·카드·세금계산서·부가세·전표·결산·자산·경비 정산 화면의 글자 크기를 정해진 단계로 맞추고, 아주 굵은 글자는 한 단계 가볍게, 모서리는 8px 로 통일했습니다. 오류·경고·안내 상자와 음수 금액 색은 공통 상태 색으로 맞췄고, 연결 상태 점의 번짐 효과를 없앴습니다. 화면 배치와 기능은 그대로입니다.",
+    articles: ["finance.ledger"],
+  },
+  {
     date: "2026-10-27",
     kind: "신규",
     title: "회사소개서 스튜디오 — 여러 개 고르기·복제",

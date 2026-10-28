@@ -1,5 +1,7 @@
 /* Precision v1.0 — 기존 cdash API를 유지하는 토큰 어댑터.
- * 값 정본: precision-tokens.css. 기본 면은 불투명, 그림자는 오버레이만 허용한다. */
+ * 값 정본: precision-tokens.css. 기본 면은 불투명.
+ * 2026-10-28 C Frosted Shell 결정판: 카드는 1단 부드러운 그림자(--cd-shadow), 글라스는 셸 크롬(.cd-glass)에만,
+ * 그라데이션은 데스크톱 셸 바탕(.cd-shell)에만 쓴다. 반경은 10(카드·버튼·입력·탭). */
 @import "./precision-tokens.css";
 
 .cdash,
@@ -27,11 +29,12 @@
   --cd-sidebar-hover: hsl(var(--precision-sidebar-hover));
   --cd-primary: #4a63d8;
   --cd-primary-foreground: #fff;
-  /* KESI Precision(2026-10-27 확정): 주 버튼은 깊은 남색 단색 + 같은 색조 1px 테두리.
-   * 2026-09-10 블루→바이올렛 그라데이션을 대체한다. 그라데이션은 어디에도 쓰지 않는다. */
-  --cd-primary-fill: #3a4fc4;
-  --cd-primary-fill-edge: #2f41a8;
-  --cd-primary-fill-hover: #3346b0;
+  /* KESI Precision(2026-10-27 확정): 주 버튼은 남색 단색 + 같은 색조 1px 테두리.
+   * 2026-09-10 블루→바이올렛 그라데이션을 대체한다. 그라데이션은 어디에도 쓰지 않는다.
+   * 2026-10-28 사용자 요청: 채움을 #3a4fc4 → --cd-primary(#4a63d8)로 한 단계 밝힘(너무 진하다는 지적). */
+  --cd-primary-fill: #4a63d8;
+  --cd-primary-fill-edge: #3d55c8;
+  --cd-primary-fill-hover: #4259cf;
   /* 이전 이름 호환 — 사용처는 단색 토큰으로 정리한다. */
   --cd-action-background: var(--cd-primary-fill);
   --cd-action-background-soft: var(--cd-primary-soft);
@@ -66,8 +69,16 @@
   --cd-accent-soft: var(--cd-error-soft);
   --cd-accent-strong: var(--cd-error);
   --cd-grid-line: var(--cd-border);
-  --cd-shadow: none;
-  --cd-shadow-hover: none;
+  --cd-shadow: var(--precision-ui-shadow-card);
+  --cd-shadow-hover: var(--precision-ui-shadow-raised);
+  --cd-shadow-raised: var(--precision-ui-shadow-raised);
+  --cd-card-border: hsl(var(--precision-ui-card-border));
+  --cd-glass: hsl(var(--precision-ui-glass));
+  --cd-glass-bar: hsl(var(--precision-ui-glass-bar));
+  --cd-glass-border: hsl(var(--precision-ui-glass-border));
+  --cd-glass-blur: var(--precision-ui-backdrop-blur);
+  --cd-tab-selected: hsl(var(--precision-ui-tab-selected));
+  --cd-tab-selected-text: hsl(var(--precision-ui-tab-selected-text));
   --cd-blur: none;
   --cd-hover: var(--cd-surface);
   --cd-active-fill: var(--cd-sidebar-selected);
@@ -86,7 +97,8 @@
   --cd-shadow-popover: 0 6px 24px hsl(var(--precision-shadow-color) / 12%);
   --cd-shadow-toast: 0 6px 24px hsl(var(--precision-shadow-color) / 12%);
   --cd-radius-card: var(--precision-ui-radius-card);
-  --cd-radius-control: var(--mcm-action-radius, 8px);
+  --cd-radius-control: var(--mcm-action-radius, 10px);
+  --cd-radius-tab-inner: var(--precision-ui-radius-tab-inner);
   /* 포커스 강조 A안 '부드러운 링'(2026-10-14 사용자 확정): 주색 테두리 1px + 바깥 3px 반투명 링. 남색 2px outline 을 대체한다. */
   --cd-focus-ring-color: color-mix(in srgb, var(--cd-primary) 16%, transparent);
   --cd-focus-ring: 0 0 0 3px var(--cd-focus-ring-color);
@@ -101,9 +113,9 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
 .cdash[data-theme="dark"], .cdash-vars[data-theme="dark"] {
   --cd-primary: #a9b8ff;
   --cd-primary-foreground: hsl(225 35% 10%);
-  --cd-primary-fill: #4a5fd0;
-  --cd-primary-fill-edge: #3e51b8;
-  --cd-primary-fill-hover: #5468d8;
+  --cd-primary-fill: #5269dc;
+  --cd-primary-fill-edge: #4a5fd0;
+  --cd-primary-fill-hover: #5c72e0;
   --cd-secondary: #7ec8f0;
   --cd-error-foreground: hsl(225 35% 10%);
   --cd-av-1: #9ba8e8;
@@ -117,10 +129,35 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
 .cdash, .cd-canvas, .cdash.cd-canvas { background: var(--cd-bg); }
 /* 2026-09-11 사용자 요청: 검토한 베이지 바탕을 운영 셸에도 적용한다.
  * 화면 바탕만 연결하며 카드·입력·문서 면과 다크/인쇄 색은 유지한다.
- * KESI Precision(2026-10-27): 배경 그라데이션 없이 canvas 단색. */
+ * 2026-10-28 C Frosted Shell 결정판: 데스크톱 셸(.cd-shell)은 쿨그레이→베이지 은은한 그라데이션 + 흐린 빛 두 점.
+ * 글라스 사이드바·상단바가 이 바탕을 비춘다. 모바일(/m)·로그인은 기존 베이지 단색을 유지한다. */
 @media screen {
   .cd-canvas[data-theme="light"] {
     background-color: #f9f6f0;
+  }
+  /* 빛 점은 루트 안에 가둔다(absolute + overflow clip). 앱 셸은 화면 전체 크기라 fixed 와 같고,
+     디자인 미리보기처럼 루트가 화면보다 작을 때 빛이 루트 밖으로 번지지 않는다. */
+  .cd-shell.cd-canvas[data-theme="light"] {
+    background: linear-gradient(160deg, #f4f6fb 0%, #eef1f8 55%, #f6f2ec 100%);
+    position: relative;
+    overflow: clip;
+    isolation: isolate;
+  }
+  .cd-shell.cd-canvas[data-theme="light"]::before,
+  .cd-shell.cd-canvas[data-theme="light"]::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: 9999px;
+  }
+  .cd-shell.cd-canvas[data-theme="light"]::before {
+    left: -120px; top: -140px; width: 520px; height: 420px;
+    background: #c9d4ff; opacity: .45; filter: blur(90px);
+  }
+  .cd-shell.cd-canvas[data-theme="light"]::after {
+    right: -160px; bottom: -180px; width: 560px; height: 460px;
+    background: #f3d9c4; opacity: .5; filter: blur(100px);
   }
   .cd-canvas[data-theme="light"] #main-content > div > .cdash:not(.cd-card),
   .cd-canvas[data-theme="light"] #main-content > div > div:not(.cdash) > .cdash:not(.cd-card) {
@@ -234,14 +271,18 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
   background: var(--cd-card);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid var(--cd-border);
+  border: 1px solid var(--cd-card-border);
   border-radius: var(--cd-radius-card);
-  box-shadow: none;
+  box-shadow: var(--cd-shadow);
   display: flex;
   flex-direction: column;
   min-width: 0;
   transition: box-shadow 0.15s ease, border-color 0.25s ease;
 }
+/* 그림자는 1단만 — 카드 안 카드·모달 안 카드는 경계로만 구분한다. */
+.cd-card .cd-card,
+.cd-modal .cd-card,
+.fixed.inset-0 .cd-card { box-shadow: none; }
 
 .cd-card-title {
   font-size: var(--precision-ui-font-section);
@@ -446,10 +487,10 @@ select.cd-input {
 }
 
 /* 세그먼트(연결형) 컨트롤 — 컨테이너가 반경·경계를 담당한다.
-   내부 버튼까지 8px 반경을 가지면 컨테이너 모서리와 어긋나 초승달 틈이 생긴다
+   내부 버튼까지 반경을 가지면 컨테이너 모서리와 어긋나 초승달 틈이 생긴다
    (착수금/중도금/잔금 탭 실사례). 컨테이너 반경은 버튼과 같은 값으로 맞춘다. */
 :is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) {
-  border-radius: var(--mcm-action-radius, 8px) !important;
+  border-radius: var(--mcm-action-radius, 10px) !important;
 }
 :is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice {
   border-radius: 0 !important;
@@ -458,12 +499,12 @@ select.cd-input {
    반경 0 이면 채움 배경의 바깥 모서리가 컨테이너 곡선에 깎여 끝이 잘린 것처럼 보였다
    (부서장 감독 진행용역 탭 실사례, 2026-09-12). */
 :is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice:first-child {
-  border-start-start-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
-  border-end-start-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
+  border-start-start-radius: calc(var(--mcm-action-radius, 10px) - 1px) !important;
+  border-end-start-radius: calc(var(--mcm-action-radius, 10px) - 1px) !important;
 }
 :is(.cdash, .cdash-vars) .overflow-hidden:has(> .cd-choice) > .cd-choice:last-child {
-  border-start-end-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
-  border-end-end-radius: calc(var(--mcm-action-radius, 8px) - 1px) !important;
+  border-start-end-radius: calc(var(--mcm-action-radius, 10px) - 1px) !important;
+  border-end-end-radius: calc(var(--mcm-action-radius, 10px) - 1px) !important;
 }
 
 /* 클릭 선택에는 추가 링이 없고, 키보드 포커스는 바깥 3px 부드러운 링으로 표시한다(A안). */
@@ -606,7 +647,7 @@ select.cd-input {
 /* ---------------- 구조화 노트(추진 내역) ---------------- */
 .sn-toolbar .sn-btn {
   border: 1px solid var(--cd-line);
-  border-radius: 8px;
+  border-radius: var(--cd-radius-control);
   padding: 2px 8px;
   font-size: 11px;
   line-height: 1.4;
@@ -715,6 +756,66 @@ html[data-theme="dark"] .cdash .cd-doc-surface, html[data-theme="dark"] .cdash-v
 .cd-tabs[data-variant="underline"] .cd-tab { position: relative; padding: 10px 2px; border-width: 0; background: transparent; }
 .cd-tabs[data-variant="underline"] .cd-tab[aria-selected="true"] { background: transparent !important; border-color: transparent !important; color: var(--cd-primary) !important; font-weight: 500; }
 .cd-tabs[data-variant="underline"] .cd-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--cd-primary); }
+/* 탭 묶음 안쪽 탭은 컨테이너 곡률(10)에서 패딩만큼 줄인 반경으로 맞춘다.
+   globals.css 의 동작 버튼 반경 !important 규칙보다 구체적인 선택자로 이 경우만 덮는다. */
+.cd-tabs:not([data-variant="underline"]) .cd-tab { border-radius: var(--cd-radius-tab-inner) !important; }
+/* 세그먼트형 페이지 탭(2026-10-28 결정판 — B안 형태, 바탕은 다른 카드와 같은 흰색).
+   묶음 = 카드 면·경계·1단 그림자, 선택 탭 = 남색 틴트 면 + 주 버튼 테두리색 글자, 테두리 없음.
+   폭은 내용만큼(:where 로 낮은 우선순위 — 사용처의 w-full 등 className 이 이긴다).
+   한 줄 유지: 옆 문구에 밀려 탭 글자가 두 줄로 꺾이던 화면(급여 설정 등)이 있어, 탭은 줄바꿈하지 않고
+   폭이 모자라면 묶음 안에서 가로 스크롤한다. */
+:where(.cd-tabs[data-variant="segment"]) { width: fit-content; max-width: 100%; }
+/* flex-shrink:0 — 가로 스크롤 컨테이너는 자동 최소 크기가 0 이라, 세로 flex 부모(AI 사용량 등) 안에서 높이가 눌렸다. */
+.cd-tabs[data-variant="segment"] { flex-shrink: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 2px; padding: 4px; background: var(--cd-card); border-color: var(--cd-card-border); box-shadow: var(--cd-shadow); }
+.cd-tabs[data-variant="segment"]::-webkit-scrollbar { display: none; }
+/* 휴대폰 폭에서는 한 줄 고정이 본문 가로 넘침을 만들므로 묶음 안에서 줄바꿈한다. */
+@media (max-width: 767px) { .cd-tabs[data-variant="segment"] { flex-wrap: wrap; overflow-x: visible; } }
+.cd-tabs[data-variant="segment"] .cd-tab { flex: none; white-space: nowrap; min-height: 32px; padding: 6px 14px; border-width: 0; color: var(--cd-muted); }
+.cd-tabs[data-variant="segment"] .cd-tab:not(:disabled):hover { color: var(--cd-text); background: var(--cd-hover); }
+.cd-tabs[data-variant="segment"] .cd-tab[aria-selected="true"] {
+  background: var(--cd-tab-selected) !important;
+  border-color: transparent !important;
+  color: var(--cd-tab-selected-text) !important;
+  font-weight: 500;
+}
+.cd-modal .cd-tabs[data-variant="segment"], .cd-card .cd-tabs[data-variant="segment"] { box-shadow: none; }
+
+/* 셸 크롬 글라스(2026-10-28 결정판) — 사이드바·상단바에만 쓴다. 본문 카드·입력·표에는 쓰지 않는다. */
+.cd-glass {
+  background: var(--cd-glass);
+  -webkit-backdrop-filter: var(--cd-glass-blur);
+  backdrop-filter: var(--cd-glass-blur);
+  border-color: var(--cd-glass-border);
+  box-shadow: 1px 0 0 hsl(var(--precision-shadow-color) / 5%);
+}
+.cd-glass-bar {
+  background: var(--cd-glass-bar);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-color: var(--cd-glass-border);
+  box-shadow: 0 1px 0 hsl(var(--precision-shadow-color) / 5%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cd-glass, .cd-glass-bar { background: var(--cd-card-solid); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--cd-border); }
+}
+@media print {
+  .cd-glass, .cd-glass-bar { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  .cd-card { box-shadow: none; }
+}
+
+/* 사이드바 그룹 머리(2026-10-28 결정판) — 현재 경로가 속한 그룹만 펼치고 나머지는 머리 + 항목 수 + 화살표. */
+/* display 는 Sidebar 의 폭 상태 클래스(flex / hidden 2xl:flex)가 정한다 — 여기서 지정하면 레일에서 hidden 을 덮는다. */
+.cd-nav-group-head {
+  align-items: center; gap: 6px; width: 100%;
+  min-height: 32px; padding: 0 10px;
+  border: 0; border-radius: var(--cd-radius-control);
+  background: transparent; color: var(--cd-sidebar-muted);
+  font-size: 12px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+.cd-nav-group-head:hover { background: var(--cd-sidebar-hover); color: var(--cd-sidebar-text); }
+.cd-nav-group-head[aria-expanded="true"] { color: var(--cd-sidebar-text); }
+.cd-nav-group-count { font-size: 11px; color: var(--cd-faint); font-variant-numeric: tabular-nums; }
 .cd-icon-button { width: 36px; height: 36px; padding: 0; border-radius: var(--cd-radius-control); }
 .cd-icon-button-sm { width: 32px; height: 32px; }
 .cd-input:focus-visible, .cd-select:focus-visible, .cd-textarea:focus-visible {

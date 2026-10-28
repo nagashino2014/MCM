@@ -28,7 +28,7 @@
   --precision-sidebar-selected: 0 0% 100%;
   --precision-sidebar-selected-text: 221 73% 38%;
   --precision-sidebar-hover: 220 14% 94%;
-  --precision-radius: 8px;
+  --precision-radius: 10px; /* 2026-10-28 shadcn 결정판: 반경 10 */
   --precision-shadow-color: 222 30% 16%;
   --precision-sidebar-background: var(--precision-sidebar);
   --precision-sidebar-primary: var(--precision-primary);
@@ -46,8 +46,9 @@
   --precision-ui-control-height: 36px;
   --precision-ui-control-height-sm: 32px;
   --precision-ui-control-padding-x: 12px;
-  --precision-ui-radius-card: 8px;
-  --precision-ui-radius-control: 6px;
+  --precision-ui-radius-card: 10px;
+  --precision-ui-radius-control: 10px;
+  --precision-ui-radius-tab-inner: 7px; /* 세그먼트 탭 안쪽 탭 = 컨테이너 10 − 패딩 3 */
   --precision-ui-font-body: 14px;
   --precision-ui-font-title: 22px;
   --precision-ui-font-section: 16px;
@@ -61,8 +62,16 @@
   --precision-ui-status-success-alpha: 0.08;
   --precision-ui-status-warning-alpha: 0.09;
   --precision-ui-status-destructive-alpha: 0.07;
-  --precision-ui-shadow-card: none;
-  --precision-ui-backdrop-blur: none;
+  /* 2026-10-28 C Frosted Shell 결정판: 그림자는 카드 1단·떠 있는 면 1단만, 글라스는 셸 크롬(사이드바·상단바)에만. */
+  --precision-ui-shadow-card: 0 1px 2px hsl(var(--precision-shadow-color) / 4%), 0 8px 24px -12px hsl(var(--precision-shadow-color) / 12%);
+  --precision-ui-shadow-raised: 0 2px 4px hsl(var(--precision-shadow-color) / 5%), 0 16px 40px -16px hsl(var(--precision-shadow-color) / 18%);
+  --precision-ui-card-border: 225 25% 12% / 6%;
+  --precision-ui-glass: 0 0% 100% / 58%;
+  --precision-ui-glass-bar: 0 0% 100% / 55%;
+  --precision-ui-glass-border: 0 0% 100% / 75%;
+  --precision-ui-backdrop-blur: blur(18px) saturate(1.3);
+  --precision-ui-tab-selected: 226 62% 96%; /* #EEF1FB */
+  --precision-ui-tab-selected-text: 231 56% 42%; /* #2F41A8 = 주 버튼 테두리색 */
 }
 html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars, .cdash[data-theme="dark"], .cdash-vars[data-theme="dark"] {
   --precision-background: 225 15% 9%;
@@ -92,8 +101,16 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars, .cdash[data
   --precision-sidebar-selected: 224 15% 18%;
   --precision-sidebar-selected-text: 218 94% 79%;
   --precision-sidebar-hover: 224 13% 16%;
-  --precision-radius: 8px;
+  --precision-radius: 10px; /* 2026-10-28 shadcn 결정판: 반경 10 */
   --precision-shadow-color: 0 0% 0%;
+  --precision-ui-shadow-card: 0 1px 2px hsl(0 0% 0% / 24%);
+  --precision-ui-shadow-raised: 0 12px 32px -12px hsl(0 0% 0% / 50%);
+  --precision-ui-card-border: 224 12% 23%;
+  --precision-ui-glass: 224 16% 11% / 78%;
+  --precision-ui-glass-bar: 224 16% 11% / 74%;
+  --precision-ui-glass-border: 224 12% 23%;
+  --precision-ui-tab-selected: 222 40% 20%;
+  --precision-ui-tab-selected-text: 218 94% 79%;
 }
 .cdash, .cdash-vars { color-scheme: light; }
 html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars, .cdash[data-theme="dark"], .cdash-vars[data-theme="dark"] { color-scheme: dark; }

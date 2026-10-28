@@ -1,0 +1,9 @@
+/* design-sync 전용 — 앱이 public/fonts 로 싣는 Pretendard Variable(globals.css @font-face 와 같은 정의).
+   globals.css 의 url("/fonts/...")는 절대경로라 변환기가 버리므로, 번들 fonts/ 로 복사되도록 상대경로로 다시 선언한다. */
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("../public/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}

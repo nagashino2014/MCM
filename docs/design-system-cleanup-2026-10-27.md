@@ -100,5 +100,6 @@
    스택을 `"Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif` 로 (globals.css·cdash.css 두 곳, Inter·Noto Sans KR 제거). `.design-sync/NOTES.md`의 `[FONT_MISSING]` 수용 기록은 폐기.
 2. **주 버튼: 깊은 남색 단색** — 블루→바이올렛 그라데이션(`--cd-action-background`) 폐기. cdash.css에
    `--cd-primary-fill:#3a4fc4; --cd-primary-fill-edge:#2f41a8; --cd-primary-fill-hover:#3346b0;` (다크 `#4a5fd0 / #3e51b8 / #5468d8`)
+   → 2026-10-28 사용자 요청으로 `#4a63d8 / #3d55c8 / #4259cf`(다크 `#5269dc / #4a5fd0 / #5c72e0`)로 밝힘.
    `.cd-btn-primary{background:var(--cd-primary-fill);border:1px solid var(--cd-primary-fill-edge);color:#fff}` `:hover{background:var(--cd-primary-fill-hover)}`.
    `--cd-action-background`는 `var(--cd-primary-fill)`로, `--cd-action-background-soft`는 `--cd-primary-soft`로 별칭 처리 후 사용처 정리. 린트 R10이 남은 그라데이션을 잡는다.

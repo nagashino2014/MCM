@@ -52,7 +52,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 
 이 앱의 UI는 [docs/ui-precision-standard.md](docs/ui-precision-standard.md)를 따른다. 이전 Modernize/Soft Glass Ink의 충돌하는 시각 규칙을 대체한다.
 - 기존 cdash 컴포넌트/API를 유지한다. KESI-IEPS는 별도 플랫폼이며 이번 요청을 프레임워크 교체로 해석하지 않는다.
-- 무광 불투명 면, 중립 경계 1px, 카드 8px/입력·버튼 8px, 카드 그림자·blur·배경 그라데이션 금지. 주 버튼은 KESI Precision 디자인 시스템(2026-10-27)에 따라 깊은 남색 단색(`--cd-primary-fill` + `-edge`)이며 블루·보라 그라데이션은 폐기했다. 글꼴은 Pretendard Variable. 모듈별 정리 순서: [docs/design-system-cleanup-2026-10-27.md](docs/design-system-cleanup-2026-10-27.md).
+- 불투명 면, 옅은 경계 1px, **반경 10px(카드·입력·버튼·탭, 2026-10-28 shadcn 결정판)**, 카드 그림자는 `--cd-shadow` 1단만, 글라스(blur)는 사이드바·상단바 셸 크롬에만, 그라데이션은 데스크톱 셸 바탕에만. 페이지 탭은 `CdTabs` 세그먼트형(흰 묶음·남색 틴트 선택), 사이드바는 현재 그룹만 펼침. 결정 근거: [docs/shadcn-design-concepts-2026-10-28.md](docs/shadcn-design-concepts-2026-10-28.md). 주 버튼은 KESI Precision 디자인 시스템(2026-10-27)에 따라 남색 단색(`--cd-primary-fill` + `-edge`, 2026-10-28 #4a63d8로 밝힘)이며 블루·보라 그라데이션은 폐기했다. 글꼴은 Pretendard Variable. 모듈별 정리 순서: [docs/design-system-cleanup-2026-10-27.md](docs/design-system-cleanup-2026-10-27.md).
 - 공통 `--cd-*` 토큰을 사용하고 페이지 CSS에서 같은 토큰을 재정의하지 않는다. Light/Dark·포털 루트의 `cdash-vars`와 `data-theme`를 유지한다.
 - 메뉴 그룹·부모·자식과 현재 경로/query를 명확히 표시한다. 기존 248px/76px 레일/드로어 구조를 보존한다.
 - 긴 사용법·배경은 `CdHelp`의 `?`로 연결하고, 오류·필수 입력·저장 상태·실행 영향은 화면에 남긴다. 제목 반복·개발 단계 설명은 축약하되 기존 카드·요소는 임의로 삭제하지 않는다.
@@ -100,4 +100,4 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 
 **최우선: 사용자의 명시적 지시 없이 기존 UI 구조를 변경하지 않는다.** 트리뷰·상세 양식·카드 배치·표 열·탭·분할 비율·스크롤 부모를 보존하고 컴포넌트의 글자·색·경계·간격만 정리한다. 허용된 구조 변경은 대시보드와 영업 상세의 FHD 하단 재배치 두 건이며 세부사항은 UI 기준 §7을 따른다.
 
-**버튼 반경 후속 지시:** 일반·태그형·필터·아이콘·탭 버튼은 네 모서리 8px(`--mcm-action-radius`)로 통일한다. 링크·label로 구현한 버튼은 `cd-action`을 쓴다. 버튼의 기존 색·크기·배치를 보존하며 개별 rounded 값으로 반경 규칙을 우회하지 않는다.
+**버튼 반경 후속 지시:** 일반·태그형·필터·아이콘·탭 버튼은 네 모서리 10px(`--mcm-action-radius`, 2026-10-28 8→10)로 통일한다. 링크·label로 구현한 버튼은 `cd-action`을 쓴다. 버튼의 기존 색·크기·배치를 보존하며 개별 rounded 값으로 반경 규칙을 우회하지 않는다.

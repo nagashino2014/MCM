@@ -67,8 +67,54 @@
     },
     "CdButton": {
       "cardMode": "column"
+    },
+    "CdAvatar": {
+      "cardMode": "column"
+    },
+    "CdBadge": {
+      "cardMode": "column"
+    },
+    "CdCheckbox": {
+      "cardMode": "column"
+    },
+    "CdCount": {
+      "cardMode": "column"
+    },
+    "CdDateInput": {
+      "cardMode": "column"
+    },
+    "CdEmptyState": {
+      "cardMode": "column"
+    },
+    "CdIconButton": {
+      "cardMode": "column"
+    },
+    "CdInput": {
+      "cardMode": "column"
+    },
+    "CdSelect": {
+      "cardMode": "column"
+    },
+    "CdTabs": {
+      "cardMode": "column"
+    },
+    "CdTextarea": {
+      "cardMode": "column"
+    },
+    "CdThemeToggle": {
+      "cardMode": "column"
     }
   },
   "readmeHeader": ".design-sync/conventions.md",
+  "extraFonts": [
+    "../fonts.css"
+  ],
+  "runtimeFontPrefixes": [
+    "Pretendard",
+    "Malgun Gothic",
+    "Apple SD Gothic Neo",
+    "system-ui",
+    "Inter"
+  ],
   "projectId": "e8a1a0a1-9597-4f05-931b-7bc32ac81f34"
 }

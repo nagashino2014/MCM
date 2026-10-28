@@ -116,8 +116,7 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
 
   return (
     <header
-      className="h-14 flex items-center gap-1.5 px-3 sm:gap-2 sm:px-7 sticky top-0 z-50 shrink-0 border-b cd-border-c"
-      style={{ background: "var(--cd-card-solid)" }}
+      className="h-14 flex items-center gap-1.5 px-3 sm:gap-2 sm:px-7 sticky top-0 z-50 shrink-0 rounded-lg border cd-glass-bar"
     >
       {/* <lg: 사이드바 드로어 열기 */}
       <CdIconButton label="메뉴 열기" className="lg:hidden" onClick={onOpenNav} aria-expanded={navOpen} aria-controls={navOpen ? "mobile-navigation" : undefined} aria-haspopup="dialog">
@@ -130,7 +129,7 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
         onClick={() => setSearchOpen(true)}
         aria-label="통합검색 열기"
         aria-haspopup="dialog"
-        className="flex h-9 min-w-9 items-center gap-2 flex-1 max-w-md rounded-md border cd-border-c cd-surface-bg px-2.5 sm:px-3 py-2 text-[13px] cd-text-muted hover:bg-[color:var(--cd-hover)] transition-colors"
+        className="flex h-9 min-w-9 items-center gap-2 flex-1 max-w-md rounded-lg border cd-border-c cd-card-bg px-2.5 sm:px-3 py-2 text-[13px] cd-text-muted hover:bg-[color:var(--cd-hover)] transition-colors"
       >
         <Search className="w-4 h-4 shrink-0" />
         <span className="hidden flex-1 text-left min-[420px]:inline">검색</span>
@@ -181,7 +180,7 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
           ref={accountButtonRef}
           type="button"
           onClick={() => setUserMenuOpen((v) => !v)}
-          className="flex shrink-0 items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-md cd-row-hover border border-transparent transition-colors"
+          className="flex shrink-0 items-center gap-2 pl-1 pr-1 sm:pr-2 py-1 rounded-lg cd-row-hover border border-transparent transition-colors"
           aria-label={`${userName || "사용자"} 계정 메뉴`}
           aria-expanded={userMenuOpen}
           aria-controls={userMenuOpen ? accountId : undefined}

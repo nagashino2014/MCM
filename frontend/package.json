@@ -14,6 +14,7 @@
     "test:manual": "node scripts/test-manual.mjs",
     "test:mail-gateway": "node scripts/test-mail-gateway.mjs",
     "test:catalog-studio": "node scripts/test-catalog-studio.mjs",
+    "test:sales-board": "node scripts/test-sales-board.mjs",
     "manual:stale": "node scripts/manual-staleness.mjs",
     "dev": "next dev",
     "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",

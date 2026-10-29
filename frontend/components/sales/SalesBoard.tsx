@@ -11,9 +11,16 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { ProgressReportModal } from "./ProgressReportModal";
 import { SalesSettingsCard } from "./SalesSettingsCard";
-import { SalesInsightZone, funnelLabel, reachedAtLeast } from "./SalesInsights";
-import { useClientPaging } from "@/components/ui/PaginationControls";
+import { SalesInsightZone, funnelLabel } from "./SalesInsights";
+import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
 import "@/components/cdash/cdash.css";
+import {
+  SALES_CATEGORY_UNSET,
+  boardFilterToParams,
+  kstNowIso,
+  type SalesBoardStats,
+  type SalesKpiFilter,
+} from "@/lib/sales/board";
 import {
   ACTIVITY_TYPE_META,
   SALES_SERVICE_CATEGORIES,
@@ -25,7 +32,7 @@ import {
   type SalesServiceCategory,
   type SalesStage,
 } from "@/lib/sales/types";
-import { SALES_REGION_GROUPS, SALES_REGION_UNKNOWN, salesRegionGroupId } from "@/lib/sales/regions";
+import { SALES_REGION_GROUPS, SALES_REGION_UNKNOWN } from "@/lib/sales/regions";
 
 const STAGE_PILL: Record<SalesStage, string> = {
   lead: "cd-pill-idle",
@@ -59,21 +66,20 @@ type TabKey = "bids" | "reports" | "activities";
 
 // 리스트 왼쪽 태그 필터(2026-10-26) — 지역권(공공입찰 7권+미상)·업종분류(용역 분류 4종+미분류).
 // 같은 그룹 안은 OR, 그룹 사이는 AND. 영업건이 늘어도 목록을 좁혀 볼 수 있게 한다.
-const CATEGORY_UNSET = "unset";
+// 판정·건수·쪽 나눔은 서버(/api/sales/projects?limit=…, lib/sales/board.ts)가 한다(2026-10-29, 수천 건 대비).
 const REGION_TAGS: { id: string; label: string }[] = [
   ...SALES_REGION_GROUPS.map((g) => ({ id: g.id, label: g.label })),
   { id: SALES_REGION_UNKNOWN.id, label: SALES_REGION_UNKNOWN.label },
 ];
 const CATEGORY_TAGS: { id: string; label: string }[] = [
   ...SALES_SERVICE_CATEGORIES.map((c) => ({ id: c.code, label: c.label })),
-  { id: CATEGORY_UNSET, label: "미분류" },
+  { id: SALES_CATEGORY_UNSET, label: "미분류" },
 ];
-const projectCategoryId = (p: SalesProject) => p.serviceCategory ?? CATEGORY_UNSET;
 
-// 상단 KPI 띠(2026-10-26) — 목록 응답(가시성 scope 적용됨)과 탭 패널 응답에서만 파생한다. 새 API 없음.
+// 상단 KPI 띠(2026-10-26) — 서버 집계(/api/sales/board-stats, 목록과 같은 가시성 scope)와 탭 패널 응답에서 파생한다.
 // 목록 필터(검색·담당·연도·태그)와 무관하게 '보이는 영업건 전체' 기준이다. 날짜 판정은 KST.
 // 칸을 누르면 목록 필터로 걸린다(KpiFilter). 투찰 예정 칸은 필터 대신 왼쪽 [투찰 임박] 탭을 연다.
-type KpiFilter = "active" | "new" | "won" | "lost" | "outcome";
+type KpiFilter = SalesKpiFilter;
 const KPI_FILTER_LABELS: Record<KpiFilter, string> = {
   active: "진행 중",
   new: "이번 달 신규",
@@ -81,11 +87,7 @@ const KPI_FILTER_LABELS: Record<KpiFilter, string> = {
   lost: "올해 실주",
   outcome: "올해 결과",
 };
-const kstNow = () => new Date(Date.now() + 9 * 3600000).toISOString();
-const isActiveProject = (p: SalesProject) => p.status !== "closed" && p.stage !== "won" && p.stage !== "lost";
-const openedMonth = (p: SalesProject) => (p.openedAt ?? p.createdAt ?? "").slice(0, 7);
-// 결과 확정 연도 — 결과 스케쥴 날짜, 없으면(스케쥴 없이 단계만 저장된 옛 건) 종료일·시작일.
-const outcomeYear = (p: SalesProject) => (p.outcomeAt ?? p.closedAt ?? p.openedAt ?? "").slice(0, 4);
+const SEARCH_DEBOUNCE_MS = 250; // 검색어는 입력이 멈춘 뒤 서버에 묻는다
 const daysUntil = (iso: string) => {
   const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
   const today = new Date();
@@ -133,10 +135,22 @@ export function SalesBoard() {
   const canManageStaff = hasPerm(permsOf(session?.user), "sales.staff.manage");
   const { theme } = useCdashTheme();
 
-  const [projects, setProjects] = useState<SalesProject[]>([]);
+  // 목록 = 현재 쪽의 행만(서버 쪽 나눔). total = 필터 결과 전체, visibleTotal = 보이는 영업건 전체.
+  const [list, setList] = useState<{
+    rows: SalesProject[];
+    total: number;
+    visibleTotal: number;
+    regionCounts: Record<string, number>;
+    categoryCounts: Record<string, number>;
+  }>({ rows: [], total: 0, visibleTotal: 0, regionCounts: {}, categoryCounts: {} });
+  const [listLoaded, setListLoaded] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  // KPI 띠·영업 현황 집계(목록 필터와 무관)
+  const [stats, setStats] = useState<SalesBoardStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
   // 담당 필터 모집단 = "영업 제설정"에서 지정한 영업 담당자(298). 전 직원이 아니다.
   const [assignees, setAssignees] = useState<SalesEmployeeOption[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -161,24 +175,91 @@ export function SalesBoard() {
   // 하단 퍼널(W4) 막대 필터 — 도달 단계가 이 단계 이상인 건
   const [reachedFilter, setReachedFilter] = useState<SalesStage | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // 검색어는 입력이 멈춘 뒤 반영(서버 요청을 글자마다 보내지 않는다)
+  const [qApplied, setQApplied] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQApplied(q), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // 쪽 나눔(10-21 규칙의 표시 수 선택지). 필터가 바뀌면 첫 쪽 — offset 을 필터 키에 묶어 두어 바뀌는 순간 0이 된다.
+  const [pageSize, setPageSize] = usePageSize("sales-board-page-size");
+  const filterKey = useMemo(
+    () =>
+      boardFilterToParams({
+        q: qApplied,
+        owner,
+        year,
+        regionIds,
+        categoryIds,
+        kpi: kpiFilter,
+        reached: reachedFilter,
+      }).toString(),
+    [qApplied, owner, year, regionIds, categoryIds, kpiFilter, reachedFilter]
+  );
+  const [page, setPage] = useState({ key: "", offset: 0 });
+  const offset = page.key === filterKey ? page.offset : 0;
+  const setOffset = (o: number) => setPage({ key: filterKey, offset: o });
+
+  // KPI·영업 현황 집계 — 진입·경과 보고 뒤에 다시 받는다
+  const loadStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/sales/projects", { cache: "no-store" });
+      const res = await fetch("/api/sales/board-stats", { cache: "no-store" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? `HTTP ${res.status}`);
       const data = await res.json();
-      setProjects(Array.isArray(data.projects) ? data.projects : []);
+      setStats(data.stats ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setLoading(false);
+      setStatsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    loadStats();
+  }, [loadStats]);
+
+  // 목록 — 필터·쪽이 바뀔 때마다 서버에 묻는다. 늦게 온 옛 응답은 버린다.
+  const listSeq = useRef(0);
+  useEffect(() => {
+    const seq = ++listSeq.current;
+    const sp = new URLSearchParams(filterKey);
+    sp.set("limit", String(pageSize));
+    sp.set("offset", String(offset));
+    setListLoading(true);
+    fetch(`/api/sales/projects?${sp.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+        return data;
+      })
+      .then((data) => {
+        if (seq !== listSeq.current) return;
+        setError(null);
+        setList({
+          rows: Array.isArray(data.projects) ? data.projects : [],
+          total: Number(data.total ?? 0),
+          visibleTotal: Number(data.visibleTotal ?? 0),
+          regionCounts: data.regionCounts ?? {},
+          categoryCounts: data.categoryCounts ?? {},
+        });
+        // 결과가 줄어 쪽이 비면 서버가 마지막 쪽으로 돌려준다
+        if (Number(data.offset ?? 0) !== offset) setPage({ key: filterKey, offset: Number(data.offset ?? 0) });
+        setListLoaded(true);
+      })
+      .catch((e) => {
+        if (seq === listSeq.current) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (seq === listSeq.current) setListLoading(false);
+      });
+  }, [filterKey, pageSize, offset, reloadTick]);
+
+  const reload = () => {
+    loadStats();
+    setReloadTick((n) => n + 1);
+  };
+  const loading = statsLoading;
 
   // 진입 시 탭 패널 데이터 로드(경과보고·투찰임박·다가오는일정)
   useEffect(() => {
@@ -225,95 +306,35 @@ export function SalesBoard() {
     setActiveTab(k);
   };
 
-  const years = useMemo(
-    () =>
-      Array.from(new Set(projects.map((p) => (p.openedAt ?? "").slice(0, 4)).filter(Boolean)))
-        .sort()
-        .reverse(),
-    [projects]
-  );
+  const years = stats?.years ?? [];
 
-  // KPI 값 — 목록 필터와 무관하게 보이는 영업건 전체 기준.
+  // KPI 값 — 목록 필터와 무관하게 보이는 영업건 전체 기준(서버 집계). 투찰 예정만 탭 패널 응답에서 센다.
   const kpi = useMemo(() => {
-    const now = kstNow();
-    const thisYear = now.slice(0, 4);
-    const thisMonth = now.slice(0, 7);
-    const prev = new Date(Date.UTC(Number(thisYear), Number(now.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
-    const active = projects.filter(isActiveProject);
-    const byStage = (st: SalesStage) => active.filter((p) => p.stage === st).length;
-    const won = projects.filter((p) => p.stage === "won" && outcomeYear(p) === thisYear).length;
-    const lost = projects.filter((p) => p.stage === "lost" && outcomeYear(p) === thisYear).length;
+    const k = stats?.kpi;
+    const by = k?.activeByStage ?? { lead: 0, contact: 0, proposal: 0, bidding: 0, hold: 0 };
+    const won = k?.won ?? 0;
+    const lost = k?.lost ?? 0;
     const nearest = upcomingBids.reduce<number | null>((m, b) => {
       const n = daysUntil(b.bidEnd);
       return m == null || n < m ? n : m;
     }, null);
     return {
-      thisYear,
-      thisMonth,
-      active: active.length,
+      thisYear: stats?.thisYear ?? kstNowIso().slice(0, 4),
+      active: k?.active ?? 0,
       // 보류는 있을 때만 덧붙여 내역 합이 진행 중 건수와 맞게 한다.
       activeBreakdown:
-        `리드 ${byStage("lead")} · 컨택 ${byStage("contact")} · 제안 ${byStage("proposal")} · 입찰 ${byStage("bidding")}` +
-        (byStage("hold") > 0 ? ` · 보류 ${byStage("hold")}` : ""),
-      newThisMonth: projects.filter((p) => openedMonth(p) === thisMonth).length,
-      newPrevMonth: projects.filter((p) => openedMonth(p) === prev).length,
+        `리드 ${by.lead} · 컨택 ${by.contact} · 제안 ${by.proposal} · 입찰 ${by.bidding}` + (by.hold > 0 ? ` · 보류 ${by.hold}` : ""),
+      newThisMonth: k?.newThisMonth ?? 0,
+      newPrevMonth: k?.newPrevMonth ?? 0,
       bids: upcomingBids.length,
       nearestBid: nearest,
       won,
       lost,
       winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null,
     };
-  }, [projects, upcomingBids]);
+  }, [stats, upcomingBids]);
 
-  const matchKpi = (p: SalesProject) => {
-    switch (kpiFilter) {
-      case "active": return isActiveProject(p);
-      case "new": return openedMonth(p) === kpi.thisMonth;
-      case "won": return p.stage === "won" && outcomeYear(p) === kpi.thisYear;
-      case "lost": return p.stage === "lost" && outcomeYear(p) === kpi.thisYear;
-      case "outcome": return (p.stage === "won" || p.stage === "lost") && outcomeYear(p) === kpi.thisYear;
-      default: return true;
-    }
-  };
   const toggleKpi = (k: KpiFilter) => setKpiFilter((cur) => (cur === k ? null : k));
-
-  // 상단 필터(검색·담당·연도)와 KPI 칸 필터를 적용한 모집단. 태그 건수는 여기서 "다른 그룹 선택"까지 적용해 센다.
-  const baseFiltered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return projects.filter((p) => {
-      if (s && !(p.title.toLowerCase().includes(s) || (p.facilityName ?? "").toLowerCase().includes(s))) return false;
-      if (owner && p.ownerEmployeeId !== owner && p.leadMemberId !== owner) return false;
-      if (year && (p.openedAt ?? "").slice(0, 4) !== year) return false;
-      if (!matchKpi(p)) return false;
-      if (reachedFilter && !reachedAtLeast(p, reachedFilter)) return false;
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects, q, owner, year, kpiFilter, reachedFilter, kpi.thisYear, kpi.thisMonth]);
-
-  const regionOf = (p: SalesProject) => salesRegionGroupId(p.regionSido);
-  const matchRegion = (p: SalesProject) => regionIds.length === 0 || regionIds.includes(regionOf(p));
-  const matchCategory = (p: SalesProject) => categoryIds.length === 0 || categoryIds.includes(projectCategoryId(p));
-
-  const filtered = useMemo(
-    () => baseFiltered.filter((p) => matchRegion(p) && matchCategory(p)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltered, regionIds, categoryIds]
-  );
-
-  // 태그별 건수 — 같은 그룹의 선택은 빼고(OR 라 선택해도 늘어나는 수를 보이게), 다른 그룹 선택은 적용.
-  const regionCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of baseFiltered) if (matchCategory(p)) m.set(regionOf(p), (m.get(regionOf(p)) ?? 0) + 1);
-    return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseFiltered, categoryIds]);
-  const categoryCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of baseFiltered) if (matchRegion(p)) m.set(projectCategoryId(p), (m.get(projectCategoryId(p)) ?? 0) + 1);
-    return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseFiltered, regionIds]);
 
   const toggleIn = (set: (f: (prev: string[]) => string[]) => void, id: string) =>
     set((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -329,12 +350,21 @@ export function SalesBoard() {
     setReachedFilter(null);
   };
 
-  // 목록 쪽 나눔(공용 useClientPaging, 10-21 규칙). 필터가 바뀌면 첫 쪽으로.
-  const { pageRows, pager, resetPage } = useClientPaging(filtered, "sales-board-page-size", loading);
-  useEffect(() => {
-    resetPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, owner, year, regionIds, categoryIds, kpiFilter, reachedFilter]);
+  // 목록 쪽 나눔(10-21 규칙) — 서버가 한 쪽만 내려준다. 필터가 바뀌면 첫 쪽(offset 이 필터 키에 묶여 있음).
+  const pager = (
+    <PaginationControls
+      total={list.total}
+      limit={pageSize}
+      offset={offset}
+      loading={listLoading}
+      onPageChange={setOffset}
+      pageSizeOptions={PAGE_SIZE_OPTIONS}
+      onPageSizeChange={(n) => {
+        setPageSize(n);
+        setOffset(0);
+      }}
+    />
+  );
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
@@ -342,7 +372,7 @@ export function SalesBoard() {
         icon={<Briefcase className="w-5 h-5" />}
         eyebrow="SALES & MARKETING"
         title="영업/마케팅"
-        titleSuffix={`${filtered.length}건${hasFilter ? ` / ${projects.length}` : ""}`}
+        titleSuffix={`${list.total}건${hasFilter ? ` / ${list.visibleTotal}` : ""}`}
         help="사업장별 영업건을 단계로 관리하고, 활동 이력·견적·입찰을 한 타임라인으로 추적합니다."
         actions={
           canEdit && (
@@ -430,18 +460,18 @@ export function SalesBoard() {
             <TagFilterPanel
               regionIds={regionIds}
               categoryIds={categoryIds}
-              regionCounts={regionCounts}
-              categoryCounts={categoryCounts}
+              regionCounts={list.regionCounts}
+              categoryCounts={list.categoryCounts}
               onToggleRegion={(id) => toggleIn(setRegionIds, id)}
               onToggleCategory={(id) => toggleIn(setCategoryIds, id)}
               onClearRegion={() => setRegionIds([])}
               onClearCategory={() => setCategoryIds([])}
             />
             <div className="flex-1 min-w-0 min-h-0">
-              {loading ? (
+              {!listLoaded ? (
                 <div className="cd-text-faint text-sm p-6">불러오는 중…</div>
               ) : (
-                <ListView projects={pageRows} total={filtered.length} pager={pager} onRowClick={(id) => router.push(`/sales/${id}`)} />
+                <ListView projects={list.rows} total={list.total} pager={pager} onRowClick={(id) => router.push(`/sales/${id}`)} />
               )}
             </div>
           </div>
@@ -450,10 +480,8 @@ export function SalesBoard() {
 
       {/* 하단 인포그래픽 존(W4~W7 + W8 요약) — 막대·행을 누르면 위 목록 필터로 걸린다(2026-10-26) */}
       <SalesInsightZone
-        projects={projects}
+        stats={stats}
         assignees={assignees}
-        upcomingActs={upcomingActs}
-        pendingReports={pendingReports}
         loading={loading}
         reachedFilter={reachedFilter}
         onReached={(st) => setReachedFilter((cur) => (cur === st ? null : st))}
@@ -481,7 +509,7 @@ export function SalesBoard() {
         <ProgressReportModal
           theme={theme}
           onClose={() => setReportModalOpen(false)}
-          onReported={() => { reload(); }}
+          onReported={reload}
         />
       )}
     </div>
@@ -765,8 +793,8 @@ function TagFilterPanel({
 }: {
   regionIds: string[];
   categoryIds: string[];
-  regionCounts: Map<string, number>;
-  categoryCounts: Map<string, number>;
+  regionCounts: Record<string, number>;
+  categoryCounts: Record<string, number>;
   onToggleRegion: (id: string) => void;
   onToggleCategory: (id: string) => void;
   onClearRegion: () => void;
@@ -776,7 +804,7 @@ function TagFilterPanel({
     title: string,
     tags: { id: string; label: string }[],
     selected: string[],
-    counts: Map<string, number>,
+    counts: Record<string, number>,
     onToggle: (id: string) => void,
     onClear: () => void
   ) => (
@@ -794,7 +822,7 @@ function TagFilterPanel({
       </div>
       {tags.map((t) => {
         const active = selected.includes(t.id);
-        const n = counts.get(t.id) ?? 0;
+        const n = counts[t.id] ?? 0;
         return (
           <button
             key={t.id}

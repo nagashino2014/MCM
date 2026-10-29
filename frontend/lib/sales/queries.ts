@@ -114,12 +114,12 @@ async function attachStepTypes(
 ): Promise<void> {
   const ids = projects.map((p) => p.projectId).filter(Boolean);
   if (!ids.length) return;
-  const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+  // 배열 파라미터 1개로 넘긴다 — 예전 IN ($1…$n) 은 영업건 수만큼 바인드 파라미터가 늘어 PG 한도(65,535)에 걸린다(2026-10-29).
   const rows = rowsToObjects(
     await db.exec(
       `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids
-         FROM sales_activities WHERE project_id IN (${ph})`,
-      ids
+         FROM sales_activities WHERE project_id = ANY($1::text[])`,
+      [ids]
     )
   );
   const byPid = new Map<string, Array<Record<string, unknown>>>();

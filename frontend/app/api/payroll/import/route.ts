@@ -5,7 +5,9 @@ import { recordAuditLog } from "@/lib/auth/audit";
 import {
   IMPORT_MAX_BYTES,
   IMPORT_MAX_FILES,
+  cleanRemap,
   importLedgerFile,
+  listImportItems,
   previewLedgerFile,
   validTarget,
   type ImportResult,
@@ -16,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * 급여대장 엑셀 가져오기 — multipart: files[] + targets(JSON, 파일 순서대로 {year,month,kind,overwrite}) + mode.
+ * 급여대장 엑셀 가져오기 — multipart: files[] + targets(JSON, 파일 순서대로 {year,month,kind,overwrite,remap}) + mode.
  * mode=preview: 파싱·검증·충돌 계획만(쓰기 없음, payroll.edit)
  * mode=import : 확정 대장으로 적재(payroll.close — 엑셀분은 확정 상태로 들어가므로 확정 권한과 같은 무게)
  */
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
       for (const [i, f] of files.entries()) {
         results.push(await previewLedgerFile(f.name, Buffer.from(await f.arrayBuffer()), targets[i] ?? null));
       }
-      return NextResponse.json({ files: results });
+      return NextResponse.json({ files: results, items: await listImportItems() });
     }
 
     if (mode !== "import") return NextResponse.json({ error: "알 수 없는 mode 입니다." }, { status: 400 });
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
       try {
-        results.push(await importLedgerFile(f.name, Buffer.from(await f.arrayBuffer()), { ...t, overwrite: !!t.overwrite }));
+        results.push(await importLedgerFile(f.name, Buffer.from(await f.arrayBuffer()), { ...t, overwrite: !!t.overwrite, remap: cleanRemap(t.remap) }));
       } catch (err) {
         results.push({ fileName: f.name, ledgerId: "", action: "invalid", headcount: 0, matched: 0, reason: (err as Error).message || "적재 실패" });
       }

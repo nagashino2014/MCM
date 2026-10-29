@@ -7,6 +7,7 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 /**
  * 급여대장 엑셀 가져오기 모달 — 과거·외부 작성 급상여대장(3단 구조) 파일을 확정 대장으로 적재한다.
  * 파일 선택 → 자동 미리보기(귀속 연·월·종류 추정, 합계 검증, 항목 매핑, 기존 대장 충돌) → [가져오기].
+ * 세무사 대장은 달마다 열 구성이 달라 라벨과 기입 내용이 어긋날 수 있어, 열마다 들어갈 항목을 바꿀 수 있다(재매핑).
  * 서버 파서는 lib/payroll/ledger-import.ts (scripts/payroll_import 파이프라인 이식).
  */
 
@@ -18,6 +19,14 @@ interface Target {
   month?: number;
   kind?: Kind;
   overwrite?: boolean;
+  /** 열 라벨 → 급여 항목 재매핑 */
+  remap?: Record<string, string>;
+}
+
+interface ItemOption {
+  itemId: string;
+  name: string;
+  kind: "pay" | "deduction";
 }
 
 interface PreviewFile {
@@ -38,7 +47,16 @@ interface PreviewFile {
   netTotal: number;
   issues: string[];
   unlabeledRows: number;
-  mapping: Array<{ label: string; itemId: string; itemName: string; kind: "pay" | "deduction"; isNew: boolean }>;
+  mapping: Array<{
+    label: string;
+    itemId: string;
+    itemName: string;
+    kind: "pay" | "deduction";
+    isNew: boolean;
+    autoItemId: string;
+    autoItemName: string;
+    remapped: boolean;
+  }>;
   newItems: Array<{ label: string; itemId: string; kind: "pay" | "deduction" }>;
   entries: Array<{ name: string; deptName: string | null; positionName: string | null; payTotal: number; deductionTotal: number; netPay: number; note: string | null }>;
 }
@@ -75,6 +93,7 @@ export default function LedgerImportModal({
   const [files, setFiles] = useState<File[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
   const [preview, setPreview] = useState<PreviewFile[]>([]);
+  const [itemOptions, setItemOptions] = useState<ItemOption[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [results, setResults] = useState<ImportResult[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,6 +116,7 @@ export default function LedgerImportModal({
       if (!res.ok) throw new Error(data.error ?? "미리보기 실패");
       const list: PreviewFile[] = data.files ?? [];
       setPreview(list);
+      setItemOptions(data.items ?? []);
       setTargets(list.map((p, i) => ({ ...p.target, overwrite: ts[i]?.overwrite ?? false })));
     } catch (err) {
       setMsg((err as Error).message);
@@ -284,6 +304,9 @@ export default function LedgerImportModal({
                               덮어쓰기
                             </label>
                           )}
+                          {p.mapping.some((m) => m.remapped) && (
+                            <p className="mt-1" style={{ color: "var(--cd-warning)" }}>열 {p.mapping.filter((m) => m.remapped).length}개 항목을 바꿨습니다.</p>
+                          )}
                           {p.newItems.length > 0 && (
                             <p className="mt-1" style={{ color: "var(--cd-warning)" }}>새 항목 {p.newItems.length}개가 급여 항목에 추가됩니다.</p>
                           )}
@@ -295,13 +318,38 @@ export default function LedgerImportModal({
                             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                               <div>
                                 <h4 className="font-bold cd-text mb-1">열 → 급여 항목</h4>
-                                <div className="flex flex-wrap gap-1">
+                                <p className="cd-text-faint mb-1.5">
+                                  열 이름과 실제 기입 내용이 다르면 들어갈 항목을 바꾸세요. 바꾼 내역은 대장 비고에 남습니다.
+                                </p>
+                                <div className="flex flex-col gap-1">
                                   {p.mapping.map((m) => (
-                                    <span key={m.label} className="rounded-lg border cd-border-c px-1.5 py-0.5 cd-text" style={{ background: "var(--cd-card-solid)" }}>
-                                      {m.label === m.itemName ? m.label : `${m.label} → ${m.itemName}`}
-                                      <span className="ml-1 cd-text-faint">{m.kind === "pay" ? "지급" : "공제"}</span>
-                                      {m.isNew && <span className="ml-1 font-bold" style={{ color: "var(--cd-warning)" }}>새 항목</span>}
-                                    </span>
+                                    <div key={m.label} className="flex items-center gap-2">
+                                      <span className="flex-1 min-w-0 truncate cd-text" title={m.label}>{m.label}</span>
+                                      <select
+                                        aria-label={`${m.label} 열에 넣을 항목`}
+                                        className="cd-select text-xs"
+                                        style={{ width: 156 }}
+                                        disabled={busy || !!results}
+                                        value={t.remap?.[m.label] ?? ""}
+                                        onChange={(e) => {
+                                          const next = { ...(t.remap ?? {}) };
+                                          if (e.target.value) next[m.label] = e.target.value;
+                                          else delete next[m.label];
+                                          changeTarget(i, { remap: next });
+                                        }}
+                                      >
+                                        <option value="">자동: {m.autoItemName}{m.isNew && !m.remapped ? " (새 항목)" : ""}</option>
+                                        {(["pay", "deduction"] as const).map((kd) => (
+                                          <optgroup key={kd} label={kd === "pay" ? "지급" : "공제"}>
+                                            {itemOptions.filter((o) => o.kind === kd).map((o) => (
+                                              <option key={o.itemId} value={o.itemId}>{o.name}</option>
+                                            ))}
+                                          </optgroup>
+                                        ))}
+                                      </select>
+                                      <span className="w-7 shrink-0 cd-text-faint">{m.kind === "pay" ? "지급" : "공제"}</span>
+                                      <span className="w-7 shrink-0 font-bold" style={{ color: "var(--cd-warning)" }}>{m.remapped ? "바꿈" : ""}</span>
+                                    </div>
                                   ))}
                                 </div>
                                 {p.issues.length > 0 && (

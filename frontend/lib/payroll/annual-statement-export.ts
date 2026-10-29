@@ -8,7 +8,7 @@ import { serviceLabel, type AnnualStatement } from "@/lib/payroll/annual-stateme
 
 /*
  * 연간 급여 명세서 내보내기(엑셀·PDF) — 직원별 연간 탭.
- * 구성: 제목 + 인적사항 → 항목×월 표(지급·공제·차인) → 퇴직금 적립 행 → 퇴직금 추계 표 → 산정 근거 → 발급일·회사명·직인.
+ * 구성: 제목 + 인적사항 → 항목×월 표(지급·공제·차인·급여일 외 지급·실수령액) → 퇴직금 적립 행 → 퇴직금 추계 표 → 산정 근거 → 발급일·회사명·직인.
  * PDF 는 급여명세서(statement-pdf.ts) 관례(자간 제목·이중선·음영 라벨 격자·직인)를 A4 가로 한 장에 맞춘다.
  */
 
@@ -38,7 +38,7 @@ function won(v: number): string {
   return Math.round(v).toLocaleString("ko-KR");
 }
 
-/** 표 본문 행 — 화면 표와 같은 순서(지급 항목 → 지급합계 → 공제 항목 → 공제합계 → 차인지급액 → 퇴직금 적립) */
+/** 표 본문 행 — 화면 표와 같은 순서(지급 항목 → 지급합계 → 공제 항목 → 공제합계 → 차인지급액 → 급여일 외 지급 → 연간 실수령액 → 퇴직금 적립) */
 function tableRows(s: AnnualStatement): TableRow[] {
   const rows: TableRow[] = [];
   for (const kind of ["pay", "deduction"] as const) {
@@ -51,7 +51,9 @@ function tableRows(s: AnnualStatement): TableRow[] {
     rows.push({ label: kind === "pay" ? "지급합계" : "공제합계", values: vals, total: vals.reduce((a, b) => a + b, 0), style: "subtotal" });
   }
   const net = s.months.map((m) => s.monthTotals[m]?.net ?? 0);
-  rows.push({ label: "차인지급액", values: net, total: net.reduce((a, b) => a + b, 0), style: "net" });
+  rows.push({ label: "차인지급액", values: net, total: net.reduce((a, b) => a + b, 0), style: "subtotal" });
+  rows.push({ label: "급여일 외 지급", values: s.months.map((m) => s.prepaid.amounts[m] ?? null), total: s.prepaid.total, style: "item" });
+  rows.push({ label: "연간 실수령액", values: s.months.map((m) => s.prepaid.received[m] ?? 0), total: s.prepaid.receivedTotal, style: "net" });
   rows.push({ label: "퇴직금 적립", values: [], total: 0, style: "section" });
   rows.push({
     label: "퇴직금 적립액(월 임금 ÷ 12)",
@@ -74,7 +76,10 @@ function severanceGrid(s: AnnualStatement): Array<[string, string, string, strin
 
 function severanceNotes(s: AnnualStatement): string[] {
   const v = s.severance;
+  const prepaidBasis = s.months.filter((m) => s.prepaid.basis[m]).map((m) => `${m}월 ${s.prepaid.basis[m]}`);
   const notes = [
+    "차인지급액은 급여일 이체액입니다. 급여일 외 지급 = 급여일 전에 먼저 받은 상여·성과급(대장의 선지급분공제, 그달 상여·성과급 이내의 기타공제). 실수령액 = 차인지급액 + 급여일 외 지급." +
+      (prepaidBasis.length ? ` (${prepaidBasis.join(", ")})` : ""),
     "퇴직금 = 1일 평균임금 × 30일 × 재직일수 ÷ 365 (근로자퇴직급여 보장법 제8조). 계속근로 1년 이상 퇴직 시 지급 대상입니다.",
     "1일 평균임금 = (기준일 이전 3개월 임금총액 + 직전 1년 상여·연차수당 × 3/12) ÷ 3개월 일수. 실비변상(정산 경비·출장수당·출장숙박수당) 제외.",
     "적립액은 매월 임금총액의 1/12 입니다. 급여대장 월 단위 추계이므로 실제 지급액은 퇴사일 기준 일할·통상임금 비교로 확정합니다.",

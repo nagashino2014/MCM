@@ -10,7 +10,7 @@ import LedgerImportModal from "@/components/payroll/LedgerImportModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
 import BonusPlanModal from "@/components/payroll/BonusPlanModal";
 import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
-import type { AnnualProfile, SeveranceEstimate } from "@/lib/payroll/annual-statement";
+import type { AnnualProfile, PrepaidSummary, SeveranceEstimate } from "@/lib/payroll/annual-statement";
 import { filenameFromDisposition } from "@/lib/client-download";
 
 /**
@@ -51,6 +51,7 @@ export default function PayrollLedgerBoard() {
   const [monthTotals, setMonthTotals] = useState<Record<number, { pay: number; ded: number; net: number }>>({});
   const [annualProfile, setAnnualProfile] = useState<AnnualProfile | null>(null);
   const [severance, setSeverance] = useState<SeveranceEstimate | null>(null);
+  const [prepaid, setPrepaid] = useState<PrepaidSummary | null>(null);
   const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
 
   // 새 대장 생성(P4)
@@ -235,12 +236,14 @@ export default function PayrollLedgerBoard() {
         setMonthTotals(d.monthTotals ?? {});
         setAnnualProfile(d.profile ?? null);
         setSeverance(d.severance ?? null);
+        setPrepaid(d.prepaid ?? null);
       })
       .catch(() => {
         setAnnualItems([]);
         setMonthTotals({});
         setAnnualProfile(null);
         setSeverance(null);
+        setPrepaid(null);
       })
       .finally(() => setLoading(false));
   }, [view, year, annualName]);
@@ -628,6 +631,31 @@ export default function PayrollLedgerBoard() {
                       </td>
                     </tr>
                   ))}
+                  {/* 급여일 외 지급 — 급여일 전에 먼저 받은 상여·성과급(대장에선 공제로 상쇄). 차인지급액은 그대로 둔다 */}
+                  {prepaid && annualMonths.length > 0 && (
+                    <>
+                      <tr className="border-b cd-border-c">
+                        <td className="p-2.5 font-semibold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
+                          급여일 외 지급
+                          <span className="ml-1 text-[10px] font-semibold cd-text-faint">기지급 상여·성과급</span>
+                        </td>
+                        {annualMonths.map((m) => (
+                          <td key={m} className="p-2.5 text-right cd-text tabular-nums" title={prepaid.basis[m]}>{fmt(prepaid.amounts[m])}</td>
+                        ))}
+                        <td className="p-2.5 text-right font-bold tabular-nums cd-text">{fmtTotal(prepaid.total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-extrabold sticky left-0 z-10 whitespace-nowrap" style={{ color: "var(--cd-primary)", background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
+                          연간 실수령액
+                          <span className="ml-1 text-[10px] font-semibold cd-text-faint">차인 + 급여일 외</span>
+                        </td>
+                        {annualMonths.map((m) => (
+                          <td key={m} className="p-2.5 text-right font-bold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(prepaid.received[m] ?? 0)}</td>
+                        ))}
+                        <td className="p-2.5 text-right font-extrabold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(prepaid.receivedTotal)}</td>
+                      </tr>
+                    </>
+                  )}
                   {severance && annualMonths.length > 0 && (
                     <tr className="border-t-2 cd-border-c">
                       <td className="p-2.5 font-extrabold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>

@@ -6,6 +6,13 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-29",
+    kind: "변경",
+    title: "왼쪽 메뉴 — 모든 묶음의 메뉴를 늘 표시",
+    body: "왼쪽 메뉴에서 지금 화면이 속하지 않은 묶음(협업·업무·사업 운영·관리)을 접던 방식을 없앴습니다. 묶음 이름 아래 메뉴가 늘 보이고, 하위 메뉴만 지금처럼 펼치거나 접습니다.",
+    articles: ["start.screen"],
+  },
+  {
     date: "2026-10-28",
     kind: "변경",
     title: "화면 바탕·메뉴·탭 정리 — 반투명 메뉴, 지금 묶음만 펼치는 메뉴, 흰 묶음 탭",

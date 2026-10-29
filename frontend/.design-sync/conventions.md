@@ -44,7 +44,7 @@ Rules: opaque surfaces with faint 1px borders; radius 10px for cards, buttons, f
 
 ## 4. Where the truth lives
 
-`styles.css` → `_ds_bundle.css` holds the compiled cdash + app stylesheet (all class and token definitions above). Page layout conventions: sidebar 248px (rail 76px, frosted glass, only the current menu group expanded) and a frosted top bar are outside your canvas; content area at 1920×1080 is ~1624px wide. Split screens use a list pane + detail pane; size the list pane with `clamp()` rather than a fixed px width, and let inner forms wrap by their own width (`flex flex-wrap` with min widths), because viewport breakpoints do not reflect the pane width.
+`styles.css` → `_ds_bundle.css` holds the compiled cdash + app stylesheet (all class and token definitions above). Page layout conventions: sidebar 248px (rail 76px, frosted glass; category labels are fixed and every top-level menu stays visible — only submenus collapse) and a frosted top bar are outside your canvas; content area at 1920×1080 is ~1624px wide. Split screens use a list pane + detail pane; size the list pane with `clamp()` rather than a fixed px width, and let inner forms wrap by their own width (`flex flex-wrap` with min widths), because viewport breakpoints do not reflect the pane width.
 
 ## 5. Example
 

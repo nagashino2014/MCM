@@ -6,9 +6,8 @@
 //   마우스 오버·키보드 포커스 동안에만 248px 로 펼친다. 펼침은 본문 위에 겹치는 오버레이라
 //   본문 가로폭은 76px 기준으로 고정된다(4K 미만에서 카드 너비 확보 — 분석 요청 배경).
 // mode="drawer" 면 폭 강제 확장(오버레이 드로어 내부용).
-// 그룹 접힘(2026-10-28 결정판): 펼친 폭에서는 현재 경로가 속한 그룹(협업·업무·사업 운영·관리)만 펼치고,
-//   나머지는 머리 버튼(항목 수·화살표)만 둔다. 머리를 눌러 다른 그룹을 열 수 있고, 경로가 바뀌면 다시 현재 그룹만 펼친다.
-//   아이콘 레일에서는 그룹과 무관하게 모든 아이콘을 보인다(레일은 라벨이 없어 접을 대상이 없다).
+// 카테고리(협업·업무·사업 운영·관리)는 접지 않는다(2026-10-29 사용자 요청 — 10-28 그룹 접힘 철회).
+//   카테고리 라벨 아래 대메뉴는 항상 보이고, 접고 펼치는 것은 대메뉴의 소메뉴뿐이다(현재 경로의 대메뉴는 자동 펼침).
 // 설계: docs/groupware-ux-overhaul-blueprint.md §2.1·§3.
 
 import { useEffect, useState } from "react";
@@ -64,9 +63,7 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
   const pathname = usePathname();
   const query = useSearchParams().toString();
   const active = resolveMenuRoute(MENU_ITEMS.filter((item) => isMenuVisible(item, perms)), pathname, query);
-  const activeGroup = active ? (MENU_ITEMS.find((m) => m.title === active.parentTitle)?.group ?? "main") : null;
   const [openSections, setOpenSections] = useState<string[]>(() => sectionsForPath(pathname, query));
-  const [openGroups, setOpenGroups] = useState<string[]>(() => (activeGroup ? [activeGroup] : []));
   const isDrawer = mode === "drawer";
   const [autoCollapse, setAutoCollapse] = useState(false);
   const [peek, setPeek] = useState(false); // 자동 축소 중 마우스 오버·포커스로 임시 펼침
@@ -82,14 +79,6 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
     }
     setOpenSections(Array.from(new Set([...saved, ...sectionsForPath(pathname, query)])));
   }, [pathname, query]);
-
-  // 경로가 바뀌면 현재 그룹만 펼친다. 메뉴에 없는 경로(매뉴얼 등)에서는 직전 상태를 둔다.
-  useEffect(() => {
-    if (activeGroup) setOpenGroups([activeGroup]);
-  }, [activeGroup, pathname, query]);
-
-  const toggleGroup = (key: string) =>
-    setOpenGroups((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   // 자동 축소 옵션 복원(드로어는 항상 확장이라 해당 없음).
   useEffect(() => {
@@ -196,57 +185,29 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
       <div className="flex flex-col gap-1.5 flex-1">
         {groups.map((g, gi) => {
           const label = SECTION_LABEL[g.key];
-          const groupOpen = !label || openGroups.includes(g.key);
-          const groupId = `nav-group-${mode}-${g.key}`;
-          const badgeSum = g.items.reduce((sum, m) => sum + (m.badgeKey ? badges[m.badgeKey] ?? 0 : 0), 0);
-          const items = g.items.map((item) => (
-            <NavItem
-              key={item.title}
-              item={item}
-              active={active}
-              badges={badges}
-              width={width}
-              open={openSections.includes(item.title)}
-              onToggle={() => toggleSection(item.title)}
-              onNavigate={onNavigate}
-            />
-          ));
           return (
             <div key={g.key} className={cn("flex flex-col gap-1.5", gi > 0 && "mt-2")}>
               {label && (
                 <>
-                  {/* 확장: 그룹 머리 버튼(접힘이면 항목 수·건수) / 레일: 구분선 */}
-                  <button
-                    type="button"
-                    className={cn("cd-nav-group-head", cls.flexLabel)}
-                    aria-expanded={groupOpen}
-                    aria-controls={groupId}
-                    onClick={() => toggleGroup(g.key)}
-                  >
-                    <span className="flex-1 truncate">{label}</span>
-                    {!groupOpen &&
-                      (badgeSum > 0 ? (
-                        <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-[11px] font-semibold inline-flex items-center justify-center cd-fill-primary text-white">
-                          {badgeSum > 99 ? "99+" : badgeSum}
-                        </span>
-                      ) : (
-                        <span className="cd-nav-group-count">{g.items.length}</span>
-                      ))}
-                    {groupOpen ? (
-                      <ChevronDown className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
-                    ) : (
-                      <ChevronRight className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
-                    )}
-                  </button>
+                  {/* 확장: 카테고리 라벨(접지 않음) / 레일: 구분선 */}
+                  <div className={cn("cd-nav-group-label", cls.label)}>{label}</div>
                   {showRail && <div className={cn("mx-3 my-1 border-t cd-hairline-c", cls.railOnly)} />}
                 </>
               )}
-              {groupOpen ? (
-                <div id={groupId} className="flex flex-col gap-1">{items}</div>
-              ) : (
-                // 접힌 그룹도 아이콘 레일에서는 보인다(railOnly: 레일=표시, 펼친 폭=숨김).
-                showRail && <div id={groupId} className={cn("flex flex-col gap-1", cls.railOnly)}>{items}</div>
-              )}
+              <div className="flex flex-col gap-1">
+                {g.items.map((item) => (
+                  <NavItem
+                    key={item.title}
+                    item={item}
+                    active={active}
+                    badges={badges}
+                    width={width}
+                    open={openSections.includes(item.title)}
+                    onToggle={() => toggleSection(item.title)}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
             </div>
           );
         })}

@@ -385,12 +385,13 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "넘침 = 글자가 쪽 여백·칸을 넘거나 잘림(PDF 와 같은 검사), 대비 = 글자와 바탕 대비 4.5:1 미만, 해상도 = 인쇄 150dpi 미만(300dpi 권장), 글자 크기 = 7pt 미만.",
+        "겹침 = 자유 배치로 옮긴 요소(직접 넣은 요소 포함)가 다른 글·데이터 영역과 실제로 겹침. 막지는 않고 경고만 합니다. 누르면 옮긴 요소를 고르고, 겹친 상대는 옅은 주황 테두리로 보입니다.",
         "자동 분쪽 쪽은 캔버스에서 나누지 않으므로 [[전체 쪽 검사]]·미리보기로 봅니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "layout" },
-    sources: ["components/sales/catalog/studio/CatalogStudio.tsx"],
-    reviewedAt: "2026-10-22",
+    sources: ["components/sales/catalog/studio/CatalogStudio.tsx", "components/sales/catalog/studio/checks.ts"],
+    reviewedAt: "2026-10-29",
   },
   {
     id: "catalog.pdf",

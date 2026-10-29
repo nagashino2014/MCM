@@ -6,7 +6,8 @@
 //   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 오른쪽·아래·모서리 손잡이로 크기 — 12열 그리드·4pt 기준선에 맞춘다(L3 쪽만)
 //   여러 개 고르기: Shift·Ctrl+클릭으로 더하고 뺀다 → 묶음 손잡이로 함께 옮기고(상대 위치 유지, 묶음 왼쪽 위를 그리드에 맞춤) Delete·Ctrl+D 도 함께
 //   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt), Delete = 숨기기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
-//   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도(주황)
+//   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도·겹침(주황)
+//   겹침: 옮기는 중(끌기·묶음 끌기) 겹치는 다른 글 상자에 옅은 주황 테두리 — 막지는 않는다. 놓은 뒤에는 쪽 검사의 '겹침' 경고로 남는다
 
 import {
   createElement,
@@ -30,13 +31,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { COL_STEP, COL_W, COLUMNS, CONTENT_W, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_X, PAGE_H, PAGE_W, snapWidth, snapX, snapY } from "@/lib/catalog/studio/design-system";
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, toEditableHtml } from "@/lib/catalog/studio/inline";
 import { stripDerived } from "@/lib/catalog/studio/edits";
-import { findNode, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
+import { findNode, findPath, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
+import { boundsOf, findOverlaps, movedNodes, textBoxNodes, type OverlapBox, type OverlapNode } from "@/lib/catalog/studio/overlap";
 import { nodeProps, renderNode, resolvedChildren, type TreeEnv } from "@/lib/catalog/studio/render-tree";
-import { capabilities, isTextBlock, outermost, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
+import { capabilities, describe, isTextBlock, outermost, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
 import type { DomLike } from "@/lib/doc-tree/inline-core";
-import { checkSheet, type CheckItem } from "./checks";
+import { checkOverlaps, checkSheet, measureRects, type CheckItem } from "./checks";
 import { PortalFrame } from "./Frames";
 import type { StudioKit } from "./kit";
+import { selectionLabel } from "./types";
 
 export interface CanvasHandle {
   /** 방향키 옮기기(가로 = 열, 세로 = 4pt) */
@@ -69,6 +72,12 @@ interface ElPos {
   position: string;
   left: number;
   top: number;
+}
+
+/** 옮기는 중 겹침 판정 — 잡을 때 잰 옮길 요소·글 상자 */
+interface DragOverlap {
+  subjects: OverlapBox[];
+  targets: OverlapBox[];
 }
 
 interface GroupItem {
@@ -107,6 +116,7 @@ const CANVAS_CSS = `
 .st-box--group { outline-offset: 3px; }
 .st-box--warn { outline: 1.5px dashed #d64545; }
 .st-box--note { outline: 1.5px dashed #c47f00; }
+.st-box--overlap { outline: 1.5px dashed rgba(196,127,0,.6); background: rgba(196,127,0,.08); }
 .st-handle { position: absolute; width: 9px; height: 9px; background: #fff; border: 1.5px solid #4a63d8; border-radius: 2px; pointer-events: auto; box-sizing: border-box; }
 .st-handle--e { right: -5px; top: calc(50% - 4.5px); cursor: ew-resize; }
 .st-handle--s { bottom: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
@@ -128,6 +138,7 @@ export function StudioCanvas({
   zoom,
   showGuides,
   checks,
+  pageLabel,
   onSelect,
   onToggleSelect,
   onCommitText,
@@ -151,6 +162,8 @@ export function StudioCanvas({
   zoom: number;
   showGuides: boolean;
   checks: CheckItem[];
+  /** 쪽 이름 — 겹침 경고 문구 */
+  pageLabel?: string;
   onSelect: (id: string | null) => void;
   /** Shift·Ctrl+클릭 — 고른 묶음에 더하거나 뺀다 */
   onToggleSelect: (id: string) => void;
@@ -168,13 +181,13 @@ export function StudioCanvas({
   handleRef?: MutableRefObject<CanvasHandle | null>;
 }) {
   const [frame, setFrame] = useState<{ doc: Document; win: Window } | null>(null);
-  const [rects, setRects] = useState<{ sel: Rect | null; others: Rect[]; group: Rect | null; hover: Rect | null; warn: Array<{ r: Rect; kind: string }> }>({ sel: null, others: [], group: null, hover: null, warn: [] });
+  const [rects, setRects] = useState<{ sel: Rect | null; others: Rect[]; group: Rect | null; hover: Rect | null; warn: Array<{ r: Rect; kind: string }>; overlap: Rect[] }>({ sel: null, others: [], group: null, hover: null, warn: [], overlap: [] });
   const selectedId = selectedIds[selectedIds.length - 1] ?? null;
   const multi = selectedIds.length > 1;
   const [hoverId, setHoverId] = useState<string | null>(null);
   const scaleRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<null | { mode: "move" | "e" | "s" | "se"; id: string; startX: number; startY: number; rect: Rect; el: HTMLElement; cs: { position: string; left: number; top: number }; orig: { transform: string; width: string; height: string } }>(null);
-  const groupDragRef = useRef<null | { startX: number; startY: number; rect: Rect; items: GroupItem[] }>(null);
+  const dragRef = useRef<null | { mode: "move" | "e" | "s" | "se"; id: string; startX: number; startY: number; rect: Rect; el: HTMLElement; cs: { position: string; left: number; top: number }; orig: { transform: string; width: string; height: string }; ov: DragOverlap | null }>(null);
+  const groupDragRef = useRef<null | { startX: number; startY: number; rect: Rect; items: GroupItem[]; ov: DragOverlap | null }>(null);
 
   // 글 블록(고칠 수 있는 노드) — 위젯 안은 빼고
   const textBlocks = useMemo(() => {
@@ -190,6 +203,10 @@ export function StudioCanvas({
     walk(tree, null, false);
     return set;
   }, [tree]);
+
+  // 겹침 검사 대상 — 옮긴 요소와 글 상자(글 블록·데이터 영역·추가한 글상자)
+  const overlapNodes = useMemo(() => ({ moved: movedNodes(tree), boxes: textBoxNodes(tree) }), [tree]);
+  const overlapLabel = useCallback((o: OverlapNode) => selectionLabel(describe(o.path)), []);
 
   const chipHtml = useCallback(
     (chip: CNode) =>
@@ -340,15 +357,20 @@ export function StudioCanvas({
       if (!c.nodeId || c.severity === "info") continue;
       const r = rectOf(elOf(c.nodeId));
       if (r) warn.push({ r, kind: c.kind });
+      for (const rid of c.relatedIds ?? []) {
+        const rr = rectOf(elOf(rid));
+        if (rr) warn.push({ r: rr, kind: "related" });
+      }
     }
     const others = multi ? selectedIds.map((id) => rectOf(elOf(id))).filter((r): r is Rect => r != null) : [];
-    setRects({
+    setRects((prev) => ({
+      overlap: prev.overlap,
       sel: multi ? null : rectOf(elOf(selectedId)),
       others,
       group: unionRect(others),
       hover: hoverId && !selectedIds.includes(hoverId) ? rectOf(elOf(hoverId)) : null,
       warn,
-    });
+    }));
   }, [checks, elOf, rectOf, selectedId, selectedIds, multi, hoverId]);
 
   useLayoutEffect(() => {
@@ -384,6 +406,7 @@ export function StudioCanvas({
       let items: CheckItem[];
       try {
         items = checkSheet(frame.win, s);
+        if (!flow) items.push(...checkOverlaps(frame.win, s, overlapNodes.moved, overlapNodes.boxes, overlapLabel, pageLabel));
       } finally {
         sc.style.transform = prevTransform;
       }
@@ -395,7 +418,7 @@ export function StudioCanvas({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [frame, content, flow, sheetEl, onChecks, fontSet]);
+  }, [frame, content, flow, sheetEl, onChecks, fontSet, overlapNodes, overlapLabel, pageLabel]);
 
   const selCaps = useMemo(() => {
     if (!selectedId) return null;
@@ -443,6 +466,36 @@ export function StudioCanvas({
     [onPatchStyles]
   );
 
+  // 옮기는 중 겹침 — 잡는 순간 옮길 요소와 다른 글 상자를 한 번 재 두고, 끄는 동안은 옮긴 거리만큼 밀어 판정한다
+  const dragOverlap = useCallback(
+    (ids: string[]): DragOverlap | null => {
+      const s = sheetEl();
+      if (!frame || !s || !ids.length) return null;
+      const lineIds = new Set(overlapNodes.boxes.filter((o) => o.measure === "lines").map((o) => o.node.id));
+      const subjects = ids.flatMap((id) => {
+        const path = findPath(tree, id);
+        const rects = measureRects(frame.win, s, elOf(id), lineIds.has(id) ? "lines" : "box");
+        return path && rects ? [{ id, path: path.map((p) => p.id), rects }] : [];
+      });
+      const targets = overlapNodes.boxes.flatMap((o) => {
+        const rects = measureRects(frame.win, s, elOf(o.node.id), o.measure);
+        return rects ? [{ id: o.node.id, path: o.path.map((p) => p.id), rects }] : [];
+      });
+      return subjects.length ? { subjects, targets } : null;
+    },
+    [frame, sheetEl, overlapNodes, tree, elOf]
+  );
+
+  const overlapAt = (ov: DragOverlap | null, ddx: number, ddy: number): Rect[] => {
+    if (!ov) return [];
+    const moved = ov.subjects.map((b) => ({ ...b, rects: b.rects.map((r) => ({ ...r, x: r.x + ddx, y: r.y + ddy })) }));
+    const hit = new Set(findOverlaps(moved, ov.targets).map((h) => h.otherId));
+    return ov.targets.filter((t) => hit.has(t.id)).flatMap((t) => {
+      const b = boundsOf(t.rects);
+      return b ? [b] : [];
+    });
+  };
+
   const onHandleDown = (mode: "move" | "e" | "s" | "se") => (e: RPointerEvent<HTMLElement>) => {
     if (!frame || !selectedId) return;
     const el = elOf(selectedId);
@@ -451,7 +504,7 @@ export function StudioCanvas({
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { mode, id: selectedId, startX: e.clientX, startY: e.clientY, rect, el, cs: readCs(el, frame.win), orig: { transform: el.style.transform, width: el.style.width, height: el.style.height } };
+    dragRef.current = { mode, id: selectedId, startX: e.clientX, startY: e.clientY, rect, el, cs: readCs(el, frame.win), orig: { transform: el.style.transform, width: el.style.width, height: el.style.height }, ov: mode === "move" ? dragOverlap([selectedId]) : null };
   };
 
   const onHandleMove = (e: RPointerEvent<HTMLElement>) => {
@@ -463,7 +516,8 @@ export function StudioCanvas({
       const ddx = snapX(d.rect.x + dx) - d.rect.x;
       const ddy = snapY(d.rect.y + dy) - d.rect.y;
       d.el.style.transform = `${d.orig.transform} translate(${ddx}px, ${ddy}px)`;
-      setRects((r) => ({ ...r, sel: { ...d.rect, x: d.rect.x + ddx, y: d.rect.y + ddy } }));
+      const overlap = overlapAt(d.ov, ddx, ddy);
+      setRects((r) => ({ ...r, sel: { ...d.rect, x: d.rect.x + ddx, y: d.rect.y + ddy }, overlap }));
     } else {
       const w = d.mode !== "s" ? snapWidth(Math.max(8, d.rect.w + dx)).width : d.rect.w;
       const h = d.mode !== "e" ? Math.max(8, snapY(d.rect.h + dy)) : d.rect.h;
@@ -480,7 +534,7 @@ export function StudioCanvas({
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    groupDragRef.current = { startX: e.clientX, startY: e.clientY, rect, items };
+    groupDragRef.current = { startX: e.clientX, startY: e.clientY, rect, items, ov: dragOverlap(items.map((it) => it.id)) };
   };
 
   const groupDelta = (g: { startX: number; startY: number; rect: Rect }, e: RPointerEvent<HTMLElement>) => ({
@@ -494,13 +548,15 @@ export function StudioCanvas({
     const { ddx, ddy } = groupDelta(g, e);
     for (const it of g.items) it.el.style.transform = `${it.transform} translate(${ddx}px, ${ddy}px)`;
     const moved = g.items.map((it) => ({ ...it.rect, x: it.rect.x + ddx, y: it.rect.y + ddy }));
-    setRects((r) => ({ ...r, others: moved, group: { ...g.rect, x: g.rect.x + ddx, y: g.rect.y + ddy } }));
+    const overlap = overlapAt(g.ov, ddx, ddy);
+    setRects((r) => ({ ...r, others: moved, group: { ...g.rect, x: g.rect.x + ddx, y: g.rect.y + ddy }, overlap }));
   };
 
   const onGroupUp = (e: RPointerEvent<HTMLElement>) => {
     const g = groupDragRef.current;
     if (!g) return;
     groupDragRef.current = null;
+    setRects((r) => ({ ...r, overlap: [] }));
     const { ddx, ddy } = groupDelta(g, e);
     for (const it of g.items) it.el.style.transform = it.transform;
     commitGroup(g.items, ddx, ddy);
@@ -510,6 +566,7 @@ export function StudioCanvas({
     const d = dragRef.current;
     if (!d) return;
     dragRef.current = null;
+    setRects((r) => ({ ...r, overlap: [] }));
     const dx = (e.clientX - d.startX) / zoom;
     const dy = (e.clientY - d.startY) / zoom;
     d.el.style.transform = d.orig.transform;
@@ -645,7 +702,8 @@ export function StudioCanvas({
                 ))}
               </>
             ) : null}
-            {rects.warn.map((w, i) => box(w.r, w.kind === "overflow" ? "st-box--warn" : "st-box--note", null, `w${i}`))}
+            {rects.warn.map((w, i) => box(w.r, w.kind === "overflow" ? "st-box--warn" : w.kind === "related" ? "st-box--overlap" : "st-box--note", null, `w${i}`))}
+            {rects.overlap.map((r, i) => box(r, "st-box--overlap", null, `o${i}`))}
             {rects.hover ? box(rects.hover, "st-box--hover") : null}
             {rects.others.map((r, i) => box(r, "st-box--sel", null, `m${i}`))}
             {rects.group

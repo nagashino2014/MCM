@@ -9,7 +9,8 @@ import { withPayrollWrite } from "@/lib/payroll/integrity";
  * - 라벨 있는 칸은 항목 사전(명칭·별칭)으로 매핑, 라벨 없는 칸 금액은 '미상 지급/공제'로 보존
  * - 3중 합계 검증(Σ지급=지급합계, Σ공제=공제합계, 지급−공제=차인) 불일치 파일은 적재하지 않는다(파이프라인과 동일)
  * - 적재분은 source='excel', status='confirmed'. 앱 작성 대장·명세서 발행·전표 확정된 대장은 덮어쓰지 않는다.
- * 파일별 과거 열 밀림 보정(COLUMN_OVERRIDES)은 스크립트 전용 — 여기서는 매핑표를 미리보기로 보여 준다.
+ * 파일별 과거 열 밀림 보정(COLUMN_OVERRIDES)은 스크립트 전용 — 여기서는 미리보기에서 열(라벨)별로 들어갈 항목을
+ * 바꿀 수 있다(remap). 세무사 대장의 열 구성이 달마다 달라 라벨과 실제 기입 내용이 어긋나는 달이 있다(314 참조).
  */
 
 const PERSON_LABELS = new Set(["사원번호", "성명", "입사일", "직급", "퇴사일", "부서"]);
@@ -129,6 +130,9 @@ export interface ParsedEntry {
   errors: string[];
 }
 
+/** 열 라벨 → 급여 항목 재매핑(파일 단위, 미리보기에서 사용자가 지정) */
+export type ColumnRemap = Record<string, string>;
+
 export interface ParsedFile {
   fileName: string;
   sha256: string;
@@ -139,7 +143,17 @@ export interface ParsedFile {
   entries: ParsedEntry[];
   issues: string[];
   /** 헤더 라벨 → 매핑 항목(미리보기 표시용) */
-  mapping: Array<{ label: string; itemId: string; itemName: string; kind: "pay" | "deduction"; isNew: boolean }>;
+  mapping: Array<{
+    label: string;
+    itemId: string;
+    itemName: string;
+    kind: "pay" | "deduction";
+    isNew: boolean;
+    /** 자동 매핑(재매핑 전) */
+    autoItemId: string;
+    autoItemName: string;
+    remapped: boolean;
+  }>;
   /** 사전에 없어 새로 추가될 항목 */
   newItems: Array<{ label: string; itemId: string; kind: "pay" | "deduction" }>;
 }
@@ -159,7 +173,7 @@ function readGrid(buf: Buffer): unknown[][] {
   });
 }
 
-function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: ItemDict): ParsedFile {
+function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: ItemDict, remap: ColumnRemap = {}): ParsedFile {
   const base: ParsedFile = {
     fileName, sha256, ok: false, error: null, title: null,
     guess: guessPeriod(fileName, null), entries: [], issues: [], mapping: [], newItems: [],
@@ -208,7 +222,7 @@ function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: It
 
   // 라벨 → 항목 해석(파일 단위 캐시)
   const newItems = new Map<string, { label: string; itemId: string; kind: "pay" | "deduction" }>();
-  const resolve = (label: string, isDed: boolean): string => {
+  const autoResolve = (label: string, isDed: boolean): string => {
     const hit = dict.byName.get(squash(label));
     if (hit) return hit.itemId;
     const existing = newItems.get(squash(label));
@@ -216,6 +230,12 @@ function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: It
     const item = { label, itemId: autoItemId(label), kind: (isDed ? "deduction" : "pay") as "pay" | "deduction" };
     newItems.set(squash(label), item);
     return item.itemId;
+  };
+  // 재매핑은 사전에 있는 항목만 받는다(없는 id 는 무시하고 자동 매핑)
+  const resolve = (label: string, isDed: boolean): string => {
+    const forced = remap[label];
+    if (forced && dict.kinds.has(forced)) return forced;
+    return autoResolve(label, isDed);
   };
   const kindOf = (itemId: string): "pay" | "deduction" =>
     dict.kinds.get(itemId) ?? [...newItems.values()].find((n) => n.itemId === itemId)?.kind ?? "pay";
@@ -226,9 +246,17 @@ function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: It
     const isDed = dedStart != null && c >= dedStart;
     const itemId = resolve(label, isDed);
     if (!mapping.has(label)) {
+      const autoId = autoResolve(label, isDed);
       const nw = [...newItems.values()].find((n) => n.itemId === itemId);
-      mapping.set(label, { label, itemId, itemName: dict.names.get(itemId) ?? label, kind: kindOf(itemId), isNew: !!nw });
+      mapping.set(label, {
+        label, itemId, itemName: dict.names.get(itemId) ?? label, kind: kindOf(itemId), isNew: !!nw,
+        autoItemId: autoId, autoItemName: dict.names.get(autoId) ?? label, remapped: autoId !== itemId,
+      });
     }
+  }
+  // 재매핑으로 쓰이지 않게 된 자동 신규 항목은 추가하지 않는다
+  for (const [k, n] of newItems) {
+    if (![...mapping.values()].some((m) => m.itemId === n.itemId)) newItems.delete(k);
   }
 
   const personPos = new Set([...person.values()].map(([k, c]) => `${k}:${c}`));
@@ -314,7 +342,7 @@ function parseGrid(fileName: string, sha256: string, grid: unknown[][], dict: It
   };
 }
 
-export async function parseLedgerFile(fileName: string, buf: Buffer, database?: PgDatabase): Promise<ParsedFile> {
+export async function parseLedgerFile(fileName: string, buf: Buffer, database?: PgDatabase, remap?: ColumnRemap): Promise<ParsedFile> {
   const sha256 = createHash("sha256").update(buf).digest("hex");
   const db = database ?? (await getDb());
   const dict = await loadItemDict(db);
@@ -330,7 +358,7 @@ export async function parseLedgerFile(fileName: string, buf: Buffer, database?: 
         : `엑셀을 읽지 못했습니다: ${msg}`,
     };
   }
-  return parseGrid(fileName, sha256, grid, dict);
+  return parseGrid(fileName, sha256, grid, dict, remap);
 }
 
 /* ---------------------------------------------------------------- 적재 계획 */
@@ -342,6 +370,17 @@ export interface ImportTarget {
   month: number;
   kind: LedgerKind;
   overwrite: boolean;
+  remap?: ColumnRemap;
+}
+
+/** 요청 본문의 remap 을 문자열→문자열 객체로만 받는다 */
+export function cleanRemap(v: unknown): ColumnRemap {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: ColumnRemap = {};
+  for (const [k, id] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof id === "string" && id && k.length <= 200 && id.length <= 100) out[k] = id;
+  }
+  return out;
 }
 
 export interface ImportPlan {
@@ -386,7 +425,8 @@ export async function planImport(db: PgDatabase, file: ParsedFile, t: ImportTarg
   const plan = (action: ImportAction, reason: string | null, canOverwrite = false): ImportPlan =>
     ({ action, reason, ledgerId: String(row.ledger_id), existing, canOverwrite });
   if (existing.source !== "excel") return plan("blocked", "앱에서 만든 대장이 이미 있습니다 — 엑셀로 덮어쓸 수 없습니다.");
-  if (String(row.source_sha256 ?? "") === file.sha256) return plan("same", "같은 파일이 이미 들어와 있습니다.");
+  const remapped = file.mapping.some((m) => m.remapped);
+  if (String(row.source_sha256 ?? "") === file.sha256 && !remapped) return plan("same", "같은 파일이 이미 들어와 있습니다.");
   if (Number(row.sent ?? 0) > 0) return plan("blocked", "급여명세서를 발행한 대장이라 덮어쓸 수 없습니다.");
   const journal = rowsToObjects(await db.exec(
     `SELECT 1 FROM journal_entries WHERE source_kind = 'payroll' AND source_id = $1 AND status NOT IN ('auto','pending') LIMIT 1`,
@@ -410,7 +450,7 @@ export interface ImportResult {
 /** 파일 하나를 대장 하나로 적재 — 파일마다 별도 트랜잭션(한 파일 실패가 다른 파일을 막지 않는다). */
 export async function importLedgerFile(fileName: string, buf: Buffer, t: ImportTarget): Promise<ImportResult> {
   return withPayrollWrite(async (db) => {
-    const file = await parseLedgerFile(fileName, buf, db);
+    const file = await parseLedgerFile(fileName, buf, db, t.remap);
     const plan = await planImport(db, file, t);
     const result: ImportResult = { fileName, ledgerId: plan.ledgerId, action: plan.action, headcount: 0, matched: 0, reason: plan.reason };
     if (plan.action !== "new" && plan.action !== "overwrite") return result;
@@ -450,13 +490,15 @@ export async function importLedgerFile(fileName: string, buf: Buffer, t: ImportT
     }
 
     const ledgerId = plan.ledgerId;
+    // 재매핑 내역은 대장 비고에 남긴다(원본 라벨과 적재 항목이 다른 근거)
+    const remapNote = file.mapping.filter((m) => m.remapped).map((m) => `${m.label}→${m.itemName}`).join(", ");
     await db.exec(
       `INSERT INTO payroll_ledgers
-         (ledger_id, pay_year, pay_month, ledger_kind, title, source, source_file, source_sha256, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,'excel',$6,$7,'confirmed',NULL,$8)
+         (ledger_id, pay_year, pay_month, ledger_kind, title, source, source_file, source_sha256, status, note, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,'excel',$6,$7,'confirmed',$9,NULL,$8)
        ON CONFLICT (ledger_id) DO UPDATE SET
-         title = EXCLUDED.title, source_file = EXCLUDED.source_file, source_sha256 = EXCLUDED.source_sha256`,
-      [ledgerId, t.year, t.month, t.kind, file.title, fileName, file.sha256, now]
+         title = EXCLUDED.title, source_file = EXCLUDED.source_file, source_sha256 = EXCLUDED.source_sha256, note = EXCLUDED.note`,
+      [ledgerId, t.year, t.month, t.kind, file.title, fileName, file.sha256, now, remapNote ? `열 재매핑: ${remapNote}` : null]
     );
     await db.exec(`DELETE FROM payroll_entries WHERE ledger_id = $1`, [ledgerId]);
     for (const e of file.entries) {
@@ -485,15 +527,25 @@ export async function importLedgerFile(fileName: string, buf: Buffer, t: ImportT
   });
 }
 
+/** 재매핑 선택지 — 사용 중인 항목 사전(지급·공제) */
+export async function listImportItems(): Promise<Array<{ itemId: string; name: string; kind: "pay" | "deduction" }>> {
+  const db = await getDb();
+  return rowsToObjects(await db.exec(
+    `SELECT item_id, name, kind FROM payroll_item_defs WHERE is_active = 1 ORDER BY kind DESC, display_order, name`
+  )).map((r) => ({ itemId: String(r.item_id), name: String(r.name), kind: r.kind === "deduction" ? "deduction" : "pay" }));
+}
+
 /** 미리보기용 — 파싱 + 계획(쓰기 없음) */
 export async function previewLedgerFile(fileName: string, buf: Buffer, t: Partial<ImportTarget> | null) {
   const db = await getDb();
-  const file = await parseLedgerFile(fileName, buf, db);
+  const remap = cleanRemap(t?.remap);
+  const file = await parseLedgerFile(fileName, buf, db, remap);
   const target: Partial<ImportTarget> = {
     year: t?.year ?? file.guess.year ?? undefined,
     month: t?.month ?? file.guess.month ?? undefined,
     kind: t?.kind ?? file.guess.kind,
     overwrite: !!t?.overwrite,
+    remap,
   };
   const plan = validTarget(target)
     ? await planImport(db, file, target)

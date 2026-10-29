@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, FileSpreadsheet, Gift, Plus, ReceiptText, Trash2, X } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, FileUp, Gift, Plus, ReceiptText, Trash2, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
+import LedgerImportModal from "@/components/payroll/LedgerImportModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
 import BonusPlanModal from "@/components/payroll/BonusPlanModal";
 import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
+import type { AnnualProfile, SeveranceEstimate } from "@/lib/payroll/annual-statement";
+import { filenameFromDisposition } from "@/lib/client-download";
 
 /**
  * 급여대장 보드 (PL-P1, 블루프린트 §4-1)
  * - 월별 대장: 플랫 그리드(직원 1행, 열=값 있는 항목만) + KPI + 행 클릭 상세 패널
- * - 직원별 연간: 성명 선택 → 항목×월 피벗
+ * - 직원별 연간: 성명 선택 → 항목×월 피벗 + 퇴직금 적립·추계, 연간 급여 명세서 엑셀·PDF 출력
  * 원본 3단 구조의 합계(지급/공제/차인)는 검증 기준값 그대로 표시한다.
  */
 
@@ -46,9 +49,13 @@ export default function PayrollLedgerBoard() {
   const [annualName, setAnnualName] = useState<string>("");
   const [annualItems, setAnnualItems] = useState<AnnualItem[]>([]);
   const [monthTotals, setMonthTotals] = useState<Record<number, { pay: number; ded: number; net: number }>>({});
+  const [annualProfile, setAnnualProfile] = useState<AnnualProfile | null>(null);
+  const [severance, setSeverance] = useState<SeveranceEstimate | null>(null);
+  const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
 
   // 새 대장 생성(P4)
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Record<string, string>>({});
@@ -226,13 +233,41 @@ export default function PayrollLedgerBoard() {
       .then((d) => {
         setAnnualItems(d.items ?? []);
         setMonthTotals(d.monthTotals ?? {});
+        setAnnualProfile(d.profile ?? null);
+        setSeverance(d.severance ?? null);
       })
       .catch(() => {
         setAnnualItems([]);
         setMonthTotals({});
+        setAnnualProfile(null);
+        setSeverance(null);
       })
       .finally(() => setLoading(false));
   }, [view, year, annualName]);
+
+  // 연간 급여 명세서 다운로드(사업장 마스터와 같은 엑셀·PDF 아이콘)
+  const exportAnnual = async (format: "xlsx" | "pdf") => {
+    if (exporting || !year || !annualName) return;
+    setExporting(format);
+    try {
+      const qs = new URLSearchParams({ year: String(year), name: annualName, format });
+      const res = await fetch(`/api/payroll/annual/export?${qs.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filenameFromDisposition(res, `${year}년_연간급여명세서_${annualName}.${format}`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(`내보내기에 실패했습니다. ${err instanceof Error ? err.message : ""}`);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const payItems = items.filter((i) => i.kind === "pay");
   const dedItems = items.filter((i) => i.kind === "deduction");
@@ -293,6 +328,16 @@ export default function PayrollLedgerBoard() {
               </button>
             )}
             {view === "month" && (
+              <button
+                type="button"
+                className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5"
+                onClick={() => setImportOpen(true)}
+                title="과거·외부에서 작성한 급상여대장 엑셀을 확정 대장으로 가져옵니다."
+              >
+                <FileUp className="w-4 h-4" /> 엑셀 가져오기
+              </button>
+            )}
+            {view === "month" && (
               <button type="button" className="cd-btn rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5" onClick={() => setCreateOpen(true)}>
                 <Plus className="w-4 h-4" /> 새 대장
               </button>
@@ -348,6 +393,29 @@ export default function PayrollLedgerBoard() {
                   <option key={n} value={n}>{n}</option>
                 ))}
               </select>
+            )}
+            {/* 연간 급여 명세서 내보내기 — 사업장 마스터와 같은 엑셀·PDF 아이콘 2개(30px) */}
+            {view === "annual" && (
+              <div className="shrink-0 flex items-center gap-1">
+                {(["xlsx", "pdf"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => exportAnnual(f)}
+                    disabled={exporting !== null || !annualName || !annualMonths.length}
+                    title={`연간 급여 명세서를 ${f === "xlsx" ? "엑셀" : "PDF"}로 다운로드`}
+                    className={`flex items-center justify-center disabled:opacity-40${exporting !== null ? " cursor-wait" : ""}`}
+                    style={{ width: 30, height: 30 }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={f === "xlsx" ? "/icons/excelico.png" : "/icons/pdfico.png"}
+                      alt={f === "xlsx" ? "엑셀 다운로드" : "PDF 다운로드"}
+                      className="w-full h-full object-contain"
+                    />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         }
@@ -467,10 +535,48 @@ export default function PayrollLedgerBoard() {
 
       {view === "annual" && (
         <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
-          <div className="flex items-center justify-between px-5 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-5 pt-4 pb-3">
             <h2 className="text-[15px] font-extrabold tracking-tight cd-text">
               {annualName || "-"} · {year}년 연간 추이
             </h2>
+            {/* 퇴직금 추계 — 대장에 없는 퇴직금을 지급 라인으로 계산(산식·근거는 ? 도움말과 출력 명세서) */}
+            {!loading && severance && annualMonths.length > 0 && (
+              <dl className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs">
+                {annualProfile?.hiredAt && (
+                  <div className="flex items-center gap-1.5">
+                    <dt className="cd-text-faint">입사일</dt>
+                    <dd className="cd-text tabular-nums">{annualProfile.hiredAt}</dd>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <dt className="cd-text-faint">{severance.referenceLabel}</dt>
+                  <dd className="cd-text tabular-nums">{severance.referenceDate ?? "-"}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="cd-text-faint">재직</dt>
+                  <dd className="cd-text tabular-nums">{severance.serviceDays != null ? `${severance.serviceDays.toLocaleString()}일` : "-"}</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="cd-text-faint">1일 평균임금</dt>
+                  <dd className="cd-text tabular-nums">{fmtTotal(severance.avgDailyWage)}원</dd>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <dt className="font-bold cd-text">추계 퇴직금</dt>
+                  <dd className="font-extrabold tabular-nums" style={{ color: "var(--cd-primary)" }}>
+                    {severance.estimate != null ? `${fmtTotal(severance.estimate)}원` : "산정 불가"}
+                  </dd>
+                  {severance.estimate != null && !severance.eligible && (
+                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ color: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}>
+                      1년 미만
+                    </span>
+                  )}
+                  {severance.settled?.amount != null && (
+                    <span className="cd-text-faint">확정 {fmtTotal(severance.settled.amount)}원</span>
+                  )}
+                  <CdHelp topic="payroll.ledger-severance" />
+                </div>
+              </dl>
+            )}
           </div>
           <div className="flex-1 min-h-0 overflow-auto px-3 pb-3">
             {loading ? (
@@ -522,6 +628,18 @@ export default function PayrollLedgerBoard() {
                       </td>
                     </tr>
                   ))}
+                  {severance && annualMonths.length > 0 && (
+                    <tr className="border-t-2 cd-border-c">
+                      <td className="p-2.5 font-extrabold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
+                        퇴직금 적립
+                        <span className="ml-1 text-[10px] font-semibold cd-text-faint">월 임금 ÷ 12</span>
+                      </td>
+                      {annualMonths.map((m) => (
+                        <td key={m} className="p-2.5 text-right font-bold tabular-nums cd-text">{fmt(severance.accrual[m])}</td>
+                      ))}
+                      <td className="p-2.5 text-right font-extrabold tabular-nums cd-text">{fmtTotal(severance.accrualTotal)}</td>
+                    </tr>
+                  )}
                   {!annualItems.length && (
                     <tr>
                       <td colSpan={2} className="p-6 text-center text-sm cd-text-faint">데이터가 없습니다.</td>
@@ -646,6 +764,14 @@ export default function PayrollLedgerBoard() {
       <BonusPlanModal open={bonusOpen} onClose={() => setBonusOpen(false)} />
       {statementOpen && current && (
         <StatementSendModal ledgerId={current.ledgerId} onClose={() => setStatementOpen(false)} />
+      )}
+
+      {/* 급여대장 엑셀 가져오기 */}
+      {importOpen && (
+        <LedgerImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={(y, m) => reloadLedgers(y, m)}
+        />
       )}
 
       {/* 새 대장 생성 모달 (P4) */}

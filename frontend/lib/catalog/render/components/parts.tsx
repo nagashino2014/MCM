@@ -31,6 +31,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { MetricId } from "@/lib/catalog/metrics";
+import { PLAN_SECTIONS, sectionNum, templateOf, type TemplatePlanKind } from "@/lib/catalog/templates";
+import { SECTIONS } from "../master-content";
 import type { CatalogRenderData, RenderCtx } from "../types";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -83,6 +85,27 @@ export const mval = (data: CatalogRenderData, id: MetricId): number | null => da
 
 export const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
 
+/** 문서의 쪽 계획 종류(템플릿에서) — standard·모름 = full */
+export const planOf = (ctx: RenderCtx): TemplatePlanKind => templateOf(ctx.template).plan;
+
+/**
+ * 섹션 번호 표기 — 쪽 컴포넌트는 원래 번호("05" 신뢰 근거)를 적고, 쪽 계획 종류에 따라 표시 번호로 바꾼다(formal 은 신뢰 근거가 02).
+ * "부록 A" 처럼 번호가 아닌 머리 문구는 그대로. full 쪽 계획(standard)은 항등이라 기존 렌더가 바뀌지 않는다.
+ */
+export function secNum(ctx: RenderCtx, num: string): string {
+  const plan = planOf(ctx);
+  if (plan === "full") return num;
+  return num.replace(/^(\d{2}|부록)(?=$|\s)/, (m) => sectionNum(plan, m));
+}
+
+/** 목차·간지가 그릴 섹션 목록 — 쪽 계획 종류의 순서·번호·설명(SECTIONS 위에 PLAN_SECTIONS 를 얹음) */
+export function sectionsFor(ctx: RenderCtx): Array<{ key: string; anchor: string; name: string; desc: string; num: string }> {
+  return PLAN_SECTIONS[planOf(ctx)].flatMap((ps) => {
+    const sec = SECTIONS.find((s) => s.key === ps.key);
+    return sec ? [{ key: sec.key, anchor: sec.anchor, name: sec.name, desc: ps.desc ?? sec.desc, num: ps.num }] : [];
+  });
+}
+
 export interface SheetProps {
   ctx: RenderCtx;
   cls?: string;
@@ -95,13 +118,16 @@ export interface SheetProps {
   section?: string;
   /** 쪽 이름 — PDF 2단 북마크(숨은 h2). 보이는 제목은 문장이 길어 북마크로 쓰지 않는다 */
   outline?: string;
+  /** 쪽 검사·확인할 내용에 남길 안내(사진 폴백 등) — data-fallback-note 로 찍히고 스튜디오 검사·발행 notices 가 읽는다 */
+  note?: string;
   style?: CSSProperties;
   children: ReactNode;
 }
 
-export function Sheet({ ctx, cls, area, anchors, flow, section, outline, style, children }: SheetProps) {
+export function Sheet({ ctx, cls, area, anchors, flow, section, outline, note, style, children }: SheetProps) {
   return (
     <section
+      data-fallback-note={note || undefined}
       className={cx(
         "kc-page",
         "pk-sheet",
@@ -117,20 +143,21 @@ export function Sheet({ ctx, cls, area, anchors, flow, section, outline, style, 
       data-anchors={anchors?.length ? anchors.join(" ") : undefined}
       style={style}
     >
-      {section ? <h1 className="pk-outline">{section}</h1> : null}
+      {section ? <h1 className="pk-outline">{secNum(ctx, section)}</h1> : null}
       {outline ? <h2 className="pk-outline">{outline}</h2> : null}
       {children}
     </section>
   );
 }
 
-/** 쪽 머리(SectionHeader) — 쪽 번호는 paginate 가 채운다 */
+/** 쪽 머리(SectionHeader) — 쪽 번호는 paginate 가 채운다. 섹션 번호는 쪽 계획 종류의 표시 번호로(secNum) */
 export function Head({ ctx, num, name, sub }: { ctx: RenderCtx; num?: string; name: string; sub?: string }) {
+  // 연구소·ESG 제안형(TP1)의 쪽 머리는 쪽 위·옆 여백까지 칠하는 네이비 띠(의도된 블리드)라 쪽 여백 넘침 검사에서 뺀다
   return (
-    <header className="kc-head">
+    <header className="kc-head" data-overflow-ok={ctx.template === "research" ? "" : undefined}>
       <div className="kc-head__section">
         <span className="kc-head__mark"></span>
-        {num ? <span className="kc-head__num">{num}</span> : null}
+        {num ? <span className="kc-head__num">{secNum(ctx, num)}</span> : null}
         <span className="kc-head__name">{name}</span>
         {sub ? <span className="kc-head__sub">{sub}</span> : null}
       </div>
@@ -186,6 +213,63 @@ export function Notes({ items }: { items: string[] }) {
 export function Drop({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
   return <span className={cx("kc-drop", mods)} style={style} aria-hidden="true"></span>;
 }
+
+// ── 모티프 상징(TP1 디자인 시스템) — 표지·간지·뒤표지에만(모티프 절제 규칙). 링 = 심볼마크의 두 색 호(kc-ring)+노드, 등고선 = 가는 등농도선 SVG(kc-contour) ──
+
+/** 링(두 색 호). mods 에 자리 클래스(kc-front__ring 등)와 kc-ring--concentric 같은 모양 변형을 준다 */
+export function Ring({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
+  return <span className={cx("kc-ring", mods)} style={style} aria-hidden="true"></span>;
+}
+
+export function RingNode({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
+  return <span className={cx("kc-ring__node", mods)} style={style} aria-hidden="true"></span>;
+}
+
+/** 등고선 — 중심에서 커지는 타원 겹선(디자인 시스템 Motifs 카드의 좌표를 그대로 쓴다) */
+export function Contour({
+  mods = "",
+  viewBox,
+  rings,
+  style,
+}: {
+  mods?: string;
+  viewBox: string;
+  /** [cx, cy, rx, ry, rotate] */
+  rings: Array<[number, number, number, number, number]>;
+  style?: CSSProperties;
+}) {
+  return (
+    <svg className={cx("kc-contour", mods)} viewBox={viewBox} aria-hidden="true" style={style}>
+      {rings.map(([cx0, cy0, rx, ry, rot], i) => (
+        <ellipse key={i} cx={cx0} cy={cy0} rx={rx} ry={ry} transform={`rotate(${rot} ${cx0} ${cy0})`}></ellipse>
+      ))}
+    </svg>
+  );
+}
+
+/** 표지 등고선 자리(kc-front__contour 180×110) */
+export const FRONT_CONTOUR: Array<[number, number, number, number, number]> = [
+  [100, 60, 12, 8, -12],
+  [96, 62, 32, 21, -10],
+  [90, 64, 54, 34, -8],
+  [84, 66, 78, 46, -6],
+];
+/** 간지 등고선 자리(kc-divider__contour 330×595) */
+export const DIVIDER_CONTOUR: Array<[number, number, number, number, number]> = [
+  [190, 300, 26, 18, -14],
+  [184, 304, 62, 44, -12],
+  [176, 310, 104, 76, -10],
+  [166, 318, 150, 112, -8],
+  [154, 328, 200, 152, -6],
+];
+/** 뒤표지 등고선 자리(kc-backc__contour 360×300) */
+export const BACK_CONTOUR: Array<[number, number, number, number, number]> = [
+  [200, 150, 20, 14, -12],
+  [196, 152, 60, 42, -10],
+  [190, 156, 104, 74, -8],
+  [182, 160, 150, 108, -6],
+  [172, 166, 200, 146, -4],
+];
 
 export function AreaTag({ name, style }: { name: string; style?: CSSProperties }) {
   return (

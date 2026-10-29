@@ -11,7 +11,7 @@
 import type { RoleFontInfo } from "@/lib/catalog/fonts";
 import { FONT_ROLE_LABEL, inRanges, type FontRole } from "@/lib/catalog/font-types";
 
-export type CheckKind = "overflow" | "contrast" | "resolution" | "size";
+export type CheckKind = "overflow" | "contrast" | "resolution" | "size" | "asset";
 
 export interface CheckItem {
   kind: CheckKind;
@@ -21,7 +21,7 @@ export interface CheckItem {
   nodeId: string | null;
 }
 
-export const CHECK_LABEL: Record<CheckKind, string> = { overflow: "넘침", contrast: "대비", resolution: "해상도", size: "글자 크기" };
+export const CHECK_LABEL: Record<CheckKind, string> = { overflow: "넘침", contrast: "대비", resolution: "해상도", size: "글자 크기", asset: "자산" };
 
 interface PkWarning {
   kind: string;
@@ -73,6 +73,9 @@ function ownText(el: Element): string {
 /** 쪽 하나 검사(캔버스) */
 export function checkSheet(win: Window, sheet: HTMLElement): CheckItem[] {
   const out: CheckItem[] = [];
+  // 템플릿 사진 폴백(TP2) — 사진이 필요한 변형인데 사진이 없어 다른 변형으로 그린 쪽(쪽 루트 data-fallback-note, plan.tsx resolveVariant)
+  const fallback = sheet.getAttribute("data-fallback-note");
+  if (fallback) out.push({ kind: "asset", severity: "info", message: fallback, nodeId: null });
   const pk = (win as unknown as { __pkCheckSheet?: (s: Element) => PkWarning[] }).__pkCheckSheet;
   if (pk) {
     try {

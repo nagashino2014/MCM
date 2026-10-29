@@ -10,17 +10,22 @@ const LOGO = "k/assets/kesi-signature-ko.png";
 const LOGO_ALT = "KESI ㈜한국환경안전연구원 Korean Environment Safety Institute Co. LTD";
 
 // ── C16 인증·등록·특허 ──
-export function CredentialsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/** 인증 보기 변형(TP2) — view: gallery(증서 썸네일 5열, 기본) | table(목록형 행, 격조 — 8건이 넘으면 2단) */
+export function CredentialsPage({ ctx, data, variant }: { ctx: RenderCtx; data: CatalogRenderData; variant?: Record<string, string> }) {
   const counts = new Map<string, number>();
   for (const c of data.credentials) counts.set(c.kind, (counts.get(c.kind) ?? 0) + 1);
   const title = ["등록", "인증", "특허", "수상"].filter((k) => counts.get(k)).map((k) => `${k} ${counts.get(k)}`).join(" · ");
+  const table = variant?.view === "table";
+  const grid = table
+    ? { gridTemplateColumns: data.credentials.length > 8 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", columnGap: 24, rowGap: 0 }
+    : { gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "18px 16px" };
   return (
     <Sheet ctx={ctx} anchors={["sec-05", "c16"]} section="05 신뢰 근거" outline="인증·등록·특허">
       <Head ctx={ctx} num="05" name="신뢰 근거" sub="인증·등록·특허" />
       <TitleBlock eyebrow="인증·등록·특허" title={title || "인증·등록·특허"} />
-      <div className="kc-creds" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "18px 16px", flex: 1, minHeight: 0, alignContent: "start" }} data-widget="credentials">
+      <div className={table ? "kc-creds kc-creds--table" : "kc-creds"} style={{ ...grid, flex: 1, minHeight: 0, alignContent: "start" }} data-widget="credentials">
         {data.credentials.map((c) => (
-          <div className="kc-cred" key={c.key}>
+          <div className={table ? "kc-cred kc-cred--table" : "kc-cred"} key={c.key}>
             <div className="kc-cred__thumb">
               {c.image ? (
                 <img src={ctx.url(c.image)} alt={c.name} style={{ display: "block", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
@@ -40,9 +45,10 @@ export function CredentialsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRe
 }
 
 // ── C17 주요 고객사·협력 기관 ──
-export function ClientsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/** @param sectionStart 신뢰 근거 섹션의 첫 쪽(인증 쪽이 없을 때 — 섹션 북마크·목차 앵커를 맡는다) */
+export function ClientsPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; sectionStart?: boolean }) {
   return (
-    <Sheet ctx={ctx} anchors={["c17"]} outline="주요 고객사·협력 기관">
+    <Sheet ctx={ctx} anchors={sectionStart ? ["sec-05", "c17"] : ["c17"]} section={sectionStart ? "05 신뢰 근거" : undefined} outline="주요 고객사·협력 기관">
       <Head ctx={ctx} num="05" name="신뢰 근거" sub="주요 고객사·협력 기관" />
       <TitleBlock eyebrow="주요 고객사·협력 기관" title="공공기관과 발전·철강·화학·전자 사업장이 함께합니다" />
       <div className="kc-logowall" style={{ flex: 1, minHeight: 0, alignContent: "start" }} data-widget="logos">

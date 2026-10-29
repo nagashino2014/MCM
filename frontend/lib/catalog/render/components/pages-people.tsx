@@ -72,9 +72,51 @@ export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData
 }
 
 // ── C13 임원진 ──
-function PersonCard({ ctx, p }: { ctx: RenderCtx; p: LeaderCard }) {
+/** 임원 카드 변형(TP2) — square(정방 사진, 기본) | portrait-large(3:4 큰 사진 세로 카드) | list(사진 없는 목록 행, 격조) */
+export type LeaderCardStyle = "square" | "portrait-large" | "list";
+
+/** 변형별 한 쪽 임원 수 — 큰 사진은 3열 한 줄, 목록형은 행이 낮아 10명 */
+export const LEADERS_PER_PAGE: Record<LeaderCardStyle, number> = { square: 6, "portrait-large": 3, list: 10 };
+
+function PersonMeta({ p }: { p: LeaderCard }) {
   return (
-    <div className="kc-person" style={{ gridTemplateColumns: "74px minmax(0, 1fr)" }}>
+    <ul className="kc-person__meta">
+      {p.edu ? (
+        <li>
+          <b>학력</b>
+          {p.edu}
+        </li>
+      ) : null}
+      {p.cert ? (
+        <li>
+          <b>자격</b>
+          {p.cert}
+        </li>
+      ) : null}
+      {p.career ? (
+        <li>
+          <b>경력</b>
+          {p.career}
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+function PersonCard({ ctx, p, card = "square" }: { ctx: RenderCtx; p: LeaderCard; card?: LeaderCardStyle }) {
+  if (card === "list")
+    return (
+      <div className="kc-person kc-person--list">
+        <span className="kc-person__name">{p.name}</span>
+        <span className="kc-person__role">
+          {p.role}
+          {p.manual ? (ctx.opts.edition === "draft" ? " · 촉탁(직접 입력)" : " · 촉탁") : ""}
+        </span>
+        <PersonMeta p={p} />
+      </div>
+    );
+  return (
+    <div className={card === "portrait-large" ? "kc-person kc-person--portrait-large" : "kc-person"} style={{ gridTemplateColumns: card === "portrait-large" ? "minmax(0, 1fr)" : "74px minmax(0, 1fr)" }}>
       {p.photo ? (
         <div className="kc-photo kc-person__photo">
           <img src={ctx.url(p.photo)} alt={p.name} />
@@ -117,15 +159,35 @@ function PersonCard({ ctx, p }: { ctx: RenderCtx; p: LeaderCard }) {
   );
 }
 
-export function LeadersPage({ ctx, data, people, part, parts }: { ctx: RenderCtx; data: CatalogRenderData; people: LeaderCard[]; part: number; parts: number }) {
+/** @param variant card 변형(LeaderCardStyle) · note = 사진 폴백 안내 */
+export function LeadersPage({
+  ctx,
+  data,
+  people,
+  part,
+  parts,
+  variant,
+  note,
+}: {
+  ctx: RenderCtx;
+  data: CatalogRenderData;
+  people: LeaderCard[];
+  part: number;
+  parts: number;
+  variant?: Record<string, string>;
+  note?: string;
+}) {
   const n = data.leaders.length;
+  const card: LeaderCardStyle = variant?.card === "portrait-large" || variant?.card === "list" ? variant.card : "square";
+  const peopleCls = card === "square" ? "kc-people" : `kc-people kc-people--${card}`;
+  const cols = card === "portrait-large" ? "repeat(3, minmax(0, 1fr))" : card === "list" ? "minmax(0, 1fr)" : "repeat(2, minmax(0, 1fr))";
   return (
-    <Sheet ctx={ctx} anchors={["c13"]} outline={part === 0 ? "임원진" : undefined}>
+    <Sheet ctx={ctx} anchors={["c13"]} outline={part === 0 ? "임원진" : undefined} note={note}>
       <Head ctx={ctx} num="04" name="조직과 사람" sub={parts > 1 ? `임원진 ${part + 1}/${parts}` : "임원진"} />
       <TitleBlock eyebrow="임원진" title={part === 0 ? `임원 ${fmt(n)}명${data.leaderAvgCareer != null ? `, 경력 평균 ${fmt(data.leaderAvgCareer)}년` : ""}` : "임원진(계속)"} />
-      <div className="kc-people" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, alignContent: "start" }} data-widget="people">
+      <div className={peopleCls} style={{ gridTemplateColumns: cols, flex: 1, minHeight: 0, alignContent: "start" }} data-widget="people">
         {people.map((p) => (
-          <PersonCard key={p.key} ctx={ctx} p={p} />
+          <PersonCard key={p.key} ctx={ctx} p={p} card={card} />
         ))}
       </div>
       <Foot items={[`* ${asOfNote(data)}. 경력은 이전 직장 경력을 포함한 연수입니다.${ctx.opts.naming === "masked" ? " 이름 가운데 글자를 ○ 로 가렸습니다." : ""}`]} />
@@ -338,9 +400,17 @@ export function AdvisorsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
 }
 
 // ── A03 수행인력 상세 이력(실명판) ──
-export function PeopleDetailPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/** @param sectionStart 부록 섹션의 첫 쪽(formal 쪽 계획에서 부록 B 가 비었을 때) */
+export function PeopleDetailPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; sectionStart?: boolean }) {
   return (
-    <Sheet ctx={ctx} flow anchors={["a03"]} outline="부록 C 수행인력 상세 이력" style={{ gap: 14 }}>
+    <Sheet
+      ctx={ctx}
+      flow
+      anchors={sectionStart ? ["sec-app", "a03"] : ["a03"]}
+      section={sectionStart ? "부록 수행실적·인력" : undefined}
+      outline="부록 C 수행인력 상세 이력"
+      style={{ gap: 14 }}
+    >
       <Head ctx={ctx} num="부록 C" name="수행인력 상세 이력" sub="실명판 전용" />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16 }}>
         <p className="kc-page-title" data-continued-title="" style={{ fontSize: 20, lineHeight: "28px" }}>

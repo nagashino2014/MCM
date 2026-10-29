@@ -10,7 +10,11 @@ import { KoreaMap } from "./infographics";
 import { AreaTag, Foot, Head, Notes, Sheet, asOfNote, cx, fmt, mval } from "./parts";
 
 // ── A01 수행실적 총괄 ──
-export function SummaryPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/**
+ * @param inBody formal 쪽 계획 — 부록 A 를 본편 신뢰 근거 섹션 끝에 둔다(쪽 머리·북마크를 본편 표기로, 부록 섹션 앵커는 부록 B 첫 쪽이 맡음)
+ * @param sectionStart inBody 이고 신뢰 근거 섹션의 첫 쪽(인증·고객사 쪽이 모두 없을 때)
+ */
+export function SummaryPage({ ctx, data, inBody, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; inBody?: boolean; sectionStart?: boolean }) {
   const hasUnknown = data.matrix.some((sec) => sec.rows.some((r) => (r.byRegion[REGION_UNKNOWN.id] ?? 0) > 0));
   const cols = [...data.regionColumns, ...(hasUnknown ? [{ id: REGION_UNKNOWN.id, label: REGION_UNKNOWN.label }] : [])];
   const permitTotal = data.matrix[0]?.rows.find((r) => r.isTotal)?.total ?? 0;
@@ -22,8 +26,14 @@ export function SummaryPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
   ];
   const pct = (a: number, b?: number) => (b ? `${fmt(Math.round((a / b) * 1000) / 10)}%` : "-");
   return (
-    <Sheet ctx={ctx} anchors={["sec-app", "a01"]} section="부록 수행실적·인력" outline="부록 A 수행실적 총괄" style={{ gap: 12 }}>
-      <Head ctx={ctx} num="부록 A" name="수행실적 총괄" />
+    <Sheet
+      ctx={ctx}
+      anchors={inBody ? (sectionStart ? ["sec-05", "a01"] : ["a01"]) : ["sec-app", "a01"]}
+      section={inBody ? (sectionStart ? "05 신뢰 근거" : undefined) : "부록 수행실적·인력"}
+      outline={inBody ? "수행실적 총괄" : "부록 A 수행실적 총괄"}
+      style={{ gap: 12 }}
+    >
+      {inBody ? <Head ctx={ctx} num="05" name="신뢰 근거" sub="수행실적 총괄" /> : <Head ctx={ctx} num="부록 A" name="수행실적 총괄" />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <p className="kc-page-title" style={{ fontSize: 20, lineHeight: "28px" }}>
           수행실적 총괄 · 분야 × 기간 × 권역
@@ -162,13 +172,22 @@ export function rulesSummary(data: CatalogRenderData, category: string): string[
   ];
 }
 
-export function ProjectListPage({ ctx, data, area, sec }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo; sec: AppendixSection }) {
+/** @param sectionStart 부록 섹션의 첫 쪽(formal 쪽 계획 — 부록 A 가 본편에 있어 부록 B 첫 분야가 부록 북마크·앵커를 맡는다) */
+export function ProjectListPage({ ctx, data, area, sec, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo; sec: AppendixSection; sectionStart?: boolean }) {
   const isPermit = area.index === 1;
   const ncol = isPermit ? 6 : 5;
   const status = (row: AppendixListRow) =>
     row.status === "completed" ? <span className="kc-status kc-status--done">준공</span> : <span className="kc-status kc-status--active">수행 중</span>;
   return (
-    <Sheet ctx={ctx} flow area={area.index} anchors={[`a02-${area.index}`]} outline={`부록 B ${area.name}`} style={{ gap: 10 }}>
+    <Sheet
+      ctx={ctx}
+      flow
+      area={area.index}
+      anchors={sectionStart ? ["sec-app", `a02-${area.index}`] : [`a02-${area.index}`]}
+      section={sectionStart ? "부록 수행실적·인력" : undefined}
+      outline={`부록 B ${area.name}`}
+      style={{ gap: 10 }}
+    >
       <Head ctx={ctx} num="부록 B" name="분야별 수행실적" sub={area.name} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16 }}>
         <p className="kc-page-title" data-continued-title="" style={{ fontSize: 20, lineHeight: "28px" }}>

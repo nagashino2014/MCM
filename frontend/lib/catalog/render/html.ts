@@ -33,6 +33,9 @@ const COVER_PHOTO: Record<CoverChoice["cover"], { file: string; box: [number, nu
   strips: { file: "assets/hq-cover-tall.webp", box: [400, 0], fit: "width" },
   band: { file: "assets/hq-cover-wide.webp", box: [842, 300], fit: "cover" },
   center: null,
+  // E 전면 사진(842×595 전면) — 키트 사옥 사진은 인쇄 해상도에 못 미쳐(약 96dpi) F 그래픽으로 폴백된다. 고해상도 사진을 키트에 넣으면 바로 사진 표지
+  photo: { file: "assets/hq-cover-tall.webp", box: [842, 595], fit: "cover" },
+  graphic: null,
   research: { file: "assets/hq-cover-tall.webp", box: [394, 595], fit: "cover" },
 };
 const MIN_PRINT_DPI = 150;
@@ -61,7 +64,11 @@ export async function chooseCover(data: CatalogRenderData, notices: string[]): P
   const ptPerPx = spec.fit === "width" ? bw / size.width : Math.max(bw / size.width, bh / size.height);
   const dpi = Math.round(72 / ptPerPx);
   if (dpi < MIN_PRINT_DPI) {
-    notices.push(`표지 사진 해상도가 낮아(${size.width}px → 약 ${dpi}dpi, 인쇄 최소 ${MIN_PRINT_DPI}dpi) 사진 없는 변형으로 만들었습니다. 고해상도 사옥 사진을 올리면 사진 표지로 바뀝니다.`);
+    notices.push(
+      cover === "photo"
+        ? `표지 사진 해상도가 낮아(${size.width}px → 약 ${dpi}dpi, 인쇄 최소 ${MIN_PRINT_DPI}dpi) E 전면 사진 대신 F 그래픽 표지로 만들었습니다. 쪽 전면을 덮을 고해상도 사진(가로 1,800px 이상)이 필요합니다.`
+        : `표지 사진 해상도가 낮아(${size.width}px → 약 ${dpi}dpi, 인쇄 최소 ${MIN_PRINT_DPI}dpi) 사진 없는 변형으로 만들었습니다. 고해상도 사옥 사진을 올리면 사진 표지로 바뀝니다.`
+    );
     return { cover, photo: null };
   }
   if (dpi < GOOD_PRINT_DPI) notices.push(`표지 사진은 약 ${dpi}dpi 입니다(화면·PDF 는 충분, 인쇄 권장 ${GOOD_PRINT_DPI}dpi 미만).`);
@@ -136,6 +143,8 @@ export async function buildCatalogHtml(
     for (let m = re.exec(body); m; m = re.exec(body)) if (!m[1].startsWith("fonts/")) used.add(m[1].replace(/&amp;/g, "&"));
   }
   for (const p of pages) if (p.orphans.length) notices.push(`'${p.item.label}' 쪽의 편집 ${p.orphans.length}건은 데이터 구조가 바뀌어 붙을 곳을 찾지 못했습니다(스튜디오에서 확인).`);
+  // 사진이 필요한 템플릿 변형에 사진이 없어 폴백한 쪽(계획서 §3-3) — 표지는 위 해상도 안내가 이미 있다
+  for (const p of pages) if (p.item.note && p.item.type !== "C01") notices.push(`'${p.item.label}' 쪽: ${p.item.note}. 스튜디오 디자인 탭에서 사진을 고르면 사진 변형으로 바뀝니다.`);
   const [sheetCss, catalogCss, script] = await Promise.all([
     readPublicText("print-kit/sheet.css"),
     readPublicText("catalog-kit/kesi-catalog.css"),

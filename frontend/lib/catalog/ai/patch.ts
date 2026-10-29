@@ -187,10 +187,11 @@ const ROLE_RULES: Array<[RegExp, BlockRole]> = [
   [/\bkc-lead\b/, "lead"],
   [/\bkc-blockhead\b/, "heading"],
   [/\bkc-(eyebrow|kpi__label|badge|areatag)\b/, "label"],
-  [/\bkc-(caption|ig__desc)\b/, "caption"],
+  [/\bkc-(caption|ig__desc|front__sub)\b/, "caption"],
 ];
 const FIGURE_CLASS = /\bkc-(kpi__figure|stat__fig|ig__fig|kpi__unit)\b/;
-const SKIP_CLASS = /\b(kc-head|kc-footnote|kc-notes|pk-outline|kc-draftmark|kc-drop)\b/;
+// 템플릿 TP2 장식 묶음(표지 F 궤도·패턴 면·사진 바탕·표지 E 판)과 분야 요약(C20)의 문의 칸(회사 프로필 값)은 AI 가 고치지 않는다
+const SKIP_CLASS = /\b(kc-head|kc-footnote|kc-notes|pk-outline|kc-draftmark|kc-drop|kc-front__orbit|kc-pattern|kc-kpis__bg|kc-front__plate|kc-front__full|kc-divider__full|kc-brief__contact)\b/;
 
 const ROLE_LABEL: Record<BlockRole, string> = { title: "쪽 제목", lead: "리드 문장", heading: "블록 제목", body: "본문", label: "짧은 라벨", caption: "설명 글" };
 const ROLE_CAP: Record<BlockRole, number> = { title: 30, lead: 260, heading: 30, body: 260, label: 24, caption: 120 };

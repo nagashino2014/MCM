@@ -731,10 +731,20 @@ export interface IllustCandidate {
   overflow: number;
 }
 
+/**
+ * 쪽 유형 → 매처 적합도에서 함께 볼 쪽 표기. C20 분야 1장 요약(템플릿 TP2)은 분야 상세(C09)의 분야별 도식(절차·순환·층위)을 그대로 쓴다 —
+ * 매처 표(scripts/catalog_assets/catalog_items.json)에 C20 항목이 생기면 그것이 먼저 잡힌다.
+ */
+export const FIT_PAGE_ALIASES: Record<string, string[]> = { C20: ["C20", "C09"] };
+
 /** 소개서 쪽 유형(C08 등)과 매처 적합도의 쪽 표기(C08·C09 플랫폼)가 맞는지 */
 export function fitsPage(info: IllustrationInfo, pageType: string | undefined): IllustFit | null {
   if (!pageType) return null;
-  return info.fits.find((f) => f.page.toUpperCase().startsWith(pageType.toUpperCase())) ?? null;
+  for (const p of FIT_PAGE_ALIASES[pageType.toUpperCase()] ?? [pageType]) {
+    const hit = info.fits.find((f) => f.page.toUpperCase().startsWith(p.toUpperCase()));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 /**

@@ -4,6 +4,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { normalizeAddress, normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/ieps/formatters";
+import { extractRegion } from "@scraper/lib/ieps/region";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,11 +66,14 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         relatedFacilityId = "facm_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
         const companyName = entityName || "미지정 업체";
         const address = normalizeAddress(body.address);
+        // 시도·시군구도 채운다 — 비워 두면 Salesboard 지역권 등에서 '미상'이 된다(수동 등록 route 와 같은 추출, 2026-10-29)
+        const region = extractRegion(address);
         await db.run(
           `INSERT INTO facilities
             (facility_id, company_name, business_registration_no, site_address, site_address_verbatim,
-             phone_number, normalized_company_name, normalized_address, source, memo, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+             phone_number, normalized_company_name, normalized_address, source, memo, created_at, updated_at,
+             region_sido, region_sigungu)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             relatedFacilityId,
             companyName,
@@ -83,6 +87,8 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
             body.memo?.trim() || null,
             now,
             now,
+            region.sido,
+            region.sigungu,
           ]
         );
       }

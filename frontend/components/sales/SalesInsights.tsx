@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Bot, Filter, PieChart, Radar, Trophy, Users } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
-import { FUNNEL_STEPS, SALES_CATEGORY_UNSET, type SalesBoardStats } from "@/lib/sales/board";
+import { FUNNEL_STEPS, SALES_CATEGORY_UNSET, kstNowIso, type SalesBoardStats } from "@/lib/sales/board";
 import {
   SALES_SERVICE_CATEGORIES,
   SALES_SUBCATEGORY_LABELS,
@@ -370,6 +370,8 @@ interface IntelSummary {
   adopted: number;
   byGrade: Record<string, number>;
 }
+// 이 일수를 넘긴 마지막 브리핑은 묵은 것으로 표시
+const BRIEF_STALE_DAYS = 30;
 interface BriefingSummary {
   question: string;
   createdAt: string;
@@ -405,6 +407,12 @@ function IntelSummaryCard() {
   }, []);
 
   const n = (k: string) => intel?.byGrade[k] ?? 0;
+  // 마지막 브리핑 경과 일수(KST 날짜 기준) — 30일이 넘으면 날짜를 경고색으로 보여 묵은 브리핑임을 알린다(2026-10-29).
+  const briefDay = brief?.createdAt.slice(0, 10) ?? "";
+  const briefAgeDays = /^\d{4}-\d{2}-\d{2}$/.test(briefDay)
+    ? Math.floor((Date.parse(kstNowIso().slice(0, 10)) - Date.parse(briefDay)) / 86400000)
+    : 0;
+  const staleBrief = briefAgeDays > BRIEF_STALE_DAYS;
   return (
     <div className="cd-card-bg rounded-2xl border cd-border-c px-3 py-2.5 mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
       <Link href="/sales/intel" className="cd-row-hover cd-action rounded-lg px-1.5 py-1 flex items-center gap-2 min-w-0">
@@ -424,7 +432,13 @@ function IntelSummaryCard() {
         <span className="cd-text-muted text-[12px] truncate" title={brief?.question}>
           {brief === undefined ? "불러오는 중…" : brief == null ? "아직 만든 브리핑이 없습니다" : brief.question}
         </span>
-        {brief && <span className="cd-text-faint text-[11px] shrink-0">{brief.createdAt.slice(0, 10)}</span>}
+        {brief && (staleBrief ? (
+          <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--cd-warning)" }} title="마지막 브리핑이 30일 넘게 지났습니다. 새로 만들면 최근 신호가 반영됩니다.">
+            {brief.createdAt.slice(0, 10)} · {briefAgeDays}일 전
+          </span>
+        ) : (
+          <span className="cd-text-faint text-[11px] shrink-0">{brief.createdAt.slice(0, 10)}</span>
+        ))}
       </Link>
     </div>
   );

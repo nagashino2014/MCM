@@ -1,6 +1,7 @@
 "use client";
 
-// 문서 설정 — 표지 디자인 4안(2×2 썸네일)·사진 없는 변형·서체 세트. 고르는 즉시 문서(마스터본)에 저장한다.
+// 문서 설정 — 표지 디자인 4안(2×2 썸네일)·사진 없는 변형·서체 세트. 고르는 즉시 문서(docId, 기본 마스터본)에 저장한다.
+// 템플릿은 문서별 고정이라 여기서 바꾸지 않는다(이름만 표시) — 다른 템플릿은 첫 화면 [새 문서]로.
 // 선택지는 lib/catalog/document-theme.ts COVER_DESIGNS 하나로 관리(B·C 확정 대기). 렌더러는 표지 루트에 kc-front--{cover}.
 
 import { useEffect, useState } from "react";
@@ -9,9 +10,11 @@ import {
   COVER_DESIGNS,
   DEFAULT_DOCUMENT_THEME,
   FONT_SET_LABEL,
+  MOTIFS,
   type CoverDesign,
   type DocumentTheme,
 } from "@/lib/catalog/document-theme";
+import { templateOf } from "@/lib/catalog/templates";
 import { catalogFetch } from "./catalogFetch";
 
 /** 표지 모양 축소 그림(문서 미리보기 — 실제 지면은 디자인 시스템 CoverPage) */
@@ -68,22 +71,25 @@ function CoverThumb({ cover, photo }: { cover: CoverDesign; photo: boolean }) {
   );
 }
 
-export function CatalogCoverPicker() {
+export function CatalogCoverPicker({ docId = "master", docTitle }: { docId?: string; docTitle?: string } = {}) {
   const [theme, setTheme] = useState<DocumentTheme>(DEFAULT_DOCUMENT_THEME);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [setLabel, setSetLabel] = useState<string | null>(null);
+  const themeUrl = `/api/catalog/document-theme?doc=${encodeURIComponent(docId)}`;
 
   useEffect(() => {
-    catalogFetch<{ theme: DocumentTheme; fontSetLabel?: string }>("/api/catalog/document-theme")
+    setLoaded(false);
+    setMessage(null);
+    catalogFetch<{ theme: DocumentTheme; fontSetLabel?: string }>(themeUrl)
       .then((d) => {
         setTheme(d.theme);
         setSetLabel(d.fontSetLabel ?? null);
       })
       .catch((e) => setMessage((e as Error).message))
       .finally(() => setLoaded(true));
-  }, []);
+  }, [themeUrl]);
 
   const save = async (patch: Partial<DocumentTheme>) => {
     const prev = theme;
@@ -91,7 +97,7 @@ export function CatalogCoverPicker() {
     setSaving(true);
     setMessage(null);
     try {
-      const d = await catalogFetch<{ theme: DocumentTheme }>("/api/catalog/document-theme", { method: "PUT", body: JSON.stringify({ theme: patch }) });
+      const d = await catalogFetch<{ theme: DocumentTheme }>(themeUrl, { method: "PUT", body: JSON.stringify({ theme: patch }) });
       setTheme(d.theme);
       setMessage("저장했습니다.");
     } catch (e) {
@@ -111,7 +117,10 @@ export function CatalogCoverPicker() {
         <h3 className="cd-text font-semibold text-base flex items-center gap-1">
           문서 설정 — 표지 디자인 <CdHelp topic="catalog.cover" />
         </h3>
-        <span className="text-xs cd-text-faint">마스터본 · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? setLabel ?? theme.fontSet}</span>
+        <span className="text-xs cd-text-faint">
+          {docId === "master" ? "마스터본" : docTitle || docId} · 템플릿 {templateOf(theme.template).label} · 모티프{" "}
+          {MOTIFS.find((m) => m.id === theme.motif)?.label ?? theme.motif} · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? setLabel ?? theme.fontSet}
+        </span>
         {message && (
           <span className={`text-xs ml-auto ${message.startsWith("저장하지") ? "cd-error-text" : "cd-text-muted"}`} role="status">
             {message}

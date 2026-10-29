@@ -113,7 +113,10 @@ export function useStudio(docId: string) {
   const theme = state?.theme ?? payload?.doc.theme;
   const fontSet = usableFontSet(theme?.fontSet, payload?.fontSets).id;
   const ctx: RenderCtx | null = useMemo(
-    () => (payload && theme ? { url: previewUrl, opts: payload.opts, docLabel: payload.data.docLabel, fontSet, concept: theme.concept } : null),
+    () =>
+      payload && theme
+        ? { url: previewUrl, opts: payload.opts, docLabel: payload.data.docLabel, fontSet, concept: theme.concept, template: theme.template, motif: theme.motif }
+        : null,
     [payload, theme, fontSet]
   );
   const data: CatalogRenderData | null = useMemo(() => (payload && theme ? { ...payload.data, theme } : null), [payload, theme]);

@@ -107,9 +107,10 @@ export function Sheet({ ctx, cls, area, anchors, flow, section, outline, style, 
         "pk-sheet",
         flow && "pk-sheet--flow",
         `kc-edition--${ctx.opts.edition}`,
+        `kc-tpl--${ctx.template ?? "standard"}`,
         `kc-concept--${ctx.concept ?? "navy"}`,
         `kc-fontset--${ctx.fontSet}`,
-        "kc-motif--drop",
+        `kc-motif--${ctx.motif ?? "drop"}`,
         area ? `kc-area-${area}` : null,
         cls
       )}

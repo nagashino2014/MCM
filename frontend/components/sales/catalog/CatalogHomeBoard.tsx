@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { BookOpenText, Building2, FileBadge, ListChecks, MessageSquareQuote, Network, PenTool, RefreshCw, Send, Shapes, Type, Users } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -14,10 +15,12 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 import { useClientPaging } from "@/components/ui/PaginationControls";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import type { InitialPermitDetail, MetricValue } from "@/lib/catalog/metrics";
+import type { CatalogDocumentSummary } from "@/lib/catalog/projects";
 import { countBySource } from "@/lib/catalog/refresh/diff";
 import type { CatalogEditionSummary } from "@/lib/catalog/render/editions";
 import { catalogFetch } from "./catalogFetch";
 import { CatalogCoverPicker } from "./CatalogCoverPicker";
+import { CatalogDocumentsPanel } from "./CatalogDocumentsPanel";
 import { CatalogEditionsPanel } from "./CatalogEditionsPanel";
 import { CatalogPendingButton, CatalogPendingModal, usePending } from "./CatalogPending";
 import { CatalogPublishModal } from "./CatalogPublishModal";
@@ -43,9 +46,18 @@ const LINKS = [
   { href: "/sales/catalog/org", title: "조직도", desc: "MCM 조직에서 불러와 소개서용으로 편집", icon: Network },
 ];
 
+const DOC_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
 export function CatalogHomeBoard() {
   const { theme } = useCdashTheme();
   const { data: session } = useSession();
+  // 고른 문서(?doc=, 없으면 마스터) — 발행본·PDF 만들기·표지 디자인·스튜디오 링크가 이 문서를 대상으로 한다(TP0 문서 복수화)
+  const router = useRouter();
+  const sp = useSearchParams();
+  const rawDoc = sp.get("doc") ?? "";
+  const docId = DOC_ID_RE.test(rawDoc) ? rawDoc : "master";
+  const isMaster = docId === "master";
+  const selectDoc = useCallback((id: string) => router.replace(id === "master" ? "/sales/catalog" : `/sales/catalog?doc=${encodeURIComponent(id)}`), [router]);
   const perms = permsOf(session?.user);
   const canManage = hasPerm(perms, "catalog.manage");
   const canPublish = hasPerm(perms, "catalog.publish");
@@ -57,6 +69,7 @@ export function CatalogHomeBoard() {
   const [error, setError] = useState<string | null>(null);
   const [permitFilter, setPermitFilter] = useState<"completed" | "ongoing" | "all">("completed");
   const [editions, setEditions] = useState<CatalogEditionSummary[]>([]);
+  const [documents, setDocuments] = useState<CatalogDocumentSummary[]>([]);
   const [modal, setModal] = useState<"pending" | "publish" | null>(null);
   const [publishFrom, setPublishFrom] = useState<CatalogEditionSummary | null>(null);
   const [renderTick, setRenderTick] = useState(0);
@@ -66,7 +79,15 @@ export function CatalogHomeBoard() {
 
   const reloadEditions = useCallback(async () => {
     try {
-      setEditions((await catalogFetch<{ editions: CatalogEditionSummary[] }>("/api/catalog/editions")).editions);
+      setEditions((await catalogFetch<{ editions: CatalogEditionSummary[] }>(`/api/catalog/editions?doc=${encodeURIComponent(docId)}`)).editions);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [docId]);
+
+  const reloadDocuments = useCallback(async () => {
+    try {
+      setDocuments((await catalogFetch<{ documents: CatalogDocumentSummary[] }>("/api/catalog/documents")).documents);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -76,14 +97,17 @@ export function CatalogHomeBoard() {
     setLoading(true);
     setError(null);
     try {
-      const [metrics] = await Promise.all([catalogFetch<MetricsResponse>("/api/catalog/metrics"), reloadEditions(), reloadPending()]);
+      const [metrics] = await Promise.all([catalogFetch<MetricsResponse>("/api/catalog/metrics"), reloadEditions(), reloadDocuments(), reloadPending()]);
       setData(metrics);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [reloadEditions, reloadPending]);
+  }, [reloadEditions, reloadDocuments, reloadPending]);
+
+  const currentDoc = documents.find((d) => d.docId === docId) ?? null;
+  const docTitle = currentDoc?.title ?? (isMaster ? "회사소개서(마스터본)" : docId);
 
   const openPublish = (from: CatalogEditionSummary | null) => {
     setPublishFrom(from);
@@ -108,10 +132,15 @@ export function CatalogHomeBoard() {
         eyebrow="SALES & MARKETING"
         title="회사소개서"
         helpTopic="catalog.home"
-        meta={data ? <span className="text-xs cd-text-faint">기준일 {data.asOf}</span> : undefined}
+        meta={
+          <span className="text-xs cd-text-faint">
+            {isMaster ? "마스터본" : docTitle}
+            {data ? ` · 기준일 ${data.asOf}` : ""}
+          </span>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
-            {steward && <CatalogPendingButton count={pendingCount} onClick={() => setModal("pending")} />}
+            {steward && isMaster && <CatalogPendingButton count={pendingCount} onClick={() => setModal("pending")} />}
             {canPublish && (
               <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => openPublish(null)}>
                 <Send className="w-3.5 h-3.5" /> 발행
@@ -129,7 +158,11 @@ export function CatalogHomeBoard() {
       {canManage && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-3">
           {LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="cd-card p-4 flex items-start gap-3 hover:border-[color:var(--cd-primary)]">
+            <Link
+              key={l.href}
+              href={l.href === "/sales/catalog/studio" && !isMaster ? `${l.href}?doc=${encodeURIComponent(docId)}` : l.href}
+              className="cd-card p-4 flex items-start gap-3 hover:border-[color:var(--cd-primary)]"
+            >
               <l.icon className="w-5 h-5 cd-text-primary shrink-0 mt-0.5" />
               <span className="min-w-0">
                 <span className="block cd-text font-semibold text-sm">{l.title}</span>
@@ -140,7 +173,19 @@ export function CatalogHomeBoard() {
         </div>
       )}
 
-      {steward && pendingCount != null && pendingCount > 0 && (
+      <CatalogDocumentsPanel
+        documents={documents}
+        current={docId}
+        canManage={canManage}
+        loading={loading}
+        onSelect={selectDoc}
+        onCreated={(doc) => {
+          setDocuments((list) => [...list, doc]);
+          selectDoc(doc.docId);
+        }}
+      />
+
+      {steward && isMaster && pendingCount != null && pendingCount > 0 && (
         <div className="cd-card px-4 py-2.5 mb-3" role="status">
           {/* .cd-card 는 세로 flex 라 가로 줄은 안쪽 div 로 */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -165,9 +210,9 @@ export function CatalogHomeBoard() {
         onChanged={(id, distributions) => setEditions((list) => list.map((e) => (e.editionId === id ? { ...e, distributions } : e)))}
       />
 
-      {canManage && <CatalogRenderPanel key={renderTick} canPublish={canPublish} onPublish={(e) => openPublish(e)} />}
+      {canManage && <CatalogRenderPanel key={`${docId}:${renderTick}`} docId={docId} docTitle={docTitle} canPublish={canPublish} onPublish={(e) => openPublish(e)} />}
 
-      {canManage && <CatalogCoverPicker />}
+      {canManage && <CatalogCoverPicker docId={docId} docTitle={docTitle} />}
 
       <section className="cd-card p-4 mb-3">
         <h3 className="cd-text font-semibold text-base flex items-center gap-1 mb-3">
@@ -338,8 +383,9 @@ export function CatalogHomeBoard() {
         <CatalogPublishModal
           open={modal === "publish"}
           onClose={() => setModal(null)}
-          pendingCount={pendingCount}
+          pendingCount={isMaster ? pendingCount : null}
           fromEdition={publishFrom}
+          docId={docId}
           onPublished={() => {
             void reloadEditions();
             void reloadPending();

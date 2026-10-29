@@ -28,6 +28,7 @@ import { BIND_GROUP_ORDER, DATA_BINDS, bindOptions, makeBindChip, resolveBind } 
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, placeChip } from "@/lib/catalog/studio/inline";
 import { findNode, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { capabilities, outermost, resolveSelection } from "@/lib/catalog/studio/select";
+import { findOverlaps, intersectRect, isMovedNode, movedNodes, textBoxNodes, type OverlapBox } from "@/lib/catalog/studio/overlap";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import { makeFixture } from "./catalog-studio-fixture";
 
@@ -380,4 +381,57 @@ test("스튜디오 — 여러 개 고르기: 다른 고른 요소 안에 든 것
   const d1 = applyEdits(base, edits);
   assert.equal(findBy(d1, hasClass("kc-lead")), null);
   assert.equal(findBy(d1, hasClass("kc-list")), null);
+});
+
+test("스튜디오 — 요소 겹침 판정: 실측 상자 교차·얇게 닿음·조상/자손·같은 쌍 한 번·넓이 순", () => {
+  const box = (id: string, path: string[], ...rects: Array<[number, number, number, number]>): OverlapBox => ({ id, path: [...path, id], rects: rects.map(([x, y, w, h]) => ({ x, y, w, h })) });
+  assert.deepEqual(intersectRect({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 6, w: 10, h: 10 }), { x: 5, y: 6, w: 5, h: 4 });
+  assert.equal(intersectRect({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 5, h: 5 }), null, "맞닿은 가장자리");
+  const moved = box("m", ["root"], [48, 100, 200, 20], [48, 124, 120, 20]);
+  const hits = findOverlaps(
+    [moved],
+    [
+      box("a", ["root"], [100, 130, 300, 20]), // 둘째 줄과 68×14
+      box("b", ["root"], [48, 119, 400, 30]), // 두 줄 모두와(넓게)
+      box("c", ["root"], [48, 144.5, 300, 20]), // 0.5pt 만 닿음 → 겹침 아님
+      box("d", ["root", "m"], [48, 100, 50, 10]), // 옮긴 상자 안 → 뺀다
+      box("m", ["root"], [48, 100, 200, 20]), // 자기 자신
+    ]
+  );
+  assert.deepEqual(hits.map((h) => h.otherId), ["b", "a"], "넓이 큰 순, c·d·자기 자신 제외");
+  assert.deepEqual(hits[1].rect, { x: 100, y: 130, w: 68, h: 14 });
+  // 옮긴 요소 둘이 서로 겹치면 한 번만
+  const two = findOverlaps([box("x", ["r"], [0, 0, 50, 50]), box("y", ["r"], [40, 40, 50, 50])], [box("x", ["r"], [0, 0, 50, 50]), box("y", ["r"], [40, 40, 50, 50])]);
+  assert.equal(two.length, 1);
+  // 조상이 옮긴 요소면 그 안의 글 상자는 상대가 아니다
+  assert.equal(findOverlaps([box("p", ["r"], [0, 0, 300, 100])], [box("t", ["r", "p"], [10, 10, 100, 20])]).length, 0);
+});
+
+test("스튜디오 — 요소 겹침 대상: 옮긴 요소(위치 편집·추가한 요소)와 글 상자(글 블록·데이터 영역·추가 글상자)", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  let edits: PageEdits = { v: 1 };
+  let derived = applyEdits(base, edits);
+  assert.equal(movedNodes(derived).length, 0, "편집 없는 쪽은 옮긴 요소 없음");
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  const boxes0 = textBoxNodes(derived);
+  assert.ok(boxes0.some((o) => o.node.id === lead.id && o.measure === "lines"), "글 블록은 줄 상자로 잰다");
+  const info = findBy(derived, (n) => n.widget === "infographic")!;
+  assert.ok(boxes0.some((o) => o.node.id === info.id && o.measure === "box"), "인포그래픽은 통째 상자");
+  assert.ok(!boxes0.some((o) => o.path.some((p) => p.id === info.id) && o.node.id !== info.id), "데이터 영역 안으로 내려가지 않는다");
+  // 옮기기(흐름 안 상대 이동) → 옮긴 요소
+  edits = patchNodeStyle(edits, derived, lead.id, { position: "relative", left: "0px", top: "40px" });
+  // 색만 바꾼 요소는 옮긴 요소가 아니다
+  const kpis = findBy(derived, hasClass("kc-kpis"));
+  if (kpis) edits = patchNodeStyle(edits, derived, kpis.id, { color: "var(--ink)" });
+  edits = addElement(edits, { id: "ueeeeeeee", tag: "div", className: "kc-x-text", style: { position: "absolute", left: "48px", top: "300px", width: "200px" }, typeStep: "caption", children: [{ id: "uffffffff", tag: "#text", text: "추가한 글상자" }] });
+  edits = addElement(edits, { id: "ugggggggg", tag: "div", className: "kc-x-shape", style: { position: "absolute", left: "48px", top: "300px", width: "100px", height: "40px" } });
+  derived = applyEdits(base, edits);
+  const moved = movedNodes(derived).map((o) => o.node.id);
+  assert.deepEqual(moved.sort(), [lead.id, "ueeeeeeee", "ugggggggg"].sort());
+  assert.equal(isMovedNode(findBy(derived, (n) => n.id === lead.id)!), true);
+  if (kpis) assert.equal(isMovedNode(findBy(derived, (n) => n.id === kpis.id)!), false);
+  const boxes = textBoxNodes(derived).map((o) => o.node.id);
+  assert.ok(boxes.includes("ueeeeeeee"), "추가한 글상자는 글 상자");
+  assert.ok(!boxes.includes("ugggggggg"), "도형은 글 상자가 아니다");
+  assert.ok(!boxes.includes("uffffffff"), "추가 요소 안으로 내려가지 않는다");
 });

@@ -77,6 +77,10 @@ const NOTO_SANS: FontFaceFile[] = [
   { family: "Noto Sans KR", weight: 700, file: "NotoSansKR-Bold.woff", sizeAdjust: 93.9 },
 ];
 const NOTO_SERIF: FontFaceFile[] = [{ family: "Noto Serif KR", weight: 700, file: "NotoSerifKR-Bold.woff", sizeAdjust: 89.4 }];
+// 노토 산스 세트 전용 윗·아랫 높이 — 부분 집합 파일의 hhea(1.0·0.2em)와 Windows 높이(usWin 1.16·0.288em)가 달라
+// Windows 화면(스튜디오 캔버스)만 글자 상자가 1.448em 이 된다 → 36pt 큰 문장(C04)의 둘째 줄 지표 칩이 줄 높이 46pt 를 넘어 넘침 1건(2026-10-29 실측).
+// PDF(converter, Linux)가 쓰는 hhea 값을 그대로 지정해 화면을 PDF 와 같게 한다 — PDF 모양은 바뀌지 않는다. 명조 제목 세트의 본문 노토는 그대로 둔다.
+const NOTO_SANS_SET: FontFaceFile[] = NOTO_SANS.map((f) => ({ ...f, ascentOverride: 100, descentOverride: 20, lineGapOverride: 0 }));
 
 export const FONT_SETS: FontSetDef[] = [
   {
@@ -93,7 +97,7 @@ export const FONT_SETS: FontSetDef[] = [
     desc: "KESI CI 가이드 전용서체(본고딕 계열). 글자 폭이 조금 넓습니다.",
     roles: { display: "Noto Sans KR", body: "Noto Sans KR", figure: "Noto Sans KR" },
     // 빠진 글자는 프리텐다드로 채운다(CSS 대체 순서와 같음)
-    faces: [...NOTO_SANS, ...PRETENDARD],
+    faces: [...NOTO_SANS_SET, ...PRETENDARD],
     available: true,
   },
   {

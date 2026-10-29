@@ -5,13 +5,16 @@
 //   대비: 글자색 ÷ 바탕색 4.5:1(큰 글자 3:1) 미만
 //   해상도: 사진이 쪽에 놓인 크기 대비 원본 화소 — 인쇄 300dpi 권장, 150dpi 미만 경고
 //   글자 크기: 7pt 미만(디자인 시스템 최소 각주 7pt)
+//   겹침: 옮긴 요소(L3)가 다른 보이는 요소의 글 상자와 실측으로 겹침 — 막지 않고 경고(lib/catalog/studio/overlap.ts)
 // 전체 검사: 모든 쪽을 정적 HTML 로 숨은 틀에 싣고 paginate 로 쪽을 나눈 뒤 넘침 경고를 쪽 키별로 모은다(서체 바꾼 뒤 재검사).
 //   서체 라이브러리 세트면 문서에 실제로 쓰인 글자 중 역할 서체에 없는 글자(빠진 글자 — 프리텐다드로 채워짐)도 모은다.
 
 import type { RoleFontInfo } from "@/lib/catalog/fonts";
 import { FONT_ROLE_LABEL, inRanges, type FontRole } from "@/lib/catalog/font-types";
+import { PAGE_W } from "@/lib/catalog/studio/design-system";
+import { findOverlaps, toBoxes, type OverlapMeasure, type OverlapNode, type Rect } from "@/lib/catalog/studio/overlap";
 
-export type CheckKind = "overflow" | "contrast" | "resolution" | "size";
+export type CheckKind = "overflow" | "contrast" | "resolution" | "size" | "overlap";
 
 export interface CheckItem {
   kind: CheckKind;
@@ -19,9 +22,11 @@ export interface CheckItem {
   message: string;
   text?: string;
   nodeId: string | null;
+  /** 함께 표시할 요소(겹침 상대) */
+  relatedIds?: string[];
 }
 
-export const CHECK_LABEL: Record<CheckKind, string> = { overflow: "넘침", contrast: "대비", resolution: "해상도", size: "글자 크기" };
+export const CHECK_LABEL: Record<CheckKind, string> = { overflow: "넘침", contrast: "대비", resolution: "해상도", size: "글자 크기", overlap: "겹침" };
 
 interface PkWarning {
   kind: string;
@@ -149,6 +154,73 @@ export function checkSheet(win: Window, sheet: HTMLElement): CheckItem[] {
     else if (dpi < 300) out.push({ kind: "resolution", severity: "info", message: `사진 약 ${dpi}dpi — 화면·PDF 는 충분, 인쇄 권장 300dpi 미만입니다.`, text: img.alt, nodeId: idOf(img) });
   }
   return out;
+}
+
+// ── 요소 겹침 ──
+
+const isHiddenEl = (win: Window, el: Element): boolean => {
+  if (el.closest("[aria-hidden='true'], .pk-outline")) return true;
+  for (let a: Element | null = el; a; a = a.parentElement) {
+    const cs = win.getComputedStyle(a);
+    if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return true;
+    if (a.classList.contains("pk-sheet")) break;
+  }
+  return false;
+};
+
+/** 요소의 상자(쪽 좌표 pt) — lines 는 글 줄 상자만(글 없는 빈 폭 제외), box 는 요소 상자. 안 보이면 null */
+export function measureRects(win: Window, sheet: HTMLElement, el: Element | null, measure: OverlapMeasure): Rect[] | null {
+  if (!el || isHiddenEl(win, el)) return null;
+  const s = sheet.getBoundingClientRect();
+  const k = s.width / PAGE_W || 1;
+  const rel = (r: DOMRect): Rect => ({ x: (r.left - s.left) / k, y: (r.top - s.top) / k, w: r.width / k, h: r.height / k });
+  if (measure === "lines") {
+    const range = el.ownerDocument.createRange();
+    range.selectNodeContents(el);
+    const lines = Array.from(range.getClientRects())
+      .filter((r) => r.width > 0.5 && r.height > 0.5)
+      .map(rel);
+    if (lines.length) return lines;
+  }
+  const r = el.getBoundingClientRect();
+  return r.width > 0.5 && r.height > 0.5 ? [rel(r)] : null;
+}
+
+/** 요소 글 앞부분 — 줄바꿈(br)은 띄어 쓴다 */
+const snippetOf = (el: Element | null): string => ((el as HTMLElement | null)?.innerText ?? el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+/** 겹침 검사 — 옮긴 요소(moved)가 다른 글 상자(boxes)와 실측으로 겹치면 경고. labelOf = 요소 종류 이름(글·상자·추가한 글상자 …) */
+export function checkOverlaps(
+  win: Window,
+  sheet: HTMLElement,
+  moved: OverlapNode[],
+  boxes: OverlapNode[],
+  labelOf: (n: OverlapNode) => string,
+  pageLabel?: string
+): CheckItem[] {
+  if (!moved.length) return [];
+  const elOf = (id: string) => sheet.querySelector(`[data-cn="${CSS.escape(id)}"]`);
+  const measure = (o: OverlapNode) => measureRects(win, sheet, elOf(o.node.id), o.measure);
+  const hits = findOverlaps(toBoxes(moved, measure), toBoxes(boxes, measure));
+  const byId = new Map([...moved, ...boxes].map((o) => [o.node.id, o]));
+  return hits.slice(0, 6).map((h) => {
+    const a = byId.get(h.id)!;
+    const b = byId.get(h.otherId)!;
+    const at = snippetOf(elOf(h.id)).slice(0, 18);
+    const bt = snippetOf(elOf(h.otherId)).slice(0, 18);
+    // 추가한 요소는 이름이 '추가한 …'이라 '옮긴'을 붙이지 않는다
+    const aLabel = labelOf(a);
+    const aName = `${aLabel.startsWith("추가한") ? "" : "옮긴 "}${aLabel}${at ? ` “${at}”` : ""}`;
+    const bName = `${labelOf(b)}${bt ? ` “${bt}”` : ""}`;
+    return {
+      kind: "overlap" as const,
+      severity: "warn" as const,
+      message: `${pageLabel ? `‘${pageLabel}’ 쪽 — ` : ""}${aName} · 겹친 요소 ${bName} · 약 ${Math.round(h.rect.w)}×${Math.round(h.rect.h)}pt. 겹친 채로 PDF 에 나갑니다.`,
+      text: at || aLabel,
+      nodeId: h.id,
+      relatedIds: [h.otherId],
+    };
+  });
 }
 
 /** 역할 서체에 없어 대체 서체가 그린 글자 */

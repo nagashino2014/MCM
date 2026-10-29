@@ -663,6 +663,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 zoom={zoom}
                 showGuides={showGuides}
                 checks={checks}
+                pageLabel={item.label}
                 onSelect={setSelectedId}
                 onToggleSelect={toggleSelect}
                 onCommitText={ops.commitText}

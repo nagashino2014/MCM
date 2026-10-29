@@ -171,6 +171,9 @@ export const COVER_CONTENT = {
   tagline: "환경개선, 기후변화 대응 및 적응을 아우르는 종합 환경컨설팅으로 사업장 여건에 맞는 환경관리 체계를 함께 만듭니다.",
   photoAlt: "본사 사옥(에이스골드타워)",
   photoCaption: "본사 사옥 · 서울 가산 에이스골드타워",
+  /** G 연구소형 표지(research 템플릿)의 머리말·부제(부설연구소 이름) */
+  researchEyebrow: "COMPANY INTRODUCTION",
+  researchSub: "탄소중립 미래연구소",
 };
 
 export const VISION_CONTENT = {

@@ -16,6 +16,7 @@ export const COVER_DESIGNS = [
   { id: "strips", label: "B 세 기둥", desc: "사진 한 장을 위가 둥근 세 기둥으로 나눠 엇갈려 세운 표지", photo: "hq-cover-tall", confirmed: true },
   { id: "center", label: "C 중앙 정렬", desc: "가운데 축·안쪽 테로 정리한 사진 없는 표지", photo: null, confirmed: true },
   { id: "band", label: "D 사진 띠", desc: "가로로 긴 사옥 사진 띠를 둔 표지", photo: "hq-cover-wide", confirmed: true },
+  { id: "research", label: "G 연구소형", desc: "왼쪽 연한 하늘빛 면에 자간 넓은 제목과 밑줄, 오른쪽에 사옥 사진을 둔 제안서형 표지(연구소·ESG 제안형 양식)", photo: "hq-cover-tall", confirmed: true },
 ] as const;
 
 export type CoverDesign = (typeof COVER_DESIGNS)[number]["id"];
@@ -25,17 +26,18 @@ export const DEFAULT_COVER: CoverDesign = "leaf";
 export const DEFAULT_FONT_SET = "pretendard";
 export const FONT_SET_LABEL: Record<string, string> = Object.fromEntries(FONT_SETS.map((f) => [f.id, f.label]));
 
-/** 색 컨셉(D12, 스튜디오 L2) — 디자인 시스템 테마 A·B·C. A 네이비가 확정 기본값. B·C 값은 TP1 디자인 전까지 임시값(tokens.json) */
+/** 색 컨셉(D12, 스튜디오 L2) — 디자인 시스템 테마 A·B·C(TP1 2026-10-29 확정값)·D 스틸 블루(연구소·ESG 제안형 양식, 2026-10-29). 값은 tokens.json */
 export const COLOR_CONCEPTS = [
   { id: "navy", label: "A 네이비", desc: "CI 메인 네이비(확정)" },
   { id: "green", label: "B 그린", desc: "CI 그린 바탕" },
   { id: "charcoal", label: "C 차콜", desc: "차콜 + 그린 강조" },
+  { id: "steel", label: "D 스틸 블루", desc: "연구소 제안서 양식의 청회색 — 네이비 머리 띠·청회색 글자·연한 회청 패널" },
 ] as const;
 export type ColorConcept = (typeof COLOR_CONCEPTS)[number]["id"];
 export const DEFAULT_CONCEPT: ColorConcept = "navy";
 
 /** 템플릿 id — 정의는 lib/catalog/templates.ts CATALOG_TEMPLATES(여기는 순환 참조를 피하려고 id 목록만) */
-export const TEMPLATE_IDS = ["standard", "photo", "graphic", "formal", "brief"] as const;
+export const TEMPLATE_IDS = ["standard", "photo", "graphic", "formal", "brief", "research"] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 export const DEFAULT_TEMPLATE: TemplateId = "standard";
 

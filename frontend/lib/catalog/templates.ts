@@ -11,8 +11,8 @@ import type { PageVariant } from "./render/components/plan";
 
 export type { TemplateId } from "./document-theme";
 
-/** 쪽 계획 종류 — full 은 지금 목차, formal 은 신뢰 근거 앞으로·부록 A 본편, brief 는 요약 8~12쪽(C20 분야 1장 요약) */
-export type TemplatePlanKind = "full" | "formal" | "brief";
+/** 쪽 계획 종류 — full 은 지금 목차, formal 은 신뢰 근거 앞으로·부록 A 본편, brief 는 요약 8~12쪽(C20 분야 1장 요약), research 는 제안서형(회사개요 → 분야·역량 → 주제 개관·동향·절차 → 인력(임원 이력서형) → 수행실적) */
+export type TemplatePlanKind = "full" | "formal" | "brief" | "research";
 
 export interface CatalogTemplate {
   id: TemplateId;
@@ -64,8 +64,9 @@ export const CATALOG_TEMPLATES: Record<TemplateId, CatalogTemplate> = {
   formal: {
     id: "formal",
     label: "격조·공공형",
-    desc: "차콜 + 그린 강조 · 등고선 모티프 · 세리프 제목 · 신뢰 근거(인증·실적 총괄)를 사업 분야 앞으로. 공공 PQ 심사·입찰 증빙용",
-    theme: theme({ template: "formal", cover: "strips", coverPhoto: "photo", concept: "charcoal", motif: "contour", fontSet: "serif" }),
+    desc: "차콜 + 그린 강조 · 등고선 모티프 · 신뢰 근거(인증·실적 총괄)를 사업 분야 앞으로. 공공 PQ 심사·입찰 증빙용",
+    // 서체는 기본 프리텐다드(사용자 지시 2026-10-29: 세리프 제목은 회사소개서에 어울리지 않음 — 세리프 세트는 선택지로만 남김)
+    theme: theme({ template: "formal", cover: "strips", coverPhoto: "photo", concept: "charcoal", motif: "contour" }),
     plan: "formal",
     variants: {},
   },
@@ -76,6 +77,16 @@ export const CATALOG_TEMPLATES: Record<TemplateId, CatalogTemplate> = {
     theme: theme({ template: "brief", cover: "band", coverPhoto: "photo", concept: "navy", motif: "drop" }),
     plan: "brief",
     variants: {},
+  },
+  research: {
+    id: "research",
+    label: "연구소·ESG 제안형",
+    desc: "부설연구소(탄소중립 미래연구소) ESG 연구 용역 소개서 양식 — 스틸 블루 · 네이비 머리 띠 · G 연구소형 표지 · 제안사 일반현황 → 사업 분야·핵심 역량 → 주제 개관·동향·수행 절차 → 임원 이력서형 인력 → 수행실적",
+    // 양식 원본: "[한국환경안전연구원] 회사소개서_260902(최종).pptx"(2026-09, 26쪽). 쪽 계획 research·주제 쪽(C21~C23)은 TP2
+    theme: theme({ template: "research", cover: "research", coverPhoto: "photo", concept: "steel", motif: "drop" }),
+    plan: "research",
+    variants: { C10: { cards: "icon-large" }, C13: { card: "list" }, C16: { view: "table" } },
+    requires: { photos: ["c01"] },
   },
 };
 

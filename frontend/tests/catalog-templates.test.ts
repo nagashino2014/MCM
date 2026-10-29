@@ -82,7 +82,7 @@ test("pickThemePatch — 색·서체·표지·모티프·선택 분야만 통과
 
 test("CATALOG_TEMPLATES — 5종, id 와 theme.template 이 맞고 테마가 정리 함수를 그대로 통과한다", () => {
   assert.deepEqual(Object.keys(CATALOG_TEMPLATES).sort(), [...TEMPLATE_IDS].sort());
-  assert.equal(TEMPLATE_LIST.length, 5);
+  assert.equal(TEMPLATE_LIST.length, 6);
   for (const t of TEMPLATE_LIST) {
     assert.equal(t.theme.template, t.id, t.id);
     assert.deepEqual(sanitizeDocumentTheme(t.theme), t.theme, `${t.id} 테마 값이 올바르다`);
@@ -100,7 +100,12 @@ test("CATALOG_TEMPLATES — 5종, id 와 theme.template 이 맞고 테마가 정
   const f = CATALOG_TEMPLATES.formal.theme;
   assert.equal(f.concept, "charcoal");
   assert.equal(f.motif, "contour");
-  assert.equal(f.fontSet, "serif");
+  assert.equal(f.fontSet, "pretendard", "격조형도 기본 서체 프리텐다드(사용자 지시 10-29)");
+  const r = CATALOG_TEMPLATES.research;
+  assert.equal(r.theme.concept, "steel");
+  assert.equal(r.theme.cover, "research");
+  assert.equal(r.plan, "research");
+  assert.deepEqual(r.variants.C13, { card: "list" });
   assert.equal(CATALOG_TEMPLATES.formal.plan, "formal");
   assert.equal(CATALOG_TEMPLATES.brief.plan, "brief");
   assert.equal(CATALOG_TEMPLATES.photo.fallback, "graphic");
@@ -181,11 +186,12 @@ test("tokens.json — green·charcoal 테마가 CSS 로 생성되고(.kc-concept
   assert.ok(TOKENS.color.tokens.every((t) => !/임시값/.test(t.usage ?? "")), "TP0 임시값 표시가 남아 있지 않다");
   assert.ok(!/임시값/.test((tokensJson as { meta?: { note?: string } }).meta?.note ?? ""), "meta.note 에 임시값 표기가 없다");
   // 아티팩트 tokens.json 과 같은 파일 — 변환기(tokensToCss)가 모르는 테마 값이 섞이면 생성이 깨지므로 테마 id 는 4개뿐
-  assert.deepEqual(TOKENS.color.themes.map((t) => t.id), ["navy", "green", "charcoal", "dark"]);
+  assert.deepEqual(TOKENS.color.themes.map((t) => t.id), ["navy", "green", "charcoal", "steel", "dark"]);
+  assert.match(css, /\.kc-concept--steel \{[^}]*--field: #104e86;/, "스틸 블루 머리 띠·면");
 });
 
 test("tokens.json — green·charcoal 본문·면 위 글자 대비 4.5:1 이상(WCAG AA)", () => {
-  for (const theme of ["green", "charcoal"]) {
+  for (const theme of ["green", "charcoal", "steel"]) {
     const pairs: Array<[string, string]> = [
       ["ink", "paper"],
       ["ink-muted", "paper"],
@@ -220,6 +226,7 @@ test("kesi-catalog.css — 계획서 §3-3 쪽 변형 클래스와 모티프 rin
     ".kc-sheet--brief", ".kc-tpl--brief", ".kc-tpl--formal", ".kc-brief",
     ".kc-front__ring", ".kc-divider__ring", ".kc-backc__ring", ".kc-front__contour", ".kc-divider__contour", ".kc-backc__contour",
     ".kc-ring--concentric", ".kc-contour-field", ".kc-pattern",
+    ".kc-front--research", ".kc-front__wash", ".kc-front__photo-half", ".kc-front__rule", ".kc-front__orbit", ".kc-tpl--research", ".kc-backc--thanks", ".kc-topic", ".kc-phases",
   ];
   for (const c of classes) assert.ok(KIT_CSS.includes(c), `${c} 가 kesi-catalog.css 에 있어야 한다`);
   // 헤더는 재export 스크립트가 쓴다(손수정 금지 안내 유지)
@@ -232,10 +239,23 @@ test("kesi-catalog.css — TP1 블록의 선택자는 모두 템플릿·모티�
   assert.ok(mark > 0, "TP1 블록 머리말");
   const block = KIT_CSS.slice(KIT_CSS.lastIndexOf("/*", mark)).replace(/\/\*[\s\S]*?\*\//g, "");
   const guard =
-    /kc-tpl--(photo|graphic|formal|brief)|kc-motif--(ring|contour)|kc-concept--(green|charcoal)|kc-sheet--brief|kc-front--(photo|graphic)|kc-front__(ring|ring-node|contour|full|plate|band-field|caption)|kc-divider--(photo-full|color-pattern|plain)|kc-divider__(ring|ring-node|contour|photo|full)|kc-backc__(ring|contour)|kc-kpis--(band|cards8)|kc-kpi--(band|card)|kc-kpis__bg|kc-timeline--(horizontal|columns4)|kc-bizhero--(photo-wide|none)|kc-strengths--icon-large|kc-people--(portrait-large|list)|kc-person--(portrait-large|list)|kc-creds--table|kc-cred--table|kc-brief|kc-ring--concentric|kc-contour-field|kc-pattern/;
+    /kc-tpl--(photo|graphic|formal|brief|research)|kc-motif--(ring|contour)|kc-concept--(green|charcoal|steel)|kc-front--research|kc-front__(wash|photo-half|rule|sub|eyebrow--en|orbit)|kc-backc--thanks|kc-topic|kc-phases|kc-sheet--brief|kc-front--(photo|graphic)|kc-front__(ring|ring-node|contour|full|plate|band-field|caption)|kc-divider--(photo-full|color-pattern|plain)|kc-divider__(ring|ring-node|contour|photo|full)|kc-backc__(ring|contour)|kc-kpis--(band|cards8)|kc-kpi--(band|card)|kc-kpis__bg|kc-timeline--(horizontal|columns4)|kc-bizhero--(photo-wide|none)|kc-strengths--icon-large|kc-people--(portrait-large|list)|kc-person--(portrait-large|list)|kc-creds--table|kc-cred--table|kc-brief|kc-ring--concentric|kc-contour-field|kc-pattern/;
   const rules = [...block.matchAll(/([^{}]+)\{[^{}]*\}/g)];
   assert.ok(rules.length > 100, `규칙 수 ${rules.length}`);
   const bad = rules.flatMap((m) => m[1].split(",").map((s) => s.trim()).filter((s) => s && !guard.test(s)));
   assert.deepEqual(bad, []);
+});
+
+test("CoverPage — research 템플릿 문서는 G 연구소형 표지(kc-front--research: 하늘빛 면·밑줄·부설연구소 부제·사진 반면)를 그린다", () => {
+  const theme = CATALOG_TEMPLATES.research.theme;
+  const data = { ...makeFixture(), theme };
+  const pages = composeDocument(ctxOf(theme), data, { cover: "research", photo: "k/assets/hq-cover-tall.webp" }, []);
+  const html = renderToStaticMarkup(renderTrees(pages.map((p) => p.tree), { url: ctxOf(theme).url, data }));
+  assert.match(html, /kc-front kc-front--research/);
+  assert.match(html, /kc-front__wash/);
+  assert.match(html, /kc-front__photo-half/);
+  assert.match(html, /kc-front__rule/);
+  assert.match(html, /탄소중립 미래연구소/);
+  assert.match(html, /kc-tpl--research[^"]*kc-concept--steel/);
 });
 

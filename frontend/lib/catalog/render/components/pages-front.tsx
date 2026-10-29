@@ -2,6 +2,7 @@
  * 회사소개서 앞부분 쪽 유형 — C01 표지 · C02 목차 · C03 인사말 · C04 숫자로 보는 KESI · C05 회사 개요 · C06 연혁 · C07 간지.
  * 마크업은 P2 쪽 유형 목업(.dc.html)과 같다. 목업의 사진 자리 표시(kc-photo__label)는 발행본에 넣지 않고 사진 없는 변형을 쓴다.
  */
+import type { CoverDesign } from "@/lib/catalog/document-theme";
 import type { CSSProperties, ReactNode } from "react";
 import { COVER_CONTENT, DIVIDER_CONTENT, SECTIONS, VISION_CONTENT } from "../master-content";
 import type { CatalogRenderData, HistoryYear, RenderCtx } from "../types";
@@ -16,11 +17,12 @@ const LOGO = "k/assets/kesi-signature-ko.png";
 const LOGO_ALT = "KESI ㈜한국환경안전연구원 Korean Environment Safety Institute Co. LTD";
 
 export interface CoverChoice {
-  cover: "leaf" | "strips" | "center" | "band";
+  /** 표지 안 — lib/catalog/document-theme.ts COVER_DESIGNS 와 같은 집합(G 연구소형 research 포함) */
+  cover: CoverDesign;
   photo: string | null;
 }
 
-// ── C01 표지(4안) ──
+// ── C01 표지(5안: A 잎 창·B 세 기둥·C 중앙 정렬·D 사진 띠·G 연구소형) ──
 export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: CatalogRenderData; choice: CoverChoice }) {
   const areaList = (style: CSSProperties) => (
     <ul className="kc-front__areas" style={{ position: "absolute", ...style }}>
@@ -92,6 +94,27 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         {block({ left: 121, top: 168, width: 600 }, <Drop mods="kc-drop--bl" style={{ width: 14, margin: "6px 0 2px" }} />)}
         {areaList({ left: 96, top: 446, width: 650 })}
         {meta({ left: 271, bottom: 54, width: 300 })}
+      </>
+    );
+  } else if (choice.cover === "research") {
+    // G 연구소형(연구소·ESG 제안형 양식): 왼쪽 연한 하늘빛 면 + 자간 넓은 제목·밑줄 + 부설연구소 부제, 오른쪽 사옥 사진(옅게)
+    body = (
+      <>
+        <div className="kc-front__wash" style={{ position: "absolute" }}></div>
+        <div className="kc-front__photo-half" style={{ position: "absolute" }}>
+          {photo ? <img src={photo} alt={COVER_CONTENT.photoAlt} /> : null}
+        </div>
+        <span className="kc-front__eyebrow kc-front__eyebrow--en" style={{ position: "absolute", left: 48, top: 40 }}>
+          {COVER_CONTENT.researchEyebrow}
+        </span>
+        <div className="kc-front__block" style={{ position: "absolute", left: 48, top: 214, width: 400 }}>
+          <p className="kc-front__title">{COVER_CONTENT.title}</p>
+          <span className="kc-front__rule"></span>
+          <p className="kc-front__company">{data.company.name}</p>
+          <p className="kc-front__sub">- {COVER_CONTENT.researchSub} -</p>
+        </div>
+        {meta({ left: 48, bottom: 100, width: 400 })}
+        {logo({ right: 40, bottom: 28, width: 190 })}
       </>
     );
   } else if (choice.cover === "band") {

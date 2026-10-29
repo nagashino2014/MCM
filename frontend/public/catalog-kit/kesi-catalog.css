@@ -1,4 +1,4 @@
-/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1793266749-ac98, 2026-10-29) 사본.
+/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1793271431-90b2, 2026-10-29) 사본.
    https://claude.ai/artifact/AovTvRBgpnUv7r6CQvxp8B — 손으로 고치지 않는다(문서 보정은 lib/catalog/render/print-overrides.ts, 재export 는 scripts/catalog/export_kit_css.py).
    PDF 는 외부 네트워크를 막으므로 원본 첫 줄의 Google Fonts @import 만 뺐다(기본 서체 Pretendard 는 print-kit 이 직접 싣는다). */
 
@@ -793,16 +793,27 @@
 .kc-front--photo .kc-front__tagline { max-width: 40em; }
 .kc-front--photo .kc-front__meta { border-top-color: rgba(255, 255, 255, 0.35); }
 .kc-front--photo .kc-front__caption { color: var(--on-overlay); }
-/* F 그래픽(T2): C 중앙 정렬 배치 + 아래 주색 면 띠에 모티프 패턴. 사진 없음 */
+/* F 그래픽(T2, 2026-10-29 재설계 — 처음 안 '아래 띠 + 패턴'은 투박하다는 사용자 지적): 왼쪽 글 단(A 와 같은 자리) + 오른쪽에 큰 모티프 궤도.
+   궤도 = 두 색 호(kc-ring) + 안쪽 동심 가는 링 + 사업 분야 6색 노드. 물방울 문서는 큰 물방울 + 윤곽 물방울 + 노드, 등고선 문서는 등고선 면 + 노드. 사진 없음 */
 .kc-front--graphic { background: var(--paper); }
-.kc-front--graphic .kc-front__block { align-items: center; text-align: center; }
-.kc-front--graphic .kc-front__title { justify-content: center; flex-direction: column; align-items: center; gap: 6px; font-size: 60px; line-height: 66px; letter-spacing: 6px; }
-.kc-front--graphic .kc-front__title small { letter-spacing: 4px; }
-.kc-front--graphic .kc-front__tagline { max-width: 30em; }
-.kc-front--graphic .kc-front__areas { justify-content: center; }
-.kc-front--graphic .kc-front__meta { justify-content: center; border-top: 0; padding-top: 0; }
-.kc-front__band-field { left: 0; right: 0; bottom: 0; height: 176px; background: var(--field); overflow: hidden; }
-.kc-front--graphic .kc-front__meta { color: var(--on-field-muted); } .kc-front--graphic .kc-front__meta b { color: var(--on-field); }
+.kc-front--graphic .kc-front__band-field { left: 0; right: 0; bottom: 0; height: 14px; background: var(--field); }
+.kc-front__orbit { position: absolute; left: 446px; top: 62px; width: 400px; height: 400px; pointer-events: none; }
+.kc-front__orbit > * { position: absolute; }
+.kc-front__orbit-ring { left: 0; top: 0; width: 400px; border-width: 46px; }
+.kc-front__orbit-inner { left: 93.75px; top: 93.75px; width: 212.5px; --ring-ink: var(--brand-tint); }
+.kc-motif--ring .kc-front__orbit-inner { --ring-ink: var(--panel); }
+.kc-front__orbit-node { width: 30px; height: 30px; border-radius: 50%; background: var(--area); box-shadow: 0 0 0 4px var(--paper); }
+.kc-front__orbit-node:nth-of-type(1) { left: 185px; top: -15px; }
+.kc-front__orbit-node:nth-of-type(2) { left: 358px; top: 85px; }
+.kc-front__orbit-node:nth-of-type(3) { left: 358px; top: 285px; }
+.kc-front__orbit-node:nth-of-type(4) { left: 185px; top: 385px; }
+.kc-front__orbit-node:nth-of-type(5) { left: 12px; top: 285px; }
+.kc-front__orbit-node:nth-of-type(6) { left: 12px; top: 85px; }
+/* 물방울 문서의 궤도: 큰 물방울(주색 옅은 면) + 윤곽 물방울 */
+.kc-motif--drop .kc-front__orbit-drop { left: 30px; top: 30px; width: 340px; background: var(--brand-tint); }
+.kc-motif--drop .kc-front__orbit-drop--line { left: 120px; top: 120px; width: 160px; background: transparent; color: var(--accent); }
+/* 등고선 문서의 궤도: 등고선 면(원형) */
+.kc-motif--contour .kc-front__orbit-field { left: 20px; top: 20px; width: 360px; height: 360px; border-radius: 50%; --contour-ink: var(--brand); }
 
 /* ── C07 간지 변형(style): photo-full · color-pattern · plain ────────────── */
 /* 전면 사진 + 왼쪽 반투명 판(T1) */
@@ -911,3 +922,82 @@
 .kc-brief__contact b { font-family: var(--kc-font-display); font-size: 12px; line-height: 17px; color: var(--ink); }
 .kc-brief__contact p { font-size: 9.5px; line-height: 15px; color: var(--ink); }
 .kc-motif--contour .kc-brief__contact { border-radius: 0; }
+
+/* ── T5 연구소·ESG 제안형(research, 2026-10-29): 부설연구소 ESG 연구 용역 소개서 양식(2026-09 PPT)을 템플릿화 ────────
+   테마 D 스틸 블루(kc-concept--steel). 쪽 머리는 네이비 띠 + 왼쪽 사선, 소제목은 세로 막대, 패널은 연한 회청. 표지 G 연구소형, 뒤표지 Thank you 면 */
+/* G 연구소형 표지: 왼쪽 연한 하늘빛 면(세로 띠로 사진과 경계) + 자간 넓은 제목·밑줄 + 부설연구소 부제, 오른쪽 사옥 사진 */
+.kc-front--research { background: var(--paper); }
+.kc-front--research .kc-front__wash { left: 0; top: 0; bottom: 0; width: 448px; background: linear-gradient(180deg, var(--brand-tint) 0%, var(--canvas) 55%, var(--paper) 100%); }
+.kc-front--research .kc-front__wash::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 10px; background: var(--panel); }
+.kc-front--research .kc-front__photo-half { left: 448px; right: 0; top: 0; bottom: 0; overflow: hidden; background: var(--canvas); }
+.kc-front--research .kc-front__photo-half img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; opacity: 0.88; }
+.kc-front--research .kc-front__eyebrow--en { font-size: 10px; line-height: 14px; letter-spacing: 1px; color: var(--brand); }
+.kc-front--research .kc-front__block { gap: 10px; }
+.kc-front--research .kc-front__title { font-size: 46px; line-height: 56px; letter-spacing: 12px; color: var(--ink); }
+.kc-front--research .kc-front__rule { display: block; width: 100%; height: 5px; background: linear-gradient(90deg, var(--rule) 0, var(--rule) 25%, var(--brand) 25%); margin: 2px 0 10px; }
+.kc-front--research .kc-front__company { font-size: 18px; line-height: 26px; color: var(--ink); }
+.kc-front--research .kc-front__sub { font-size: 15px; line-height: 22px; font-weight: 600; color: var(--ink-muted); }
+.kc-front--research .kc-front__meta { border-top: 0; padding-top: 0; font-size: 12px; }
+.kc-front--research .kc-front__meta b { font-size: 14px; color: var(--ink-muted); }
+/* 쪽 머리 = 네이비 띠(쪽 위 여백을 띠가 채움) + 왼쪽 사선 회청 면. 쪽 컴포넌트 수정 없이 템플릿 루트로 적용 */
+.kc-page.kc-tpl--research { gap: 16px; }
+.kc-tpl--research .kc-head { position: relative; margin: -28px -48px 0; padding: 0 48px 0 92px; height: 54px; align-items: center; border-bottom: 0; background: var(--field); color: var(--on-field); font-size: 10px; overflow: hidden; }
+.kc-tpl--research .kc-head::before { content: ""; position: absolute; left: 0; top: 0; width: 120px; height: 100%; background: var(--panel); clip-path: polygon(0 0, 100% 0, 58% 100%, 0 100%); }
+.kc-tpl--research .kc-head::after { content: ""; position: absolute; left: 0; top: 0; width: 240px; height: 26px; background: var(--ink-muted); clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%); opacity: 0.55; }
+.kc-tpl--research .kc-head__section { position: relative; z-index: 1; gap: 10px; }
+.kc-tpl--research .kc-head__mark { display: none; }
+.kc-tpl--research .kc-head__num { font-size: 20px; line-height: 26px; color: var(--on-field); }
+.kc-tpl--research .kc-head__name { font-family: var(--kc-font-display); font-size: 20px; line-height: 26px; font-weight: 700; color: var(--on-field); }
+.kc-tpl--research .kc-head__sub { font-size: 12px; font-weight: 600; color: var(--on-field); }
+.kc-tpl--research .kc-head__sub::before { color: var(--on-field-muted); margin: 0 6px 0 2px; }
+.kc-tpl--research .kc-head__end { position: relative; z-index: 1; }
+.kc-tpl--research .kc-head__doc { color: var(--on-field-muted); }
+.kc-tpl--research .kc-head__folio { color: var(--on-field); }
+/* 소제목 = 세로 막대 + 네이비, 블록 제목 위 선 대신 왼쪽 막대 */
+.kc-tpl--research .kc-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; color: var(--brand); }
+.kc-tpl--research .kc-eyebrow::before { content: ""; width: 5px; height: 14px; background: var(--brand); }
+.kc-tpl--research .kc-blockhead { border-top: 0; padding-left: 10px; border-left: 4px solid var(--brand); color: var(--brand); font-size: 11px; }
+/* 패널·카드·표: 연한 회청 면, 카드는 흰 둥근 모서리, 표 머리와 키-값 표 제목 칸은 네이비 */
+.kc-tpl--research .kc-card, .kc-motif--drop .kc-tpl--research .kc-card { background: var(--paper); border: var(--stroke-hair) solid var(--rule); border-radius: 8px; box-shadow: 0 1px 3px rgba(16, 37, 67, 0.06); }
+.kc-tpl--research .kc-table thead th { background: var(--brand); color: var(--on-brand); }
+.kc-tpl--research .kc-facts { border-top: 0; border: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-facts dt { background: var(--brand); color: var(--on-brand); letter-spacing: 2px; text-align: center; }
+.kc-tpl--research .kc-kpi, .kc-motif--drop .kc-tpl--research .kc-kpi { background: var(--canvas); border-radius: 8px; border-top: 0; padding: 12px 14px; }
+.kc-tpl--research .kc-toc { border-top: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 48px; }
+.kc-tpl--research .kc-toc > li { border-bottom: 1px dotted var(--rule-strong); padding: 12px 0; }
+.kc-tpl--research .kc-toc__num { font-size: 22px; color: var(--brand); }
+/* 뒤표지 Thank you: 네이비 면 + 아래 짙은 띠에 연락처 3칸 */
+.kc-backc--thanks { background: var(--field); color: var(--on-field); }
+.kc-backc--thanks::before { content: ""; position: absolute; left: 36px; right: 36px; top: 40px; border-top: var(--stroke-hair) solid var(--on-field-muted); }
+.kc-backc--thanks .kc-backc__thanks { position: absolute; left: 0; right: 0; top: 230px; text-align: center; font-family: var(--kc-font-display); font-size: 56px; line-height: 64px; font-weight: 400; color: var(--on-field); }
+.kc-backc--thanks .kc-backc__foot-band { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: rgba(0, 0, 0, 0.28); }
+.kc-backc--thanks .kc-backc__rule { display: none; }
+.kc-backc--thanks .kc-backc__info { top: auto; bottom: 36px; }
+.kc-backc--thanks .kc-backc__label b, .kc-backc--thanks .kc-backc__col p, .kc-backc--thanks .kc-backc__foot { color: var(--on-field); }
+.kc-backc--thanks .kc-backc__label { color: var(--on-field-muted); }
+/* C21 주제 개관(작성 콘텐츠: 개념 3단·배경·기대효과) — 아이콘 원 + 점선 + 설명 + 세부 요소 상자 */
+.kc-topic { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--grid-gutter); padding: 18px 20px; background: var(--canvas); border-radius: 8px; }
+.kc-topic__lead { grid-column: 1 / -1; font-size: 11px; line-height: 18px; color: var(--ink); }
+.kc-topic__col { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 16px; background: var(--paper); border-radius: 8px; text-align: center; }
+.kc-topic__icon { width: 60px; height: 60px; display: grid; place-items: center; border-radius: 50%; background: var(--area); color: var(--on-area); }
+.kc-topic__icon .kc-icon { width: 26px; height: 26px; }
+.kc-topic__name { font-family: var(--kc-font-display); font-size: 13px; line-height: 18px; font-weight: 700; color: var(--area); }
+.kc-topic__name small { display: block; font-family: var(--kc-font-body); font-size: 9px; font-weight: 600; color: var(--ink-muted); }
+.kc-topic__dots { width: 100%; border-top: 3px dotted var(--area-mid); }
+.kc-topic__desc { font-size: 9.5px; line-height: 15px; color: var(--ink); text-align: left; }
+.kc-topic__detail { display: grid; grid-template-columns: 26px minmax(0, 1fr); width: 100%; border: var(--stroke-hair) solid var(--area-mid); border-radius: 6px; overflow: hidden; text-align: left; }
+.kc-topic__detail b { display: grid; place-items: center; background: var(--area); color: var(--on-area); font-size: 8.5px; line-height: 11px; writing-mode: vertical-rl; letter-spacing: 2px; }
+.kc-topic__detail span { padding: 6px 8px; font-size: 8.5px; line-height: 13px; color: var(--ink); }
+/* C23 수행 절차(단계 4 + 단계별 세부 + 기간) — 화살표 단계 띠와 세로 세부 목록 */
+.kc-phases { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 8px; row-gap: 8px; align-content: start; }
+.kc-phases__step { position: relative; padding: 7px 10px 7px 16px; background: var(--brand-tint); color: var(--brand); font-size: 10.5px; line-height: 15px; font-weight: 700; text-align: center; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%); }
+.kc-phases__step:nth-child(2) { background: color-mix(in srgb, var(--brand) 35%, var(--paper)); color: var(--on-brand); }
+.kc-phases__step:nth-child(3) { background: color-mix(in srgb, var(--brand) 65%, var(--paper)); color: var(--on-brand); }
+.kc-phases__step:nth-child(4) { background: var(--brand); color: var(--on-brand); }
+.kc-phases__when { text-align: center; font-family: var(--kc-font-figure); font-size: 9.5px; font-weight: 700; color: var(--ink-muted); }
+.kc-phases__list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kc-phases__list li { position: relative; padding: 7px 8px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); border-radius: 4px; font-size: 8.5px; line-height: 12.5px; text-align: center; color: var(--ink); }
+.kc-phases__list li:not(:last-child)::after { content: ""; position: absolute; left: 50%; bottom: -6px; border-top: 5px solid var(--rule-strong); border-left: 4px solid transparent; border-right: 4px solid transparent; transform: translateX(-50%); }
+.kc-phases__list li.is-internal { background: var(--area-4-tint); }
+.kc-phases__list li.is-external { background: var(--area-3-tint); }
+

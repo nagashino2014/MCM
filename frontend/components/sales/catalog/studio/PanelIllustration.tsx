@@ -111,9 +111,10 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
     setIllust(cur!.assetId, { mode: colors.mode, ...(Object.keys(map).length ? { map } : {}) });
   };
   const colors: IllustColors = sanitizeIllustColors(spec.illust?.colors);
-  const fit = spec.illust?.fit;
-  const setIllust = (asset: string, next?: IllustColors, nextFit: "width" | undefined = fit) =>
-    ops.setInfo(sel.id, { illust: { asset, colors: next ?? colors, ...(nextFit ? { fit: nextFit } : {}) } }, slot.slot);
+  const fit = spec.illust?.fit ?? "height";
+  // nextFit 생략 = 지금 크기 유지. "height"(기본)는 fit 을 빼서 저장한다
+  const setIllust = (asset: string, next?: IllustColors, nextFit: "width" | "height" = fit) =>
+    ops.setInfo(sel.id, { illust: { asset, colors: next ?? colors, ...(nextFit === "width" ? { fit: nextFit } : {}) } }, slot.slot);
   const metrics = Object.values(studio.payload?.data.metrics ?? {}).filter((m): m is NonNullable<typeof m> => Boolean(m));
   const numberItems = cur ? [...new Set(cur.slots.filter((s) => s.role === "number" && s.item > 0).map((s) => s.item))].sort((a, b) => a - b) : [];
   const w = Math.min(268, slot.box.w);
@@ -144,7 +145,7 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="일러스트 크기">
                 {(
                   [
-                    [undefined, "자리 높이에 맞춤"],
+                    ["height", "자리 높이에 맞춤"],
                     ["width", "자리 폭에 맞춤"],
                   ] as const
                 ).map(([f, l]) => (

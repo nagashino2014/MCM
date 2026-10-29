@@ -274,5 +274,6 @@ test("프롬프트 — 모양·색은 토큰·모양 id 로만, 좌표·hex 금�
   assert.match(SECTION_WRITE_SYSTEM, /hex/);
   assert.match(SECTION_WRITE_SYSTEM, /"op": "shape"/);
   assert.match(SECTION_WRITE_SYSTEM, /"op": "style"/);
+  assert.match(SECTION_WRITE_SYSTEM, /색·톤만 말하면[^\n]*일러스트를 새로 넣거나 바꾸지 않습니다/, "톤 지시로 그림을 바꾸지 않게");
   assert.doesNotMatch(SECTION_WRITE_SYSTEM, /배치·색·좌표·글자 크기·쪽 구성은 바꾸지 않습니다/);
 });

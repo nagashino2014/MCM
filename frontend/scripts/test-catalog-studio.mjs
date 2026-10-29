@@ -1,8 +1,8 @@
 import { build } from "esbuild";
 import { spawnSync } from "node:child_process";
 
-// 회사소개서 스튜디오(P5)·서체 라이브러리(P5b)·LLM 편집(P6)·발행·변경 감지(P7)·일러스트 라이브러리(313)·템플릿 TP0 순수 모듈 시험 + 홍보·채용공고 편집기 회귀 시험(공용 핵심 lib/doc-tree 추출) — test-todo.mjs 와 같은 방식(esbuild → node --test).
-const entryPoints = ["tests/catalog-studio.test.ts", "tests/catalog-fonts.test.ts", "tests/catalog-ai.test.ts", "tests/catalog-publish.test.tsx", "tests/catalog-illustrations.test.tsx", "tests/catalog-templates.test.ts", "tests/recruit-doc-tree-regression.test.ts"];
+// 회사소개서 스튜디오(P5)·서체 라이브러리(P5b)·LLM 편집(P6)·발행·변경 감지(P7)·일러스트 라이브러리(313)·AI 모양·색(§7-5)·템플릿 TP0 순수 모듈 시험 + 홍보·채용공고 편집기 회귀 시험(공용 핵심 lib/doc-tree 추출) — test-todo.mjs 와 같은 방식(esbuild → node --test).
+const entryPoints = ["tests/catalog-studio.test.ts", "tests/catalog-fonts.test.ts", "tests/catalog-ai.test.ts", "tests/catalog-ai-shape.test.ts", "tests/catalog-publish.test.tsx", "tests/catalog-illustrations.test.tsx", "tests/catalog-templates.test.ts", "tests/recruit-doc-tree-regression.test.ts"];
 await build({
   entryPoints,
   outdir: ".next/catalog-studio-tests",

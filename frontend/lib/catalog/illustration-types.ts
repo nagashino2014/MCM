@@ -585,6 +585,17 @@ function numberText(it: InfoItem | undefined, i: number, unit?: string): string 
   return String(i).padStart(2, "0");
 }
 
+/** 제목 뒤에 지표 칩(suffix)이 붙는 항목 순번(0부터) — 항목에 지표가 있고 그림에 그 항목의 숫자 자리가 없을 때(illustSlotTexts 와 같은 규칙) */
+export function suffixItems(info: Pick<IllustrationInfo, "slots">, content: InfoContent): Set<number> {
+  const numbered = new Set(info.slots.filter((s) => (s.bind ?? defaultBind(s.role)) === "number").map((s) => s.item));
+  const labeled = new Set(info.slots.filter((s) => (s.bind ?? defaultBind(s.role)) === "label").map((s) => s.item));
+  const out = new Set<number>();
+  content.items.forEach((it, i) => {
+    if (it.metric && labeled.has(i + 1) && !numbered.has(i + 1)) out.add(i);
+  });
+  return out;
+}
+
 /** 내용(InfoContent) → 자리별 글자. 항목은 자리의 item 순번으로 짝짓는다. */
 export function illustSlotTexts(info: Pick<IllustrationInfo, "slots"> & Partial<Pick<IllustrationInfo, "view">>, content: InfoContent, widthPt?: number): SlotText[] {
   const heightPt = widthPt && info.view ? (widthPt * info.view[1]) / info.view[0] : undefined;

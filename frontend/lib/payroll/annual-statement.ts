@@ -11,6 +11,12 @@ import { getEmployeeAnnual, type PayrollItemDef } from "@/lib/payroll/queries";
  *  - 월별 적립액 = 그 달 임금총액 ÷ 12 (연간 임금총액의 1/12 — 퇴직연금 DC 부담금 기준과 같은 관행)
  *  - 실비변상 항목(정산 경비·출장수당·출장숙박수당)은 임금에서 제외한다.
  * 대장 월 단위 근사치이므로 실제 지급액은 퇴사일 기준 일할·통상임금 비교로 확정한다(재무 퇴직 정산).
+ *
+ * 급여일 외 지급(기지급): 상여·성과급을 급여일 전에 먼저 이체하면 대장에는 지급으로 넣고 같은 금액을
+ * 공제(선지급분공제 또는 기타공제)로 빼서 차인지급액 = 급여일 이체액이 된다. 실수령액은 차인지급액에 이 기지급분을 더한다.
+ *  - 선지급분공제: 항상 기지급
+ *  - 기타공제: 같은 대장 그달 상여·성과급(선지급분공제로 이미 상쇄된 금액 제외) 이내일 때만 기지급(그 외는 실제 공제)
+ * 차인지급액은 원본 대장·명세서·전표와 같은 숫자여야 하므로 바꾸지 않는다.
  */
 
 /** 실비변상 — 평균임금·적립 기준에서 제외 */
@@ -18,6 +24,10 @@ export const SEVERANCE_EXCLUDED_ITEMS = ["expense-settle", "trip", "trip-lodging
 /** 상여성 — 3개월 임금에서 빼고 직전 1년분 × 3/12 로 가산 */
 const BONUS_ITEMS = new Set(["bonus", "incentive", "key-talent"]);
 const LEAVE_PAY_ITEMS = new Set(["annual-leave"]);
+/** 급여일 외 지급 판별 — 기지급 상쇄 공제와 그 상대가 되는 상여·성과급 */
+const ADVANCE_DED = "advance-ded";
+const MISC_DED = "misc-ded";
+const PREPAID_PAY_ITEMS = new Set(["bonus", "incentive", "key-talent"]);
 
 export type AnnualItem = PayrollItemDef & { amounts: Record<number, number>; total: number };
 
@@ -53,12 +63,24 @@ export interface SeveranceEstimate {
   notes: string[];
 }
 
+export interface PrepaidSummary {
+  /** 월별 급여일 외 지급(기지급) */
+  amounts: Record<number, number>;
+  total: number;
+  /** 월별 판별 근거(툴팁·출력용) */
+  basis: Record<number, string>;
+  /** 월별 실수령액 = 차인지급액 + 급여일 외 지급 */
+  received: Record<number, number>;
+  receivedTotal: number;
+}
+
 export interface AnnualStatement {
   year: number;
   profile: AnnualProfile;
   items: AnnualItem[];
   monthTotals: Record<number, { pay: number; ded: number; net: number }>;
   months: number[];
+  prepaid: PrepaidSummary;
   severance: SeveranceEstimate;
 }
 
@@ -115,6 +137,16 @@ export async function getAnnualStatement(year: number, name: string): Promise<An
        FROM payroll_entries e WHERE e.name = $1`,
     [name]
   ))[0] ?? {};
+  // 급여일 외 지급 판별용 — 대장(ledger) 단위로 상여·성과급과 상쇄 공제를 맞춘다(별도 상여대장 금액과 섞지 않게)
+  const prepaidRows = rowsToObjects(await db.exec(
+    `SELECT l.pay_month, l.ledger_id, li.item_id, sum(li.amount) AS amount
+       FROM payroll_entries e
+       JOIN payroll_ledgers l ON l.ledger_id = e.ledger_id
+       JOIN payroll_entry_lines li ON li.entry_id = e.entry_id
+      WHERE l.pay_year = $1 AND e.name = $2 AND li.item_id = ANY($3::text[])
+      GROUP BY l.pay_month, l.ledger_id, li.item_id`,
+    [year, name, [ADVANCE_DED, MISC_DED, ...PREPAID_PAY_ITEMS]]
+  ));
   const settledRow = employeeId
     ? rowsToObjects(await db.exec(
         `SELECT severance_amount, status, resign_date FROM severance_settlements WHERE employee_id = $1`,
@@ -151,6 +183,8 @@ export async function getAnnualStatement(year: number, name: string): Promise<An
     else if (LEAVE_PAY_ITEMS.has(itemId)) add(leave, k, amt);
     else add(regular, k, amt);
   }
+
+  const prepaid = buildPrepaid(prepaidRows, months, annual.monthTotals);
 
   const accrual: Record<number, number> = {};
   for (const m of months) accrual[m] = Math.floor((wageAll.get(ym(year, m)) ?? 0) / 12);
@@ -199,6 +233,7 @@ export async function getAnnualStatement(year: number, name: string): Promise<An
     items: annual.items,
     monthTotals: annual.monthTotals,
     months,
+    prepaid,
     severance: {
       accrual,
       accrualTotal,
@@ -219,6 +254,51 @@ export async function getAnnualStatement(year: number, name: string): Promise<An
       notes,
     },
   };
+}
+
+function buildPrepaid(
+  rows: Array<Record<string, unknown>>,
+  months: number[],
+  monthTotals: Record<number, { pay: number; ded: number; net: number }>
+): PrepaidSummary {
+  // 월 → 대장 → { 상여·성과급, 선지급분공제, 기타공제 }
+  const byMonth = new Map<number, Map<string, { pay: number; advance: number; misc: number }>>();
+  for (const r of rows) {
+    const m = toNum(r.pay_month);
+    const ledgers = byMonth.get(m) ?? new Map();
+    const cur = ledgers.get(String(r.ledger_id)) ?? { pay: 0, advance: 0, misc: 0 };
+    const itemId = String(r.item_id);
+    const amt = toNum(r.amount);
+    if (itemId === ADVANCE_DED) cur.advance += amt;
+    else if (itemId === MISC_DED) cur.misc += amt;
+    else if (PREPAID_PAY_ITEMS.has(itemId)) cur.pay += amt;
+    ledgers.set(String(r.ledger_id), cur);
+    byMonth.set(m, ledgers);
+  }
+  const won = (v: number) => Math.round(v).toLocaleString("ko-KR");
+  const amounts: Record<number, number> = {};
+  const basis: Record<number, string> = {};
+  const received: Record<number, number> = {};
+  for (const m of months) {
+    let sum = 0;
+    const why: string[] = [];
+    for (const l of byMonth.get(m)?.values() ?? []) {
+      if (l.advance) {
+        sum += l.advance;
+        why.push(`선지급분공제 ${won(l.advance)}`);
+      }
+      const room = l.pay - Math.max(0, l.advance);
+      if (l.misc > 0 && room > 0 && l.misc <= room) {
+        sum += l.misc;
+        why.push(`기타공제 ${won(l.misc)} (같은 달 상여·성과급 ${won(room)} 이내)`);
+      }
+    }
+    amounts[m] = sum;
+    if (why.length) basis[m] = why.join(" + ");
+    received[m] = (monthTotals[m]?.net ?? 0) + sum;
+  }
+  const total = Object.values(amounts).reduce((a, b) => a + b, 0);
+  return { amounts, total, basis, received, receivedTotal: Object.values(received).reduce((a, b) => a + b, 0) };
 }
 
 /** 재직일수 → 'N년 M개월'(표시용, 365·30일 근사) */

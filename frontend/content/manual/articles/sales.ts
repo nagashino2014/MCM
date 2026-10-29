@@ -818,17 +818,38 @@ export const SALES_ARTICLES: ManualArticle[] = [
   {
     id: "sales.catalog",
     chapter: "sales",
-    title: "회사소개서 — 발행본 받기·반영 대기·발행·PDF 만들기",
+    title: "회사소개서 — 발행본 받기·반영 대기·발행·PDF 만들기·문서와 템플릿",
     routes: ["/sales/catalog$"],
     audience: ["staff", "exec", "admin"],
     summary: [
       "대외에 내는 회사소개서 발행본을 받습니다. 마스킹판은 전 직원이, 실명판은 관리·발행 담당이 받습니다.",
+      "회사소개서는 문서 여러 개를 둘 수 있습니다. 마스터본 외에 템플릿(스탠다드·포토·인포그래픽·격조·브리프)을 골라 새 문서를 만들고, 고른 문서별로 발행본·PDF·표지·스튜디오를 다룹니다(관리 권한).",
       "계약·인물·회사 정보가 바뀌어 발행본과 달라진 것(반영 대기)을 보고, 검토한 뒤 새 판을 발행합니다(관리·발행 담당).",
       "회사소개서(마스터본)를 지금 데이터로 PDF 로 만들어 미리 보고 받습니다(관리 권한).",
       "회사소개서에 들어갈 숫자(지표)를 한곳에서 확인합니다. 소개서의 숫자는 모두 이 지표에서 나옵니다.",
       "현행 카탈로그 대조·최초허가 계약별 집계와 실적·인물·고객사 로고 관리 화면, 스튜디오로 이동합니다(관리 권한).",
     ],
     sections: [
+      {
+        id: "documents",
+        title: "문서와 템플릿",
+        blocks: [
+          { kind: "p", text: "[[문서]] 칸에는 회사소개서 문서 목록이 있습니다. 기본은 회사소개서(마스터본) 하나이고, 관리 담당은 [[새 문서]]로 다른 템플릿의 문서를 더 만들 수 있습니다. 문서를 누르면 그 문서가 선택되고(주소의 ?doc=), 아래 발행본·PDF 만들기·표지 디자인과 스튜디오 카드가 모두 그 문서를 대상으로 합니다." },
+          { kind: "table", head: ["템플릿", "성격", "주 용도"], rows: [
+            ["스탠다드", "네이비 · A 잎 창 표지 · 물방울 모티프 · 프리텐다드 · 풀버전(지금 모습)", "마스터본"],
+            ["포토 에디토리얼", "사진 중심 — 전면 사진 간지·사진 배경 숫자 띠·큰 히어로 사진", "민간 사업장·홈페이지 다운로드용"],
+            ["인포그래픽형", "사진 없음 — 그린 바탕 · 링 모티프 · 아이콘+큰 숫자", "사진이 부족할 때·화면 발표용"],
+            ["격조·공공형", "차콜 + 그린 강조 · 등고선 모티프 · 세리프 제목 · 신뢰 근거를 앞으로", "공공 발주처 PQ 심사·입찰 증빙"],
+            ["요약·분야 브리프", "표지 → 숫자 → 분야 개관 → 선택 분야 1장 요약 → 역량 → 인증 → 연락처(8~12쪽)", "제안서·견적 첨부"],
+          ] },
+          { kind: "list", items: [
+            "템플릿은 색·표지·모티프·서체의 기본값과 쪽 구성 묶음입니다. 문서를 만든 뒤에는 색 컨셉·서체 세트·표지·모티프만 바꿀 수 있고 템플릿은 바꿀 수 없습니다 — 다른 템플릿이 필요하면 새 문서를 만듭니다(스튜디오 편집이 다른 템플릿에는 붙지 않기 때문).",
+            "지금은 기반 단계라 템플릿을 골라도 색 컨셉(B 그린·C 차콜 임시값)·모티프·표지·서체 기본값만 달라집니다. 사진 간지·숫자 띠·연혁 가로형 같은 쪽 변형과 격조·브리프의 쪽 순서는 다음 단계에서 들어옵니다.",
+            "마스터본은 스탠다드 템플릿으로 고정이며 반영 대기·알림은 마스터본 기준입니다. 새 문서의 쪽 편집은 그 문서에만 저장됩니다.",
+          ] },
+          { kind: "link", article: "sales.catalog-studio", section: "levels", label: "스튜디오에서 색 컨셉·모티프 바꾸기" },
+        ],
+      },
       {
         id: "editions",
         title: "발행본 받기",
@@ -998,9 +1019,10 @@ export const SALES_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["회사소개서", "카탈로그", "회사 소개서", "브로슈어", "지표", "최초허가", "99건", "실적 수치", "표지", "표지 디자인", "PDF", "회사소개서 PDF", "실명판", "마스킹판", "인쇄·배포본", "대조", "발행", "발행본", "반영 대기", "변경 감지", "요약본", "풀버전", "배포 기록", "회사소개서 받기"],
+    keywords: ["회사소개서", "카탈로그", "회사 소개서", "브로슈어", "지표", "최초허가", "99건", "실적 수치", "표지", "표지 디자인", "PDF", "회사소개서 PDF", "실명판", "마스킹판", "인쇄·배포본", "대조", "발행", "발행본", "반영 대기", "변경 감지", "요약본", "풀버전", "배포 기록", "회사소개서 받기", "템플릿", "새 문서", "문서 목록", "포토", "인포그래픽형", "격조", "브리프", "모티프"],
     sources: [
       "components/sales/catalog/CatalogHomeBoard.tsx",
+      "components/sales/catalog/CatalogDocumentsPanel.tsx",
       "components/sales/catalog/CatalogEditionsPanel.tsx",
       "components/sales/catalog/CatalogPending.tsx",
       "components/sales/catalog/CatalogPublishModal.tsx",
@@ -1008,7 +1030,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/CatalogRenderPanel.tsx",
       "components/sales/catalog/CatalogReferencePanel.tsx",
     ],
-    reviewedAt: "2026-10-26",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "sales.catalog-studio",
@@ -1047,7 +1069,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "table", head: ["수준", "할 수 있는 것"], rows: [
             ["내용", "글 고치기, 사진 바꾸기·초점·확대, 목록 항목 추가·삭제·순서"],
-            ["구조", "요소 숨기기, 인포그래픽 유형 바꾸기, 쪽 변형(표지 디자인·분야 히어로 사진 등), 열 수, 사진 비율, 색 컨셉"],
+            ["구조", "요소 숨기기, 인포그래픽 유형 바꾸기, 쪽 변형(표지 디자인·분야 히어로 사진 등), 열 수, 사진 비율, 색 컨셉, 모티프(물방울·링·등고선)"],
             ["자유 배치", "요소 옮기기·크기(12열 그리드·4pt 기준선에 맞춤), 여러 개 함께 옮기기·복제, 글자 크기(디자인 시스템 단계), 글자·면 색(디자인 시스템 색), 글상자·도형·이미지 추가"],
           ] },
           { kind: "list", items: [
@@ -1188,7 +1210,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/studio/AssetPicker.tsx",
       "components/sales/catalog/studio/BindPicker.tsx",
     ],
-    reviewedAt: "2026-10-27",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "sales.catalog-fonts",

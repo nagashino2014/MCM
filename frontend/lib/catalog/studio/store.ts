@@ -1,6 +1,6 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getDocumentTheme } from "@/lib/catalog/projects";
-import { isColorConcept, isCoverDesign, sanitizeDocumentTheme, type DocumentTheme } from "@/lib/catalog/document-theme";
+import { pickThemePatch, sanitizeDocumentTheme, type DocumentTheme } from "@/lib/catalog/document-theme";
 import { isMeaningfulPage, sanitizeStudioPages, type StudioDoc, type StudioPageState } from "./doc";
 import { sanitizePageEdits } from "./edits";
 
@@ -79,14 +79,9 @@ export async function saveStudioDoc(docId: string, input: StudioSaveInput, actor
     const cur = rowsToObjects(await txn.exec("SELECT updated_at, theme FROM catalog_documents WHERE doc_id = $1 FOR UPDATE", [docId]))[0];
     if (!cur) throw new Error("회사소개서 문서를 찾지 못했습니다.");
     if (input.rev && s(cur.updated_at) !== input.rev) throw new StudioConflictError();
-    // 설정(보낸 항목만, 올바른 값만)
+    // 설정(보낸 항목만, 올바른 값만) — template 은 문서별 고정이라 자동 저장에서는 조용히 무시한다(document-theme route 는 400)
     const before = sanitizeDocumentTheme(parse(cur.theme));
-    const patch: Partial<DocumentTheme> = {};
-    const t = input.theme ?? {};
-    if (isCoverDesign(t.cover)) patch.cover = t.cover;
-    if (t.coverPhoto === "photo" || t.coverPhoto === "none") patch.coverPhoto = t.coverPhoto;
-    if (typeof t.fontSet === "string" && /^[a-z0-9-]{1,40}$/.test(t.fontSet)) patch.fontSet = t.fontSet;
-    if (isColorConcept(t.concept)) patch.concept = t.concept;
+    const patch = pickThemePatch(input.theme);
     const theme = sanitizeDocumentTheme({ ...before, ...patch });
     const keep = pages.filter(isMeaningfulPage);
     const keepIds = keep.map((p) => `${docId}:${p.key}`);

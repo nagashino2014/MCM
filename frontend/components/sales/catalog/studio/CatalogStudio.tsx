@@ -520,7 +520,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         }
         actions={
           <div className="flex flex-wrap items-center gap-1.5">
-            <Link href="/sales/catalog" className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
+            <Link href={docId === "master" ? "/sales/catalog" : `/sales/catalog?doc=${encodeURIComponent(docId)}`} className="cd-btn cd-btn-ghost cd-btn-sm cd-action">
               <ArrowLeft className="w-3.5 h-3.5" /> 회사소개서
             </Link>
             <CatalogPendingButton count={pendingCount} onClick={() => setModal("pending")} />

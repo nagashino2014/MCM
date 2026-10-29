@@ -80,7 +80,7 @@ function previewHtml(spec: InfoSpec, box: { w: number; h: number }, studio: Pane
   return renderToStaticMarkup(
     (
       <div
-        className={`kc-concept--${theme.concept} kc-fontset--${studio.fontSet} kc-motif--drop kc-area-${area}`}
+        className={`kc-tpl--${theme.template} kc-concept--${theme.concept} kc-fontset--${studio.fontSet} kc-motif--${theme.motif} kc-area-${area}`}
         style={{ width: box.w, fontFamily: "var(--kc-font-body)", fontSize: 10.5, lineHeight: "17px", color: "var(--ink)", wordBreak: "keep-all" }}
       >
         {renderInfographic(spec, box, {}, area)}

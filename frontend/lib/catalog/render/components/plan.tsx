@@ -5,6 +5,7 @@
  * 데이터가 없는 쪽(인사말 확정판 없음, 자문위원 0명, 고객사 0곳 등)은 빠지고, 흐름 쪽(명단·부록)은 paginate 가 쪽을 늘린다.
  */
 import type { ReactElement } from "react";
+import { templateOf, templateVariant, type CatalogTemplate } from "@/lib/catalog/templates";
 import type { CatalogRenderData, HistoryYear, LeaderCard, RenderCtx } from "../types";
 import { DIVIDER_CONTENT, SECTIONS } from "../master-content";
 import { BusinessMapPage, AreaPage, CasePage, CustomAreaPage, PlatformPage, SoftwarePage, StrengthsPage } from "./pages-business";
@@ -56,7 +57,19 @@ function chunk<T>(list: T[], size: number): T[][] {
   return out;
 }
 
-export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: CoverChoice, variants: Record<string, PageVariant> = {}): PagePlanItem[] {
+/**
+ * @param variants 쪽 키별 저장 변형(PageEdits.variant) — 템플릿 기본 변형 위에 얹는다
+ * @param template 문서 템플릿(없으면 ctx.template → standard). TP0 는 변형 기본값 배관만 — plan 종류(full/formal/brief)에 따른
+ *   쪽 순서·포함 쪽 분기는 TP2 에서(formal: 신뢰 근거를 사업 분야 앞으로·부록 A 본편, brief: C20 분야 1장 요약·부록 없음).
+ */
+export function buildPagePlan(
+  ctx: RenderCtx,
+  data: CatalogRenderData,
+  cover: CoverChoice,
+  variants: Record<string, PageVariant> = {},
+  template: CatalogTemplate = templateOf(ctx.template)
+): PagePlanItem[] {
+  // TODO(TP2): template.plan === "formal" | "brief" 분기 — 지금은 세 종류 모두 full 쪽 계획
   const historyParts = chunkHistory(data.history);
   const leaderParts: LeaderCard[][] = chunk(data.leaders, 6);
   const consulting = data.areas.filter((a) => a.index <= 5);
@@ -65,7 +78,7 @@ export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: Co
     .map((sec) => ({ sec, area: data.areas.find((a) => a.category === sec.category)! }))
     .filter((x) => x.sec.shownRows > 0);
   const sec03 = SECTIONS.find((s) => s.key === "03")!;
-  const v = (key: string) => variants[key] ?? {};
+  const v = (key: string, type: string): PageVariant => ({ ...templateVariant(template, key, type), ...(variants[key] ?? {}) });
   const out: PagePlanItem[] = [];
   const add = (key: string, type: string, label: string, section: string, element: ReactElement, opts: { maxLevel?: 1 | 2 | 3; flow?: boolean } = {}) =>
     out.push({ key, type, label, section, maxLevel: opts.maxLevel ?? 3, flow: opts.flow ?? false, element });
@@ -75,7 +88,7 @@ export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: Co
   if (data.ceoMessage) add("c03", "C03", "대표이사 인사말", "01", <MessagePage ctx={ctx} data={data} />);
   // 인사말이 없으면 숫자로 보는 KESI 가 01 섹션의 첫 쪽
   add("c04", "C04", "숫자로 보는 KESI", "01", <FiguresPage ctx={ctx} data={data} sectionStart={!data.ceoMessage} />);
-  add("c05", "C05", "회사 개요·비전", "01", <OverviewPage ctx={ctx} data={data} variant={v("c05")} />);
+  add("c05", "C05", "회사 개요·비전", "01", <OverviewPage ctx={ctx} data={data} variant={v("c05", "C05")} />);
   historyParts.forEach((years, i) =>
     add(`c06-${i + 1}`, "C06", historyParts.length > 1 ? `연혁 ${i + 1}/${historyParts.length}` : "연혁", "01", <HistoryPage ctx={ctx} data={data} years={years} part={i} parts={historyParts.length} />, {
       maxLevel: 2,
@@ -99,7 +112,7 @@ export function buildPagePlan(ctx: RenderCtx, data: CatalogRenderData, cover: Co
     />
   );
   add("c08", "C08", "사업 분야 개관", "02", <BusinessMapPage ctx={ctx} data={data} />);
-  consulting.forEach((a) => add(`area-${a.index}`, "C09", a.name, "02", <AreaPage ctx={ctx} data={data} area={a} variant={v(`area-${a.index}`)} />));
+  consulting.forEach((a) => add(`area-${a.index}`, "C09", a.name, "02", <AreaPage ctx={ctx} data={data} area={a} variant={v(`area-${a.index}`, "C09")} />));
   (data.customAreas ?? []).forEach((a) => add(a.key, "C09", a.name, "02", <CustomAreaPage ctx={ctx} data={data} area={a} />));
   add("c09-software", "C09", software.name, "02", <SoftwarePage ctx={ctx} data={data} area={software} />);
   add("c09-platform", "C09", "통합허가 플랫폼", "02", <PlatformPage ctx={ctx} data={data} />);

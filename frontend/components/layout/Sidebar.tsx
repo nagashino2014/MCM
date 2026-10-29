@@ -242,10 +242,10 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
                 </>
               )}
               {groupOpen ? (
-                <div id={groupId} className="flex flex-col gap-1.5">{items}</div>
+                <div id={groupId} className="flex flex-col gap-1">{items}</div>
               ) : (
                 // 접힌 그룹도 아이콘 레일에서는 보인다(railOnly: 레일=표시, 펼친 폭=숨김).
-                showRail && <div id={groupId} className={cn("flex flex-col gap-1.5", cls.railOnly)}>{items}</div>
+                showRail && <div id={groupId} className={cn("flex flex-col gap-1", cls.railOnly)}>{items}</div>
               )}
             </div>
           );
@@ -318,12 +318,12 @@ function NavItem({
 
   // 항목 = 글라스 칩(비활성) / 흰 글라스 필(선택) — 확정안 4a.
   const rowCls = cn(
-    "flex items-center w-full rounded-lg text-[13px] transition-all",
+    "cd-nav-item flex items-center w-full rounded-lg text-[13px] transition-all",
     width === "expand"
-      ? "px-2.5 py-[7px] justify-between"
+      ? "px-2.5 py-2 justify-between"
       : width === "rail"
-        ? "px-2 py-[7px] justify-center"
-        : "px-2 2xl:px-2.5 py-[7px] justify-center 2xl:justify-between",
+        ? "px-2 py-2 justify-center"
+        : "px-2 2xl:px-2.5 py-2 justify-center 2xl:justify-between",
     isActive ? "cd-glass-active font-bold" : "cd-glass-chip font-medium text-[color:var(--cd-nav-muted)]"
   );
 
@@ -369,7 +369,7 @@ function NavItem({
       )}
 
       {open && (
-        <div className={cn("flex-col gap-0.5 pl-4 mt-1 relative", cls.flexLabel)}>
+        <div className={cn("flex-col gap-1 pl-4 mt-1 relative", cls.flexLabel)}>
           <div className="absolute left-6 top-0 bottom-0 w-px" style={{ background: "var(--cd-hairline)" }} />
           {item.submenu!.map((sub) => {
             const subActive = isActive && active?.href === sub.href;
@@ -380,7 +380,7 @@ function NavItem({
                 aria-current={subActive ? "page" : undefined}
                 onClick={onNavigate}
                 className={cn(
-                  "relative block px-2.5 py-[7px] text-[12.5px] rounded-lg ml-4 transition-colors",
+                  "cd-nav-sub relative block px-2.5 py-[7px] text-[12.5px] rounded-lg ml-4 transition-colors",
                   subActive
                     ? "cd-glass-active font-bold"
                     : "font-medium text-[color:var(--cd-nav-muted)] cd-row-hover hover:text-[color:var(--cd-text)]"

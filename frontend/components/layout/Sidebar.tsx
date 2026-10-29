@@ -7,7 +7,8 @@
 //   본문 가로폭은 76px 기준으로 고정된다(4K 미만에서 카드 너비 확보 — 분석 요청 배경).
 // mode="drawer" 면 폭 강제 확장(오버레이 드로어 내부용).
 // 카테고리(협업·업무·사업 운영·관리)는 접지 않는다(2026-10-29 사용자 요청 — 10-28 그룹 접힘 철회).
-//   카테고리 라벨 아래 대메뉴는 항상 보이고, 접고 펼치는 것은 대메뉴의 소메뉴뿐이다(현재 경로의 대메뉴는 자동 펼침).
+//   카테고리 라벨 아래 대메뉴는 항상 보이고, 접고 펼치는 것은 대메뉴의 소메뉴뿐이다.
+//   화면을 옮기면 현재 대메뉴의 소메뉴만 펼치고 다른 대메뉴의 소메뉴는 접는다(펼침 상태는 저장하지 않음).
 // 설계: docs/groupware-ux-overhaul-blueprint.md §2.1·§3.
 
 import { useEffect, useState } from "react";
@@ -48,8 +49,8 @@ const SECTION_LABEL: Record<string, string> = {
   system: "관리",
 };
 
-// v2 = 기본 접힘 정책 도입(구 키의 "전체 펼침" 저장값이 복원되지 않도록 분리).
-const OPEN_SECTIONS_KEY = "nav-open-sections-v2";
+// 소메뉴 펼침은 저장하지 않는다(2026-10-29) — 예전 저장값(v1·v2)은 지운다.
+const LEGACY_OPEN_SECTIONS_KEYS = ["nav-open-sections-v2", "nav-open-sections"];
 // 자동 축소(마우스 오버 시에만 펼침) 옵션.
 const AUTO_COLLAPSE_KEY = "nav-auto-collapse";
 
@@ -68,17 +69,20 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
   const [autoCollapse, setAutoCollapse] = useState(false);
   const [peek, setPeek] = useState(false); // 자동 축소 중 마우스 오버·포커스로 임시 펼침
 
-  // 접힘 상태 기억(클라이언트 전용) — 저장값 ∪ 현재 경로 섹션(경로 이동 시 자동 펼침).
+  // 화면을 옮기면 현재 대메뉴의 소메뉴만 펼치고 나머지는 접는다(2026-10-29 사용자 요청).
+  // 메뉴에 없는 경로(매뉴얼 등)에서는 직전 펼침을 그대로 둔다. 손으로 연 소메뉴는 다음 이동까지만 유지된다.
   useEffect(() => {
-    let saved: string[] = [];
+    const current = sectionsForPath(pathname, query);
+    if (current.length > 0) setOpenSections(current);
+  }, [pathname, query]);
+
+  useEffect(() => {
     try {
-      const raw = localStorage.getItem(OPEN_SECTIONS_KEY);
-      if (raw) saved = JSON.parse(raw);
+      for (const key of LEGACY_OPEN_SECTIONS_KEYS) localStorage.removeItem(key);
     } catch {
       /* noop */
     }
-    setOpenSections(Array.from(new Set([...saved, ...sectionsForPath(pathname, query)])));
-  }, [pathname, query]);
+  }, []);
 
   // 자동 축소 옵션 복원(드로어는 항상 확장이라 해당 없음).
   useEffect(() => {
@@ -90,17 +94,8 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
     }
   }, [isDrawer]);
 
-  const toggleSection = (title: string) => {
-    setOpenSections((prev) => {
-      const next = prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title];
-      try {
-        localStorage.setItem(OPEN_SECTIONS_KEY, JSON.stringify(next));
-      } catch {
-        /* noop */
-      }
-      return next;
-    });
-  };
+  const toggleSection = (title: string) =>
+    setOpenSections((prev) => (prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]));
 
   const toggleAutoCollapse = () => {
     setAutoCollapse((prev) => {

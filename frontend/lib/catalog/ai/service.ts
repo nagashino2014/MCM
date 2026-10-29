@@ -5,6 +5,8 @@ import { CATALOG_CATEGORIES, areaIndex } from "@/lib/catalog/areas";
 import { buildDisplayTitle, isCompleted, projectPartyName, type CatalogProjectRow } from "@/lib/catalog/appendix";
 import { sanitizeCustomAreaContent, sanitizeAreaName, CUSTOM_AREA_LIMITS, type CustomAreaContent } from "@/lib/catalog/custom-area-types";
 import { pickAreaSlot } from "@/lib/catalog/custom-areas";
+import { ILLUST_COLOR_MODES } from "@/lib/catalog/illustration-types";
+import { listIllustrations } from "@/lib/catalog/illustrations";
 import { MASTER_DOC_ID, listCatalogProjects } from "@/lib/catalog/projects";
 import { ICON_NAMES } from "@/lib/catalog/render/components/parts";
 import { caseRow, loadCatalogRenderData } from "@/lib/catalog/render/data";
@@ -13,23 +15,28 @@ import { AREA_CONTENT, VISION_CONTENT } from "@/lib/catalog/render/master-conten
 import { INFO_TYPE_META, isInfoType, type InfoBox, type InfoContent, type InfoType } from "@/lib/catalog/render/infographic/types";
 import type { CatalogRenderData, EditionKind, RenderCtx } from "@/lib/catalog/render/types";
 import { composePage, orderedPlan } from "@/lib/catalog/studio/compose";
+import { FILL_COLORS, TEXT_COLORS } from "@/lib/catalog/studio/design-system";
 import { pageState } from "@/lib/catalog/studio/doc";
 import { loadStudioDoc } from "@/lib/catalog/studio/store";
 import { awkwardReasons, checkLabel } from "./label-rules";
 import {
+  INFO_COLOR_MODES,
   METRIC_TOKEN_RE,
+  SHAPE_COLOR_TOKENS,
   buildOutline,
   charLen,
   checkText,
   editableBlocks,
   metricBriefs,
   numbersIn,
+  shapeChoices,
   validatePatch,
   type CaseCandidate,
   type Flag,
   type MetricBrief,
   type PageOutline,
   type ProposedChange,
+  type ShapeChoice,
 } from "./patch";
 import {
   COPY_FIT_SYSTEM,
@@ -98,6 +105,10 @@ export interface PageAiContext {
   candidates: CaseCandidate[];
   /** 분야 쪽이면 그 분야(계약 분류) */
   areaCategory: string | null;
+  /** 쪽 분야 번호(분야 상세 쪽만 — 대비 계산) */
+  area?: number;
+  /** 인포그래픽 자리별 일러스트 후보(모양 연산 화이트리스트, §7-5 A) */
+  illusts: Record<string, ShapeChoice[]>;
 }
 
 /** 대표 실적 후보 — 그 분류의 공개 계약(지정한 대표 실적 먼저, 그다음 준공·금액 순) */
@@ -142,7 +153,7 @@ export async function loadPageContext(o: { docId: string; pageKey: string; focus
   if (!doc) throw Object.assign(new Error("회사소개서 문서를 찾지 못했습니다."), { status: 404 });
   // LLM 에 보내는 자료는 늘 마스킹판(사람 이름 가운데 글자 ○) — 노드 id 는 이름 방식과 무관하다
   const opts = { edition: o.edition ?? "print", naming: "masked" as const };
-  const [data, projects] = await Promise.all([loadCatalogRenderData({ ...opts, docId: o.docId }), listCatalogProjects()]);
+  const [data, projects, library] = await Promise.all([loadCatalogRenderData({ ...opts, docId: o.docId }), listCatalogProjects(), listIllustrations()]);
   const cover = await chooseCover(data, []);
   const ctx: RenderCtx = { url: (k) => k, opts, docLabel: data.docLabel, fontSet: "pretendard", concept: data.theme.concept };
   const item = orderedPlan(ctx, data, cover, doc.pages).find((p) => p.key === o.pageKey);
@@ -152,6 +163,8 @@ export async function loadPageContext(o: { docId: string; pageKey: string; focus
   const m = item.key.match(/^area-([1-5])$/);
   const areaCategory = m ? CATALOG_CATEGORIES[Number(m[1]) - 1] : null;
   const outline = buildOutline(composed.tree, item, { focusId: o.focusId ?? null, casesEditable: areaCategory != null });
+  const illusts: Record<string, ShapeChoice[]> = {};
+  for (const b of outline.blocks) if (b.kind === "info") illusts[b.id] = shapeChoices(library, b, item.type);
   return {
     docId: o.docId,
     pageKey: item.key,
@@ -161,6 +174,8 @@ export async function loadPageContext(o: { docId: string; pageKey: string; focus
     metrics: metricBriefs(data.metrics),
     candidates: areaCategory ? caseCandidates(projects, [areaCategory]) : [],
     areaCategory,
+    ...(m ? { area: Number(m[1]) } : {}),
+    illusts,
   };
 }
 
@@ -170,8 +185,10 @@ function outlineForLlm(o: PageOutline) {
     type: o.type,
     label: o.label,
     blocks: o.blocks.map((b) => {
-      if (b.kind === "text") return { id: b.id, kind: "text", role: b.role, text: b.text, maxChars: b.maxChars, ...(b.focus ? { focus: true } : {}), ...(b.readonly ? { readonly: true } : {}) };
-      if (b.kind === "list") return { id: b.id, kind: "list", items: b.items, maxItems: b.maxItems, maxCharsPerItem: b.maxChars, context: b.label, ...(b.focus ? { focus: true } : {}) };
+      const tone = b.kind === "text" || b.kind === "list" || b.kind === "added" ? { ...(b.color ? { color: b.color } : {}), ...(b.background ? { background: b.background } : {}) } : {};
+      if (b.kind === "text") return { id: b.id, kind: "text", role: b.role, text: b.text, maxChars: b.maxChars, ...tone, ...(b.focus ? { focus: true } : {}), ...(b.readonly ? { readonly: true } : {}) };
+      if (b.kind === "list") return { id: b.id, kind: "list", items: b.items, maxItems: b.maxItems, maxCharsPerItem: b.maxChars, context: b.label, ...tone, ...(b.focus ? { focus: true } : {}) };
+      if (b.kind === "added") return { id: b.id, kind: "added", element: b.element, ...(b.text ? { text: b.text } : {}), ...tone, ...(b.focus ? { focus: true } : {}) };
       if (b.kind === "info")
         return {
           id: b.id,
@@ -182,12 +199,40 @@ function outlineForLlm(o: PageOutline) {
           title: b.content.title,
           center: b.content.center,
           items: b.content.items.map((it) => ({ label: it.label, ...(it.desc ? { desc: it.desc } : {}), ...(it.when ? { when: it.when } : {}), ...(it.icon ? { icon: it.icon } : {}), ...(it.metric ? { metric: it.metric } : {}), ...(it.value != null && !it.metric ? { value: it.value } : {}) })),
+          // 지금 모양 — 일러스트(자산 id·색 모드·직접 고른 색·맞춤) 또는 기본 도식(변형·색 모드)
+          shape: b.illust
+            ? { illust: { asset: b.illust.asset, ...(b.illust.colors ? { colors: b.illust.colors } : {}), fit: b.illust.fit ?? "height" } }
+            : { illust: null, variant: b.variant, variants: INFO_TYPE_META[b.type]?.variants.map((v) => v.id) ?? [], colorMode: b.colorMode ?? "area" },
+          ...(b.added ? { added: true } : {}),
           ...(b.focus ? { focus: true } : {}),
         };
       return { id: b.id, kind: "cases", items: b.items, ...(b.focus ? { focus: true } : {}) };
     }),
   };
 }
+
+/** 프롬프트용 일러스트 후보(자리 id → id·제목·유형·무리 수·추천 이유·글자 넘침 수) */
+function illustBrief(illusts: Record<string, ShapeChoice[]>) {
+  const out: Record<string, Array<Record<string, unknown>>> = {};
+  for (const [id, list] of Object.entries(illusts)) {
+    if (!list.length) continue;
+    out[id] = list.map((c) => ({ id: c.id, title: c.title, type: c.type, colorGroups: c.groups, reasons: c.reasons, overflow: c.overflow, ...(c.current ? { current: true } : {}) }));
+  }
+  return out;
+}
+
+/** 모양·색 연산에서 고를 수 있는 값(validatePatch 화이트리스트와 같음) */
+const SHAPE_OPTIONS = {
+  illustColorModes: ILLUST_COLOR_MODES.map((m) => ({ id: m.id, label: m.label })),
+  infographicColorModes: INFO_COLOR_MODES.map((m) => ({ id: m.id, label: m.label })),
+  illustColorTokens: SHAPE_COLOR_TOKENS,
+  illustFit: [
+    { id: "height", label: "자리 높이에 맞춤(기본)" },
+    { id: "width", label: "자리 폭 전체" },
+  ],
+  textColors: TEXT_COLORS,
+  fillColors: FILL_COLORS,
+};
 
 // ───────────────────────── 쪽 고치기(section_write) ─────────────────────────
 
@@ -230,6 +275,8 @@ export async function proposePageEdit(o: {
       company: companyBrief(pc.data),
       infographicTypes: infoTypeCatalog(),
       icons: ICON_NAMES,
+      ...(Object.values(pc.illusts).some((l) => l.length) ? { illustCandidates: illustBrief(pc.illusts) } : {}),
+      shapeOptions: SHAPE_OPTIONS,
     };
     const r = await callJson<{ summary?: unknown; ops?: unknown; notes?: unknown }>("catalog.section_write", SECTION_WRITE_SYSTEM, userMessage(instruction, payload), {
       // Opus 5 는 기본으로 생각(adaptive)하므로 출력 여유를 둔다
@@ -238,7 +285,7 @@ export async function proposePageEdit(o: {
       userId: o.userId,
       subject: { type: "catalog_page", id: `${docId}:${pc.pageKey}` },
     });
-    const { changes, dropped } = validatePatch({ outline: pc.outline, tree: pc.tree, ops: r.ops, metrics: pc.metrics, candidates: pc.candidates, source: "ai" });
+    const { changes, dropped } = validatePatch({ outline: pc.outline, tree: pc.tree, ops: r.ops, metrics: pc.metrics, candidates: pc.candidates, illusts: pc.illusts, area: pc.area, source: "ai" });
     return {
       ...base,
       source: "ai",
@@ -249,8 +296,8 @@ export async function proposePageEdit(o: {
     };
   } catch (e) {
     if (!(e instanceof LlmError)) throw e;
-    const rule = ruleEditOps(pc.outline, instruction, pc.metrics);
-    const { changes, dropped } = validatePatch({ outline: pc.outline, tree: pc.tree, ops: rule.ops, metrics: pc.metrics, candidates: pc.candidates, source: "rule" });
+    const rule = ruleEditOps(pc.outline, instruction, pc.metrics, { illusts: pc.illusts });
+    const { changes, dropped } = validatePatch({ outline: pc.outline, tree: pc.tree, ops: rule.ops, metrics: pc.metrics, candidates: pc.candidates, illusts: pc.illusts, area: pc.area, source: "rule" });
     return { ...base, source: "rule", fallback: fallbackReason(e), summary: rule.understood.join(" · "), notes: [], changes, dropped, understood: rule.understood, missed: rule.missed };
   }
 }
@@ -282,7 +329,12 @@ export async function fitTexts(o: { items: FitItem[]; userId: string | null; sub
   const metrics = o.metrics ?? {};
   const rule = (it: FitItem) => ({ key: it.key, text: ruleShorten(it.text, it.maxChars, metrics), flags: [] as Flag[], source: "rule" as const });
   try {
-    const r = await callJson<{ items?: Array<{ key?: unknown; text?: unknown }> }>("catalog.copy_fit", COPY_FIT_SYSTEM, userMessage(null, { items }), {
+    // 지표 표식({{metric:…}}, 일러스트 제목 뒤 칩 포함)은 값 글자 수로 센다 — 모델이 표식 글자 자체를 세지 않게 알려 준다
+    const brief = items.map((it) => {
+      const chips = [...it.text.matchAll(METRIC_TOKEN_RE)].map((m) => m[0]).join("");
+      return chips ? { ...it, metricChars: charLen(chips, metrics) } : it;
+    });
+    const r = await callJson<{ items?: Array<{ key?: unknown; text?: unknown }> }>("catalog.copy_fit", COPY_FIT_SYSTEM, userMessage(null, { items: brief }), {
       maxTokens: 3000,
       timeoutMs: 45_000,
       userId: o.userId,

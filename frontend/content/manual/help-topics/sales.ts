@@ -293,15 +293,16 @@ export const SALES_HELP: HelpTopic[] = [
     label: "AI로 수정 도움말",
     blocks: [
       { kind: "list", items: [
-        "AI 는 이 쪽의 글·목록·인포그래픽 내용만 바꿉니다. 배치·색·글자 크기는 그대로입니다.",
+        "AI 는 이 쪽의 글·목록·인포그래픽 내용을 바꾸고, 지시하면 모양·색도 고릅니다. 배치·좌표·글자 크기는 그대로입니다.",
+        "모양은 라이브러리 일러스트(항목 수가 같은 그림)에서, 색은 색 모드·디자인 토큰에서만 고릅니다. 글자·바탕 대비가 4.5:1 미만이면 흰·짙은 글자로 바꿔 제안합니다('모양'·'색 바뀜' 칩).",
         "숫자는 지표 칩으로만 씁니다. 지표에 없는 숫자·근거 없는 최상급에는 '검토' 표시가 붙고 기본으로 고르지 않습니다.",
         "채택 전 넘침을 재고, 넘치면 한두 번 자동으로 줄입니다. 고른 곳만 채택되고 버전이 남습니다.",
-        "AI 를 쓸 수 없으면 규칙 초안(유형 바꾸기·단계·줄이기)만 만듭니다.",
+        "AI 를 쓸 수 없으면 규칙 초안(유형 바꾸기·단계·줄이기·분야 색 통일·일러스트 고르기)만 만듭니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "ai" },
     sources: ["components/sales/catalog/studio/AiEditModal.tsx", "components/sales/catalog/studio/AiAreaPanel.tsx"],
-    reviewedAt: "2026-10-24",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "catalog.studio-design",

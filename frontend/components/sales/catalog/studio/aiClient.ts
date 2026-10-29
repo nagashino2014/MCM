@@ -2,12 +2,14 @@
 
 // 스튜디오 AI 편집(P6) 화면 공용 — 쪽 넘침 검사(렌더 후 실측), 넘침 자동 축약(copy_fit 1–2회), [AI로 줄이기] 제안 만들기.
 // 검사는 전체 쪽 검사와 같은 방법(정적 HTML → 숨은 틀 → paginate 넘침 경고)이라 PDF 와 같은 판정이다.
+// 일러스트 자리의 제목 뒤 지표 칩(§7-5 G)은 축약 글자 수에 칩 폭을 넣고, {{metric:…}} 표식으로 넘겨 칩을 지우지 못하게 한다.
 
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildOutline,
   charLen,
+  infoItemLines,
   readableText,
   replaceChangeText,
   validatePatch,
@@ -18,13 +20,16 @@ import {
   type PatchOp,
   type ProposedChange,
 } from "@/lib/catalog/ai/patch";
-import { INFO_TYPE_META, type InfoContent, type InfoType } from "@/lib/catalog/render/infographic/types";
+import { fittedItems, infoContentOf, infoFitItems, infoTypeOf, overflowTargets, type FitItem } from "@/lib/catalog/ai/fit";
+import type { InfoContent, InfoType } from "@/lib/catalog/render/infographic/types";
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
 import { findPath, type CNode } from "@/lib/catalog/studio/nodes";
 import { renderNode, type TreeEnv } from "@/lib/catalog/studio/render-tree";
 import { catalogFetch } from "../catalogFetch";
 import { runFullCheck } from "./checks";
 import { frameDocument, type StudioKit } from "./kit";
+
+export { overflowTargets };
 
 export interface ClientProposal {
   source: "ai" | "rule";
@@ -72,45 +77,27 @@ async function fit(items: Array<{ key: string; text: string; maxChars: number }>
 
 const shrink = (text: string, metrics: Record<string, MetricBrief>, ratio: number, floor = 6) => Math.max(floor, Math.floor(charLen(text, metrics) * ratio));
 
-/** 넘친 글이 든 바꿈(없으면 글·목록·인포그래픽 바꿈 전부) */
-export function overflowTargets(changes: ProposedChange[], texts: string[]): ProposedChange[] {
-  const norm = (s: string) => s.replace(/\s+/g, "");
-  const keys = texts.map((t) => norm(t).slice(0, 12)).filter((t) => t.length >= 4);
-  const hit = changes.filter((c) => c.kind !== "cases" && keys.some((k) => norm(c.after.join("")).includes(k)));
-  return hit.length ? hit : changes.filter((c) => c.kind !== "cases");
-}
-
-/** 인포그래픽 바꿈의 라벨·설명 갈아 끼우기 */
+/** 인포그래픽·모양 바꿈의 라벨·설명 갈아 끼우기(검토 화면의 항목 줄만 새로, 유형·모양 줄은 그대로) */
 function replaceInfoTexts(c: ProposedChange, updates: Map<string, string>, metrics: Record<string, MetricBrief>): ProposedChange {
-  const info = c.edit?.info;
-  if (!info?.content) return c;
-  const content: InfoContent = {
-    ...info.content,
-    items: info.content.items.map((it, i) => ({
-      ...it,
-      label: updates.get(`${c.id}@${i}.label`) ?? it.label,
-      ...(it.desc != null ? { desc: updates.get(`${c.id}@${i}.desc`) ?? it.desc } : {}),
-    })),
-  };
-  const type = (info.type ?? "process") as InfoType;
-  const after = [`유형: ${INFO_TYPE_META[type]?.label ?? type}`, ...content.items.map((it, i) => `${i + 1}. ${readableText(it.label, metrics)}${it.desc ? ` — ${readableText(it.desc, metrics)}` : ""}`)];
-  return { ...c, after, edit: { ...c.edit, info: { ...info, content } } };
+  const base = infoContentOf(c);
+  if (!base) return c;
+  const content: InfoContent = { ...base, items: fittedItems(c.id, base, c.illust, updates) };
+  const isItem = (l: string) => /^\d+\. /.test(l);
+  const at = c.after.findIndex(isItem);
+  const lines = infoItemLines(content, metrics).map((l) => readableText(l, metrics));
+  const after = at < 0 ? [...c.after, ...lines] : [...c.after.slice(0, at), ...lines, ...c.after.slice(at).filter((l) => !isItem(l))];
+  return { ...c, after, content, edit: { ...(c.edit ?? {}), info: { ...(c.edit?.info ?? {}), content } } };
 }
 
 /** 바꿈들을 줄인다(한 번) — 돌려주는 값: 새 바꿈 목록과 출처 */
 export async function shrinkChanges(changes: ProposedChange[], targets: ProposedChange[], tree: CNode, metrics: Record<string, MetricBrief>, ratio: number, subject: string): Promise<{ changes: ProposedChange[]; source: "ai" | "rule"; fallback?: string }> {
-  const items: Array<{ key: string; text: string; maxChars: number }> = [];
+  const items: FitItem[] = [];
   const ids = new Set(targets.map((t) => t.id));
   for (const c of targets) {
+    const content = infoContentOf(c);
     if (c.kind === "text" && c.raw?.[0]) items.push({ key: c.id, text: c.raw[0], maxChars: shrink(c.raw[0], metrics, ratio, 12) });
     else if (c.kind === "list" && c.raw) c.raw.forEach((t, i) => items.push({ key: `${c.id}#${i}`, text: t, maxChars: shrink(t, metrics, ratio) }));
-    else if (c.kind === "info" && c.edit?.info?.content) {
-      const meta = INFO_TYPE_META[(c.edit.info.type ?? "process") as InfoType];
-      c.edit.info.content.items.forEach((it, i) => {
-        items.push({ key: `${c.id}@${i}.label`, text: it.label, maxChars: Math.min(meta?.maxLabel ?? 12, shrink(it.label, metrics, ratio, 4)) });
-        if (it.desc) items.push({ key: `${c.id}@${i}.desc`, text: it.desc, maxChars: Math.min(Math.max(meta?.maxDesc ?? 24, 12), shrink(it.desc, metrics, ratio, 8)) });
-      });
-    }
+    else if ((c.kind === "info" || c.kind === "shape") && content) items.push(...infoFitItems(c.id, content, infoTypeOf(c), c.illust, metrics, { label: ratio, desc: ratio }));
   }
   if (items.length === 0) return { changes, source: "rule" };
   const res = await fit(items, metrics, subject);
@@ -119,7 +106,7 @@ export async function shrinkChanges(changes: ProposedChange[], targets: Proposed
     if (!ids.has(c.id)) return c;
     if (c.kind === "text") return replaceChangeText(c, [got.get(c.id) ?? c.raw?.[0] ?? ""], tree, metrics);
     if (c.kind === "list") return replaceChangeText(c, (c.raw ?? []).map((t, i) => got.get(`${c.id}#${i}`) ?? t), tree, metrics);
-    if (c.kind === "info") return replaceInfoTexts(c, got, metrics);
+    if (c.kind === "info" || c.kind === "shape") return replaceInfoTexts(c, got, metrics);
     return c;
   });
   return { changes: next, source: res.source, fallback: res.fallback };
@@ -142,7 +129,7 @@ export function blockOfNode(outline: PageOutline, tree: CNode, nodeId: string): 
  */
 export async function proposeShrink(item: PagePlanItem, tree: CNode, nodeIds: string[], metrics: Record<string, MetricBrief>, docId: string): Promise<ClientProposal> {
   const outline = buildOutline(tree, item, {});
-  let blocks = [...new Map(nodeIds.map((id) => blockOfNode(outline, tree, id)).filter((b): b is OutlineBlock => b != null && b.kind !== "cases").map((b) => [b.id, b])).values()];
+  let blocks = [...new Map(nodeIds.map((id) => blockOfNode(outline, tree, id)).filter((b): b is OutlineBlock => b != null && b.kind !== "cases" && b.kind !== "added" && !(b.kind === "info" && b.added)).map((b) => [b.id, b])).values()];
   if (blocks.length === 0) {
     // 넘친 곳이 데이터 영역(대표 실적 등)이면 위의 글이 밀어낸 것 — 사람이 고친 글, 그다음 긴 리드·본문을 줄인다
     const pinned = new Set<string>();
@@ -162,13 +149,7 @@ export async function proposeShrink(item: PagePlanItem, tree: CNode, nodeIds: st
   for (const b of blocks) {
     if (b.kind === "text") items.push({ key: b.id, text: b.text, maxChars: shrink(b.text, metrics, 0.8, 12) });
     else if (b.kind === "list") b.items.forEach((t, i) => items.push({ key: `${b.id}#${i}`, text: t, maxChars: shrink(t, metrics, 0.8) }));
-    else if (b.kind === "info") {
-      const meta = INFO_TYPE_META[b.type];
-      b.content.items.forEach((it, i) => {
-        items.push({ key: `${b.id}@${i}.label`, text: it.label, maxChars: Math.min(meta.maxLabel, shrink(it.label, metrics, 0.85, 4)) });
-        if (it.desc) items.push({ key: `${b.id}@${i}.desc`, text: it.desc, maxChars: Math.min(Math.max(meta.maxDesc, 12), shrink(it.desc, metrics, 0.8, 8)) });
-      });
-    }
+    else if (b.kind === "info") items.push(...infoFitItems(b.id, b.content, b.type, b.illust?.asset, metrics, { label: 0.85, desc: 0.8 }));
   }
   const res = await fit(items, metrics, `${docId}:${item.key}`);
   const got = new Map(res.items.map((x) => [x.key, x.text]));
@@ -179,12 +160,13 @@ export async function proposeShrink(item: PagePlanItem, tree: CNode, nodeIds: st
     return {
       op: "info",
       id: ib.id,
-      items: ib.content.items.map((it, i) => ({
-        label: got.get(`${ib.id}@${i}.label`) ?? it.label,
-        ...(it.desc ? { desc: got.get(`${ib.id}@${i}.desc`) ?? it.desc } : {}),
+      items: fittedItems(ib.id, ib.content, ib.illust?.asset, got).map((it) => ({
+        label: it.label,
+        ...(it.desc ? { desc: it.desc } : {}),
         ...(it.when ? { when: it.when } : {}),
         ...(it.icon ? { icon: it.icon } : {}),
         ...(it.metric ? { metric: it.metric } : {}),
+        ...(it.sub ? { sub: it.sub } : {}),
       })),
     };
   });

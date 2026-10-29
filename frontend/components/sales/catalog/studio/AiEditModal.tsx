@@ -1,7 +1,8 @@
 "use client";
 
 // 스튜디오 [AI로 수정](P6, 블루프린트 §7-2) — 쪽·고른 요소에 지시 → 서버가 컨텍스트를 묶어 LLM 패치(실패 시 규칙 초안) →
-// 검사(숫자·최상급·글자 수) → 렌더 후 넘침 실측(넘치면 copy_fit 1–2회 자동 축약 또는 다른 유형 제안) → 전/후 미리보기 → 전체·부분 채택.
+// 검사(숫자·최상급·글자 수·모양 화이트리스트·색 대비) → 렌더 후 넘침 실측(넘치면 copy_fit 1–2회 자동 축약 또는 다른 유형 제안) → 전/후 미리보기 → 전체·부분 채택.
+// 모양·색(§7-5 A·B)은 라이브러리 일러스트 id·색 모드·토큰만 고른 제안이며, 행에 '모양'·'색 바뀜' 칩과 고른 일러스트 그림을 보인다.
 // 채택은 보통 편집과 같은 편집층(실행 취소 가능)에 들어가고 버전으로 남는다. 응답 원문은 어디에도 저장하지 않는다.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
@@ -10,7 +11,8 @@ import { Loader2, Sparkles } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useCdToast } from "@/components/cdash/CdToast";
-import { applyChanges, hasReview, type ProposedChange } from "@/lib/catalog/ai/patch";
+import { applyChanges, changeKindLabel, hasReview, type ProposedChange } from "@/lib/catalog/ai/patch";
+import { illustIdsIn } from "@/lib/catalog/illustration-types";
 import { matchInfographic } from "@/lib/catalog/render/infographic/match";
 import { INFO_TYPE_META, type InfoType } from "@/lib/catalog/render/infographic/types";
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
@@ -25,11 +27,11 @@ import { AiAreaPanel } from "./AiAreaPanel";
 import { overflowTargets, pageOverflow, shrinkChanges, type ClientProposal, type Overflow } from "./aiClient";
 import { StaticFrame } from "./Frames";
 import type { StudioKit } from "./kit";
-import type { Studio } from "./useStudio";
+import { ensureIllustrations, type Studio } from "./useStudio";
 
 type Mode = "page" | "area";
 
-const EXAMPLES = ["리드 문장을 두 문장으로 더 간결하게", "인포그래픽을 5단계 흐름도로 바꾸고 단계 설명을 다듬어", "주요 서비스에 최근 업무를 반영해 정리해"];
+const EXAMPLES = ["리드 문장을 두 문장으로 더 간결하게", "인포그래픽을 5단계 흐름도로 바꾸고 단계 설명을 다듬어", "절차 도식을 어울리는 일러스트로 바꿔", "이 쪽 색을 분야 색으로 통일해"];
 
 const FLAG_CLS = (sev: "review" | "note") => (sev === "review" ? "cd-pill cd-pill-warn" : "cd-pill cd-pill-idle");
 
@@ -127,7 +129,7 @@ export function AiEditModal({
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-xs cd-text-muted">
-              {item.label} 쪽의 글·목록·인포그래픽 내용만 바꿉니다. 배치·색·글자 크기는 그대로이고, 숫자는 지표에 묶인 값만 씁니다. 제안을 보고 고른 것만 채택합니다.
+              {item.label} 쪽의 글·목록·인포그래픽 내용을 바꾸고, 지시하면 일러스트 모양·색도 고릅니다. 배치·글자 크기는 그대로이고, 모양·색은 라이브러리 일러스트와 디자인 토큰 중에서만, 숫자는 지표에 묶인 값만 씁니다. 제안을 보고 고른 것만 채택합니다.
             </p>
             <div className="flex flex-wrap gap-3 text-xs" role="radiogroup" aria-label="고칠 범위">
               <label className="flex items-center gap-1.5">
@@ -217,10 +219,13 @@ function AiReview({
   const pages = studio.state?.pages ?? [];
   const st = pageState(pages, item.key);
   const beforeTree = studio.composedOf(item).tree;
+  // 제안이 고른 일러스트(아직 이 화면에 불러오지 않은 것)를 불러온 뒤 미리보기를 다시 그린다
+  const [, setIllustTick] = useState(0);
+  const illustIds = useMemo(() => illustIdsIn(changes.map((c) => c.illust ?? "")), [changes]);
 
   const afterTreeOf = useCallback(
     (list: ProposedChange[]): CNode => {
-      const edits = applyChanges(st.edits, list.filter((c) => c.edit));
+      const edits = applyChanges(st.edits, list.filter((c) => c.edit || c.style), beforeTree);
       const cases = list.find((c) => c.kind === "cases" && c.featured);
       let it = item;
       if (cases && studio.ctx && studio.data && studio.cover) {
@@ -230,7 +235,7 @@ function AiReview({
       }
       return composePage(it, { ...st, edits }, { metrics: studio.data?.metrics }).tree;
     },
-    [st, item, studio.ctx, studio.data, studio.cover, pages, proposal.candidates]
+    [st, item, studio.ctx, studio.data, studio.cover, pages, proposal.candidates, beforeTree]
   );
   const chosen = useMemo(() => changes.filter((c) => picked.has(c.id)), [changes, picked]);
   const afterTree = useMemo(() => afterTreeOf(chosen), [afterTreeOf, chosen]);
@@ -243,6 +248,7 @@ function AiReview({
     ran.current = true;
     void (async () => {
       setCheck({ phase: "checking", round: 0 });
+      if (illustIds.length && (await ensureIllustrations(illustIds).catch(() => false))) setIllustTick((t) => t + 1);
       const before = await pageOverflow(kit, studio.fontSet, env, beforeTree, item.key);
       let list = changes;
       let after = await pageOverflow(kit, studio.fontSet, env, afterTreeOf(list), item.key);
@@ -256,7 +262,7 @@ function AiReview({
         return Boolean(t && box && INFO_TYPE_META[t].minHeight > box.h + 4);
       };
       while (after.count > base && round < 2) {
-        const targets = overflowTargets(list, after.texts).filter((c) => !tooTall(c));
+        const targets = overflowTargets(list, after.texts, metrics).filter((c) => !tooTall(c));
         if (targets.length === 0) break;
         round += 1;
         setCheck({ phase: "fitting", before, after, round });
@@ -307,8 +313,8 @@ function AiReview({
     if (chosen.length === 0) return;
     setBusy(true);
     try {
-      const edits = chosen.filter((c) => c.edit);
-      if (edits.length) studio.setPageEdits(item.key, (e) => applyChanges(e, edits));
+      const edits = chosen.filter((c) => c.edit || c.style);
+      if (edits.length) studio.setPageEdits(item.key, (e) => applyChanges(e, edits, beforeTree));
       if (!(await studio.save())) throw new Error("저장하지 못했습니다.");
       const cases = chosen.find((c) => c.kind === "cases" && c.featured);
       if (cases) await catalogFetch("/api/catalog/ai/edit", { method: "PUT", body: JSON.stringify({ pageKey: item.key, featured: cases.featured }) });
@@ -414,6 +420,8 @@ function AiReview({
                 <span className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <b className="cd-text">{c.label}</b>
+                    {changeKindLabel(c) ? <span className="cd-pill cd-pill-info">{changeKindLabel(c)}</span> : null}
+                    {c.recolor ? <span className="cd-pill cd-pill-info">색 바뀜</span> : null}
                     {c.source === "rule" ? <span className="cd-pill cd-pill-idle">규칙</span> : null}
                     {c.flags.map((f, i) => (
                       <span key={i} className={FLAG_CLS(f.severity)} title={f.message}>
@@ -425,6 +433,9 @@ function AiReview({
                     <span className="cd-text-faint whitespace-pre-line break-words">{c.before.join("\n")}</span>
                     <span className="cd-text whitespace-pre-line break-words">{c.after.join("\n")}</span>
                   </span>
+                  {c.illust && c.after.some((l) => l.startsWith("모양: 일러스트")) ? (
+                    <img src={`/api/catalog/illustrations/${c.illust}/file?f=thumb`} alt="고른 일러스트" className="rounded border cd-border-c" style={{ width: 120, height: 72, objectFit: "contain", background: "#fff" }} loading="lazy" />
+                  ) : null}
                 </span>
               </label>
             ))}

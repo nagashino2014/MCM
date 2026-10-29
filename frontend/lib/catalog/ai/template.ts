@@ -1,7 +1,7 @@
 /*
  * 회사소개서 LLM 편집(P6)의 규칙 기반 대체안(template_draft 패턴, 블루프린트 §7-3) — LLM 이 없거나(키 없음·킬스위치·예산) 실패해도 동작한다.
  * 클라이언트 안전(순수 함수). 숫자를 지어내지 않는다: 수치는 지표 id, 대표 실적은 실제 계약 후보에서만.
- *   ruleEditOps      지시문에서 인포그래픽 유형·단계 수·줄이기만 알아듣고 패치를 만든다(그 밖은 '해석하지 못함')
+ *   ruleEditOps      지시문에서 인포그래픽 유형·단계 수·줄이기·분야 색 통일·일러스트(규칙 1위 후보)만 알아듣고 패치를 만든다(그 밖은 '해석하지 못함')
  *   ruleShorten      문구 줄이기(괄호 설명 빼기 → 접속 표현 줄이기 → 뒤 문장·구절 빼기)
  *   templateArea     새 사업 분야 쪽 초안(분야명·메모·관련 분류 → 리드·서비스·절차·KPI·대표 실적)
  */
@@ -9,7 +9,7 @@ import { AREA_CONTENT } from "@/lib/catalog/render/master-content";
 import { INFO_TYPE_META, contentFamily, type InfoType } from "@/lib/catalog/render/infographic/types";
 import { areaIndex } from "@/lib/catalog/areas";
 import { CUSTOM_AREA_LIMITS, type CustomAreaContent } from "@/lib/catalog/custom-area-types";
-import { METRIC_TOKEN_RE, charLen, findSuperlatives, type CaseCandidate, type InfoBlock, type MetricBrief, type OutlineBlock, type PageOutline, type PatchOp } from "./patch";
+import { METRIC_TOKEN_RE, charLen, findSuperlatives, type CaseCandidate, type InfoBlock, type MetricBrief, type OutlineBlock, type PageOutline, type PatchOp, type ShapeChoice } from "./patch";
 
 // ───────────────────────── 줄이기 ─────────────────────────
 
@@ -38,6 +38,9 @@ export function ruleShorten(text: string, maxChars: number, metrics?: Record<str
   const t = text.trim().replace(METRIC_TOKEN_RE, (m) => (toks.push(m), `⟦${toks.length - 1}⟧`));
   const restore = (s: string) => s.replace(/⟦(\d+)⟧/g, (_, i: string) => toks[Number(i)]);
   const fits = (s: string) => charLen(restore(s), metrics) <= maxChars;
+  // 끝에 붙은 지표 표식(일러스트 제목 뒤 칩)은 떼어 두고 앞 글만 줄인 뒤 다시 붙인다
+  const tail = /(\s*⟦\d+⟧)+\s*$/.exec(t)?.[0] ?? "";
+  if (tail && tail.length < t.length) return restore(`${shortenProtected(t.slice(0, t.length - tail.length), (s) => fits(s + tail)).trimEnd()}${tail}`.trim());
   return restore(shortenProtected(t, fits));
 }
 
@@ -63,8 +66,14 @@ function shortenProtected(input: string, fits: (s: string) => boolean): string {
   while (parts.length > 1 && !fits(parts.join(" ").replace(/[·,，]\s*$/, ""))) parts.pop();
   t = parts.join(" ").replace(/[·,，]\s*$/, "").trim();
   if (fits(t)) return t;
+  // 지표 자리표(⟦n⟧ — 일러스트 제목 뒤 칩 포함)가 든 낱말은 남기고 그 앞 낱말부터 뺀다
   const words = t.split(/\s+/);
-  while (words.length > 1 && !fits(words.join(" "))) words.pop();
+  const isTok = (w: string) => /⟦\d+⟧/.test(w);
+  while (words.filter((w) => !isTok(w)).length > 1 && !fits(words.join(" "))) {
+    let i = words.length - 1;
+    while (i > 0 && isTok(words[i])) i -= 1;
+    words.splice(i, 1);
+  }
   return words.join(" ");
 }
 
@@ -92,13 +101,39 @@ export interface RuleEditResult {
   missed: string[];
 }
 
-/** 지시문 → 패치(규칙). 인포그래픽 유형·단계 수·줄이기만 다룬다 */
-export function ruleEditOps(outline: PageOutline, instruction: string, metrics: Record<string, MetricBrief>): RuleEditResult {
+/** 톤 맞추기 — 쪽 안 인포그래픽·일러스트 색을 이 쪽 분야 색(규칙 기본값)으로 */
+const TONE_WORDS = /분야\s*색|톤|색(을|깔)?\s*(통일|맞춰|맞추)|같은\s*색/;
+const ILLUST_WORDS = /일러스트|그림으로|그림을/;
+
+/** 지시문 → 패치(규칙). 인포그래픽 유형·단계 수·줄이기·분야 색 통일·일러스트(첫 후보)만 다룬다 */
+export function ruleEditOps(outline: PageOutline, instruction: string, metrics: Record<string, MetricBrief>, opts: { illusts?: Record<string, ShapeChoice[]> } = {}): RuleEditResult {
   const ops: PatchOp[] = [];
   const understood: string[] = [];
   const missed: string[] = [];
   const focus = outline.blocks.filter((b) => b.focus);
   const pool = focus.length ? focus : outline.blocks;
+  const infos = pool.filter((b): b is InfoBlock => b.kind === "info");
+  if (ILLUST_WORDS.test(instruction)) {
+    // 일러스트로 — 규칙 점수 1위 후보(지금 그림이 아닌 것)
+    const target = infos.find((b) => (opts.illusts?.[b.id] ?? []).some((c) => !c.current));
+    const pick = target ? opts.illusts![target.id].find((c) => !c.current) : undefined;
+    if (target && pick) {
+      ops.push({ op: "shape", id: target.id, illust: { asset: pick.id } });
+      understood.push(`${target.label} → 일러스트 '${pick.title}'(규칙 점수 1위)`);
+    } else missed.push("이 쪽 인포그래픽과 항목 수가 같은 일러스트가 라이브러리에 없습니다.");
+  }
+  if (TONE_WORDS.test(instruction)) {
+    let n = 0;
+    for (const b of infos) {
+      if (ops.some((o) => o.id === b.id && o.op === "shape")) continue;
+      if (b.illust && (b.illust.colors?.mode ?? "area") !== "area") ops.push({ op: "shape", id: b.id, illust: { asset: b.illust.asset, colors: { mode: "area" } } });
+      else if (!b.illust && (b.colorMode ?? "area") !== "area") ops.push({ op: "shape", id: b.id, colorMode: "area" });
+      else continue;
+      n += 1;
+    }
+    if (n) understood.push(`인포그래픽·일러스트 ${n}곳의 색을 이 쪽 분야 색으로`);
+    else understood.push("인포그래픽·일러스트가 이미 이 쪽 분야 색입니다");
+  }
   const wantType = TYPE_WORDS.find(([re]) => re.test(instruction))?.[1];
   // 바꿀 유형과 같은 형태(목록·수치)의 인포그래픽을 고른다(분야 쪽에는 전후 비교·막대가 함께 있음)
   const fam = wantType ? INFO_TYPE_META[wantType].family : "list";

@@ -38,6 +38,8 @@
   --precision-sidebar-ring: var(--precision-ring);
   --precision-ui-sidebar-width: 240px;
   --precision-ui-topbar-height: 56px;
+  --precision-ui-nav-item-height: 38px; /* 2026-10-29 사용자 요청: 사이드바 항목 34→38, 항목 사이 4(ESG 와 같음) */
+  --precision-ui-nav-sub-height: 34px;
   --precision-ui-content-max-width: 1456px;
   --precision-ui-content-padding: 28px;
   --precision-ui-sheet-width: 460px;

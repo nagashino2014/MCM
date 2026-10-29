@@ -815,6 +815,9 @@ html[data-theme="dark"] .cdash .cd-doc-surface, html[data-theme="dark"] .cdash-v
 }
 .cd-nav-group-head:hover { background: var(--cd-sidebar-hover); color: var(--cd-sidebar-text); }
 .cd-nav-group-head[aria-expanded="true"] { color: var(--cd-sidebar-text); }
+/* 사이드바 항목·하위 항목 높이(2026-10-29 행간 넓힘). 글자 13px 에 줄 높이 20 을 고정해 높이가 글꼴에 따라 흔들리지 않게 한다. */
+.cd-nav-item { min-height: var(--precision-ui-nav-item-height); line-height: 20px; }
+.cd-nav-sub { min-height: var(--precision-ui-nav-sub-height); line-height: 20px; }
 .cd-nav-group-count { font-size: 11px; color: var(--cd-faint); font-variant-numeric: tabular-nums; }
 .cd-icon-button { width: 36px; height: 36px; padding: 0; border-radius: var(--cd-radius-control); }
 .cd-icon-button-sm { width: 32px; height: 32px; }

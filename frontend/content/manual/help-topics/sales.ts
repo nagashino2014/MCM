@@ -98,13 +98,14 @@ export const SALES_HELP: HelpTopic[] = [
         "숫자는 내가 볼 수 있는 영업건 전체 기준입니다. 위 목록의 검색·담당·연도·태그 필터는 이 카드들에 영향을 주지 않습니다.",
         "파이프라인 퍼널은 스케쥴로 도달한 가장 높은 단계로 셉니다. 실주한 건도 입찰까지 갔다면 입찰 이상에 들어갑니다. 아직 시작하지 않은 예정 스케쥴은 세지 않습니다.",
         "퍼널 막대를 누르면 그 단계 이상 도달한 건만, 용역 분류 막대를 누르면 업종분류 태그가, 담당자 행을 누르면 담당 필터가 목록에 걸립니다. 다시 누르면 풀립니다.",
+        "용역 분류 막대 아래 줄에는 세분류별 건수가 많은 순으로 모두 나옵니다. 폭이 좁으면 항목 단위로 줄을 바꿉니다.",
         "수주 성과의 연도는 결과 스케쥴 날짜로 정합니다. 금액은 각 영업건의 마지막 투찰가이며, 투찰가를 적지 않은 건은 금액에서 빠집니다.",
         "아래 줄은 최근 7일 수집된 투자·발주 신호와 가장 최근 AI 브리핑입니다. 누르면 해당 화면으로 갑니다.",
       ] },
     ],
     more: { article: "sales.board", section: "insights" },
-    sources: ["components/sales/SalesInsights.tsx"],
-    reviewedAt: "2026-10-26",
+    sources: ["components/sales/SalesInsights.tsx", "lib/sales/board.ts"],
+    reviewedAt: "2026-10-29",
   },
   // ── 영업 상세 ──
   {
@@ -187,6 +188,21 @@ export const SALES_HELP: HelpTopic[] = [
   },
   // ── 회사소개서 ──
   {
+    id: "catalog.documents",
+    label: "문서·템플릿 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "문서를 누르면 선택되고, 아래 발행본·PDF 만들기·표지 디자인과 스튜디오가 그 문서를 대상으로 합니다.",
+        "[[새 문서]]는 템플릿(스탠다드·포토 에디토리얼·인포그래픽형·격조·공공형·요약·분야 브리프)을 골라 만듭니다. 템플릿은 색·표지·모티프·서체 기본값과 쪽 구성 묶음입니다.",
+        "만든 뒤에는 색 컨셉·서체·표지·모티프만 바꿀 수 있고 템플릿은 바꿀 수 없습니다. 다른 템플릿은 새 문서로 만듭니다.",
+        "마스터본은 스탠다드로 고정이고 반영 대기는 마스터본 기준입니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "documents" },
+    sources: ["components/sales/catalog/CatalogDocumentsPanel.tsx"],
+    reviewedAt: "2026-10-29",
+  },
+  {
     id: "catalog.home",
     label: "회사소개서 도움말",
     blocks: [
@@ -194,11 +210,12 @@ export const SALES_HELP: HelpTopic[] = [
         "[[발행본]] 표에서 대외 배포용 회사소개서를 받습니다. 발행본은 발행한 때의 파일 그대로입니다.",
         "회사소개서의 숫자는 모두 [[지표 사전]]에서 계산합니다. 계약·인사가 바뀌면 초안에는 바로 들어가고, 발행본에는 검토 후 발행해야 들어갑니다.",
         "관리 권한이 있으면 위쪽 카드로 관리 화면·스튜디오에 가고, 반영 대기와 PDF 만들기를 씁니다.",
+        "[[문서]] 칸에서 고른 문서(마스터본 또는 템플릿으로 만든 문서)가 발행본·PDF·표지·스튜디오의 대상입니다.",
       ] },
     ],
     more: { article: "sales.catalog", section: "editions" },
     sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
-    reviewedAt: "2026-10-26",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "catalog.editions",
@@ -309,14 +326,29 @@ export const SALES_HELP: HelpTopic[] = [
     label: "디자인 탭 도움말",
     blocks: [
       { kind: "list", items: [
-        "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비).",
+        "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비). B 그린은 CI 그린 면에 네이비 글자·짙은 녹색 주색, C 차콜은 차콜 면과 주색에 CI 그린 강조, D 스틸 블루는 연구소 제안서 양식의 네이비 머리 띠와 청회색 글자입니다.",
+        "모티프는 문서 전체의 모양 묶음입니다(기본 물방울). 표지·간지·뒤표지의 상징 모양과 요소 모서리가 바뀝니다.",
         "색은 디자인 시스템 색, 글자 크기는 디자인 시스템 단계, 폭은 12열 묶음으로만 고릅니다.",
         "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "levels" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-29",
+  },
+  {
+    id: "catalog.studio-motif",
+    label: "모티프 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "물방울(지금 모습)·링·등고선 중 하나를 고르면 문서 전체에 적용되고 자동 저장됩니다.",
+        "모티프는 표지·간지·뒤표지의 상징 모양과 사진 틀·카드·표식의 모서리 모양을 바꿉니다. 글·사진·편집은 그대로입니다.",
+        "링은 심볼마크의 두 색 호, 등고선은 가는 등농도선입니다(2026-10-29 확정). 템플릿은 바꿀 수 없고 모티프만 바꿉니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog", section: "documents" },
+    sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
+    reviewedAt: "2026-10-29",
   },
   {
     id: "catalog.studio-fonts",
@@ -392,15 +424,15 @@ export const SALES_HELP: HelpTopic[] = [
     label: "표지 디자인 도움말",
     blocks: [
       { kind: "list", items: [
-        "표지 4안 중 하나를 누르면 바로 저장됩니다. 기본은 A 잎 창입니다.",
-        "'확정 전' 안(B·C)은 디자인 확정 전이라 이름·모양이 바뀔 수 있습니다.",
+        "표지 5안 중 하나를 누르면 고른 문서에 바로 저장됩니다. 기본은 A 잎 창입니다. 문서의 템플릿·모티프는 오른쪽 위에 표시만 됩니다(모티프는 스튜디오 디자인 탭에서).",
+        "다섯 안 모두 확정된 디자인입니다(B·C·G 는 2026-10-29). G 연구소형은 연구소·ESG 제안형 템플릿의 기본 표지입니다.",
         "[[사진 없는 변형으로 만들기]]는 사진 자리를 비운 변형입니다. C 는 원래 사진이 없습니다.",
         "이미 발행한 소개서의 표지는 바뀌지 않습니다.",
       ] },
     ],
     more: { article: "sales.catalog", section: "cover" },
     sources: ["components/sales/catalog/CatalogCoverPicker.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "catalog.metrics",

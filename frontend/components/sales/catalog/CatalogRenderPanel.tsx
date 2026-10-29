@@ -15,7 +15,18 @@ const fmtSec = (ms: number) => `${(ms / 1000).toFixed(1)}초`;
 const fmtWhen = (iso: string) =>
   iso ? new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
-export function CatalogRenderPanel({ canPublish = false, onPublish }: { canPublish?: boolean; onPublish?: (edition: CatalogEditionSummary) => void }) {
+export function CatalogRenderPanel({
+  docId = "master",
+  docTitle,
+  canPublish = false,
+  onPublish,
+}: {
+  /** 문서 id(TP0 문서 복수화) — 없으면 마스터 */
+  docId?: string;
+  docTitle?: string;
+  canPublish?: boolean;
+  onPublish?: (edition: CatalogEditionSummary) => void;
+}) {
   const [edition, setEdition] = useState<EditionKind>("print");
   const [naming, setNaming] = useState<NamingMode>("masked");
   const [scope, setScope] = useState<ScopeMode>("full");
@@ -27,11 +38,11 @@ export function CatalogRenderPanel({ canPublish = false, onPublish }: { canPubli
 
   const reload = useCallback(async () => {
     try {
-      setList((await catalogFetch<{ editions: CatalogEditionSummary[] }>("/api/catalog/render/pdf")).editions);
+      setList((await catalogFetch<{ editions: CatalogEditionSummary[] }>(`/api/catalog/render/pdf?doc=${encodeURIComponent(docId)}`)).editions);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  }, [docId]);
 
   useEffect(() => {
     reload();
@@ -43,7 +54,7 @@ export function CatalogRenderPanel({ canPublish = false, onPublish }: { canPubli
     try {
       const d = await catalogFetch<{ edition: CatalogEditionSummary }>("/api/catalog/render/pdf", {
         method: "POST",
-        body: JSON.stringify({ edition, naming, scope }),
+        body: JSON.stringify({ doc: docId, edition, naming, scope }),
       });
       setLast(d.edition);
       setPreviewId(d.edition.editionId);
@@ -64,7 +75,7 @@ export function CatalogRenderPanel({ canPublish = false, onPublish }: { canPubli
         <h3 className="cd-text font-semibold text-base flex items-center gap-1">
           <FileText className="w-4 h-4 cd-text-primary" /> 회사소개서 PDF <CdHelp topic="catalog.pdf" />
         </h3>
-        <span className="text-xs cd-text-faint">마스터본 · A4 가로 · 지금 데이터로 만듭니다</span>
+        <span className="text-xs cd-text-faint">{docId === "master" ? "마스터본" : docTitle || docId} · A4 가로 · 지금 데이터로 만듭니다</span>
       </div>
       <div className="flex items-end gap-3 flex-wrap">
         <label className="flex flex-col gap-1 text-xs cd-text-muted">

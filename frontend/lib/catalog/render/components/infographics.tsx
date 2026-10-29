@@ -175,7 +175,7 @@ export function KoreaMap({
   const op = (r: string) => (mode === "regions" ? (0.16 + (0.84 * (vals[r] || 0)) / max).toFixed(2) : "1");
   const map = (
     <div
-      className={cx("kc-map", `kc-area-${area}`, "kc-motif--drop")}
+      className={cx("kc-map", `kc-area-${area}`)}
       style={{ position: "relative", width: MAP_W, height: MAP_H, fontFamily: "var(--kc-font-body)", color: "var(--ink)" }}
     >
       <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} role="img" aria-label={mode === "regions" ? "권역별 수행 실적 지도" : "사업장 위치 지도"}>

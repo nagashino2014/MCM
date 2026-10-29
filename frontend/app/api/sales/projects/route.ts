@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { loadUserAccess, grantDeptIds } from "@/lib/auth/rbac";
-import { createSalesProject, listSalesProjects } from "@/lib/sales/queries";
+import { loadUserAccess } from "@/lib/auth/rbac";
+import { filterBoardProjects, parseBoardFilter } from "@/lib/sales/board";
+import { createSalesProject } from "@/lib/sales/queries";
+import { listVisibleSalesProjects } from "@/lib/sales/visible-projects";
 import type {
   SalesProjectFilter,
   SalesProjectInput,
@@ -17,6 +19,28 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requirePermission("sales.view");
     const sp = req.nextUrl.searchParams;
+    const access = await loadUserAccess(ctx.userId);
+
+    // Salesboard 목록(limit 지정, 2026-10-29) — 검색·담당·연도·지역권·업종분류·KPI·도달 단계 필터와 쪽 나눔을 서버에서 한다.
+    //   판정은 lib/sales/board.ts(예전 화면 판정 그대로)라 태그 건수·건수가 화면 계산과 같다. 응답은 한 쪽 분량만.
+    if (sp.has("limit")) {
+      const visible = await listVisibleSalesProjects(access);
+      const { rows, regionCounts, categoryCounts } = filterBoardProjects(visible, parseBoardFilter(sp));
+      const limit = Math.min(200, Math.max(1, Math.floor(Number(sp.get("limit")) || 50)));
+      let offset = Math.max(0, Math.floor(Number(sp.get("offset")) || 0));
+      // 결과가 줄어 쪽이 비면 마지막 쪽(useClientPaging 과 같은 동작)
+      if (offset > 0 && offset >= rows.length) offset = Math.max(0, Math.floor((rows.length - 1) / limit) * limit);
+      return NextResponse.json({
+        projects: rows.slice(offset, offset + limit),
+        total: rows.length,
+        offset,
+        visibleTotal: visible.length,
+        regionCounts,
+        categoryCounts,
+      });
+    }
+
+    // 그 밖(연결 선택기·모바일 등) — 기존 응답 그대로(전건)
     const filter: SalesProjectFilter = {
       facilityId: sp.get("facilityId") || undefined,
       stage: (sp.get("stage") as SalesStage) || undefined,
@@ -24,20 +48,7 @@ export async function GET(req: NextRequest) {
       status: (sp.get("status") as SalesProjectStatus) || undefined,
       q: sp.get("q") || undefined,
     };
-    let projects = await listSalesProjects(filter);
-    // 목록도 단건 가드(target.projectId)와 같은 범위로 거른다(X-03, 2026-10-19):
-    //   all = 전사 / self_dept·specific_dept = 담당 부서가 그 부서인 건 + 본인이 관계자인 건 / participant·self = 본인이 관계자인 건.
-    const access = await loadUserAccess(ctx.userId);
-    const grants = access.grants.filter((g) => g.permissionKey === "sales.view" && g.effect === "allow");
-    if (!grants.some((g) => g.scopeKind === "all")) {
-      const deptIds = new Set<string>();
-      for (const g of grants) {
-        for (const d of grantDeptIds(access, g)) deptIds.add(d); // self_dept = 보직 부서 전체(겸직 300)
-      }
-      projects = projects.filter(
-        (p) => (p.ownerDeptId != null && deptIds.has(String(p.ownerDeptId))) || access.participantProjectIds.has(p.projectId)
-      );
-    }
+    const projects = await listVisibleSalesProjects(access, filter);
     return NextResponse.json({ projects });
   } catch (err) {
     return authErrorToResponse(err);

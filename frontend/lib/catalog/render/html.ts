@@ -33,6 +33,7 @@ const COVER_PHOTO: Record<CoverChoice["cover"], { file: string; box: [number, nu
   strips: { file: "assets/hq-cover-tall.webp", box: [400, 0], fit: "width" },
   band: { file: "assets/hq-cover-wide.webp", box: [842, 300], fit: "cover" },
   center: null,
+  research: { file: "assets/hq-cover-tall.webp", box: [394, 595], fit: "cover" },
 };
 const MIN_PRINT_DPI = 150;
 const GOOD_PRINT_DPI = 300;
@@ -123,7 +124,7 @@ export async function buildCatalogHtml(
   const url = (key: ImageKey) => (opts.target === "print" ? PRINT_ORIGIN + key : previewUrl(key));
   const { set, notice } = await resolveFontSet(data.theme.fontSet);
   if (notice) notices.push(notice);
-  const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept };
+  const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept, template: data.theme.template, motif: data.theme.motif };
   await registerUsedIllustrations(opts.pages ?? []);
   const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
   const drawn = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));

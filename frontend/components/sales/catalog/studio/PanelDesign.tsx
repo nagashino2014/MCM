@@ -3,11 +3,11 @@
 // 오른쪽 패널 · 디자인 탭 — L2 구조(쪽 변형·인포그래픽 유형·열 수·사진 배치·색 컨셉)와 L3 자유 배치(크기·글자 크기·토큰 색·요소 추가).
 // 자유도는 디자인 시스템 안: 색 = 토큰 팔레트, 글자 크기 = 타입 스케일 단계, 폭 = 12열 묶음, 위치 = 그리드·4pt 맞춤.
 
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ImagePlus, Loader2, PenTool, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
-import { COLOR_CONCEPTS, COVER_DESIGNS } from "@/lib/catalog/document-theme";
+import { COLOR_CONCEPTS, COVER_DESIGNS, MOTIFS } from "@/lib/catalog/document-theme";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
 import { matchInfographic } from "@/lib/catalog/render/infographic/match";
 import { INFO_TYPE_META, type InfoColorMode, type InfoSpec, type InfoType } from "@/lib/catalog/render/infographic/types";
@@ -25,6 +25,13 @@ import { GRID_NOTE } from "./StudioCanvas";
 import type { PanelProps } from "./types";
 
 const TOKENS = tokensJson as unknown as DesignTokens;
+/** 모티프 칩의 작은 표식 — 물방울(한 모서리 각), 링(원 테두리), 등고선(각진 겹선) */
+const motifSwatchStyle = (motif: string, color: string): CSSProperties =>
+  motif === "ring"
+    ? { borderRadius: "50%", border: `2px solid ${color}` }
+    : motif === "contour"
+      ? { borderRadius: 0, border: `1px solid ${color}`, outline: `1px solid ${color}`, outlineOffset: 1, width: 8, height: 8, margin: 2 }
+      : { borderRadius: "0 6px 6px 6px", background: color };
 const swatch = (name: string, concept: string) => {
   try {
     return resolveColor(TOKENS.color.tokens, name, concept, "navy");
@@ -98,6 +105,20 @@ export function PanelDesign(props: PanelProps) {
             <Chip key={c.id} active={theme.concept === c.id} onClick={() => studio.setTheme({ concept: c.id })}>
               <span aria-hidden className="inline-block w-3 h-3 rounded-sm" style={{ background: swatch("field", c.id) }} />
               {c.label}
+            </Chip>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold cd-text flex items-center gap-1">
+          모티프(문서 전체) <CdHelp topic="catalog.studio-motif" />
+        </h3>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="모티프">
+          {MOTIFS.map((m) => (
+            <Chip key={m.id} active={theme.motif === m.id} onClick={() => studio.setTheme({ motif: m.id })}>
+              <span aria-hidden className="inline-block w-3 h-3" style={motifSwatchStyle(m.id, swatch("field", theme.concept))} />
+              {m.label}
             </Chip>
           ))}
         </div>
@@ -363,7 +384,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
     renderToStaticMarkup(
       (
         <div
-          className={`kc-concept--${theme.concept} kc-fontset--${studio.fontSet} kc-motif--drop kc-area-${slot.area ?? 1}`}
+          className={`kc-tpl--${theme.template} kc-concept--${theme.concept} kc-fontset--${studio.fontSet} kc-motif--${theme.motif} kc-area-${slot.area ?? 1}`}
           style={{ width: slot.box.w, fontFamily: "var(--kc-font-body)", fontSize: 10.5, lineHeight: "17px", color: "var(--ink)", wordBreak: "keep-all" }}
         >
           {renderInfographic({ ...spec, type, variant }, slot.box, {}, slot.area ?? 1)}

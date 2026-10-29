@@ -9,7 +9,8 @@ import {
   type DisplayOverride,
 } from "./appendix";
 import { SOFTWARE_CATEGORY, isSoftwareServiceType } from "./areas";
-import { isColorConcept, isCoverDesign, sanitizeDocumentTheme, type DocumentTheme } from "./document-theme";
+import { isTemplateId, pickThemePatch, sanitizeDocumentTheme, type DocumentTheme, type TemplateId } from "./document-theme";
+import { templateOf } from "./templates";
 import { listManualProjects, manualToProjectRow } from "./manual-projects";
 import { regionGroupId } from "./regions";
 
@@ -186,25 +187,75 @@ export interface CatalogDocumentSummary {
   title: string;
   kind: "master" | "custom";
   status: string;
+  /** 문서 템플릿(theme.template, 문서별 고정) */
+  template: TemplateId;
+  theme: DocumentTheme;
   appendixRules: AppendixRules;
+  createdAt: string;
   updatedAt: string;
 }
+
+const parseJson = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v);
 
 export async function listCatalogDocuments(): Promise<CatalogDocumentSummary[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      "SELECT doc_id, title, kind, status, appendix_rules, updated_at FROM catalog_documents ORDER BY (kind = 'master') DESC, updated_at DESC"
+      "SELECT doc_id, title, kind, status, theme, appendix_rules, created_at, updated_at FROM catalog_documents WHERE status <> 'archived' ORDER BY (kind = 'master') DESC, created_at DESC"
     )
   );
-  return rows.map((r) => ({
-    docId: s(r.doc_id),
-    title: s(r.title),
-    kind: s(r.kind) === "custom" ? "custom" : "master",
-    status: s(r.status) || "draft",
-    appendixRules: sanitizeAppendixRules(typeof r.appendix_rules === "string" ? JSON.parse(r.appendix_rules) : r.appendix_rules),
-    updatedAt: s(r.updated_at),
-  }));
+  return rows.map((r) => {
+    const theme = sanitizeDocumentTheme(parseJson(r.theme));
+    return {
+      docId: s(r.doc_id),
+      title: s(r.title),
+      kind: s(r.kind) === "custom" ? "custom" : "master",
+      status: s(r.status) || "draft",
+      template: theme.template,
+      theme,
+      appendixRules: sanitizeAppendixRules(parseJson(r.appendix_rules)),
+      createdAt: s(r.created_at),
+      updatedAt: s(r.updated_at),
+    };
+  });
+}
+
+export async function getCatalogDocument(docId: string): Promise<CatalogDocumentSummary | null> {
+  return (await listCatalogDocuments()).find((d) => d.docId === docId) ?? null;
+}
+
+export class CatalogDocumentError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * 새 문서(맞춤판) — 템플릿을 골라 만든다(계획서 §3-1). doc_id = tpl-{template}-{yymmdd}-{4자}. 테마는 템플릿 기본값으로 시작하고
+ * 부록 표시 범위는 마스터의 것을 복사한다. 편집층(catalog_pages)은 비어 있다 — 쪽 계획이 데이터에서 다시 만든다.
+ * 마스터(master)는 standard 고정이며 여기서 만들지 않는다.
+ */
+export async function createCatalogDocument(input: { template?: unknown; title?: unknown }, actorUserId: string | null): Promise<CatalogDocumentSummary> {
+  if (!isTemplateId(input.template)) throw new CatalogDocumentError("템플릿을 골라 주세요.");
+  const template = templateOf(input.template);
+  const title = s(input.title).slice(0, 80);
+  if (!title) throw new CatalogDocumentError("문서 제목을 적어 주세요.");
+  const now = new Date();
+  const yymmdd = now.toISOString().slice(2, 10).replace(/-/g, "");
+  const docId = `tpl-${template.id}-${yymmdd}-${Math.random().toString(36).slice(2, 6)}`;
+  const masterRules = await getAppendixRules(MASTER_DOC_ID);
+  await withDbWrite(async (txn) => {
+    await txn.run(
+      `INSERT INTO catalog_documents (doc_id, title, kind, theme, appendix_rules, status, created_at, created_by, updated_at, updated_by)
+       VALUES ($1, $2, 'custom', $3::jsonb, $4::jsonb, 'draft', $5, $6, $5, $6)`,
+      [docId, title, JSON.stringify(template.theme), JSON.stringify(masterRules), now.toISOString(), actorUserId]
+    );
+  });
+  const created = await getCatalogDocument(docId);
+  if (!created) throw new CatalogDocumentError("문서를 만들지 못했습니다.", 500);
+  return created;
 }
 
 export async function getAppendixRules(docId = MASTER_DOC_ID): Promise<AppendixRules> {
@@ -235,15 +286,18 @@ export async function getDocumentTheme(docId = MASTER_DOC_ID): Promise<DocumentT
   return sanitizeDocumentTheme(typeof raw === "string" ? JSON.parse(raw) : raw);
 }
 
-/** 문서 설정 저장 — 보낸 항목만 바꾸고 theme 의 다른 키(색 컨셉 등 이후 항목)는 유지한다. */
+export class ThemeTemplateLockedError extends CatalogDocumentError {
+  constructor() {
+    super("같은 문서 안에서는 템플릿을 바꿀 수 없습니다. 다른 템플릿은 [새 문서]로 만들어 주세요(색·서체·표지·모티프는 바꿀 수 있습니다).", 400);
+  }
+}
+
+/** 문서 설정 저장 — 보낸 항목만 바꾸고 theme 의 다른 키는 유지한다. template 은 문서별 고정 — 다른 값을 보내면 거부(ThemeTemplateLockedError). */
 export async function saveDocumentTheme(docId: string, patch: Partial<DocumentTheme>, actorUserId: string | null): Promise<DocumentTheme> {
   const current = await getDocumentTheme(docId);
+  if (patch.template !== undefined && patch.template !== current.template) throw new ThemeTemplateLockedError();
   // 올바르지 않은 값은 무시한다(기본값으로 덮어쓰지 않게)
-  const clean: Partial<DocumentTheme> = {};
-  if (isCoverDesign(patch.cover)) clean.cover = patch.cover;
-  if (patch.coverPhoto === "photo" || patch.coverPhoto === "none") clean.coverPhoto = patch.coverPhoto;
-  if (typeof patch.fontSet === "string" && /^[a-z0-9-]{1,40}$/.test(patch.fontSet)) clean.fontSet = patch.fontSet;
-  if (isColorConcept(patch.concept)) clean.concept = patch.concept;
+  const clean = pickThemePatch(patch);
   const next = sanitizeDocumentTheme({ ...current, ...clean });
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {

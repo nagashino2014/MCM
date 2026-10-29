@@ -75,3 +75,12 @@
 - 분기: 로컬 main이 origin/main보다 뒤이므로 `git fetch` 후 **origin/main에서 새 브랜치**(`claude/salesboard-filters`)를 딴다.
 - 마이그레이션 없음(1·2단계). 3단계도 집계만이라 마이그레이션 없음.
 - 배포는 프론트 전용 → `staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`(ADT·intel 배치는 고정 revision에 남고 서비스만 이동).
+
+## 7. 후속(2026-10-29) — 세분류 줄·수천 건 대비
+- **W5 세분류 줄**: 상위 3개 + `truncate`(나머지는 title·툴팁에만)였다. 분류당 세분류가 최대 5개라 **전부** 보이고, 항목(이름+건수) 단위로 줄을 바꾼다(`whitespace-nowrap` + `flex-wrap`). 이름 축약 없음. 1366 폭(레일 76px)에서 통합허가 5개 = 2줄, 1920 폭은 1줄.
+- **목록 서버 필터**: `/api/sales/projects` 에 `limit` 을 주면 검색·담당·연도·지역권·업종분류·KPI·도달 단계 필터와 쪽 나눔을 서버가 하고 `{projects(한 쪽), total, offset, visibleTotal, regionCounts, categoryCounts}` 를 돌려준다. `limit` 없으면 예전 응답(`{projects}` 전건) 그대로 — 연결 선택기·모바일이 쓴다.
+- **집계 API** `/api/sales/board-stats`: KPI 띠·W4~W7 숫자. 판정은 `lib/sales/board.ts`(예전 SalesBoard·SalesInsights 판정을 그대로 옮김)라 목록·집계·화면이 같은 식을 쓴다. 가시성 scope 는 `lib/sales/visible-projects.ts` 로 모아 두 API가 같이 쓴다.
+- **SQL 로 옮기지 않은 이유**: 단계(`computeStage`)·도달 단계·`outcomeAt`·최종 투찰가가 KST 현재 시각과 스케쥴 날짜 비교로 정해져(JS) SQL 로 옮기면 경계 불일치 위험이 크다. 서버 JS 로 판정해도 5,014건·스케쥴 20,019건에서 필터 ~10ms·집계 ~8ms라 충분하다. 지역권도 `salesRegionGroupId` 를 그대로 써 클라이언트와 결과가 같다.
+- **측정(일회용 PG, 5,014건)**: 예전 목록 응답 3.30MB → 쪽 50건 32.9KB + 집계 1.4KB. `attachStepTypes` 는 `IN ($1…$n)`(영업건 수만큼 바인드 파라미터, PG 한도 65,535) → `= ANY($1::text[])` 1개.
+- **대조**: 예전 클라이언트 판정과 새 서버 판정을 14건 시드·5,014건 합성 데이터에서 필터 조합 57,600개씩 비교해 불일치 0. 단위 테스트 `npm run test:sales-board`.
+- **남은 것**: `listPendingProgressReports` 는 영업건마다 상세·스케쥴을 따로 읽는다(N+1). 집계 API가 경과 보고 탭과 같은 모집단을 쓰려고 이를 한 번 더 부르므로, 미보고 영업건이 많아지면 먼저 이 쿼리를 한 번에 읽도록 고친다. `listUpcomingBids` 는 같은 사업장의 영업건마다 발주 한 줄씩 나온다(합성 데이터에서 226KB).

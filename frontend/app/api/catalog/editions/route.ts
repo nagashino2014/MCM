@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { EditionError, addDistribution, generateCatalogPdf, getCatalogEdition, listCatalogEditions, publishCatalogEdition } from "@/lib/catalog/render/editions";
 import { parseRenderOptions } from "@/lib/catalog/render/options";
+import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { catalogRoles } from "@/lib/catalog/refresh/service";
 import { ConverterError } from "@/lib/print-kit/converter";
 
@@ -11,20 +12,22 @@ export const dynamic = "force-dynamic";
 // 발행 = PDF 생성(converter) + 승격 — 렌더 경로와 같은 여유
 export const maxDuration = 180;
 
-// GET: 발행본 목록(마스터본) — 전 직원(catalog.view). 배포 기록은 관리·발행 담당에게만 보인다.
-export async function GET() {
+const docIdOf = (v: unknown) => (typeof v === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : MASTER_DOC_ID);
+
+// GET: 발행본 목록 ?doc=master — 전 직원(catalog.view). 배포 기록은 관리·발행 담당에게만 보인다.
+export async function GET(req: NextRequest) {
   try {
     const actor = await requirePermission("catalog.view");
     const roles = await catalogRoles(actor.userId);
     const steward = roles.manage || roles.publish;
-    const editions = await listCatalogEditions(undefined, 50, { stage: "published", withDistributions: steward });
+    const editions = await listCatalogEditions(docIdOf(req.nextUrl.searchParams.get("doc")), 50, { stage: "published", withDistributions: steward });
     return NextResponse.json({ editions, roles: { manage: roles.manage, publish: roles.publish } });
   } catch (err) {
     return authErrorToResponse(err);
   }
 }
 
-// POST: 발행 { scope: full|summary, naming: masked|real, recipient?, purpose?, givenOn? } — catalog.publish
+// POST: 발행 { doc?: 문서 id(기본 master), scope: full|summary, naming: masked|real, recipient?, purpose?, givenOn? } — catalog.publish
 //   지금 데이터로 인쇄·배포본 PDF 를 만들고, 넘침 경고가 없으면 바로 발행한다.
 //   넘침이 있으면 생성본으로만 남기고 409 { needsConfirm, edition } — 화면이 확인을 받은 뒤 /editions/{id}/publish 로 승격한다.
 export async function POST(req: NextRequest) {
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest) {
     const actor = await requirePermission("catalog.publish");
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const opts = parseRenderOptions({ ...body, edition: "print" });
-    const generated = await generateCatalogPdf(opts, actor.userId);
+    const generated = await generateCatalogPdf(opts, actor.userId, docIdOf(body.doc));
     await recordAuditLog({
       actorUserId: actor.userId,
       action: "catalog_render",

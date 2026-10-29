@@ -7,7 +7,7 @@
 import type { AppendixResult, AppendixRules } from "@/lib/catalog/appendix";
 import type { OrgChartDoc } from "@/lib/catalog/content-types";
 import type { CustomAreaContent } from "@/lib/catalog/custom-area-types";
-import type { DocumentTheme } from "@/lib/catalog/document-theme";
+import type { DocumentTheme, Motif, TemplateId } from "@/lib/catalog/document-theme";
 import type { InitialPermitDetail, MetricId, MetricValue } from "@/lib/catalog/metrics";
 
 /** 판 — 인쇄·배포본(안내문·초안 표시·화면 전용 칩을 숨기고 우측 하단 로고) / 작업본 */
@@ -43,6 +43,10 @@ export interface RenderCtx {
   fontSet: string;
   /** 색 컨셉 클래스 접미사(kc-concept--{concept}, 기본 navy) — 스튜디오 L2 */
   concept?: string;
+  /** 템플릿 클래스 접미사(kc-tpl--{template}, 기본 standard) — 쪽 계획·쪽 변형의 기본값(lib/catalog/templates.ts) */
+  template?: TemplateId;
+  /** 모티프 클래스 접미사(kc-motif--{motif}, 기본 drop) */
+  motif?: Motif;
 }
 
 export interface Office {

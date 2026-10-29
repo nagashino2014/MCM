@@ -42,10 +42,13 @@ export function CatalogPublishModal({
   onPublished,
   pendingCount,
   fromEdition,
+  docId = "master",
 }: {
   open: boolean;
   onClose: () => void;
   onPublished: (edition: CatalogEditionSummary) => void;
+  /** 발행할 문서(TP0 문서 복수화) — 없으면 마스터 */
+  docId?: string;
   /** 이 발행으로 해소될 반영 대기 건수(안내용) */
   pendingCount?: number | null;
   /** 검토한 생성본을 그대로 발행 */
@@ -80,7 +83,7 @@ export function CatalogPublishModal({
     try {
       const edition = promoteId
         ? await postPublish(`/api/catalog/editions/${encodeURIComponent(promoteId)}/publish`, dist)
-        : await postPublish("/api/catalog/editions", { scope, naming, ...dist });
+        : await postPublish("/api/catalog/editions", { doc: docId, scope, naming, ...dist });
       setConfirm(null);
       setDone(edition);
       onPublished(edition);

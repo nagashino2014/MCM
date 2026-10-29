@@ -2,7 +2,8 @@
 
 // Salesboard 하단 인포그래픽 존(2026-10-26, 3단계) — 기록된 위젯 W4~W7 + W8 요약 카드.
 //   W4 파이프라인 퍼널 · W5 용역 분류 분포 · W6 수주 성과(연도별) · W7 담당자 현황 · W8 인텔·AI 브리핑 요약.
-// 데이터: W4~W7 은 목록 응답(가시성 scope 적용)·탭 패널 응답에서만 파생한다(새 API 없음). W8 은 기존 인텔·RAG API.
+// 데이터: W4~W7 은 서버 집계 /api/sales/board-stats(목록과 같은 가시성 scope, 판정은 lib/sales/board.ts — 2026-10-29
+//   클라이언트 계산에서 그대로 옮겨 숫자는 같다). W8 은 기존 인텔·RAG API.
 // 기준: 상단 KPI 띠와 같이 '보이는 영업건 전체'. 아래 목록의 검색·담당·연도·태그 필터와 무관하다.
 // 차트 규칙(dataviz): 막대 ≤24px·끝 4px 둥글게, 값은 막대 끝 텍스트 색, 단일 계열은 범례 없음, 호버·포커스 툴팁은
 //   보조일 뿐 값은 화면에 모두 보인다. 수주·실주를 녹/적 두 색으로 칠하면 적록 색각에서 구분이 약해(ΔE 6.2, 다크 명도 범위 이탈)
@@ -12,29 +13,15 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Bot, Filter, PieChart, Radar, Trophy, Users } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
+import { FUNNEL_STEPS, SALES_CATEGORY_UNSET, type SalesBoardStats } from "@/lib/sales/board";
 import {
   SALES_SERVICE_CATEGORIES,
   SALES_SUBCATEGORY_LABELS,
   type SalesEmployeeOption,
-  type SalesProject,
   type SalesStage,
 } from "@/lib/sales/types";
 
-// 퍼널 단계(도달 단계 기준) — 첫 칸은 전체(모든 영업건이 리드 이상)
-export const FUNNEL_STEPS: { stage: SalesStage; label: string }[] = [
-  { stage: "lead", label: "전체 영업건" },
-  { stage: "contact", label: "컨택 이상" },
-  { stage: "proposal", label: "제안 이상" },
-  { stage: "bidding", label: "입찰 이상" },
-  { stage: "won", label: "수주" },
-];
-const RANK: Partial<Record<SalesStage, number>> = { lead: 0, contact: 1, proposal: 2, bidding: 3, won: 4 };
-/** 도달 단계가 stage 이상인지 — Salesboard 목록 필터와 W4 가 같은 판정을 쓴다. */
-export const reachedAtLeast = (p: SalesProject, stage: SalesStage) =>
-  (RANK[p.reachedStage ?? (p.stage === "won" ? "won" : "lead")] ?? 0) >= (RANK[stage] ?? 0);
 export const funnelLabel = (stage: SalesStage) => FUNNEL_STEPS.find((s) => s.stage === stage)?.label ?? stage;
-
-const CATEGORY_UNSET = "unset"; // SalesBoard 업종분류 태그의 미분류 id 와 같아야 한다
 
 // 금액 축약 — 1억 이상 '0.0억', 1만 이상 '0만', 그 밖 원
 function won(n: number): string {
@@ -44,17 +31,10 @@ function won(n: number): string {
 }
 
 const kstYear = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 4);
-const outcomeYear = (p: SalesProject) => (p.outcomeAt ?? p.closedAt ?? p.openedAt ?? "").slice(0, 4);
-const isActive = (p: SalesProject) => p.status !== "closed" && p.stage !== "won" && p.stage !== "lost";
-
-interface UpcomingLike { projectId: string }
-interface PendingLike { projectId: string; activities: unknown[] }
 
 export function SalesInsightZone({
-  projects,
+  stats,
   assignees,
-  upcomingActs,
-  pendingReports,
   loading,
   reachedFilter,
   onReached,
@@ -63,10 +43,8 @@ export function SalesInsightZone({
   owner,
   onOwner,
 }: {
-  projects: SalesProject[];
+  stats: SalesBoardStats | null;
   assignees: SalesEmployeeOption[];
-  upcomingActs: UpcomingLike[];
-  pendingReports: PendingLike[];
   loading: boolean;
   reachedFilter: SalesStage | null;
   onReached: (stage: SalesStage) => void;
@@ -92,17 +70,10 @@ export function SalesInsightZone({
         <CdHelp topic="sales.insights" />
       </div>
       <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-4" style={{ opacity: loading ? 0.5 : 1 }}>
-        <FunnelCard projects={projects} active={reachedFilter} onPick={onReached} />
-        <CategoryCard projects={projects} active={categoryIds} onToggle={onToggleCategory} />
-        <OutcomeCard projects={projects} />
-        <StaffCard
-          projects={projects}
-          assignees={assignees}
-          upcomingActs={upcomingActs}
-          pendingReports={pendingReports}
-          owner={owner}
-          onOwner={onOwner}
-        />
+        <FunnelCard stats={stats} active={reachedFilter} onPick={onReached} />
+        <CategoryCard stats={stats} active={categoryIds} onToggle={onToggleCategory} />
+        <OutcomeCard stats={stats} />
+        <StaffCard stats={stats} assignees={assignees} owner={owner} onOwner={onOwner} />
       </div>
       <IntelSummaryCard />
     </section>
@@ -168,8 +139,8 @@ function BarRow({
 }
 
 // W4 파이프라인 퍼널 — 도달 단계 누적. 오른쪽 작은 글씨는 앞 단계 대비 전환율.
-function FunnelCard({ projects, active, onPick }: { projects: SalesProject[]; active: SalesStage | null; onPick: (s: SalesStage) => void }) {
-  const counts = FUNNEL_STEPS.map((s) => projects.filter((p) => reachedAtLeast(p, s.stage)).length);
+function FunnelCard({ stats, active, onPick }: { stats: SalesBoardStats | null; active: SalesStage | null; onPick: (s: SalesStage) => void }) {
+  const counts = stats?.funnel ?? FUNNEL_STEPS.map(() => 0);
   const total = counts[0] ?? 0;
   return (
     <Card icon={<Filter className="w-4 h-4" />} title="파이프라인 퍼널" caption="도달한 가장 높은 단계 기준 · 오른쪽은 전환율">
@@ -202,20 +173,16 @@ function FunnelCard({ projects, active, onPick }: { projects: SalesProject[]; ac
   );
 }
 
-// W5 용역 분류 분포 — 4대 분류(+미분류) 막대, 아래 줄에 세분류 상위 3개. 누르면 왼쪽 업종분류 태그와 같은 필터.
-function CategoryCard({ projects, active, onToggle }: { projects: SalesProject[]; active: string[]; onToggle: (id: string) => void }) {
+// W5 용역 분류 분포 — 4대 분류(+미분류) 막대, 아래 줄에 세분류 전부(분류당 최대 5개). 누르면 왼쪽 업종분류 태그와 같은 필터.
+function CategoryCard({ stats, active, onToggle }: { stats: SalesBoardStats | null; active: string[]; onToggle: (id: string) => void }) {
   const rows = useMemo(() => {
-    const cats = [...SALES_SERVICE_CATEGORIES.map((c) => ({ id: c.code as string, label: c.label as string })), { id: CATEGORY_UNSET, label: "미분류" }];
+    const cats = [...SALES_SERVICE_CATEGORIES.map((c) => ({ id: c.code as string, label: c.label as string })), { id: SALES_CATEGORY_UNSET, label: "미분류" }];
     return cats.map((c) => {
-      const list = projects.filter((p) => (p.serviceCategory ?? CATEGORY_UNSET) === c.id);
-      const sub = new Map<string, number>();
-      for (const p of list) if (p.serviceSubcategory) sub.set(p.serviceSubcategory, (sub.get(p.serviceSubcategory) ?? 0) + 1);
-      const subText = Array.from(sub.entries())
-        .sort((a, b) => b[1] - a[1])
-        .map(([code, n]) => `${SALES_SUBCATEGORY_LABELS[code] ?? code} ${n}`);
-      return { ...c, n: list.length, subText };
+      const row = stats?.categories.find((r) => r.id === c.id);
+      const subText = (row?.subs ?? []).map((s) => `${SALES_SUBCATEGORY_LABELS[s.code] ?? s.code} ${s.n}`);
+      return { ...c, n: row?.n ?? 0, subText };
     });
-  }, [projects]);
+  }, [stats]);
   const max = Math.max(0, ...rows.map((r) => r.n));
   const total = rows.reduce((s, r) => s + r.n, 0);
   return (
@@ -238,9 +205,16 @@ function CategoryCard({ projects, active, onToggle }: { projects: SalesProject[]
                 </>
               }
             />
+            {/* 세분류는 모두 화면 글자로 보인다(툴팁에만 있는 값 없음). 한 줄에 안 들어가면(1366 폭) 항목 단위로 줄을 바꾸고,
+                항목(이름 + 건수)은 끊거나 줄이지 않는다(2026-10-29, 예전 = 상위 3개 + 말줄임) */}
             {r.subText.length > 0 && (
-              <p className="cd-text-faint text-[11px] truncate" style={{ paddingLeft: 86 }} title={r.subText.join(" · ")}>
-                {r.subText.slice(0, 3).join(" · ")}
+              <p className="cd-text-faint text-[11px] flex flex-wrap gap-x-1 leading-[1.45]" style={{ paddingLeft: 86 }}>
+                {r.subText.map((t, i) => (
+                  <span key={t} className="whitespace-nowrap">
+                    {t}
+                    {i < r.subText.length - 1 ? " ·" : ""}
+                  </span>
+                ))}
               </p>
             )}
           </div>
@@ -251,25 +225,13 @@ function CategoryCard({ projects, active, onToggle }: { projects: SalesProject[]
 }
 
 // W6 수주 성과 — 최근 3개 연도. 수주율 게이지(한 색: 채움 = 수주 비율, 트랙 = 같은 색 옅게) + 건수·금액 글자.
-function OutcomeCard({ projects }: { projects: SalesProject[] }) {
+function OutcomeCard({ stats }: { stats: SalesBoardStats | null }) {
   const y = Number(kstYear());
-  const years = [y, y - 1, y - 2].map(String);
-  const rows = years.map((yy) => {
-    const done = projects.filter((p) => (p.stage === "won" || p.stage === "lost") && outcomeYear(p) === yy);
-    const w = done.filter((p) => p.stage === "won");
-    const sum = (arr: SalesProject[]) => arr.reduce((s, p) => s + (p.finalBidAmount ?? 0), 0);
-    const priced = done.filter((p) => p.finalBidAmount != null).length;
-    return {
-      year: yy,
-      won: w.length,
-      lost: done.length - w.length,
-      rate: done.length ? Math.round((w.length / done.length) * 100) : null,
-      wonAmt: sum(w),
-      bidAmt: sum(done),
-      priced,
-      total: done.length,
-    };
-  });
+  const empty = { won: 0, lost: 0, wonAmt: 0, bidAmt: 0, priced: 0, total: 0 };
+  const rows = (stats?.outcomes ?? [y, y - 1, y - 2].map((yy) => ({ year: String(yy), ...empty }))).map((r) => ({
+    ...r,
+    rate: r.total ? Math.round((r.won / r.total) * 100) : null,
+  }));
   return (
     <Card icon={<Trophy className="w-4 h-4" />} title="수주 성과" caption="결과 스케쥴 연도 기준 · 금액은 최종 투찰가(기록된 건만)">
       <div className="flex flex-col gap-2">
@@ -314,52 +276,30 @@ function OutcomeCard({ projects }: { projects: SalesProject[] }) {
 
 // W7 담당자 현황 — 영업 담당자(영업 제설정에서 지정)별 표. 담당 판정은 목록 담당 필터와 같다(담당자 또는 대표 멤버).
 function StaffCard({
-  projects,
+  stats,
   assignees,
-  upcomingActs,
-  pendingReports,
   owner,
   onOwner,
 }: {
-  projects: SalesProject[];
+  stats: SalesBoardStats | null;
   assignees: SalesEmployeeOption[];
-  upcomingActs: UpcomingLike[];
-  pendingReports: PendingLike[];
   owner: string;
   onOwner: (id: string) => void;
 }) {
-  const year = kstYear();
+  const year = stats?.thisYear ?? kstYear();
   const rows = useMemo(() => {
-    const upcomingBy = new Map<string, number>();
-    for (const a of upcomingActs) upcomingBy.set(a.projectId, (upcomingBy.get(a.projectId) ?? 0) + 1);
-    const pendingBy = new Map<string, number>();
-    for (const r of pendingReports) pendingBy.set(r.projectId, (pendingBy.get(r.projectId) ?? 0) + (Array.isArray(r.activities) ? r.activities.length : 0));
-    const mine = (e: string) => projects.filter((p) => p.ownerEmployeeId === e || p.leadMemberId === e);
-    const sumBy = (list: SalesProject[], m: Map<string, number>) => list.reduce((s, p) => s + (m.get(p.projectId) ?? 0), 0);
-    const out = assignees.map((e) => {
-      const list = mine(e.employeeId);
-      return {
-        id: e.employeeId,
-        name: e.name,
-        dept: e.deptName ?? null,
-        active: list.filter(isActive).length,
-        upcoming: sumBy(list, upcomingBy),
-        pending: sumBy(list, pendingBy),
-        wonYear: list.filter((p) => p.stage === "won" && outcomeYear(p) === year).length,
-      };
-    });
-    const unassigned = projects.filter((p) => !p.ownerEmployeeId && !p.leadMemberId);
+    const zero = { active: 0, upcoming: 0, pending: 0, wonYear: 0 };
+    const out = assignees.map((e) => ({
+      id: e.employeeId,
+      name: e.name,
+      dept: e.deptName ?? null,
+      ...(stats?.staff[e.employeeId] ?? zero),
+    }));
     return {
       list: out.sort((a, b) => b.active - a.active || a.name.localeCompare(b.name, "ko")),
-      unassigned: {
-        active: unassigned.filter(isActive).length,
-        upcoming: sumBy(unassigned, upcomingBy),
-        pending: sumBy(unassigned, pendingBy),
-        wonYear: unassigned.filter((p) => p.stage === "won" && outcomeYear(p) === year).length,
-        total: unassigned.length,
-      },
+      unassigned: stats?.unassigned ?? { ...zero, total: 0 },
     };
-  }, [projects, assignees, upcomingActs, pendingReports, year]);
+  }, [stats, assignees]);
 
   const thBase = "cd-text-faint text-[11px] font-bold px-1 py-1";
   const th = `${thBase} text-right`;

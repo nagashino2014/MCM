@@ -50,7 +50,7 @@
 | **T3 `formal`** | 격조·공공형 | 스타일: 세리프 + 용도: PQ 심사 | **C 차콜 + 그린 강조** · 표지 **B 세 기둥**(확정 필요) 또는 여백 흰 표지 · 모티프 **contour** · 서체 세트 **serif**(세리프 제목 + 고딕 본문) | 섹션 순서 변경: 신뢰 근거(인증·등록·특허, 실적 총괄)를 사업 분야 앞으로, C06 연혁 세로 4단, 부록 A 를 본편에, 밀도 ↑(본문 10pt) | 공공 발주처 PQ 심사·입찰 증빙 패키지 첨부 |
 | **T4 `brief`** | 요약·분야 브리프 | 용도: 요약본 + 분야 맞춤 | 네이비 · 표지 D 사진 띠 · drop · 프리텐다드 | **쪽 계획이 다름**: 표지 → 숫자 → 분야 개관 → **분야 1장 요약(C20 신규, 선택 분야만)** → 핵심 역량 → 인증 → 연락처(8~12쪽). 부록 없음. 선택 분야 = 문서 설정(`areas[]`) | 제안서·견적 첨부, 분야 맞춤판(블루프린트 P8 "capability sheet" 흡수) |
 
-색 컨셉 B·C 의 실제 색 값과 모티프 ring·contour 의 모양은 디자인 단계(TP1)에서 정한다 — CI 전용색 #102543·#72AF2D·#0093B8 기준.
+색 컨셉 B·C 의 실제 색 값과 모티프 ring·contour 의 모양은 디자인 단계(TP1)에서 정한다 — CI 전용색 #102543·#72AF2D·#0093B8 기준. **TP1(2026-10-29) 시안**: 결정 T-2·T-3·T-4 를 각 2안씩 실제 지면 키트 CSS 로 그린 비교 페이지 https://claude.ai/artifact/9ebeLUPwszTn2EjDBwKXAK (권장안 = 1안). 사용자 확인 전까지 1안 값을 tokens.json·kesi-catalog.css 에 반영해 둔다.
 
 ## 3. 구조 설계
 
@@ -86,17 +86,21 @@ export interface CatalogTemplate {
 
 ### 3-3. 쪽 변형 목록(구현 대상)
 
-| 쪽 | 변형 키 | 값 | 쓰는 템플릿 |
-|---|---|---|---|
-| C01 표지 | `cover` | 기존 4 + `photo`(E 전면 사진) + `graphic`(F 그래픽) | T1·T2 |
-| C04 숫자 | `layout` | `grid`(기본) · `band`(사진 배경 띠) · `cards8`(아이콘+큰 숫자 8) | T1·T2 |
-| C06 연혁 | `axis` | `vertical`(기본) · `horizontal` · `columns4`(연대별 4단) | T2·T3 |
-| C07 간지 | `style` | `leaf`(기본) · `photo-full`(전면 사진+판) · `color-pattern`(분야색 면+패턴) · `plain`(단색) | T1·T2·T3 |
-| C09 분야 상세 | `hero` | 기존 + `photo-wide` · `none`(인포그래픽 확대) | T1·T2 |
-| C10 핵심 역량 | `cards` | `compact`(기본) · `icon-large` | T2 |
-| C13 임원진 | `card` | `square`(기본) · `portrait-large` · `list`(사진 없음, 격조) | T1·T3 |
-| C16 인증 | `view` | `gallery`(기본) · `table`(목록형, 격조) | T3 |
-| **C20 분야 1장 요약** | 신규 쪽 유형 | 핵심 서비스·강점·분야 KPI·대표 실적 3건·담당 연락처를 한 장에(AECOM 방식) | T4 |
+TP1(2026-10-29)에서 CSS 클래스가 디자인 시스템 bundle.css → `kesi-catalog.css` 에 들어갔다(쪽 컴포넌트 연결은 TP2). 기본값(변형 없음)은 클래스가 없어 standard 문서 렌더가 바뀌지 않는다.
+
+| 쪽 | 변형 키 | 값 | CSS 클래스(TP1) | 쓰는 템플릿 |
+|---|---|---|---|---|
+| C01 표지 | `cover` | 기존 4 + `photo`(E 전면 사진) + `graphic`(F 그래픽) | `.kc-front--photo`(`__full` 사진·`__plate` 아래 판) · `.kc-front--graphic`(C 중앙 정렬 배치 + `__band-field` 아래 주색 띠 + `.kc-pattern`) | T1·T2 |
+| C04 숫자 | `layout` | `grid`(기본) · `band`(사진 배경 띠) · `cards8`(아이콘+큰 숫자 8) | `.kc-kpis--band`(+`.kc-kpis__bg`)·`.kc-kpi--band` · `.kc-kpis--cards8`·`.kc-kpi--card` | T1·T2 |
+| C06 연혁 | `axis` | `columns`(기본 — 연도 열 가로 나열, 항목 아래로) · `horizontal`(한 줄 축, 항목 위·아래 번갈아) · `columns4`(연대별 4단) | `.kc-timeline--horizontal`(li 안 `__cell`·`__axis`·`__cell`) · `.kc-timeline--columns4` | T2·T3 |
+| C07 간지 | `style` | `leaf`(기본) · `photo-full`(전면 사진+판) · `color-pattern`(분야(주)색 면+패턴) · `plain`(단색) | `.kc-divider--photo-full`(`__full`) · `.kc-divider--color-pattern`(+`.kc-pattern`) · `.kc-divider--plain` | T1·T2·T3 |
+| C09 분야 상세 | `hero` | 기존 + `photo-wide` · `none`(인포그래픽 확대) | `.kc-bizhero--photo-wide` · `.kc-bizhero--none`(블록명이 `kc-bizhero` 라 계획의 `.kc-hero--*` 대신 이 이름) | T1·T2 |
+| C10 핵심 역량 | `cards` | `compact`(기본) · `icon-large` | `.kc-strengths--icon-large` | T2 |
+| C13 임원진 | `card` | `square`(기본) · `portrait-large` · `list`(사진 없음, 격조) | `.kc-people--portrait-large`·`.kc-person--portrait-large` · `.kc-people--list`·`.kc-person--list` | T1·T3 |
+| C16 인증 | `view` | `gallery`(기본) · `table`(목록형, 격조) | `.kc-creds--table`·`.kc-cred--table` | T3 |
+| **C20 분야 1장 요약** | 신규 쪽 유형 | 핵심 서비스·강점·분야 KPI·대표 실적 3건·담당 연락처를 한 장에(AECOM 방식) | `.kc-brief`(`__services`·`__strengths` 7열, `__kpis`·`__cases`·`__contact` 5열) + 쪽 루트 `.kc-sheet--brief`/`.kc-tpl--brief` | T4 |
+| 템플릿 루트 밀도 | — | T3 본문 10pt, T4 본문 11pt | `.kc-tpl--formal` · `.kc-tpl--brief`(=`.kc-sheet--brief`) | T3·T4 |
+| 모티프 상징 자리 | `motif` | ring · contour 의 표지·간지·뒤표지 모양 | `.kc-front__ring`·`__ring-node`·`__contour`, `.kc-divider__ring`·`__ring-node`·`__photo`·`__contour`, `.kc-backc__ring`·`__contour`; 유틸 `.kc-ring--concentric`(동심 링)·`.kc-contour-field`(CSS 등고선, `--bands` 등고 띠)·`.kc-pattern`(모티프별 패턴 면). ring·contour 문서에서 렌더러가 넣는 `kc-drop` 은 원·겹선 원으로 폴백 | T2·T3 |
 
 사진이 필요한 변형(`photo-full`·`band`·`photo-wide`·`portrait-large`)은 자산이 없으면 템플릿 `fallback` 변형으로 그리고, 쪽 검사에 "사진 없음 — 그래픽 변형으로 그림" 안내를 남긴다.
 
@@ -124,9 +128,9 @@ export interface CatalogTemplate {
 | # | 결정 | 권장 |
 |---|---|---|
 | T-1 | 4종 확정(§2) — 이름·성격 | 제안대로. 이름은 화면 표기용이라 뒤에 바꿀 수 있음 |
-| T-2 | 색 컨셉 B 그린·C 차콜 값 | CI 그린 #72AF2D 바탕 + 네이비 글자(B), 차콜 #2b2f36 + 그린 강조(C). TP1 시안 2안씩 |
-| T-3 | 모티프 ring·contour 모양 | 디자인 시스템 README 후보(순환 링·등고선) 그대로, 표지·간지·뒤표지에만(본문 절제 규칙 유지) |
-| T-4 | 표지 B 세 기둥·C 중앙 정렬 확정 | T3 가 B, T2 가 C 파생 F 를 쓰므로 **이번에 확정** |
+| T-2 | 색 컨셉 B 그린·C 차콜 값 | CI 그린 #72AF2D 바탕 + 네이비 글자(B), 차콜 #2b2f36 + 그린 강조(C). **TP1 시안(10-29)**: B-1 포레스트(권장, 반영) / B-2 딥 그린(#2d6a1a 면 + 흰 글자), C-1 차콜 주색 + 그린 강조(권장, 반영) / C-2 차콜 면 + 그린 주색 — 사용자 확인 대기 |
+| T-3 | 모티프 ring·contour 모양 | 디자인 시스템 README 후보(순환 링·등고선) 그대로, 표지·간지·뒤표지에만(본문 절제 규칙 유지). **TP1 시안(10-29)**: 링-1 두 색 호(권장, 반영) / 링-2 동심 가는 링, 등고선-1 가는 등농도선(권장, 반영) / 등고선-2 등고 띠 — 사용자 확인 대기 |
+| T-4 | 표지 B 세 기둥·C 중앙 정렬 확정 | T3 가 B, T2 가 C 파생 F 를 쓰므로 **이번에 확정**. **TP1 시안(10-29)**: B-1 세 기둥(현재 안, 권장) / B-2 세 띠, C-1 안쪽 테(현재 안, 권장) / C-2 겹선 + 워터마크, F-1 아래 주색 띠 + 패턴(권장, CSS 반영) / F-2 전면 주색 면 — 사용자 확인 대기 |
 | T-5 | T3 섹션 순서(신뢰 근거 앞으로) | 권장. 목차·북마크는 자동이라 비용 없음 |
 | T-6 | T4 선택 분야 수·쪽 수 상한 | 분야 1~3개, 본편 12쪽 이내 |
 | T-7 | 문서 복수화 UI 위치 | 영업 > 회사소개서 첫 화면에 문서 카드 목록. 발행본 열람(전 직원)은 문서별 |
@@ -144,6 +148,8 @@ export interface CatalogTemplate {
 
 - TP0 와 TP1 은 병렬. TP0 는 디자인 결정 없이 진행할 수 있다(색 값은 임시).
 - **TP0 구현 기록(2026-10-29, 브랜치 `claude/catalog-templates-tp0-b74acf`)**: `lib/catalog/templates.ts`(5종·`templateOf`·`templateVariant`), `DocumentTheme.template/motif/areas` + `sanitizeDocumentTheme`·`pickThemePatch`(template 은 패치에서 제외 = 문서별 고정, `saveDocumentTheme` 은 다른 template 을 보내면 400 `ThemeTemplateLockedError`, 스튜디오 자동 저장은 조용히 무시), `RenderCtx.template/motif` → `Sheet` 루트 `kc-tpl--{id} kc-motif--{motif}`(하드코딩 4곳 제거 — 지도·패널 미리보기는 상위 래퍼의 모티프를 따른다), `buildPagePlan(…, variants, template)` 변형 합치기(`{...템플릿[쪽 유형], ...템플릿[쪽 키], ...PageEdits.variant}`, plan 분기는 TODO), `tokens.json` green·charcoal 임시값(usage 에 표시, 본문 대비 4.5:1 시험), 문서 복수화(`createCatalogDocument`·`GET/POST /api/catalog/documents`, 첫 화면 `CatalogDocumentsPanel` 문서 카드·[새 문서] 모달·`?doc=` 전환, `document-theme`·`render/pdf`·`editions` route 와 `CatalogCoverPicker`·`CatalogRenderPanel`·`CatalogPublishModal`·스튜디오 `?doc=` 의 docId 파라미터), 발행 options 에 `template/motif/areas`, 스튜디오 디자인 탭 모티프 칩, 시험 `tests/catalog-templates.test.ts`(9건), 매뉴얼 `sales.catalog` "문서와 템플릿" 절·도움말 `catalog.documents`·`catalog.studio-motif`. 마이그레이션 없음(jsonb). 반영 대기·알림은 마스터만. 발견: `tokens.json` 에 B·C 값이 canvas·panel·brand·field·on-field 에는 이미 있었고 나머지(accent·ink·rule 등)가 비어 있어 채웠다.
+- **TP1 구현 기록(2026-10-29, 브랜치 `claude/catalog-templates-tp1-eaa0ea`)**: 시안 페이지 https://claude.ai/artifact/9ebeLUPwszTn2EjDBwKXAK (T-2·T-3·T-4 각 2안, 실제 키트 CSS 렌더). `tokens.json` green·charcoal 값을 1안으로 확정 표기(임시값 표시 제거, usage·`color.note`·`meta.note` 갱신; 변경 값 rule-strong green #1f3a12, brand·field charcoal #2b2f36 로 아티팩트의 #2c2f33 통일). 디자인 시스템 bundle.css 에 TP1 블록(§3-3 표의 클래스 전부 + 모티프 상징 자리·유틸 + 템플릿 루트 밀도, 규칙 133개) 추가 → `scripts/catalog/export_kit_css.py`(신규, 머리말·@import 제거)로 `kesi-catalog.css` 재export(기존 규칙 변경 0, 추가만 — `git diff` 184+/2−, 2 는 머리말). 발견: 저장소 사본에 일러스트 블록(`.kc-ill*`, 313)이 디자인 시스템 bundle.css 에는 없어 이번 재export 때 bundle.css 에 넣었다. 시험 `tests/catalog-templates.test.ts` 12건(+3: 변형 클래스 존재, TP1 블록 선택자 가드 — 모든 선택자가 템플릿·모티프·컨셉·변형 클래스를 포함, 임시값 표시 없음), 전체 72/72. 매뉴얼 `sales.catalog`·도움말 `catalog.studio-design` 임시 색 문구 정리, changelog 1건. 디자인 시스템·목업 아티팩트 갱신은 아래 TP1 아티팩트 기록. 결정 T-2~T-4 는 시안 제시 후 사용자 확인 대기(확인되면 값·클래스 정리 커밋 1건).
+- **TP1 아티팩트 기록(2026-10-29)**: 디자인 시스템 `AovTvRBgpnUv7r6CQvxp8B` version 21(1793266811-2612; bundle.css·tokens.json 은 version 18 = 1793266749-ac98, `kesi-catalog.css` 머리말의 version) — tokens.json B·C 값, bundle.css TP1 블록(+`.kc-ill` 동기화), README 색 표·모티프 절·"템플릿과 쪽 변형" 절, 컴포넌트 README 10개 덧붙임, 새 카드 `TemplateVariants`. 목업 캔버스 `2bMEZ7oMfZbNUfCtswStMb` version 49(1793266820-b9e6) — 쪽 파일 Tweaks(C01 cover photo·graphic + 링·등고선 상징 자리, C07 style, C04 layout, C06 axis, C09 hero, C10 cards, C13 card, C16 view), `C20Brief.dc.html` 신규, `Templates.dc.html` 보드(템플릿 4종 × 대표 쪽 6, y 8900), ds 사본·kc-tokens.css 동기화. 시안 비교 페이지 `9ebeLUPwszTn2EjDBwKXAK`. 재export 절차: 디자인 시스템 bundle.css 를 받아 `python scripts/catalog/export_kit_css.py <bundle.css> --version <아티팩트 version> --date <날짜>`.
 - 배포는 모두 next 이미지만(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`, ADT·intel 은 618 고정). 세리프 서체 파일을 converter 이미지에 넣으면 converter 재배포(전체 apply 금지·java-common 필수 — 메모리 converter-service).
 - 마이그레이션: TP0~TP3 모두 jsonb 안에서 해결되어 **신규 SQL 없음**이 목표. 문서 목록에 썸네일 키를 두려면 `catalog_documents` 컬럼 1개(그때 번호 확인, 10-29 기준 최대 314).
 

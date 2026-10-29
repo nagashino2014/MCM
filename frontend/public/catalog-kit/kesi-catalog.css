@@ -1,5 +1,5 @@
-/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1792637927-7285, 2026-10-22) 사본.
-   https://claude.ai/artifact/AovTvRBgpnUv7r6CQvxp8B — 손으로 고치지 않는다(문서 보정은 lib/catalog/render/print-overrides.ts).
+/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1793266749-ac98, 2026-10-29) 사본.
+   https://claude.ai/artifact/AovTvRBgpnUv7r6CQvxp8B — 손으로 고치지 않는다(문서 보정은 lib/catalog/render/print-overrides.ts, 재export 는 scripts/catalog/export_kit_css.py).
    PDF 는 외부 네트워크를 막으므로 원본 첫 줄의 Google Fonts @import 만 뺐다(기본 서체 Pretendard 는 print-kit 이 직접 싣는다). */
 
 /* KESI 회사소개서 디자인 시스템 — 컴포넌트 스타일.
@@ -729,3 +729,185 @@
 .kc-backc__col p { font-size: 9.5px; line-height: 15px; color: var(--ink); }
 .kc-backc__col p .kc-num { font-weight: 600; }
 .kc-backc__foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 8px; line-height: 11px; color: var(--ink-muted); }
+
+/* ══ 템플릿 4종 TP1(2026-10-29, docs/catalog-templates-plan.md §3-3·§5) ══════════════════════════
+   템플릿 = 테마(색 컨셉·표지·모티프·서체) + 쪽 변형 묶음. 쪽 루트에 kc-tpl--{standard|photo|graphic|formal|brief} 가 붙고,
+   쪽 변형은 아래 클래스를 요소에 붙여 켠다(쪽 컴포넌트 연결은 TP2). 이 블록의 선택자는 모두 템플릿·모티프(ring·contour)·
+   색 컨셉(green·charcoal)·변형 클래스 중 하나를 포함하므로 기존 standard 문서(drop·navy, 변형 없음)의 그림은 바뀌지 않는다.
+   모티프 절제 규칙(2026-10-22): 상징 모양(물방울·링·등고선)은 표지(kc-front)·간지(kc-divider)·뒤표지(kc-backc)에만 두고,
+   본문 쪽에서는 모서리와 작은 표식만 바뀐다. */
+
+/* ── 템플릿 루트: 밀도 ───────────────────────────────────────── */
+/* T3 격조·공공형: 본문 10pt(밀도 ↑), 제목 자간은 세리프 세트가 맡는다 */
+.kc-page.kc-tpl--formal { font-size: 10px; line-height: 16px; }
+.kc-tpl--formal .kc-body { font-size: 10px; line-height: 16px; }
+.kc-tpl--formal .kc-lead { font-size: 12px; line-height: 19px; }
+.kc-tpl--formal .kc-small, .kc-tpl--formal .kc-list { font-size: 9px; line-height: 14px; }
+.kc-tpl--formal .kc-page-title { letter-spacing: -0.2px; }
+/* T4 요약·분야 브리프: 쪽 수가 적어 본문 11pt, 블록 간격을 조금 넓힌다 */
+.kc-page.kc-sheet--brief, .kc-page.kc-tpl--brief { font-size: 11px; line-height: 18px; gap: 16px; }
+.kc-sheet--brief .kc-body, .kc-tpl--brief .kc-body { font-size: 11px; line-height: 18px; }
+.kc-sheet--brief .kc-small, .kc-tpl--brief .kc-small, .kc-sheet--brief .kc-list, .kc-tpl--brief .kc-list { font-size: 10px; line-height: 16px; }
+
+/* ── 모티프 B 링·C 등고선: 상징 자리(표지·간지·뒤표지) ───────────── */
+/* 렌더러가 넣는 물방울(kc-drop)은 링·등고선 문서에서 모티프 규칙을 따른다: 링 = 원, 등고선 = 겹선 원(채움 없음) */
+.kc-motif--ring .kc-drop, .kc-motif--ring .kc-drop--tl, .kc-motif--ring .kc-drop--br, .kc-motif--ring .kc-drop--bl { border-radius: 50%; }
+.kc-motif--contour .kc-drop, .kc-motif--contour .kc-drop--tl, .kc-motif--contour .kc-drop--br, .kc-motif--contour .kc-drop--bl { border-radius: 50%; }
+.kc-motif--contour .kc-drop:not(.kc-drop--line) { background: transparent; box-sizing: border-box; border: 1px solid var(--accent-2); outline: 1px solid var(--accent-2); outline-offset: -5px; }
+/* 상징 자리 — 배치 좌표는 842×595 기준. class="kc-ring kc-front__ring" 처럼 모양 클래스와 함께 쓴다 */
+.kc-front__ring, .kc-front__ring-node, .kc-front__contour, .kc-divider__ring, .kc-divider__ring-node, .kc-divider__contour, .kc-backc__ring, .kc-backc__contour { position: absolute; pointer-events: none; }
+/* 링(심볼마크의 두 반원 호 + 노드 하나) */
+.kc-front__ring { width: 110px; left: 350px; top: -10px; border-width: 14px; }
+.kc-front__ring-node { width: 16px; left: 448px; top: 8px; }
+.kc-motif--ring .kc-front__window { border-radius: 184px 184px var(--radius-sm) var(--radius-sm); }
+.kc-divider__ring { width: 320px; left: 15px; top: 125px; border-width: 40px; }
+.kc-divider__ring-node { width: 34px; left: 282px; top: 100px; }
+.kc-motif--ring .kc-divider__photo { position: absolute; left: 60px; top: 170px; width: 230px; height: 230px; border-radius: 50%; }
+.kc-backc__ring { width: 420px; right: -150px; top: -170px; border-width: 40px; border-color: var(--brand-tint) var(--brand-tint) var(--area-1-tint) var(--area-1-tint); }
+/* 링 변형: 동심 가는 링(단색) — 심볼마크와 덜 닮아 로고 효과를 흐리지 않는다. 폭은 링 간격(16.5px)의 배수로 */
+.kc-ring--concentric { border: 0; transform: none; background: repeating-radial-gradient(circle at center, transparent 0, transparent 15px, var(--ring-ink, var(--accent-2)) 15px, var(--ring-ink, var(--accent-2)) 16.5px); }
+/* 등고선(SVG kc-contour 의 자리) */
+.kc-front__contour { width: 180px; height: 110px; left: 290px; top: 462px; }
+.kc-divider__contour { inset: 0; width: 100%; height: 100%; }
+.kc-motif--contour .kc-divider__art { background: var(--field); }
+.kc-motif--contour .kc-divider__photo { position: absolute; inset: 0; border-radius: 0; }
+.kc-backc__contour { width: 360px; height: 300px; right: -40px; top: -40px; stroke: var(--rule); }
+/* 등고선 면(마크업 없는 CSS 등고선): 가는 등농도선 또는 등고 띠(농도 단계 면) */
+.kc-contour-field { position: absolute; pointer-events: none; background: repeating-radial-gradient(ellipse 62% 48% at 56% 54%, transparent 0, transparent 20px, var(--contour-ink, var(--accent-2)) 20px, var(--contour-ink, var(--accent-2)) 21px); }
+.kc-contour-field--bands { background: repeating-radial-gradient(ellipse 62% 48% at 56% 54%, color-mix(in srgb, var(--contour-ink, var(--field)) 26%, transparent) 0 24px, color-mix(in srgb, var(--contour-ink, var(--field)) 16%, transparent) 24px 48px, color-mix(in srgb, var(--contour-ink, var(--field)) 8%, transparent) 48px 72px, transparent 72px 96px); }
+/* 패턴 면(표지 F·간지 color-pattern): 모티프별 CSS 패턴. 물방울은 자식 kc-drop--line 을 배치한다 */
+.kc-pattern { --pattern-ink: color-mix(in srgb, var(--on-field) 32%, transparent); position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.kc-pattern > .kc-drop { position: absolute; }
+.kc-motif--ring .kc-pattern { background-image: radial-gradient(circle at center, transparent 0 10px, var(--pattern-ink) 10px 11.5px, transparent 11.5px); background-size: 42px 42px; background-position: 10px 10px; }
+.kc-motif--contour .kc-pattern { background-image: repeating-radial-gradient(ellipse 80% 60% at 70% 115%, transparent 0 22px, var(--pattern-ink) 22px 23px); }
+
+/* ── C01 표지 변형: E 전면 사진(photo) · F 그래픽(graphic, C 중앙 정렬 파생) ───────── */
+/* E 전면 사진(T1): 사진 전면 + 아래 반투명 판 위 글자. 로고·글은 판 위에만 둔다(사진 위 배치 금지) */
+.kc-front--photo { background: var(--photo-fill); }
+.kc-front--photo .kc-front__full { inset: 0; overflow: hidden; }
+.kc-front--photo .kc-front__full img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.kc-front--photo .kc-front__plate { left: 0; right: 0; bottom: 0; height: 252px; background: var(--overlay); }
+.kc-front--photo .kc-front__plate::before { content: ""; position: absolute; left: 0; right: 0; top: -90px; height: 90px; background: linear-gradient(to bottom, transparent, var(--overlay)); }
+.kc-front--photo .kc-front__eyebrow, .kc-front--photo .kc-front__title, .kc-front--photo .kc-front__title small, .kc-front--photo .kc-front__company,
+.kc-front--photo .kc-front__tagline, .kc-front--photo .kc-front__areas, .kc-front--photo .kc-front__meta, .kc-front--photo .kc-front__meta b { color: var(--on-overlay); }
+.kc-front--photo .kc-front__tagline { max-width: 40em; }
+.kc-front--photo .kc-front__meta { border-top-color: rgba(255, 255, 255, 0.35); }
+.kc-front--photo .kc-front__caption { color: var(--on-overlay); }
+/* F 그래픽(T2): C 중앙 정렬 배치 + 아래 주색 면 띠에 모티프 패턴. 사진 없음 */
+.kc-front--graphic { background: var(--paper); }
+.kc-front--graphic .kc-front__block { align-items: center; text-align: center; }
+.kc-front--graphic .kc-front__title { justify-content: center; flex-direction: column; align-items: center; gap: 6px; font-size: 60px; line-height: 66px; letter-spacing: 6px; }
+.kc-front--graphic .kc-front__title small { letter-spacing: 4px; }
+.kc-front--graphic .kc-front__tagline { max-width: 30em; }
+.kc-front--graphic .kc-front__areas { justify-content: center; }
+.kc-front--graphic .kc-front__meta { justify-content: center; border-top: 0; padding-top: 0; }
+.kc-front__band-field { left: 0; right: 0; bottom: 0; height: 176px; background: var(--field); overflow: hidden; }
+.kc-front--graphic .kc-front__meta { color: var(--on-field-muted); } .kc-front--graphic .kc-front__meta b { color: var(--on-field); }
+
+/* ── C07 간지 변형(style): photo-full · color-pattern · plain ────────────── */
+/* 전면 사진 + 왼쪽 반투명 판(T1) */
+.kc-divider--photo-full { display: block; background: var(--photo-fill); }
+.kc-divider--photo-full .kc-divider__full { position: absolute; inset: 0; overflow: hidden; }
+.kc-divider--photo-full .kc-divider__full img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.kc-divider--photo-full .kc-divider__main { position: absolute; left: 0; top: 0; bottom: 0; width: 430px; padding: 44px 40px 44px 56px; background: var(--overlay); color: var(--on-overlay); }
+.kc-divider--photo-full .kc-divider__num, .kc-divider--photo-full .kc-divider__title, .kc-divider--photo-full .kc-divider__lead,
+.kc-divider--photo-full .kc-areatag, .kc-divider--photo-full .kc-toc__folio { color: var(--on-overlay); }
+.kc-divider--photo-full .kc-divider__list { border-top-color: rgba(255, 255, 255, 0.5); }
+.kc-divider--photo-full .kc-divider__list li { border-bottom-color: rgba(255, 255, 255, 0.25); }
+.kc-divider--photo-full .kc-divider__art { display: none; }
+/* 분야(주)색 면 + 패턴(T2): 분야 간지는 kc-area-n 으로 분야 색, 섹션 간지는 주색(--area 기본값 = brand) */
+.kc-divider--color-pattern { background: var(--area); color: var(--on-area); }
+.kc-divider--color-pattern .kc-divider__num, .kc-divider--color-pattern .kc-divider__title, .kc-divider--color-pattern .kc-divider__lead,
+.kc-divider--color-pattern .kc-areatag, .kc-divider--color-pattern .kc-toc__folio { color: var(--on-area); }
+.kc-divider--color-pattern .kc-divider__list { border-top-color: rgba(255, 255, 255, 0.55); }
+.kc-divider--color-pattern .kc-divider__list li { border-bottom-color: rgba(255, 255, 255, 0.28); }
+.kc-divider--color-pattern .kc-areatag::before, .kc-divider--color-pattern .kc-front__areas li::before { background: var(--on-area); }
+.kc-divider--color-pattern .kc-pattern { --pattern-ink: rgba(255, 255, 255, 0.4); }
+/* 단색(T3 격조): 흰 바탕, 위 겹선, 그림 없음, 번호는 옅게 */
+.kc-divider--plain { display: block; background: var(--paper); }
+.kc-divider--plain::before { content: ""; position: absolute; left: 56px; right: 56px; top: 40px; border-top: 3px double var(--rule-strong); }
+.kc-divider--plain .kc-divider__main { padding: 64px 56px 44px 56px; max-width: 560px; height: 100%; }
+.kc-divider--plain .kc-divider__num { color: var(--ink-faint); }
+.kc-divider--plain .kc-divider__art { display: none; }
+
+/* ── C04 숫자 변형(layout): band(사진 배경 띠) · cards8(아이콘 + 큰 숫자 카드) ─────── */
+.kc-kpis--band { position: relative; padding: 22px 24px; border-radius: 10px; overflow: hidden; background: var(--field); }
+.kc-kpis__bg { position: absolute; inset: 0; }
+.kc-kpis__bg img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.kc-kpis__bg::after { content: ""; position: absolute; inset: 0; background: var(--overlay); }
+.kc-kpis--band > .kc-kpi { position: relative; z-index: 1; }
+.kc-kpis--band .kc-kpi, .kc-kpi--band, .kc-motif--drop .kc-kpis--band .kc-kpi, .kc-motif--drop .kc-kpi--band { background: transparent; border-top: var(--stroke-hair) solid rgba(255, 255, 255, 0.4); border-radius: 0; padding: 10px 0 0; }
+.kc-kpis--band .kc-kpi__label, .kc-kpis--band .kc-kpi__label .kc-icon, .kc-kpis--band .kc-kpi__value, .kc-kpis--band .kc-kpi__note,
+.kc-kpi--band .kc-kpi__label, .kc-kpi--band .kc-kpi__label .kc-icon, .kc-kpi--band .kc-kpi__value, .kc-kpi--band .kc-kpi__note { color: var(--on-overlay); }
+.kc-motif--contour .kc-kpis--band .kc-kpi::before, .kc-motif--contour .kc-kpi--band::before { background: var(--on-overlay); }
+.kc-kpis--cards8 { gap: 12px 14px; }
+.kc-kpi--card, .kc-kpis--cards8 .kc-kpi, .kc-motif--drop .kc-kpi--card, .kc-motif--drop .kc-kpis--cards8 .kc-kpi { border-top: 0; padding: 14px 14px 12px; gap: 6px; background: var(--canvas); border-radius: 10px; }
+.kc-kpi--card .kc-kpi__label, .kc-kpis--cards8 .kc-kpi__label { flex-direction: column; align-items: flex-start; gap: 8px; }
+.kc-kpi--card .kc-kpi__label .kc-icon, .kc-kpis--cards8 .kc-kpi__label .kc-icon { display: block; width: 40px; height: 40px; padding: 9px; box-sizing: border-box; background: var(--area-tint); color: var(--area); border-radius: 10px; stroke-width: 1.6; }
+.kc-kpi--card .kc-kpi__figure, .kc-kpis--cards8 .kc-kpi__figure { font-size: 40px; line-height: 44px; letter-spacing: -1px; }
+.kc-motif--ring .kc-kpi--card, .kc-motif--ring .kc-kpis--cards8 .kc-kpi { padding-left: 14px; }
+.kc-motif--ring .kc-kpi--card::before, .kc-motif--ring .kc-kpis--cards8 .kc-kpi::before, .kc-motif--contour .kc-kpi--card::before, .kc-motif--contour .kc-kpis--cards8 .kc-kpi::before { display: none; }
+.kc-motif--ring .kc-kpi--card .kc-kpi__label .kc-icon, .kc-motif--ring .kc-kpis--cards8 .kc-kpi__label .kc-icon { border-radius: 50%; }
+.kc-motif--contour .kc-kpi--card, .kc-motif--contour .kc-kpis--cards8 .kc-kpi { border-top: 0; }
+
+/* ── C06 연혁 변형(axis): horizontal(한 줄 축, 위·아래 번갈아) · columns4(연대별 4단) ──────
+   기본(.kc-timeline)은 연도 열을 가로로 늘어놓고 항목을 아래로 쌓는다. horizontal 은 li 안에 위 칸·축·아래 칸 세 줄을 둔다:
+   <li><div class="kc-timeline__cell"></div><div class="kc-timeline__axis"><span class="kc-timeline__year"><span class="kc-timeline__tick"></div><div class="kc-timeline__cell"><ul class="kc-timeline__items">…</div></li> */
+.kc-timeline--horizontal::before { top: 50%; }
+.kc-timeline--horizontal > li { display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; padding-right: 6px; }
+.kc-timeline--horizontal .kc-timeline__axis { display: flex; align-items: center; gap: 6px; }
+.kc-timeline--horizontal .kc-timeline__axis .kc-timeline__tick, .kc-timeline--horizontal.kc-timeline > li.is-highlight .kc-timeline__axis .kc-timeline__tick { margin: 0; }
+.kc-timeline--horizontal .kc-timeline__axis .kc-timeline__year { padding-right: 4px; background: var(--paper); position: relative; z-index: 1; }
+.kc-timeline--horizontal .kc-timeline__cell { min-height: 0; }
+.kc-timeline--horizontal .kc-timeline__cell:first-child { align-self: end; }
+.kc-timeline--columns4 { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--grid-gutter); row-gap: 12px; }
+.kc-timeline--columns4::before { display: none; }
+.kc-timeline--columns4 > li { padding: 8px 0 0; border-top: var(--stroke-strong) solid var(--rule-strong); gap: 6px; }
+.kc-timeline--columns4 .kc-timeline__tick { display: none; }
+.kc-timeline--columns4 .kc-timeline__year { font-size: 15px; line-height: 18px; }
+.kc-timeline--columns4 .kc-timeline__items { gap: 6px; }
+
+/* ── C09 분야 상세 히어로 변형(hero): photo-wide(전폭 사진 띠) · none(사진 자리 없음) ─────── */
+.kc-bizhero--photo-wide { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.kc-bizhero--photo-wide .kc-bizhero__visual { order: -1; height: 150px; }
+.kc-bizhero--none { grid-template-columns: minmax(0, 1fr); }
+.kc-bizhero--none .kc-bizhero__visual { display: none; }
+
+/* ── C10 핵심 역량 변형(cards): icon-large ─────────────────────── */
+.kc-strengths--icon-large .kc-iconbox { width: 48px; height: 48px; }
+.kc-strengths--icon-large .kc-iconbox .kc-icon { width: 26px; height: 26px; }
+.kc-strengths--icon-large .kc-strengths__label .kc-icon { width: 22px; height: 22px; }
+.kc-strengths--icon-large .kc-strengths__num { font-size: 38px; line-height: 42px; }
+.kc-strengths--icon-large .kc-strengths__step { gap: 10px; }
+
+/* ── C13 임원진 변형(card): portrait-large(3:4 큰 사진 세로 카드, 3열) · list(사진 없는 목록, 격조) ──
+   list 행 마크업: <div class="kc-person kc-person--list"><span class="kc-person__name">·<span class="kc-person__role">·<ul class="kc-person__meta"> */
+.kc-people--portrait-large { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kc-person--portrait-large { grid-template-columns: minmax(0, 1fr); gap: 8px; border-top: 0; padding-top: 0; }
+.kc-person--portrait-large .kc-person__photo, .kc-person--portrait-large .kc-person__initial { width: 100%; aspect-ratio: 3 / 4; font-size: 44px; }
+.kc-person--portrait-large .kc-person__name { font-size: 14px; line-height: 19px; }
+.kc-person--portrait-large .kc-person__role { display: block; margin: 2px 0 0; }
+.kc-people--list { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: var(--stroke-strong) solid var(--rule-strong); }
+.kc-person--list { grid-template-columns: 110px 96px minmax(0, 1fr); gap: var(--space-3); align-items: baseline; padding: 7px 0; border-top: 0; border-bottom: var(--stroke-hair) solid var(--rule); }
+.kc-person--list .kc-person__photo, .kc-person--list .kc-person__initial { display: none; }
+.kc-person--list .kc-person__role { margin: 0; }
+.kc-person--list .kc-person__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+
+/* ── C16 인증 변형(view): table(목록형, 격조) ────────────────────── */
+.kc-creds--table { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: var(--stroke-strong) solid var(--rule-strong); }
+.kc-cred--table { display: grid; grid-template-columns: 48px 44px minmax(0, 1fr) auto; column-gap: var(--space-3); align-items: center; gap: 0 var(--space-3); padding: 5px 0; border-bottom: var(--stroke-hair) solid var(--rule); }
+.kc-cred--table .kc-cred__thumb { width: 48px; aspect-ratio: 4 / 3; }
+.kc-cred--table .kc-cred__thumb .kc-icon { width: 14px; height: 14px; }
+.kc-cred--table .kc-cred__kind { font-size: 8.5px; line-height: 12px; }
+.kc-cred--table .kc-cred__name { font-size: 10px; line-height: 14px; }
+.kc-cred--table .kc-cred__meta { font-size: 8.5px; line-height: 12px; white-space: nowrap; }
+
+/* ── C20 분야 1장 요약(T4 브리프): 핵심 서비스·강점(왼쪽 7열) + 분야 KPI·대표 실적 3건·담당 연락처(오른쪽 5열) ── */
+.kc-brief { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--grid-gutter); row-gap: 14px; align-content: start; }
+.kc-brief__services, .kc-brief__strengths { grid-column: 1 / span 7; }
+.kc-brief__kpis { grid-column: 8 / span 5; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.kc-brief__cases { grid-column: 8 / span 5; }
+.kc-brief__contact { grid-column: 8 / span 5; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: var(--brand-tint); border-radius: 10px; }
+.kc-brief__contact b { font-family: var(--kc-font-display); font-size: 12px; line-height: 17px; color: var(--ink); }
+.kc-brief__contact p { font-size: 9.5px; line-height: 15px; color: var(--ink); }
+.kc-motif--contour .kc-brief__contact { border-radius: 0; }

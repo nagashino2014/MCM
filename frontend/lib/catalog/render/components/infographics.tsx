@@ -220,24 +220,44 @@ export function KoreaMap({
 }
 
 // ── HistoryTimeline 연혁 ──
-export function Timeline({ years, style }: { years: HistoryYear[]; style?: CSSProperties }) {
-  return (
-    <ol className="kc-timeline" style={style} data-widget="timeline">
-      {years.map((y) => (
-        <li key={y.year} className={y.highlight ? "is-highlight" : undefined}>
-          <span className="kc-timeline__year">{y.year}</span>
-          <span className="kc-timeline__tick"></span>
-          <ul className="kc-timeline__items">
-            {y.items.map((it, i) => (
-              <li key={i} className={it.highlight ? "is-key" : undefined}>
-                <b>{it.month}</b>
-                {it.content}
-                {it.category ? <span className="kc-timeline__cat">{it.category}</span> : null}
-              </li>
-            ))}
-          </ul>
+/**
+ * 연혁 — axis(TP2 변형): columns(기본, 연도 열 가로 나열·항목 아래) · horizontal(한 줄 축, 항목 위·아래 번갈아 — li 안 위 칸·축·아래 칸) ·
+ * columns4(연대별 4단, 클래스만 — research 템플릿은 루트 CSS 로 2열 행으로 다시 그림)
+ */
+export function Timeline({ years, axis, style }: { years: HistoryYear[]; axis?: string; style?: CSSProperties }) {
+  const horizontal = axis === "horizontal";
+  const cls = axis === "horizontal" || axis === "columns4" ? `kc-timeline kc-timeline--${axis}` : "kc-timeline";
+  const items = (y: HistoryYear) => (
+    <ul className="kc-timeline__items">
+      {y.items.map((it, i) => (
+        <li key={i} className={it.highlight ? "is-key" : undefined}>
+          <b>{it.month}</b>
+          {it.content}
+          {it.category ? <span className="kc-timeline__cat">{it.category}</span> : null}
         </li>
       ))}
+    </ul>
+  );
+  return (
+    <ol className={cls} style={style} data-widget="timeline">
+      {years.map((y, idx) =>
+        horizontal ? (
+          <li key={y.year} className={y.highlight ? "is-highlight" : undefined}>
+            <div className="kc-timeline__cell">{idx % 2 === 1 ? items(y) : null}</div>
+            <div className="kc-timeline__axis">
+              <span className="kc-timeline__year">{y.year}</span>
+              <span className="kc-timeline__tick"></span>
+            </div>
+            <div className="kc-timeline__cell">{idx % 2 === 0 ? items(y) : null}</div>
+          </li>
+        ) : (
+          <li key={y.year} className={y.highlight ? "is-highlight" : undefined}>
+            <span className="kc-timeline__year">{y.year}</span>
+            <span className="kc-timeline__tick"></span>
+            {items(y)}
+          </li>
+        )
+      )}
     </ol>
   );
 }

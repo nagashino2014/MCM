@@ -1,8 +1,8 @@
 "use client";
 
-// 문서 설정 — 표지 디자인 4안(2×2 썸네일)·사진 없는 변형·서체 세트. 고르는 즉시 문서(docId, 기본 마스터본)에 저장한다.
+// 문서 설정 — 표지 디자인 7안(2열 썸네일)·사진 없는 변형·서체 세트. 고르는 즉시 문서(docId, 기본 마스터본)에 저장한다.
 // 템플릿은 문서별 고정이라 여기서 바꾸지 않는다(이름만 표시) — 다른 템플릿은 첫 화면 [새 문서]로.
-// 선택지는 lib/catalog/document-theme.ts COVER_DESIGNS 하나로 관리(5안, B·C 는 2026-10-29 확정·G 연구소형 추가). 렌더러는 표지 루트에 kc-front--{cover}.
+// 선택지는 lib/catalog/document-theme.ts COVER_DESIGNS 하나로 관리(7안, B·C 는 2026-10-29 확정·E 전면 사진·F 그래픽·G 연구소형 추가). 렌더러는 표지 루트에 kc-front--{cover}.
 
 import { useEffect, useState } from "react";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -76,6 +76,23 @@ function CoverThumb({ cover, photo }: { cover: CoverDesign; photo: boolean }) {
         <>
           <div className="absolute inset-x-0 top-[16%] h-[38%]" style={photoStyle} />
           <div className="absolute left-[8%] top-[64%]">{lines}</div>
+        </>
+      )}
+      {cover === "photo" && (
+        <>
+          <div className="absolute inset-0" style={photoStyle} />
+          <div className="absolute inset-x-0 bottom-0 h-[42%]" style={{ background: "var(--cd-text)", opacity: 0.55 }} />
+          <div className="absolute left-[8%] top-[66%] flex flex-col gap-1">
+            <span className="block h-1.5 w-12 rounded-sm" style={{ background: "var(--cd-card)" }} />
+            <span className="block h-1 w-8 rounded-sm" style={{ background: "var(--cd-card)", opacity: 0.7 }} />
+          </div>
+        </>
+      )}
+      {cover === "graphic" && (
+        <>
+          <div className="absolute left-[8%] top-[38%]">{lines}</div>
+          <div className="absolute right-[4%] top-[10%] w-[40%] aspect-square rounded-full" style={{ border: "6px solid var(--cd-primary-soft)", borderTopColor: "var(--cd-primary)" }} />
+          <div className="absolute inset-x-0 bottom-0 h-[3%]" style={{ background: "var(--cd-primary)" }} />
         </>
       )}
     </div>

@@ -4,16 +4,18 @@
  */
 import type { CoverDesign } from "@/lib/catalog/document-theme";
 import type { CSSProperties, ReactNode } from "react";
-import { COVER_CONTENT, DIVIDER_CONTENT, SECTIONS, VISION_CONTENT } from "../master-content";
+import { COVER_CONTENT, DIVIDER_CONTENT, VISION_CONTENT } from "../master-content";
 import type { CatalogRenderData, HistoryYear, RenderCtx } from "../types";
 import { Timeline } from "./infographics";
 import { cardsSpec } from "../infographic/adapt";
 import { InfoSlot, InfoSource } from "../infographic/slot";
 import type { InfoItem, InfoSpec } from "../infographic/types";
 import type { MetricId } from "@/lib/catalog/metrics";
-import { AreaTag, Drop, Foot, Head, Icon, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval } from "./parts";
+import { AreaTag, Contour, DIVIDER_CONTOUR, Drop, Foot, Head, Icon, Kpi, M, Notes, Ring, Sheet, TitleBlock, asOfNote, fmt, mval, planOf, secNum, sectionsFor } from "./parts";
 
 const LOGO = "k/assets/kesi-signature-ko.png";
+/** 사진 위 판(E 전면 사진 표지)용 흰 로고 */
+const LOGO_WHITE = "k/assets/kesi-en-horizontal-white.png";
 const LOGO_ALT = "KESI ㈜한국환경안전연구원 Korean Environment Safety Institute Co. LTD";
 
 export interface CoverChoice {
@@ -22,7 +24,8 @@ export interface CoverChoice {
   photo: string | null;
 }
 
-// ── C01 표지(5안: A 잎 창·B 세 기둥·C 중앙 정렬·D 사진 띠·G 연구소형) ──
+// ── C01 표지(7안: A 잎 창·B 세 기둥·C 중앙 정렬·D 사진 띠·E 전면 사진·F 그래픽·G 연구소형) ──
+// E 전면 사진은 사진(인쇄 해상도 판정을 통과한 것)이 없으면 F 그래픽으로 그리고 쪽 검사에 안내를 남긴다(템플릿 폴백, 계획서 §3-3).
 export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: CatalogRenderData; choice: CoverChoice }) {
   const areaList = (style: CSSProperties) => (
     <ul className="kc-front__areas" style={{ position: "absolute", ...style }}>
@@ -55,7 +58,54 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
   const photo = choice.photo ? ctx.url(choice.photo) : null;
   const caption = (style: CSSProperties) => (photo ? <span className="kc-caption" style={{ position: "absolute", ...style }}>{COVER_CONTENT.photoCaption}</span> : null);
   let body: ReactNode;
-  if (choice.cover === "strips") {
+  // E 전면 사진인데 사진이 없으면 F 그래픽(포토 에디토리얼의 폴백 = 인포그래픽형 표지)
+  const cover = choice.cover === "photo" && !photo ? "graphic" : choice.cover;
+  const note = cover !== choice.cover ? "사진 없음 — E 전면 사진 대신 F 그래픽 표지로 그림" : undefined;
+  const motif = ctx.motif ?? "drop";
+  if (cover === "photo") {
+    // E 전면 사진: 사진 전면 + 아래 반투명 판 위에 글·흰 로고(사진 위 배치 금지 — 판 위에만)
+    body = (
+      <>
+        <div className="kc-front__full" style={{ position: "absolute" }}>
+          <img src={photo!} alt={COVER_CONTENT.photoAlt} />
+        </div>
+        <div className="kc-front__plate" style={{ position: "absolute" }}></div>
+        {block({ left: 56, top: 372, width: 520 })}
+        {areaList({ left: 56, top: 506, width: 600 })}
+        {meta({ left: 56, bottom: 40, width: 330 })}
+        <img className="kc-front__logo" src={ctx.url(LOGO_WHITE)} alt={LOGO_ALT} style={{ position: "absolute", right: 56, bottom: 40, width: 150 }} />
+      </>
+    );
+  } else if (cover === "graphic") {
+    // F 그래픽(10-29 재설계): 왼쪽 글 단 + 오른쪽 모티프 궤도(링 = 두 색 호 + 동심 링, 물방울 = 큰 물방울 + 윤곽, 등고선 = 등고선 면) + 분야 6색 노드, 아래 주색 선
+    body = (
+      <>
+        {logo({ left: 56, top: 46, width: 230 })}
+        {block({ left: 56, top: 176, width: 340 })}
+        {areaList({ left: 56, top: 420, width: 340 })}
+        {meta({ left: 56, bottom: 40, width: 330 })}
+        <div className="kc-front__orbit">
+          {motif === "ring" ? (
+            <>
+              <Ring mods="kc-front__orbit-ring" />
+              <Ring mods="kc-ring--concentric kc-front__orbit-inner" />
+            </>
+          ) : motif === "contour" ? (
+            <span className="kc-contour-field kc-front__orbit-field" aria-hidden="true"></span>
+          ) : (
+            <>
+              <Drop mods="kc-front__orbit-drop" />
+              <Drop mods="kc-drop--line kc-drop--tl kc-front__orbit-drop kc-front__orbit-drop--line" />
+            </>
+          )}
+          {data.areas.map((a) => (
+            <span key={a.index} className={`kc-front__orbit-node kc-area-${a.index}`} aria-hidden="true"></span>
+          ))}
+        </div>
+        <div className="kc-front__band-field" style={{ position: "absolute" }}></div>
+      </>
+    );
+  } else if (cover === "strips") {
     const pillars = [
       { left: 434, top: 140, height: 400, pos: "-20px -84px", fill: "var(--brand-tint)" },
       { left: 558, top: 56, height: 440, pos: "-144px 0px", fill: "var(--field)", lead: true },
@@ -86,7 +136,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         {caption({ right: 48, top: 566 })}
       </>
     );
-  } else if (choice.cover === "center") {
+  } else if (cover === "center") {
     body = (
       <>
         <div className="kc-front__frame" style={{ position: "absolute" }}></div>
@@ -96,7 +146,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         {meta({ left: 271, bottom: 54, width: 300 })}
       </>
     );
-  } else if (choice.cover === "research") {
+  } else if (cover === "research") {
     // G 연구소형(연구소·ESG 제안형 양식): 왼쪽 연한 하늘빛 면 + 자간 넓은 제목·밑줄 + 부설연구소 부제, 오른쪽 사옥 사진(옅게)
     body = (
       <>
@@ -117,7 +167,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         {logo({ right: 40, bottom: 28, width: 190 })}
       </>
     );
-  } else if (choice.cover === "band") {
+  } else if (cover === "band") {
     body = (
       <>
         <div className="kc-front__band" style={{ position: "absolute" }}>
@@ -164,7 +214,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
     );
   }
   return (
-    <Sheet ctx={ctx} cls={`kc-front kc-front--${choice.cover}`} anchors={["cover"]} section="회사소개서">
+    <Sheet ctx={ctx} cls={`kc-front kc-front--${cover}`} anchors={["cover"]} section="회사소개서" note={note}>
       {body}
     </Sheet>
   );
@@ -179,12 +229,14 @@ export function ContentsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
         <div className="kc-span-7" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <p className="kc-page-title">목차</p>
           <ol className="kc-toc">
-            {SECTIONS.map((sec) => (
+            {sectionsFor(ctx).map((sec) => (
               <li key={sec.key} data-hide-empty="">
-                <span className="kc-toc__num">{sec.key}</span>
+                <span className="kc-toc__num">{sec.num}</span>
                 <span className="kc-toc__name">
                   {sec.name}
-                  <span className="kc-toc__desc">{sec.anchor === "sec-app" && ctx.opts.naming === "masked" ? "A 수행실적 총괄 · B 분야별 수행실적 목록" : sec.desc}</span>
+                  <span className="kc-toc__desc">
+                    {sec.anchor === "sec-app" && ctx.opts.naming === "masked" ? (planOf(ctx) === "formal" ? "B 분야별 수행실적 목록" : "A 수행실적 총괄 · B 분야별 수행실적 목록") : sec.desc}
+                  </span>
                 </span>
                 <a className="kc-toc__folio" href="#" data-ref={sec.anchor} data-ref-fmt="folio" data-ref-missing="hide">
                   00
@@ -298,14 +350,28 @@ function figuresSpec(data: CatalogRenderData): InfoSpec {
   return { type: "stats", variant: "row", content: { title: "숫자로 보는 KESI", items: items.map((it) => ({ ...it, value: mval(data, it.metric as MetricId) ?? undefined })) } };
 }
 
-export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; sectionStart?: boolean }) {
+/** 숫자 쪽 변형(TP2) — layout: grid(기본) | band(사진 배경 띠, photo = 이미지 키) | cards8(아이콘 + 큰 숫자 카드 8). note = 사진 폴백 안내 */
+export function FiguresPage({
+  ctx,
+  data,
+  sectionStart,
+  variant,
+  note,
+}: {
+  ctx: RenderCtx;
+  data: CatalogRenderData;
+  sectionStart?: boolean;
+  variant?: Record<string, string>;
+  note?: string;
+}) {
+  const layout = variant?.layout === "band" && variant.photo ? "band" : variant?.layout === "cards8" ? "cards8" : "grid";
   const share = mval(data, "market.permit.share");
   const denom = data.figures["permit.sites.total"];
   const area = (i: number) => data.areas[i - 1];
   const sw = data.areas[5];
   const initial = mval(data, "permit.initial.completed");
   return (
-    <Sheet ctx={ctx} anchors={sectionStart ? ["sec-01", "c04"] : ["c04"]} section={sectionStart ? "01 회사 소개" : undefined} outline="숫자로 보는 KESI">
+    <Sheet ctx={ctx} anchors={sectionStart ? ["sec-01", "c04"] : ["c04"]} section={sectionStart ? "01 회사 소개" : undefined} outline="숫자로 보는 KESI" note={note}>
       <Head ctx={ctx} num="01" name="회사 소개" sub="숫자로 보는 KESI" />
       <div className="kc-titleblock" style={{ gap: 8 }}>
         <p className="kc-eyebrow">숫자로 보는 KESI</p>
@@ -317,7 +383,15 @@ export function FiguresPage({ ctx, data, sectionStart }: { ctx: RenderCtx; data:
         </p>
       </div>
       <InfoSource slot="c04.figures" spec={figuresSpec(data)} box={{ w: 746, h: 380 }}>
-      <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gridTemplateRows: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, marginTop: 6 }}>
+      <div
+        className={layout === "grid" ? "kc-kpis" : `kc-kpis kc-kpis--${layout}`}
+        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gridTemplateRows: "repeat(2, minmax(0, 1fr))", flex: 1, minHeight: 0, marginTop: 6 }}
+      >
+        {layout === "band" ? (
+          <div className="kc-kpis__bg">
+            <img src={ctx.url(variant!.photo)} alt="" />
+          </div>
+        ) : null}
         <Kpi size="xl" area={1} icon="factory" label="통합환경허가 최초허가" value={fmt(initial)} unit="건" metric="permit.initial.completed"
           note={share != null && denom ? `허가 사업장 ${fmt(denom)}개소 중 ${fmt(share)}%` : undefined} />
         <Kpi size="xl" area={1} icon="file-check" label="변경허가·변경신고" value={<M data={data} id="permit.change.completed" />} unit="건"
@@ -422,7 +496,22 @@ function Fact({ k, v }: { k: string; v: ReactNode }) {
 }
 
 // ── C06 연혁 ──
-export function HistoryPage({ ctx, data, years, part, parts }: { ctx: RenderCtx; data: CatalogRenderData; years: HistoryYear[]; part: number; parts: number }) {
+/** 연혁 변형(TP2) — axis: columns(기본) | horizontal(한 줄 축) | columns4(연대별 4단) */
+export function HistoryPage({
+  ctx,
+  data,
+  years,
+  part,
+  parts,
+  variant,
+}: {
+  ctx: RenderCtx;
+  data: CatalogRenderData;
+  years: HistoryYear[];
+  part: number;
+  parts: number;
+  variant?: Record<string, string>;
+}) {
   const first = data.history[0]?.year;
   return (
     <Sheet ctx={ctx} anchors={["c06"]} outline={part === 0 ? "연혁" : undefined}>
@@ -431,7 +520,7 @@ export function HistoryPage({ ctx, data, years, part, parts }: { ctx: RenderCtx;
         eyebrow="연혁"
         title={part === 0 ? `${first ?? ""}년 설립 이후 등록·인증과 함께 사업 영역을 넓혀 왔습니다` : `${years[0]?.year}–${years[years.length - 1]?.year} 연혁`}
       />
-      <Timeline years={years} style={{ flex: 1, minHeight: 0, marginTop: 6 }} />
+      <Timeline years={years} axis={variant?.axis} style={{ flex: 1, minHeight: 0, marginTop: 6 }} />
       {part === parts - 1 ? <HistoryFigures data={data} /> : null}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24, paddingTop: 8, borderTop: "var(--stroke-hair) solid var(--rule)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -462,6 +551,7 @@ function HistoryFigures({ data }: { data: CatalogRenderData }) {
 }
 
 // ── C07 섹션 간지 ──
+/** 간지 변형(TP2) — style: leaf(잎 창, 기본) | photo-full(전면 사진 + 판, photo = 이미지 키) | color-pattern(주색 면 + 모티프 패턴) | plain(단색·겹선) */
 export function DividerPage({
   ctx,
   num,
@@ -469,6 +559,8 @@ export function DividerPage({
   lead,
   items,
   anchor,
+  variant,
+  note,
 }: {
   ctx: RenderCtx;
   num: string;
@@ -476,12 +568,16 @@ export function DividerPage({
   lead: string;
   items: Array<{ label: string; area?: number; ref: string }>;
   anchor: string;
+  variant?: Record<string, string>;
+  note?: string;
 }) {
+  const style = variant?.style === "photo-full" && variant.photo ? "photo-full" : variant?.style === "color-pattern" || variant?.style === "plain" ? variant.style : "leaf";
+  const motif = ctx.motif ?? "drop";
   return (
-    <Sheet ctx={ctx} cls="kc-divider" anchors={[anchor]} section={`${num} ${title}`}>
+    <Sheet ctx={ctx} cls={style === "leaf" ? "kc-divider" : `kc-divider kc-divider--${style}`} anchors={[anchor]} section={`${num} ${title}`} note={note}>
       <div className="kc-divider__main">
         <div>
-          <p className="kc-divider__num">{num}</p>
+          <p className="kc-divider__num">{secNum(ctx, num)}</p>
           <p className="kc-divider__title">{title}</p>
           <p className="kc-divider__lead">{lead}</p>
         </div>
@@ -496,14 +592,35 @@ export function DividerPage({
           ))}
         </ol>
       </div>
-      <div className="kc-divider__art">
-        <div className="kc-motif-layer">
-          <div style={{ left: 34, top: 92, width: 262, height: 350, borderRadius: "0 131px 131px 131px", background: "var(--field)", overflow: "hidden" }}>
-            <Drop mods="kc-drop--line" style={{ position: "absolute", width: 132, left: 24, top: 30, color: "var(--on-field-muted)" }} />
-          </div>
-          <Drop mods="kc-drop--bl" style={{ width: 56, left: 256, top: 40 }} />
+      {style === "photo-full" ? (
+        <div className="kc-divider__full">
+          <img src={ctx.url(variant!.photo)} alt={`${title} 간지 사진`} />
         </div>
-      </div>
+      ) : null}
+      {style === "leaf" ? (
+        <div className="kc-divider__art">
+          <div className="kc-motif-layer">
+            <div style={{ left: 34, top: 92, width: 262, height: 350, borderRadius: "0 131px 131px 131px", background: "var(--field)", overflow: "hidden" }}>
+              <Drop mods="kc-drop--line" style={{ position: "absolute", width: 132, left: 24, top: 30, color: "var(--on-field-muted)" }} />
+            </div>
+            <Drop mods="kc-drop--bl" style={{ width: 56, left: 256, top: 40 }} />
+          </div>
+        </div>
+      ) : style === "color-pattern" ? (
+        <div className="kc-divider__art">
+          <div className="kc-pattern">
+            {motif === "drop" ? (
+              <>
+                <Drop mods="kc-drop--line" style={{ width: 170, left: 60, top: 60, color: "var(--pattern-ink)" }} />
+                <Drop mods="kc-drop--line kc-drop--tl" style={{ width: 110, left: 190, top: 300, color: "var(--pattern-ink)" }} />
+                <Drop mods="kc-drop--line kc-drop--bl" style={{ width: 60, left: 40, top: 420, color: "var(--pattern-ink)" }} />
+              </>
+            ) : motif === "contour" ? (
+              <Contour mods="kc-contour--on-field kc-divider__contour" viewBox="0 0 330 595" rings={DIVIDER_CONTOUR} style={{ position: "absolute" }} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </Sheet>
   );
 }

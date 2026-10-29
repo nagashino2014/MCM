@@ -47,10 +47,14 @@ function businessMapSpec(data: CatalogRenderData): InfoSpec {
   };
 }
 
-export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/**
+ * @param sectionStart 사업 분야 섹션의 첫 쪽(간지가 없는 brief 쪽 계획) — 섹션 북마크·목차 앵커를 이 쪽이 맡는다
+ * @param linked 쪽이 있는 분야 번호(brief — 분야 1장 요약을 넣은 분야만 링크, 나머지 카드는 링크 없이)
+ */
+export function BusinessMapPage({ ctx, data, sectionStart, linked }: { ctx: RenderCtx; data: CatalogRenderData; sectionStart?: boolean; linked?: number[] }) {
   const consulting = data.areas.filter((a) => a.index <= 5).length;
   return (
-    <Sheet ctx={ctx} anchors={["c08"]} outline="사업 분야 개관">
+    <Sheet ctx={ctx} anchors={sectionStart ? ["sec-02", "c08"] : ["c08"]} section={sectionStart ? "02 사업 분야" : undefined} outline="사업 분야 개관">
       <Head ctx={ctx} num="02" name="사업 분야" sub="사업 분야 개관" />
       <TitleBlock eyebrow="사업 분야 개관" title={`환경 컨설팅 ${consulting}분야와 응용소프트웨어로 사업장을 지원합니다`} />
       <InfoSource slot="c08.areas" spec={businessMapSpec(data)} box={{ w: 746, h: 400 }}>
@@ -76,7 +80,13 @@ export function BusinessMapPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRe
           const sw = a.index === 6;
           const bullets = sw ? SOFTWARE_CONTENT.products.map((p) => `${p.name}(${p.status === "개발 중" ? `${p.whenLabel} ${p.when}` : p.status})`) : AREA_CONTENT[a.category]?.overview ?? [];
           return (
-            <a key={a.index} href="#" data-ref={`area-${a.index}`} className={`kc-orbit__card kc-area-${a.index}`} style={{ left: pos.left, top: pos.top, width: 226 }}>
+            <a
+              key={a.index}
+              href="#"
+              data-ref={!linked || linked.includes(a.index) ? `area-${a.index}` : undefined}
+              className={`kc-orbit__card kc-area-${a.index}`}
+              style={{ left: pos.left, top: pos.top, width: 226 }}
+            >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <AreaTag name={a.name} />
                 <span className="kc-ig__fig" style={{ fontSize: 15 }}>
@@ -116,16 +126,13 @@ function regionBars(data: CatalogRenderData, category: string) {
   return regionRows(total.byRegion);
 }
 
-/** 분야 상세 변형(L2) — hero: figure(사진 없는 숫자, 기본) | photo(사진, photo = 이미지 키) */
-export function AreaPage({ ctx, data, area, variant }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo; variant?: Record<string, string> }) {
-  const heroPhoto = variant?.hero === "photo" && variant.photo ? variant.photo : null;
+/** 분야 KPI 4개 — 분야 상세(C09)와 분야 1장 요약(C20)이 같은 숫자를 쓴다 */
+export function areaKpis(data: CatalogRenderData, area: AreaInfo) {
   const c: AreaContent = AREA_CONTENT[area.category];
   const isPermit = area.index === 1;
-  const isEsg = area.index === 4;
   const nowYear = Number(data.asOf.slice(0, 4));
-  const heroMetric: MetricId = isPermit ? "permit.contracts.total" : (`projects.area.${area.index}` as MetricId);
   const share = mval(data, "market.permit.share");
-  const kpis = isPermit
+  return isPermit
     ? [
         <Kpi key="a" label="최초허가" value={<M data={data} id="permit.initial.completed" />} unit="건" />,
         <Kpi key="b" label="변경허가·신고" value={<M data={data} id="permit.change.completed" />} unit="건" />,
@@ -147,11 +154,27 @@ export function AreaPage({ ctx, data, area, variant }: { ctx: RenderCtx; data: C
               <Kpi key="d" label="수행 권역" value={fmt(area.regions)} unit={`/ ${REGION_GROUPS.length}`} />,
             ]),
       ];
+}
+
+/**
+ * 분야 상세 변형(L2) — hero: figure(사진 없는 숫자, 기본) | photo(사진, photo = 이미지 키) | photo-wide(전폭 사진 띠, TP2) | none(사진 자리 없이 인포그래픽 확대, TP2).
+ * photo·photo-wide 는 사진이 없으면 쪽 계획(resolveVariant)이 폴백 변형으로 바꿔 넘긴다. note = 폴백 안내
+ */
+export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; data: CatalogRenderData; area: AreaInfo; variant?: Record<string, string>; note?: string }) {
+  const hero = variant?.hero ?? "figure";
+  const heroPhoto = (hero === "photo" || hero === "photo-wide") && variant?.photo ? variant.photo : null;
+  const heroCls = hero === "photo-wide" && heroPhoto ? "kc-bizhero kc-bizhero--photo-wide" : hero === "none" ? "kc-bizhero kc-bizhero--none" : "kc-bizhero";
+  const c: AreaContent = AREA_CONTENT[area.category];
+  const isPermit = area.index === 1;
+  const isEsg = area.index === 4;
+  const heroMetric: MetricId = isPermit ? "permit.contracts.total" : (`projects.area.${area.index}` as MetricId);
+  const share = mval(data, "market.permit.share");
+  const kpis = areaKpis(data, area);
   const regions = !isPermit && !isEsg ? regionBars(data, area.category) : [];
   return (
-    <Sheet ctx={ctx} area={area.index} anchors={[`area-${area.index}`]} outline={area.name} style={{ gap: 16 }}>
+    <Sheet ctx={ctx} area={area.index} anchors={[`area-${area.index}`]} outline={area.name} note={note} style={{ gap: 16 }}>
       <Head ctx={ctx} num="02" name="사업 분야" sub={area.name} />
-      <section className="kc-bizhero">
+      <section className={heroCls}>
         <div className="kc-bizhero__text">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
             <p className="kc-eyebrow">사업 분야 {String(area.index).padStart(2, "0")}</p>
@@ -245,7 +268,7 @@ export function AreaPage({ ctx, data, area, variant }: { ctx: RenderCtx; data: C
         <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <p className="kc-blockhead">{c.processTitle}</p>
-            <InfoSlot slot={`area-${area.index}.process`} spec={stepsSpec(c.process)} box={{ w: 490, h: 90 }} area={area.index} />
+            <InfoSlot slot={`area-${area.index}.process`} spec={stepsSpec(c.process)} box={{ w: 490, h: hero === "none" ? 120 : 90 }} area={area.index} />
           </div>
           <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
             {kpis}
@@ -562,14 +585,15 @@ function strengthsMethodSpec(): InfoSpec {
   };
 }
 
-export function StrengthsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
+/** 핵심 역량 변형(TP2) — cards: compact(기본) | icon-large(아이콘 큰 변형). sectionStart = 간지 없는 brief 쪽 계획에서 섹션 첫 쪽 */
+export function StrengthsPage({ ctx, data, variant, sectionStart }: { ctx: RenderCtx; data: CatalogRenderData; variant?: Record<string, string>; sectionStart?: boolean }) {
   const c = STRENGTHS_CONTENT;
   const industries = fmt(mval(data, "permit.industries"));
   return (
-    <Sheet ctx={ctx} anchors={["c10"]} outline="핵심 역량">
+    <Sheet ctx={ctx} anchors={sectionStart ? ["sec-03", "c10"] : ["c10"]} section={sectionStart ? "03 핵심 역량" : undefined} outline="핵심 역량">
       <Head ctx={ctx} num="03" name="핵심 역량" />
       <TitleBlock eyebrow="핵심 역량" title={c.title} />
-      <div className="kc-strengths">
+      <div className={variant?.cards === "icon-large" ? "kc-strengths kc-strengths--icon-large" : "kc-strengths"}>
         <section className="kc-strengths__hero">
           <p className="kc-strengths__tag">
             <b>01</b>실적

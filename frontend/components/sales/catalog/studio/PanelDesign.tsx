@@ -16,6 +16,8 @@ import { resolveColor, type DesignTokens } from "@/lib/print-kit/tokens";
 import tokensJson from "@/lib/catalog/render/tokens.json";
 import { FILL_COLORS, PHOTO_RATIOS, PICKABLE_TYPE_STEPS, TEXT_COLORS, spanWidth } from "@/lib/catalog/studio/design-system";
 import { pageState } from "@/lib/catalog/studio/doc";
+import { PAGE_VARIANT_FIELDS, templateOf, templateVariant, type VariantField } from "@/lib/catalog/templates";
+import { DEFAULT_BRIEF_AREAS } from "@/lib/catalog/render/components/plan";
 import { gridColumnsOf, type Selection } from "@/lib/catalog/studio/select";
 import type { CNode } from "@/lib/catalog/studio/nodes";
 import { fetchRank, type RankResponse } from "./aiClient";
@@ -62,7 +64,9 @@ export function PanelDesign(props: PanelProps) {
       {sel && caps ? <ElementDesign {...props} sel={sel} /> : null}
 
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold cd-text">쪽 변형</h3>
+        <h3 className="text-sm font-semibold cd-text flex items-center gap-1">
+          쪽 변형 <CdHelp topic="catalog.studio-variant" />
+        </h3>
         {item.key === "c01" ? (
           <>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="표지 디자인">
@@ -87,14 +91,59 @@ export function PanelDesign(props: PanelProps) {
               </button>
             ) : null}
           </div>
-        ) : item.key.startsWith("area-") ? (
-          <PhotoVariant label="분야 히어로" field="hero" values={[["figure", "숫자(사진 없음)"], ["photo", "사진"]]} variant={variant} ops={ops} />
         ) : item.key === "c05" ? (
           <PhotoVariant label="오른쪽 그림" field="visual" values={[["logo", "로고 판"], ["photo", "사진"]]} variant={variant} ops={ops} />
+        ) : item.type === "C13" && item.key !== "c13-1" ? (
+          <p className="text-xs cd-text-muted">임원 카드 모양은 첫 임원진 쪽에서 고릅니다(카드 모양에 따라 한 쪽 인원이 달라져 문서 전체에 함께 적용).</p>
+        ) : item.type === "C06" && item.key !== "c06-1" ? (
+          <p className="text-xs cd-text-muted">연혁 축은 첫 연혁 쪽에서 고릅니다(축에 따라 한 쪽 연도 수가 달라져 문서 전체에 함께 적용).</p>
+        ) : PAGE_VARIANT_FIELDS[item.type] && (item.type !== "C09" || /^area-\d$/.test(item.key)) ? (
+          <>
+            {PAGE_VARIANT_FIELDS[item.type].map((f) => (
+              <VariantChips
+                key={f.field}
+                f={f}
+                variant={variant}
+                defaults={templateVariant(templateOf(theme.template), item.key, item.type)}
+                pickPhoto={item.type !== "C13"}
+                ops={ops}
+              />
+            ))}
+            {item.note ? (
+              <p className="text-xs cd-text-muted" role="status">
+                {item.note}
+              </p>
+            ) : null}
+          </>
         ) : (
           <p className="text-xs cd-text-faint">이 쪽 유형은 고를 변형이 없습니다. 요소를 골라 인포그래픽 유형·열 수·사진 배치를 바꿉니다.</p>
         )}
       </section>
+
+      {theme.template === "brief" ? (
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold cd-text">분야 요약에 넣을 분야(문서 전체)</h3>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="분야 요약에 넣을 분야">
+            {(studio.data?.areas ?? []).map((a) => {
+              const picked = theme.areas?.length ? theme.areas : DEFAULT_BRIEF_AREAS;
+              const on = picked.includes(a.index);
+              return (
+                <Chip
+                  key={a.index}
+                  active={on}
+                  onClick={() => {
+                    const next = on ? picked.filter((x) => x !== a.index) : [...picked, a.index].sort((x, y) => x - y);
+                    if (next.length) studio.setTheme({ areas: next });
+                  }}
+                >
+                  {a.name}
+                </Chip>
+              );
+            })}
+          </div>
+          <p className="text-[11px] cd-text-faint">고른 분야마다 분야 1장 요약 쪽이 하나씩 생깁니다. 1~3개를 권장하고, 하나는 남겨야 합니다.</p>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold cd-text flex items-center gap-1">
@@ -188,6 +237,51 @@ function PhotoVariant({
           </Chip>
         ))}
         {cur === "photo" ? (
+          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.pickImage((key) => ops.setVariant("photo", key))}>
+            <ImagePlus className="w-3.5 h-3.5" /> 사진 고르기
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 쪽 변형 칩(TP2) — 템플릿 기본값(templateVariant) 위에 저장값(PageEdits.variant)을 보여 주고, 고르면 저장한다.
+ * 템플릿 기본값과 같은 값을 고르면 저장값을 지운다(템플릿을 따름). 사진이 필요한 값은 사진이 없으면 사진 고르기 창을 먼저 연다.
+ */
+function VariantChips({
+  f,
+  variant,
+  defaults,
+  pickPhoto,
+  ops,
+}: {
+  f: VariantField;
+  variant: Record<string, string>;
+  defaults: Record<string, string>;
+  pickPhoto: boolean;
+  ops: PanelProps["ops"];
+}) {
+  const base = defaults[f.field] ?? f.values[0][0];
+  const cur = variant[f.field] ?? base;
+  const needsPhoto = (v: string) => pickPhoto && (f.photo ?? []).includes(v);
+  const choose = (v: string) => {
+    const save = () => ops.setVariant(f.field, v === base ? null : v);
+    if (needsPhoto(v) && !variant.photo) ops.pickImage((key) => (ops.setVariant("photo", key), save()));
+    else save();
+  };
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs cd-text-muted">{f.label}</p>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={f.label}>
+        {f.values.map(([v, l]) => (
+          <Chip key={v} active={cur === v} onClick={() => choose(v)}>
+            {l}
+            {v === base && base !== f.values[0][0] ? " · 템플릿" : ""}
+          </Chip>
+        ))}
+        {needsPhoto(cur) ? (
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.pickImage((key) => ops.setVariant("photo", key))}>
             <ImagePlus className="w-3.5 h-3.5" /> 사진 고르기
           </button>

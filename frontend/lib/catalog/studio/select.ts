@@ -22,6 +22,12 @@ export function isTextBlock(n: CNode, parent: CNode | null): boolean {
 
 const LIST_TAGS = new Set(["ul", "ol"]);
 
+/**
+ * 모티프 장식 묶음(템플릿 TP2) — 표지 F 궤도·간지 패턴 면·숫자 띠 사진 바탕·표지 E 판. 안의 호·노드·물방울을 하나씩 고르지 않고 묶음 통째로
+ * 고른다(옮기기·숨기기 단위). 클래스는 디자인 시스템 TP1 블록(kesi-catalog.css).
+ */
+export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|front__full|divider__full)\b/;
+
 export interface Selection {
   id: string;
   node: CNode;
@@ -37,6 +43,10 @@ export function resolveSelection(root: CNode, hitId: string): Selection | null {
   // 위젯 안이면 가장 가까운 위젯
   for (let i = path.length - 1; i >= 1; i--) {
     if (path[i].widget) return describe(path.slice(0, i + 1));
+  }
+  // 모티프 장식 묶음 안이면 묶음 통째로
+  for (let i = 1; i < path.length; i++) {
+    if (DECOR_GROUP_RE.test(path[i].className ?? "")) return describe(path.slice(0, i + 1));
   }
   // 추가한 요소 안이면 그 요소(루트)
   for (let i = 1; i < path.length; i++) {

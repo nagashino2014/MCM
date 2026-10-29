@@ -55,8 +55,10 @@ export function previewUrl(key: ImageKey): string {
 
 /** 표지 사진 — 서버가 해상도까지 본 결과가 있으면 그것, 표지 디자인을 바꾸면 그 디자인의 기본 사진 */
 function coverFor(theme: DocumentTheme, server: CoverChoice): CoverChoice {
-  if (theme.cover === "center" || theme.coverPhoto === "none") return { cover: theme.cover, photo: null };
+  if (theme.cover === "center" || theme.cover === "graphic" || theme.coverPhoto === "none") return { cover: theme.cover, photo: null };
   if (server.cover === theme.cover) return server;
+  // E 전면 사진은 서버의 해상도 판정을 거쳐야 쓴다(다시 열면 판정 결과로 그림) — 그전까지 F 그래픽 폴백
+  if (theme.cover === "photo") return { cover: "photo", photo: null };
   return { cover: theme.cover, photo: theme.cover === "band" ? "k/assets/hq-cover-wide.webp" : "k/assets/hq-cover-tall.webp" };
 }
 

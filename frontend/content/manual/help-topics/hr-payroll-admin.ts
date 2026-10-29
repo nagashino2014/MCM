@@ -12,11 +12,12 @@ export const HR_PAYROLL_ADMIN_HELP: HelpTopic[] = [
         "작성 중 대장만 고칠 수 있습니다. **확정하면 되돌릴 수 없습니다.**",
         "확정과 명세서 발행에는 급여 확정 권한이 따로 필요합니다.",
         "명절 상여는 ‘상여금 지급 계획’을 결재받으면 상여대장이 자동으로 만들어집니다.",
+        "과거 엑셀 대장은 ‘엑셀 가져오기’로, 직원별 연간 명세서(퇴직금 적립·추계 포함)는 직원별 연간 탭의 엑셀·PDF 아이콘으로 받습니다.",
       ] },
     ],
     more: { article: "payroll.ledger", section: "flow" },
     sources: ["components/payroll/PayrollLedgerBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-29",
   },
   {
     id: "payroll.ledger-create",
@@ -32,6 +33,36 @@ export const HR_PAYROLL_ADMIN_HELP: HelpTopic[] = [
     more: { article: "payroll.ledger", section: "create" },
     sources: ["components/payroll/LedgerCreateModal.tsx"],
     reviewedAt: "2026-10-20",
+  },
+  {
+    id: "payroll.ledger-import",
+    label: "엑셀 가져오기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "사원번호·성명 / 입사일·직급 / 퇴사일·부서 3단 양식의 급상여대장을 확정 대장으로 들여옵니다. 여러 파일을 함께 골라도 됩니다.",
+        "귀속 연·월·종류는 파일 이름·제목에서 자동으로 채워지며 줄마다 고칠 수 있습니다.",
+        "지급·공제·차인 합계가 맞지 않는 파일, 앱에서 만든 대장과 겹치는 달, 명세서 발행·전표 확정된 대장은 들어가지 않습니다.",
+        "예전에 엑셀로 들여온 대장은 **덮어쓰기**를 체크해야 바뀝니다. 가져오기에는 급여 확정 권한이 필요합니다.",
+      ] },
+    ],
+    more: { article: "payroll.ledger", section: "import" },
+    sources: ["components/payroll/LedgerImportModal.tsx"],
+    reviewedAt: "2026-10-29",
+  },
+  {
+    id: "payroll.ledger-severance",
+    label: "퇴직금 추계 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "퇴직금 적립: 매달 임금총액의 1/12 입니다(급여대장에는 없지만 매달 쌓이는 금액).",
+        "추계 퇴직금 = 1일 평균임금 × 30일 × 재직일수 ÷ 365. 기준일은 그해 마지막 급여월 말일, 그해 퇴사했으면 퇴사일입니다.",
+        "1일 평균임금 = (기준일 이전 3개월 임금 + 직전 1년 상여·연차수당 × 3/12) ÷ 3개월 일수. 정산 경비·출장수당·출장숙박수당은 뺍니다.",
+        "재직 1년 미만은 지급 대상이 아닙니다. 실제 지급액은 재무의 퇴직 정산에서 확정합니다.",
+      ] },
+    ],
+    more: { article: "payroll.ledger", section: "annual" },
+    sources: ["components/payroll/PayrollLedgerBoard.tsx", "lib/payroll/annual-statement.ts"],
+    reviewedAt: "2026-10-29",
   },
   {
     id: "payroll.ledger-tax",

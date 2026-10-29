@@ -2,7 +2,7 @@
 
 // 문서 설정 — 표지 디자인 4안(2×2 썸네일)·사진 없는 변형·서체 세트. 고르는 즉시 문서(docId, 기본 마스터본)에 저장한다.
 // 템플릿은 문서별 고정이라 여기서 바꾸지 않는다(이름만 표시) — 다른 템플릿은 첫 화면 [새 문서]로.
-// 선택지는 lib/catalog/document-theme.ts COVER_DESIGNS 하나로 관리(B·C 확정 대기). 렌더러는 표지 루트에 kc-front--{cover}.
+// 선택지는 lib/catalog/document-theme.ts COVER_DESIGNS 하나로 관리(5안, B·C 는 2026-10-29 확정·G 연구소형 추가). 렌더러는 표지 루트에 kc-front--{cover}.
 
 import { useEffect, useState } from "react";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -46,6 +46,17 @@ function CoverThumb({ cover, photo }: { cover: CoverDesign; photo: boolean }) {
               style={{ ...photoStyle, left: `${50 + i * 15}%`, width: "12%", height: `${[62, 74, 54][i]}%`, borderRadius: "999px 999px 2px 2px" }}
             />
           ))}
+        </>
+      )}
+      {cover === "research" && (
+        <>
+          <div className="absolute inset-y-0 left-0 w-[53%]" style={{ background: "var(--cd-primary-soft)" }} />
+          <div className="absolute left-[8%] top-[36%] flex flex-col gap-1">
+            <span className="block h-2 w-16 rounded-sm" style={{ background: "var(--cd-text)" }} />
+            <span className="block h-0.5 w-20" style={{ background: "var(--cd-primary)" }} />
+            <span className="block h-1 w-10 rounded-sm" style={{ background: "var(--cd-muted)" }} />
+          </div>
+          <div className="absolute right-0 inset-y-0 w-[47%]" style={photoStyle} />
         </>
       )}
       {cover === "center" && (

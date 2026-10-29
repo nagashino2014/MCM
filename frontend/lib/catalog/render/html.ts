@@ -33,6 +33,7 @@ const COVER_PHOTO: Record<CoverChoice["cover"], { file: string; box: [number, nu
   strips: { file: "assets/hq-cover-tall.webp", box: [400, 0], fit: "width" },
   band: { file: "assets/hq-cover-wide.webp", box: [842, 300], fit: "cover" },
   center: null,
+  research: { file: "assets/hq-cover-tall.webp", box: [394, 595], fit: "cover" },
 };
 const MIN_PRINT_DPI = 150;
 const GOOD_PRINT_DPI = 300;

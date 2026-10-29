@@ -22,7 +22,7 @@
 | 축 | 선택지 | 실제 구현 | 상태 |
 |---|---|---|---|
 | 색 컨셉 | navy·green·charcoal(+검토용 dark) | `.kc-concept--{id}` 가 CSS 변수를 갈아 끼움. `tokens.json` 에 **navy·dark 값만** 있음 | **B 그린·C 차콜은 선택지만 있고 색 값이 없다** → 고르면 navy 와 같게 그려짐 |
-| 표지 | leaf·strips·center·band | `CoverPage` 분기 + CSS | B·C 확정 대기 |
+| 표지 | leaf·strips·center·band | `CoverPage` 분기 + CSS | B·C 10-29 확정(TP1) |
 | 모티프 | drop·ring·contour | CSS 는 세 가지 다 있음(`.kc-motif--*`) | **코드가 `kc-motif--drop` 을 하드코딩**(parts.tsx:112·infographics.tsx:178·PanelDesign.tsx:366·PanelIllustration.tsx:83) → 선택지 없음 |
 | 서체 세트 | noto·pretendard·plex·serif + 사용자 세트 | 완성 | serif 세트의 PDF 포함은 TrueType 변환 필요(§9-1 함정) |
 | 판 | print/draft · masked/real · full/summary | 완성 | summary 는 부록 제외뿐 |
@@ -47,10 +47,11 @@
 |---|---|---|---|---|---|
 | **T1 `photo`** | 포토 에디토리얼 | 스타일: 사진 중심 | 네이비 · 표지 **E 전면 사진**(신규) · 모티프 drop · 프리텐다드 | 간지 = 전면 사진 + 반투명 판, C04 = 사진 배경 위 KPI 띠, C09 = 큰 히어로 사진(`hero: photo-wide`), C13 = 인물 카드 3:4 큰 사진 | 민간 사업장·홈페이지 다운로드용. **사진이 없는 쪽은 자동으로 T2 변형으로 폴백** |
 | **T2 `graphic`** | 인포그래픽형 | 스타일: 사진 없음 | **B 그린** · 표지 **F 그래픽**(C 중앙 정렬 기반, 모티프 패턴 면) · 모티프 **ring** · 프리텐다드 | 간지 = 분야색 면 + 패턴, C04 = 아이콘+큰 숫자 카드 8개, C09 = 인포그래픽 확대(사진 자리 없음), C06 = 가로 타임라인, C10 = 역량 카드 아이콘 큰 변형 | 사진 부족 시 기본·화면 발표용. 벤치마크 "사진 없는 변형 필수" 요구의 본체 |
-| **T3 `formal`** | 격조·공공형 | 스타일: 세리프 + 용도: PQ 심사 | **C 차콜 + 그린 강조** · 표지 **B 세 기둥**(확정 필요) 또는 여백 흰 표지 · 모티프 **contour** · 서체 세트 **serif**(세리프 제목 + 고딕 본문) | 섹션 순서 변경: 신뢰 근거(인증·등록·특허, 실적 총괄)를 사업 분야 앞으로, C06 연혁 세로 4단, 부록 A 를 본편에, 밀도 ↑(본문 10pt) | 공공 발주처 PQ 심사·입찰 증빙 패키지 첨부 |
+| **T3 `formal`** | 격조·공공형 | 용도: PQ 심사 | **C 차콜 + 그린 강조** · 표지 **B 세 기둥**(10-29 확정) · 모티프 **contour** · 서체 프리텐다드(~~serif~~ — **사용자 10-29: 세리프 제목은 회사소개서에 어울리지 않음**, 세트는 선택지로만 남김) | 섹션 순서 변경: 신뢰 근거(인증·등록·특허, 실적 총괄)를 사업 분야 앞으로, C06 연혁 세로 4단, 부록 A 를 본편에, 밀도 ↑(본문 10pt) | 공공 발주처 PQ 심사·입찰 증빙 패키지 첨부 |
 | **T4 `brief`** | 요약·분야 브리프 | 용도: 요약본 + 분야 맞춤 | 네이비 · 표지 D 사진 띠 · drop · 프리텐다드 | **쪽 계획이 다름**: 표지 → 숫자 → 분야 개관 → **분야 1장 요약(C20 신규, 선택 분야만)** → 핵심 역량 → 인증 → 연락처(8~12쪽). 부록 없음. 선택 분야 = 문서 설정(`areas[]`) | 제안서·견적 첨부, 분야 맞춤판(블루프린트 P8 "capability sheet" 흡수) |
+| **T5 `research`** | 연구소·ESG 제안형 | 용도: 부설연구소(탄소중립 미래연구소) ESG 연구 용역 제안 — **사용자 요청 10-29**, 양식 `[한국환경안전연구원] 회사소개서_260902(최종).pptx`(2026-09, 26쪽) | **D 스틸 블루**(#104E86 머리 띠·#263246 글자·#F3F5F8 패널, 신규 컨셉) · 표지 **G 연구소형**(신규: 왼쪽 하늘빛 면 + 자간 넓은 제목·밑줄 + '- 탄소중립 미래연구소 -' 부제 + 오른쪽 사옥 사진) · drop · 프리텐다드 | **쪽 계획 `research`(TP2)**: 표지 → 목차(로마 숫자 2열) → I 회사개요(제안사 일반현황 키-값 표 + 연혁 세로, 경영철학·비전 4원칙, 등록증) → II 사업 분야 → III 핵심 역량(아이콘 큰 카드 4) → IV **C21 주제 개관**(작성: 개념 3단·도입 배경·기대효과) → V **C22 동향**(작성: 국내·국외) → VI **C23 수행 절차**(4단계 화살표 띠 + 단계별 세부 + 중대성 평가 + 작성 프레임) → VII 인력(임원 이력서형 = A03 `kc-cv` 본편, 참여인력 표 + 수행 조직) → VIII 수행실적(분야별 그룹 행) → 뒤표지 Thank you. 쪽 머리는 네이비 띠 + 사선, 소제목은 세로 막대(템플릿 루트 CSS 로 자동). 변형 C10 icon-large·C13 list·C16 table | ESG 연구 용역 제안·PQ, 연구소 명의 소개 |
 
-색 컨셉 B·C 의 실제 색 값과 모티프 ring·contour 의 모양은 디자인 단계(TP1)에서 정한다 — CI 전용색 #102543·#72AF2D·#0093B8 기준.
+색 컨셉 B·C 의 실제 색 값과 모티프 ring·contour 의 모양은 디자인 단계(TP1)에서 정한다 — CI 전용색 #102543·#72AF2D·#0093B8 기준. **TP1(2026-10-29) 시안**: 결정 T-2·T-3·T-4 를 각 2안씩 실제 지면 키트 CSS 로 그린 비교 페이지 https://claude.ai/artifact/9ebeLUPwszTn2EjDBwKXAK (권장안 = 1안). **사용자가 10-29 다섯 결정 모두 권장안으로 확정**(원문 "권장안으로 확정함") — 1안 값이 tokens.json·kesi-catalog.css·디자인 시스템의 확정값이다.
 
 ## 3. 구조 설계
 
@@ -86,17 +87,27 @@ export interface CatalogTemplate {
 
 ### 3-3. 쪽 변형 목록(구현 대상)
 
-| 쪽 | 변형 키 | 값 | 쓰는 템플릿 |
-|---|---|---|---|
-| C01 표지 | `cover` | 기존 4 + `photo`(E 전면 사진) + `graphic`(F 그래픽) | T1·T2 |
-| C04 숫자 | `layout` | `grid`(기본) · `band`(사진 배경 띠) · `cards8`(아이콘+큰 숫자 8) | T1·T2 |
-| C06 연혁 | `axis` | `vertical`(기본) · `horizontal` · `columns4`(연대별 4단) | T2·T3 |
-| C07 간지 | `style` | `leaf`(기본) · `photo-full`(전면 사진+판) · `color-pattern`(분야색 면+패턴) · `plain`(단색) | T1·T2·T3 |
-| C09 분야 상세 | `hero` | 기존 + `photo-wide` · `none`(인포그래픽 확대) | T1·T2 |
-| C10 핵심 역량 | `cards` | `compact`(기본) · `icon-large` | T2 |
-| C13 임원진 | `card` | `square`(기본) · `portrait-large` · `list`(사진 없음, 격조) | T1·T3 |
-| C16 인증 | `view` | `gallery`(기본) · `table`(목록형, 격조) | T3 |
-| **C20 분야 1장 요약** | 신규 쪽 유형 | 핵심 서비스·강점·분야 KPI·대표 실적 3건·담당 연락처를 한 장에(AECOM 방식) | T4 |
+TP1(2026-10-29)에서 CSS 클래스가 디자인 시스템 bundle.css → `kesi-catalog.css` 에 들어갔다(쪽 컴포넌트 연결은 TP2). 기본값(변형 없음)은 클래스가 없어 standard 문서 렌더가 바뀌지 않는다.
+
+| 쪽 | 변형 키 | 값 | CSS 클래스(TP1) | 쓰는 템플릿 |
+|---|---|---|---|---|
+| C01 표지 | `cover` | 기존 4 + `photo`(E 전면 사진) + `graphic`(F 그래픽) | `.kc-front--photo`(`__full` 사진·`__plate` 아래 판) · `.kc-front--graphic`(**10-29 재설계** — 왼쪽 글 단 + 오른쪽 모티프 궤도 `__orbit`: 두 색 호 `__orbit-ring` + 동심 링 `__orbit-inner` + 분야 6색 노드 `__orbit-node`, 물방울 문서는 `__orbit-drop`, 등고선 문서는 `__orbit-field`; 아래 14pt 주색 선 `__band-field`. 처음 안 '아래 띠 + 패턴'은 투박하다는 사용자 지적으로 폐기) | T1·T2 |
+| C04 숫자 | `layout` | `grid`(기본) · `band`(사진 배경 띠) · `cards8`(아이콘+큰 숫자 8) | `.kc-kpis--band`(+`.kc-kpis__bg`)·`.kc-kpi--band` · `.kc-kpis--cards8`·`.kc-kpi--card` | T1·T2 |
+| C06 연혁 | `axis` | `columns`(기본 — 연도 열 가로 나열, 항목 아래로) · `horizontal`(한 줄 축, 항목 위·아래 번갈아) · `columns4`(연대별 4단) | `.kc-timeline--horizontal`(li 안 `__cell`·`__axis`·`__cell`) · `.kc-timeline--columns4` | T2·T3 |
+| C07 간지 | `style` | `leaf`(기본) · `photo-full`(전면 사진+판) · `color-pattern`(분야(주)색 면+패턴) · `plain`(단색) | `.kc-divider--photo-full`(`__full`) · `.kc-divider--color-pattern`(+`.kc-pattern`) · `.kc-divider--plain` | T1·T2·T3 |
+| C09 분야 상세 | `hero` | 기존 + `photo-wide` · `none`(인포그래픽 확대) | `.kc-bizhero--photo-wide` · `.kc-bizhero--none`(블록명이 `kc-bizhero` 라 계획의 `.kc-hero--*` 대신 이 이름) | T1·T2 |
+| C10 핵심 역량 | `cards` | `compact`(기본) · `icon-large` | `.kc-strengths--icon-large` | T2 |
+| C13 임원진 | `card` | `square`(기본) · `portrait-large` · `list`(사진 없음, 격조) | `.kc-people--portrait-large`·`.kc-person--portrait-large` · `.kc-people--list`·`.kc-person--list` | T1·T3 |
+| C16 인증 | `view` | `gallery`(기본) · `table`(목록형, 격조) | `.kc-creds--table`·`.kc-cred--table` | T3 |
+| **C20 분야 1장 요약** | 신규 쪽 유형 | 핵심 서비스·강점·분야 KPI·대표 실적 3건·담당 연락처를 한 장에(AECOM 방식) | `.kc-brief`(`__services`·`__strengths` 7열, `__kpis`·`__cases`·`__contact` 5열) + 쪽 루트 `.kc-sheet--brief`/`.kc-tpl--brief` | T4 |
+| 템플릿 루트 밀도 | — | T3 본문 10pt, T4 본문 11pt | `.kc-tpl--formal` · `.kc-tpl--brief`(=`.kc-sheet--brief`) | T3·T4 |
+| T5 연구소형 양식 | — | 쪽 머리 네이비 띠 + 사선, 소제목 세로 막대, 네이비 표 머리·키-값 제목 칸, 회청 KPI 카드, 목차 2열 점선 | `.kc-tpl--research .kc-head/__num/__name`, `.kc-tpl--research .kc-eyebrow/.kc-blockhead/.kc-table/.kc-facts/.kc-kpi/.kc-toc`(쪽 컴포넌트 수정 없이 루트 셀렉터) | T5 |
+| C01 표지 G 연구소형 | `cover` | `research` | `.kc-front--research`(`__wash` 하늘빛 면·`__photo-half` 사진 반면·`__rule` 밑줄·`__sub` 부제·`__eyebrow--en`) — **렌더러 분기 구현(TP1)** | T5 |
+| C19 뒤표지 | `style` | `thanks`(네이비 면 + Thank you + 아래 짙은 띠 연락처) | `.kc-backc--thanks`(`__thanks`·`__foot-band`) | T5 |
+| **C21 주제 개관** | 신규 쪽 유형(작성) | 개념 3단(아이콘 원·점선·설명·세부 요소 상자)·도입 배경·기대효과 | `.kc-topic`(`__lead`·`__col`·`__icon`·`__name`·`__dots`·`__desc`·`__detail`) | T5 |
+| **C22 동향** | 신규 쪽 유형(작성) | 국내·국외 제도 동향 글 + 그림·출처 | 본문 블록(`kc-blockhead`·`kc-list`)로 구성, 전용 CSS 없음 | T5 |
+| **C23 수행 절차** | 신규 쪽 유형 | 4단계 화살표 띠 + 기간 + 단계별 세부 목록(내부 결정·외부 협업 음영) | `.kc-phases`(`__step`·`__when`·`__list`, `is-internal`·`is-external`) | T5 |
+| 모티프 상징 자리 | `motif` | ring · contour 의 표지·간지·뒤표지 모양 | `.kc-front__ring`·`__ring-node`·`__contour`, `.kc-divider__ring`·`__ring-node`·`__photo`·`__contour`, `.kc-backc__ring`·`__contour`; 유틸 `.kc-ring--concentric`(동심 링)·`.kc-contour-field`(CSS 등고선, `--bands` 등고 띠)·`.kc-pattern`(모티프별 패턴 면). ring·contour 문서에서 렌더러가 넣는 `kc-drop` 은 원·겹선 원으로 폴백 | T2·T3 |
 
 사진이 필요한 변형(`photo-full`·`band`·`photo-wide`·`portrait-large`)은 자산이 없으면 템플릿 `fallback` 변형으로 그리고, 쪽 검사에 "사진 없음 — 그래픽 변형으로 그림" 안내를 남긴다.
 
@@ -124,13 +135,13 @@ export interface CatalogTemplate {
 | # | 결정 | 권장 |
 |---|---|---|
 | T-1 | 4종 확정(§2) — 이름·성격 | 제안대로. 이름은 화면 표기용이라 뒤에 바꿀 수 있음 |
-| T-2 | 색 컨셉 B 그린·C 차콜 값 | CI 그린 #72AF2D 바탕 + 네이비 글자(B), 차콜 #2b2f36 + 그린 강조(C). TP1 시안 2안씩 |
-| T-3 | 모티프 ring·contour 모양 | 디자인 시스템 README 후보(순환 링·등고선) 그대로, 표지·간지·뒤표지에만(본문 절제 규칙 유지) |
-| T-4 | 표지 B 세 기둥·C 중앙 정렬 확정 | T3 가 B, T2 가 C 파생 F 를 쓰므로 **이번에 확정** |
+| T-2 | 색 컨셉 B 그린·C 차콜 값 | CI 그린 #72AF2D 바탕 + 네이비 글자(B), 차콜 #2b2f36 + 그린 강조(C). **TP1 시안(10-29)**: B-1 포레스트(권장, 반영) / B-2 딥 그린(#2d6a1a 면 + 흰 글자), C-1 차콜 주색 + 그린 강조(권장, 반영) / C-2 차콜 면 + 그린 주색 → **10-29 사용자 확정: B-1·C-1** |
+| T-3 | 모티프 ring·contour 모양 | 디자인 시스템 README 후보(순환 링·등고선) 그대로, 표지·간지·뒤표지에만(본문 절제 규칙 유지). **TP1 시안(10-29)**: 링-1 두 색 호(권장, 반영) / 링-2 동심 가는 링, 등고선-1 가는 등농도선(권장, 반영) / 등고선-2 등고 띠 → **10-29 사용자 확정: 링-1·등고선-1** |
+| T-4 | 표지 B 세 기둥·C 중앙 정렬 확정 | T3 가 B, T2 가 C 파생 F 를 쓰므로 **이번에 확정**. **TP1 시안(10-29)**: B-1 세 기둥(현재 안, 권장) / B-2 세 띠, C-1 안쪽 테(현재 안, 권장) / C-2 겹선 + 워터마크, F-1 아래 주색 띠 + 패턴 / F-2 전면 주색 면 → **10-29 사용자 확정: B-1·C-1**, F 는 확정 뒤 "너무 심플해 투박하다"는 지적으로 **재설계(F-3 모티프 궤도)**(`COVER_DESIGNS` strips·center `confirmed: true`, '확정 전' 핀 제거) |
 | T-5 | T3 섹션 순서(신뢰 근거 앞으로) | 권장. 목차·북마크는 자동이라 비용 없음 |
 | T-6 | T4 선택 분야 수·쪽 수 상한 | 분야 1~3개, 본편 12쪽 이내 |
 | T-7 | 문서 복수화 UI 위치 | 영업 > 회사소개서 첫 화면에 문서 카드 목록. 발행본 열람(전 직원)은 문서별 |
-| T-8 | 서체 세리프 세트 | Noto Serif KR(OFL, TrueType 변환 검증 필요) |
+| T-8 | 서체 세리프 세트 | ~~Noto Serif KR~~ → **취소(사용자 10-29)**: 모든 템플릿 기본 서체는 프리텐다드. 세리프 세트는 서체 라이브러리 선택지로만 남고 TrueType 변환 과제도 보류 |
 
 ## 5. 구현 로드맵
 
@@ -144,6 +155,12 @@ export interface CatalogTemplate {
 
 - TP0 와 TP1 은 병렬. TP0 는 디자인 결정 없이 진행할 수 있다(색 값은 임시).
 - **TP0 구현 기록(2026-10-29, 브랜치 `claude/catalog-templates-tp0-b74acf`)**: `lib/catalog/templates.ts`(5종·`templateOf`·`templateVariant`), `DocumentTheme.template/motif/areas` + `sanitizeDocumentTheme`·`pickThemePatch`(template 은 패치에서 제외 = 문서별 고정, `saveDocumentTheme` 은 다른 template 을 보내면 400 `ThemeTemplateLockedError`, 스튜디오 자동 저장은 조용히 무시), `RenderCtx.template/motif` → `Sheet` 루트 `kc-tpl--{id} kc-motif--{motif}`(하드코딩 4곳 제거 — 지도·패널 미리보기는 상위 래퍼의 모티프를 따른다), `buildPagePlan(…, variants, template)` 변형 합치기(`{...템플릿[쪽 유형], ...템플릿[쪽 키], ...PageEdits.variant}`, plan 분기는 TODO), `tokens.json` green·charcoal 임시값(usage 에 표시, 본문 대비 4.5:1 시험), 문서 복수화(`createCatalogDocument`·`GET/POST /api/catalog/documents`, 첫 화면 `CatalogDocumentsPanel` 문서 카드·[새 문서] 모달·`?doc=` 전환, `document-theme`·`render/pdf`·`editions` route 와 `CatalogCoverPicker`·`CatalogRenderPanel`·`CatalogPublishModal`·스튜디오 `?doc=` 의 docId 파라미터), 발행 options 에 `template/motif/areas`, 스튜디오 디자인 탭 모티프 칩, 시험 `tests/catalog-templates.test.ts`(9건), 매뉴얼 `sales.catalog` "문서와 템플릿" 절·도움말 `catalog.documents`·`catalog.studio-motif`. 마이그레이션 없음(jsonb). 반영 대기·알림은 마스터만. 발견: `tokens.json` 에 B·C 값이 canvas·panel·brand·field·on-field 에는 이미 있었고 나머지(accent·ink·rule 등)가 비어 있어 채웠다.
+- **TP1 구현 기록(2026-10-29, 브랜치 `claude/catalog-templates-tp1-eaa0ea`)**: 시안 페이지 https://claude.ai/artifact/9ebeLUPwszTn2EjDBwKXAK (T-2·T-3·T-4 각 2안, 실제 키트 CSS 렌더). `tokens.json` green·charcoal 값을 1안으로 확정 표기(임시값 표시 제거, usage·`color.note`·`meta.note` 갱신; 변경 값 rule-strong green #1f3a12, brand·field charcoal #2b2f36 로 아티팩트의 #2c2f33 통일). 디자인 시스템 bundle.css 에 TP1 블록(§3-3 표의 클래스 전부 + 모티프 상징 자리·유틸 + 템플릿 루트 밀도, 규칙 133개) 추가 → `scripts/catalog/export_kit_css.py`(신규, 머리말·@import 제거)로 `kesi-catalog.css` 재export(기존 규칙 변경 0, 추가만 — `git diff` 184+/2−, 2 는 머리말). 발견: 저장소 사본에 일러스트 블록(`.kc-ill*`, 313)이 디자인 시스템 bundle.css 에는 없어 이번 재export 때 bundle.css 에 넣었다. 시험 `tests/catalog-templates.test.ts` 12건(+3: 변형 클래스 존재, TP1 블록 선택자 가드 — 모든 선택자가 템플릿·모티프·컨셉·변형 클래스를 포함, 임시값 표시 없음), 전체 72/72. 매뉴얼 `sales.catalog`·도움말 `catalog.studio-design` 임시 색 문구 정리, changelog 1건. 디자인 시스템·목업 아티팩트 갱신은 아래 TP1 아티팩트 기록. 결정 T-2~T-4 는 시안 제시 후 **사용자가 모두 권장안(1안)으로 확정**(10-29) — 확정 커밋에서 `document-theme.ts` B·C `confirmed: true`, 매뉴얼 '확정 전' 문구 제거, tokens.json·계획서·디자인 시스템·캔버스의 '확인 대기' 문구를 확정으로 정리. 2안(딥 그린·차콜 면+그린 주색·동심 링·등고 띠·세 띠·겹선+워터마크·전면 주색 면)은 시안 페이지에만 남는다.
+- **TP1 아티팩트 기록(2026-10-29)**: 디자인 시스템 `AovTvRBgpnUv7r6CQvxp8B` version 21(1793266811-2612; bundle.css·tokens.json 은 version 18 = 1793266749-ac98, `kesi-catalog.css` 머리말의 version) — tokens.json B·C 값, bundle.css TP1 블록(+`.kc-ill` 동기화), README 색 표·모티프 절·"템플릿과 쪽 변형" 절, 컴포넌트 README 10개 덧붙임, 새 카드 `TemplateVariants`. 목업 캔버스 `2bMEZ7oMfZbNUfCtswStMb` version 49(1793266820-b9e6) — 쪽 파일 Tweaks(C01 cover photo·graphic + 링·등고선 상징 자리, C07 style, C04 layout, C06 axis, C09 hero, C10 cards, C13 card, C16 view), `C20Brief.dc.html` 신규, `Templates.dc.html` 보드(템플릿 4종 × 대표 쪽 6, y 8900), ds 사본·kc-tokens.css 동기화. 시안 비교 페이지 `9ebeLUPwszTn2EjDBwKXAK`. 재export 절차: 디자인 시스템 bundle.css 를 받아 `python scripts/catalog/export_kit_css.py <bundle.css> --version <아티팩트 version> --date <날짜>`.
+- **TP1 추가 기록(2026-10-29, 사용자 지시 3건)**: ① T2 표지 F 재설계 — 아래 띠 + 패턴 폐기, 왼쪽 글 단 + 오른쪽 모티프 궤도(두 색 호 + 동심 링 + 분야 6색 노드, 모티프별 변형) `.kc-front__orbit*`, 시안 페이지에 F-3(궤도, 반영)·F-4(분야 원 격자, 대안) 추가. ② T3 격조·공공형 서체 세리프 → 프리텐다드(`templates.ts` fontSet 제거, 결정 T-8 취소, 매뉴얼·DS·캔버스 문구). ③ **T5 연구소·ESG 제안형 템플릿 신설** — 양식 PPT 26쪽 분석(네이비 #104E86 사선 머리 띠, 청회색 #4C5374/#263246 글자, 포인트 블루 #0830C1, 회청 패널 #F3F5F8, 프리텐다드, 로마 숫자 목차, 제안사 일반현황 표, ESG 개념·배경·기대효과·동향·절차·중대성 평가·작성 프레임, 임원 이력서형 4쪽, 참여인력 내부 11·외부 5 표, 실적, Thank you): `TEMPLATE_IDS`·`CATALOG_TEMPLATES.research`(plan `research`, variants C10 icon-large·C13 list·C16 table), 색 컨셉 **D 스틸 블루**(`COLOR_CONCEPTS` steel + tokens.json 테마, 대비 전 쌍 5.5:1 이상), 표지 **G 연구소형**(`COVER_DESIGNS` research + `CoverPage` 분기 + 썸네일, `COVER_CONTENT.researchSub/Eyebrow`), CSS(템플릿 루트 양식 규칙·표지 G·뒤표지 thanks·C21 `kc-topic`·C23 `kc-phases`), 시험 +1(73/73). 쪽 계획 `research` 분기와 C21~C23 렌더·`kc-cv` 본편 포함은 TP2. 자산: 양식의 사옥 투시도 사진·등록증 이미지는 저장소에 없음(표지는 키트 사옥 사진으로, 등록증은 회사 프로필 증빙 이미지로 대체).
+- **TP1 아티팩트 기록 2차(2026-10-29, T5·F 재설계·T3 서체)**: 디자인 시스템 version 25(1793271440-441a; bundle.css·tokens.json 은 version 23 = 1793271431-90b2 → `kesi-catalog.css` 머리말) — tokens 테마 D 스틸 블루, bundle.css F 궤도·표지 G·T5 루트 규칙·`kc-backc--thanks`·`kc-topic`·`kc-phases`, README 색 표 D 행·템플릿 표 T5 행·F·G 설명, TemplateVariants 카드 14장. 캔버스 version 51 — `Main.dc.html` cover research + F 궤도 마크업, 모든 쪽 concept enum 에 steel, `C19Back` style thanks, 새 쪽 `C05Proposal`·`C21Topic`·`C23Phases`, Templates 보드 T5 행(y 8900)·T3 프리텐다드, 새 쪽 행(y 10360). 시안 페이지 version 4(F-3·F-4, T5 절).
+- **T5 사용자 피드백 반영(2026-10-29)**: 표지 G 그라데이션을 사선 방향으로 더 주고(주색 24% → 흰색) 사진을 0.6 으로 옅게 + 네 가장자리 페이드(마스크), 쪽 머리 띠의 왼쪽 사선을 회청·회색 대신 네이비 중간 톤(42%·62%)으로 통일, 연혁을 연도(왼쪽 60pt)·내용(오른쪽) 2열 행 + 세로 축선·점(행 25pt)으로, 절차 띠 4단계와 세부 목록에 약한 그라데이션, C21 세부요소 상자는 카드 아래 붙여 같은 높이(min-height 64). DS version 26(1793271905-884d → kesi-catalog.css 머리말), 캔버스·시안 페이지 재발행.
+- **T5 피드백 2차(2026-10-29)**: 표지 G 그라데이션 시작 주색 17%(조금 더 연하게), 제안사 일반현황 칸 padding 11px·10pt, 연혁 행 padding 9px·10pt(행 36pt), 절차 쪽은 grid 3행(단계·기간·세부 `minmax(0,1fr)`)으로 세부 상자가 남는 높이를 나눠 채움(상자 최소 44pt, 단계 띠 11.5pt).
 - 배포는 모두 next 이미지만(`staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`, ADT·intel 은 618 고정). 세리프 서체 파일을 converter 이미지에 넣으면 converter 재배포(전체 apply 금지·java-common 필수 — 메모리 converter-service).
 - 마이그레이션: TP0~TP3 모두 jsonb 안에서 해결되어 **신규 SQL 없음**이 목표. 문서 목록에 썸네일 키를 두려면 `catalog_documents` 컬럼 1개(그때 번호 확인, 10-29 기준 최대 314).
 

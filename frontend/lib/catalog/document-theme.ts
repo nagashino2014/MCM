@@ -2,8 +2,8 @@
  * 회사소개서 문서(판) 설정 — 템플릿·표지 디자인·표지 사진·서체 세트·색 컨셉·모티프. 클라이언트 안전(DB 접근은 projects.ts).
  * 문서마다 catalog_documents.theme(jsonb)에 저장한다. 렌더러(P4)는 표지 루트에 `kc-front--{cover}`, 쪽 루트에
  * `kc-tpl--{template} kc-motif--{motif} kc-concept--{concept}` 를 붙인다.
- * 표지 4안(사용자 지시 10-22): A 잎 창·D 사진 띠는 확정, B 세 기둥·C 중앙 정렬은 확정 대기라 이름·모양이 바뀔 수 있다
- *   → 선택지는 이 상수 하나로만 관리한다(화면·검증·렌더러가 모두 이 목록을 본다).
+ * 표지 4안: A 잎 창·D 사진 띠는 10-22 확정, B 세 기둥·C 중앙 정렬은 TP1 시안(10-29)을 거쳐 사용자가 현재 안으로 확정했다(계획서 T-4).
+ *   E 전면 사진·F 그래픽(C 파생)은 TP2 에서 선택지에 더한다. 선택지는 이 상수 하나로만 관리한다(화면·검증·렌더러가 모두 이 목록을 본다).
  * 템플릿(TP0, 계획서 docs/catalog-templates-plan.md §3-1): 새 문서를 만들 때 고르고 문서마다 고정한다 — 편집층 노드 id 가
  *   마크업 구조 해시라 템플릿을 바꾸면 편집이 고아가 되기 때문. 같은 문서 안에서는 색·서체·표지·모티프만 바꾼다.
  *   템플릿 정의(기본 테마·쪽 변형)는 lib/catalog/templates.ts.
@@ -13,8 +13,8 @@ import { FONT_SETS } from "./fonts";
 
 export const COVER_DESIGNS = [
   { id: "leaf", label: "A 잎 창", desc: "사옥 사진을 잎 모양 창에 담은 표지", photo: "hq-cover-tall", confirmed: true },
-  { id: "strips", label: "B 세 기둥", desc: "사진 한 장을 위가 둥근 세 기둥으로 나눠 엇갈려 세운 표지", photo: "hq-cover-tall", confirmed: false },
-  { id: "center", label: "C 중앙 정렬", desc: "가운데 축·안쪽 테로 정리한 사진 없는 표지", photo: null, confirmed: false },
+  { id: "strips", label: "B 세 기둥", desc: "사진 한 장을 위가 둥근 세 기둥으로 나눠 엇갈려 세운 표지", photo: "hq-cover-tall", confirmed: true },
+  { id: "center", label: "C 중앙 정렬", desc: "가운데 축·안쪽 테로 정리한 사진 없는 표지", photo: null, confirmed: true },
   { id: "band", label: "D 사진 띠", desc: "가로로 긴 사옥 사진 띠를 둔 표지", photo: "hq-cover-wide", confirmed: true },
 ] as const;
 

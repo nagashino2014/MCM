@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { shortSido } from "@/lib/catalog/regions";
 import { syncSalesStaffGrants } from "./staff-access";
 import {
   ACTIVITY_TYPE_META,
@@ -56,12 +57,22 @@ const num = (v: unknown): number | null => {
 const kstDay = (offsetDays = 0): string =>
   new Date(Date.now() + 9 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
 
+// 사업장 시도 — region_sido 가 비면 소재지 주소 맨 앞의 시도로 읽는다(2026-10-29 스테이징 실측: 사업장 15.8%·계약 거래처 62%가
+//   시도 빈 값이라 지역권 '미상'으로 쏠렸다). 회사소개서 권역과 같은 shortSido 판정. '광주시 …'는 경기 광주시라 광역시로 보지 않는다.
+function projectSido(row: Record<string, unknown>): string | null {
+  const sido = text(row.region_sido);
+  if (sido) return sido;
+  const addr = String(row.facility_site_address ?? "").replace(/\s+/g, "");
+  if (!addr || /^광주시/.test(addr)) return null;
+  return shortSido(addr) || null;
+}
+
 function mapProject(row: Record<string, unknown>): SalesProject {
   return {
     projectId: String(row.project_id ?? ""),
     facilityId: String(row.facility_id ?? ""),
     facilityName: text(row.facility_name),
-    regionSido: text(row.region_sido),
+    regionSido: projectSido(row),
     title: String(row.title ?? ""),
     stage: (String(row.stage ?? "lead") as SalesProject["stage"]),
     ownerEmployeeId: text(row.owner_employee_id),
@@ -86,7 +97,8 @@ function mapProject(row: Record<string, unknown>): SalesProject {
 }
 
 const PROJECT_SELECT = `
-  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, f.region_sido, p.title, p.stage,
+  SELECT p.project_id, p.facility_id, f.company_name AS facility_name, f.region_sido,
+         f.site_address AS facility_site_address, p.title, p.stage,
          p.owner_employee_id, e.name AS owner_employee_name, p.owner_dept_id, p.contract_id,
          p.service_category, p.service_subcategory,
          p.expected_amount, p.priority, p.status, p.opened_at, p.closed_at, p.memo,
@@ -108,6 +120,7 @@ const PROJECT_SELECT = `
 //  - 태그: 등록된 '모든' 스케쥴의 유형을 시작 날짜 오름차순으로(예정 포함). 같은 유형은 최초 1회.
 //  - 단계: computeStage — 날짜 기준이라 활동이 그대로여도 시간이 지나면 값이 바뀐다.
 //    저장된 sales_projects.stage 는 마지막 갱신 시점 값이므로 조회 때마다 다시 계산해 덮어쓴다.
+//    기간이 끝났는데 입력이 없는 스케쥴은 단계 근거로 쓰지 않는다(isStageEvidence, 2026-10-29).
 async function attachStepTypes(
   db: Awaited<ReturnType<typeof getDb>>,
   projects: SalesProject[]
@@ -117,7 +130,8 @@ async function attachStepTypes(
   // 배열 파라미터 1개로 넘긴다 — 예전 IN ($1…$n) 은 영업건 수만큼 바인드 파라미터가 늘어 PG 한도(65,535)에 걸린다(2026-10-29).
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids
+      `SELECT project_id, activity_id, activity_type, status, scheduled_at, ended_at, occurred_at, created_at,
+              progress_note, bid_result, quotes, bids
          FROM sales_activities WHERE project_id = ANY($1::text[])`,
       [ids]
     )
@@ -137,6 +151,7 @@ async function attachStepTypes(
       // 스케쥴이 없으면 저장된 단계가 곧 도달 단계(실주·보류는 근거가 없어 리드로 본다)
       p.reachedStage = STAGE_RANK[p.stage] != null ? p.stage : "lead";
       p.finalBidAmount = null;
+      p.unrecordedCount = 0;
       continue;
     }
     const earliest = new Map<SalesActivityType, string>();
@@ -150,22 +165,26 @@ async function attachStepTypes(
       .sort((a, b) => (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1))
       .map(([t]) => t);
     p.stage = computeStage(acts);
-    // 수주·실주 확정일 — Salesboard KPI의 '올해' 판정용. computeStage 와 같은 결과 스케쥴(첫 result)의 날짜.
+    // 수주·실주 확정일 — Salesboard KPI의 '올해' 판정용. computeStage 와 같은 결과 스케쥴(가장 늦은 확정 결과)의 날짜.
     if (p.stage === "won" || p.stage === "lost") {
-      const r = acts.find((a) => String(a.activity_type) === "result");
-      const at = r ? String(r.scheduled_at ?? r.occurred_at ?? r.ended_at ?? r.created_at ?? "") : "";
+      const r = latestDecidedResult(acts);
+      const at = r ? activityWhen(r) : "";
       p.outcomeAt = at ? at.slice(0, 10) : null;
     }
-    // 도달 단계(Salesboard 퍼널 W4) — 시작된 스케쥴 중 가장 높은 단계. 수주면 수주.
+    // 도달 단계(Salesboard 퍼널 W4) — 단계 근거가 되는 스케쥴 중 가장 높은 단계. 수주면 수주.
     //   computeStage 는 '지금' 단계라 결과 뒤 실주·재투찰로 내려갈 수 있어 퍼널에는 이 값을 쓴다.
     let best: SalesStage = "lead";
+    let unrecorded = 0;
     for (const a of acts) {
+      if (String(a.status ?? "") === "canceled") continue;
       const start = String(a.scheduled_at ?? a.occurred_at ?? "");
       if (!start || start > nowKst) continue; // 아직 시작하지 않은 예정 스케쥴은 도달로 보지 않는다
+      if (!isStageEvidence(a, nowKst)) { unrecorded++; continue; } // 기간이 끝났는데 입력 없음
       const st = STAGE_BY_ACTIVITY_TYPE[String(a.activity_type)];
       if (st && (STAGE_RANK[st] ?? -1) > (STAGE_RANK[best] ?? -1)) best = st;
     }
     p.reachedStage = p.stage === "won" ? "won" : best;
+    p.unrecordedCount = unrecorded;
     // 최종 투찰가(W6) — 가장 늦게 시작한 투찰 스케쥴의 마지막 회차 금액
     let lastBidAt = "";
     let lastBid: number | null = null;
@@ -267,14 +286,15 @@ export async function listFacilityProjectHistory(facilityId: string): Promise<Sa
   for (const p of projects) {
     const acts = rowsToObjects(
       await db.exec(
-        `SELECT activity_type, scheduled_at, ended_at, occurred_at, bid_result, bids, summary
+        `SELECT activity_id, activity_type, status, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids, summary
            FROM sales_activities WHERE project_id = $1`,
         [p.projectId]
       )
     );
     const dates: string[] = [];
     let bidAmount: number | null = null;
-    let outcome: SalesBidResult | null = null;
+    // 결과 = 가장 늦은 확정 결과(진행 단계 판정과 같은 기준)
+    const outcome = (text(latestDecidedResult(acts)?.bid_result) as SalesBidResult | null);
     let summary = p.memo;
     for (const a of acts) {
       const s = text(a.scheduled_at) ?? text(a.occurred_at);
@@ -286,7 +306,6 @@ export async function listFacilityProjectHistory(facilityId: string): Promise<Sa
         const last = bids[bids.length - 1];
         if (last && last.amount != null) bidAmount = last.amount;
       }
-      if (String(a.activity_type) === "result") outcome = text(a.bid_result) as SalesBidResult | null;
       if (!summary) { const sm = text(a.summary); if (sm) summary = sm; }
     }
     dates.sort();
@@ -794,11 +813,16 @@ export async function setSalesAssignees(employeeIds: string[], userId: string | 
 }
 
 // ── 진행 단계 자동 분류 ──────────────────────────────────────
-// 스케쥴 '날짜' 기준으로 지금 어느 단계에 있는지 판정한다(경과 입력 여부와 무관).
+// 스케쥴 날짜 기준으로 지금 어느 단계에 있는지 판정한다.
 //   1) 진행 중 = 시작일시가 지났고 기한(종료일시)이 아직 남은 스케쥴 → 그중 가장 늦게 시작한 것
-//   2) 진행 중이 없으면(= 다음 단계 시작일이 아직 도래하지 않음) → 기한이 경과한 것 중 가장 최근 것
-//   3) 전부 미래 예정이면 리드
-// 단, 영업 결과가 확정(낙찰·탈락·거절·중단)된 건은 날짜와 무관하게 수주/실주로 고정한다.
+//   2) 진행 중이 없으면(= 다음 단계 시작일이 아직 도래하지 않음) → 기한이 경과한 것 중 가장 최근 것.
+//      단, 기한이 지났는데 경과·견적가·투찰가·영업 결과가 하나도 없는 스케쥴(예정 그대로)은 빼고 본다.
+//   3) 전부 미래 예정이면(또는 근거가 되는 스케쥴이 없으면) 리드
+// 단, 영업 결과가 확정(낙찰·탈락·거절·중단)된 건은 날짜와 무관하게 수주/실주로 고정한다(가장 늦은 확정 결과 기준).
+// 취소한 스케쥴은 어디에도 넣지 않는다.
+// 2026-10-29: 예전에는 경과 입력과 무관하게 날짜만 봐서, 진행하지 않은 채 날짜만 지난 '예정' 스케쥴로 단계가 올라갔다
+//   (스테이징 실측: 7월 견적·제안·투찰·결과가 예정 그대로인 건이 '입찰'로 표시). 경과는 기간이 지난 뒤에야
+//   입력할 수 있으므로(ScheduleModal) 기간 중인 스케쥴은 입력이 없어도 인정한다.
 // 유형→단계: 전화·메일=컨택, 방문·현설=제안, 견적·제안·투찰·결과=입찰.
 const STAGE_BY_ACTIVITY_TYPE: Record<string, SalesStage> = {
   telemarketing: "contact",
@@ -811,8 +835,39 @@ const STAGE_BY_ACTIVITY_TYPE: Record<string, SalesStage> = {
   result: "bidding",
 };
 
+// 스케쥴 대표 시각 — 정렬·확정일용(scheduled_at·occurred_at 은 KST 벽시계 문자열)
+function activityWhen(r: Record<string, unknown>): string {
+  return String(r.scheduled_at ?? r.occurred_at ?? r.ended_at ?? r.created_at ?? "");
+}
+
+// 기한이 지난 스케쥴이 실제로 진행됐다는 입력이 있는지 — 경과(완료), 견적가·투찰가, 영업 결과 중 하나.
+// 기간 중인 스케쥴은 아직 경과를 입력할 수 없으므로 근거로 인정한다.
+function isStageEvidence(r: Record<string, unknown>, nowKst: string): boolean {
+  if (String(r.status ?? "") === "canceled") return false;
+  const start = String(r.scheduled_at ?? r.occurred_at ?? "");
+  const end = String(r.ended_at ?? "") || start;
+  if (start && start <= nowKst && nowKst <= end) return true;
+  // status 가 비어 있는 옛 행은 mapActivity 와 같이 완료로 본다
+  if (String(r.status ?? "done") === "done") return true;
+  if (text(r.progress_note) || text(r.bid_result)) return true;
+  return jsonArray<ActivityQuote>(r.quotes).some((q) => q.amount != null) || jsonArray<ActivityBid>(r.bids).some((b) => b.amount != null);
+}
+
+// 영업 결과가 입력된 결과 스케쥴 중 가장 늦은 것(같으면 늦게 등록한 것). 재투찰도 '입력된 결과'라
+//   낙찰 뒤 재투찰을 입력하면 재투찰이 이긴다. 예전 rows.find 는 DB 반환 순서에 따라 달라졌다(2026-10-29).
+function latestDecidedResult(rows: Array<Record<string, unknown>>): Record<string, unknown> | null {
+  let pick: Record<string, unknown> | null = null;
+  let pickKey = "";
+  for (const r of rows) {
+    if (String(r.activity_type) !== "result" || String(r.status ?? "") === "canceled" || !text(r.bid_result)) continue;
+    const key = `${activityWhen(r)}|${String(r.created_at ?? "")}|${String(r.activity_id ?? "")}`;
+    if (!pick || key > pickKey) { pick = r; pickKey = key; }
+  }
+  return pick;
+}
+
 function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
-  const result = rows.find((r) => String(r.activity_type) === "result");
+  const result = latestDecidedResult(rows);
   if (result) {
     const br = String(result.bid_result ?? "");
     if (br === "won_bid") return "won";
@@ -826,12 +881,14 @@ function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
   let past: Record<string, unknown> | null = null;
   let pastEnd = "";
   for (const r of rows) {
+    if (String(r.status ?? "") === "canceled") continue;
     const start = String(r.scheduled_at ?? "");
     if (!start) continue;
     const end = String(r.ended_at ?? "") || start;
     if (start <= nowKst && nowKst <= end) {
       if (!running || start >= runningStart) { running = r; runningStart = start; }
     } else if (end < nowKst) {
+      if (!isStageEvidence(r, nowKst)) continue;
       if (!past || end >= pastEnd) { past = r; pastEnd = end; }
     }
   }
@@ -845,7 +902,8 @@ async function recomputeProjectStage(
   projectId: string,
   now: string
 ): Promise<void> {
-  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result, progress_note, scheduled_at, ended_at FROM sales_activities WHERE project_id = $1", [projectId]));
+  const rows = rowsToObjects(await db.exec(`SELECT activity_id, activity_type, status, bid_result, progress_note, quotes, bids, scheduled_at, ended_at, occurred_at, created_at
+       FROM sales_activities WHERE project_id = $1`, [projectId]));
   const stage = computeStage(rows);
   await db.run("UPDATE sales_projects SET stage = $2, updated_at = $3 WHERE project_id = $1", [projectId, stage, now]);
 }

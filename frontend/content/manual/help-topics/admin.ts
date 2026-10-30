@@ -180,4 +180,19 @@ export const ADMIN_HELP: HelpTopic[] = [
     sources: ["components/recruit/RecruitEditorBoard.tsx"],
     reviewedAt: "2026-10-21",
   },
+  {
+    id: "admin.integrations",
+    label: "외부 연동 상태 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "근태·영업 수집·공공입찰·바로빌 연동이 정해진 주기 안에 성공했는지 매일 08~20시에 매시 점검합니다.",
+        "[[이상]]이 생기면 시스템 관리자에게 운영 알람·모바일 앱 알림·메일로 알리고, 계속되면 24시간마다, 복구되면 한 번 더 알립니다.",
+        "[[확인 불가]]는 판정 근거가 없는 상태(수집기 갱신 전 등)라 알리지 않습니다.",
+        "[[지금 점검]]을 누르면 바로 판정합니다. 알림 규칙은 같습니다.",
+      ] },
+    ],
+    more: { article: "admin.integrations", section: "targets" },
+    sources: ["components/admin/IntegrationHealthBoard.tsx"],
+    reviewedAt: "2026-10-30",
+  },
 ];

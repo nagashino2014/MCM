@@ -25,6 +25,7 @@ export async function register() {
     __todoRemindTimer?: ReturnType<typeof setInterval>;
     __mailImportTimer?: ReturnType<typeof setInterval>;
     __catalogRefreshTimer?: ReturnType<typeof setInterval>;
+    __integrationWatchTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -110,5 +111,13 @@ export async function register() {
     const catalogTick = () => callTick("/api/internal/catalog-refresh-tick", "catalog-refresh");
     g.__catalogRefreshTimer = setInterval(catalogTick, 60 * 60 * 1000);
     setTimeout(catalogTick, 180 * 1000); // 기동 직후 1회
+  }
+
+  // 외부 연동 상태 감시(316) — 10분마다 깨어나 KST 08~20시에 시간당 1회 신선도 판정·이상/복구 알림.
+  // 실행 여부는 라우트가 메모리로 판정하므로 그 밖의 틱은 DB 를 열지 않는다(Aurora auto-pause 보호).
+  if (!g.__integrationWatchTimer) {
+    const watchTick = () => callTick("/api/internal/integration-watch-tick", "integration-watch");
+    g.__integrationWatchTimer = setInterval(watchTick, 10 * 60 * 1000);
+    setTimeout(watchTick, 210 * 1000); // 기동 직후 1회
   }
 }

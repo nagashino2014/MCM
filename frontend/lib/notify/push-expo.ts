@@ -36,7 +36,8 @@ export type PushEventKey =
   | "todo.assigned"
   | "todo.comment"
   | "todo.status"
-  | "catalog.pending";
+  | "catalog.pending"
+  | "ops.integration";
 
 /**
  * 이벤트 기본 수신 여부(사용자 설정 행이 없을 때).
@@ -68,6 +69,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "todo.comment": true,
   "todo.status": true,
   "catalog.pending": true,
+  "ops.integration": true,
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
@@ -93,6 +95,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "todo.comment", label: "할 일 댓글·멘션", description: "내 할 일(담당·공유)에 댓글이 달리거나 @멘션됐을 때" },
   { key: "todo.status", label: "할 일 완료·검토 요청", description: "내가 만들었거나 공유받은 할 일이 완료되거나 검토 요청됐을 때" },
   { key: "catalog.pending", label: "회사소개서 반영 대기", description: "계약·인물·회사 정보가 바뀌어 회사소개서 발행본과 달라졌을 때(관리·발행 담당, 하루 한 번)" },
+  { key: "ops.integration", label: "외부 연동 이상", description: "근태·영업 수집·공공입찰·바로빌 연동이 멈추거나 복구됐을 때(시스템 관리자)" },
 ];
 
 let expo: Expo | null = null;

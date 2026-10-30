@@ -22,7 +22,7 @@ const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finan
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 26);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 77);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 79);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [

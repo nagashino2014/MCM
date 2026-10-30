@@ -20,7 +20,8 @@
     "dev:aws": "powershell -ExecutionPolicy Bypass -File ../scripts/dev-frontend-aws.ps1",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:integration-watch": "node scripts/test-integration-watch.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1087.0",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withDbWrite } from "@/lib/db";
 import { ingestCapsEventFiles } from "@/lib/adt/events";
 import { ingestStaging } from "@/lib/adt/ingest";
+import { recordHeartbeat } from "@/lib/ops/heartbeat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   try {
-    const body = (await req.json().catch(() => ({}))) as { files?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { files?: unknown; heartbeat?: unknown };
+    // 외부 연동 감시(316) — 수집기는 보낼 파일이 없어도 매시 심장박동만 보낸다(수집기·사내 PC 생존 확인).
+    if (body.heartbeat === true) {
+      await recordHeartbeat("adt.collector", { ok: true, detail: { files: 0 } });
+      return NextResponse.json({ ok: true, heartbeat: true });
+    }
     const rawFiles = Array.isArray(body.files) ? body.files : [];
     const files = rawFiles
       .filter((f): f is { name?: unknown; content?: unknown } => !!f && typeof f === "object")
@@ -37,9 +43,11 @@ export async function POST(req: NextRequest) {
       return { ...events, ...ing };
     });
     console.log("[adt-events-ingest]", JSON.stringify(result));
+    await recordHeartbeat("adt.collector", { ok: true, detail: { files: files.length } });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("[adt-events-ingest] error", err);
+    await recordHeartbeat("adt.collector", { ok: false, error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

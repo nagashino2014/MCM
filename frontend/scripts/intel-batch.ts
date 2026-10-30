@@ -17,6 +17,15 @@ import { collectCustomSource } from "@/lib/intel/custom-sink";
 import { collectBidSource } from "@/lib/bid/bid-sink"; // 백필 루프 전용(수집은 bid-collect-tick 담당)
 import { buildChunkConfig, nextYm, totalMonths, type BackfillState } from "@/lib/scraper/backfill";
 import { logScraperRun } from "@/lib/scraper/run-log";
+import { recordHeartbeat } from "@/lib/ops/heartbeat";
+
+// 외부 연동 감시(316) 심장박동 — 오류 없이 끝나고 1건 이상 훑었을 때만 성공으로 남긴다(0건으로 끝나는 조용한 실패도 잡기 위해).
+const beat = (source: string, scanned: number, error?: unknown) =>
+  recordHeartbeat(`intel.${source}`, {
+    ok: !error && scanned > 0,
+    error: error ? String((error as Error)?.message ?? error) : scanned > 0 ? null : "0건 수집",
+    detail: { scanned },
+  });
 
 async function main() {
   // 수집 설정(intel_settings)을 읽어 각 수집기에 전달. env 는 설정보다 우선(백필 오버라이드용).
@@ -32,14 +41,21 @@ async function main() {
 
   if (settings.dart.enabled && (!only || only === "dart")) {
     const started = Date.now();
-    const result = await collectDartSignals({
-      ...(dartBgnDe ? { bgnDe: dartBgnDe, endDe: dartEndDe } : { days }),
-      ...(settings.dart.counterpartyScan ? {} : { maxDocs: 0 }),
-      supplyLeadScan: settings.dart.supplyLeadScan,
-      supplyLeadMaxClassify: settings.dart.supplyLeadMaxClassify,
-      industries: settings.industries.list,
-    }); // maxPages 미지정 = 전 페이지 완주
+    let result: Awaited<ReturnType<typeof collectDartSignals>>;
+    try {
+      result = await collectDartSignals({
+        ...(dartBgnDe ? { bgnDe: dartBgnDe, endDe: dartEndDe } : { days }),
+        ...(settings.dart.counterpartyScan ? {} : { maxDocs: 0 }),
+        supplyLeadScan: settings.dart.supplyLeadScan,
+        supplyLeadMaxClassify: settings.dart.supplyLeadMaxClassify,
+        industries: settings.industries.list,
+      }); // maxPages 미지정 = 전 페이지 완주
+    } catch (err) {
+      await beat("dart", 0, err);
+      throw err;
+    }
     console.log(`[intel-batch] dart done in ${Math.round((Date.now() - started) / 1000)}s`, JSON.stringify(result));
+    await beat("dart", result.scanned);
   } else {
     console.log("[intel-batch] dart skipped");
   }
@@ -70,8 +86,10 @@ async function main() {
         `[intel-batch] eiass done in ${Math.round((Date.now() - eiassStarted) / 1000)}s`,
         JSON.stringify(eiassResult)
       );
+      await beat("eiass", eiassResult.parseEmpty ? 0 : eiassResult.scanned);
     } catch (err) {
       console.error("[intel-batch] eiass error", err);
+      await beat("eiass", 0, err);
     }
   }
 
@@ -90,8 +108,10 @@ async function main() {
         `[intel-batch] press done in ${Math.round((Date.now() - pressStarted) / 1000)}s`,
         JSON.stringify(pressResult)
       );
+      await beat("press", pressResult.scanned);
     } catch (err) {
       console.error("[intel-batch] press error", err);
+      await beat("press", 0, err);
     }
   }
 
@@ -109,8 +129,10 @@ async function main() {
         `[intel-batch] news done in ${Math.round((Date.now() - newsStarted) / 1000)}s`,
         JSON.stringify(newsResult)
       );
+      await beat("news", newsResult.scanned);
     } catch (err) {
       console.error("[intel-batch] news error", err);
+      await beat("news", 0, err);
     }
   }
 
@@ -128,8 +150,11 @@ async function main() {
         `[intel-batch] gosi done in ${Math.round((Date.now() - gosiStarted) / 1000)}s`,
         JSON.stringify(gosiResult)
       );
+      // 토지이음은 AWS IP 차단이라 서버 배치에서는 늘 0건 — 환경청 RSS 채널만 판정한다(토지이음은 사내 PC 반입구가 남긴다).
+      if (settings.gosi.rssEnabled) await beat("gosi_me", gosiResult.scannedMe);
     } catch (err) {
       console.error("[intel-batch] gosi error", err);
+      if (settings.gosi.rssEnabled) await beat("gosi_me", 0, err);
     }
   }
 

@@ -44,6 +44,7 @@ export interface CollectGosiOptions {
 
 export interface CollectGosiResult {
   scanned: number; // 두 채널에서 훑은 항목 수
+  scannedMe: number; // 그중 환경청 RSS — 외부 연동 감시(316)가 채널별로 판정
   newFound: number; // DB에 없던 신규 수
   kwPassed: number; // (환경청) 제목 키워드 통과 수 — 토지이음은 검색 자체가 필터라 전량
   inserted: number;
@@ -163,7 +164,7 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
   const cutoffIso = opts.disclosureCutoffIso ?? null;
 
   const result: CollectGosiResult = {
-    scanned: 0, newFound: 0, kwPassed: 0, inserted: 0,
+    scanned: 0, scannedMe: 0, newFound: 0, kwPassed: 0, inserted: 0,
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
     parseEmpty: false,
   };
@@ -214,6 +215,7 @@ export async function collectGosiSignals(opts: CollectGosiOptions = {}): Promise
     await sleep(CHANNEL_THROTTLE_MS);
     if (items.length) anyItems = true;
     result.scanned += items.length;
+    result.scannedMe += items.length;
     for (const it of items) {
       if (seen.has(it.externalId)) continue;
       seen.add(it.externalId);

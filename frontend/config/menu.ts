@@ -313,7 +313,7 @@ export const MENU_ITEMS: MenuItem[] = [
     group: "main",
   },
   // ── 관리 (운영자) ─────────────────────────────────
-  // 서브메뉴별 권한키가 다르다(계정 account.manage·rbac.* / 접속기록 security.access_log / AI ai.usage.view / 첨부 security.attachment_policy).
+  // 서브메뉴별 권한키가 다르다(계정 account.manage·rbac.* / 접속기록 security.access_log / AI ai.usage.view / 연동 ops.integration.view / 첨부 security.attachment_policy).
   // 상위 항목은 보이는 서브메뉴가 하나라도 있으면 노출된다.
   {
     title: "사용자 관리",
@@ -326,6 +326,8 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "접속기록 조회", href: "/admin/access-log" },
       // AI API 사용량·과금(docs/ai-api-usage-management-blueprint.md P1) — ai.usage.view RBAC 가드.
       { title: "AI API 사용량", href: "/admin/ai-usage" },
+      // 외부 연동 상태(316, docs/integration-watchdog-blueprint.md) — 근태·영업 수집·입찰·바로빌 신선도. ops.integration.view RBAC 가드.
+      { title: "외부 연동 상태", href: "/admin/integrations" },
       // 메일·메신저 첨부 확장자 정책(262) — 전사 기본 + 인원별 예외. security.attachment_policy RBAC 가드.
       { title: "첨부 확장자 정책", href: "/admin/attachment-policy" },
     ],

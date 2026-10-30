@@ -21,6 +21,7 @@ export const ADMIN_AREA_KEYS: readonly string[] = [
   "security.access_log",
   "security.attachment_policy",
   "ai.usage.view",
+  "ops.integration.view",
   "recruit.view",
 ];
 
@@ -37,6 +38,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/admin/users", keys: ACCOUNT_ADMIN_KEYS },
   { path: "/admin/access-log", keys: ["security.access_log"] },
   { path: "/admin/ai-usage", keys: ["ai.usage.view"] },
+  { path: "/admin/integrations", keys: ["ops.integration.view"] },
   { path: "/admin/attachment-policy", keys: ["security.attachment_policy"] },
   { path: "/admin/company-profile", keys: ["org.edit"] },
   { path: "/admin/recruit", keys: ["recruit.view"] },

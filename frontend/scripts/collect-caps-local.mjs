@@ -81,6 +81,18 @@ async function main() {
   }
   if (!files.length) {
     console.log("[collect-caps] 새로 보낼 파일 없음");
+    // 외부 연동 감시(316) 심장박동 — 보낼 파일이 없어도 수집기·사내 PC 가 살아 있음을 알린다.
+    // 서버가 아직 심장박동을 모르는 버전이어도 수집 실패로 보지 않는다(경고만, 종료 코드 0).
+    try {
+      const hb = await fetch(`${baseUrl}/api/internal/adt-events-ingest`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-cron-key": cronKey },
+        body: JSON.stringify({ heartbeat: true }),
+      });
+      if (!hb.ok) console.warn(`[collect-caps] 심장박동 응답 HTTP ${hb.status}`);
+    } catch (err) {
+      console.warn("[collect-caps] 심장박동 전송 실패", err instanceof Error ? err.message : err);
+    }
     return;
   }
   console.log(`[collect-caps] 전송 대상 ${files.length}개:`, files.map((f) => f.name).join(", "));

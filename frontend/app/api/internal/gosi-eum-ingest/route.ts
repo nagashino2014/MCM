@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { ingestEumGosiItems } from "@/lib/intel/collect-gosi";
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
+import { recordHeartbeat } from "@/lib/ops/heartbeat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +26,12 @@ export async function POST(req: NextRequest) {
     const settings = await loadIntelSettings(await getDb());
     const result = await ingestEumGosiItems(items, { disclosureCutoffIso: disclosureCutoffIso(settings) });
     console.log("[gosi-eum-ingest]", JSON.stringify(result));
+    // 외부 연동 감시(316) — 사내 PC 가 목록을 1건 이상 올렸으면 성공(신규 0건이어도 수집은 살아 있다).
+    await recordHeartbeat("intel.gosi_eum", { ok: true, detail: { received: items.length } });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[gosi-eum-ingest] error", err);
+    await recordHeartbeat("intel.gosi_eum", { ok: false, error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

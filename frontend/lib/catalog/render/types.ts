@@ -107,6 +107,8 @@ export interface LeaderCard {
   career: string;
   careerYears: number | null;
   manual: boolean;
+  /** 소속 부서(사용자관리 기준, 손으로 더한 사람은 없음) — 연구소·ESG 제안형 참여인력 표의 담당 칸 */
+  dept?: string;
 }
 
 export interface StaffRow {

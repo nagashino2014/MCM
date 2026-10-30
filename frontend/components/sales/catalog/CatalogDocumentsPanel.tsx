@@ -152,7 +152,7 @@ function NewDocumentModal({ open, onClose, onCreated }: { open: boolean; onClose
     >
       <div className="p-4 flex flex-col gap-3 text-sm">
         <p className="text-xs cd-text-muted">
-          템플릿은 색·표지·모티프·서체의 기본값과 쪽 구성 묶음입니다. 문서를 만든 뒤에는 색·서체·표지·모티프만 바꿀 수 있고 템플릿은 바꿀 수
+          템플릿은 색·표지·서체의 기본값과 쪽 구성 묶음입니다. 문서를 만든 뒤에는 색·서체·표지만 바꿀 수 있고 템플릿은 바꿀 수
           없습니다(다른 템플릿은 새 문서로).
         </p>
         <div role="radiogroup" aria-label="템플릿" className="grid grid-cols-1 sm:grid-cols-2 gap-2">

@@ -10,7 +10,6 @@ import {
   COVER_DESIGNS,
   DEFAULT_DOCUMENT_THEME,
   FONT_SET_LABEL,
-  MOTIFS,
   type CoverDesign,
   type DocumentTheme,
 } from "@/lib/catalog/document-theme";
@@ -146,8 +145,7 @@ export function CatalogCoverPicker({ docId = "master", docTitle }: { docId?: str
           문서 설정 — 표지 디자인 <CdHelp topic="catalog.cover" />
         </h3>
         <span className="text-xs cd-text-faint">
-          {docId === "master" ? "마스터본" : docTitle || docId} · 템플릿 {templateOf(theme.template).label} · 모티프{" "}
-          {MOTIFS.find((m) => m.id === theme.motif)?.label ?? theme.motif} · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? setLabel ?? theme.fontSet}
+          {docId === "master" ? "마스터본" : docTitle || docId} · 템플릿 {templateOf(theme.template).label} · 기본 서체 {FONT_SET_LABEL[theme.fontSet] ?? setLabel ?? theme.fontSet}
         </span>
         {message && (
           <span className={`text-xs ml-auto ${message.startsWith("저장하지") ? "cd-error-text" : "cd-text-muted"}`} role="status">

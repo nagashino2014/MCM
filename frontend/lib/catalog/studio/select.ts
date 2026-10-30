@@ -25,8 +25,9 @@ const LIST_TAGS = new Set(["ul", "ol"]);
 /**
  * 모티프 장식 묶음(템플릿 TP2) — 표지 F 궤도·간지 패턴 면·숫자 띠 사진 바탕·표지 E 판. 안의 호·노드·물방울을 하나씩 고르지 않고 묶음 통째로
  * 고른다(옮기기·숨기기 단위). 클래스는 디자인 시스템 TP1 블록(kesi-catalog.css).
+ * 연구소·ESG 제안형(10-30)의 도식 장식(사업분야 조각 바퀴·경영철학 클로버·기대효과 반원·쪽 아래 로고·쪽 번호 탭)도 묶음으로.
  */
-export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|front__full|divider__full)\b/;
+export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|front__full|divider__full|rs-biz__wheel|rs-clover|rs-effects__arc|rs-foot)\b/;
 
 export interface Selection {
   id: string;

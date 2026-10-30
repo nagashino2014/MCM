@@ -7,11 +7,12 @@
  * 선택지 이름은 화면 표기용이라 뒤에 바꿀 수 있다(결정 T-1).
  */
 import { DEFAULT_DOCUMENT_THEME, type DocumentTheme, type TemplateId } from "./document-theme";
+import { RESEARCH_SECTIONS } from "./render/master-content";
 import type { PageVariant } from "./render/components/plan";
 
 export type { TemplateId } from "./document-theme";
 
-/** 쪽 계획 종류 — full 은 지금 목차, formal 은 신뢰 근거 앞으로·부록 A 본편, brief 는 요약 8~12쪽(C20 분야 1장 요약), research 는 제안서형(회사개요 → 분야·역량 → 주제 개관·동향·절차 → 인력(임원 이력서형) → 수행실적) */
+/** 쪽 계획 종류 — full 은 지금 목차, formal 은 신뢰 근거 앞으로·부록 A 본편, brief 는 요약 8~12쪽(C20 분야 1장 요약), research 는 제안서형 양식 26쪽(회사개요 → 분야·역량 → ESG 개념·동향·작성 개요(C21~C23) → 임원 이력·참여인력 → 수행실적) */
 export type TemplatePlanKind = "full" | "formal" | "brief" | "research";
 
 export interface CatalogTemplate {
@@ -55,17 +56,19 @@ export const CATALOG_TEMPLATES: Record<TemplateId, CatalogTemplate> = {
   graphic: {
     id: "graphic",
     label: "인포그래픽형",
-    desc: "사진 없음 — 그린 바탕 · 링 모티프 · F 그래픽 표지 · 색 면 간지 · 아이콘+큰 숫자 카드 8 · 가로 연혁 · 인포그래픽 확대. 사진 부족 시 기본·화면 발표용",
-    theme: theme({ template: "graphic", cover: "graphic", coverPhoto: "none", concept: "green", motif: "ring" }),
+    desc: "사진 없음 — 그린 바탕 · F 그래픽 표지 · 색 면 간지 · 아이콘+큰 숫자 카드 8 · 가로 연혁 · 인포그래픽 확대. 사진 부족 시 기본·화면 발표용",
+    // 모티프는 물방울(링 모티프는 2026-10-30 사용자 지시로 폐기)
+    theme: theme({ template: "graphic", cover: "graphic", coverPhoto: "none", concept: "green", motif: "drop" }),
     plan: "full",
     variants: { C04: { layout: "cards8" }, C06: { axis: "horizontal" }, C07: { style: "color-pattern" }, C09: { hero: "none" }, C10: { cards: "icon-large" } },
   },
   formal: {
     id: "formal",
     label: "격조·공공형",
-    desc: "차콜 + 그린 강조 · 등고선 모티프 · 단색 간지 · 연혁 4단 · 임원 목록형 · 인증 목록형 · 신뢰 근거(인증·고객사·실적 총괄)를 사업 분야 앞으로. 공공 PQ 심사·입찰 증빙용",
-    // 서체는 기본 프리텐다드(사용자 지시 2026-10-29: 세리프 제목은 회사소개서에 어울리지 않음 — 세리프 세트는 선택지로만 남김)
-    theme: theme({ template: "formal", cover: "strips", coverPhoto: "photo", concept: "charcoal", motif: "contour" }),
+    desc: "차콜 + 그린 강조 · 단색 간지 · 연혁 4단 · 임원 목록형 · 인증 목록형 · 신뢰 근거(인증·고객사·실적 총괄)를 사업 분야 앞으로. 공공 PQ 심사·입찰 증빙용",
+    // 서체는 기본 프리텐다드(사용자 지시 2026-10-29: 세리프 제목은 회사소개서에 어울리지 않음 — 세리프 세트는 선택지로만 남김).
+    // 모티프는 물방울(등고선 모티프는 2026-10-30 사용자 지시로 폐기)
+    theme: theme({ template: "formal", cover: "strips", coverPhoto: "photo", concept: "charcoal", motif: "drop" }),
     plan: "formal",
     variants: { C06: { axis: "columns4" }, C07: { style: "plain" }, C13: { card: "list" }, C16: { view: "table" } },
   },
@@ -80,11 +83,12 @@ export const CATALOG_TEMPLATES: Record<TemplateId, CatalogTemplate> = {
   research: {
     id: "research",
     label: "연구소·ESG 제안형",
-    desc: "부설연구소(탄소중립 미래연구소) ESG 연구 용역 소개서 양식 — 스틸 블루 · 네이비 머리 띠 · G 연구소형 표지 · 제안사 일반현황 → 사업 분야·핵심 역량 → 주제 개관·동향·수행 절차 → 임원 이력서형 인력 → 수행실적",
-    // 양식 원본: "[한국환경안전연구원] 회사소개서_260902(최종).pptx"(2026-09, 26쪽). 쪽 계획 research·주제 쪽(C21~C23)은 다음 단계 — 지금은 full 쪽 계획에 변형만
+    desc: "부설연구소(탄소중립 미래연구소) ESG 연구 용역 소개서 양식 — 스틸 블루 · 네이비 머리 띠 · G 연구소형 표지 · 로마 숫자 목차 → 회사개요(일반현황·경영철학·등록증) → 사업분야·핵심역량 → ESG 개념·동향·작성 개요 → 임원 이력·참여인력 → 수행실적 → Thank you",
+    // 양식 원본: "[한국환경안전연구원] 회사소개서_260928.pdf"(2026-09-28, 26쪽 — 이전 판 260902(최종).pptx 를 대체). 쪽 계획 research 는 양식 쪽을 그대로 옮긴
+    // 전용 쪽(pages-research.tsx)이라 쪽 변형 축이 없다(variants 비움 — 스튜디오 디자인 탭도 변형 칩을 숨긴다)
     theme: theme({ template: "research", cover: "research", coverPhoto: "photo", concept: "steel", motif: "drop" }),
     plan: "research",
-    variants: { C06: { axis: "columns4" }, C10: { cards: "icon-large" }, C13: { card: "list" }, C16: { view: "table" } },
+    variants: {},
     requires: { photos: ["c01"] },
   },
 };
@@ -176,6 +180,9 @@ export interface PlanSection {
   num: string;
   /** 목차 설명 덮어쓰기(없으면 SECTIONS.desc) */
   desc?: string;
+  /** SECTIONS 에 없는 섹션(research 의 R1…R8)의 이름·앵커 */
+  name?: string;
+  anchor?: string;
 }
 
 const FULL_SECTIONS: PlanSection[] = ["01", "02", "03", "04", "05", "06", "부록"].map((k) => ({ key: k, num: k }));
@@ -183,7 +190,8 @@ const FULL_SECTIONS: PlanSection[] = ["01", "02", "03", "04", "05", "06", "부�
 /** 쪽 계획 종류 → 섹션 순서·번호. formal 은 신뢰 근거(05)를 사업 분야 앞 02 로, 부록 A 가 본편(신뢰 근거)에 들어가 부록은 B·C 만. brief 는 목차·부록 없이 5개 섹션 */
 export const PLAN_SECTIONS: Record<TemplatePlanKind, PlanSection[]> = {
   full: FULL_SECTIONS,
-  research: FULL_SECTIONS,
+  // 연구소·ESG 제안형 — 양식의 8개 섹션(목차 I~VIII, 쪽 머리 01~08). 키가 SECTIONS 와 겹치지 않아(R1…) 번호 바꾸기는 항등
+  research: RESEARCH_SECTIONS.map((s) => ({ key: s.key, num: s.num, desc: s.desc, name: s.name, anchor: s.anchor })),
   formal: [
     { key: "01", num: "01" },
     { key: "05", num: "02", desc: "인증·등록·특허 · 주요 고객사·협력 기관 · 수행실적 총괄" },

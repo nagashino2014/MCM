@@ -5,26 +5,44 @@
 import type { CSSProperties, ReactNode } from "react";
 import {
   Award,
+  Briefcase,
+  Building2,
   Calculator,
+  CalendarCheck,
   Check,
   CloudDownload,
   Database,
   Factory,
   FileCheck,
+  FileSearch,
   FileSpreadsheet,
   FileText,
+  Flag,
   FlaskConical,
+  Globe,
   GraduationCap,
+  House,
+  Landmark,
   LayoutGrid,
   Leaf,
+  Lightbulb,
   ListChecks,
+  Mail,
   MapPin,
   Network,
+  Phone,
+  Presentation,
   RefreshCw,
   Scale,
   ScanLine,
+  Search,
   SearchCheck,
+  Settings,
   ShieldCheck,
+  Sprout,
+  Thermometer,
+  TrendingUp,
+  UserRound,
   Users,
   Wind,
   Workflow,
@@ -60,6 +78,25 @@ const ICONS: Record<string, LucideIcon> = {
   workflow: Workflow,
   "list-checks": ListChecks,
   "search-check": SearchCheck,
+  // 연구소·ESG 제안형(research) 쪽 도식
+  globe: Globe,
+  lightbulb: Lightbulb,
+  sprout: Sprout,
+  thermometer: Thermometer,
+  briefcase: Briefcase,
+  search: Search,
+  "calendar-check": CalendarCheck,
+  "trending-up": TrendingUp,
+  house: House,
+  presentation: Presentation,
+  "file-search": FileSearch,
+  settings: Settings,
+  landmark: Landmark,
+  "building-2": Building2,
+  "user-round": UserRound,
+  flag: Flag,
+  mail: Mail,
+  phone: Phone,
 };
 
 /** 쓸 수 있는 아이콘 이름(LLM 편집이 고를 수 있는 목록) */
@@ -102,7 +139,8 @@ export function secNum(ctx: RenderCtx, num: string): string {
 export function sectionsFor(ctx: RenderCtx): Array<{ key: string; anchor: string; name: string; desc: string; num: string }> {
   return PLAN_SECTIONS[planOf(ctx)].flatMap((ps) => {
     const sec = SECTIONS.find((s) => s.key === ps.key);
-    return sec ? [{ key: sec.key, anchor: sec.anchor, name: sec.name, desc: ps.desc ?? sec.desc, num: ps.num }] : [];
+    if (sec) return [{ key: sec.key, anchor: sec.anchor, name: sec.name, desc: ps.desc ?? sec.desc, num: ps.num }];
+    return ps.name && ps.anchor ? [{ key: ps.key, anchor: ps.anchor, name: ps.name, desc: ps.desc ?? "", num: ps.num }] : [];
   });
 }
 
@@ -213,63 +251,6 @@ export function Notes({ items }: { items: string[] }) {
 export function Drop({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
   return <span className={cx("kc-drop", mods)} style={style} aria-hidden="true"></span>;
 }
-
-// ── 모티프 상징(TP1 디자인 시스템) — 표지·간지·뒤표지에만(모티프 절제 규칙). 링 = 심볼마크의 두 색 호(kc-ring)+노드, 등고선 = 가는 등농도선 SVG(kc-contour) ──
-
-/** 링(두 색 호). mods 에 자리 클래스(kc-front__ring 등)와 kc-ring--concentric 같은 모양 변형을 준다 */
-export function Ring({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
-  return <span className={cx("kc-ring", mods)} style={style} aria-hidden="true"></span>;
-}
-
-export function RingNode({ mods = "", style }: { mods?: string; style?: CSSProperties }) {
-  return <span className={cx("kc-ring__node", mods)} style={style} aria-hidden="true"></span>;
-}
-
-/** 등고선 — 중심에서 커지는 타원 겹선(디자인 시스템 Motifs 카드의 좌표를 그대로 쓴다) */
-export function Contour({
-  mods = "",
-  viewBox,
-  rings,
-  style,
-}: {
-  mods?: string;
-  viewBox: string;
-  /** [cx, cy, rx, ry, rotate] */
-  rings: Array<[number, number, number, number, number]>;
-  style?: CSSProperties;
-}) {
-  return (
-    <svg className={cx("kc-contour", mods)} viewBox={viewBox} aria-hidden="true" style={style}>
-      {rings.map(([cx0, cy0, rx, ry, rot], i) => (
-        <ellipse key={i} cx={cx0} cy={cy0} rx={rx} ry={ry} transform={`rotate(${rot} ${cx0} ${cy0})`}></ellipse>
-      ))}
-    </svg>
-  );
-}
-
-/** 표지 등고선 자리(kc-front__contour 180×110) */
-export const FRONT_CONTOUR: Array<[number, number, number, number, number]> = [
-  [100, 60, 12, 8, -12],
-  [96, 62, 32, 21, -10],
-  [90, 64, 54, 34, -8],
-  [84, 66, 78, 46, -6],
-];
-/** 간지 등고선 자리(kc-divider__contour 330×595) */
-export const DIVIDER_CONTOUR: Array<[number, number, number, number, number]> = [
-  [190, 300, 26, 18, -14],
-  [184, 304, 62, 44, -12],
-  [176, 310, 104, 76, -10],
-  [166, 318, 150, 112, -8],
-  [154, 328, 200, 152, -6],
-];
-/** 뒤표지 등고선 자리(kc-backc__contour 360×300) */
-export const BACK_CONTOUR: Array<[number, number, number, number, number]> = [
-  [200, 150, 20, 14, -12],
-  [196, 152, 60, 42, -10],
-  [190, 156, 104, 74, -8],
-  [182, 160, 150, 108, -6],
-  [172, 166, 200, 146, -4],
-];
 
 export function AreaTag({ name, style }: { name: string; style?: CSSProperties }) {
   return (

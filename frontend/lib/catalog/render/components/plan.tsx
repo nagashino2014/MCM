@@ -5,9 +5,12 @@
  * 데이터가 없는 쪽(인사말 확정판 없음, 자문위원 0명, 고객사 0곳 등)은 빠지고, 흐름 쪽(명단·부록)은 paginate 가 쪽을 늘린다.
  *
  * 템플릿(TP2, 계획서 docs/catalog-templates-plan.md §3-2·§3-3): 쪽 키·유형·섹션 정의는 공유하고 template.plan 으로 순서·포함 쪽을 바꾼다.
- *   full·research — 지금 목차(research 의 주제 쪽 C21~C23 은 다음 단계)
+ *   full     — 지금 목차
  *   formal — 신뢰 근거(인증·고객사 + 부록 A 수행실적 총괄)를 사업 분야 앞으로, 부록은 B·C 만
  *   brief  — 표지 → 숫자 → 사업 분야 개관 → C20 분야 1장 요약 × 선택 분야(theme.areas) → 핵심 역량 → 인증 → 연락처 → 뒤표지(목차·부록 없음)
+ *   research — 연구소·ESG 제안형 양식(260928 PDF 26쪽) 순서의 전용 쪽(pages-research.tsx): 표지 → 목차 → I 회사개요(일반현황·경영철학·등록증)
+ *              → II 사업분야 → III 핵심역량 → IV ESG 개념·배경·기대효과(C21) → V 국내외 동향(C22) → VI 작성 절차·이중 중대성·작성 항목(C23)
+ *              → VII 임원 이력(C13, 한 쪽 2명)·참여인력 내부·외부(C15 흐름)·수행 조직(C12) → VIII 수행실적(A02 2쪽) → Thank you 뒤표지. 간지·부록 없음
  * 쪽 변형은 resolveVariant({...템플릿[쪽 유형], ...템플릿[쪽 키], ...PageEdits.variant}) — 사진이 필요한 값에 사진이 없으면 템플릿 fallback 으로 바꾸고 note 를 남긴다.
  * 섹션 번호(쪽 머리·목차·북마크)는 쪽 컴포넌트가 원래 번호를 쓰고 parts.secNum 이 쪽 계획 종류에 맞춰 바꾼다. 목차·북마크·쪽 번호는 자동 경로 그대로.
  */
@@ -21,6 +24,31 @@ import { ContentsPage, CoverPage, DividerPage, FiguresPage, HistoryPage, Message
 import { AdvisorsPage, LEADERS_PER_PAGE, LeadersPage, OrgPage, PeopleDetailPage, StaffListPage, StaffPage, type LeaderCardStyle } from "./pages-people";
 import { BackCoverPage, ClientsPage, ContactPage, CredentialsPage } from "./pages-trust";
 import { ProjectListPage, SummaryPage } from "./pages-appendix";
+import {
+  EsgBackgroundPage,
+  EsgConceptPage,
+  EsgDomesticPage,
+  EsgEffectsPage,
+  EsgGlobalPage,
+  MaterialityPage,
+  MaterialityStepsPage,
+  RS_LEADERS_PER_PAGE,
+  ReportProcessPage,
+  ReportWritingPage,
+  ResearchAdvisorsPage,
+  ResearchBackPage,
+  ResearchBusinessPage,
+  ResearchCasesPage,
+  ResearchContentsPage,
+  ResearchCredentialsPage,
+  ResearchCvPage,
+  ResearchProfilePage,
+  ResearchRecordsPage,
+  ResearchStaffPage,
+  ResearchStrengthsPage,
+  ResearchTeamPage,
+  ResearchVisionPage,
+} from "./pages-research";
 
 /** 쪽 변형(L2) — 쪽 키별 저장값. 예: 분야 상세 { hero: "photo", photo: "a/cas_…" } */
 export type PageVariant = Record<string, string>;
@@ -289,6 +317,46 @@ export function buildPagePlan(
   };
   const back = () => add("c19", "C19", "뒤표지", "", <BackCoverPage ctx={ctx} data={data} />);
 
+  if (kind === "research") {
+    // 연구소·ESG 제안형 — 양식 쪽 순서 그대로. 섹션 키는 R1…R8(목차 I~VIII), 섹션 첫 쪽이 섹션 앵커를 맡는다(간지 없음)
+    coverPage();
+    add("c02", "C02", "목차", "", <ResearchContentsPage ctx={ctx} data={data} />, { maxLevel: 2 });
+    add("c05", "C05", "일반현황 및 주요연혁", "R1", <ResearchProfilePage ctx={ctx} data={data} />, { maxLevel: 2 });
+    add("c05-vision", "C05", "경영철학 및 비전", "R1", <ResearchVisionPage ctx={ctx} data={data} />);
+    if (data.credentials.length) add("c16", "C16", "등록증 보유현황", "R1", <ResearchCredentialsPage ctx={ctx} data={data} />, { maxLevel: 2 });
+    add("c08", "C08", "사업분야", "R2", <ResearchBusinessPage ctx={ctx} data={data} />);
+    add("c10", "C10", "핵심역량(특장점)", "R3", <ResearchStrengthsPage ctx={ctx} data={data} />);
+    add("c21-1", "C21", "ESG 개념", "R4", <EsgConceptPage ctx={ctx} data={data} />);
+    add("c21-2", "C21", "ESG 경영 도입배경 및 중요성", "R4", <EsgBackgroundPage ctx={ctx} data={data} />);
+    add("c21-3", "C21", "ESG 경영보고서 기대효과", "R4", <EsgEffectsPage ctx={ctx} data={data} />);
+    add("c22-1", "C22", "ESG 국내 동향", "R5", <EsgDomesticPage ctx={ctx} data={data} />);
+    add("c22-2", "C22", "EU 규제·국외 공시 동향", "R5", <EsgGlobalPage ctx={ctx} data={data} />);
+    add("c23-1", "C23", "ESG 경영보고서 작성 절차", "R6", <ReportProcessPage ctx={ctx} data={data} />);
+    add("c23-2", "C23", "이중 중대성 평가 개념·필요성", "R6", <MaterialityPage ctx={ctx} data={data} />);
+    add("c23-3", "C23", "이중 중대성 평가 프로세스", "R6", <MaterialityStepsPage ctx={ctx} data={data} />);
+    add("c23-4", "C23", "ESG 경영보고서 작성", "R6", <ReportWritingPage ctx={ctx} data={data} />);
+    // VII 전문인력 — 섹션 첫 쪽(앵커)은 있는 쪽 중 맨 앞(임원 이력 → 내부 → 외부 → 수행 조직)
+    const cvParts = chunk(data.leaders, RS_LEADERS_PER_PAGE);
+    const staffCount = data.leaders.length + data.staffRows.length;
+    cvParts.forEach((ps, i) =>
+      add(
+        `c13-${i + 1}`,
+        "C13",
+        cvParts.length > 1 ? `임원 이력 현황 ${i + 1}/${cvParts.length}` : "임원 이력 현황",
+        "R7",
+        <ResearchCvPage ctx={ctx} data={data} people={ps} part={i} parts={cvParts.length} />,
+        { maxLevel: 2 }
+      )
+    );
+    if (staffCount) add("c15-staff", "C15", "참여인력 현황(내부)", "R7", <ResearchStaffPage ctx={ctx} data={data} first={!cvParts.length} />, { maxLevel: 2, flow: true });
+    if (data.advisors.length)
+      add("c15-advisors", "C15", "참여인력 현황(외부)", "R7", <ResearchAdvisorsPage ctx={ctx} data={data} first={!cvParts.length && !staffCount} />, { maxLevel: 2, flow: true });
+    add("c12", "C12", "사업 수행 조직", "R7", <ResearchTeamPage ctx={ctx} data={data} first={!cvParts.length && !staffCount && !data.advisors.length} />);
+    add("a02-r", "A02", "용역 수행실적", "R8", <ResearchRecordsPage ctx={ctx} data={data} />, { maxLevel: 2 });
+    add("a02-cases", "A02", "ESG·연구용역 수행 실적", "R8", <ResearchCasesPage ctx={ctx} data={data} />, { maxLevel: 2 });
+    add("c19", "C19", "뒤표지", "", <ResearchBackPage ctx={ctx} data={data} />);
+    return out;
+  }
   if (kind === "brief") {
     // 요약·분야 브리프 — 섹션 첫 쪽이 간지 대신 섹션 앵커를 맡는다(숫자·개관·역량)
     const picked = data.theme.areas?.length ? data.theme.areas : DEFAULT_BRIEF_AREAS;

@@ -6,7 +6,7 @@
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, TriangleAlert } from "lucide-react";
-import { SECTIONS } from "@/lib/catalog/render/master-content";
+import { RESEARCH_SECTIONS, SECTIONS } from "@/lib/catalog/render/master-content";
 import { isEmptyEdits } from "@/lib/catalog/studio/edits";
 import { pageState } from "@/lib/catalog/studio/doc";
 import type { CNode } from "@/lib/catalog/studio/nodes";
@@ -28,7 +28,10 @@ export function staticHtml(tree: CNode, env: TreeEnv): string {
 const sectionName = (key: string) => {
   if (!key) return "";
   const s = SECTIONS.find((x) => x.key === key);
-  return s ? `${s.key === "부록" ? "부록" : s.key} ${s.name}` : key;
+  if (s) return `${s.key === "부록" ? "부록" : s.key} ${s.name}`;
+  // 연구소·ESG 제안형(research) 섹션 R1…R8 — 쪽 머리 번호(01~08)로
+  const r = RESEARCH_SECTIONS.find((x) => x.key === key);
+  return r ? `${r.num} ${r.name}` : key;
 };
 
 export function StudioThumbs({

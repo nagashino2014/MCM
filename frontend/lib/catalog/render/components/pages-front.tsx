@@ -11,7 +11,7 @@ import { cardsSpec } from "../infographic/adapt";
 import { InfoSlot, InfoSource } from "../infographic/slot";
 import type { InfoItem, InfoSpec } from "../infographic/types";
 import type { MetricId } from "@/lib/catalog/metrics";
-import { AreaTag, Contour, DIVIDER_CONTOUR, Drop, Foot, Head, Icon, Kpi, M, Notes, Ring, Sheet, TitleBlock, asOfNote, fmt, mval, planOf, secNum, sectionsFor } from "./parts";
+import { AreaTag, Drop, Foot, Head, Icon, Kpi, M, Notes, Sheet, TitleBlock, asOfNote, fmt, mval, planOf, secNum, sectionsFor } from "./parts";
 
 const LOGO = "k/assets/kesi-signature-ko.png";
 /** 사진 위 판(E 전면 사진 표지)용 흰 로고 */
@@ -61,7 +61,6 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
   // E 전면 사진인데 사진이 없으면 F 그래픽(포토 에디토리얼의 폴백 = 인포그래픽형 표지)
   const cover = choice.cover === "photo" && !photo ? "graphic" : choice.cover;
   const note = cover !== choice.cover ? "사진 없음 — E 전면 사진 대신 F 그래픽 표지로 그림" : undefined;
-  const motif = ctx.motif ?? "drop";
   if (cover === "photo") {
     // E 전면 사진: 사진 전면 + 아래 반투명 판 위에 글·흰 로고(사진 위 배치 금지 — 판 위에만)
     body = (
@@ -77,7 +76,8 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
       </>
     );
   } else if (cover === "graphic") {
-    // F 그래픽(10-29 재설계): 왼쪽 글 단 + 오른쪽 모티프 궤도(링 = 두 색 호 + 동심 링, 물방울 = 큰 물방울 + 윤곽, 등고선 = 등고선 면) + 분야 6색 노드, 아래 주색 선
+    // F 그래픽(10-29 재설계): 왼쪽 글 단 + 오른쪽 모티프 궤도(큰 물방울 + 윤곽 물방울) + 분야 6색 노드, 아래 주색 선.
+    // 링·등고선 궤도는 10-30 사용자 지시로 모티프와 함께 폐기 — 궤도는 물방울 한 가지
     body = (
       <>
         {logo({ left: 56, top: 46, width: 230 })}
@@ -85,19 +85,8 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         {areaList({ left: 56, top: 420, width: 340 })}
         {meta({ left: 56, bottom: 40, width: 330 })}
         <div className="kc-front__orbit">
-          {motif === "ring" ? (
-            <>
-              <Ring mods="kc-front__orbit-ring" />
-              <Ring mods="kc-ring--concentric kc-front__orbit-inner" />
-            </>
-          ) : motif === "contour" ? (
-            <span className="kc-contour-field kc-front__orbit-field" aria-hidden="true"></span>
-          ) : (
-            <>
-              <Drop mods="kc-front__orbit-drop" />
-              <Drop mods="kc-drop--line kc-drop--tl kc-front__orbit-drop kc-front__orbit-drop--line" />
-            </>
-          )}
+          <Drop mods="kc-front__orbit-drop" />
+          <Drop mods="kc-drop--line kc-drop--tl kc-front__orbit-drop kc-front__orbit-drop--line" />
           {data.areas.map((a) => (
             <span key={a.index} className={`kc-front__orbit-node kc-area-${a.index}`} aria-hidden="true"></span>
           ))}
@@ -147,7 +136,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
       </>
     );
   } else if (cover === "research") {
-    // G 연구소형(연구소·ESG 제안형 양식): 왼쪽 연한 하늘빛 면 + 자간 넓은 제목·밑줄 + 부설연구소 부제, 오른쪽 사옥 사진(옅게)
+    // G 연구소형(연구소·ESG 제안형 양식 260928): 왼쪽 연한 하늘빛 면 + 오른쪽 끝에 맞춘 자간 넓은 제목·밑줄·회사명·부설연구소 부제·기준월, 오른쪽 사옥 사진(옅게)
     body = (
       <>
         <div className="kc-front__wash" style={{ position: "absolute" }}></div>
@@ -157,13 +146,13 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         <span className="kc-front__eyebrow kc-front__eyebrow--en" style={{ position: "absolute", left: 48, top: 40 }}>
           {COVER_CONTENT.researchEyebrow}
         </span>
-        <div className="kc-front__block" style={{ position: "absolute", left: 48, top: 214, width: 400 }}>
+        <div className="kc-front__block" style={{ position: "absolute", left: 40, top: 206, width: 386 }}>
           <p className="kc-front__title">{COVER_CONTENT.title}</p>
           <span className="kc-front__rule"></span>
           <p className="kc-front__company">{data.company.name}</p>
           <p className="kc-front__sub">- {COVER_CONTENT.researchSub} -</p>
         </div>
-        {meta({ left: 48, bottom: 100, width: 400 })}
+        {meta({ left: 40, bottom: 128, width: 386 })}
         {logo({ right: 40, bottom: 28, width: 190 })}
       </>
     );
@@ -551,7 +540,7 @@ function HistoryFigures({ data }: { data: CatalogRenderData }) {
 }
 
 // ── C07 섹션 간지 ──
-/** 간지 변형(TP2) — style: leaf(잎 창, 기본) | photo-full(전면 사진 + 판, photo = 이미지 키) | color-pattern(주색 면 + 모티프 패턴) | plain(단색·겹선) */
+/** 간지 변형(TP2) — style: leaf(잎 창, 기본) | photo-full(전면 사진 + 판, photo = 이미지 키) | color-pattern(주색 면 + 윤곽 물방울 패턴) | plain(단색·겹선) */
 export function DividerPage({
   ctx,
   num,
@@ -572,7 +561,6 @@ export function DividerPage({
   note?: string;
 }) {
   const style = variant?.style === "photo-full" && variant.photo ? "photo-full" : variant?.style === "color-pattern" || variant?.style === "plain" ? variant.style : "leaf";
-  const motif = ctx.motif ?? "drop";
   return (
     <Sheet ctx={ctx} cls={style === "leaf" ? "kc-divider" : `kc-divider kc-divider--${style}`} anchors={[anchor]} section={`${num} ${title}`} note={note}>
       <div className="kc-divider__main">
@@ -609,15 +597,9 @@ export function DividerPage({
       ) : style === "color-pattern" ? (
         <div className="kc-divider__art">
           <div className="kc-pattern">
-            {motif === "drop" ? (
-              <>
-                <Drop mods="kc-drop--line" style={{ width: 170, left: 60, top: 60, color: "var(--pattern-ink)" }} />
-                <Drop mods="kc-drop--line kc-drop--tl" style={{ width: 110, left: 190, top: 300, color: "var(--pattern-ink)" }} />
-                <Drop mods="kc-drop--line kc-drop--bl" style={{ width: 60, left: 40, top: 420, color: "var(--pattern-ink)" }} />
-              </>
-            ) : motif === "contour" ? (
-              <Contour mods="kc-contour--on-field kc-divider__contour" viewBox="0 0 330 595" rings={DIVIDER_CONTOUR} style={{ position: "absolute" }} />
-            ) : null}
+            <Drop mods="kc-drop--line" style={{ width: 170, left: 60, top: 60, color: "var(--pattern-ink)" }} />
+            <Drop mods="kc-drop--line kc-drop--tl" style={{ width: 110, left: 190, top: 300, color: "var(--pattern-ink)" }} />
+            <Drop mods="kc-drop--line kc-drop--bl" style={{ width: 60, left: 40, top: 420, color: "var(--pattern-ink)" }} />
           </div>
         </div>
       ) : null}

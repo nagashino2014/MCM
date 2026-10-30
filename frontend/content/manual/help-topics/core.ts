@@ -72,11 +72,12 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
         "참조·열람에 넣은 사람은 결재하지 않고 문서만 봅니다.",
         "상신한 뒤부터 결재가 진행 중일 때도 볼 수 있고, 그 사람의 문서함 [참조·열람] 탭에 나타납니다.",
         "참조와 열람은 문서에 표시되는 이름만 다릅니다.",
+        "자주 넣는 참조·열람자는 [[참조/열람 저장]]으로 묶어 두고 [[불러오기]]로 더합니다.",
       ] },
     ],
     more: { article: "approval.draft", section: "line" },
     sources: ["components/approval/ApprovalDraftBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "approval.draft-expense",
@@ -99,14 +100,17 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     label: "초과근무 신청 도움말",
     blocks: [
       { kind: "list", items: [
-        "이번 주 연장근로가 한도(기본 주 12시간)를 넘게 되면 상신할 때 ‘보상휴가 전환 동의서’가 뜹니다. 전자서명해야 올라갑니다.",
+        "평일 초과근무는 내 출퇴근 유형의 퇴근 시각부터 인정됩니다(예: 8시 출근이면 17:00부터). 저녁 식사 시간도 빼지 않고 신청한 시간 전부를 인정합니다.",
+        "초과근무 식대는 그 날 신청이 평일 2시간 이상, 휴일 4시간 이상일 때만 쓸 수 있습니다(양식 맨 아래 안내 참고).",
+        "기사용시간은 근무일이 속한 주에 이미 올린(결재 중·승인) 신청 시간과 출퇴근 기록의 연장근로 중 큰 값입니다.",
+        "그 주 연장근로가 한도(기본 주 12시간)를 넘게 되면 상신할 때 ‘보상휴가 전환 동의서’가 뜹니다. 전자서명해야 올라갑니다.",
         "동의는 주 단위입니다. 다른 주로 다시 올리면 새로 동의합니다.",
         "승인된 초과근무는 실제 출퇴근 기록과 대조해 주 12시간까지는 수당, 넘는 시간은 수당 대신 대체휴가로 산정됩니다.",
       ] },
     ],
     more: { article: "approval.draft", section: "overtime" },
     sources: ["components/approval/ApprovalDraftBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "approval.draft-save",

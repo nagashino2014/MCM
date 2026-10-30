@@ -27,12 +27,16 @@ export async function POST(req: NextRequest) {
     const ctx = await requirePermission("approval.view");
     const body = (await req.json().catch(() => ({}))) as PostBody;
     const steps = Array.isArray(body.steps) ? body.steps : [];
-    if (!steps.length) return NextResponse.json({ error: "결재선이 비어 있습니다." }, { status: 400 });
+    const watchers = Array.isArray(body.watchers) ? body.watchers : [];
+    // 참조/열람자만 묶은 프리셋도 허용한다(2026-10-30 사내 테스트 피드백 — 참조·열람 프리셋 요청).
+    if (!steps.length && !watchers.length) {
+      return NextResponse.json({ error: "결재선 또는 참조/열람자가 비어 있습니다." }, { status: 400 });
+    }
     const presetId = await saveLinePreset({
       ownerUserId: ctx.userId,
       name: String(body.name ?? ""),
       steps,
-      watchers: Array.isArray(body.watchers) ? body.watchers : [],
+      watchers,
     });
     return NextResponse.json({ presetId });
   } catch (err) {

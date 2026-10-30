@@ -50,6 +50,7 @@ interface Props {
  * 직접 입력 모드이거나 매칭 실패로 값이 비면 잠그지 않아 수기 입력이 가능하다.
  */
 function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Record<string, unknown>): boolean {
+  if (isPlaceField(f)) return false;
   const cur = allValues[f.key];
   const empty =
     cur == null ||
@@ -64,6 +65,26 @@ function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allVal
     const o = sv as { contractId?: string; facilityId?: string; manual?: boolean };
     return !o.manual && Boolean(o.contractId || o.facilityId);
   });
+}
+
+/** 장소 성격의 업체 필드(출장지·방문지) — 계약 업체와 다를 수 있어 잠그지 않는다(웹과 동일, 2026-10-30). */
+function isPlaceField(f: ApprovalFieldDef): boolean {
+  return f.key === 'destination' || /출장지|방문지|장소/.test(f.label ?? '');
+}
+
+/**
+ * 계약 연동 업체 필드 잠금 — 계약 검색이 계약상대로 채우는 업체 필드는 계약을 '미등록 용역(직접 입력)'으로
+ * 둔 경우에만 직접 입력한다(웹 contractLockHint 와 동일, 2026-10-30 사용자 지시). 잠그면 안내 문구를 돌려준다.
+ */
+function contractLockHint(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Record<string, unknown>): string | null {
+  if (isPlaceField(f)) return null;
+  const src = allFields.find(
+    (x) => x.type === 'contract_select' && x.fillMap?.some((r) => r.source === 'counterpartyName' && r.target === f.key),
+  );
+  if (!src) return null;
+  const cv = allValues[src.key];
+  if (cv && typeof cv === 'object' && (cv as { manual?: boolean }).manual) return null;
+  return `${src.label} 선택 시 자동 입력 (미등록 용역이면 직접 입력)`;
 }
 
 /** 잠긴 필드의 표시 문자열. */
@@ -224,7 +245,8 @@ export function FormField({
     );
   }
 
-  const locked = readOnly || isAutoFilled(f, allFields ?? [], allValues ?? {});
+  const lockHint = readOnly ? null : contractLockHint(f, allFields ?? [], allValues ?? {});
+  const locked = readOnly || lockHint != null || isAutoFilled(f, allFields ?? [], allValues ?? {});
   if (locked) {
     return (
       <View className="gap-1.5">
@@ -233,7 +255,11 @@ export function FormField({
           <Ionicons name="lock-closed" size={12} color={c.faint} />
         </View>
         <View className="min-h-[46px] justify-center rounded-xl border border-cd-border bg-cd-surface px-3">
-          <Text className="text-[14px] text-cd-body">{lockedText(f, value)}</Text>
+          {lockedText(f, value) || !lockHint ? (
+            <Text className="text-[14px] text-cd-body">{lockedText(f, value)}</Text>
+          ) : (
+            <Text className="text-[12.5px] text-cd-faint">{lockHint}</Text>
+          )}
         </View>
       </View>
     );

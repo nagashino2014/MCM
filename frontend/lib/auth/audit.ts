@@ -41,6 +41,8 @@ export type AuditAction =
   | "facility_manual_product_update"
   | "facility_logo_update"
   | "facility_contact_update"
+  | "facility_contact_person_create"
+  | "facility_contact_person_update"
   | "contract_create"
   | "contract_update"
   | "contract_delete"

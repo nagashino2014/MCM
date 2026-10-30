@@ -11,6 +11,8 @@ import { getDb, rowsToObjects } from "@/lib/db";
 import { loadHomeSettings } from "@/lib/home/layout";
 import { listAssetUsage } from "@/lib/assets/usage";
 import { EDUCATION_FORM_ID, TRIP_FORM_ID, extractTripDestination, parsePeriod } from "@/lib/approval/trip";
+import { addDaysYmd, leaveDates, periodEndFromNote } from "@/lib/approval/leave-dates";
+import { offDaySet } from "@/lib/hr/holidays";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -183,9 +185,14 @@ export async function GET(req: Request) {
         }
       }
     }
+    // 휴가 — 대장 1행 = 시작일 + 일수(승인 문서는 비고에 기간). 위젯 격자가 단일 date 구조라
+    // 실제 쉬는 날(주말·휴무일 제외)마다 1건씩 펼친다(2026-10-30: 3일 휴가가 시작일에만 보였다).
+    // 앞 달에 시작해 넘어오는 휴가도 잡도록 시작일을 45일 앞까지 넓혀 읽는다.
+    const monthYear = Number(month.slice(0, 4));
+    const offDays = await offDaySet([monthYear - 1, monthYear]).catch(() => new Set<string>());
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT l.entry_id, l.employee_id, l.used_on, l.days, l.leave_type_key,
+        `SELECT l.entry_id, l.employee_id, l.used_on, l.days, l.leave_type_key, l.note,
                 e.name, d.dept_name, p.position_name, lt.label AS type_label
            FROM annual_leave_ledger l
            JOIN employee_profiles e ON e.employee_id = l.employee_id
@@ -194,25 +201,32 @@ export async function GET(req: Request) {
            LEFT JOIN leave_types lt ON lt.key = l.leave_type_key
           WHERE l.entry_type = 'use'
             AND l.used_on IS NOT NULL
-            AND substr(l.used_on, 1, 7) = $1
-            AND l.employee_id = ANY($2::text[])
+            AND substr(l.used_on, 1, 10) BETWEEN $1 AND $2
+            AND l.employee_id = ANY($3::text[])
           ORDER BY l.used_on ASC`,
-        [month, ids]
+        [addDaysYmd(monthFirst, -45), monthLast, ids]
       )
     );
 
-    const entries: HomeCalendarEntry[] = rows.map((r) => ({
-      entryId: String(r.entry_id),
-      scope: (targets.get(String(r.employee_id)) ?? "dept") as HomeCalendarEntry["scope"],
-      employeeId: String(r.employee_id),
-      name: String(r.name ?? ""),
-      positionName: r.position_name != null ? String(r.position_name) : null,
-      deptName: r.dept_name != null ? String(r.dept_name) : null,
-      date: String(r.used_on).slice(0, 10),
-      label: r.type_label != null ? String(r.type_label) : "연차",
-      kind: "휴가",
-      days: Number(r.days ?? 0),
-    }));
+    const entries: HomeCalendarEntry[] = rows.flatMap((r) => {
+      const start = String(r.used_on).slice(0, 10);
+      const dates = leaveDates({ from: start, to: periodEndFromNote(r.note), days: Number(r.days ?? 0) }, offDays);
+      return dates
+        .filter((date) => date.slice(0, 7) === month)
+        .map((date) => ({
+          // 시작일 건은 기존 id 를 유지한다(위젯이 id 로 상세를 연다).
+          entryId: date === start ? String(r.entry_id) : `${r.entry_id}:${date}`,
+          scope: (targets.get(String(r.employee_id)) ?? "dept") as HomeCalendarEntry["scope"],
+          employeeId: String(r.employee_id),
+          name: String(r.name ?? ""),
+          positionName: r.position_name != null ? String(r.position_name) : null,
+          deptName: r.dept_name != null ? String(r.dept_name) : null,
+          date,
+          label: r.type_label != null ? String(r.type_label) : "연차",
+          kind: "휴가" as const,
+          days: Number(r.days ?? 0),
+        }));
+    });
 
     return NextResponse.json({ entries: [...entries, ...docEntries, ...vehicleEntries] });
   } catch (err) {

@@ -24,7 +24,7 @@ import { CdSplitPane } from "@/components/cdash/CdSplitPane";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
 import { ApprovalDocViewer, DOC_STATUS_LABEL } from "@/components/approval/ApprovalDocModal";
-import { approvalEditHref, approvalNewHref } from "@/lib/approval/edit-route";
+import { approvalEditHref, approvalMenuOnlyLabel, approvalNewHref } from "@/lib/approval/edit-route";
 import "@/components/cdash/cdash.css";
 
 interface DocSummary {
@@ -521,17 +521,27 @@ export function ApprovalHomeBoard() {
                   {sec.favorite ? <Star className="w-3.5 h-3.5" /> : <FolderOpen className="w-3.5 h-3.5" />} {sec.name}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 mb-2">
-                  {sec.list.map((f) => (
-                    <button
-                      key={f.formId}
-                      type="button"
-                      className="text-left rounded-lg border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)]"
-                      onClick={() => router.push(approvalNewHref(f.formId))}
-                    >
-                      <span className="text-[13px] cd-text font-semibold">{f.name}</span>
-                      {f.description && <p className="text-[11px] cd-text-faint truncate">{f.description}</p>}
-                    </button>
-                  ))}
+                  {sec.list.map((f) => {
+                    // 공문·내부고시·견적서는 메뉴에서 작성 — 목록에는 보이되 누를 수 없게 둔다.
+                    const menuOnly = approvalMenuOnlyLabel(f.formId);
+                    return (
+                      <button
+                        key={f.formId}
+                        type="button"
+                        disabled={menuOnly != null}
+                        title={menuOnly ? `${menuOnly} 메뉴에서 작성합니다` : undefined}
+                        className="text-left rounded-lg border cd-border-c px-3 py-2 hover:bg-[color:var(--cd-surface)] disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        onClick={() => router.push(approvalNewHref(f.formId))}
+                      >
+                        <span className="text-[13px] cd-text font-semibold">{f.name}</span>
+                        {menuOnly ? (
+                          <p className="text-[11px] cd-text-faint truncate">{menuOnly} 메뉴에서 작성하세요</p>
+                        ) : (
+                          f.description && <p className="text-[11px] cd-text-faint truncate">{f.description}</p>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );

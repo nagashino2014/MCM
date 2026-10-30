@@ -133,10 +133,12 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         title: "양식 고르기",
         blocks: [
           { kind: "image", src: "/manual/shots/approval-draft.webp", alt: "새 기안 — 양식 고르기" },
-          { kind: "p", text: "[[결재양식 선택]] 창에서 [[자주 이용하는 양식]]이나 폴더별 목록에서 고릅니다. 공문·내부고시·견적서 양식은 각각 전용 작성 화면으로 열립니다." },
+          { kind: "p", text: "[[결재양식 선택]] 창에서 [[자주 이용하는 양식]]이나 폴더별 목록에서 고릅니다. 공문·내부고시·견적서 양식은 목록에 흐리게 보이며 누를 수 없습니다. 전자결재 메뉴의 공문 작성·내부고시 작성, 영업/마케팅 메뉴의 견적서 작성에서 작성합니다." },
           { kind: "list", items: [
             "급한 문서는 제목 옆 [[긴급]]을 켭니다. 결재함에 긴급 표시가 붙습니다.",
-            "휴가 양식은 잔여 연차를, 초과근무 양식은 이번 주 사용량을 화면 위에 보여 줍니다.",
+            "휴가 양식은 잔여 연차를, 초과근무 양식은 근무일이 속한 주의 사용량과 내 출퇴근 유형에 따른 초과근무 인정 시작 시각을 화면 위에 보여 줍니다.",
+            "계약명과 업체명을 함께 적는 양식은 계약명을 고르면 업체명이 자동으로 채워지고 잠깁니다. 계약 전 업무라 [[미등록 용역(직접 입력)]]을 켠 경우에만 업체명을 직접 검색·입력합니다. 출장지는 계약 업체와 다를 수 있어 잠그지 않습니다.",
+            "계약·업체 검색 목록은 다른 곳을 누르거나 Esc를 누르면 닫힙니다.",
           ] },
         ],
       },
@@ -186,8 +188,11 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         title: "초과근무·휴가 양식",
         blocks: [
           { kind: "list", items: [
+            "초과근무는 저녁 식사 시간을 빼지 않고 신청한 시간 전부를 인정합니다. 대신 초과근무 식대는 그 날 신청이 평일 2시간 이상(휴일 4시간 이상)일 때만 쓸 수 있고, 지출결의서를 올리면 신청 시간과 자동 대조됩니다. 양식 맨 아래에도 이 기준이 적혀 있습니다.",
             "초과근무 신청으로 그 주 연장근로가 한도(기본 주 12시간)를 넘게 되면 [[연장근로(주 12시간 초과) 및 보상휴가 전환 동의서]]가 뜹니다. [[동의 및 전자서명]]을 해야 상신되고, 동의는 주 단위라 다른 주로 다시 올리면 새로 동의합니다.",
             "휴가 종류에 따라 시작일만 넣으면 종료일이 자동으로 정해지기도 합니다. 반차는 0.5일 차감입니다.",
+            "연차처럼 기간으로 쓰는 휴가는 주말과 공휴일·회사 휴무일을 빼고 사용일수를 셉니다. 빠진 날 수는 화면 위 안내에 함께 나옵니다.",
+            "출장신청서는 교통편에서 법인차량을 고른 경우에만 이용차량·이용시간을 입력합니다.",
             "출장·휴가·교육 신청은 일정 메뉴에서 날짜를 눌러 시작해도 이 화면으로 날짜가 채워져 열립니다.",
           ] },
         ],
@@ -200,7 +205,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "[[결재선]]에서 [[＋ 결재자 추가]]를 눌러 조직도에서 사람을 고릅니다.",
             "각 줄마다 [[합의]] 또는 [[승인]]을 고릅니다. 위에서 아래 순서대로 결재가 진행됩니다.",
             "결재를 하지 않고 내용만 공유할 사람은 [[참조 · 열람]]에 넣습니다. 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 참조와 열람은 볼 수 있는 범위가 같고 문서에 표시되는 이름만 다릅니다.",
-            "자주 쓰는 결재선은 [[프리셋 저장]]해 두고 다음에 [[불러오기]]로 씁니다.",
+            "자주 쓰는 결재선은 [[프리셋 저장]]해 두고 다음에 [[불러오기]]로 씁니다. 참조·열람자만 따로 [[참조/열람 저장]]해 두면 참조·열람 칸의 [[불러오기]]로 결재선과 상관없이 더할 수 있습니다.",
           ] },
           { kind: "list", items: [
             "로그인 계정이 없는 직원은 결재자로 지정할 수 없습니다.",
@@ -223,8 +228,8 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["기안", "상신", "결재선", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
-    sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx"],
-    reviewedAt: "2026-10-21",
+    sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx", "components/approval/ApprovalFormRenderer.tsx"],
+    reviewedAt: "2026-10-30",
   },
   {
     id: "approval.letter",

@@ -40,7 +40,8 @@ const SOURCES: Record<EntityKind, Source> = {
     title: '업체 선택',
     placeholder: '업체명 검색(2자 이상)',
     minChars: 2,
-    path: (q) => `/api/facilities?q=${encodeURIComponent(q)}&limit=15&sort=name`,
+    // 결재 전용 검색 — /api/facilities 는 facility.view 가 없는 직원 계정에서 403(2026-10-30)
+    path: (q) => `/api/approval/facility-search?q=${encodeURIComponent(q)}&limit=15`,
     parse: (json) =>
       ((json as { items?: Record<string, unknown>[] }).items ?? []).map((o) => ({
         id: str(o.facilityId),

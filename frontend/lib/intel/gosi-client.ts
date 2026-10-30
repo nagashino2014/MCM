@@ -2,7 +2,7 @@
 // ① 토지이음(eum.go.kr): 산업입지법상 산단 지정·개발계획·실시계획 승인 고시는 토지이용규제
 //    고시로서 전국 시군구 것이 한 곳에 통합 게재된다(지자체 개별 크롤링 대체, 2026-07-08 실사).
 //    EUC-KR 사이트라 한글 검색어는 사전 인코딩된 바이트를 쓴다(UTF-8 은 0건 — 실측).
-// ② 유역·지방환경청 8곳 RSS(me.go.kr): 환경영향평가 공람·협의 공고가 EIASS 리스트보다 빠른
+// ② 유역·지방환경청 8곳 RSS(mcee.go.kr): 환경영향평가 공람·협의 공고가 EIASS 리스트보다 빠른
 //    경우가 있어 보완 채널로 구독. boardMasterId 는 기관별 실측값(2026-07-09, 8곳 전부 활성 확인).
 
 import { fetch as undiciFetch } from "undici";
@@ -82,10 +82,13 @@ export async function fetchEumGosiList(keyword: keyof typeof EUM_KEYWORDS, page 
   }
 }
 
-// --- ② 유역·지방환경청 RSS (me.go.kr) ---
+// --- ② 유역·지방환경청 RSS (mcee.go.kr) ---
 // 공지공고 boardMasterId 실측표(2026-07-09, 전 기관 활성). 주의: 금강=gg·영산강=ysg·전북=smg
-// (구 새만금 orgCd 유지) — geumgang/yeongsan/jeonbuk 은 404. 본부(mcee) 개편에도 유역청은
-// me.go.kr 유지 — 장기 이관 가능성은 수집 0건 알람으로 감지.
+// (구 새만금 orgCd 유지) — geumgang/yeongsan/jeonbuk 은 404.
+// 2026-10 www.me.go.kr 퇴역(DNS 127.0.0.1) → 같은 CMS 가 www.mcee.go.kr/{orgCd}/ 로 이전.
+// orgCd·boardMasterId·boardId 모두 그대로라(같은 boardId=같은 글, 2026-10-30 실측) external_id 호환.
+// 상세 read.do 는 menuId 파라미터가 아예 없으면 System Failure — 빈 값(menuId=)이라도 붙인다.
+const ME_BASE = "https://www.mcee.go.kr";
 
 export const ME_OFFICES: { orgCd: string; boardMasterId: number; name: string }[] = [
   { orgCd: "hg", boardMasterId: 342, name: "한강유역환경청" },
@@ -114,7 +117,7 @@ export async function fetchMeOfficeRss(office: (typeof ME_OFFICES)[number]): Pro
   const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await undiciFetch(
-      `https://www.me.go.kr/${office.orgCd}/web/board/rss.do?boardMasterId=${office.boardMasterId}`,
+      `${ME_BASE}/${office.orgCd}/web/board/rss.do?boardMasterId=${office.boardMasterId}`,
       { headers: { "user-agent": UA }, signal: controller.signal }
     );
     if (!res.ok) throw new Error(`환경청 RSS 응답 오류: ${res.status} ${office.orgCd}`);
@@ -131,8 +134,8 @@ export async function fetchMeOfficeRss(office: (typeof ME_OFFICES)[number]): Pro
         externalId: `me:${office.orgCd}:${boardId[1]}`,
         title: clean(title[1]),
         url:
-          `https://www.me.go.kr/${office.orgCd}/web/board/read.do?boardMasterId=${office.boardMasterId}` +
-          `&boardId=${boardId[1]}${menuId ? `&menuId=${menuId[1]}` : ""}`,
+          `${ME_BASE}/${office.orgCd}/web/board/read.do?boardMasterId=${office.boardMasterId}` +
+          `&boardId=${boardId[1]}&menuId=${menuId ? menuId[1] : ""}`,
         agency: office.name,
         region: null,
         publishedAt: pub ? parseRssDate(pub[1]) : null,

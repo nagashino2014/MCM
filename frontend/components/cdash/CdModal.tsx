@@ -79,6 +79,8 @@ export interface CdModalProps extends OverlayBaseProps {
   size?: "sm" | "md" | "lg" | "xl";
   /** 최대 높이 클래스(기본 max-h-[85vh]). */
   maxHeightClass?: string;
+  /** preset 사이 폭이 필요할 때 size 대신 쓰는 최대 폭 클래스(예: max-w-xl). */
+  widthClass?: string;
 }
 
 const MODAL_SIZE: Record<NonNullable<CdModalProps["size"]>, string> = {
@@ -88,7 +90,7 @@ const MODAL_SIZE: Record<NonNullable<CdModalProps["size"]>, string> = {
   xl: "max-w-4xl",
 };
 
-export function CdModal({ open, onClose, title, children, footer, size = "md", maxHeightClass = "max-h-[85vh]", closeOnBackdrop = true }: CdModalProps) {
+export function CdModal({ open, onClose, title, children, footer, size = "md", maxHeightClass = "max-h-[85vh]", widthClass, closeOnBackdrop = true }: CdModalProps) {
   const { theme } = useCdashTheme();
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -111,7 +113,7 @@ export function CdModal({ open, onClose, title, children, footer, size = "md", m
         aria-modal="true"
         // 모달 본체는 스크림 위에 뜨므로 반드시 불투명(--cd-card-solid).
         // 글라스 토큰(--cd-card)을 쓰면 뒤 화면이 그대로 비쳐 읽을 수 없다.
-        className={cn("rounded-lg border cd-border-c w-full flex flex-col", maxHeightClass, MODAL_SIZE[size])}
+        className={cn("rounded-lg border cd-border-c w-full flex flex-col", maxHeightClass, widthClass ?? MODAL_SIZE[size])}
         style={{ background: "var(--cd-card-solid)", boxShadow: "var(--cd-shadow-dialog)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >

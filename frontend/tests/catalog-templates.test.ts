@@ -21,7 +21,7 @@ import tokensJson from "@/lib/catalog/render/tokens.json";
 import { resolveColor, tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
 import { composeDocument } from "@/lib/catalog/studio/compose";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
-import { RS_HISTORY_MAX, careerItems, caseCards, historyRows, strengthLines } from "@/lib/catalog/render/components/pages-research";
+import { RS_HISTORY_MAX, careerItems, caseCards, historyRows, pickRecordRows, strengthLines } from "@/lib/catalog/render/components/pages-research";
 import { makeFixture } from "./catalog-studio-fixture";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -545,4 +545,15 @@ test("research 도움 함수 — 연혁 줄 수 상한(설립 줄 유지)·경�
   assert.ok(cards.length > 0 && cards.length <= 3);
   assert.ok(cards.every((c) => c.title));
   assert.deepEqual(caseCards(data, undefined), []);
+});
+
+test("연구소형 수행실적 — 줄 예산 안에서 그룹마다 1건 이상, 긴 실적명은 두 줄로 센다", () => {
+  const f = (n: number) => ({ year: "2026", title: "가".repeat(n), meta: "" });
+  // 스테이징 실데이터 길이(10-30): 5그룹 × 4건, 82자 1건은 두 줄
+  const groups = [[40, 38, 46, 54], [35, 37, 39, 37], [51, 69, 43, 53], [41, 41, 44, 82], [50, 54, 63, 69]].map((ls) => ls.map(f));
+  const rows = pickRecordRows(groups);
+  assert.deepEqual(rows, [4, 3, 3, 3, 3]);
+  // 모두 두 줄짜리(100자)면 16줄 예산에서 8건까지, 빈 그룹은 0
+  const long = pickRecordRows([[f(100), f(100), f(100)], [f(100), f(100)], [], [f(100)], [f(100), f(100)]]);
+  assert.deepEqual(long, [3, 2, 0, 1, 2]);
 });

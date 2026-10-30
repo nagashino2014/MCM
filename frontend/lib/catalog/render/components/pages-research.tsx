@@ -196,7 +196,8 @@ export function ResearchProfilePage({ ctx, data }: { ctx: RenderCtx; data: Catal
           <RsTitle lead="제안사" em="주요연혁" />
           <ol className="kc-rs-tl">
             {history.map((h, i) => (
-              <li key={i} className={h.highlight ? "is-highlight" : undefined}>
+              // is-t0~9: 위(최근)에서 아래(설립)로 점 색을 점점 연하게(print-overrides.ts)
+              <li key={i} className={[`is-t${history.length > 1 ? Math.round((i / (history.length - 1)) * 9) : 0}`, h.highlight ? "is-highlight" : ""].filter(Boolean).join(" ")}>
                 <span className="kc-rs-tl__ym kc-num">{h.ym}</span>
                 <span className="kc-rs-tl__text">{h.content}</span>
               </li>
@@ -1122,8 +1123,32 @@ export function ResearchTeamPage({ ctx, first }: { ctx: RenderCtx; data: Catalog
 /** 수행실적 그룹 순서 — ESG(4) → 통합환경허가(1) → 환경 인허가·연구·교육(5) → 장외·화관법(2) → HAPs(3). 응용소프트웨어(6)는 계약 실적이 따로 없어 뺀다 */
 export const RS_RECORD_ORDER = [4, 1, 5, 2, 3];
 
+/** 그룹 칸에 들어갈 줄 수 예산 — 5그룹이 한 쪽(그룹 칸 약 347pt)에 들어가게. 긴 실적명은 두 줄로 접히므로 줄 수로 센다 */
+const RS_RECORD_LINE_BUDGET = 16;
+const RS_RECORD_CHARS_PER_LINE = 72;
+
+/** 그룹마다 1건은 넣고, 남은 줄 예산을 그룹 순서대로 한 건씩 돌려 가며 나눈다(실데이터 23쪽 넘침, 2026-10-30) */
+export function pickRecordRows(featured: AreaInfo["featured"][], budget = RS_RECORD_LINE_BUDGET): number[] {
+  const lines = (f: AreaInfo["featured"][number]) => Math.max(1, Math.ceil((f.title.length + (f.meta ? f.meta.length + 3 : 0)) / RS_RECORD_CHARS_PER_LINE));
+  const take = featured.map((fs) => (fs.length ? 1 : 0));
+  let used = featured.reduce((s, fs) => s + (fs.length ? lines(fs[0]) : 0), 0);
+  for (let grew = true; grew; ) {
+    grew = false;
+    featured.forEach((fs, g) => {
+      const next = fs[take[g]];
+      if (next && used + lines(next) <= budget) {
+        used += lines(next);
+        take[g] += 1;
+        grew = true;
+      }
+    });
+  }
+  return take;
+}
+
 export function ResearchRecordsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const groups = RS_RECORD_ORDER.map((i) => data.areas.find((a) => a.index === i)).filter((a): a is AreaInfo => Boolean(a && (a.featured.length || a.count)));
+  const rows = pickRecordRows(groups.map((a) => a.featured));
   return (
     <RsSheet ctx={ctx} sec="R8" anchors={["a02-r"]} outline="용역 수행실적" first>
       <div className="kc-rs-records">
@@ -1139,7 +1164,7 @@ export function ResearchRecordsPage({ ctx, data }: { ctx: RenderCtx; data: Catal
           <img src={ctx.url(LOGO_WHITE)} alt="" />
         </div>
         <div className="kc-rs-records__groups">
-          {groups.map((a) => (
+          {groups.map((a, g) => (
             <section key={a.index} className={`kc-rs-records__group kc-area-${a.index}`}>
               <p className="kc-rs-records__label">
                 {a.name}
@@ -1148,7 +1173,7 @@ export function ResearchRecordsPage({ ctx, data }: { ctx: RenderCtx; data: Catal
                 </small>
               </p>
               <ul className="kc-rs-records__list">
-                {a.featured.map((f, i) => (
+                {a.featured.slice(0, rows[g]).map((f, i) => (
                   <li key={i} className={i === 0 && a.index === 4 ? "is-strong" : undefined}>
                     {f.title}
                     {f.meta ? <span className="kc-rs-records__meta">({f.meta})</span> : null}

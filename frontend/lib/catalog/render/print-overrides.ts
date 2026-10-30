@@ -36,4 +36,24 @@ ${BODY} .kc-photo--frame, ${BODY} .kc-nophoto.kc-photo--frame { border-radius: 1
 ${BODY} .kc-kpi, ${BODY} .kc-card, ${BODY} .kc-strengths__method, ${BODY} .kc-fx > div { border-radius: 10px; }
 ${BODY} .kc-strengths__hero { border-radius: 14px; }
 ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
+
+/* 연구소형 주요연혁(사용자 지시 2026-10-30) — 세로선이 점 중심에서 4px 어긋남 → 점을 22px 칸 가운데(27px)에 두고 선도 27px 중심으로,
+   점 13 → 9px(30% 축소), 위(최근)는 진하게·아래로 갈수록 연하게(is-t0~9). ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-tpl--research .kc-rs-tl::before { left: 26px; }
+.kc-tpl--research .kc-rs-tl > li::before { width: 9px; height: 9px; justify-self: center; background: color-mix(in srgb, var(--rule-strong) var(--tl-mix, 100%), var(--canvas)); }
+${[100, 94, 88, 82, 76, 70, 64, 58, 52, 46].map((m, i) => `.kc-tpl--research .kc-rs-tl > li.is-t${i} { --tl-mix: ${m}%; }`).join("\n")}
+
+/* 연구소형 대비·글자 크기 정리(스테이징 쪽 검사, 2026-10-30) — 흰 글자는 4.5:1(큰 글자 3:1) 이상인 짙은 바탕 위에만, 글자는 7pt 이상.
+   ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+/* 목차 제목은 쪽 ::before 삼각 면 위의 흰 글자 — 검사기는 그 면을 못 보므로 그림 바탕으로 표시(모양 변화 없음) */
+.kc-tpl--research .kc-rs-tocpage__title { background-image: linear-gradient(transparent, transparent); }
+.kc-tpl--research .kc-rs-clover__petal--2, .kc-tpl--research .kc-rs-clover__petal--4 { color: var(--brand); }
+.kc-tpl--research .kc-topic__icon, .kc-tpl--research .kc-rs-report__bar span { background: color-mix(in srgb, var(--area) 65%, black); }
+.kc-tpl--research .kc-rs-title__aside { color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-source { font-size: 7px; line-height: 10px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-mt__step i { font-size: 7px; line-height: 9px; }
+.kc-tpl--research .kc-rs-dma__side small { font-size: 7px; line-height: 9.5px; }
+.kc-tpl--research .kc-rs-team__support b { color: var(--ink); }
+.kc-tpl--research .kc-rs-team__core { background: var(--brand); }
+.kc-tpl--research .kc-rs-contact { color: var(--on-brand); }
 `;

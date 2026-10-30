@@ -131,7 +131,7 @@ function NewDocumentModal({ open, onClose, onCreated }: { open: boolean; onClose
     <CdModal
       open={open}
       onClose={busy ? () => undefined : onClose}
-      size="md"
+      widthClass="max-w-xl"
       closeOnBackdrop={!busy}
       title={
         <span className="inline-flex items-center gap-1">
@@ -168,7 +168,7 @@ function NewDocumentModal({ open, onClose, onCreated }: { open: boolean; onClose
                 onClick={() => setTemplate(t.id)}
                 className="cd-choice text-left rounded-lg border p-2.5 disabled:opacity-60"
                 data-active={active ? "true" : undefined}
-                style={{ borderColor: active ? "var(--cd-primary)" : "var(--cd-border)" }}
+                style={{ borderColor: active ? "var(--cd-primary)" : "var(--cd-border)", boxShadow: "var(--cd-shadow)" }}
               >
                 <span className={`block text-sm ${active ? "cd-text-primary font-semibold" : "cd-text font-semibold"}`}>{t.label}</span>
                 <span className="block text-[11px] cd-text-faint mt-0.5">{t.desc}</span>

@@ -132,7 +132,9 @@ if (-not $SkipBuild) {
   if ($LASTEXITCODE -ne 0) { Fail "docker login" }
 
   Log "이미지 빌드 (linux/amd64) — 수 분 걸린다"
-  docker build --platform linux/amd64 -f (Join-Path $repoRoot "frontend\Dockerfile") -t $image -t "${registry}/${repo}:latest" $repoRoot
+  # --provenance=false: 출처 증명을 붙이면 푸시마다 ECR 항목이 3개(묶음·플랫폼·증명)로 늘어 개수 기반
+  #   수명주기 규칙이 배포 몇 회 만에 이전 이미지를 만료시킨다(2026-10-01 627 만료). 단일 매니페스트로 푸시한다.
+  docker build --provenance=false --platform linux/amd64 -f (Join-Path $repoRoot "frontend\Dockerfile") -t $image -t "${registry}/${repo}:latest" $repoRoot
   if ($LASTEXITCODE -ne 0) { Fail "docker build" }
 
   Log "ECR 푸시: $Tag"

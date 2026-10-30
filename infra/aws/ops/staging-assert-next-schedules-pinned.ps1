@@ -54,4 +54,27 @@ foreach ($name in $contract.scheduleRules) {
   $pinnedArn = $taskArn
 }
 
+# 고정 revision 이미지가 ECR 에 남아 있고 schedule-pin 태그로 보호되는지 확인한다.
+# 보호 태그가 없으면 이후 배포 푸시가 개수 규칙으로 그 이미지를 만료시켜 배치가 조용히 멈춘다(2026-10-01).
+$pinnedRevision = $pinnedArn.Substring($expectedTaskPrefix.Length)
+$pinTag = "schedule-pin-$pinnedRevision"
+$repoName = [string]$contract.components.next.family
+$taskDef = Read-AwsJson @("ecs", "describe-task-definition", "--task-definition", $pinnedArn)
+$pinnedImage = [string]$taskDef.taskDefinition.containerDefinitions[0].image
+$imageRef = if ($pinnedImage -match "@(sha256:[0-9a-f]{64})\z") { "imageDigest=$($Matches[1])" } elseif ($pinnedImage -match ":([^:/@]+)\z") { "imageTag=$($Matches[1])" } else { $null }
+if (-not $imageRef) { throw "next schedule pin preflight image reference invalid: $pinnedImage" }
+$previousPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = "Continue"
+  $rawImage = & aws ecr describe-images --repository-name $repoName --image-ids $imageRef --profile $AwsProfile --region $Region --no-cli-pager --output json 2>$null
+  $imageExitCode = $LASTEXITCODE
+} finally { $ErrorActionPreference = $previousPreference }
+if ($imageExitCode -ne 0 -or -not $rawImage) {
+  throw "next schedule pin preflight: 고정 revision $pinnedRevision 의 이미지가 ECR 에 없습니다($pinnedImage) — ADT·intel 배치가 실패 중입니다. 스케줄을 이미지가 있는 revision 으로 다시 고정하세요"
+}
+$imageTags = @(($rawImage | Out-String | ConvertFrom-Json).imageDetails[0].imageTags)
+if ($imageTags -cnotcontains $pinTag) {
+  throw "next schedule pin preflight: 고정 revision $pinnedRevision 이미지에 보호 태그 $pinTag 가 없습니다 — .\infra\aws\ops\staging-protect-pinned-image.ps1 -Revision $pinnedRevision 실행 후 다시 배포하세요"
+}
+
 Write-Output "next-schedules-pinned-ok"

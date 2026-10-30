@@ -53,7 +53,36 @@ resource "aws_ecr_lifecycle_policy" "keep_last_10" {
 
   repository = each.value
 
-  policy = jsonencode({
+  # next 는 ADT·intel 스케줄이 숫자 revision 에 고정돼 있어, 그 이미지가 개수 규칙으로 만료되면
+  # 배치가 CannotPullContainerError 로 조용히 멈춘다(2026-10-01 627 이미지 만료 → 한 달 수집 중단).
+  # 고정 revision 이미지는 schedule-pin-* 태그(이미지 묶음·하위 매니페스트 모두)를 붙여 1순위 규칙으로
+  # 보호한다 — 상위 규칙에 걸린 이미지는 하위 규칙(any)이 만료시키지 않는다. 태그는
+  # ops/staging-protect-pinned-image.ps1 로 붙인다. 개수도 10(푸시당 항목 3개라 배포 약 3회분)→30.
+  policy = each.key == "next" ? jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Protect schedule-pinned images"
+        selection = {
+          tagStatus      = "tagged"
+          tagPatternList = ["schedule-pin-*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = 30
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep last 30 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
+        }
+        action = { type = "expire" }
+      }
+    ]
+    }) : jsonencode({
     rules = [{
       rulePriority = 1
       description  = "Keep last 10 images"

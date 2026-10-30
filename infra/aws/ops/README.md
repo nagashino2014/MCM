@@ -61,6 +61,17 @@ plan의 계정·revision을 확인한다. 기존에 저장한 Terraform plan 파
 revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinnedScheduleLag -Wait`를 함께
 지정한다. `-Force`와 `-SkipBuild`는 스케줄 고정 검사를 우회하지 않는다. 배치까지 새 revision으로
 옮기는 절차는 R0B 전체 전환 작업의 별도 범위다.
+**고정 이미지 보호(2026-10-30):** 09-24에 고정한 revision 627의 이미지가 10-01 ECR 수명주기 규칙
+(당시 "최근 10개" — 푸시당 항목 3개라 배포 약 3회분)으로 만료돼, 10-02부터 ADT·intel 배치가
+`CannotPullContainerError`로 매번 실패했다(EventBridge `FailedInvocations`는 0이라 경보 없음).
+두 target을 745로 다시 고정하고 next 리포 정책을 "`schedule-pin-*` 태그 보호 + 최근 30개"로 바꿨다(ecr.tf).
+스케줄을 새 revision으로 고정할 때마다 그 이미지(묶음·하위 매니페스트 모두)에 보호 태그를 붙인다.
+배포 가드(`staging-assert-next-schedules-pinned.ps1`)는 고정 이미지가 없거나 보호 태그가 없으면 배포를 막는다.
+
+```powershell
+.\infra\aws\ops\staging-protect-pinned-image.ps1 -Revision 745   # 멱등
+```
+
 이 고정 검사는 `staging-deploy-next.ps1` 경로의 새 revision 등록을 막는다. 콘솔 수동 등록,
 다른 등록 도구, Terraform의 Next task definition 변경은 이 스크립트 밖이므로 같은 검사로
 보호된 것으로 간주하지 않는다.

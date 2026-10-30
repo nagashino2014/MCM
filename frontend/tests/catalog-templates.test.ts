@@ -21,6 +21,7 @@ import tokensJson from "@/lib/catalog/render/tokens.json";
 import { resolveColor, tokensToCss, type DesignTokens } from "@/lib/print-kit/tokens";
 import { composeDocument } from "@/lib/catalog/studio/compose";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
+import { RS_HISTORY_MAX, careerItems, caseCards, historyRows, strengthLines } from "@/lib/catalog/render/components/pages-research";
 import { makeFixture } from "./catalog-studio-fixture";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -65,9 +66,18 @@ test("sanitizeDocumentTheme — 모르는 템플릿·모티프는 기본값, 선
   for (const m of MOTIFS) assert.equal(sanitizeDocumentTheme({ motif: m.id }).motif, m.id);
 });
 
+test("모티프 — 링·등고선 폐기(사용자 지시 2026-10-30): 선택지는 물방울 하나, 저장된 ring·contour 는 drop 으로 읽고 패치에서는 빠진다", () => {
+  assert.deepEqual(MOTIFS.map((m) => m.id), ["drop"]);
+  for (const old of ["ring", "contour"]) {
+    assert.equal(sanitizeDocumentTheme({ template: "graphic", motif: old }).motif, "drop", old);
+    assert.equal("motif" in pickThemePatch({ motif: old }), false, `${old} 는 저장 패치에서 빠진다`);
+  }
+  for (const t of TEMPLATE_LIST) assert.equal(t.theme.motif, "drop", `${t.id} 기본 모티프`);
+});
+
 test("pickThemePatch — 색·서체·표지·모티프·선택 분야만 통과하고 template 은 빠진다(문서별 고정)", () => {
-  const p = pickThemePatch({ template: "graphic", concept: "charcoal", motif: "ring", cover: "center", coverPhoto: "none", fontSet: "serif", areas: [3, 1] });
-  assert.deepEqual(p, { cover: "center", coverPhoto: "none", fontSet: "serif", concept: "charcoal", motif: "ring", areas: [1, 3] });
+  const p = pickThemePatch({ template: "graphic", concept: "charcoal", motif: "drop", cover: "center", coverPhoto: "none", fontSet: "serif", areas: [3, 1] });
+  assert.deepEqual(p, { cover: "center", coverPhoto: "none", fontSet: "serif", concept: "charcoal", motif: "drop", areas: [1, 3] });
   assert.equal("template" in p, false);
   // 잘못된 값은 빠지고(기본값으로 덮지 않음), areas 를 비우면 undefined 로 지운다
   assert.deepEqual(pickThemePatch({ concept: "pink", motif: 3, cover: "x", fontSet: "A B" }), {});
@@ -96,17 +106,17 @@ test("CATALOG_TEMPLATES — 5종, id 와 theme.template 이 맞고 테마가 정
   // 계획서 §2 표의 테마 값
   const g = CATALOG_TEMPLATES.graphic.theme;
   assert.equal(g.concept, "green");
-  assert.equal(g.motif, "ring");
+  assert.equal(g.motif, "drop", "링 모티프 폐기(10-30) — 물방울");
   assert.equal(g.coverPhoto, "none");
   const f = CATALOG_TEMPLATES.formal.theme;
   assert.equal(f.concept, "charcoal");
-  assert.equal(f.motif, "contour");
+  assert.equal(f.motif, "drop", "등고선 모티프 폐기(10-30) — 물방울");
   assert.equal(f.fontSet, "pretendard", "격조형도 기본 서체 프리텐다드(사용자 지시 10-29)");
   const r = CATALOG_TEMPLATES.research;
   assert.equal(r.theme.concept, "steel");
   assert.equal(r.theme.cover, "research");
   assert.equal(r.plan, "research");
-  assert.deepEqual(r.variants.C13, { card: "list" });
+  assert.deepEqual(r.variants, {}, "research 는 양식 전용 쪽이라 쪽 변형 축이 없다");
   assert.equal(CATALOG_TEMPLATES.formal.plan, "formal");
   assert.equal(CATALOG_TEMPLATES.brief.plan, "brief");
   assert.equal(CATALOG_TEMPLATES.photo.fallback, "graphic");
@@ -148,16 +158,19 @@ test("Sheet — 저장값 없는 마스터는 kc-tpl--standard·kc-motif--drop �
   assert.equal(/kc-map[^"]*kc-motif--drop/.test(html), false);
 });
 
-test("Sheet — graphic 템플릿 문서는 kc-tpl--graphic·kc-concept--green·kc-motif--ring 으로 그려진다", () => {
+test("Sheet — graphic 템플릿 문서는 kc-tpl--graphic·kc-concept--green·kc-motif--drop 으로 그려진다(링·등고선 폐기)", () => {
   const theme = CATALOG_TEMPLATES.graphic.theme;
   const html = renderHtml(ctxOf(theme), theme);
   assert.match(html, /kc-tpl--graphic/);
   assert.match(html, /kc-concept--green/);
-  assert.match(html, /kc-motif--ring/);
-  assert.equal(html.includes("kc-motif--drop"), false);
+  assert.match(html, /kc-motif--drop/);
+  assert.equal(/kc-motif--(ring|contour)|kc-ring|kc-contour/.test(html), false);
   assert.equal(html.includes("kc-concept--navy"), false);
   const formal = renderHtml(ctxOf(CATALOG_TEMPLATES.formal.theme), CATALOG_TEMPLATES.formal.theme);
-  assert.match(formal, /kc-tpl--formal[^"]*kc-concept--charcoal[^"]*kc-fontset--pretendard[^"]*kc-motif--contour/);
+  assert.match(formal, /kc-tpl--formal[^"]*kc-concept--charcoal[^"]*kc-fontset--pretendard[^"]*kc-motif--drop/);
+  // 예전에 ring 으로 저장한 graphic 문서도 drop 으로 그려진다
+  const old = sanitizeDocumentTheme({ ...theme, motif: "ring" });
+  assert.equal(renderHtml(ctxOf(old), old), html);
 });
 
 // ── 색 컨셉 B·C 값(TP1 시안 1안 — docs/catalog-templates-plan.md §4-3 T-2)
@@ -214,7 +227,7 @@ test("tokens.json — green·charcoal 본문·면 위 글자 대비 4.5:1 이상
 
 const KIT_CSS = readFileSync(join(process.cwd(), "public/catalog-kit/kesi-catalog.css"), "utf8");
 
-test("kesi-catalog.css — 계획서 §3-3 쪽 변형 클래스와 모티프 ring·contour 상징 자리 클래스가 있다", () => {
+test("kesi-catalog.css — 계획서 §3-3 쪽 변형 클래스와 research 전용 쪽 클래스가 있고, 링·등고선 모티프 규칙은 없다(10-30 폐기)", () => {
   const classes = [
     ".kc-front--photo", ".kc-front--graphic", ".kc-front__band-field",
     ".kc-divider--photo-full", ".kc-divider--color-pattern", ".kc-divider--plain",
@@ -225,26 +238,35 @@ test("kesi-catalog.css — 계획서 §3-3 쪽 변형 클래스와 모티프 rin
     ".kc-people--portrait-large", ".kc-person--portrait-large", ".kc-people--list", ".kc-person--list",
     ".kc-creds--table", ".kc-cred--table",
     ".kc-sheet--brief", ".kc-tpl--brief", ".kc-tpl--formal", ".kc-brief",
-    ".kc-front__ring", ".kc-divider__ring", ".kc-backc__ring", ".kc-front__contour", ".kc-divider__contour", ".kc-backc__contour",
-    ".kc-ring--concentric", ".kc-contour-field", ".kc-pattern",
+    ".kc-pattern",
     ".kc-front--research", ".kc-front__wash", ".kc-front__photo-half", ".kc-front__rule", ".kc-front__orbit", ".kc-tpl--research", ".kc-backc--thanks", ".kc-topic", ".kc-phases",
+    // research 전용 쪽(10-30)
+    ".kc-rs-foot__folio", ".kc-rs-toc__num", ".kc-rs-facts", ".kc-rs-tl", ".kc-rs-clover__petal--1", ".kc-rs-cert", ".kc-rs-biz__piece--tl", ".kc-rs-strengths__card",
+    ".kc-rs-why__diagram", ".kc-rs-effects__arc", ".kc-rs-mt__table", ".kc-rs-global__grid", ".kc-rs-numbered", ".kc-rs-dma__diagram", ".kc-rs-steps__head",
+    ".kc-rs-pesg__card", ".kc-rs-onestop", ".kc-rs-cvt", ".kc-rs-ptable", ".kc-rs-team__unit", ".kc-rs-records__group", ".kc-rs-case__title", ".kc-rs-contact",
   ];
   for (const c of classes) assert.ok(KIT_CSS.includes(c), `${c} 가 kesi-catalog.css 에 있어야 한다`);
+  assert.equal(/kc-motif--(ring|contour)|\.kc-ring\b|\.kc-ring--|\.kc-contour|__ring\b|__contour\b|__orbit-(ring|inner|field)/.test(KIT_CSS), false, "링·등고선 모티프 규칙이 남아 있다");
   // 헤더는 재export 스크립트가 쓴다(손수정 금지 안내 유지)
   assert.match(KIT_CSS.split("\n")[0],/디자인 시스템 아티팩트 project\/components\/bundle\.css\(version [^,]+, \d{4}-\d{2}-\d{2}\) 사본/);
   assert.equal(/@import\s+url\(/.test(KIT_CSS), false, "PDF 변환기가 외부 네트워크를 막으므로 @import 가 없어야 한다");
 });
 
-test("kesi-catalog.css — TP1 블록의 선택자는 모두 템플릿·모티프(ring·contour)·컨셉(green·charcoal)·변형 클래스를 포함한다(standard 렌더 불변)", () => {
+test("kesi-catalog.css — TP1·research 블록의 선택자는 모두 템플릿·컨셉(green·charcoal·steel)·변형 클래스를 포함한다(standard 렌더 불변)", () => {
   const mark = KIT_CSS.indexOf("템플릿 4종 TP1(");
   assert.ok(mark > 0, "TP1 블록 머리말");
   const block = KIT_CSS.slice(KIT_CSS.lastIndexOf("/*", mark)).replace(/\/\*[\s\S]*?\*\//g, "");
   const guard =
-    /kc-tpl--(photo|graphic|formal|brief|research)|kc-motif--(ring|contour)|kc-concept--(green|charcoal|steel)|kc-front--research|kc-front__(wash|photo-half|rule|sub|eyebrow--en|orbit)|kc-backc--thanks|kc-topic|kc-phases|kc-sheet--brief|kc-front--(photo|graphic)|kc-front__(ring|ring-node|contour|full|plate|band-field|caption)|kc-divider--(photo-full|color-pattern|plain)|kc-divider__(ring|ring-node|contour|photo|full)|kc-backc__(ring|contour)|kc-kpis--(band|cards8)|kc-kpi--(band|card)|kc-kpis__bg|kc-timeline--(horizontal|columns4)|kc-bizhero--(photo-wide|none)|kc-strengths--icon-large|kc-people--(portrait-large|list)|kc-person--(portrait-large|list)|kc-creds--table|kc-cred--table|kc-brief|kc-ring--concentric|kc-contour-field|kc-pattern/;
+    /kc-tpl--(photo|graphic|formal|brief|research)|kc-concept--(green|charcoal|steel)|kc-front--research|kc-front__(wash|photo-half|rule|sub|eyebrow--en|orbit)|kc-backc--thanks|kc-topic|kc-phases|kc-sheet--brief|kc-front--(photo|graphic)|kc-front__(full|plate|band-field|caption)|kc-divider--(photo-full|color-pattern|plain)|kc-divider__full|kc-kpis--(band|cards8)|kc-kpi--(band|card)|kc-kpis__bg|kc-timeline--(horizontal|columns4)|kc-bizhero--(photo-wide|none)|kc-strengths--icon-large|kc-people--(portrait-large|list)|kc-person--(portrait-large|list)|kc-creds--table|kc-cred--table|kc-brief|kc-pattern/;
   const rules = [...block.matchAll(/([^{}]+)\{[^{}]*\}/g)];
   assert.ok(rules.length > 100, `규칙 수 ${rules.length}`);
   const bad = rules.flatMap((m) => m[1].split(",").map((s) => s.trim()).filter((s) => s && !guard.test(s)));
   assert.deepEqual(bad, []);
+  // research 전용 쪽 클래스(.kc-rs-*)는 research 템플릿 루트 안에서만 켜진다
+  const rsBad = [...KIT_CSS.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{[^{}]*\}/g)].flatMap((m) =>
+    m[1].split(",").map((x) => x.trim()).filter((x) => x.includes("kc-rs-") && !x.includes("kc-tpl--research"))
+  );
+  assert.deepEqual(rsBad, []);
 });
 
 test("CoverPage — research 템플릿 문서는 G 연구소형 표지(kc-front--research: 하늘빛 면·밑줄·부설연구소 부제·사진 반면)를 그린다", () => {
@@ -274,11 +296,17 @@ const STANDARD_KEYS = [
   "c01", "c02", "c03", "c04", "c05", "c06-1", "c07-02", "c08", "area-1", "area-2", "area-3", "area-4", "area-5", "c09-software", "c09-platform",
   "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c16", "c17", "c18", "a01", "a02-1", "c19",
 ];
+/** research 쪽 계획(260928 양식 순서) — 픽스처는 임원 2명·기술인력 1명·자문위원 1명·인증 1건 */
+const RESEARCH_KEYS = [
+  "c01", "c02", "c05", "c05-vision", "c16", "c08", "c10", "c21-1", "c21-2", "c21-3", "c22-1", "c22-2", "c23-1", "c23-2", "c23-3", "c23-4",
+  "c13-1", "c15-staff", "c15-advisors", "c12", "a02-r", "a02-cases", "c19",
+];
 const VARIANT_CLASS_RE = /kc-(front--(photo|graphic)\b|kpis--(band|cards8)|timeline--(horizontal|columns4)|divider--(photo-full|color-pattern|plain)|bizhero--(photo-wide|none)|strengths--icon-large|people--(portrait-large|list)|creds--table|sheet--brief)/;
 
-test("buildPagePlan — 템플릿별 쪽 키 목록(standard·photo·graphic·research = 지금 목차, formal = 신뢰 근거 앞으로, brief = 요약 쪽 계획)", () => {
+test("buildPagePlan — 템플릿별 쪽 키 목록(standard·photo·graphic = 지금 목차, formal = 신뢰 근거 앞으로, brief = 요약, research = 양식 쪽 순서)", () => {
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.standard.theme), STANDARD_KEYS, "standard(마스터) 쪽 목록 불변");
-  for (const id of ["photo", "graphic", "research"] as const) assert.deepEqual(keysOf(CATALOG_TEMPLATES[id].theme), STANDARD_KEYS, id);
+  for (const id of ["photo", "graphic"] as const) assert.deepEqual(keysOf(CATALOG_TEMPLATES[id].theme), STANDARD_KEYS, id);
+  assert.deepEqual(keysOf(CATALOG_TEMPLATES.research.theme), RESEARCH_KEYS);
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.formal.theme), [
     "c01", "c02", "c03", "c04", "c05", "c06-1", "c16", "c17", "a01", "c07-02", "c08", "area-1", "area-2", "area-3", "area-4", "area-5", "c09-software", "c09-platform",
     "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c18", "a02-1", "c19",
@@ -301,14 +329,13 @@ test("standard 마스터 렌더 — 쪽 변형 클래스·폴백 안내가 하�
   assert.match(html, /kc-toc__num">05<\/span><span class="kc-toc__name">신뢰 근거/);
 });
 
-test("graphic 템플릿 — F 그래픽 표지(링 궤도·분야 노드)·숫자 카드 8·가로 연혁·색 면 간지·인포그래픽 확대·역량 아이콘 큰 변형", () => {
+test("graphic 템플릿 — F 그래픽 표지(물방울 궤도·분야 노드)·숫자 카드 8·가로 연혁·색 면 간지·인포그래픽 확대·역량 아이콘 큰 변형", () => {
   const theme = CATALOG_TEMPLATES.graphic.theme;
   const html = htmlOf(theme, [], { cover: "graphic", photo: null });
   for (const re of [
     /kc-front kc-front--graphic/,
     /kc-front__orbit/,
-    /kc-ring kc-front__orbit-ring/,
-    /kc-ring kc-ring--concentric kc-front__orbit-inner/,
+    /kc-drop kc-front__orbit-drop/,
     /kc-front__orbit-node kc-area-6/,
     /kc-kpis kc-kpis--cards8/,
     /kc-timeline kc-timeline--horizontal/,
@@ -441,4 +468,81 @@ test("fitsPage — C20 분야 요약은 C20 적합도가 없으면 분야 상세
   assert.equal(fitsPage(info, "C10"), null);
   const own = { fits: [{ item: "C09-process", page: "C09" }, { item: "C20-x", page: "C20" }] } as unknown as Parameters<typeof fitsPage>[0];
   assert.equal(fitsPage(own, "C20")?.item, "C20-x");
+});
+
+// ── research 쪽 계획(10-30): 260928 양식 순서의 전용 쪽 ──
+
+test("research 템플릿 — 양식 26쪽 구성(로마 숫자 목차·일반현황 표·클로버·등록증·4분면·ESG 개념/배경/기대효과·동향·절차·중대성·작성 항목·임원 이력·참여인력·수행 조직·수행실적·Thank you)", () => {
+  const theme = CATALOG_TEMPLATES.research.theme;
+  const html = htmlOf(theme, [], { cover: "research", photo: "k/assets/hq-cover-tall.webp" });
+  for (const re of [
+    /kc-front kc-front--research/,
+    /kc-rs-tocpage/,
+    /kc-rs-toc__num">VIII</,
+    /kc-rs-facts/,
+    /kc-rs-tl/,
+    /kc-rs-clover__petal kc-rs-clover__petal--1/,
+    /kc-rs-cert/,
+    /kc-rs-biz__piece kc-rs-biz__piece--tl/,
+    /kc-rs-strengths__card/,
+    /kc-topic__col kc-area-4/,
+    /kc-rs-why__diagram/,
+    /kc-rs-effects__arc/,
+    /kc-rs-mt__table/,
+    /kc-rs-global__grid/,
+    /kc-phases__step/,
+    /kc-rs-dma__diagram/,
+    /kc-rs-steps__col/,
+    /kc-rs-pesg__card kc-area-2/,
+    /kc-rs-cvt/,
+    /kc-rs-ptable/,
+    /kc-rs-team__unit/,
+    /kc-rs-records__group/,
+    /kc-rs-case__title/,
+    /kc-backc kc-backc--thanks/,
+  ])
+    assert.match(html, re);
+  // 모든 쪽이 research 루트, 쪽 아래 사선 쪽 번호 탭(목차·표지·뒤표지 제외) — 인쇄본 자동 로고는 끈다
+  assert.equal((html.match(/kc-rs-foot__folio/g) ?? []).length, RESEARCH_KEYS.length - 3);
+  assert.equal(html.includes("data-fallback-note"), false);
+  assert.equal(/kc-motif--(ring|contour)/.test(html), false);
+  // 섹션 앵커 I~VIII 가 한 번씩, 쪽 머리 번호 01~08
+  for (let i = 1; i <= 8; i++) assert.equal((html.match(new RegExp(`data-anchors="sec-r${i}[ "]`, "g")) ?? []).length, 1, `sec-r${i}`);
+  assert.match(html, /kc-head__num">07<\/span><span class="kc-head__name">ESG 분야별 전문인력 현황/);
+  // 간지·부록·standard 쪽은 없다
+  assert.equal(/kc-divider|kc-cv"|kc-toc__folio/.test(html), false);
+});
+
+test("research 템플릿 — 섹션 표기(목차·스튜디오 썸네일)와 VII 첫 쪽 앵커가 있는 쪽으로 옮겨 간다", () => {
+  const theme = CATALOG_TEMPLATES.research.theme;
+  const plan = buildPagePlan(ctxOf(theme), { ...makeFixture(), theme }, COVER);
+  assert.deepEqual([...new Set(plan.map((p) => p.section).filter(Boolean))], ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"]);
+  assert.ok(plan.filter((p) => p.type === "C21" || p.type === "C22" || p.type === "C23").length === 9);
+  assert.ok(plan.find((p) => p.key === "c15-staff")!.flow && plan.find((p) => p.key === "c15-advisors")!.flow);
+  // 임원이 없으면 VII 섹션 앵커는 참여인력(내부) 쪽이 맡는다
+  const noLeaders = { ...makeFixture(), theme, leaders: [] };
+  const html = htmlOf(theme, [], COVER, noLeaders);
+  assert.match(html, /data-anchors="sec-r7 c15-staff"/);
+  assert.equal(keysOf(theme, noLeaders).includes("c13-1"), false);
+  // 인증이 없으면 등록증 쪽을 뺀다
+  assert.equal(keysOf(theme, { ...makeFixture(), credentials: [] }).includes("c16"), false);
+});
+
+test("research 도움 함수 — 연혁 줄 수 상한(설립 줄 유지)·경력 줄·핵심역량 자리 채우기·수행실적 카드", () => {
+  const years = Array.from({ length: 20 }, (_, i) => ({ year: String(2006 + i), highlight: false, items: [{ month: "1", content: `일 ${i}`, category: "", highlight: i === 19 }] }));
+  const rows = historyRows(years);
+  assert.equal(rows.length, RS_HISTORY_MAX);
+  assert.equal(rows[0].content, "일 19");
+  assert.equal(rows[0].highlight, true);
+  assert.equal(rows[0].ym, "2025. 01");
+  assert.equal(rows[rows.length - 1].content, "일 0", "설립(가장 오래된) 줄은 남는다");
+  assert.deepEqual(careerItems("38년 · 前 환경부 부이사관, 원주청 기획국장"), ["환경부 부이사관", "원주청 기획국장"]);
+  assert.deepEqual(careerItems("강원대 박사 · 경력 44년 · 前 청장"), ["강원대 박사", "청장"]);
+  const data = makeFixture();
+  assert.deepEqual(strengthLines(["{leaderMax}년 경력", "자문 {advisors}명", "{patent} 보유", "고정 문구"], data), ["25년 경력", "자문 1명", "고정 문구"], "특허가 없으면 그 줄을 뺀다");
+  const area1 = data.areas.find((a) => a.index === 1)!;
+  const cards = caseCards(data, area1, 3);
+  assert.ok(cards.length > 0 && cards.length <= 3);
+  assert.ok(cards.every((c) => c.title));
+  assert.deepEqual(caseCards(data, undefined), []);
 });

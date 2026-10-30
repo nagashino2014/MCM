@@ -288,7 +288,7 @@ export async function getDocumentTheme(docId = MASTER_DOC_ID): Promise<DocumentT
 
 export class ThemeTemplateLockedError extends CatalogDocumentError {
   constructor() {
-    super("같은 문서 안에서는 템플릿을 바꿀 수 없습니다. 다른 템플릿은 [새 문서]로 만들어 주세요(색·서체·표지·모티프는 바꿀 수 있습니다).", 400);
+    super("같은 문서 안에서는 템플릿을 바꿀 수 없습니다. 다른 템플릿은 [새 문서]로 만들어 주세요(색·서체·표지는 바꿀 수 있습니다).", 400);
   }
 }
 

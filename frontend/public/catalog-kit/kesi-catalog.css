@@ -1,4 +1,4 @@
-/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1793272609-f6d1, 2026-10-29) 사본.
+/* KESI 회사소개서 디자인 시스템 컴포넌트 CSS(kc-*) — 디자인 시스템 아티팩트 project/components/bundle.css(version 1793324574-b1a5, 2026-10-30) 사본.
    https://claude.ai/artifact/AovTvRBgpnUv7r6CQvxp8B — 손으로 고치지 않는다(문서 보정은 lib/catalog/render/print-overrides.ts, 재export 는 scripts/catalog/export_kit_css.py).
    PDF 는 외부 네트워크를 막으므로 원본 첫 줄의 Google Fonts @import 만 뺐다(기본 서체 Pretendard 는 print-kit 이 직접 싣는다). */
 
@@ -95,8 +95,6 @@
 .kc-head__end { display: inline-flex; align-items: center; gap: var(--space-3); }
 .kc-head__doc { color: var(--ink-muted); }
 .kc-head__folio { font-family: var(--kc-font-figure); font-size: 9px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-.kc-motif--ring .kc-head__mark { border-radius: 50%; background: transparent; border: 2.5px solid var(--area); }
-.kc-motif--contour .kc-head__mark { border-radius: 50%; background: transparent; border: 1px solid var(--area); outline: 1px solid var(--area); outline-offset: 2px; width: 7px; height: 7px; margin: 0 2px; }
 
 /* ── 제목 ─────────────────────────────────────────────────────── */
 .kc-titleblock { display: flex; flex-direction: column; gap: 6px; flex: none; }
@@ -135,7 +133,6 @@
 .kc-icon--sm { width: 14px; height: 14px; }
 .kc-icon--lg { width: 26px; height: 26px; stroke-width: 1.6; }
 .kc-iconbox { width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: var(--area); background: var(--area-tint); border-radius: 50% 0 50% 50%; }
-.kc-motif--ring .kc-iconbox, .kc-motif--contour .kc-iconbox { border-radius: 50%; }
 
 /* ── 모티프 A: 물방울·잎(CI 그래픽 모티프) ─────────────────────── */
 .kc-drop { display: block; aspect-ratio: 1; flex: none; background: var(--accent); border-radius: 50% 0 50% 50%; }
@@ -153,18 +150,6 @@
 .kc-motif-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .kc-motif-layer > * { position: absolute; }
 
-/* ── 모티프 B: 순환 링(심볼마크의 두 반원에서 딴 호) ─────────────── */
-.kc-ring { display: block; aspect-ratio: 1; flex: none; border-radius: 50%; border: 18px solid; transform: rotate(-35deg);
-  border-color: var(--accent-2) var(--accent-2) var(--accent) var(--accent); }
-.kc-ring--thin { border-width: 6px; }
-.kc-ring--area { border-color: var(--area) var(--area) var(--area-mid) var(--area-mid); }
-.kc-ring__node { position: absolute; aspect-ratio: 1; border-radius: 50%; background: var(--accent-2); }
-
-/* ── 모티프 C: 등고선(측정·확산 등농도선) ─────────────────────── */
-.kc-contour { display: block; fill: none; stroke: var(--accent-2); stroke-width: 1; }
-.kc-contour--on-field { stroke: var(--on-field-muted); }
-.kc-contour--area { stroke: var(--area-mid); }
-
 /* ── 사진 자리 ────────────────────────────────────────────────── */
 .kc-photo { position: relative; display: block; overflow: hidden; background: var(--photo-fill); border-radius: var(--radius-sm); min-width: 0; }
 .kc-photo > img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -174,8 +159,7 @@
 .kc-ratio-4x3 { aspect-ratio: 4 / 3; } .kc-ratio-1x1 { aspect-ratio: 1; } .kc-ratio-3x4 { aspect-ratio: 3 / 4; }
 /* 사진 틀은 문서 모티프를 따른다 */
 .kc-motif--drop .kc-photo--frame { border-radius: 0 var(--radius-leaf) var(--radius-leaf) var(--radius-leaf); }
-.kc-motif--ring .kc-photo--frame { border-radius: var(--radius-sm); }
-.kc-motif--contour .kc-photo--frame { border-radius: 0; }
+
 .kc-photo-ornament { position: absolute; pointer-events: none; }
 /* 사진 없는 변형의 면 */
 .kc-nophoto { position: relative; overflow: hidden; background: var(--area-tint); border-radius: var(--radius-sm); }
@@ -197,12 +181,6 @@
 .kc-kpi--s .kc-kpi__unit { font-size: 9.5px; }
 /* KPI 카드는 문서 모티프를 따른다 */
 .kc-motif--drop .kc-kpi { border-top: 0; padding: 12px 14px 12px; background: var(--canvas); border-radius: 0 18px 18px 18px; }
-.kc-motif--ring .kc-kpi { border-top: 0; padding-top: 0; padding-left: 34px; }
-.kc-motif--ring .kc-kpi__label .kc-icon { display: none; }
-.kc-motif--ring .kc-kpi::before { content: ""; position: absolute; left: 0; top: 2px; width: 24px; height: 24px; border-radius: 50%; border: 5px solid;
-  border-color: var(--accent-2) var(--accent-2) var(--accent) var(--accent); transform: rotate(-35deg); }
-.kc-motif--contour .kc-kpi { border-top: var(--stroke-hair) solid var(--rule); padding-top: 10px; }
-.kc-motif--contour .kc-kpi::before { content: ""; position: absolute; top: -2px; left: 0; width: 28px; height: 3px; background: var(--area); }
 
 /* ── 표 ───────────────────────────────────────────────────────── */
 .kc-tablehead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-bottom: 4px; }
@@ -235,7 +213,7 @@
 .kc-list { list-style: none; padding: 0; display: grid; gap: 4px; font-size: 9.5px; line-height: 15px; }
 .kc-list li { position: relative; padding-left: 12px; }
 .kc-list li::before { content: ""; position: absolute; left: 0; top: 5px; width: 6px; height: 6px; background: var(--area-mid); border-radius: 50% 0 50% 50%; }
-.kc-motif--ring .kc-list li::before, .kc-motif--contour .kc-list li::before { border-radius: 50%; }
+
 .kc-list--plain li { padding-left: 0; } .kc-list--plain li::before { display: none; }
 
 /* ── C01 표지 · C19 뒤표지 ────────────────────────────────────── */
@@ -266,16 +244,15 @@
 .kc-front__areas { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 5px 14px; font-size: 9.5px; line-height: 14px; font-weight: 600; color: var(--ink); }
 .kc-front__areas li { display: flex; align-items: center; gap: 5px; }
 .kc-front__areas li::before { content: ""; width: 8px; height: 8px; flex: none; background: var(--area); border-radius: 50% 0 50% 50%; }
-.kc-motif--ring .kc-front__areas li::before, .kc-motif--contour .kc-front__areas li::before { border-radius: 50%; }
+
 /* A 잎 창: 흰 바탕 + 잎 모양 사진 창 */
 .kc-front__window { overflow: hidden; background: var(--field); border-radius: 0 184px 184px 184px; }
-.kc-motif--ring .kc-front__window { border-radius: 184px 184px var(--radius-sm) var(--radius-sm); }
-.kc-motif--contour .kc-front__window { border-radius: 0; }
+
 .kc-front__window img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
 /* B 세 기둥: 사옥 사진 한 장을 위가 둥근 세 기둥으로 나눠 엇갈려 세움(한 장으로 이어 보이게 같은 배경 좌표) */
 .kc-front__pillar { overflow: hidden; background-color: var(--brand-tint); background-repeat: no-repeat; border-radius: 56px 56px var(--radius-sm) var(--radius-sm); }
 .kc-motif--drop .kc-front__pillar--lead { border-radius: 0 56px var(--radius-sm) var(--radius-sm); }
-.kc-motif--contour .kc-front__pillar { border-radius: 0; }
+
 /* C 중앙 정렬: 연한 그라데이션 바탕 + 안쪽 테 + 가운데 정렬(사진 없음) */
 .kc-front--center { background: linear-gradient(180deg, var(--paper) 0%, var(--paper) 38%, var(--canvas) 72%, var(--brand-tint) 100%); }
 .kc-front--center .kc-front__block { align-items: center; text-align: center; }
@@ -340,7 +317,7 @@
 .kc-strengths__head { font-family: var(--kc-font-display); font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: -0.2px; color: var(--ink); }
 .kc-strengths__hero { grid-column: 1 / span 4; grid-row: 1 / span 2; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; background: var(--field); color: var(--on-field); border-radius: var(--radius-sm); }
 .kc-motif--drop .kc-strengths__hero { border-radius: 0 var(--radius-leaf) var(--radius-leaf) var(--radius-leaf); }
-.kc-motif--contour .kc-strengths__hero { border-radius: 0; }
+
 .kc-strengths__hero > * { position: relative; }
 .kc-strengths__hero > .kc-strengths__art { position: absolute; inset: 0; pointer-events: none; }
 .kc-strengths__art > * { position: absolute; }
@@ -451,7 +428,7 @@
 .kc-process > li { position: relative; display: flex; flex-direction: column; gap: 4px; padding-right: 14px; }
 .kc-process__num { width: 28px; height: 28px; display: grid; place-items: center; background: var(--area); color: var(--on-area);
   font-family: var(--kc-font-figure); font-size: 11px; font-weight: 700; border-radius: 50% 0 50% 50%; margin-bottom: 4px; }
-.kc-motif--ring .kc-process__num, .kc-motif--contour .kc-process__num { border-radius: 50%; }
+
 .kc-process > li:not(:last-child)::after { content: ""; position: absolute; top: 13.5px; left: 36px; right: 8px; border-top: var(--stroke-strong) solid var(--area-mid); }
 .kc-process > li:not(:last-child)::before { content: ""; position: absolute; top: 10px; right: 6px; border-left: 6px solid var(--area-mid); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .kc-process--v { grid-auto-flow: row; gap: 10px; }
@@ -473,7 +450,7 @@
 .kc-orbit__node { position: absolute; display: flex; flex-direction: column; gap: 2px; transform: translate(-50%, -50%); text-align: center; align-items: center; }
 .kc-orbit__dot { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50% 0 50% 50%; background: var(--area); color: var(--on-area);
   font-family: var(--kc-font-figure); font-size: 9px; font-weight: 700; margin-bottom: 2px; }
-.kc-motif--ring .kc-orbit__dot, .kc-motif--contour .kc-orbit__dot { border-radius: 50%; }
+
 /* 일러스트 모양(313 보유 스톡 일러스트) — 그림은 벡터 SVG, 글자는 자리마다 HTML(검색·복사). 자리는 줄 수만큼 높이를 갖고 넘치면 잘려 넘침 검사에 걸린다 */
 .kc-ill { position: relative; }
 .kc-ill__art { position: absolute; inset: 0; }
@@ -495,7 +472,6 @@
 .kc-layer .kc-layer { background: var(--area-tint); }
 .kc-layer .kc-layer .kc-layer { background: var(--area); color: var(--on-area); }
 .kc-layer .kc-layer .kc-layer .kc-ig__desc, .kc-layer .kc-layer .kc-layer .kc-ig__label { color: var(--on-area); }
-.kc-motif--ring .kc-layer, .kc-motif--contour .kc-layer { border-radius: 14px; }
 
 /* matrix 2×2 */
 .kc-matrix { display: grid; grid-template-columns: 18px repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)) 18px; gap: 4px; }
@@ -511,7 +487,7 @@
 .kc-timeline__year { font-family: var(--kc-font-figure); font-size: 13px; line-height: 16px; font-weight: 700; color: var(--area); font-variant-numeric: tabular-nums; }
 .kc-timeline__tick { width: 9px; height: 9px; margin: 2px 0 6px; background: var(--paper); border: 2px solid var(--area); border-radius: 50%; position: relative; z-index: 1; }
 .kc-timeline > li.is-highlight .kc-timeline__tick { background: var(--area); border-color: var(--area); border-radius: 50% 0 50% 50%; width: 13px; height: 13px; margin: 0 0 4px; }
-.kc-motif--ring .kc-timeline > li.is-highlight .kc-timeline__tick, .kc-motif--contour .kc-timeline > li.is-highlight .kc-timeline__tick { border-radius: 50%; }
+
 .kc-timeline > li.is-highlight .kc-timeline__year { font-size: 15px; }
 .kc-timeline__items { list-style: none; padding: 0; display: grid; gap: 5px; }
 .kc-timeline__items li { font-size: 9.5px; line-height: 14px; }
@@ -585,7 +561,7 @@
 .kc-map__pin { fill: var(--area); stroke: var(--paper); stroke-width: 1; }
 .kc-map__dot { position: absolute; width: 9px; height: 9px; transform: translate(-50%, -50%); background: var(--area); border: 1.5px solid var(--paper); border-radius: 50%; }
 .kc-map__dot--num { width: 15px; height: 15px; display: grid; place-items: center; border-width: 1px; font-family: var(--kc-font-figure); font-size: 7.5px; line-height: 1; font-weight: 700; color: var(--on-area); border-radius: 50% 0 50% 50%; }
-.kc-motif--ring .kc-map__dot--num, .kc-motif--contour .kc-map__dot--num { border-radius: 50%; }
+
 .kc-map__pinlabel { position: absolute; transform: translate(9px, -50%); font-size: 7.5px; line-height: 10px; font-weight: 700; color: var(--ink); white-space: nowrap; background: var(--paper); padding: 0 3px; }
 .kc-map__pinlabel--left { transform: translate(calc(-100% - 9px), -50%); }
 .kc-map__label { position: absolute; transform: translate(-50%, -50%); text-align: center; font-size: 7px; line-height: 9px; font-weight: 600; color: var(--ink); white-space: nowrap; background: var(--paper); padding: 2px 4px 1px; border-radius: var(--radius-sm); }
@@ -658,7 +634,7 @@
 .kc-sw__list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .kc-sw__list li { position: relative; padding-left: 12px; font-size: 9.5px; line-height: 15px; color: var(--ink); }
 .kc-sw__list li::before { content: ""; position: absolute; left: 0; top: 5px; width: 6px; height: 6px; background: var(--area); border-radius: 50% 0 50% 50%; }
-.kc-motif--ring .kc-sw__list li::before, .kc-motif--contour .kc-sw__list li::before { border-radius: 50%; }
+
 .kc-sw__when { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-top: 7px; border-top: var(--stroke-hair) solid var(--rule-strong); font-size: 8.5px; line-height: 12px; color: var(--ink-muted); }
 .kc-sw__when b { font-family: var(--kc-font-figure); font-size: 12px; line-height: 14px; font-weight: 700; color: var(--area); font-variant-numeric: tabular-nums; }
 /* 일정 점선(제품 공통) */
@@ -732,9 +708,9 @@
 
 /* ══ 템플릿 4종 TP1(2026-10-29, docs/catalog-templates-plan.md §3-3·§5) ══════════════════════════
    템플릿 = 테마(색 컨셉·표지·모티프·서체) + 쪽 변형 묶음. 쪽 루트에 kc-tpl--{standard|photo|graphic|formal|brief} 가 붙고,
-   쪽 변형은 아래 클래스를 요소에 붙여 켠다(쪽 컴포넌트 연결은 TP2). 이 블록의 선택자는 모두 템플릿·모티프(ring·contour)·
-   색 컨셉(green·charcoal)·변형 클래스 중 하나를 포함하므로 기존 standard 문서(drop·navy, 변형 없음)의 그림은 바뀌지 않는다.
-   모티프 절제 규칙(2026-10-22): 상징 모양(물방울·링·등고선)은 표지(kc-front)·간지(kc-divider)·뒤표지(kc-backc)에만 두고,
+   쪽 변형은 아래 클래스를 요소에 붙여 켠다(쪽 컴포넌트 연결은 TP2). 이 블록의 선택자는 모두 템플릿·색 컨셉(green·charcoal·steel)·변형 클래스
+   중 하나를 포함하므로 기존 standard 문서(drop·navy, 변형 없음)의 그림은 바뀌지 않는다.
+   모티프 절제 규칙(2026-10-22): 상징 모양(물방울)은 표지(kc-front)·간지(kc-divider)·뒤표지(kc-backc)에만 두고,
    본문 쪽에서는 모서리와 작은 표식만 바뀐다. */
 
 /* ── 템플릿 루트: 밀도 ───────────────────────────────────────── */
@@ -749,37 +725,9 @@
 .kc-sheet--brief .kc-body, .kc-tpl--brief .kc-body { font-size: 11px; line-height: 18px; }
 .kc-sheet--brief .kc-small, .kc-tpl--brief .kc-small, .kc-sheet--brief .kc-list, .kc-tpl--brief .kc-list { font-size: 10px; line-height: 16px; }
 
-/* ── 모티프 B 링·C 등고선: 상징 자리(표지·간지·뒤표지) ───────────── */
-/* 렌더러가 넣는 물방울(kc-drop)은 링·등고선 문서에서 모티프 규칙을 따른다: 링 = 원, 등고선 = 겹선 원(채움 없음) */
-.kc-motif--ring .kc-drop, .kc-motif--ring .kc-drop--tl, .kc-motif--ring .kc-drop--br, .kc-motif--ring .kc-drop--bl { border-radius: 50%; }
-.kc-motif--contour .kc-drop, .kc-motif--contour .kc-drop--tl, .kc-motif--contour .kc-drop--br, .kc-motif--contour .kc-drop--bl { border-radius: 50%; }
-.kc-motif--contour .kc-drop:not(.kc-drop--line) { background: transparent; box-sizing: border-box; border: 1px solid var(--accent-2); outline: 1px solid var(--accent-2); outline-offset: -5px; }
-/* 상징 자리 — 배치 좌표는 842×595 기준. class="kc-ring kc-front__ring" 처럼 모양 클래스와 함께 쓴다 */
-.kc-front__ring, .kc-front__ring-node, .kc-front__contour, .kc-divider__ring, .kc-divider__ring-node, .kc-divider__contour, .kc-backc__ring, .kc-backc__contour { position: absolute; pointer-events: none; }
-/* 링(심볼마크의 두 반원 호 + 노드 하나) */
-.kc-front__ring { width: 110px; left: 350px; top: -10px; border-width: 14px; }
-.kc-front__ring-node { width: 16px; left: 448px; top: 8px; }
-.kc-motif--ring .kc-front__window { border-radius: 184px 184px var(--radius-sm) var(--radius-sm); }
-.kc-divider__ring { width: 320px; left: 15px; top: 125px; border-width: 40px; }
-.kc-divider__ring-node { width: 34px; left: 282px; top: 100px; }
-.kc-motif--ring .kc-divider__photo { position: absolute; left: 60px; top: 170px; width: 230px; height: 230px; border-radius: 50%; }
-.kc-backc__ring { width: 420px; right: -150px; top: -170px; border-width: 40px; border-color: var(--brand-tint) var(--brand-tint) var(--area-1-tint) var(--area-1-tint); }
-/* 링 변형: 동심 가는 링(단색) — 심볼마크와 덜 닮아 로고 효과를 흐리지 않는다. 폭은 링 간격(16.5px)의 배수로 */
-.kc-ring--concentric { border: 0; transform: none; background: repeating-radial-gradient(circle at center, transparent 0, transparent 15px, var(--ring-ink, var(--accent-2)) 15px, var(--ring-ink, var(--accent-2)) 16.5px); }
-/* 등고선(SVG kc-contour 의 자리) */
-.kc-front__contour { width: 180px; height: 110px; left: 290px; top: 462px; }
-.kc-divider__contour { inset: 0; width: 100%; height: 100%; }
-.kc-motif--contour .kc-divider__art { background: var(--field); }
-.kc-motif--contour .kc-divider__photo { position: absolute; inset: 0; border-radius: 0; }
-.kc-backc__contour { width: 360px; height: 300px; right: -40px; top: -40px; stroke: var(--rule); }
-/* 등고선 면(마크업 없는 CSS 등고선): 가는 등농도선 또는 등고 띠(농도 단계 면) */
-.kc-contour-field { position: absolute; pointer-events: none; background: repeating-radial-gradient(ellipse 62% 48% at 56% 54%, transparent 0, transparent 20px, var(--contour-ink, var(--accent-2)) 20px, var(--contour-ink, var(--accent-2)) 21px); }
-.kc-contour-field--bands { background: repeating-radial-gradient(ellipse 62% 48% at 56% 54%, color-mix(in srgb, var(--contour-ink, var(--field)) 26%, transparent) 0 24px, color-mix(in srgb, var(--contour-ink, var(--field)) 16%, transparent) 24px 48px, color-mix(in srgb, var(--contour-ink, var(--field)) 8%, transparent) 48px 72px, transparent 72px 96px); }
-/* 패턴 면(표지 F·간지 color-pattern): 모티프별 CSS 패턴. 물방울은 자식 kc-drop--line 을 배치한다 */
+/* 패턴 면(표지 F·간지 color-pattern): 물방울은 자식 kc-drop--line 을 배치한다(링·등고선 패턴은 2026-10-30 폐기) */
 .kc-pattern { --pattern-ink: color-mix(in srgb, var(--on-field) 32%, transparent); position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .kc-pattern > .kc-drop { position: absolute; }
-.kc-motif--ring .kc-pattern { background-image: radial-gradient(circle at center, transparent 0 10px, var(--pattern-ink) 10px 11.5px, transparent 11.5px); background-size: 42px 42px; background-position: 10px 10px; }
-.kc-motif--contour .kc-pattern { background-image: repeating-radial-gradient(ellipse 80% 60% at 70% 115%, transparent 0 22px, var(--pattern-ink) 22px 23px); }
 
 /* ── C01 표지 변형: E 전면 사진(photo) · F 그래픽(graphic, C 중앙 정렬 파생) ───────── */
 /* E 전면 사진(T1): 사진 전면 + 아래 반투명 판 위 글자. 로고·글은 판 위에만 둔다(사진 위 배치 금지) */
@@ -794,14 +742,12 @@
 .kc-front--photo .kc-front__meta { border-top-color: rgba(255, 255, 255, 0.35); }
 .kc-front--photo .kc-front__caption { color: var(--on-overlay); }
 /* F 그래픽(T2, 2026-10-29 재설계 — 처음 안 '아래 띠 + 패턴'은 투박하다는 사용자 지적): 왼쪽 글 단(A 와 같은 자리) + 오른쪽에 큰 모티프 궤도.
-   궤도 = 두 색 호(kc-ring) + 안쪽 동심 가는 링 + 사업 분야 6색 노드. 물방울 문서는 큰 물방울 + 윤곽 물방울 + 노드, 등고선 문서는 등고선 면 + 노드. 사진 없음 */
+   궤도 = 큰 물방울 + 윤곽 물방울 + 사업 분야 6색 노드. 사진 없음(링·등고선 궤도는 2026-10-30 모티프와 함께 폐기) */
 .kc-front--graphic { background: var(--paper); }
 .kc-front--graphic .kc-front__band-field { left: 0; right: 0; bottom: 0; height: 14px; background: var(--field); }
 .kc-front__orbit { position: absolute; left: 446px; top: 62px; width: 400px; height: 400px; pointer-events: none; }
 .kc-front__orbit > * { position: absolute; }
-.kc-front__orbit-ring { left: 0; top: 0; width: 400px; border-width: 46px; }
-.kc-front__orbit-inner { left: 93.75px; top: 93.75px; width: 212.5px; --ring-ink: var(--brand-tint); }
-.kc-motif--ring .kc-front__orbit-inner { --ring-ink: var(--panel); }
+
 .kc-front__orbit-node { width: 30px; height: 30px; border-radius: 50%; background: var(--area); box-shadow: 0 0 0 4px var(--paper); }
 .kc-front__orbit-node:nth-of-type(1) { left: 185px; top: -15px; }
 .kc-front__orbit-node:nth-of-type(2) { left: 358px; top: 85px; }
@@ -812,8 +758,6 @@
 /* 물방울 문서의 궤도: 큰 물방울(주색 옅은 면) + 윤곽 물방울 */
 .kc-motif--drop .kc-front__orbit-drop { left: 30px; top: 30px; width: 340px; background: var(--brand-tint); }
 .kc-motif--drop .kc-front__orbit-drop--line { left: 120px; top: 120px; width: 160px; background: transparent; color: var(--accent); }
-/* 등고선 문서의 궤도: 등고선 면(원형) */
-.kc-motif--contour .kc-front__orbit-field { left: 20px; top: 20px; width: 360px; height: 360px; border-radius: 50%; --contour-ink: var(--brand); }
 
 /* ── C07 간지 변형(style): photo-full · color-pattern · plain ────────────── */
 /* 전면 사진 + 왼쪽 반투명 판(T1) */
@@ -850,16 +794,12 @@
 .kc-kpis--band .kc-kpi, .kc-kpi--band, .kc-motif--drop .kc-kpis--band .kc-kpi, .kc-motif--drop .kc-kpi--band { background: transparent; border-top: var(--stroke-hair) solid rgba(255, 255, 255, 0.4); border-radius: 0; padding: 10px 0 0; }
 .kc-kpis--band .kc-kpi__label, .kc-kpis--band .kc-kpi__label .kc-icon, .kc-kpis--band .kc-kpi__value, .kc-kpis--band .kc-kpi__note,
 .kc-kpi--band .kc-kpi__label, .kc-kpi--band .kc-kpi__label .kc-icon, .kc-kpi--band .kc-kpi__value, .kc-kpi--band .kc-kpi__note { color: var(--on-overlay); }
-.kc-motif--contour .kc-kpis--band .kc-kpi::before, .kc-motif--contour .kc-kpi--band::before { background: var(--on-overlay); }
+
 .kc-kpis--cards8 { gap: 12px 14px; }
 .kc-kpi--card, .kc-kpis--cards8 .kc-kpi, .kc-motif--drop .kc-kpi--card, .kc-motif--drop .kc-kpis--cards8 .kc-kpi { border-top: 0; padding: 14px 14px 12px; gap: 6px; background: var(--canvas); border-radius: 10px; }
 .kc-kpi--card .kc-kpi__label, .kc-kpis--cards8 .kc-kpi__label { flex-direction: column; align-items: flex-start; gap: 8px; }
 .kc-kpi--card .kc-kpi__label .kc-icon, .kc-kpis--cards8 .kc-kpi__label .kc-icon { display: block; width: 40px; height: 40px; padding: 9px; box-sizing: border-box; background: var(--area-tint); color: var(--area); border-radius: 10px; stroke-width: 1.6; }
 .kc-kpi--card .kc-kpi__figure, .kc-kpis--cards8 .kc-kpi__figure { font-size: 40px; line-height: 44px; letter-spacing: -1px; }
-.kc-motif--ring .kc-kpi--card, .kc-motif--ring .kc-kpis--cards8 .kc-kpi { padding-left: 14px; }
-.kc-motif--ring .kc-kpi--card::before, .kc-motif--ring .kc-kpis--cards8 .kc-kpi::before, .kc-motif--contour .kc-kpi--card::before, .kc-motif--contour .kc-kpis--cards8 .kc-kpi::before { display: none; }
-.kc-motif--ring .kc-kpi--card .kc-kpi__label .kc-icon, .kc-motif--ring .kc-kpis--cards8 .kc-kpi__label .kc-icon { border-radius: 50%; }
-.kc-motif--contour .kc-kpi--card, .kc-motif--contour .kc-kpis--cards8 .kc-kpi { border-top: 0; }
 
 /* ── C06 연혁 변형(axis): horizontal(한 줄 축, 위·아래 번갈아) · columns4(연대별 4단) ──────
    기본(.kc-timeline)은 연도 열을 가로로 늘어놓고 항목을 아래로 쌓는다. horizontal 은 li 안에 위 칸·축·아래 칸 세 줄을 둔다:
@@ -921,7 +861,6 @@
 .kc-brief__contact { grid-column: 8 / span 5; display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: var(--brand-tint); border-radius: 10px; }
 .kc-brief__contact b { font-family: var(--kc-font-display); font-size: 12px; line-height: 17px; color: var(--ink); }
 .kc-brief__contact p { font-size: 9.5px; line-height: 15px; color: var(--ink); }
-.kc-motif--contour .kc-brief__contact { border-radius: 0; }
 
 /* ── T5 연구소·ESG 제안형(research, 2026-10-29): 부설연구소 ESG 연구 용역 소개서 양식(2026-09 PPT)을 템플릿화 ────────
    테마 D 스틸 블루(kc-concept--steel). 쪽 머리는 네이비 띠 + 왼쪽 사선, 소제목은 세로 막대, 패널은 연한 회청. 표지 G 연구소형, 뒤표지 Thank you 면 */
@@ -1017,3 +956,430 @@
 .kc-phases__list li.is-internal { background: linear-gradient(180deg, color-mix(in srgb, var(--area-4-tint) 55%, var(--paper)), var(--area-4-tint)); }
 .kc-phases__list li.is-external { background: linear-gradient(180deg, color-mix(in srgb, var(--area-3-tint) 55%, var(--paper)), var(--area-3-tint)); }
 
+/* ══ T5 연구소·ESG 제안형 전용 쪽(research 쪽 계획, 2026-10-30) ══════════════════════════════════════
+   사용자 제공 양식 "[한국환경안전연구원] 회사소개서_260928.pdf"(A4 가로 26쪽)의 쪽 머리·쪽 아래·도식을 옮긴 전용 쪽(.kc-rs-*).
+   모든 선택자는 .kc-tpl--research 안에서만 켜진다(다른 템플릿·standard 렌더 불변). 렌더러: lib/catalog/render/components/pages-research.tsx.
+   쪽 머리 = 위 회색 띠(45) + 왼쪽 위 사선 탭 + 네이비 머리 띠(48, 왼쪽 사선), 쪽 아래 = 왼쪽 로고 + 오른쪽 사선 쪽 번호 탭. */
+
+/* ── 쪽 머리·쪽 아래 ─────────────────────────────────────────── */
+.kc-tpl--research.kc-rs-page { gap: 14px; padding-bottom: 42px; }
+.kc-tpl--research.kc-rs-page .kc-head { position: relative; box-sizing: border-box; height: 93px; margin: -28px -48px 0; padding: 45px 48px 0 116px; border-bottom: 0; align-items: center;
+  background: linear-gradient(var(--panel), var(--panel)) left top / 100% 45px no-repeat; color: var(--on-brand); }
+.kc-tpl--research.kc-rs-page .kc-head::before { content: ""; position: absolute; left: 0; top: 0; width: 172px; height: 45px; background: color-mix(in srgb, var(--brand) 58%, var(--paper));
+  clip-path: polygon(0 0, 100% 0, 93% 100%, 0 100%); }
+.kc-tpl--research.kc-rs-page .kc-head::after { content: ""; position: absolute; left: 76px; right: 0; top: 45px; width: auto; height: 48px; background: var(--brand);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 16px 100%); }
+.kc-tpl--research.kc-rs-page .kc-head__section { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 14px; }
+.kc-tpl--research.kc-rs-page .kc-head__num { font-family: var(--kc-font-figure); font-size: 23px; line-height: 28px; font-weight: 700; letter-spacing: 0.5px; color: var(--on-brand); }
+.kc-tpl--research.kc-rs-page .kc-head__name { font-family: var(--kc-font-display); font-size: 21px; line-height: 28px; font-weight: 700; color: var(--on-brand); }
+.kc-tpl--research.kc-rs-page .kc-head__sub { margin-left: 12px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--on-brand); }
+.kc-tpl--research.kc-rs-page .kc-head__sub::before { content: none; }
+.kc-tpl--research.kc-rs-page .kc-head__end { display: none; }
+.kc-tpl--research .kc-rs-foot { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; pointer-events: none; }
+.kc-tpl--research .kc-rs-foot__logo { position: absolute; left: 22px; bottom: 16px; width: 128px; height: auto; }
+.kc-tpl--research .kc-rs-foot__folio { position: absolute; right: 0; bottom: 17px; width: 50px; height: 18px; box-sizing: border-box; padding: 0 9px 0 0; text-align: right;
+  font-family: var(--kc-font-figure); font-size: 7.5px; line-height: 18px; font-weight: 600; color: var(--on-brand);
+  background: color-mix(in srgb, var(--brand) 58%, var(--paper)); clip-path: polygon(30% 0, 100% 0, 100% 100%, 0 100%); }
+
+/* ── C01 표지 G(260928 양식): 제목·밑줄·회사명·부설연구소 부제·기준월을 왼쪽 면 오른쪽 끝에 맞춘다 ── */
+.kc-tpl--research.kc-front--research .kc-front__block { align-items: flex-end; text-align: right; }
+.kc-tpl--research.kc-front--research .kc-front__title { padding-right: 4px; }
+.kc-tpl--research.kc-front--research .kc-front__rule { align-self: stretch; height: 4px; margin: 0 0 18px; background: linear-gradient(90deg, var(--rule-strong) 0, var(--rule-strong) 100%) left center / 26% 1.5px no-repeat, linear-gradient(90deg, var(--brand), var(--brand)) right center / 74% 4px no-repeat; }
+.kc-tpl--research.kc-front--research .kc-front__company { font-size: 19px; line-height: 28px; font-weight: 600; color: var(--rule-strong); }
+.kc-tpl--research.kc-front--research .kc-front__sub { font-size: 18px; line-height: 26px; font-weight: 600; color: var(--rule-strong); }
+.kc-tpl--research.kc-front--research .kc-front__meta { justify-content: flex-end; }
+
+/* ── 공통 부품: 소제목(▌ + 회청 앞말 + 블루 뒷말) · 작은 머리(세 점) · 회청 판 · 글머리 ── */
+.kc-tpl--research .kc-rs-title { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 21px; font-weight: 700; color: var(--rule-strong); }
+.kc-tpl--research .kc-rs-title::before { background: var(--rule-strong); width: 4px; height: 15px; }
+.kc-tpl--research .kc-rs-title em { font-style: normal; color: var(--accent-ink); }
+.kc-tpl--research .kc-rs-title > span + em { margin-left: -4px; }
+.kc-tpl--research .kc-rs-title__aside { margin-left: auto; font-size: 9px; font-weight: 600; color: var(--ink-faint); }
+.kc-tpl--research .kc-rs-mini { flex: none; margin: 0; display: flex; align-items: center; gap: 10px; width: 260px; padding-bottom: 4px; border-bottom: var(--stroke-hair) solid var(--rule);
+  font-size: 12px; line-height: 17px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-dots { position: relative; width: 22px; height: 18px; flex: none; }
+.kc-tpl--research .kc-rs-dots i { position: absolute; width: 11px; height: 11px; border-radius: 50%; }
+.kc-tpl--research .kc-rs-dots i:nth-child(1) { left: 0; top: 0; background: var(--area-1-mid); }
+.kc-tpl--research .kc-rs-dots i:nth-child(2) { left: 9px; top: 2px; background: var(--brand); }
+.kc-tpl--research .kc-rs-dots i:nth-child(3) { left: 3px; top: 7px; background: color-mix(in srgb, var(--area-1-mid) 45%, var(--paper)); }
+.kc-tpl--research .kc-rs-panel { box-sizing: border-box; background: var(--canvas); }
+.kc-tpl--research .kc-rs-bullets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.kc-tpl--research .kc-rs-bullets > li { position: relative; padding-left: 11px; font-size: 9.5px; line-height: 15px; color: var(--ink); }
+.kc-tpl--research .kc-rs-bullets > li::before { content: "•"; position: absolute; left: 0; top: 0; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-bullets b { font-weight: 700; }
+.kc-tpl--research .kc-rs-source { margin: 0; font-size: 6.5px; line-height: 9px; color: var(--ink-faint); text-align: right; }
+
+/* ── C02 목차: 왼쪽 위 사선 삼각 면 + 로마 숫자 2단 ─────────────── */
+.kc-tpl--research.kc-rs-tocpage { background: var(--paper); }
+.kc-tpl--research .kc-rs-tocpage__tri { position: absolute; left: 0; top: 0; width: 300px; height: 330px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 78%, var(--paper)) 0 58%, color-mix(in srgb, var(--brand) 60%, var(--paper)) 58% 100%); clip-path: polygon(0 0, 100% 0, 0 100%); }
+.kc-tpl--research .kc-rs-tocpage__title { position: absolute; left: 92px; top: 60px; margin: 0; font-family: var(--kc-font-display); font-size: 33px; line-height: 40px; font-weight: 700; color: var(--on-brand); }
+.kc-tpl--research .kc-rs-toc { position: absolute; left: 204px; right: 26px; top: 176px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 66px; }
+.kc-tpl--research .kc-rs-toc__col { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.kc-tpl--research .kc-rs-toc__col:first-child { position: relative; }
+.kc-tpl--research .kc-rs-toc__col:first-child::after { content: ""; position: absolute; right: -33px; top: 6px; bottom: 24px; border-left: 1px dashed var(--rule-strong); opacity: 0.6; }
+.kc-tpl--research .kc-rs-toc__item { display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: start; min-height: 88px; box-sizing: border-box; padding: 14px 0 12px; border-bottom: 1.5px dotted color-mix(in srgb, var(--rule-strong) 60%, var(--paper)); }
+.kc-tpl--research .kc-rs-toc__item:last-child { border-bottom: 0; }
+.kc-tpl--research .kc-rs-toc__num { font-family: var(--kc-font-figure); font-size: 30px; line-height: 32px; font-weight: 700; color: var(--brand); }
+.kc-tpl--research .kc-rs-toc__body { display: flex; flex-direction: column; gap: 5px; padding-top: 2px; }
+.kc-tpl--research .kc-rs-toc__name { font-family: var(--kc-font-display); font-size: 18px; line-height: 24px; font-weight: 700; color: var(--brand); text-decoration: none; }
+.kc-tpl--research .kc-rs-toc__desc { font-size: 10.5px; line-height: 15px; font-weight: 600; color: color-mix(in srgb, var(--brand) 82%, var(--paper)); }
+
+/* ── C05 일반현황 및 주요연혁: 키-값 표(회청 머리 칸) + 회색 판 세로 타임라인 ── */
+.kc-tpl--research .kc-rs-profile { flex: 1; min-height: 0; display: grid; grid-template-columns: 404px minmax(0, 1fr); gap: 30px; }
+.kc-tpl--research .kc-rs-profile > section { min-height: 0; display: flex; flex-direction: column; gap: 9px; }
+.kc-tpl--research .kc-rs-facts { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9.5px; line-height: 14px; border-top: 2px solid var(--rule-strong); border-bottom: var(--stroke-hair) solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-facts th { width: 66px; padding: 7px 4px; background: var(--rule-strong); color: var(--on-brand); font-weight: 700; letter-spacing: 3px; text-align: center; vertical-align: middle; border-bottom: 1px solid var(--paper); }
+.kc-tpl--research .kc-rs-facts th small { display: block; font-size: 7px; line-height: 9px; letter-spacing: 0; font-weight: 500; }
+.kc-tpl--research .kc-rs-facts .kc-rs-facts__th2 { width: 52px; }
+.kc-tpl--research .kc-rs-facts td { padding: 7px 9px; color: var(--ink); border-bottom: var(--stroke-hair) solid var(--rule); vertical-align: middle; }
+.kc-tpl--research .kc-rs-facts__ceo { width: 62px; text-align: center; }
+.kc-tpl--research .kc-rs-facts__list { list-style: none; margin: 0; padding: 0; }
+.kc-tpl--research .kc-rs-facts__list li { position: relative; padding-left: 9px; font-size: 9px; line-height: 15.5px; color: var(--ink); }
+.kc-tpl--research .kc-rs-facts__list li::before { content: "·"; position: absolute; left: 1px; top: 0; font-weight: 700; }
+.kc-tpl--research .kc-rs-facts__list li.is-strong { color: var(--accent-ink); font-weight: 600; }
+.kc-tpl--research .kc-rs-tl { position: relative; flex: 1; min-height: 0; list-style: none; margin: 0; padding: 14px 18px 14px 16px; display: flex; flex-direction: column; justify-content: space-between; background: var(--canvas); }
+.kc-tpl--research .kc-rs-tl::before { content: ""; position: absolute; left: 25.5px; top: 22px; bottom: 22px; border-left: 2px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-tl > li { position: relative; display: grid; grid-template-columns: 22px 70px minmax(0, 1fr); align-items: center; min-height: 18px; }
+.kc-tpl--research .kc-rs-tl > li::before { content: ""; grid-column: 1; width: 13px; height: 13px; border-radius: 50%; background: var(--rule-strong); justify-self: start; }
+.kc-tpl--research .kc-rs-tl__ym { font-size: 9.5px; line-height: 13px; font-weight: 700; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-tl__text { font-size: 9.5px; line-height: 13px; color: var(--ink); }
+.kc-tpl--research .kc-rs-tl > li.is-highlight .kc-rs-tl__text { color: var(--accent-ink); font-weight: 700; }
+
+/* ── C05 경영철학 및 비전: VISION 띠 + 4잎 클로버(01~04) + 네 모서리 원칙 ── */
+.kc-tpl--research .kc-rs-visionpage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 16px; }
+.kc-tpl--research .kc-rs-vision { display: grid; grid-template-columns: 196px minmax(0, 1fr); align-items: center; width: 610px; height: 44px; background: color-mix(in srgb, var(--brand) 45%, var(--ink)); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-vision__label { text-align: center; font-family: var(--kc-font-figure); font-size: 19px; line-height: 24px; font-weight: 500; letter-spacing: 1px; border-right: 1px solid var(--on-field-muted); }
+.kc-tpl--research .kc-rs-vision__text { text-align: center; font-family: var(--kc-font-display); font-size: 16px; line-height: 22px; font-weight: 700; }
+.kc-tpl--research .kc-rs-vision__arrow { width: 132px; height: 20px; margin-top: 4px; background: linear-gradient(180deg, color-mix(in srgb, var(--accent-2) 70%, var(--paper)), color-mix(in srgb, var(--brand) 22%, var(--paper))); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.kc-tpl--research .kc-rs-philo { flex: 1; min-height: 0; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px minmax(0, 1fr); grid-template-rows: 1fr 1fr; column-gap: 26px; align-items: center; }
+.kc-tpl--research .kc-rs-principle { text-align: center; padding: 0 6px; }
+.kc-tpl--research .kc-rs-principle--tl { grid-column: 1; grid-row: 1; }
+.kc-tpl--research .kc-rs-principle--tr { grid-column: 3; grid-row: 1; }
+.kc-tpl--research .kc-rs-principle--bl { grid-column: 1; grid-row: 2; }
+.kc-tpl--research .kc-rs-principle--br { grid-column: 3; grid-row: 2; }
+.kc-tpl--research .kc-rs-principle__title { margin: 0 0 6px; font-family: var(--kc-font-display); font-size: 16px; line-height: 22px; font-weight: 700; color: color-mix(in srgb, var(--brand) 75%, var(--accent-2)); }
+.kc-tpl--research .kc-rs-principle__desc { margin: 0; font-size: 9px; line-height: 14px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-clover { grid-column: 2; grid-row: 1 / 3; position: relative; width: 300px; height: 300px; justify-self: center; }
+.kc-tpl--research .kc-rs-clover__petal { position: absolute; width: 142px; height: 142px; box-sizing: border-box; padding: 26px 28px; display: flex; font-family: var(--kc-font-figure); font-size: 26px; line-height: 30px; font-weight: 700; color: var(--on-brand); }
+.kc-tpl--research .kc-rs-clover__petal--1 { left: 0; top: 0; border-radius: 71px 71px 22px 71px; background: color-mix(in srgb, var(--brand) 82%, var(--paper)); align-items: flex-start; justify-content: flex-start; }
+.kc-tpl--research .kc-rs-clover__petal--2 { right: 0; top: 0; border-radius: 71px 71px 71px 22px; background: color-mix(in srgb, var(--brand) 36%, var(--paper)); align-items: flex-start; justify-content: flex-end; }
+.kc-tpl--research .kc-rs-clover__petal--3 { right: 0; bottom: 0; border-radius: 22px 71px 71px 71px; background: color-mix(in srgb, var(--brand) 82%, var(--paper)); align-items: flex-end; justify-content: flex-end; }
+.kc-tpl--research .kc-rs-clover__petal--4 { left: 0; bottom: 0; border-radius: 71px 22px 71px 71px; background: color-mix(in srgb, var(--brand) 36%, var(--paper)); align-items: flex-end; justify-content: flex-start; }
+.kc-tpl--research .kc-rs-clover__center { position: absolute; left: 66px; top: 66px; width: 168px; height: 168px; box-sizing: border-box; border-radius: 50%; display: grid; place-items: center;
+  background: var(--paper); box-shadow: 0 0 0 8px color-mix(in srgb, var(--paper) 70%, transparent), 0 3px 12px rgba(16, 30, 60, 0.18); font-family: var(--kc-font-display); font-size: 18px; line-height: 24px; font-weight: 700; color: var(--rule-strong); }
+
+/* ── C16 등록증 보유현황: 파란 테 증서 격자 ───────────────────────── */
+.kc-tpl--research .kc-rs-certs { flex: 1; min-height: 0; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 16px; }
+.kc-tpl--research .kc-rs-cert { margin: 0; box-sizing: border-box; display: flex; padding: 5px; background: var(--paper); border: 3px solid color-mix(in srgb, var(--accent-ink) 62%, var(--brand)); box-shadow: 2px 3px 5px rgba(16, 30, 60, 0.18); }
+.kc-tpl--research .kc-rs-cert > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.kc-tpl--research .kc-rs-cert__paper { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 14px 8px 10px; border: var(--stroke-hair) solid var(--rule); background: linear-gradient(180deg, var(--paper), var(--canvas)); text-align: center; }
+.kc-tpl--research .kc-rs-cert__kind { font-size: 9px; line-height: 12px; font-weight: 700; letter-spacing: 6px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-cert__emblem { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-tint); color: var(--brand); }
+.kc-tpl--research .kc-rs-cert__emblem .kc-icon { width: 18px; height: 18px; }
+.kc-tpl--research .kc-rs-cert__name { font-size: 10.5px; line-height: 15px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-cert__meta { font-size: 8px; line-height: 11px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-cert__rule { width: 46%; margin-top: auto; border-top: var(--stroke-hair) solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-cert__holder { font-size: 8px; line-height: 11px; font-weight: 600; color: var(--ink); }
+
+/* ── C08 사업분야: 가운데 원 + 4분면 조각 + 네 모서리 목록 ───────────── */
+.kc-tpl--research .kc-rs-biz { flex: 1; min-height: 0; position: relative; }
+.kc-tpl--research .kc-rs-biz__group { position: absolute; width: 230px; display: flex; flex-direction: column; gap: 6px; }
+.kc-tpl--research .kc-rs-biz__group--tl { left: 0; top: 10px; --rs-c: var(--area-4-mid); }
+.kc-tpl--research .kc-rs-biz__group--tr { right: -16px; top: 10px; --rs-c: color-mix(in srgb, var(--area-4-mid) 35%, var(--area-1-mid)); }
+.kc-tpl--research .kc-rs-biz__group--bl { left: 0; bottom: 4px; --rs-c: var(--area-6); }
+.kc-tpl--research .kc-rs-biz__group--br { right: -16px; bottom: 4px; --rs-c: var(--area-1-mid); }
+.kc-tpl--research .kc-rs-biz__title { margin: 0; font-family: var(--kc-font-display); font-size: 16.5px; line-height: 22px; font-weight: 700; color: color-mix(in srgb, var(--rs-c) 82%, var(--ink)); }
+.kc-tpl--research .kc-rs-biz__list { list-style: none; margin: 0; padding: 0; }
+.kc-tpl--research .kc-rs-biz__list li { position: relative; padding-left: 8px; font-size: 9.5px; line-height: 15px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-biz__list li::before { content: "·"; position: absolute; left: 0; top: 0; font-weight: 700; }
+.kc-tpl--research .kc-rs-biz__wheel { position: absolute; left: 50%; top: 50%; width: 272px; height: 272px; transform: translate(-50%, -50%); }
+.kc-tpl--research .kc-rs-biz__piece { position: absolute; width: 128px; height: 128px; box-sizing: border-box; padding: 24px; display: flex; color: var(--on-brand); }
+.kc-tpl--research .kc-rs-biz__piece .kc-icon { width: 34px; height: 34px; stroke-width: 1.6; }
+.kc-tpl--research .kc-rs-biz__piece--tl { left: 0; top: 0; border-radius: 64px 16px 16px 16px; background: var(--area-4-mid); align-items: flex-start; justify-content: flex-start; }
+.kc-tpl--research .kc-rs-biz__piece--tr { right: 0; top: 0; border-radius: 16px 64px 16px 16px; background: color-mix(in srgb, var(--area-4-mid) 35%, var(--area-1-mid)); align-items: flex-start; justify-content: flex-end; }
+.kc-tpl--research .kc-rs-biz__piece--bl { left: 0; bottom: 0; border-radius: 16px 16px 16px 64px; background: var(--area-6-mid); align-items: flex-end; justify-content: flex-start; }
+.kc-tpl--research .kc-rs-biz__piece--br { right: 0; bottom: 0; border-radius: 16px 16px 64px 16px; background: var(--area-1-mid); align-items: flex-end; justify-content: flex-end; }
+.kc-tpl--research .kc-rs-biz__center { position: absolute; left: 50%; top: 50%; width: 152px; height: 152px; margin: 0; transform: translate(-50%, -50%); box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; align-content: center;
+  background: var(--paper); box-shadow: 0 0 0 8px color-mix(in srgb, var(--canvas) 80%, transparent), 0 3px 14px rgba(16, 30, 60, 0.22); text-align: center; font-family: var(--kc-font-display); font-size: 12.5px; line-height: 19px; font-weight: 700; color: var(--ink); }
+
+/* ── C10 핵심역량: 로고 + 표어 + 카드 4 ─────────────────────────── */
+.kc-tpl--research .kc-rs-strengths { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 26px 34px 26px; }
+.kc-tpl--research .kc-rs-strengths__logo { width: 112px; height: auto; }
+.kc-tpl--research .kc-rs-strengths__slogan { margin: 0; padding: 9px 26px; border-top: 1.5px solid var(--rule-strong); border-bottom: 1px solid var(--rule); font-size: 12px; line-height: 17px; font-weight: 700; color: var(--ink); text-align: center; }
+.kc-tpl--research .kc-rs-strengths__cards { flex: 1; min-height: 0; width: 100%; margin-top: 10px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.kc-tpl--research .kc-rs-strengths__card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 14px 16px; background: var(--paper); border-radius: 14px; box-shadow: 0 2px 8px rgba(16, 30, 60, 0.08); }
+.kc-tpl--research .kc-rs-strengths__icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: var(--brand-tint); color: var(--brand); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--brand) 35%, var(--paper)); }
+.kc-tpl--research .kc-rs-strengths__icon .kc-icon { width: 22px; height: 22px; }
+.kc-tpl--research .kc-rs-strengths__name { margin: 4px 0 2px; font-family: var(--kc-font-display); font-size: 12.5px; line-height: 18px; font-weight: 700; color: var(--ink); text-align: center; }
+.kc-tpl--research .kc-rs-strengths__list { list-style: none; margin: 0; padding: 0; align-self: stretch; display: flex; flex-direction: column; gap: 4px; }
+.kc-tpl--research .kc-rs-strengths__list li { position: relative; padding-left: 10px; font-size: 9.5px; line-height: 16px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-strengths__list li::before { content: "•"; position: absolute; left: 0; top: 0; }
+
+/* ── C21 주제 개관 — 개념(E·S·G 3단: TP1 .kc-topic 위에 양식 색 판) ── */
+.kc-tpl--research .kc-topic { padding: 16px 26px 20px; gap: 18px 24px; grid-template-rows: auto minmax(0, 1fr); }
+.kc-tpl--research .kc-topic__lead { font-size: 9.5px; line-height: 16px; padding: 0 8px; }
+.kc-tpl--research .kc-topic__col { background: color-mix(in srgb, var(--area-tint) 70%, var(--paper)); border-radius: 4px; padding: 16px 16px 14px; }
+.kc-tpl--research .kc-topic__icon { width: 74px; height: 74px; background: var(--area-mid); }
+.kc-tpl--research .kc-topic__icon > span { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.kc-tpl--research .kc-topic__icon .kc-icon { width: 22px; height: 22px; }
+.kc-tpl--research .kc-topic__icon small { font-size: 7.5px; line-height: 9px; font-weight: 600; }
+.kc-tpl--research .kc-topic__dots { border-top: 3px dotted var(--area-mid); }
+.kc-tpl--research .kc-topic__desc { font-size: 9.5px; line-height: 16px; }
+.kc-tpl--research .kc-topic__detail { min-height: 72px; background: var(--paper); border-radius: 6px; overflow: hidden; }
+
+/* ── C21 주제 개관 — 도입배경(재무 → 비재무 도식 + 필수 생존 전략) ── */
+.kc-tpl--research .kc-rs-why { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 238px; grid-template-rows: auto minmax(0, 1fr); gap: 18px 26px; padding: 20px 30px 22px; }
+.kc-tpl--research .kc-rs-why__lead { grid-column: 1 / -1; margin: 0; font-size: 10px; line-height: 16px; color: var(--ink); }
+.kc-tpl--research .kc-rs-why__diagram { display: grid; grid-template-columns: 120px 46px minmax(0, 1fr); align-items: center; padding: 20px 22px; border: 2px solid color-mix(in srgb, var(--accent-2) 45%, var(--paper)); border-radius: 28px; background: var(--paper); }
+.kc-tpl--research .kc-rs-why__fin { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.kc-tpl--research .kc-rs-why__fin-icon { width: 70px; height: 70px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--brand) 60%, var(--ink)); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-why__fin-icon .kc-icon { width: 32px; height: 32px; }
+.kc-tpl--research .kc-rs-why__fin-title { margin: 0; font-size: 12px; line-height: 17px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-why__fin ul { margin: 0; padding: 0 0 0 12px; font-size: 9.5px; line-height: 15px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-why__fin li { color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-why__fin li::marker { color: var(--ink-faint); }
+.kc-tpl--research .kc-rs-why__arrow { justify-self: center; width: 34px; height: 64px; background: var(--panel); clip-path: polygon(0 22%, 52% 22%, 52% 0, 100% 50%, 52% 100%, 52% 78%, 0 78%); }
+.kc-tpl--research .kc-rs-why__non { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.kc-tpl--research .kc-rs-why__non-title { margin: 0; font-size: 12px; line-height: 17px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-why__trio { position: relative; width: 210px; height: 180px; }
+.kc-tpl--research .kc-rs-why__trio::before { content: ""; position: absolute; left: 44px; right: 44px; top: 40px; bottom: 16px; border: 2px dotted var(--rule-strong); border-radius: 50%; opacity: 0.5; }
+.kc-tpl--research .kc-rs-why__dot { position: absolute; width: 74px; height: 74px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent-2) 55%, var(--paper)), color-mix(in srgb, var(--brand) 70%, var(--accent-2))); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-why__dot .kc-icon { width: 24px; height: 24px; }
+.kc-tpl--research .kc-rs-why__dot small { font-size: 8px; line-height: 10px; font-weight: 600; }
+.kc-tpl--research .kc-rs-why__dot--1 { left: 68px; top: 0; }
+.kc-tpl--research .kc-rs-why__dot--2 { left: 0; bottom: 0; }
+.kc-tpl--research .kc-rs-why__dot--3 { right: 0; bottom: 0; }
+.kc-tpl--research .kc-rs-why__strategy { display: flex; flex-direction: column; gap: 10px; align-self: center; }
+.kc-tpl--research .kc-rs-why__strategy-title { margin: 0; font-size: 12px; line-height: 17px; font-weight: 700; color: var(--brand); }
+.kc-tpl--research .kc-rs-why__strategy .kc-rs-bullets { gap: 8px; }
+
+/* ── C21 주제 개관 — 기대효과(반원 고리 + 둘레 5개) ───────────────── */
+.kc-tpl--research .kc-rs-effects { flex: 1; min-height: 0; position: relative; }
+.kc-tpl--research .kc-rs-effects__arc { position: absolute; left: 50%; bottom: 22px; width: 300px; height: 160px; transform: translateX(-50%); overflow: visible; }
+.kc-tpl--research .kc-rs-effects__tick { fill: var(--paper); opacity: 0.9; }
+.kc-tpl--research .kc-rs-effects__center { position: absolute; left: 50%; bottom: 30px; width: 140px; margin: 0 0 0 -70px; text-align: center; font-family: var(--kc-font-display); font-size: 14px; line-height: 19px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-effects__item { position: absolute; display: grid; grid-template-columns: 70px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; align-items: center; }
+.kc-tpl--research .kc-rs-effects__icon { grid-row: 1 / 3; width: 70px; height: 70px; box-sizing: border-box; display: grid; place-items: center; border-radius: 50%; border: 6px solid currentColor; background: var(--paper); box-shadow: 0 2px 6px rgba(16, 30, 60, 0.15); }
+.kc-tpl--research .kc-rs-effects__icon .kc-icon { width: 28px; height: 28px; }
+.kc-tpl--research .kc-rs-effects__title { margin: 0; align-self: end; font-family: var(--kc-font-display); font-size: 13px; line-height: 18px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-effects__desc { margin: 0; align-self: start; font-size: 8.5px; line-height: 13px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-effects__desc em { font-style: normal; font-weight: 700; color: var(--area-2); }
+/* 둘레 배치: 반원 중심(판 아래 32·가운데)에서 반지름 210 위 162°·126°·90°·54°·18° — 왼쪽 둘은 글이 왼쪽, 가운데 위는 글이 위, 오른쪽 둘은 글이 오른쪽 */
+.kc-tpl--research .kc-rs-effects__item { width: 200px; }
+.kc-tpl--research .kc-rs-effects__item--1, .kc-tpl--research .kc-rs-effects__item--2 { grid-template-columns: minmax(0, 1fr) 70px; text-align: right; }
+.kc-tpl--research .kc-rs-effects__item--1 .kc-rs-effects__icon, .kc-tpl--research .kc-rs-effects__item--2 .kc-rs-effects__icon { grid-column: 2; grid-row: 1 / 3; }
+.kc-tpl--research .kc-rs-effects__item--1 .kc-rs-effects__title, .kc-tpl--research .kc-rs-effects__item--2 .kc-rs-effects__title,
+.kc-tpl--research .kc-rs-effects__item--1 .kc-rs-effects__desc, .kc-tpl--research .kc-rs-effects__item--2 .kc-rs-effects__desc { grid-column: 1; }
+.kc-tpl--research .kc-rs-effects__item--1 { left: calc(50% - 365px); bottom: 62px; }
+.kc-tpl--research .kc-rs-effects__item--2 { left: calc(50% - 288px); bottom: 167px; }
+.kc-tpl--research .kc-rs-effects__item--3 { left: 50%; bottom: 207px; width: 220px; margin-left: -110px; grid-template-columns: minmax(0, 1fr); text-align: center; justify-items: center; }
+.kc-tpl--research .kc-rs-effects__item--3 .kc-rs-effects__icon { grid-row: 3; margin-top: 6px; }
+.kc-tpl--research .kc-rs-effects__item--4 { right: calc(50% - 288px); bottom: 167px; }
+.kc-tpl--research .kc-rs-effects__item--5 { right: calc(50% - 365px); bottom: 62px; }
+
+/* ── C22 동향 — 국내(번호 목록 + 작은 표 둘) ─────────────────────── */
+.kc-tpl--research .kc-rs-trend { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; padding: 18px 22px 14px; }
+.kc-tpl--research .kc-rs-trend__items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; counter-reset: rs-trend; }
+.kc-tpl--research .kc-rs-trend__items > li { display: flex; flex-direction: column; gap: 5px; counter-increment: rs-trend; }
+.kc-tpl--research .kc-rs-trend__title { margin: 0; font-size: 11px; line-height: 16px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-trend__title::before { content: counter(rs-trend) ". "; }
+.kc-tpl--research .kc-rs-trend__note { margin: 0; padding-left: 11px; font-size: 8.5px; line-height: 13px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-trend__tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; align-content: center; }
+.kc-tpl--research .kc-rs-trend__tables .kc-rs-source { grid-column: 1 / -1; }
+.kc-tpl--research .kc-rs-mt { display: flex; flex-direction: column; gap: 6px; }
+.kc-tpl--research .kc-rs-mt__title { margin: 0; display: flex; align-items: center; gap: 5px; font-size: 8.5px; line-height: 12px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-mt__title::before { content: ""; width: 5px; height: 5px; border-radius: 50%; border: 2.5px solid var(--brand); flex: none; }
+.kc-tpl--research .kc-rs-mt__table { width: 100%; border-collapse: collapse; table-layout: fixed; background: var(--paper); font-size: 7.5px; line-height: 11px; }
+.kc-tpl--research .kc-rs-mt__table thead th { padding: 5px 4px; background: var(--panel); color: var(--ink); font-weight: 700; text-align: center; border-bottom: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-mt--final .kc-rs-mt__table thead th { background: var(--brand); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-mt__table tbody th { width: 46px; padding: 6px 2px; font-weight: 600; color: var(--ink-muted); text-align: center; border-bottom: var(--stroke-hair) solid var(--rule); border-right: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-mt__table tbody th .kc-icon { display: block; width: 14px; height: 14px; margin: 0 auto 3px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-mt__table tbody td { padding: 6px 6px; color: var(--ink); border-bottom: var(--stroke-hair) solid var(--rule); text-align: center; }
+.kc-tpl--research .kc-rs-mt__step { display: block; }
+.kc-tpl--research .kc-rs-mt__step i { display: block; font-style: normal; font-size: 6px; line-height: 8px; color: var(--area-2); }
+
+/* ── C22 동향 — EU 규제 · 국외 공시 제도화 ───────────────────────── */
+.kc-tpl--research .kc-rs-global { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: 24px; }
+.kc-tpl--research .kc-rs-global > section { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.kc-tpl--research .kc-rs-global .kc-rs-panel { flex: 1; min-height: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.kc-tpl--research .kc-rs-global__lead { margin: 0; font-size: 9.5px; line-height: 15px; color: var(--ink); }
+.kc-tpl--research .kc-rs-global__laws { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.kc-tpl--research .kc-rs-global__laws > li > p { margin: 0; font-size: 9px; line-height: 14px; color: var(--ink); }
+.kc-tpl--research .kc-rs-global__laws > li > p.kc-rs-global__law { position: relative; padding-left: 10px; font-size: 9.5px; line-height: 15px; font-weight: 700; }
+.kc-tpl--research .kc-rs-global__law::before { content: "•"; position: absolute; left: 0; }
+.kc-tpl--research .kc-rs-global__laws > li > p:not(.kc-rs-global__law) { padding-left: 10px; }
+.kc-tpl--research .kc-rs-global__laws > li > p.kc-rs-global__sub { padding-left: 16px; font-size: 8px; line-height: 12px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-global__abroad .kc-rs-bullets { gap: 6px; }
+.kc-tpl--research .kc-rs-global__abroad .kc-rs-bullets > li { font-size: 9px; line-height: 14px; }
+.kc-tpl--research .kc-rs-global__abroad .kc-rs-mt__title { margin-top: auto; }
+.kc-tpl--research .kc-rs-global__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.kc-tpl--research .kc-rs-global__cell { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 6px; padding: 3px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); font-size: 7.5px; line-height: 11px; color: var(--ink); }
+.kc-tpl--research .kc-rs-global__flag { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--brand); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-global__flag b { font-size: 7.5px; line-height: 9px; }
+.kc-tpl--research .kc-rs-global__flag .kc-icon { width: 12px; height: 12px; }
+
+/* ── C23 수행 절차 — 보고서 발간 프로세스(TP1 .kc-phases) + 번호 목록 ── */
+.kc-tpl--research .kc-rs-process { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 222px; gap: 18px; padding: 14px 18px 16px; }
+.kc-tpl--research .kc-rs-process__left { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.kc-tpl--research .kc-rs-process__card { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 8px; background: var(--paper); }
+.kc-tpl--research .kc-rs-process__card .kc-phases { flex: 1; }
+.kc-tpl--research .kc-rs-legend { list-style: none; margin: 0; padding: 0; display: flex; justify-content: flex-end; gap: 14px; font-size: 7.5px; line-height: 10px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-legend li { display: flex; align-items: center; gap: 4px; }
+.kc-tpl--research .kc-rs-legend li::before { content: ""; width: 8px; height: 8px; }
+.kc-tpl--research .kc-rs-legend li.is-internal::before { background: var(--area-4-tint); border: var(--stroke-hair) solid var(--area-4-mid); }
+.kc-tpl--research .kc-rs-legend li.is-external::before { background: var(--area-3-tint); border: var(--stroke-hair) solid var(--area-3-mid); }
+.kc-tpl--research .kc-rs-numbered { list-style: none; margin: 0; padding: 26px 0 0; display: flex; flex-direction: column; gap: 6px; counter-reset: rs-num; }
+.kc-tpl--research .kc-rs-numbered > li { position: relative; padding-left: 15px; counter-increment: rs-num; font-size: 9.5px; line-height: 15.5px; color: var(--ink); }
+.kc-tpl--research .kc-rs-numbered > li::before { content: counter(rs-num) "."; position: absolute; left: 0; top: 0; font-weight: 700; }
+
+/* ── C23 수행 절차 — 이중 중대성 평가 개념·필요성 ──────────────────── */
+.kc-tpl--research .kc-rs-dma { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; padding: 16px 22px 18px; }
+.kc-tpl--research .kc-rs-dma > section { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.kc-tpl--research .kc-rs-dma__text { margin: 0; font-size: 9.5px; line-height: 16px; color: var(--ink); }
+.kc-tpl--research .kc-rs-dma__text b { font-weight: 700; }
+.kc-tpl--research .kc-rs-dma__diagram { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr) 70px; grid-template-rows: 1fr 1fr; gap: 10px 14px; align-items: center; padding: 18px 16px; }
+.kc-tpl--research .kc-rs-dma__diagram::before { content: ""; position: absolute; left: 0; right: 0; top: 34px; bottom: 34px; border-radius: 90px; background: var(--panel); }
+.kc-tpl--research .kc-rs-dma__side { position: relative; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-dma__side .kc-icon { width: 38px; height: 38px; stroke-width: 1.3; color: var(--rule-strong); }
+.kc-tpl--research .kc-rs-dma__side b { font-size: 11px; line-height: 15px; color: var(--ink); }
+.kc-tpl--research .kc-rs-dma__side small { font-size: 6.5px; line-height: 9px; }
+.kc-tpl--research .kc-rs-dma__side--out { grid-column: 1; }
+.kc-tpl--research .kc-rs-dma__side--in { grid-column: 3; }
+.kc-tpl--research .kc-rs-dma__box { position: relative; grid-column: 2; padding: 8px 12px; background: var(--paper); border-radius: 10px; box-shadow: 0 2px 6px rgba(16, 30, 60, 0.12); }
+.kc-tpl--research .kc-rs-dma__box-title { margin: 0 0 4px; font-size: 9px; line-height: 13px; font-weight: 700; color: var(--ink); text-align: center; }
+.kc-tpl--research .kc-rs-dma__box ul { margin: 0; padding: 0 0 0 10px; font-size: 8px; line-height: 12px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-dma__box--fin { grid-row: 1; }
+.kc-tpl--research .kc-rs-dma__box--imp { grid-row: 2; }
+.kc-tpl--research .kc-rs-needs { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1.5px solid var(--rule-strong); border-bottom: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-needs > li { flex: 1 1 auto; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px 0; }
+.kc-tpl--research .kc-rs-needs > li + li { border-top: 1px dotted var(--rule-strong); }
+.kc-tpl--research .kc-rs-needs__head { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; font-size: 10px; line-height: 14px; font-weight: 700; color: var(--brand); }
+.kc-tpl--research .kc-rs-needs__head b { font-size: 12px; line-height: 15px; }
+.kc-tpl--research .kc-rs-needs .kc-rs-bullets > li { font-size: 8.5px; line-height: 13.5px; }
+
+/* ── C23 수행 절차 — 이중 중대성 평가 프로세스(STEP 1~5) ──────────── */
+.kc-tpl--research .kc-rs-stepspage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 14px 18px 18px; }
+.kc-tpl--research .kc-rs-steps { flex: 1; min-height: 0; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; }
+.kc-tpl--research .kc-rs-steps__col { position: relative; min-height: 0; display: flex; flex-direction: column; background: var(--paper); border-bottom: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-steps__col:not(:last-child)::after { content: ""; position: absolute; right: -16px; top: 50%; width: 12px; height: 22px; margin-top: -11px; background: var(--rule); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.kc-tpl--research .kc-rs-steps__head { display: grid; grid-template-columns: 36px minmax(0, 1fr); min-height: 48px; }
+.kc-tpl--research .kc-rs-steps__no { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--panel); font-size: 7.5px; line-height: 10px; font-weight: 700; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-steps__no b { font-size: 13px; line-height: 16px; color: var(--ink); }
+.kc-tpl--research .kc-rs-steps__title { display: flex; align-items: center; justify-content: center; padding: 4px 6px; background: color-mix(in srgb, var(--brand) 55%, var(--ink)); color: var(--on-brand); font-size: 10.5px; line-height: 14px; font-weight: 700; text-align: center; }
+.kc-tpl--research .kc-rs-steps__body { flex: 1; justify-content: center; padding: 14px 12px; gap: 10px; }
+.kc-tpl--research .kc-rs-steps__body > li { font-size: 9px; line-height: 15px; }
+.kc-tpl--research .kc-rs-steps__subs { flex: 1; display: flex; flex-direction: column; gap: 0; }
+.kc-tpl--research .kc-rs-steps__sub { flex: 1; display: flex; flex-direction: column; }
+.kc-tpl--research .kc-rs-steps__sub b { padding: 6px 8px; background: var(--canvas); border-bottom: var(--stroke-hair) solid var(--rule); font-size: 9px; line-height: 13px; color: var(--ink); }
+.kc-tpl--research .kc-rs-steps__sub span { flex: 1; padding: 8px 10px; font-size: 8.5px; line-height: 14px; color: var(--ink); }
+
+/* ── C23 수행 절차 — ESG 경영보고서 작성(작성 틀 + P·E·S·G + 원스톱 띠) ── */
+.kc-tpl--research .kc-rs-report { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 9px; padding: 14px 22px 14px; }
+.kc-tpl--research .kc-rs-report__top { display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 22px; align-items: stretch; }
+.kc-tpl--research .kc-rs-report__lead { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.kc-tpl--research .kc-rs-report__mix { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 14px 16px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); border-radius: 8px; }
+.kc-tpl--research .kc-rs-report__mix-title { margin: 0; font-size: 10px; line-height: 14px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-report__mix-title b { font-size: 18px; color: var(--brand); }
+.kc-tpl--research .kc-rs-report__bar { display: flex; height: 26px; border-radius: 4px; overflow: hidden; }
+.kc-tpl--research .kc-rs-report__bar span { flex-basis: 0; display: grid; place-items: center; background: var(--area-mid); color: var(--on-area); font-size: 10px; font-weight: 700; }
+.kc-tpl--research .kc-rs-report__legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 8.5px; line-height: 12px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-report__legend b { color: var(--area); }
+.kc-tpl--research .kc-rs-report__legend .kc-num { font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-report__headline { margin: 0; font-family: var(--kc-font-display); font-size: 13.5px; line-height: 20px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-report__frame { width: 100%; border-collapse: collapse; font-size: 9px; line-height: 13px; border-top: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-report__frame th { width: 92px; padding: 6px 8px; text-align: left; font-size: 7.5px; letter-spacing: 0.4px; font-weight: 700; color: var(--area-2); border-bottom: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-report__frame td { padding: 6px 8px; color: var(--ink-muted); border-bottom: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-report__frame td.kc-rs-report__ko { width: 74px; color: var(--ink); font-weight: 700; }
+.kc-tpl--research .kc-rs-report__pesg-title { margin: 4px 0 0; font-size: 11.5px; line-height: 16px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-report__pesg-title small { font-size: 9.5px; font-weight: 700; }
+.kc-tpl--research .kc-rs-pesg { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kc-tpl--research .kc-rs-pesg__card { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px 10px 14px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); border-left: 5px solid var(--area-mid); border-radius: 0 6px 6px 0; }
+.kc-tpl--research .kc-rs-pesg__head { margin: 0; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; font-size: 10px; line-height: 14px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-pesg__head b { font-family: var(--kc-font-figure); font-size: 20px; line-height: 22px; color: var(--area); margin-right: 2px; }
+.kc-tpl--research .kc-rs-pesg__head small { font-size: 7.5px; font-weight: 600; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-pesg__head .kc-num { font-size: 8.5px; }
+.kc-tpl--research .kc-rs-pesg__card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.kc-tpl--research .kc-rs-pesg__card li { position: relative; padding-left: 10px; font-size: 9px; line-height: 15px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-pesg__card li::before { content: ""; position: absolute; left: 0; top: 4.5px; width: 4px; height: 4px; border-radius: 50%; background: var(--area-mid); }
+.kc-tpl--research .kc-rs-onestop { flex: none; margin: auto 0 0; display: flex; align-items: center; gap: 22px; padding: 9px 18px; border-radius: 6px; background: color-mix(in srgb, var(--brand) 82%, var(--ink)); color: var(--on-brand); }
+.kc-tpl--research .kc-rs-onestop b { font-size: 9.5px; line-height: 13px; font-weight: 600; color: var(--on-field-muted); }
+.kc-tpl--research .kc-rs-onestop span { font-size: 10.5px; line-height: 14px; font-weight: 700; }
+
+/* ── C13 임원 이력 현황(한 쪽 2명): 기본 정보 표 + 주요 경력 + 참여 용역 ── */
+.kc-tpl--research .kc-rs-cvs { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-around; gap: 8px; padding: 8px 18px; }
+.kc-tpl--research .kc-rs-cv { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.kc-tpl--research .kc-rs-cv + .kc-rs-cv { padding-top: 10px; border-top: 1px dashed var(--rule); }
+.kc-tpl--research .kc-rs-cv__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.kc-tpl--research .kc-rs-cv--solo .kc-rs-cv__grid { grid-template-columns: minmax(0, 1fr); }
+.kc-tpl--research .kc-rs-cv__info { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.kc-tpl--research .kc-rs-cvt { width: 100%; border-collapse: collapse; background: var(--paper); font-size: 8.5px; line-height: 11.5px; }
+.kc-tpl--research .kc-rs-cvt th { padding: 3px 6px; background: color-mix(in srgb, var(--brand) 20%, var(--paper)); color: var(--ink); font-weight: 700; text-align: center; white-space: nowrap; border: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-cvt td { padding: 3px 7px; color: var(--ink); border: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-cvt td.kc-mask, .kc-tpl--research .kc-rs-cvt tr:first-child td:nth-child(2) { white-space: nowrap; }
+.kc-tpl--research .kc-rs-cvt--list td { width: 50%; }
+.kc-tpl--research .kc-rs-cvt--list thead th, .kc-tpl--research .kc-rs-cvt--projects thead tr:first-child th { background: color-mix(in srgb, var(--brand) 38%, var(--paper)); }
+.kc-tpl--research .kc-rs-cvt--projects td.kc-num { width: 38px; text-align: center; }
+
+/* ── C15 참여인력 표(흐름) ──────────────────────────────────────── */
+.kc-tpl--research .kc-rs-dia { flex: none; margin: 0; font-size: 11px; line-height: 16px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-ptable thead th { text-align: center; }
+.kc-tpl--research .kc-rs-ptable td { text-align: center; }
+
+/* ── C12 사업 수행 조직(역할 조직도) ─────────────────────────────── */
+.kc-tpl--research .kc-rs-team { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 22px 40px 20px; }
+.kc-tpl--research .kc-rs-team__lead { position: relative; width: 190px; padding: 10px 0; text-align: center; background: var(--brand); color: var(--on-brand); font-size: 11.5px; line-height: 16px; }
+.kc-tpl--research .kc-rs-team__lead::after { content: ""; position: absolute; left: 50%; top: 100%; height: 22px; border-left: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-team__core::after { content: ""; position: absolute; left: 50%; top: 100%; height: 28px; border-left: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-team__support { position: absolute; right: 64px; top: 52px; width: 176px; background: var(--paper); border: var(--stroke-hair) solid var(--rule); }
+.kc-tpl--research .kc-rs-team__support::before { content: ""; position: absolute; right: 100%; top: 50%; width: 110px; border-top: 1.5px dashed var(--rule-strong); }
+.kc-tpl--research .kc-rs-team__support b { display: block; padding: 6px 0; text-align: center; background: color-mix(in srgb, var(--brand) 45%, var(--paper)); color: var(--on-brand); font-size: 10px; line-height: 14px; }
+.kc-tpl--research .kc-rs-team__support ul { margin: 0; padding: 8px 12px 8px 22px; font-size: 8.5px; line-height: 13px; color: var(--ink); }
+.kc-tpl--research .kc-rs-team__core { position: relative; width: 170px; padding: 10px 0; text-align: center; background: color-mix(in srgb, var(--brand) 70%, var(--paper)); color: var(--on-brand); font-size: 11px; line-height: 16px; font-weight: 700; }
+.kc-tpl--research .kc-rs-team__units { position: relative; margin-top: 18px; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; flex: 1; min-height: 0; }
+.kc-tpl--research .kc-rs-team__units::before { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: -12px; border-top: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-team__unit { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.kc-tpl--research .kc-rs-team__unit::before { content: ""; position: absolute; left: 50%; top: -12px; height: 12px; border-left: 1.5px solid var(--rule-strong); }
+.kc-tpl--research .kc-rs-team__unit b { width: 120px; padding: 6px 0; text-align: center; border-radius: 4px; background: color-mix(in srgb, var(--area-mid) 30%, var(--paper)); border: var(--stroke-hair) solid var(--area-mid); font-size: 10px; line-height: 14px; color: var(--ink); }
+.kc-tpl--research .kc-rs-team__unit ul { flex: 1; width: 100%; margin: 0; padding: 18px 12px 18px 26px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 6px; background: var(--paper); border: 1.5px solid var(--rule); border-radius: 22px; font-size: 9px; line-height: 14px; color: var(--ink); }
+.kc-tpl--research .kc-rs-team__base { width: 100%; padding: 12px 0; text-align: center; border-radius: 16px; background: linear-gradient(180deg, var(--paper), var(--panel)); border: var(--stroke-hair) solid var(--rule); font-size: 9.5px; line-height: 13px; font-weight: 600; color: var(--ink); }
+
+/* ── A02 용역 수행실적 — 분야별 그룹(왼쪽 판 + 그룹 행) ──────────────── */
+.kc-tpl--research .kc-rs-records { flex: 1; min-height: 0; display: grid; grid-template-columns: 158px minmax(0, 1fr); gap: 14px; padding: 16px 0; background: var(--canvas); }
+.kc-tpl--research .kc-rs-records__panel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px 12px; border-radius: 0 16px 16px 0;
+  background: color-mix(in srgb, var(--brand) 62%, var(--area-3)); color: var(--on-brand); text-align: center; }
+.kc-tpl--research .kc-rs-records__panel::before { content: ""; position: absolute; left: 50%; top: 0; height: 26%; border-left: 1px solid var(--on-field-muted); opacity: 0.6; }
+.kc-tpl--research .kc-rs-records__mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--on-field-muted); }
+.kc-tpl--research .kc-rs-records__mark .kc-icon { width: 14px; height: 14px; }
+.kc-tpl--research .kc-rs-records__panel p { margin: 0; font-family: var(--kc-font-display); font-size: 12.5px; line-height: 19px; font-weight: 700; }
+.kc-tpl--research .kc-rs-records__panel img { position: absolute; left: 50%; bottom: 22px; width: 64px; height: auto; margin-left: -32px; }
+.kc-tpl--research .kc-rs-records__groups { min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-right: 18px; }
+.kc-tpl--research .kc-rs-records__group { flex: 1 1 auto; display: grid; grid-template-columns: 116px minmax(0, 1fr); align-items: center; background: var(--paper); border-radius: 10px; box-shadow: 0 1px 4px rgba(16, 30, 60, 0.08); }
+.kc-tpl--research .kc-rs-records__label { margin: 0; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 8px; border-right: var(--stroke-hair) solid var(--rule); text-align: center; font-size: 10.5px; line-height: 14px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-records__label small { font-size: 7.5px; line-height: 10px; font-weight: 600; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-records__list { list-style: none; margin: 0; padding: 7px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kc-tpl--research .kc-rs-records__list li { position: relative; padding-left: 9px; font-size: 8.5px; line-height: 13px; color: var(--ink); }
+.kc-tpl--research .kc-rs-records__list li::before { content: "•"; position: absolute; left: 0; top: 0; color: var(--area); }
+.kc-tpl--research .kc-rs-records__list li.is-strong { color: var(--accent-ink); font-weight: 700; }
+.kc-tpl--research .kc-rs-records__meta { margin-left: 4px; color: var(--ink-muted); font-weight: 400; }
+
+/* ── A02 용역 수행실적 — 두 단 카드 ─────────────────────────────── */
+.kc-tpl--research .kc-rs-cases { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.kc-tpl--research .kc-rs-cases__col { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.kc-tpl--research .kc-rs-cases__cards { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.kc-tpl--research .kc-rs-case { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 14px; background: var(--canvas); }
+.kc-tpl--research .kc-rs-case__title { position: relative; margin: 0; padding-left: 14px; font-size: 10px; line-height: 15px; font-weight: 700; color: var(--ink); }
+.kc-tpl--research .kc-rs-case__title::before { content: "›"; position: absolute; left: 0; top: -1px; font-size: 14px; color: var(--area-mid); }
+.kc-tpl--research .kc-rs-case__title .kc-num { margin-left: 4px; font-weight: 600; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-case__meta { margin: 0; padding-left: 14px; font-size: 8.5px; line-height: 13px; color: var(--ink-muted); }
+.kc-tpl--research .kc-rs-case__meta b { margin-right: 6px; padding: 0 5px; border-radius: 3px; background: var(--area-tint); color: var(--area); font-size: 7.5px; font-weight: 700; }
+
+/* ── C19 뒤표지 Thank you(TP1 .kc-backc--thanks) — 연락처 줄 + 흰 로고 + 사선 면 ── */
+.kc-tpl--research.kc-backc--thanks { background: color-mix(in srgb, var(--brand) 88%, var(--paper)); }
+.kc-tpl--research.kc-backc--thanks .kc-backc__foot-band { background: color-mix(in srgb, var(--brand) 55%, var(--ink)); opacity: 0.85; }
+.kc-tpl--research.kc-backc--thanks .kc-backc__foot-band::before { content: ""; position: absolute; right: 0; bottom: 100%; width: 400px; height: 330px; background: rgba(255, 255, 255, 0.06); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.kc-tpl--research .kc-rs-contact { position: absolute; left: 30px; bottom: 26px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 7.5px; line-height: 11px; color: var(--on-field-muted); }
+.kc-tpl--research .kc-rs-contact li { display: flex; align-items: flex-start; gap: 8px; }
+.kc-tpl--research .kc-rs-contact .kc-icon { width: 10px; height: 10px; flex: none; margin-top: 0.5px; color: var(--on-brand); }
+.kc-tpl--research .kc-rs-contact__logo { position: absolute; right: 30px; bottom: 30px; width: 150px; height: auto; }

@@ -17,7 +17,7 @@ export const COVER_DESIGNS = [
   { id: "center", label: "C 중앙 정렬", desc: "가운데 축·안쪽 테로 정리한 사진 없는 표지", photo: null, confirmed: true },
   { id: "band", label: "D 사진 띠", desc: "가로로 긴 사옥 사진 띠를 둔 표지", photo: "hq-cover-wide", confirmed: true },
   { id: "photo", label: "E 전면 사진", desc: "사진을 쪽 전면에 깔고 아래 반투명 판 위에 글을 둔 표지(포토 에디토리얼 기본). 사진이 없으면 F 그래픽으로 그립니다", photo: "hq-cover-wide", confirmed: true },
-  { id: "graphic", label: "F 그래픽", desc: "왼쪽 글 단과 오른쪽 모티프 궤도(두 색 호·동심 링·분야 6색 노드)로 꾸민 사진 없는 표지(인포그래픽형 기본)", photo: null, confirmed: true },
+  { id: "graphic", label: "F 그래픽", desc: "왼쪽 글 단과 오른쪽 모티프 궤도(큰 물방울·윤곽 물방울·분야 6색 노드)로 꾸민 사진 없는 표지(인포그래픽형 기본)", photo: null, confirmed: true },
   { id: "research", label: "G 연구소형", desc: "왼쪽 연한 하늘빛 면에 자간 넓은 제목과 밑줄, 오른쪽에 사옥 사진을 둔 제안서형 표지(연구소·ESG 제안형 양식)", photo: "hq-cover-tall", confirmed: true },
 ] as const;
 
@@ -43,12 +43,12 @@ export const TEMPLATE_IDS = ["standard", "photo", "graphic", "formal", "brief", 
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
 export const DEFAULT_TEMPLATE: TemplateId = "standard";
 
-/** 모티프(CI 그래픽 모티프, 디자인 시스템 .kc-motif--*) — 표지·간지·뒤표지와 요소 모서리 모양. drop 이 지금 모습 */
-export const MOTIFS = [
-  { id: "drop", label: "물방울", desc: "물방울·잎 모양(지금 모습)" },
-  { id: "ring", label: "링", desc: "순환 링 — 둥근 모서리·원형 표식" },
-  { id: "contour", label: "등고선", desc: "등고선 — 각진 모서리·겹선 표식" },
-] as const;
+/**
+ * 모티프(CI 그래픽 모티프, 디자인 시스템 .kc-motif--*) — 표지·간지·뒤표지와 요소 모서리 모양.
+ * 물방울(drop) 하나만 남긴다: TP1 의 링(ring)·등고선(contour)은 2026-10-30 사용자 지시("별로 마음에 들지 않음, 폐기")로 폐기했다 —
+ * 새 템플릿을 만들 때 참고 자료를 보강해 다시 설계한다. 저장된 ring·contour 는 sanitizeDocumentTheme 이 drop 으로 읽는다(모르는 값 = 기본값).
+ */
+export const MOTIFS = [{ id: "drop", label: "물방울", desc: "물방울·잎 모양(지금 모습)" }] as const;
 export type Motif = (typeof MOTIFS)[number]["id"];
 export const DEFAULT_MOTIF: Motif = "drop";
 
@@ -99,7 +99,7 @@ export function sanitizeAreas(v: unknown): number[] | undefined {
   return out.length ? out : undefined;
 }
 
-/** 저장값·요청값 정리 — 모르는 표지는 기본값(A 잎 창), 빠진 키는 기본값(템플릿 standard·모티프 drop → 기존 문서는 그대로). */
+/** 저장값·요청값 정리 — 모르는 표지는 기본값(A 잎 창), 빠진 키는 기본값(템플릿 standard·모티프 drop → 기존 문서는 그대로). 폐기한 모티프(ring·contour)도 drop. */
 export function sanitizeDocumentTheme(input: unknown): DocumentTheme {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const fontSet = typeof o.fontSet === "string" && /^[a-z0-9-]{1,40}$/.test(o.fontSet) ? o.fontSet : DEFAULT_FONT_SET;

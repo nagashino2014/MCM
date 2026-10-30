@@ -355,6 +355,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       career: careerSummary(years, p.meta?.bioShort ?? "", d),
       careerYears: years,
       manual: false,
+      dept: p.deptName,
     };
   };
   type Sortable = { card: LeaderCard; order: number; rank: number };

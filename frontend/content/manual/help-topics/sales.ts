@@ -193,14 +193,15 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "문서를 누르면 선택되고, 아래 발행본·PDF 만들기·표지 디자인과 스튜디오가 그 문서를 대상으로 합니다.",
-        "[[새 문서]]는 템플릿(스탠다드·포토 에디토리얼·인포그래픽형·격조·공공형·요약·분야 브리프)을 골라 만듭니다. 템플릿은 색·표지·모티프·서체 기본값과 쪽 구성 묶음입니다.",
-        "만든 뒤에는 색 컨셉·서체·표지·모티프만 바꿀 수 있고 템플릿은 바꿀 수 없습니다. 다른 템플릿은 새 문서로 만듭니다.",
+        "[[새 문서]]는 템플릿(스탠다드·포토 에디토리얼·인포그래픽형·격조·공공형·요약·분야 브리프·연구소·ESG 제안형)을 골라 만듭니다. 템플릿은 색·표지·서체 기본값과 쪽 구성 묶음입니다.",
+        "만든 뒤에는 색 컨셉·서체·표지만 바꿀 수 있고 템플릿은 바꿀 수 없습니다. 다른 템플릿은 새 문서로 만듭니다.",
+        "연구소·ESG 제안형은 연구소 양식(26쪽)의 쪽 순서·도식을 그대로 따른 전용 쪽으로 만들어집니다(목차 I~VIII, 간지·부록 없음).",
         "마스터본은 스탠다드로 고정이고 반영 대기는 마스터본 기준입니다.",
       ] },
     ],
     more: { article: "sales.catalog", section: "documents" },
     sources: ["components/sales/catalog/CatalogDocumentsPanel.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "catalog.home",
@@ -327,28 +328,13 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비). B 그린은 CI 그린 면에 네이비 글자·짙은 녹색 주색, C 차콜은 차콜 면과 주색에 CI 그린 강조, D 스틸 블루는 연구소 제안서 양식의 네이비 머리 띠와 청회색 글자입니다.",
-        "모티프는 문서 전체의 모양 묶음입니다(기본 물방울). 표지·간지·뒤표지의 상징 모양과 요소 모서리가 바뀝니다.",
         "색은 디자인 시스템 색, 글자 크기는 디자인 시스템 단계, 폭은 12열 묶음으로만 고릅니다.",
         "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "levels" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
-    reviewedAt: "2026-10-29",
-  },
-  {
-    id: "catalog.studio-motif",
-    label: "모티프 도움말",
-    blocks: [
-      { kind: "list", items: [
-        "물방울(지금 모습)·링·등고선 중 하나를 고르면 문서 전체에 적용되고 자동 저장됩니다.",
-        "모티프는 표지·간지·뒤표지의 상징 모양과 사진 틀·카드·표식의 모서리 모양을 바꿉니다. 글·사진·편집은 그대로입니다.",
-        "링은 심볼마크의 두 색 호, 등고선은 가는 등농도선입니다(2026-10-29 확정). 템플릿은 바꿀 수 없고 모티프만 바꿉니다.",
-      ] },
-    ],
-    more: { article: "sales.catalog", section: "documents" },
-    sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "catalog.studio-fonts",
@@ -426,7 +412,7 @@ export const SALES_HELP: HelpTopic[] = [
     label: "쪽 변형 도움말",
     blocks: [
       { kind: "list", items: [
-        "쪽 변형은 같은 내용을 다른 모양으로 그리는 선택지입니다. 숫자 배치·연혁 축·간지 모양·분야 히어로·역량 카드·임원 카드·인증 보기를 이 쪽에서만 바꿉니다.",
+        "쪽 변형은 같은 내용을 다른 모양으로 그리는 선택지입니다. 숫자 배치·연혁 축·간지 모양·분야 히어로·역량 카드·임원 카드·인증 보기를 이 쪽에서만 바꿉니다. 연구소·ESG 제안형은 양식 배치 그대로라 변형이 없습니다.",
         "'템플릿'이 붙은 칩이 이 문서 템플릿의 기본값입니다. 다른 값을 고르면 이 쪽에 저장되고, 템플릿 값을 다시 고르면 저장값이 지워집니다.",
         "사진 배경 띠·전면 사진·전폭 사진 띠는 사진이 있어야 합니다. 사진이 없으면 [[사진 고르기]] 창이 먼저 열리고, 고르지 않으면 인포그래픽형 변형으로 그려 쪽 검사에 '자산' 안내가 남습니다.",
         "임원 카드 모양은 첫 임원진 쪽에서 고르면 문서 전체에 적용됩니다(한 쪽 인원이 바뀝니다). 3:4 큰 사진은 임원 사진이 있어야 합니다.",
@@ -434,14 +420,14 @@ export const SALES_HELP: HelpTopic[] = [
     ],
     more: { article: "sales.catalog-studio", section: "variants" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "catalog.cover",
     label: "표지 디자인 도움말",
     blocks: [
       { kind: "list", items: [
-        "표지 7안 중 하나를 누르면 고른 문서에 바로 저장됩니다. 기본은 A 잎 창입니다. 문서의 템플릿·모티프는 오른쪽 위에 표시만 됩니다(모티프는 스튜디오 디자인 탭에서).",
+        "표지 7안 중 하나를 누르면 고른 문서에 바로 저장됩니다. 기본은 A 잎 창입니다. 문서의 템플릿은 오른쪽 위에 표시만 됩니다.",
         "일곱 안 모두 확정된 디자인입니다. E 전면 사진은 포토 에디토리얼, F 그래픽은 인포그래픽형, G 연구소형은 연구소·ESG 제안형 템플릿의 기본 표지입니다.",
         "E 전면 사진은 쪽 전체를 덮을 고해상도 사진이 있어야 합니다. 지금 사옥 사진은 해상도가 모자라 F 그래픽으로 그려지고 '확인할 내용'에 안내가 나옵니다.",
         "[[사진 없는 변형으로 만들기]]는 사진 자리를 비운 변형입니다. C 는 원래 사진이 없습니다.",
@@ -450,7 +436,7 @@ export const SALES_HELP: HelpTopic[] = [
     ],
     more: { article: "sales.catalog", section: "cover" },
     sources: ["components/sales/catalog/CatalogCoverPicker.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-10-30",
   },
   {
     id: "catalog.metrics",

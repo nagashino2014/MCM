@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
-import { parseTimeRange } from "@/lib/approval/fields";
+import { parseTimeRange, timeRangeMinutes } from "@/lib/approval/fields";
+import { DEFAULT_WORK_SCHEDULE_KIND, WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
 import { CONSENT_VERSION, type OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { getAttendanceSettings } from "@/lib/adt/queries";
 import { DEFAULT_ATTENDANCE_SETTINGS } from "@/lib/adt/settings";
@@ -49,7 +50,7 @@ async function sumRequestedMinutes(
   const status = opts.approvedOnly ? `d.status = 'approved'` : `d.status IN ('in_progress','approved')`;
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT d.doc_id, d.field_values->>'apply_hours' AS apply_hours
+      `SELECT d.doc_id, d.field_values->>'apply_hours' AS apply_hours, d.field_values->'work_time' AS work_time
          FROM approval_docs d
         WHERE d.form_id = $1 AND ${status}
           AND d.drafter_employee_id = $2
@@ -60,7 +61,8 @@ async function sumRequestedMinutes(
       [OVERTIME_FORM_ID, employeeId, weekStart, weekEnd, opts.excludeDocId ?? null]
     )
   );
-  return rows.reduce((sum, r) => sum + hoursToMin(r.apply_hours), 0);
+  // 신청시간(apply_hours)이 비어 있는 문서는 근무 시간대(work_time)로 대신 센다 — 빈 값이 0h 로 빠지지 않게.
+  return rows.reduce((sum, r) => sum + (hoursToMin(r.apply_hours) || timeRangeMinutes(r.work_time) || 0), 0);
 }
 
 const addDaysYmd = (ymd: string, n: number): string => {
@@ -140,6 +142,11 @@ export interface WeeklyOvertimeUsage {
   limitMinutes: number;
   /** 같은 근무일의 기존 신청 — 추가 신청 안내(자동 연동·겹침 불가) 표시용. */
   sameDay: SameDayRequest[];
+  /**
+   * 기안자의 출퇴근 유형 — 평일 초과근무는 소정 종료(endHhmm)부터 인정된다(급여 대조 matchOvertimeRequests 와 같은 기준).
+   * 미설정이면 기본 유형(8시 출근)이고 isDefault=true.
+   */
+  schedule: { label: string; startHhmm: string; endHhmm: string; isDefault: boolean };
 }
 
 /** 기안 화면용 — 사용자의 해당 주 초과근무 사용량(기존 신청 합 + 근태 실적). */
@@ -167,19 +174,59 @@ export async function getWeeklyOvertimeUsage(
 
   const requestedMinutes = await sumRequestedMinutes(db, employeeId, weekStart, weekEnd, { excludeDocId });
 
+  // 단말 번호가 둘인 직원(본사+울산)은 주간 행이 2개다 — 정렬 없이 첫 행을 쓰면 빈 행이 잡힐 수 있어 큰 값을 쓴다.
   const attRows = rowsToObjects(
     await db.exec(
-      `SELECT overtime_minutes, excess_minutes FROM attendance_weekly
+      `SELECT COALESCE(MAX(COALESCE(overtime_minutes, 0) + COALESCE(excess_minutes, 0)), 0) AS minutes
+         FROM attendance_weekly
         WHERE employee_id = $1 AND week_start = $2`,
       [employeeId, weekStart]
     )
   );
-  const attendanceOvertimeMinutes = attRows.length
-    ? Number(attRows[0].overtime_minutes ?? 0) + Number(attRows[0].excess_minutes ?? 0)
-    : 0;
+  const attendanceOvertimeMinutes = Number(attRows[0]?.minutes ?? 0);
   const sameDay = await listSameDayRequests(db, employeeId, date, excludeDocId);
+  const schedule = await loadMySchedule(db, employeeId);
 
-  return { weekStart, weekEnd, requestedMinutes, attendanceOvertimeMinutes, limitMinutes: settings.weeklyOvertimeLimitMinutes, sameDay };
+  return {
+    weekStart,
+    weekEnd,
+    requestedMinutes,
+    attendanceOvertimeMinutes,
+    limitMinutes: settings.weeklyOvertimeLimitMinutes,
+    sameDay,
+    schedule,
+  };
+}
+
+const fmtHhmm = (v: string): string => {
+  const s = String(v).replace(/\D/g, "").padStart(4, "0");
+  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
+};
+
+/** 기안자 출퇴근 유형(마이그 167) — 미설정·조회 실패 시 기본 유형. */
+async function loadMySchedule(db: PgDatabase, employeeId: string): Promise<WeeklyOvertimeUsage["schedule"]> {
+  const preset = (kind: string) => WORK_SCHEDULE_KINDS.find((k) => k.kind === kind);
+  try {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT schedule_kind, start_hhmm, end_hhmm FROM attendance_work_schedules WHERE employee_id = $1`,
+        [employeeId]
+      )
+    );
+    if (rows.length) {
+      const r = rows[0];
+      return {
+        label: preset(String(r.schedule_kind))?.label ?? String(r.schedule_kind),
+        startHhmm: fmtHhmm(String(r.start_hhmm)),
+        endHhmm: fmtHhmm(String(r.end_hhmm)),
+        isDefault: false,
+      };
+    }
+  } catch {
+    /* 167 미적용 등 — 기본 유형으로 안내 */
+  }
+  const d = preset(DEFAULT_WORK_SCHEDULE_KIND)!;
+  return { label: d.label, startHhmm: fmtHhmm(d.startHhmm), endHhmm: fmtHhmm(d.endHhmm), isDefault: true };
 }
 
 /**

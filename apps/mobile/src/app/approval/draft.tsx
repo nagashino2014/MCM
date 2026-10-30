@@ -21,6 +21,7 @@ import { FormField } from '@/components/approval/FormField';
 import { OvertimeConsentSheet } from '@/components/approval/OvertimeConsentSheet';
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
+import { useHolidays } from '@/lib/calendar/use-holidays';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/theme/useTheme';
@@ -113,9 +114,22 @@ const addDays = (iso: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-/** 양끝 포함 달력일수(웹 DraftBoard 의 dayCount 와 동일). */
+/** 양끝 포함 달력일수. */
 const dayCount = (from: string, to: string) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+/**
+ * 양끝 포함 근무일수 — 주말·휴무일 제외(웹 lib/approval/leave-dates countWorkdays 와 동일, 2026-10-30).
+ * 가변 휴가(연차 등)의 사용일수에 쓴다. 뒤집힌 기간은 0 이하.
+ */
+const workdayCount = (from: string, to: string, off: ReadonlyMap<string, string>) => {
+  if (to < from) return 0;
+  let n = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
+    if (dow !== 0 && dow !== 6 && !off.has(d)) n += 1;
+  }
+  return n;
+};
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -168,7 +182,8 @@ export default function DraftScreen() {
 
   // 결재선 프리셋이 하나뿐이면 자동 적용(모바일에서 가장 흔한 경우).
   useEffect(() => {
-    const list = presets.data?.presets ?? [];
+    // 참조/열람만 묶은 프리셋(웹 2026-10-30)은 결재선이 비어 있어 제외한다.
+    const list = (presets.data?.presets ?? []).filter((p) => p.steps.length > 0);
     if (!line.length && list.length === 1) setLine(list[0].steps);
   }, [presets.data, line.length]);
 
@@ -184,12 +199,17 @@ export default function DraftScreen() {
     return v?.from && /^\d{4}-\d{2}-\d{2}$/.test(v.from) ? v.from : null;
   }, [isOvertime, fields, values]);
 
+  // 응답은 { usage: {...} } 로 감싸져 온다 — 감싼 채 읽으면 기사용시간이 NaN 이 됐다(2026-10-30 재점검).
   const otUsage = useApi<{
-    weekStart: string;
-    weekEnd: string;
-    requestedMinutes: number;
-    attendanceOvertimeMinutes: number;
-    limitMinutes: number;
+    usage: {
+      weekStart: string;
+      weekEnd: string;
+      requestedMinutes: number;
+      attendanceOvertimeMinutes: number;
+      limitMinutes: number;
+      /** 출퇴근 유형 — 평일 초과근무는 endHhmm 부터 인정. */
+      schedule?: { label: string; startHhmm: string; endHhmm: string; isDefault: boolean };
+    } | null;
   }>(otFrom ? `/api/approval/overtime/week-usage?date=${otFrom}` : '/api/approval/forms', { skip: !otFrom });
 
   const leaveMine = useApi<{ granted?: number; used?: number; remaining?: number }>(
@@ -224,6 +244,17 @@ export default function DraftScreen() {
   /** 반차 = 하루·0.5일 차감. 고정 부여일수(경조 등)는 days. 둘 다 종료일을 사용자가 못 고른다. */
   const leaveFixedDays = leaveItem ? (leaveItem.deduct === 'half' ? 1 : leaveItem.days) : null;
 
+  // 휴무일 — 기간의 시작·종료 연도(같으면 한 번). 가변 휴가 사용일수에서 주말과 함께 뺀다.
+  const leavePeriodNow = (leavePeriodKey ? (values[leavePeriodKey] as { from?: string; to?: string } | undefined) : undefined) ?? {};
+  const leaveFromYear = Number(String(leavePeriodNow.from ?? '').slice(0, 4)) || new Date().getFullYear();
+  const leaveToYear = Number(String(leavePeriodNow.to ?? '').slice(0, 4)) || leaveFromYear;
+  const offFrom = useHolidays(leaveFromYear);
+  const offTo = useHolidays(leaveToYear);
+  const leaveOffDays = useMemo(
+    () => (offFrom === offTo ? offFrom : new Map([...offFrom, ...offTo])),
+    [offFrom, offTo],
+  );
+
   const leaveHint = useMemo(() => {
     if (!isLeave || !leaveItem || !leavePeriodKey) return null;
     const period = (values[leavePeriodKey] as { from?: string; to?: string } | undefined) ?? {};
@@ -242,14 +273,19 @@ export default function DraftScreen() {
       return { text: `${leaveItem.label} — 부여 ${leaveItem.days}일 · 종료일 자동 설정(${to})`, over: false };
     }
     if (period.to && DAY_RE.test(period.to)) {
-      const cnt = dayCount(period.from, period.to);
-      if (cnt <= 0) return { text: '종료일이 시작일보다 빠릅니다.', over: true };
+      if (period.to < period.from) return { text: '종료일이 시작일보다 빠릅니다.', over: true };
+      const cnt = workdayCount(period.from, period.to, leaveOffDays);
+      if (cnt <= 0) return { text: '기간이 모두 주말·휴일입니다. 날짜를 확인하세요.', over: true };
+      const skipped = dayCount(period.from, period.to) - cnt;
       const remaining = leaveMine.data?.remaining;
       const over = !!leaveItem.deduct && typeof remaining === 'number' && cnt > remaining;
-      return { text: `사용 ${cnt}일${over ? ` · ⚠ 잔여 연차(${remaining}일) 초과` : ''}`, over };
+      return {
+        text: `사용 ${cnt}일${skipped > 0 ? ` (주말·휴일 ${skipped}일 제외)` : ''}${over ? ` · ⚠ 잔여 연차(${remaining}일) 초과` : ''}`,
+        over,
+      };
     }
     return { text: `${leaveItem.label} — 시작·종료일을 지정하면 사용일수가 계산됩니다`, over: false };
-  }, [isLeave, leaveItem, leavePeriodKey, values, leaveMine.data]);
+  }, [isLeave, leaveItem, leavePeriodKey, values, leaveMine.data, leaveOffDays]);
 
   /** 직전 휴가 종류 — 종류가 바뀌었을 때만 기간·일수를 새 규정으로 재설정한다. */
   const prevLeaveTypeRef = useRef<string | null>(null);
@@ -290,15 +326,15 @@ export default function DraftScreen() {
       return;
     }
     if (period.to && DAY_RE.test(period.to)) {
-      const cnt = dayCount(period.from, period.to);
+      const cnt = workdayCount(period.from, period.to, leaveOffDays);
       if (cnt > 0 && String(values.use_days ?? '') !== String(cnt)) {
         setValues((prev) => ({ ...prev, use_days: String(cnt) }));
       }
     }
-  }, [isLeave, leaveItem, leavePeriodKey, values]);
+  }, [isLeave, leaveItem, leavePeriodKey, values, leaveOffDays]);
 
   // 초과근무: 기사용·잔여 시간을 자동으로 채운다(웹 DraftBoard 와 같은 계산).
-  const usage = otUsage.data;
+  const usage = otUsage.data?.usage ?? null;
   const applyHours = Number(values.apply_hours) > 0 ? Number(values.apply_hours) : 0;
   const otHint = useMemo(() => {
     if (!isOvertime || !usage) return null;
@@ -313,7 +349,7 @@ export default function DraftScreen() {
       over: usedMin + applyMin > usage.limitMinutes,
       totalMin: usedMin + applyMin,
       excessMin: Math.max(0, usedMin + applyMin - usage.limitMinutes),
-      text: `이번 주 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`,
+      text: `해당 주(${usage.weekStart.slice(5).replace('-', '.')}~${usage.weekEnd.slice(5).replace('-', '.')}) 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`,
     };
   }, [isOvertime, usage, applyHours]);
 
@@ -350,9 +386,20 @@ export default function DraftScreen() {
 
   const setValue = (key: string, v: unknown) => setValues((prev) => ({ ...prev, [key]: v }));
 
+  const isUnusedVehicleField = (f: ApprovalFieldDef): boolean => {
+    const vehicle = (f.type === 'asset_select' && f.assetKind === 'vehicle') || f.key === 'car_name' || f.key === 'car_time';
+    if (!vehicle) return false;
+    const transport = fields.find((x) => x.type === 'checkbox' && (x.options ?? []).includes('법인차량'));
+    if (!transport) return false;
+    const picked = values[transport.key];
+    return !(Array.isArray(picked) && picked.map(String).includes('법인차량'));
+  };
+
   const missing = (): ApprovalFieldDef | null => {
     for (const f of fields) {
       if (!f.required || f.type === 'static') continue;
+      // 법인차량을 고르지 않은 출장은 이용차량·이용시간을 묻지 않는다(웹 isUnusedVehicleField 와 동일, 2026-10-30).
+      if (isUnusedVehicleField(f)) continue;
       const v = values[f.key];
       const empty =
         v == null ||
@@ -566,6 +613,11 @@ export default function DraftScreen() {
                       주 12시간을 초과합니다 — 상신 시 특별휴가 전환 동의(전자서명)가 필요합니다.
                     </Text>
                   ) : null}
+                  {usage?.schedule ? (
+                    <Text className="mt-1 text-[11.5px] text-cd-faint">
+                      평일 초과근무 인정 {usage.schedule.endHhmm}부터 (근무 {usage.schedule.startHhmm}~{usage.schedule.endHhmm})
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -617,9 +669,9 @@ export default function DraftScreen() {
                 badge={line.length ? <Badge label={`${line.length}`} tone="primary" /> : undefined}
                 action={{ label: '결재자 추가', onPress: () => setPicker('line') }}>
                 <View className="mt-1">
-                  {presets.data?.presets?.length ? (
+                  {presets.data?.presets?.some((p) => p.steps.length > 0) ? (
                     <View className="mb-2 flex-row flex-wrap gap-2">
-                      {presets.data.presets.map((p) => (
+                      {presets.data.presets.filter((p) => p.steps.length > 0).map((p) => (
                         <Chip key={p.presetId} label={p.name} onPress={() => setLine(p.steps)} />
                       ))}
                     </View>

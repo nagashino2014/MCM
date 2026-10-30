@@ -17,6 +17,8 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
+import { isUnusedVehicleField } from "@/lib/approval/trip";
+import { countWorkdays } from "@/lib/approval/leave-dates";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
@@ -91,14 +93,6 @@ function addDays(iso: string, n: number): string {
   return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
 }
 
-/** 두 ISO 날짜 사이 달력일수(양끝 포함, from~to). */
-function dayCount(from: string, to: string): number {
-  const [fy, fm, fd] = from.split("-").map(Number);
-  const [ty, tm, td] = to.split("-").map(Number);
-  const a = new Date(fy, fm - 1, fd).getTime();
-  const b = new Date(ty, tm - 1, td).getTime();
-  return Math.round((b - a) / 86400000) + 1;
-}
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -215,6 +209,8 @@ export function ApprovalDraftBoard() {
     limitMinutes: number;
     /** 같은 근무일의 기존 신청 — 추가 신청 안내(원 신청 자동 연동·시간대 겹침 불가) */
     sameDay?: Array<{ docId: string; docNo: string | null; start: string | null; end: string | null; applyMinutes: number }>;
+    /** 기안자 출퇴근 유형 — 평일 초과근무는 endHhmm 부터 인정(급여 대조와 같은 기준). */
+    schedule?: { label: string; startHhmm: string; endHhmm: string; isDefault: boolean };
   } | null>(null);
   const [otHint, setOtHint] = useState<string | null>(null);
   const isOvertimeForm = form?.formId === "frm-overtime-request";
@@ -589,7 +585,7 @@ export function ApprovalDraftBoard() {
     };
   }, [isOvertimeForm, otFrom, docId]);
 
-  // 사용량 + 신청 시간 → 힌트 갱신 + 기사용/잔여시간 자동 채움(수기 수정 가능).
+  // 사용량 + 신청 시간 → 힌트 갱신 + 기사용/잔여시간 자동 채움(자동 산정 값으로 유지된다).
   useEffect(() => {
     if (!isOvertimeForm || !otUsage) {
       setOtHint(null);
@@ -608,15 +604,17 @@ export function ApprovalDraftBoard() {
     if (String(values.used_hours ?? "") !== autoUsed || String(values.remain_hours ?? "") !== autoRemain) {
       setValues((prev) => ({ ...prev, used_hours: autoUsed, remain_hours: autoRemain }));
     }
+    // '이번 주'가 아니라 근무일이 속한 주(설정의 주 시작 요일 기준)라 기간을 그대로 보여 준다.
+    const weekLabel = `${otUsage.weekStart.slice(5).replace("-", ".")}~${otUsage.weekEnd.slice(5).replace("-", ".")}`;
     if (applyMin === 0) {
-      setOtHint(`이번 주(${otUsage.weekStart}~) 기사용 ${fmtH(usedMin)}h · 한도 ${fmtH(otUsage.limitMinutes)}h`);
+      setOtHint(`해당 주(${weekLabel}) 기사용 ${fmtH(usedMin)}h · 한도 ${fmtH(otUsage.limitMinutes)}h`);
     } else if (usedMin + applyMin > otUsage.limitMinutes) {
       setOtHint(
         `⚠ 주 12시간 초과 — 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h = ${fmtH(usedMin + applyMin)}h (한도 ${fmtH(otUsage.limitMinutes)}h). ` +
           `승인 후 실제 근태와 대조해 주 12시간을 넘는 인정분은 수당 대신 특별휴가(대체휴가)로 산정됩니다.`
       );
     } else {
-      setOtHint(`이번 주 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`);
+      setOtHint(`해당 주(${weekLabel}) 기사용 ${fmtH(usedMin)}h + 신청 ${fmtH(applyMin)}h · 잔여 ${fmtH(remainMin)}h`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOvertimeForm, otUsage, values.apply_hours, values.used_hours, values.remain_hours]);
@@ -731,7 +729,35 @@ export function ApprovalDraftBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAbsenceForm, editDocId]);
 
-  // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2) — 달력일 기준.
+  // 휴무일(법정공휴일·사내 지정 휴무일) — 가변 휴가의 사용일수에서 주말과 함께 뺀다(2026-10-30 피드백).
+  // 기간의 연도별로 /api/home/holidays 를 읽는다. 실패하면 주말만 뺀다.
+  const leavePeriodYears = (() => {
+    const p = (values.leave_period ?? {}) as { from?: string; to?: string };
+    return [...new Set([p.from, p.to].filter((d): d is string => !!d && /^\d{4}-/.test(d)).map((d) => d.slice(0, 4)))].sort().join(",");
+  })();
+  const [leaveOffDays, setLeaveOffDays] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isLeaveForm || !leavePeriodYears) return;
+    let cancelled = false;
+    Promise.all(
+      leavePeriodYears.split(",").map((y) =>
+        fetch(`/api/home/holidays?year=${y}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ),
+    ).then((rs) => {
+      if (cancelled) return;
+      const set = new Set<string>();
+      for (const r of rs) for (const h of (r?.holidays ?? []) as { date: string }[]) set.add(h.date);
+      setLeaveOffDays(set);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLeaveForm, leavePeriodYears]);
+
+  // 휴가 기간 ↔ 사용일수 ↔ 부여일수 연동(§LM-P2).
+  // 가변 휴가의 사용일수는 근무일 기준 — 주말·휴무일을 뺀다(2026-10-30). 고정 부여일수는 규정대로 달력일.
   // 부여일수 고정(경조·조의 등): 시작일 입력 → 종료일 자동(days-1 가산)·사용일수=days.
   // 반차: 하루 안에서 쓰므로 종료일=시작일, 사용일수 0.5(서버 차감과 일치).
   // 가변(연차·공가(예비군)·병가): 시작+종료 입력 → 사용일수 자동 카운팅(연차 잔여만 안내).
@@ -775,11 +801,16 @@ export function ApprovalDraftBoard() {
       setValues((prev) => ({ ...prev, leave_period: { from, to: from }, use_days: "1" }));
       setLeaveHint(`${item.label} — 종료일을 지정하면 사용일수가 계산됩니다`);
     } else {
-      // 가변: 종료일이 있으면 사용일수 카운팅
+      // 가변: 종료일이 있으면 사용일수 카운팅(근무일 — 주말·휴무일 제외)
       if (period.to && /^\d{4}-\d{2}-\d{2}$/.test(period.to)) {
-        const cnt = dayCount(from, period.to);
-        if (cnt <= 0) {
+        if (period.to < from) {
           setLeaveHint("종료일이 시작일보다 빠릅니다.");
+          return;
+        }
+        const span = Math.round((Date.parse(period.to) - Date.parse(from)) / 86400000) + 1; // 달력일
+        const cnt = countWorkdays(from, period.to, leaveOffDays);
+        if (cnt <= 0) {
+          setLeaveHint("기간이 모두 주말·휴일입니다. 날짜를 확인하세요.");
           return;
         }
         if (String(values.use_days ?? "") !== String(cnt)) setValues((prev) => ({ ...prev, use_days: String(cnt) }));
@@ -787,13 +818,14 @@ export function ApprovalDraftBoard() {
           item.deduct && leaveRemaining && cnt > leaveRemaining.remaining
             ? ` · ⚠ 잔여 연차(${leaveRemaining.remaining}일) 초과`
             : "";
-        setLeaveHint(`사용 ${cnt}일${over}`);
+        const skipped = span - cnt;
+        setLeaveHint(`사용 ${cnt}일${skipped > 0 ? ` (주말·휴일 ${skipped}일 제외)` : ""}${over}`);
       } else {
         setLeaveHint(`${item.label} — 시작·종료일을 입력하면 사용일수가 계산됩니다`);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLeaveForm, leaveCatalog, values.leave_type, values.leave_period, leaveRemaining]);
+  }, [isLeaveForm, leaveCatalog, values.leave_type, values.leave_period, leaveRemaining, leaveOffDays]);
 
   useEffect(() => {
     let cancelled = false;
@@ -982,12 +1014,27 @@ export function ApprovalDraftBoard() {
     setWatchers(p.watchers.map((w) => ({ userId: w.userId, name: w.name ?? "", kind: w.kind === "view" ? "view" : "ref" })));
   };
 
-  const saveAsPreset = async () => {
-    if (line.length === 0) {
+  // 참조/열람 프리셋(결재선 없이 참조·열람자만) — 불러오면 현재 참조·열람에 더한다(결재선은 그대로).
+  const applyWatcherPreset = (p: LinePreset) => {
+    setWatchers((prev) => [
+      ...prev,
+      ...p.watchers
+        .filter((w) => !prev.some((x) => x.userId === w.userId))
+        .map((w) => ({ userId: w.userId, name: w.name ?? "", kind: w.kind === "view" ? ("view" as const) : ("ref" as const) })),
+    ]);
+  };
+
+  /** mode=line: 결재선+참조/열람 묶음, mode=watchers: 참조/열람자만(2026-10-30 피드백). */
+  const saveAsPreset = async (mode: "line" | "watchers" = "line") => {
+    if (mode === "line" && line.length === 0) {
       alert("저장할 결재선이 없습니다.");
       return;
     }
-    const name = window.prompt("결재선 프리셋 이름을 입력하세요.", "");
+    if (mode === "watchers" && watchers.length === 0) {
+      alert("저장할 참조/열람자가 없습니다.");
+      return;
+    }
+    const name = window.prompt(mode === "line" ? "결재선 프리셋 이름을 입력하세요." : "참조/열람 프리셋 이름을 입력하세요.", "");
     if (name == null) return;
     try {
       const res = await fetch("/api/approval/line-presets", {
@@ -995,7 +1042,10 @@ export function ApprovalDraftBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          steps: line.map((s) => ({ stepType: s.stepType, assigneeUserId: s.assigneeUserId, assigneeName: s.assigneeName, assigneePosition: s.assigneePosition })),
+          steps:
+            mode === "line"
+              ? line.map((s) => ({ stepType: s.stepType, assigneeUserId: s.assigneeUserId, assigneeName: s.assigneeName, assigneePosition: s.assigneePosition }))
+              : [],
           watchers: watchers.map((w) => ({ userId: w.userId, name: w.name, kind: w.kind })),
         }),
       });
@@ -1148,6 +1198,8 @@ export function ApprovalDraftBoard() {
     }
     const missing = form.fields
       .filter((f) => f.required && f.type !== "static")
+      // 법인차량을 고르지 않은 출장은 이용차량·이용시간을 묻지 않는다.
+      .filter((f) => !isUnusedVehicleField(f, form.fields, values))
       .filter((f) => {
         const v = values[f.key];
         if (v == null) return true;
@@ -1337,6 +1389,15 @@ export function ApprovalDraftBoard() {
                   }`}
                 >
                   {otHint}
+                </span>
+              )}
+              {/* 출퇴근 유형별 인정 시작 시각(2026-10-30 사내 테스트 피드백) — 급여 대조와 같은 기준 */}
+              {isOvertimeForm && otUsage?.schedule && (
+                <span
+                  className="mt-4 text-[12px] rounded-full px-2.5 py-1 border cd-border-c cd-text-muted"
+                  title={`출퇴근 유형: ${otUsage.schedule.label}${otUsage.schedule.isDefault ? " (미설정 — 기본값)" : ""} · 휴일 근무는 출근 시각부터 인정`}
+                >
+                  평일 초과근무 인정 {otUsage.schedule.endHhmm}부터 (근무 {otUsage.schedule.startHhmm}~{otUsage.schedule.endHhmm})
                 </span>
               )}
               {isOvertimeForm && (
@@ -1589,10 +1650,10 @@ export function ApprovalDraftBoard() {
             </h3>
 
             {/* 나의 결재선 프리셋 */}
-            {presets.length > 0 && (
+            {presets.some((p) => p.steps.length > 0) && (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
-                {presets.map((p) => (
+                {presets.filter((p) => p.steps.length > 0).map((p) => (
                   <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                     <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">
                       {p.name}
@@ -1646,7 +1707,7 @@ export function ApprovalDraftBoard() {
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-2.5 py-2 text-[11px] cd-text-faint flex-1 flex items-center justify-center gap-1"
-                onClick={saveAsPreset}
+                onClick={() => saveAsPreset("line")}
                 title="현재 결재선·참조자를 프리셋으로 저장"
               >
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
@@ -1663,6 +1724,29 @@ export function ApprovalDraftBoard() {
                 <CdHelp topic="approval.draft-watchers" />
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
               </h4>
+              {/* 참조/열람 프리셋 — 결재선 없이 참조·열람자만 저장한 묶음 */}
+              {presets.some((p) => p.steps.length === 0 && p.watchers.length > 0) && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
+                  {presets
+                    .filter((p) => p.steps.length === 0 && p.watchers.length > 0)
+                    .map((p) => (
+                      <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                        <button
+                          type="button"
+                          className="text-[11px] px-2 py-0.5 hover:cd-tint-primary"
+                          onClick={() => applyWatcherPreset(p)}
+                          title={`참조/열람자 추가: ${p.watchers.map((w) => w.name ?? "").join(", ")}`}
+                        >
+                          {p.name}
+                        </button>
+                        <button type="button" className="text-[11px] px-1 cd-text-faint hover:text-[color:var(--cd-error)]" onClick={() => deletePreset(p.presetId)} title="프리셋 삭제">
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
               {watchers.length === 0 ? (
                 <p className="text-[11px] cd-text-faint">필요 시 참조/열람자를 지정하세요(선택).</p>
               ) : (
@@ -1689,9 +1773,21 @@ export function ApprovalDraftBoard() {
                   </div>
                 ))
               )}
-              <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11px] cd-text-faint" onClick={() => openOrgModal("ref")}>
-                ＋ 참조/열람자 추가
-              </button>
+              <div className="flex gap-1.5">
+                <button type="button" className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-1.5 text-[11px] cd-text-faint flex-1" onClick={() => openOrgModal("ref")}>
+                  ＋ 참조/열람자 추가
+                </button>
+                {watchers.length > 0 && (
+                  <button
+                    type="button"
+                    className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] cd-text-faint flex items-center justify-center gap-1"
+                    onClick={() => saveAsPreset("watchers")}
+                    title="현재 참조/열람자만 프리셋으로 저장"
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5" /> 참조/열람 저장
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <CdHelp topic="approval.draft-save" />

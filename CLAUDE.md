@@ -6,7 +6,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
 ## 브랜치·배포 운영 규칙 (모든 세션 공통) ★
 여러 Claude 세션이 각자 브랜치에서 작업하다 **다른 브랜치 기능이 빠진 이미지가 배포되는 사고가 2회**(2026-08-26·08-31) 있었다. 어느 세션이든 다음을 지킨다.
 - **재무 통합 임시 배포 중지 해제(2026-09-30, 사용자 승인):** 09-22에 재무 SQL 28개(226~264)를 스테이징에 적용하고 Next 624를 배포한 뒤 조회 화면 점검만 마친 상태로 추가 Next 배포를 중지했었다. 사용자 승인으로 중지를 해제하며, 이후 Next 배포는 아래 "Terraform·Next 배포 경계"를 따른다. 재무 개별 API 응답·금액 정확성·쓰기 경로는 아직 검증되지 않았으므로 재무 화면 결함이 보고되면 이 기록을 출발점으로 삼는다. 재무 SQL 226~264는 여전히 일괄 재적용하지 말고, 개별 재실행 전에도 각 파일의 설치 계약을 확인한다.
-- **Terraform·Next 배포 경계(2026-09-22 R0B IR-1 후속):** ADT·intel 두 EventBridge target은 숫자 revision(현재 618)에 고정돼 있고, Terraform은 `ignore_changes`로 이를 보존한다. **스테이징 전체 `terraform apply`는 금지한다** — 현재 plan에 메일 수신 MX 삭제(`enable_mail_inbound_mx` 기본값 false)·SES/Route53 교체·bastion 교체가 섞여 있다. `-target` apply는 사용자가 검토한 리소스에 한하며, 적용 직전 plan에서 그 주소 외 변경이 없는지 확인하고 메일(MX·SES·DMARC)·bastion 변경이 섞이면 중단한다. 임시 중지 해제 이후 Next 배포는 `staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`로만 하며, 명령을 제시할 때 "ADT·intel 배치는 고정 revision(현재 618)에 남고 서비스만 새 revision으로 이동한다"는 경고를 함께 적는다. ADT·intel이 쓰는 표의 스키마 변경이 포함된 배포에는 이 명령을 제시하지 않고 스케줄 동반 전환이 필요하다고 안내한다.
+- **Terraform·Next 배포 경계(2026-09-22 R0B IR-1 후속):** ADT·intel 두 EventBridge target은 숫자 revision(현재 745, 2026-10-30 재고정)에 고정돼 있고, Terraform은 `ignore_changes`로 이를 보존한다. **고정 revision 이미지에는 `staging-protect-pinned-image.ps1 -Revision <rev>`로 `schedule-pin-*` 보호 태그를 붙인다** — 태그가 없으면 ECR 개수 규칙이 이미지를 만료시켜 배치가 조용히 멈춘다(2026-10-01 627 만료 → 10월 intel 수집 중단). 배포 가드가 보호 태그 누락을 차단한다. **스테이징 전체 `terraform apply`는 금지한다** — 현재 plan에 메일 수신 MX 삭제(`enable_mail_inbound_mx` 기본값 false)·SES/Route53 교체·bastion 교체가 섞여 있다. `-target` apply는 사용자가 검토한 리소스에 한하며, 적용 직전 plan에서 그 주소 외 변경이 없는지 확인하고 메일(MX·SES·DMARC)·bastion 변경이 섞이면 중단한다. 임시 중지 해제 이후 Next 배포는 `staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait`로만 하며, 명령을 제시할 때 "ADT·intel 배치는 고정 revision(현재 745)에 남고 서비스만 새 revision으로 이동한다"는 경고를 함께 적는다. ADT·intel이 쓰는 표의 스키마 변경이 포함된 배포에는 이 명령을 제시하지 않고 스케줄 동반 전환이 필요하다고 안내한다.
 - **작업 시작 전**: `git fetch origin` 후 원격 브랜치 상황을 확인하고, **최신 main(또는 진행 중인 통합 브랜치)에서 분기**한다. 오래된 분기점 위에 새 작업을 쌓지 않는다.
 - **배포는 반드시 `infra/aws/ops/staging-deploy-next.ps1` 로**: 원격 `claude/*`·`codex/*`·`main` 커밋 누락을 검사한다. 미커밋 변경 또는 `HEAD != origin/main`이면 배포를 차단한다(`-Force`로도 우회 불가). 사용자 승인 후 커밋·main 통합·푸시를 완료하고 배포한다. 2026-09-11에는 미커밋 UI를 운영에만 배포한 뒤 다음 main 배포에서 UI가 사라졌다. **운영 반영과 저장소 통합은 함께 완료해야 한다.**
 - **마이그레이션 번호**: 갈래별 중복 사고로 **200~210 이 소진**됐다 — 신규는 **211부터**, 번호 확정 전 `git fetch` 후 원격 전 브랜치의 `infra/aws/` 를 확인한다. DB 적용은 `infra/aws/ops/staging-apply-migrations.ps1 -Files <파일들>`.
@@ -89,7 +89,7 @@ IEPS(통합환경허가) 데이터 수집·파싱 + 계약/사업장 관리 모�
   $env:AWS_PROFILE = "mcm-kesi-staging"
   .\infra\aws\ops\staging-deploy-next.ps1 -AcknowledgePinnedScheduleLag -Wait   # 프론트 변경 → next 이미지만
   ```
-  - 블록 앞에 "ADT·intel 배치는 고정 revision(현재 618)에 남고 서비스만 새 revision으로 이동한다"는 경고를 한 줄 적는다. ADT·intel이 쓰는 표의 스키마 변경이 포함되면 이 블록을 출력하지 않는다(위 Terraform·Next 배포 경계).
+  - 블록 앞에 "ADT·intel 배치는 고정 revision(현재 745)에 남고 서비스만 새 revision으로 이동한다"는 경고를 한 줄 적는다. ADT·intel이 쓰는 표의 스키마 변경이 포함되면 이 블록을 출력하지 않는다(위 Terraform·Next 배포 경계).
   - 백엔드/워커 변경이면 해당 이미지(`backend`/`worker`) 절차(위 1→2→3)를 aws 명령으로 함께 나열한다. 마이그레이션이 있으면 `staging-apply-migrations.ps1 -Files ...` 를 배포 앞에 붙인다.
   - 갈라진 배포 가드 경고가 예상되면(원격에 미머지 브랜치가 있을 때) 어떤 브랜치가 누락되는지와 `y` 진행 가능 여부를 한 줄로 덧붙인다. `-Force` 는 권하지 않는다.
   - 빌드 로그에서 `RUN npm run build` 가 `CACHED` 면 소스가 반영되지 않은 것(체크아웃에 커밋 누락) — 이 확인 포인트도 같이 안내한다.

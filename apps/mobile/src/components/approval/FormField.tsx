@@ -8,7 +8,7 @@ import { EntityPickerSheet, type EntityKind, type EntityOption } from '@/compone
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
-import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
+import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
 
 /**
  * 기안 폼의 필드 하나 — 웹 `ApprovalFormRenderer` 의 필드 렌더를 모바일로 옮긴 것.
@@ -323,9 +323,15 @@ export function FormField({
         // 시작·종료를 각각 HHMM 으로 받는다(웹 TimeRangeInput 과 같은 규칙·같은 저장 구조).
         // 입력 자체는 TimeInput 로컬 버퍼가 담당하고, 저장 값은 유효 시각만 들어온다.
         const v = parseTimeRange(value);
-        const minutes = timeRangeMinutes(value);
+        // strict — 익일 야간을 체크하지 않았는데 종료가 시작보다 이르면 시간을 내지 않고 안내한다(웹과 동일, 2026-10-31).
+        const minutes = timeRangeMinutes(value, { strict: true });
+        const invalid = timeRangeInvalid(value);
         const onPart = (part: 'start' | 'end') => (t: string) => {
           onSet({ ...parseTimeRange(value), [part]: t });
+        };
+        const toggleOvernight = () => {
+          const { overnight, ...rest } = parseTimeRange(value);
+          onSet(overnight ? rest : { ...rest, overnight: true });
         };
         return (
           <View className="gap-1.5">
@@ -338,11 +344,19 @@ export function FormField({
                 <TimeInput value={v.end ?? ''} onCommit={onPart('end')} placeholder="종료 HHMM" />
               </View>
             </View>
-            {minutes != null ? (
-              <Text className="text-[11.5px] text-cd-faint">
-                {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ''}
-              </Text>
-            ) : null}
+            <View className="flex-row items-center gap-2">
+              <Chip label="익일 야간" active={v.overnight === true} onPress={toggleOvernight} />
+              {minutes != null ? (
+                <Text className="text-[11.5px] text-cd-faint">
+                  {v.overnight ? '익일 · ' : ''}
+                  {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ''}
+                </Text>
+              ) : invalid ? (
+                <Text className="flex-1 text-[11.5px] text-cd-error">
+                  종료가 시작보다 빠릅니다 — 다음 날까지 이어지는 근무면 익일 야간을 켜세요.
+                </Text>
+              ) : null}
+            </View>
           </View>
         );
       }

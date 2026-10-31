@@ -21,6 +21,7 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { MailEditor } from "@/components/mail/MailEditor";
 import {
   parseTimeRange,
+  timeRangeInvalid,
   timeRangeMinutes,
   type ApprovalFieldDef,
   type ApprovalTimeRange,
@@ -36,6 +37,8 @@ interface RendererProps {
   /** 문서 헤더(다우식 양식 상단 — 제목·기안 정보 표·신청/승인란). */
   header?: DocHeadInfo;
   readOnly?: boolean;
+  /** 문서 최대 폭 — 기본 273mm. 기안 화면은 카드 폭을 따르도록 "none" 을 넘긴다(2026-10-31). */
+  maxWidth?: string;
 }
 
 const fmtComma = (v: unknown): string => {
@@ -43,7 +46,7 @@ const fmtComma = (v: unknown): string => {
   return isNaN(n) || String(v ?? "").trim() === "" ? "" : n.toLocaleString("ko-KR");
 };
 
-export function ApprovalFormRenderer({ fields, values, onChange, header, readOnly }: RendererProps) {
+export function ApprovalFormRenderer({ fields, values, onChange, header, readOnly, maxWidth = "273mm" }: RendererProps) {
   const [local, setLocal] = useState<Values>({});
   const vals = values ?? local;
   // 자동 채움(fillMap)은 선택 1회에 set 을 연속 호출한다 — 제어 모드의 onChange 구현은
@@ -67,7 +70,7 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
     // 결재 문서는 고정 가로폭에 맞춰 가운데 정렬한다. 브라우저 창 너비를 그대로 따라가면
     // 넓은 화면에서 한 줄이 지나치게 길어져 읽기 어렵다. 세로는 제한하지 않는다.
     // A4(210mm)로 시작했으나 실사용에서 좁다는 피드백 → 30% 확대(273mm).
-    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth: "273mm" }}>
+    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth }}>
       {header && <ApprovalDocHead info={header} />}
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-form-line-strong)" }}>
         {rows.map((rowFields, ri) => (
@@ -342,6 +345,38 @@ function FieldInput({
       const v = (value ?? {}) as { from?: string; to?: string };
       // singleDay: 1일 1건 양식(초과근무 신청 등) — 날짜 하나만 받고 to=from 으로 저장한다.
       if (f.singleDay) {
+        // 같은 양식에 시간 범위가 있으면(초과근무 신청) 근무일 옆에 [익일 야간] — 체크해야만 종료가 시작보다
+        // 이른(자정을 넘기는) 시간을 받는다. 표시는 시간 범위 값의 overnight 로 저장한다(2026-10-31 사용자 지시).
+        const rangeField = allFields.find((x) => x.type === "time_range");
+        if (rangeField) {
+          const range = parseTimeRange(allValues[rangeField.key]);
+          return (
+            <div className="flex items-center gap-2.5 flex-wrap w-full">
+              <AutoDateInput
+                className="cd-input flex-1 min-w-[160px] text-[13px]"
+                disabled={dis}
+                value={v.from ?? ""}
+                onChange={(from) => onSet({ from, to: from })}
+              />
+              <label
+                className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0"
+                title="자정을 넘겨 다음 날까지 이어지는 근무일 때만 체크합니다"
+              >
+                <input
+                  type="checkbox"
+                  disabled={dis}
+                  checked={range.overnight === true}
+                  onChange={(e) => {
+                    const { overnight: _drop, ...rest } = range;
+                    void _drop;
+                    onFill(rangeField.key, e.target.checked ? { ...rest, overnight: true } : rest);
+                  }}
+                />
+                익일 야간
+              </label>
+            </div>
+          );
+        }
         return (
           <AutoDateInput className={base} disabled={dis} value={v.from ?? ""} onChange={(from) => onSet({ from, to: from })} />
         );
@@ -450,7 +485,10 @@ function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: 
  */
 function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
   const v: ApprovalTimeRange = parseTimeRange(value);
-  const minutes = timeRangeMinutes(value);
+  // 입력 중에는 strict — 익일 야간 체크 없이 종료가 시작보다 이르면 시간을 내지 않고 안내한다.
+  // 열람(readOnly)은 구문서(표시 없음)를 예전처럼 자정 넘김으로 보여 준다.
+  const minutes = timeRangeMinutes(value, { strict: !readOnly });
+  const invalid = !readOnly && timeRangeInvalid(value);
   const base = "cd-input w-full text-[13px]";
   return (
     <div className="flex items-center gap-1.5 w-full">
@@ -471,7 +509,16 @@ function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
       />
       {minutes != null && (
         <span className="text-[11px] cd-text-faint shrink-0 whitespace-nowrap">
+          {v.overnight ? "익일 · " : ""}
           {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ""}
+        </span>
+      )}
+      {invalid && (
+        <span
+          className="text-[11px] cd-error-text shrink-0 whitespace-nowrap"
+          title="자정을 넘겨 다음 날까지 이어지는 근무면 근무일 옆 [익일 야간]을 체크하세요"
+        >
+          종료가 시작보다 빠름
         </span>
       )}
     </div>

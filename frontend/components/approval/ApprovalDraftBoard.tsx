@@ -15,7 +15,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { useDragOrder } from "@/components/approval/useDragOrder";
-import { parseTimeRange, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
+import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { isUnusedVehicleField } from "@/lib/approval/trip";
 import { countWorkdays } from "@/lib/approval/leave-dates";
@@ -556,12 +556,18 @@ export function ApprovalDraftBoard() {
   const prevLeaveTypeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isOvertimeForm || !otRangeKey) return;
-    const minutes = timeRangeMinutes(otRangeValue);
+    // strict — [익일 야간] 체크 없이 종료가 시작보다 이르면 계산하지 않는다(2026-10-31: 18:00~12:00 → 18h 오계산).
+    const minutes = timeRangeMinutes(otRangeValue, { strict: true });
     const sig = minutes == null ? "" : String(minutes);
     const first = otRangeSigRef.current === undefined;
     if (otRangeSigRef.current === sig) return;
     otRangeSigRef.current = sig;
-    if (first || minutes == null) return;
+    if (first) return;
+    if (minutes == null) {
+      // 잘못된 범위로 바뀌면 직전 자동값(예: 18h)이 남지 않게 신청시간을 비운다.
+      if (timeRangeInvalid(otRangeValue)) setValues((prev) => (String(prev.apply_hours ?? "") === "" ? prev : { ...prev, apply_hours: "" }));
+      return;
+    }
     const hours = String(Math.round((minutes / 60) * 100) / 100);
     setValues((prev) => (String(prev.apply_hours ?? "") === hours ? prev : { ...prev, apply_hours: hours }));
   }, [isOvertimeForm, otRangeKey, otRangeValue]);
@@ -1196,6 +1202,16 @@ export function ApprovalDraftBoard() {
         return false;
       }
     }
+    // 초과근무 — 자정을 넘기는 시간은 [익일 야간] 체크가 있어야 한다(서버도 상신을 거부한다).
+    const rangeInvalid = form.fields.find((f) => f.type === "time_range" && timeRangeInvalid(values[f.key]));
+    if (rangeInvalid) {
+      alert(
+        `${rangeInvalid.label}: 종료 시각이 시작 시각보다 빠르거나 같습니다.
+` +
+          "자정을 넘겨 다음 날까지 이어지는 근무라면 근무일 옆 [익일 야간]을 체크하세요."
+      );
+      return false;
+    }
     const missing = form.fields
       .filter((f) => f.required && f.type !== "static")
       // 법인차량을 고르지 않은 출장은 이용차량·이용시간을 묻지 않는다.
@@ -1349,13 +1365,14 @@ export function ApprovalDraftBoard() {
         <p className="text-sm text-[color:var(--cd-error)]">{error}</p>
       ) : form ? (
         <>
-        <div className="max-w-[1032px]">
+        <div className="max-w-[1152px]">
           <RejectedBanner meta={editMeta} />
         </div>
         <div className="flex flex-col xl:flex-row gap-4 items-start">
-          {/* 본문 카드는 렌더러 고정폭(273mm ≈ 1032px)에 맞춘다 — 공문·견적서 작성 화면과 동일 규칙.
-              제한이 없으면 넓은 화면에서 양식 좌우로 빈 여백만 커진다. */}
-          <div className="cd-card rounded-lg p-5 flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4">
+          {/* 본문 카드 폭 상한 — 제한이 없으면 넓은 화면에서 양식 좌우로 빈 여백만 커진다.
+              공문 작성 카드(1032px)보다 120px 넓다: 기안 양식은 본문 편집기가 128px 레이블 칸 옆에 놓여
+              편집 도구 막대가 두 줄로 접혔다(2026-10-31 사용자 지적) — 편집기 폭을 공문 본문과 같은 수준으로 맞춘다. */}
+          <div className="cd-card rounded-lg p-5 flex-1 min-w-0 max-w-[1152px] flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[260px]">
                 제목
@@ -1389,6 +1406,12 @@ export function ApprovalDraftBoard() {
                   }`}
                 >
                   {otHint}
+                </span>
+              )}
+              {/* 익일 야간 경고(2026-10-31 사용자 지시) — [익일 야간]을 체크한 신청서에만 */}
+              {isOvertimeForm && otRangeKey && parseTimeRange(values[otRangeKey]).overnight && (
+                <span className="mt-4 text-[12px] rounded-full px-2.5 py-1 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">
+                  ⚠ 익일까지 이어지는 야간 근무는 반드시 부서장의 사전 동의 및 승인 결재를 받아야 합니다. 승인 결재 전 임의로 수행한 야간 근무는 인정되지 않으니 유의하시기 바랍니다.
                 </span>
               )}
               {/* 출퇴근 유형별 인정 시작 시각(2026-10-30 사내 테스트 피드백) — 급여 대조와 같은 기준 */}
@@ -1563,6 +1586,7 @@ export function ApprovalDraftBoard() {
             <ApprovalFormRenderer
               fields={renderFields}
               values={values}
+              maxWidth="none"
               onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
               // 기안 단계에서도 완성 문서와 같은 양식 제목을 보여준다(신청/승인란은 상신 후).
               header={{ formName: form.name }}
@@ -1642,7 +1666,8 @@ export function ApprovalDraftBoard() {
           </div>
 
           {/* 결재선 */}
-          <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+          {/* 결재선 카드 340px(2026-10-31) — 320px 에서 '참조 · 열람' 제목이 접혔다. */}
+          <div className="cd-card rounded-lg p-5 w-full xl:w-[340px] shrink-0 flex flex-col gap-3">
             <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
               <Users className="w-4 h-4 cd-text-primary" /> 결재선
               <CdHelp topic="approval.draft-line" />
@@ -1720,7 +1745,7 @@ export function ApprovalDraftBoard() {
             {/* 참조/열람자 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
               <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
+                <Eye className="w-3.5 h-3.5 cd-text-primary shrink-0" /> <span className="whitespace-nowrap">참조 · 열람</span>
                 <CdHelp topic="approval.draft-watchers" />
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
               </h4>

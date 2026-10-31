@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
-import { parseTimeRange, timeRangeMinutes } from "@/lib/approval/fields";
+import { parseTimeRange, timeRangeInvalid, timeRangeMinutes } from "@/lib/approval/fields";
 import { DEFAULT_WORK_SCHEDULE_KIND, WORK_SCHEDULE_KINDS } from "@/lib/adt/types";
 import { CONSENT_VERSION, type OvertimeConsent } from "@/lib/approval/overtime-consent";
 import { getAttendanceSettings } from "@/lib/adt/queries";
@@ -257,6 +257,11 @@ export async function assessOverLimitOnSubmit(txn: PgDatabase, docId: string): P
   const to = period.to;
   if (to && /^\d{4}-\d{2}-\d{2}$/.test(to) && to !== from) {
     throw new Error("초과근무 신청은 1일 1건입니다 — 근무일을 하루씩 나눠 상신해 주세요.");
+  }
+  // 자정을 넘기는 시간은 [익일 야간] 체크(work_time.overnight)가 있어야 한다(2026-10-31 사용자 지시) —
+  // 체크 없이 종료가 시작보다 이르거나 같으면 입력 실수(18:00~12:00 → 18h)로 보고 막는다.
+  if (timeRangeInvalid(fv.work_time)) {
+    throw new Error("종료 시각이 시작 시각보다 빠르거나 같습니다 — 자정을 넘겨 다음 날까지 이어지는 근무면 근무일 옆 [익일 야간]을 체크해 주세요.");
   }
 
   // 같은 날 추가 신청(예정보다 길어진 근무, 2026-08-28 확정) — 허용하되:

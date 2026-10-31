@@ -36,6 +36,8 @@ export interface ApprovalFillRule {
 export interface ApprovalTimeRange {
   start?: string;
   end?: string;
+  /** 익일 야간 — 체크했을 때만 종료가 시작보다 이른(자정을 넘기는) 시간을 받는다(웹과 동일, 2026-10-31). */
+  overnight?: boolean;
 }
 
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -48,7 +50,7 @@ export function parseTimeRange(value: unknown): ApprovalTimeRange {
       const s = String(x ?? '').trim();
       return HHMM_RE.test(s) ? s : '';
     };
-    return { start: norm(v.start), end: norm(v.end) };
+    return { start: norm(v.start), end: norm(v.end), ...(v.overnight === true ? { overnight: true } : {}) };
   }
   const s = String(value ?? '').trim();
   if (!s) return {};
@@ -64,18 +66,27 @@ export function parseTimeRange(value: unknown): ApprovalTimeRange {
 }
 
 /** 시간 범위의 길이(분) — 종료가 시작보다 이르면 자정을 넘긴 근무로 본다. */
-export function timeRangeMinutes(value: unknown): number | null {
-  const { start, end } = parseTimeRange(value);
+export function timeRangeMinutes(value: unknown, opts?: { strict?: boolean }): number | null {
+  const { start, end, overnight } = parseTimeRange(value);
   if (!start || !end) return null;
   const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
   const diff = toMin(end) - toMin(start);
-  return diff > 0 ? diff : diff + 24 * 60;
+  if (diff > 0) return diff;
+  // strict(기안 입력): 자정 넘김은 익일 야간 체크가 있을 때만. 구문서 표시는 예전 해석 유지(웹과 동일).
+  if (opts?.strict) return overnight && diff < 0 ? diff + 24 * 60 : null;
+  return diff + 24 * 60;
+}
+
+/** 기안 입력 오류 — 시작·종료가 다 있는데 strict 계산이 안 되는 경우(익일 야간 미체크로 종료가 이르거나 같음). */
+export function timeRangeInvalid(value: unknown): boolean {
+  const { start, end } = parseTimeRange(value);
+  return !!start && !!end && timeRangeMinutes(value, { strict: true }) == null;
 }
 
 /** 표시용 "HH:MM ~ HH:MM". */
 export function timeRangeText(value: unknown): string {
-  const { start, end } = parseTimeRange(value);
-  if (start && end) return `${start} ~ ${end}`;
+  const { start, end, overnight } = parseTimeRange(value);
+  if (start && end) return `${start} ~ ${overnight ? '익일 ' : ''}${end}`;
   return start || end || '';
 }
 

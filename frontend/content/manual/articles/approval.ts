@@ -188,6 +188,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         title: "초과근무·휴가 양식",
         blocks: [
           { kind: "list", items: [
+            "자정을 넘겨 다음 날까지 이어지는 근무는 근무일 옆 [[익일 야간]]을 체크해야 종료 시각을 시작보다 이르게 넣을 수 있습니다(예: 22:00 ~ 익일 01:00). 체크하지 않고 종료가 시작보다 빠르면 시간이 계산되지 않고 상신도 되지 않습니다. 익일 야간 근무는 반드시 부서장의 사전 동의와 승인 결재를 받아야 하며, 승인 전에 임의로 한 야간 근무는 인정되지 않습니다.",
             "초과근무는 저녁 식사 시간을 빼지 않고 신청한 시간 전부를 인정합니다. 대신 초과근무 식대는 그 날 신청이 평일 2시간 이상(휴일 4시간 이상)일 때만 쓸 수 있고, 지출결의서를 올리면 신청 시간과 자동 대조됩니다. 양식 맨 아래에도 이 기준이 적혀 있습니다.",
             "초과근무 신청으로 그 주 연장근로가 한도(기본 주 12시간)를 넘게 되면 [[연장근로(주 12시간 초과) 및 보상휴가 전환 동의서]]가 뜹니다. [[동의 및 전자서명]]을 해야 상신되고, 동의는 주 단위라 다른 주로 다시 올리면 새로 동의합니다.",
             "휴가 종류에 따라 시작일만 넣으면 종료일이 자동으로 정해지기도 합니다. 반차는 0.5일 차감입니다.",
@@ -229,7 +230,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["기안", "상신", "결재선", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
     sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx", "components/approval/ApprovalFormRenderer.tsx"],
-    reviewedAt: "2026-10-30",
+    reviewedAt: "2026-10-31",
   },
   {
     id: "approval.letter",

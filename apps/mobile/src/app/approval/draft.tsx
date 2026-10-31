@@ -29,6 +29,7 @@ import {
   PINNED_FORM_IDS,
   draftableOnMobile,
   parseTimeRange,
+  timeRangeInvalid,
   timeRangeMinutes,
   undraftableReason,
   type ApprovalFieldDef,
@@ -367,12 +368,17 @@ export default function DraftScreen() {
   const otRangeSigRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!isOvertime || !otRangeKey) return;
-    const minutes = timeRangeMinutes(otRangeValue);
+    // strict — 익일 야간 없이 종료가 시작보다 이르면 계산하지 않는다(웹과 동일, 2026-10-31).
+    const minutes = timeRangeMinutes(otRangeValue, { strict: true });
     const sig = minutes == null ? '' : String(minutes);
     const first = otRangeSigRef.current === undefined;
     if (otRangeSigRef.current === sig) return;
     otRangeSigRef.current = sig;
-    if (first || minutes == null) return;
+    if (first) return;
+    if (minutes == null) {
+      if (timeRangeInvalid(otRangeValue)) setValues((prev) => (String(prev.apply_hours ?? '') === '' ? prev : { ...prev, apply_hours: '' }));
+      return;
+    }
     const hours = String(Math.round((minutes / 60) * 100) / 100);
     setValues((prev) => (String(prev.apply_hours ?? '') === hours ? prev : { ...prev, apply_hours: hours }));
   }, [isOvertime, otRangeKey, otRangeValue]);
@@ -455,6 +461,12 @@ export default function DraftScreen() {
   };
 
   const onSubmit = async () => {
+    // 자정을 넘기는 시간은 익일 야간 체크가 있어야 한다(서버도 상신을 거부한다).
+    const badRange = fields.find((f) => f.type === 'time_range' && timeRangeInvalid(values[f.key]));
+    if (badRange) {
+      toast.show(`${badRange.label}: 종료가 시작보다 빠릅니다. 다음 날까지 이어지는 근무면 익일 야간을 켜세요.`, 'error');
+      return;
+    }
     const m = missing();
     if (m) {
       toast.show(`${m.label}을(를) 입력하세요.`, 'error');
@@ -600,6 +612,14 @@ export default function DraftScreen() {
                 <View className={`rounded-xl px-3 py-2.5 ${leaveHint.over ? 'bg-cd-error-soft' : 'bg-cd-surface'}`}>
                   <Text className={`text-[12.5px] font-bold ${leaveHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
                     {leaveHint.text}
+                  </Text>
+                </View>
+              ) : null}
+              {/* 익일 야간 경고(웹과 같은 문구, 2026-10-31) */}
+              {isOvertime && otRangeKey && parseTimeRange(values[otRangeKey]).overnight ? (
+                <View className="rounded-xl bg-cd-error-soft px-3 py-2.5">
+                  <Text className="text-[12.5px] font-bold text-cd-error">
+                    ⚠ 익일까지 이어지는 야간 근무는 반드시 부서장의 사전 동의 및 승인 결재를 받아야 합니다. 승인 결재 전 임의로 수행한 야간 근무는 인정되지 않으니 유의하시기 바랍니다.
                   </Text>
                 </View>
               ) : null}

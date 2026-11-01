@@ -62,6 +62,24 @@ export function extractTripDestination(fieldValues: Record<string, unknown>): st
   return null;
 }
 
+/**
+ * 법인차량을 고르지 않았을 때 쉬는 차량 입력 칸인지 — 교통편 체크박스에 '법인차량' 선택지가 있는 양식에서
+ * 그 선택이 빠져 있으면 이용차량·이용시간은 필수 검사에서 뺀다(2026-10-30 사내 테스트 피드백:
+ * 법인차량을 안 골랐는데 상신 시 이용차량 필수 안내가 떴다).
+ */
+export function isUnusedVehicleField(
+  f: { key: string; type: string; assetKind?: string },
+  fields: { key: string; type: string; options?: string[] }[],
+  values: Record<string, unknown>,
+): boolean {
+  const vehicleField = (f.type === "asset_select" && f.assetKind === "vehicle") || f.key === "car_name" || f.key === "car_time";
+  if (!vehicleField) return false;
+  const transport = fields.find((x) => x.type === "checkbox" && (x.options ?? []).includes("법인차량"));
+  if (!transport) return false;
+  const picked = values[transport.key];
+  return !(Array.isArray(picked) && picked.map(String).includes("법인차량"));
+}
+
 export interface TripVehicleUse {
   /** asset_select 값의 assetId(레거시 문자열 값이면 null) */
   assetId: string | null;

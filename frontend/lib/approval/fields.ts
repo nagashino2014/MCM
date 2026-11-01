@@ -39,6 +39,12 @@ export type ApprovalFieldType = (typeof APPROVAL_FIELD_TYPES)[number];
 export interface ApprovalTimeRange {
   start?: string;
   end?: string;
+  /**
+   * 익일 야간(자정을 넘겨 다음 날까지 이어지는 근무) — 기안자가 근무일 옆 [익일 야간]을 체크했을 때만 true.
+   * 체크하지 않았는데 종료가 시작보다 이르면 입력 실수로 본다(2026-10-31: 18:00~12:00 이 18시간으로 계산됐다).
+   * 이 표시가 없던 구문서는 예전처럼 자정 넘김으로 해석한다(아래 timeRangeMinutes 의 strict 참고).
+   */
+  overnight?: boolean;
 }
 
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -51,7 +57,7 @@ export function parseTimeRange(value: unknown): ApprovalTimeRange {
       const s = String(x ?? "").trim();
       return HHMM_RE.test(s) ? s : "";
     };
-    return { start: norm(v.start), end: norm(v.end) };
+    return { start: norm(v.start), end: norm(v.end), ...(v.overnight === true ? { overnight: true } : {}) };
   }
   const s = String(value ?? "").trim();
   if (!s) return {};
@@ -66,19 +72,31 @@ export function parseTimeRange(value: unknown): ApprovalTimeRange {
   return { start: hm(m[1], m[2]), end: hm(m[3], m[4]) };
 }
 
-/** 시간 범위의 길이(분) — 종료가 시작보다 이르면 자정을 넘긴 것으로 본다(22:00~01:00 = 180분). */
-export function timeRangeMinutes(value: unknown): number | null {
-  const { start, end } = parseTimeRange(value);
+/**
+ * 시간 범위의 길이(분) — 종료가 시작보다 이르면 자정을 넘긴 것으로 본다(22:00~01:00 = 180분).
+ * strict(기안 입력 화면): 자정 넘김은 [익일 야간] 체크(overnight)가 있을 때만 인정하고, 아니면 null(입력 오류).
+ * 같은 시각(시작=종료)도 strict 에서는 null. 서버 집계·구문서 표시는 기본(비 strict)으로 예전 해석을 유지한다.
+ */
+export function timeRangeMinutes(value: unknown, opts?: { strict?: boolean }): number | null {
+  const { start, end, overnight } = parseTimeRange(value);
   if (!start || !end) return null;
   const toMin = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
   const diff = toMin(end) - toMin(start);
-  return diff > 0 ? diff : diff + 24 * 60;
+  if (diff > 0) return diff;
+  if (opts?.strict) return overnight && diff < 0 ? diff + 24 * 60 : null;
+  return diff + 24 * 60;
+}
+
+/** 기안 입력 오류 — 시작·종료가 다 있는데 strict 계산이 안 되는 경우(익일 야간 미체크로 종료가 이르거나 같음). */
+export function timeRangeInvalid(value: unknown): boolean {
+  const { start, end } = parseTimeRange(value);
+  return !!start && !!end && timeRangeMinutes(value, { strict: true }) == null;
 }
 
 /** 표시용 "HH:MM ~ HH:MM"(한쪽만 있으면 그쪽만). */
 export function timeRangeText(value: unknown): string {
-  const { start, end } = parseTimeRange(value);
-  if (start && end) return `${start} ~ ${end}`;
+  const { start, end, overnight } = parseTimeRange(value);
+  if (start && end) return `${start} ~ ${overnight ? "익일 " : ""}${end}`;
   return start || end || "";
 }
 

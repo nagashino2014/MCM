@@ -205,6 +205,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`cd-pill ${STAGE_PILL[project.stage] ?? "cd-pill-idle"}`} title="진행 단계(자동 분류)">{SALES_STAGE_LABELS[project.stage]}</span>
+          {!!project.unrecordedCount && (
+            <span
+              className="text-[12px] font-bold"
+              style={{ color: "var(--cd-warning)" }}
+              title="기간이 끝났지만 경과·견적가·투찰가·영업 결과가 없는 스케쥴은 진행 단계에 넣지 않습니다. 스케쥴을 열어 경과를 입력하세요."
+            >
+              단계 미반영 {project.unrecordedCount}건
+            </span>
+          )}
           <CdHelp topic="sales.stage" />
         </div>
       </div>

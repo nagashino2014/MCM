@@ -17,6 +17,17 @@ export function approvalEditHref(formId: string | null | undefined, docId: strin
   return `/approval/draft${q}`;
 }
 
+/**
+ * 메뉴에서만 새로 작성하는 양식 — 새 기안 양식 목록에는 보이되 비활성으로 두고 메뉴 이름을 안내한다
+ * (2026-10-30 사내 테스트 피드백: 메뉴의 공문·내부고시·견적서 작성과 새 기안 목록이 중복).
+ */
+export function approvalMenuOnlyLabel(formId: string): string | null {
+  if (formId === LETTER_FORM_ID) return "전자결재 › 공문 작성";
+  if (formId === NOTICE_FORM_ID) return "전자결재 › 내부고시 작성";
+  if (formId === QUOTE_FORM_ID) return "영업/마케팅 › 견적서 작성";
+  return null;
+}
+
 /** 새 기안 진입 경로 — 전용 작성 화면이 있는 양식(공문·내부고시·견적서)은 그 화면으로 보낸다. */
 export function approvalNewHref(formId: string): string {
   if (formId === LETTER_FORM_ID) return "/approval/letter";

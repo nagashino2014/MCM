@@ -56,7 +56,8 @@ export function MobileCard() {
       return;
     }
     try {
-      const res = await fetch(`/api/facilities?q=${encodeURIComponent(query.trim())}&limit=5&sort=name`, { cache: "no-store" });
+      // 결재 전용 검색 — 명함 등록(contact.edit)이 전 직원에게 열려(2026-10-30) facility.view 없이도 검색되게 한다.
+      const res = await fetch(`/api/approval/facility-search?q=${encodeURIComponent(query.trim())}&limit=5`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
       setFacilityOptions(Array.isArray(data.items) ? data.items : []);

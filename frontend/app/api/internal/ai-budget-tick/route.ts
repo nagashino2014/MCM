@@ -10,9 +10,10 @@ export const maxDuration = 120;
 // ⚠ Aurora auto-pause 보호(infra/aws/ops/README.md "틱을 새로 추가할 때"): "오늘 이미 실행" 판정은
 //    프로세스 메모리로만 하고 DB 를 열지 않는다. 실행 시각은 KST 09시 이후 하루 1회. 재기동 후 중복 실행은
 //    ai_budget_alerts 유니크 dedup 이 흡수한다(재발송 없음).
+// callTick 은 모든 틱을 POST 로 부른다 — GET 만 두었을 때 405 로 한 번도 돌지 않았다(2026-10-30).
 const g = globalThis as { __aiBudgetTickDone?: string };
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const key = req.headers.get("x-cron-key") ?? "";
   const secret = process.env.AUTH_SECRET ?? "";
   if (!secret || key !== secret) return NextResponse.json({ error: "forbidden" }, { status: 403 });

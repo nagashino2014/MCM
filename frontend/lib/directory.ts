@@ -5,6 +5,7 @@
  * 설계: docs/groupware-ux-overhaul-blueprint.md §7 (메일 자동완성·결재선과 공유).
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { recordAuditLogInline } from "@/lib/auth/audit";
 import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import type { OrgCategory } from "@/lib/directory-categories";
 
@@ -103,7 +104,10 @@ export async function setFacilityOrgCategory(facilityId: string, category: OrgCa
   });
 }
 
-/** 주소록에서의 담당자 개별 수정(사업장 상세 편집과 별개 경로). */
+/**
+ * 주소록에서의 담당자 개별 수정(사업장 상세 편집과 별개 경로).
+ * 2026-10-30부터 전 직원(contact.edit)이 쓰므로 변경 전·후를 감사 로그에 남긴다(actorUserId 가 있을 때).
+ */
 export async function updateContactPerson(
   id: number,
   patch: {
@@ -114,7 +118,8 @@ export async function updateContactPerson(
     email?: string | null;
     duties?: string | null;
     status?: string;
-  }
+  },
+  actorUserId?: string
 ): Promise<void> {
   const sets: string[] = [];
   const params: unknown[] = [id];
@@ -133,7 +138,99 @@ export async function updateContactPerson(
   params.push(new Date().toISOString());
   sets.push(`updated_at = $${params.length}`);
   await withDbWrite(async (db) => {
+    const before = rowsToObjects(await db.exec(`SELECT * FROM facility_contact_people WHERE id = $1`, [id]))[0];
+    if (!before) throw new Error("담당자를 찾을 수 없습니다.");
     await db.run(`UPDATE facility_contact_people SET ${sets.join(", ")} WHERE id = $1`, params);
+    if (actorUserId) {
+      await recordAuditLogInline(db, {
+        actorUserId,
+        action: "facility_contact_person_update",
+        targetTable: "facility_contact_people",
+        targetId: String(id),
+        before,
+        after: patch,
+      });
+    }
+  });
+}
+
+export interface NewContactPerson {
+  facilityId: string;
+  personName: string;
+  title?: string | null;
+  /** 부서명 — 같은 사업장에 같은 이름의 부서가 있으면 그 부서로, 없으면 새로 만든다. */
+  departmentName?: string | null;
+  officePhone?: string | null;
+  mobilePhone?: string | null;
+  email?: string | null;
+  duties?: string | null;
+}
+
+/**
+ * 사업장 담당자 1명 추가 — 출장·영업에서 만난 사람을 직원이 직접 등록한다(2026-10-30 사용자 결정, contact.edit).
+ * 사업장 상세의 일괄 저장(replace-all, facility.edit)과 달리 기존 담당자를 건드리지 않는다. 새 id 를 돌려준다.
+ */
+export async function createContactPerson(input: NewContactPerson, actorUserId: string): Promise<number> {
+  const clean = (v: string | null | undefined) => {
+    const t = String(v ?? "").trim();
+    return t || null;
+  };
+  const personName = clean(input.personName);
+  if (!personName) throw new Error("이름을 입력하세요.");
+  const now = new Date().toISOString();
+  return withDbWrite(async (db) => {
+    const fac = rowsToObjects(
+      await db.exec(`SELECT facility_id FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`, [input.facilityId])
+    );
+    if (!fac.length) throw new Error("기관·업체를 찾을 수 없습니다.");
+    let departmentId: number | null = null;
+    const deptName = clean(input.departmentName);
+    if (deptName) {
+      const found = rowsToObjects(
+        await db.exec(
+          `SELECT id FROM facility_contact_departments WHERE facility_id = $1 AND department_name = $2 ORDER BY id LIMIT 1`,
+          [input.facilityId, deptName]
+        )
+      );
+      if (found.length) departmentId = Number(found[0].id);
+      else {
+        const ins = rowsToObjects(
+          await db.exec(
+            `INSERT INTO facility_contact_departments (facility_id, department_name, created_at, updated_at)
+             VALUES ($1, $2, $3, $3) RETURNING id`,
+            [input.facilityId, deptName, now]
+          )
+        );
+        departmentId = Number(ins[0].id);
+      }
+    }
+    const row = {
+      facilityId: input.facilityId,
+      departmentId,
+      personName,
+      title: clean(input.title),
+      officePhone: clean(input.officePhone),
+      mobilePhone: clean(input.mobilePhone),
+      email: clean(input.email),
+      duties: clean(input.duties),
+    };
+    const inserted = rowsToObjects(
+      await db.exec(
+        `INSERT INTO facility_contact_people
+           (facility_id, department_id, person_name, title, office_phone, mobile_phone, email, duties, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $9) RETURNING id`,
+        [row.facilityId, row.departmentId, row.personName, row.title, row.officePhone, row.mobilePhone, row.email, row.duties, now]
+      )
+    );
+    const id = Number(inserted[0].id);
+    await recordAuditLogInline(db, {
+      actorUserId,
+      action: "facility_contact_person_create",
+      targetTable: "facility_contact_people",
+      targetId: String(id),
+      after: row,
+    });
+    return id;
   });
 }
 

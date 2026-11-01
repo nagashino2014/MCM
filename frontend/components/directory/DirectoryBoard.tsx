@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
-  Beaker, Building2, Landmark, Mail, Network, Pencil, Phone, Search, Smartphone,
+  Beaker, Building2, Landmark, Mail, Network, Pencil, Phone, Plus, Search, Smartphone,
   Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -26,6 +26,7 @@ import { useCdToast } from "@/components/cdash/CdToast";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
+import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
 import "@/components/cdash/cdash.css";
 
 type Tab = "staff" | "external" | "orgchart";
@@ -58,8 +59,12 @@ export function DirectoryBoard() {
   const { theme } = useCdashTheme();
   const { toast } = useCdToast();
   const { data: session } = useSession();
-  // 외부 연락처 수정·삭제 API 는 facility.edit — 같은 키 보유자에게만 관리 아이콘을 보인다(F-25).
-  const canEditContacts = hasPerm(permsOf(session?.user), "facility.edit");
+  // 외부 연락처 권한(2026-10-30 사용자 결정): 추가·수정은 contact.edit(전 직원), 삭제·연락처 구분 변경은
+  // facility.edit 만. 같은 키 보유자에게만 해당 아이콘·입력을 보인다(F-25).
+  const perms = permsOf(session?.user);
+  const canDeleteContacts = hasPerm(perms, "facility.edit");
+  const canEditContacts = canDeleteContacts || hasPerm(perms, "contact.edit");
+  const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<Tab>("staff");
 
   // 임직원
@@ -190,7 +195,7 @@ export function DirectoryBoard() {
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="주소록 · 조직도"
-        help="임직원과 외부 담당자의 연락처를 조회합니다. 외부 담당자 등록·명함 촬영은 사업장 상세에서 합니다."
+        help="임직원과 외부 담당자의 연락처를 조회합니다. 출장·영업에서 만난 외부 담당자는 외부 연락처 탭에서 직접 등록하고 직급·연락처를 고칠 수 있습니다(삭제는 사업장 관리 담당자). 명함 촬영은 사업장 상세·앱에서 합니다."
         meta={`임직원 ${people.length}명 · 외부 연락처 ${activeContacts.length}명`}
       />
 
@@ -347,6 +352,11 @@ export function DirectoryBoard() {
                   </button>
                 )}
                 <span className="ml-auto text-[11.5px] cd-text-faint">{filteredContacts.length}명</span>
+                {canEditContacts && (
+                  <CdButton size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>
+                    담당자 등록
+                  </CdButton>
+                )}
               </div>
 
               <div className="flex-1 min-h-0 overflow-auto cd-card">
@@ -413,14 +423,16 @@ export function DirectoryBoard() {
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                className="p-1 rounded-md cd-text-faint hover:cd-error-text"
-                                title="삭제"
-                                onClick={() => setDeleting(c)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canDeleteContacts && (
+                                <button
+                                  type="button"
+                                  className="p-1 rounded-md cd-text-faint hover:cd-error-text"
+                                  title="삭제"
+                                  onClick={() => setDeleting(c)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>
@@ -440,9 +452,37 @@ export function DirectoryBoard() {
         <OrgChart departments={departments} people={people} loading={loading} />
       )}
 
+      {creating && (
+        <ContactCreateModal
+          onClose={() => setCreating(false)}
+          onCreated={(c) => {
+            setContacts((prev) => [
+              ...(prev ?? []),
+              {
+                id: c.id,
+                facilityId: c.facilityId,
+                facilityName: c.facilityName,
+                departmentName: c.departmentName,
+                personName: c.personName,
+                title: c.title,
+                officePhone: c.officePhone,
+                mobilePhone: c.mobilePhone,
+                email: c.email,
+                deptType: null,
+                // 연락처 구분은 사업장 속성 — 같은 사업장 담당자가 이미 있으면 그 값을 따른다.
+                orgCategory: (prev ?? []).find((x) => x.facilityId === c.facilityId)?.orgCategory ?? null,
+                status: "active",
+              },
+            ]);
+            setCreating(false);
+          }}
+        />
+      )}
+
       {editing && (
         <ContactEditModal
           contact={editing}
+          canEditCategory={canDeleteContacts}
           onClose={() => setEditing(null)}
           onSaved={(patch) => {
             // 연락처 구분은 사업장 속성 — 같은 사업장의 다른 담당자에게도 즉시 반영한다.
@@ -547,10 +587,13 @@ function ContactRow({ icon, children }: { icon: React.ReactNode; children: React
 /** 담당자 수정 — 이름·직급·연락처 + 소속 사업장의 연락처 구분(기관 유형). */
 function ContactEditModal({
   contact,
+  canEditCategory,
   onClose,
   onSaved,
 }: {
   contact: ExternalContact;
+  /** 연락처 구분은 사업장 속성이라 facility.edit 보유자만 바꾼다. */
+  canEditCategory: boolean;
   onClose: () => void;
   onSaved: (patch: Partial<ExternalContact>) => void;
 }) {
@@ -568,7 +611,7 @@ function ContactEditModal({
       toast("이름을 입력하세요.", "warn");
       return;
     }
-    if (!orgCategory) {
+    if (canEditCategory && !orgCategory) {
       toast("연락처 구분을 선택하세요.", "warn");
       return;
     }
@@ -580,7 +623,7 @@ function ContactEditModal({
         body: JSON.stringify({
           id: contact.id,
           facilityId: contact.facilityId,
-          orgCategory,
+          ...(canEditCategory ? { orgCategory } : {}),
           personName,
           title: title.trim() || null,
           mobilePhone: mobilePhone.trim() || null,
@@ -600,7 +643,7 @@ function ContactEditModal({
         mobilePhone: mobilePhone.trim() || null,
         officePhone: officePhone.trim() || null,
         email: email.trim() || null,
-        orgCategory,
+        ...(canEditCategory ? { orgCategory } : {}),
       });
     } finally {
       setSaving(false);
@@ -626,20 +669,22 @@ function ContactEditModal({
         <p className="text-xs cd-text-faint">
           소속: <span className="cd-text font-semibold">{contact.facilityName ?? "-"}</span>
         </p>
-        <CdSelect
-          label="연락처 구분"
-          required
-          value={orgCategory}
-          onChange={(e) => setOrgCategory(e.target.value)}
-          hint="소속 기관·업체(사업장) 속성입니다 — 같은 곳의 담당자 전원에게 함께 적용됩니다."
-        >
-          <option value="">선택하세요</option>
-          {ORG_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </CdSelect>
+        {canEditCategory && (
+          <CdSelect
+            label="연락처 구분"
+            required
+            value={orgCategory}
+            onChange={(e) => setOrgCategory(e.target.value)}
+            hint="소속 기관·업체(사업장) 속성입니다 — 같은 곳의 담당자 전원에게 함께 적용됩니다."
+          >
+            <option value="">선택하세요</option>
+            {ORG_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </CdSelect>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />
           <CdInput label="직급" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 부장" />

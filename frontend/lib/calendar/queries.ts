@@ -21,6 +21,8 @@ import {
   parsePeriod,
 } from "@/lib/approval/trip";
 import { LEAVE_FORM_ID } from "@/lib/approval/leave";
+import { addDaysYmd, leaveDates, periodEndFromNote } from "@/lib/approval/leave-dates";
+import { offDaySet } from "@/lib/hr/holidays";
 import { listActivitiesByMonth } from "@/lib/sales/queries";
 import { ACTIVITY_TYPE_META } from "@/lib/sales/types";
 import { expandRefs, loadCalendarPrefs } from "@/lib/calendar/prefs";
@@ -167,6 +169,9 @@ export async function listCalendarEvents(params: {
   // ── 휴가 — 문서(상신부터) + 수기 대장 보충 ──
   if (targetIds.length) {
     const catalog = await listLeaveTypes();
+    // 시작일 + 일수로만 남은 휴가(종료일 없음)의 끝 날짜를 근무일 기준으로 구하기 위한 휴무일(2026-10-30).
+    const monthYear = Number(month.slice(0, 4));
+    const offDays = await offDaySet([monthYear - 1, monthYear]).catch(() => new Set<string>());
     const leaveDocs = await listMonthDocs({
       formId: LEAVE_FORM_ID,
       periodKey: "leave_period",
@@ -180,6 +185,10 @@ export async function listCalendarEvents(params: {
       if (!period) continue;
       const item = findInCatalog(catalog, doc.values.leave_type);
       const typeLabel = item?.label ?? String(doc.values.leave_type ?? "휴가");
+      // 종료일 없이 사용일수만 큰 문서(구문서·수기 조정)도 기간 전체가 보이게 한다.
+      const useDays = Number(String(doc.values.use_days ?? "").replace(/[^\d.]/g, "")) || 0;
+      const docDates = leaveDates({ from: period.from, to: period.to, days: useDays }, offDays);
+      const docEnd = docDates.length ? docDates[docDates.length - 1] : period.to;
       events.push({
         id: `doc:${doc.docId}:leave`,
         tag,
@@ -187,7 +196,7 @@ export async function listCalendarEvents(params: {
         // ':' 양쪽 공백 — 붙여 쓰면 좁아 보인다는 피드백(과도하지 않게 1칸씩).
         title: `${typeLabel} : ${doc.person?.name ?? ""}`,
         startDate: period.from,
-        endDate: period.to,
+        endDate: docEnd > period.to ? docEnd : period.to,
         startTime: null,
         people: [], // 제목에 휴가자 이름이 이미 있다(사용자 확정 규칙).
         summary: stripHtml(doc.values.reason),
@@ -197,9 +206,12 @@ export async function listCalendarEvents(params: {
     }
 
     // 관리자 수기 입력분(엑셀 임포트·수동) — 문서가 없어 doc_id IS NULL 인 use 행만.
+    // 시작일 + 일수(예: 10/5 3일)로 저장되므로 근무일 기준으로 끝 날짜를 펼친다(2026-10-30).
+    // 앞 달에 시작해 이번 달로 넘어오는 휴가도 잡도록 시작일을 한 달 앞까지 넓혀 읽는다.
+    const { first: monthFirst, last: monthLast } = monthRange(month);
     const ledgerRows = rowsToObjects(
       await db.exec(
-        `SELECT l.entry_id, l.employee_id, l.used_on, l.note,
+        `SELECT l.entry_id, l.employee_id, l.used_on, l.days, l.note,
                 e.name, lt.label AS type_label
            FROM annual_leave_ledger l
            JOIN employee_profiles e ON e.employee_id = l.employee_id
@@ -207,23 +219,26 @@ export async function listCalendarEvents(params: {
           WHERE l.entry_type = 'use'
             AND l.doc_id IS NULL
             AND l.used_on IS NOT NULL
-            AND substr(l.used_on, 1, 7) = $1
-            AND l.employee_id = ANY($2::text[])
+            AND substr(l.used_on, 1, 10) BETWEEN $1 AND $2
+            AND l.employee_id = ANY($3::text[])
           ORDER BY l.used_on ASC`,
-        [month, targetIds]
+        [addDaysYmd(monthFirst, -45), monthLast, targetIds]
       )
     );
     for (const r of ledgerRows) {
       const tag = tagOf(String(r.employee_id));
       if (!tag) continue;
       const date = String(r.used_on).slice(0, 10);
+      const dates = leaveDates({ from: date, to: periodEndFromNote(r.note), days: Number(r.days ?? 0) }, offDays);
+      const endDate = dates.length ? dates[dates.length - 1] : date;
+      if (endDate < monthFirst) continue;
       events.push({
         id: `ledg:${r.entry_id}`,
         tag,
         kind: "leave",
         title: `${String(r.type_label ?? "연차")} : ${String(r.name ?? "")}`,
         startDate: date,
-        endDate: date,
+        endDate,
         startTime: null,
         people: [],
         summary: r.note != null ? String(r.note) : null,

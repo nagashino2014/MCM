@@ -21,6 +21,7 @@ import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { useDragOrder } from "@/components/approval/useDragOrder";
+import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
 import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
@@ -93,6 +94,8 @@ export function FacilityRecipientPicker({
   const [q, setQ] = useState("");
   const [items, setItems] = useState<FacilityOption[]>([]);
   const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(boxRef, open, () => setOpen(false));
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -101,8 +104,9 @@ export function FacilityRecipientPicker({
     }
     const controller = new AbortController();
     const t = setTimeout(() => {
-      const params = new URLSearchParams({ q: q.trim(), limit: "15", sort: "name" });
-      fetch(`/api/facilities?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+      // 결재 전용 검색 — /api/facilities 는 facility.view 가 없는 직원 계정에서 403(2026-10-30)
+      const params = new URLSearchParams({ q: q.trim(), limit: "15" });
+      fetch(`/api/approval/facility-search?${params.toString()}`, { cache: "no-store", signal: controller.signal })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => setItems(Array.isArray(d?.items) ? d.items : []))
         .catch(() => {});
@@ -147,7 +151,7 @@ export function FacilityRecipientPicker({
           ))}
         </div>
       )}
-      <div className="relative">
+      <div ref={boxRef} className="relative">
         <div className="flex items-center gap-1.5">
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" />
@@ -274,6 +278,8 @@ export function RecipientPicker({
   const [q, setQ] = useState("");
   const [items, setItems] = useState<ContactItem[]>([]);
   const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(boxRef, open, () => setOpen(false));
   const [manual, setManual] = useState(false);
   const [draft, setDraft] = useState<LetterRecipient>({ name: "", deptName: "", title: "", email: "", facilityName: "", phone: "" });
   const abortRef = useRef<AbortController | null>(null);
@@ -319,7 +325,7 @@ export function RecipientPicker({
           ))}
         </div>
       )}
-      <div className="relative">
+      <div ref={boxRef} className="relative">
         <div className="flex items-center gap-1.5">
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 cd-text-faint pointer-events-none" />

@@ -3,6 +3,8 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { findInCatalog } from "@/lib/approval/leave-types";
 import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 import { computeAccrual, type AccrualBasis } from "@/lib/approval/leave-accrual";
+import { countWorkdays, leaveDates, periodEndFromNote } from "@/lib/approval/leave-dates";
+import { offDaySet } from "@/lib/hr/holidays";
 
 /*
  * 직원별 휴가 관리(087) — 연차 대장을 날짜별 이력 기반으로 관리(LM-P3).
@@ -31,6 +33,8 @@ export interface LeaveEntry {
   source: "groupware" | "excel" | "manual"; // 입력 출처 — 그룹웨어(휴가신청 승인)/엑셀 임포트/수기
   note: string | null;
   createdAt: string;
+  /** 사용 행이 실제로 쉬는 날짜(주말·휴무일 제외) — 내 휴가 조회(getMyLeaveOverview)만 채운다(모바일 목록용). */
+  dates?: string[];
 }
 
 export interface LeaveSummaryRow {
@@ -106,7 +110,11 @@ export async function recordLeaveUsageOnApproval(txn: PgDatabase, docId: string)
     const manual = Number(String(values.use_days ?? "").replace(/[^\d.]/g, ""));
     if (manual > 0) days = manual;
     else if (item.days != null) days = item.days;
-    else if (from && to) days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1);
+    else if (from && to) {
+      // 사용일수가 비어 온 구문서 대비 — 근무일(주말·휴무일 제외) 기준(2026-10-30, 기안 화면과 같은 기준).
+      const off = await offDaySet([Number(from.slice(0, 4)), Number(to.slice(0, 4))]).catch(() => new Set<string>());
+      days = Math.max(1, countWorkdays(from, to, off));
+    }
     else days = 1;
   }
   const year = (from || new Date().toISOString()).slice(0, 4);
@@ -516,6 +524,17 @@ export interface MyLeaveOverview {
  * 본인 휴가 현황 — 관리자용 listLeaveSummary/listLeaveEntries 와 같은 집계 규칙을
  * users.user_id → employee_id 스코프로 좁혀서 쓴다(본인 것 외에는 조회 불가).
  */
+/** 사용 행마다 실제 쉬는 날짜를 붙인다 — 대장은 시작일 1행이라 복수일 휴가가 시작일만 보였다(2026-10-30). */
+async function withLeaveDates(entries: LeaveEntry[], year: string): Promise<LeaveEntry[]> {
+  const y = Number(year) || new Date().getFullYear();
+  const off = await offDaySet([y, y + 1]).catch(() => new Set<string>());
+  return entries.map((e) =>
+    e.entryType === "use" && e.usedOn
+      ? { ...e, dates: leaveDates({ from: e.usedOn, to: periodEndFromNote(e.note), days: e.days }, off) }
+      : e,
+  );
+}
+
 export async function getMyLeaveOverview(userId: string, year: string): Promise<MyLeaveOverview> {
   const db = await getDb();
   const empRows = rowsToObjects(
@@ -569,7 +588,7 @@ export async function getMyLeaveOverview(userId: string, year: string): Promise<
     usedAnnual: Math.round(usedAnnual * 100) / 100,
     remaining: Math.round((granted - usedAnnual) * 100) / 100,
     otherUsed: Math.round(otherUsed * 100) / 100,
-    entries,
+    entries: await withLeaveDates(entries, year),
     special: { remaining: specialRemaining, entries: specialEntries },
     years: rowsToObjects(yearRows).map((r) => String(r.year)),
   };

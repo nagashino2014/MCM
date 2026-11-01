@@ -114,8 +114,10 @@ export default function CardScreen() {
       return;
     }
     try {
+      // 결재 전용 검색 — /api/facilities 는 facility.view 가 없는 직원 계정에서 403.
+      // 명함 등록(contact.edit)은 전 직원에게 열렸다(2026-10-30) — 업체 검색도 같이 열어야 쓸 수 있다.
       const d = await apiJson<{ items: FacilityOption[] }>(
-        `/api/facilities?q=${encodeURIComponent(q.trim())}&limit=5&sort=name`
+        `/api/approval/facility-search?q=${encodeURIComponent(q.trim())}&limit=5`
       );
       setFacilityOptions(d.items ?? []);
     } catch {

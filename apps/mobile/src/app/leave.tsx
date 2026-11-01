@@ -34,6 +34,8 @@ interface LeaveEntry {
   leaveLabel: string | null;
   deduct: 'full' | 'half' | null;
   note: string | null;
+  /** 실제 쉬는 날짜(주말·휴무일 제외) — 서버가 채운다(2026-10-30). 구버전 서버면 없음. */
+  dates?: string[];
 }
 interface LeaveNotice {
   noticeId: string;
@@ -228,6 +230,8 @@ export default function LeaveScreen() {
                 const d = new Date(`${e.usedOn}T12:00:00`);
                 const isAnnual = e.deduct === 'full' || e.deduct === 'half' || e.leaveLabel == null;
                 const period = e.note?.match(/\d{4}-\d{2}-\d{2}~(\d{4}-\d{2}-\d{2})/)?.[1];
+                // 복수일 휴가는 실제 쉬는 날짜를 모두 보여 준다(10/5 3일 → 10.05, 10.06, 10.07).
+                const dateList = e.dates && e.dates.length > 1 ? e.dates.map((x) => x.slice(5).replace('-', '.')).join(', ') : null;
                 return (
                   <View key={e.entryId} className="flex-row items-center gap-3 border-t py-2" style={{ borderColor: dark ? '#2a2d3a' : '#eef0f7' }}>
                     <Text className="w-[92px] text-[12.5px] font-semibold" style={{ color: ink }}>
@@ -235,10 +239,17 @@ export default function LeaveScreen() {
                     </Text>
                     <View className="flex-1 flex-row items-center gap-1.5">
                       <View className="h-2 w-2 rounded-full" style={{ backgroundColor: isAnnual ? '#4353e4' : '#1f9d76' }} />
-                      <Text numberOfLines={1} className="flex-1 text-[12.5px]" style={{ color: ink }}>
-                        {e.leaveLabel ?? '연차'}
-                        {period ? ` ~${period.slice(5).replace('-', '.')}` : ''}
-                      </Text>
+                      <View className="flex-1">
+                        <Text numberOfLines={1} className="text-[12.5px]" style={{ color: ink }}>
+                          {e.leaveLabel ?? '연차'}
+                          {!dateList && period ? ` ~${period.slice(5).replace('-', '.')}` : ''}
+                        </Text>
+                        {dateList ? (
+                          <Text className="text-[11.5px]" style={{ color: CHART.weekday }}>
+                            {dateList}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                     <Text className="text-[12px]" style={{ color: CHART.weekday }}>
                       {isAnnual ? `${d1(e.days)}일 차감` : '차감 없음'}

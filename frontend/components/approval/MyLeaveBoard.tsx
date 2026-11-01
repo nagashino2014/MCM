@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarCheck2, CalendarPlus, ChevronLeft, ChevronRight, Gauge, HeartHandshake, Sparkles } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
+import { formatLeaveDateList, leaveDates, periodEndFromNote } from "@/lib/approval/leave-dates";
 
 interface EntryRow {
   entryId: string;
@@ -72,11 +73,13 @@ const DOT_COLOR: Record<DotKind, string> = {
 };
 const DOT_LABEL: Record<DotKind, string> = { annual: "연차", half: "반차", family: "비연차(경조)", official: "비연차(공가 등)" };
 
-/** 승인 기록 note("라벨 YYYY-MM-DD~YYYY-MM-DD (문서번호)")에서 종료일만 — 시작일과 같으면 null */
-function periodEnd(e: EntryRow): string | null {
-  const m = e.note?.match(/(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})/);
-  if (!m || m[2] === (e.usedOn ?? "")) return null;
-  return m[2];
+/**
+ * 사용 1행이 실제로 쉬는 날짜들 — 승인 기록은 note 의 기간, 수기 입력은 시작일 + 일수(근무일 기준).
+ * 대장은 시작일 1행이라 펼치지 않으면 3일 휴가가 시작일에만 보였다(2026-10-30).
+ */
+function entryDates(e: EntryRow, offDays: ReadonlySet<string>): string[] {
+  if (!e.usedOn) return [];
+  return leaveDates({ from: e.usedOn, to: periodEndFromNote(e.note), days: e.days }, offDays);
 }
 
 function dotKind(e: EntryRow): DotKind {
@@ -140,13 +143,14 @@ export function MyLeaveSection() {
       }));
   }, [data]);
 
+  const offDays = useMemo(() => new Set(holidays.keys()), [holidays]);
   const usesByDate = useMemo(() => {
     const map = new Map<string, EntryRow[]>();
     for (const e of (data?.entries ?? []).filter((x) => x.entryType === "use" && x.usedOn)) {
-      (map.get(e.usedOn!) ?? map.set(e.usedOn!, []).get(e.usedOn!)!).push(e);
+      for (const date of entryDates(e, offDays)) (map.get(date) ?? map.set(date, []).get(date)!).push(e);
     }
     return map;
-  }, [data]);
+  }, [data, offDays]);
 
   const yearOptions = useMemo(() => {
     const set = new Set([String(thisYear), ...(data?.years ?? [])]);
@@ -341,6 +345,7 @@ export function MyLeaveSection() {
               {g.rows.map((e) => {
                 const d = new Date(e.usedOn! + "T00:00:00");
                 const kind = dotKind(e);
+                const dates = entryDates(e, offDays);
                 return (
                   <div key={e.entryId} className="flex items-center gap-2 text-[13px] py-[9.5px] border-t cd-hairline-row-c">
                     <span className="tabular-nums cd-text w-[84px] shrink-0">
@@ -349,8 +354,12 @@ export function MyLeaveSection() {
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT_COLOR[kind] }} />
                       <span className="cd-text truncate">{e.leaveLabel ?? "연차"}</span>
-                      {/* 기간 휴가는 승인 시 시작일 1행으로 남는다 — note 의 종료일을 붙여 '어느 날짜까지'가 보이게 */}
-                      {periodEnd(e) && <span className="cd-text-faint whitespace-nowrap">~ {periodEnd(e)!.slice(5)}</span>}
+                      {/* 복수일 휴가는 대장에 시작일 1행으로 남는다 — 실제 쉬는 날짜를 모두 붙인다 */}
+                      {dates.length > 1 && (
+                        <span className="cd-text-faint truncate" title={formatLeaveDateList(dates)}>
+                          {formatLeaveDateList(dates)}
+                        </span>
+                      )}
                     </span>
                     <span className="tabular-nums cd-text-muted ml-auto shrink-0">
                       {kind === "annual" || kind === "half" ? `${fmtDays(e.days)}일 차감` : "차감 없음"}

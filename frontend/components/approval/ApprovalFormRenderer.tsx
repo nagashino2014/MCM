@@ -14,9 +14,14 @@ import { OrgRefSelect } from "@/components/approval/OrgRefSelect";
 import { RELATED_CONTRACT_KEY, RELATED_FACILITY_KEY } from "@/lib/approval/expense-purpose";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
+import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
+import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
+import { useSession } from "next-auth/react";
+import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { MailEditor } from "@/components/mail/MailEditor";
 import {
   parseTimeRange,
+  timeRangeInvalid,
   timeRangeMinutes,
   type ApprovalFieldDef,
   type ApprovalTimeRange,
@@ -32,6 +37,8 @@ interface RendererProps {
   /** 문서 헤더(다우식 양식 상단 — 제목·기안 정보 표·신청/승인란). */
   header?: DocHeadInfo;
   readOnly?: boolean;
+  /** 문서 최대 폭 — 기본 273mm. 기안 화면은 카드 폭을 따르도록 "none" 을 넘긴다(2026-10-31). */
+  maxWidth?: string;
 }
 
 const fmtComma = (v: unknown): string => {
@@ -39,7 +46,7 @@ const fmtComma = (v: unknown): string => {
   return isNaN(n) || String(v ?? "").trim() === "" ? "" : n.toLocaleString("ko-KR");
 };
 
-export function ApprovalFormRenderer({ fields, values, onChange, header, readOnly }: RendererProps) {
+export function ApprovalFormRenderer({ fields, values, onChange, header, readOnly, maxWidth = "273mm" }: RendererProps) {
   const [local, setLocal] = useState<Values>({});
   const vals = values ?? local;
   // 자동 채움(fillMap)은 선택 1회에 set 을 연속 호출한다 — 제어 모드의 onChange 구현은
@@ -63,7 +70,7 @@ export function ApprovalFormRenderer({ fields, values, onChange, header, readOnl
     // 결재 문서는 고정 가로폭에 맞춰 가운데 정렬한다. 브라우저 창 너비를 그대로 따라가면
     // 넓은 화면에서 한 줄이 지나치게 길어져 읽기 어렵다. 세로는 제한하지 않는다.
     // A4(210mm)로 시작했으나 실사용에서 좁다는 피드백 → 30% 확대(273mm).
-    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth: "273mm" }}>
+    <div className="flex flex-col gap-3 w-full mx-auto" style={{ maxWidth }}>
       {header && <ApprovalDocHead info={header} />}
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cd-form-line-strong)" }}>
         {rows.map((rowFields, ri) => (
@@ -134,6 +141,7 @@ function buildFillValue(target: ApprovalFieldDef | undefined, text: string, ref?
  * 값이 비면 잠그지 않아 수기 입력이 가능하다.
  */
 function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Values): boolean {
+  if (isPlaceField(f)) return false;
   const cur = allValues[f.key];
   const empty = cur == null || (typeof cur === "string" && cur.trim() === "") || (typeof cur === "object" && !Object.values(cur as Record<string, unknown>).some(Boolean));
   if (empty) return false;
@@ -144,6 +152,30 @@ function isAutoFilled(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allVal
     const o = sv as { contractId?: string; facilityId?: string; manual?: boolean };
     return !o.manual && Boolean(o.contractId || o.facilityId);
   });
+}
+
+/**
+ * 장소 성격의 업체 필드(출장지·방문지) — 계약 업체와 실제 방문지가 다를 수 있어(예: 환경전문심사원)
+ * 계약에서 채워져도 잠그지 않는다(2026-10-30 사내 테스트 피드백).
+ */
+function isPlaceField(f: ApprovalFieldDef): boolean {
+  return f.key === "destination" || /출장지|방문지|장소/.test(f.label ?? "");
+}
+
+/**
+ * 계약 연동 업체 필드 잠금 — 같은 양식의 계약 검색이 계약상대(counterpartyName)로 채우는 업체 필드는
+ * 계약을 '미등록 용역(직접 입력)'으로 둔 경우에만 직접 검색·입력할 수 있다(2026-10-30 사용자 지시).
+ * 잠겨야 하면 입력 칸에 보일 안내 문구를, 아니면 null 을 돌려준다.
+ */
+function contractLockHint(f: ApprovalFieldDef, allFields: ApprovalFieldDef[], allValues: Values): string | null {
+  if (isPlaceField(f)) return null;
+  const src = allFields.find(
+    (x) => x.type === "contract_select" && x.fillMap?.some((r) => r.source === "counterpartyName" && r.target === f.key),
+  );
+  if (!src) return null;
+  const cv = allValues[src.key];
+  if (cv && typeof cv === "object" && (cv as ContractValue).manual) return null;
+  return `${src.label} 선택 시 자동 입력 (미등록 용역이면 직접 입력)`;
 }
 
 function FieldCell({
@@ -172,6 +204,7 @@ function FieldCell({
     );
   }
   const autoFilled = !readOnly && isAutoFilled(f, allFields, allValues);
+  const lockHint = readOnly ? null : contractLockHint(f, allFields, allValues);
   return (
     <div className="flex min-w-0 border-t md:border-t-0 md:border-l first:border-l-0 first:border-t-0 cd-border-c" style={{ flex: span }}>
       <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-semibold cd-surface-bg cd-text flex items-center">
@@ -187,9 +220,10 @@ function FieldCell({
           value={value}
           onSet={onSet}
           onFill={onFill}
-          readOnly={readOnly || autoFilled}
+          readOnly={readOnly || autoFilled || lockHint != null}
           allFields={allFields}
           allValues={allValues}
+          lockHint={lockHint ?? undefined}
         />
       </div>
     </div>
@@ -204,6 +238,7 @@ function FieldInput({
   readOnly,
   allFields,
   allValues,
+  lockHint,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
@@ -212,13 +247,20 @@ function FieldInput({
   readOnly?: boolean;
   allFields: ApprovalFieldDef[];
   allValues: Values;
+  lockHint?: string;
 }) {
   const dis = readOnly === true;
   const base = "cd-input w-full text-[13px]";
   switch (f.type) {
     case "text": {
       return (
-        <input className={base} disabled={dis} placeholder={f.placeholder} value={String(value ?? "")} onChange={(e) => onSet(e.target.value)} />
+        <input
+          className={base}
+          disabled={dis}
+          placeholder={lockHint ?? f.placeholder}
+          value={String(value ?? "")}
+          onChange={(e) => onSet(e.target.value)}
+        />
       );
     }
     case "dept_select":
@@ -303,6 +345,38 @@ function FieldInput({
       const v = (value ?? {}) as { from?: string; to?: string };
       // singleDay: 1일 1건 양식(초과근무 신청 등) — 날짜 하나만 받고 to=from 으로 저장한다.
       if (f.singleDay) {
+        // 같은 양식에 시간 범위가 있으면(초과근무 신청) 근무일 옆에 [익일 야간] — 체크해야만 종료가 시작보다
+        // 이른(자정을 넘기는) 시간을 받는다. 표시는 시간 범위 값의 overnight 로 저장한다(2026-10-31 사용자 지시).
+        const rangeField = allFields.find((x) => x.type === "time_range");
+        if (rangeField) {
+          const range = parseTimeRange(allValues[rangeField.key]);
+          return (
+            <div className="flex items-center gap-2.5 flex-wrap w-full">
+              <AutoDateInput
+                className="cd-input flex-1 min-w-[160px] text-[13px]"
+                disabled={dis}
+                value={v.from ?? ""}
+                onChange={(from) => onSet({ from, to: from })}
+              />
+              <label
+                className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0"
+                title="자정을 넘겨 다음 날까지 이어지는 근무일 때만 체크합니다"
+              >
+                <input
+                  type="checkbox"
+                  disabled={dis}
+                  checked={range.overnight === true}
+                  onChange={(e) => {
+                    const { overnight: _drop, ...rest } = range;
+                    void _drop;
+                    onFill(rangeField.key, e.target.checked ? { ...rest, overnight: true } : rest);
+                  }}
+                />
+                익일 야간
+              </label>
+            </div>
+          );
+        }
         return (
           <AutoDateInput className={base} disabled={dis} value={v.from ?? ""} onChange={(from) => onSet({ from, to: from })} />
         );
@@ -316,7 +390,9 @@ function FieldInput({
       );
     }
     case "company_select":
-      return <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} allFields={allFields} />;
+      return (
+        <CompanySelectInput field={f} value={value} onSet={onSet} onFill={onFill} readOnly={dis} allFields={allFields} lockHint={lockHint} />
+      );
     case "contract_select": {
       // 같은 양식에 업체 검색(company_select) 필드가 있고 업체가 선택돼 있으면, 키워드 검색 대신
       // 그 업체와 계약한 최근 3년 이내 계약 리스트를 보여준다(없으면 기존 키워드 검색 유지).
@@ -409,7 +485,10 @@ function RichTextInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: 
  */
 function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
   const v: ApprovalTimeRange = parseTimeRange(value);
-  const minutes = timeRangeMinutes(value);
+  // 입력 중에는 strict — 익일 야간 체크 없이 종료가 시작보다 이르면 시간을 내지 않고 안내한다.
+  // 열람(readOnly)은 구문서(표시 없음)를 예전처럼 자정 넘김으로 보여 준다.
+  const minutes = timeRangeMinutes(value, { strict: !readOnly });
+  const invalid = !readOnly && timeRangeInvalid(value);
   const base = "cd-input w-full text-[13px]";
   return (
     <div className="flex items-center gap-1.5 w-full">
@@ -430,7 +509,16 @@ function TimeRangeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
       />
       {minutes != null && (
         <span className="text-[11px] cd-text-faint shrink-0 whitespace-nowrap">
+          {v.overnight ? "익일 · " : ""}
           {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ""}
+        </span>
+      )}
+      {invalid && (
+        <span
+          className="text-[11px] cd-error-text shrink-0 whitespace-nowrap"
+          title="자정을 넘겨 다음 날까지 이어지는 근무면 근무일 옆 [익일 야간]을 체크하세요"
+        >
+          종료가 시작보다 빠름
         </span>
       )}
     </div>
@@ -467,6 +555,7 @@ function CompanySelectInput({
   onFill,
   readOnly,
   allFields,
+  lockHint,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
@@ -474,23 +563,29 @@ function CompanySelectInput({
   onFill: (key: string, value: unknown) => void;
   readOnly?: boolean;
   allFields: ApprovalFieldDef[];
+  /** 계약 연동으로 잠긴 경우의 안내 문구 — 있으면 검색·직접 입력 체크를 숨긴다. */
+  lockHint?: string;
 }) {
   const v: CompanyValue =
     value && typeof value === "object" ? (value as CompanyValue) : { name: String(value ?? "") };
   const [options, setOptions] = useState<FacilityOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(boxRef, open, () => setOpen(false));
 
   useEffect(() => {
     const q = (v.name ?? "").trim();
     // 직접 입력 모드·이미 선택됨·2자 미만이면 검색하지 않는다
-    if (v.manual || v.facilityId || q.length < 2) {
+    if (readOnly || v.manual || v.facilityId || q.length < 2) {
       setOptions([]);
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ q, limit: "15", sort: "name" });
-        const res = await fetch(`/api/facilities?${params.toString()}`, { cache: "no-store", signal: controller.signal });
+        // 결재 전용 검색 — /api/facilities 는 facility.view 권한이 없는 직원 계정에서 403 이 났다.
+        const params = new URLSearchParams({ q, limit: "15" });
+        const res = await fetch(`/api/approval/facility-search?${params.toString()}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) return;
         const json = (await res.json()) as { items?: FacilityOption[] };
         setOptions(json.items ?? []);
@@ -502,7 +597,7 @@ function CompanySelectInput({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [v.name, v.manual, v.facilityId]);
+  }, [v.name, v.manual, v.facilityId, readOnly]);
 
   const pick = (o: FacilityOption) => {
     onSet({ name: o.companyName, facilityId: o.facilityId, manual: false });
@@ -514,39 +609,47 @@ function CompanySelectInput({
       if (val) onFill(rule.target, buildFillValue(allFields.find((x) => x.key === rule.target), val));
     }
     setOptions([]);
+    setOpen(false);
   };
 
   return (
-    <div className="w-full relative">
+    <div ref={boxRef} className="w-full relative">
       <div className="flex items-center gap-2.5 flex-wrap">
         <input
           className="cd-input flex-1 min-w-[160px] text-[13px]"
           disabled={readOnly}
-          placeholder={f.placeholder ?? (v.manual ? "업체명 직접 입력" : "업체명 검색(2자 이상)")}
+          placeholder={lockHint ?? f.placeholder ?? (v.manual ? "업체명 직접 입력" : "업체명 검색(2자 이상)")}
           value={v.name ?? ""}
-          onChange={(e) => onSet({ ...v, name: e.target.value, facilityId: undefined })}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            onSet({ ...v, name: e.target.value, facilityId: undefined });
+            setOpen(true);
+          }}
         />
-        <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0" title="계약·등록되지 않은 컨택 중 업체는 직접 입력합니다">
-          <input
-            type="checkbox"
-            disabled={readOnly}
-            checked={v.manual === true}
-            onChange={(e) => {
-              onSet({ name: v.name ?? "", manual: e.target.checked, facilityId: undefined });
-              setOptions([]);
-            }}
-          />
-          미계약 업체(직접 입력)
-        </label>
+        {!lockHint && (
+          <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0" title="계약·등록되지 않은 컨택 중 업체는 직접 입력합니다">
+            <input
+              type="checkbox"
+              disabled={readOnly}
+              checked={v.manual === true}
+              onChange={(e) => {
+                onSet({ name: v.name ?? "", manual: e.target.checked, facilityId: undefined });
+                setOptions([]);
+              }}
+            />
+            {isPlaceField(f) ? "목록에 없는 곳(직접 입력)" : "미계약 업체(직접 입력)"}
+          </label>
+        )}
       </div>
-      {v.facilityId && !v.manual && <p className="text-[11px] cd-text-primary mt-0.5">선택됨: {v.name}</p>}
-      {options.length > 0 && !v.facilityId && !v.manual && !readOnly && (
+      {v.facilityId && !v.manual && !lockHint && <p className="text-[11px] cd-text-primary mt-0.5">선택됨: {v.name}</p>}
+      {open && options.length > 0 && !v.facilityId && !v.manual && !readOnly && (
         <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-52 overflow-y-auto">
           {options.map((o) => (
             <button
               key={o.facilityId}
               type="button"
               className="w-full px-3 py-2 text-left text-[13px] hover:bg-[color:var(--cd-surface)]"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(o)}
             >
               <span className="cd-text">{o.companyName}</span>
@@ -613,7 +716,10 @@ function ContractSelectInput({
   const [options, setOptions] = useState<ContractOption[]>([]);
   // 업체 연동 모드 — 선택 업체의 최근 3년 계약 리스트(포커스 시 표시)
   const [companyList, setCompanyList] = useState<ContractOption[] | null>(null);
+  // 목록 열림 — 포커스·입력 시 열고, 바깥 클릭·Tab·Esc 로 닫는다(두 모드 공통).
   const [focused, setFocused] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(boxRef, focused, () => setFocused(false));
   const linkedFacilityId = companyFacility?.facilityId ?? null;
 
   // 키워드 검색 모드(업체 미연동 시에만)
@@ -684,9 +790,9 @@ function ContractSelectInput({
 
   // 표시할 리스트 — 연동 모드: 최근 3년 계약(입력 텍스트로 필터), 검색 모드: 키워드 결과
   const listToShow: ContractOption[] = (() => {
-    if (v.contractId || v.manual || readOnly) return [];
+    if (v.contractId || v.manual || readOnly || !focused) return [];
     if (linkedFacilityId) {
-      if (!focused || !companyList) return [];
+      if (!companyList) return [];
       const q = (v.title ?? "").trim().toLowerCase();
       return q ? companyList.filter((o) => o.contractTitle.toLowerCase().includes(q)) : companyList;
     }
@@ -694,7 +800,7 @@ function ContractSelectInput({
   })();
 
   return (
-    <div className="w-full relative">
+    <div ref={boxRef} className="w-full relative">
       <div className="flex items-center gap-2.5 flex-wrap">
         <input
           className="cd-input flex-1 min-w-[160px] text-[13px]"
@@ -709,11 +815,10 @@ function ContractSelectInput({
           }
           value={v.title ?? ""}
           onFocus={() => setFocused(true)}
-          onBlur={() => {
-            // 리스트 항목 클릭(mousedown→click)이 끝난 뒤 닫히도록 지연
-            setTimeout(() => setFocused(false), 180);
+          onChange={(e) => {
+            onSet({ ...v, title: e.target.value, contractId: undefined });
+            setFocused(true);
           }}
-          onChange={(e) => onSet({ ...v, title: e.target.value, contractId: undefined })}
         />
         <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer shrink-0" title="계약 전 업무(제안서·발표자료 등)는 직접 입력합니다">
           <input
@@ -723,6 +828,15 @@ function ContractSelectInput({
             onChange={(e) => {
               onSet({ title: v.title ?? "", manual: e.target.checked, contractId: undefined });
               setOptions([]);
+              // 직접 입력을 끄면 업체명은 다시 계약에서 채워야 하므로 비운다(잠긴 칸에 수기 값이 남지 않게).
+              if (!e.target.checked) {
+                for (const rule of f.fillMap ?? []) {
+                  const target = allFields.find((x) => x.key === rule.target);
+                  if (rule.source === "counterpartyName" && target?.type === "company_select" && !isPlaceField(target)) {
+                    onFill(rule.target, null);
+                  }
+                }
+              }
             }}
           />
           미등록 용역(직접 입력)
@@ -796,6 +910,14 @@ function ContactSelectInput({
   const legacyText = !Array.isArray(value) && typeof value === "string" ? value : "";
   const [q, setQ] = useState("");
   const [options, setOptions] = useState<ContactOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(boxRef, open, () => setOpen(false));
+  // 목록에 없는 사람은 바로 등록 — 전 직원 contact.edit(2026-10-30 사용자 결정). 삭제는 여기서 하지 않는다.
+  const { data: session } = useSession();
+  const perms = permsOf(session?.user);
+  const canCreate = hasPerm(perms, "contact.edit") || hasPerm(perms, "facility.edit");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const term = q.trim();
@@ -847,13 +969,17 @@ function ContactSelectInput({
   }
 
   return (
-    <div className="w-full relative">
+    <div ref={boxRef} className="w-full relative">
       <div className="flex items-center gap-1.5 flex-wrap">
         <input
           className="cd-input flex-1 min-w-[180px] text-[13px]"
           placeholder={f.placeholder ?? "담당자 검색(성명·업체명, 2자 이상)"}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
         />
         {people.map((p) => (
           <span key={p.id} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
@@ -868,14 +994,38 @@ function ContactSelectInput({
             기존 입력: {legacyText}
           </span>
         )}
+        {canCreate && (
+          <button
+            type="button"
+            className="text-[12px] cd-text-primary flex items-center gap-0.5 shrink-0"
+            title="목록에 없는 담당자를 등록하고 바로 접견인으로 넣습니다"
+            onClick={() => setCreating(true)}
+          >
+            <Plus className="w-3.5 h-3.5" /> 새 담당자
+          </button>
+        )}
       </div>
-      {options.length > 0 && (
+      {creating && (
+        <ContactCreateModal
+          initialName={q.trim()}
+          onClose={() => setCreating(false)}
+          onCreated={(c) => {
+            if (!people.some((p) => p.id === c.id)) {
+              onSet([...people, { id: c.id, name: c.personName, title: c.title, facilityName: c.facilityName }]);
+            }
+            setQ("");
+            setCreating(false);
+          }}
+        />
+      )}
+      {open && options.length > 0 && (
         <div className="absolute z-10 top-full mt-1 left-0 right-0 rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-popover)] max-h-52 overflow-y-auto">
           {options.map((o) => (
             <button
               key={o.id}
               type="button"
               className="w-full px-3 py-2 text-left text-[13px] hover:bg-[color:var(--cd-surface)]"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(o)}
             >
               <span className="cd-text">

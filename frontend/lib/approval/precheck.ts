@@ -9,6 +9,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getMyLeaveRemaining } from "@/lib/approval/leave";
+import { isUnusedVehicleField } from "@/lib/approval/trip";
 
 export type PrecheckLevel = "block" | "warn" | "info";
 export interface PrecheckFinding {
@@ -181,6 +182,9 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
         });
       }
     } else if (p.kind === "required_field" && p.fieldKey) {
+      // 법인차량을 고르지 않은 출장의 이용차량·이용시간은 필수 정책 대상에서 뺀다(2026-10-30).
+      const pf = fields.find((x) => x.key === p.fieldKey);
+      if (pf && isUnusedVehicleField(pf, fields, values)) continue;
       const val = values[p.fieldKey];
       const empty = val == null || (typeof val === "string" && !val.trim()) || (Array.isArray(val) && val.length === 0);
       if (empty) {

@@ -26,6 +26,7 @@ export async function register() {
     __mailImportTimer?: ReturnType<typeof setInterval>;
     __catalogRefreshTimer?: ReturnType<typeof setInterval>;
     __integrationWatchTimer?: ReturnType<typeof setInterval>;
+    __intelBriefingTimer?: ReturnType<typeof setInterval>;
   };
   const port = process.env.PORT ?? "3000";
   const callTick = async (path: string, tag: string) => {
@@ -43,6 +44,13 @@ export async function register() {
     const tick = () => callTick("/api/internal/bid-notify-tick", "bid-notify");
     g.__bidNotifyTimer = setInterval(tick, 5 * 60 * 1000);
     setTimeout(tick, 30 * 1000); // 기동 직후 1회(서버 리슨 대기 여유 30초)
+  }
+
+  // 정기 영업 브리핑: 공유 next-due 캐시로 유휴 틱의 DB 접근을 생략한다.
+  if (process.env.INTEL_BRIEFING_ENABLED === "true" && !g.__intelBriefingTimer) {
+    const briefingTick = () => callTick("/api/internal/intel-briefing-tick", "intel-briefing");
+    g.__intelBriefingTimer = setInterval(briefingTick, 5 * 60 * 1000);
+    setTimeout(briefingTick, 90 * 1000);
   }
 
   // 공공입찰 수집 — 5분마다 체크, 소스별 설정 시각(KST, 기본 07시)에 1회 수집(일 1회 멱등).

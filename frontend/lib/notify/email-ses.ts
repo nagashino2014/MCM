@@ -11,6 +11,7 @@ export interface ChannelSendResult {
   skipped?: string;
   error?: string;
   sentTo?: number;
+  providerId?: string;
 }
 
 let client: SESClient | null = null;
@@ -73,7 +74,7 @@ export async function sendNotifyEmail(input: {
   if (!to.length) return { ok: false, skipped: "수신자 이메일 없음" };
   try {
     client ??= new SESClient({ region: process.env.AWS_REGION ?? "ap-northeast-2" });
-    await client.send(
+    const result = await client.send(
       new SendEmailCommand({
         Source: from,
         Destination: { ToAddresses: to },
@@ -83,7 +84,7 @@ export async function sendNotifyEmail(input: {
         },
       })
     );
-    return { ok: true, sentTo: to.length };
+    return { ok: true, sentTo: to.length, providerId: result.MessageId };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

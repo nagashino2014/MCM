@@ -1,0 +1,106 @@
+// 실제 공개 자료 발행본을 로컬 시험 수신자 u2에게만 공유한다. 외부 푸시는 차단 상태를 검증한다.
+import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { Client } from "pg";
+const base = "http://127.0.0.1:4174";
+const output = resolve(".next/local-intelligence-demo/shares", new Date().toISOString().replace(/[-:.TZ]/g, ""));
+await mkdir(output, { recursive: true });
+const record = { status: "running", startedAt: new Date().toISOString(), checks: [], screenshots: [] };
+const check = name => { record.checks.push(name); console.log(`PASS: ${name}`); };
+const api = async (path, options = {}) => { const response = await fetch(base + path, { ...options, headers: { origin: base, "content-type": "application/json", ...options.headers } }); const body = await response.json(); assert(response.ok, `${response.status}: ${JSON.stringify(body)}`); return body; };
+let browser, page, db;
+try {
+  const health = await api("/api/local-demo/health");
+  assert.equal(health.mode, "real"); assert.equal(health.database, "intel_live");
+  const run = (await api("/api/sales/rag/runs")).runs.find(item => item.status === "published");
+  assert(run, "기존 발행 보고서가 필요합니다. 이 검증에서는 생성하지 않습니다.");
+  const published = await api(`/api/sales/rag/runs/${run.runId}`);
+  const briefingId = published.briefing.briefingId;
+  const endpoint = `/api/sales/rag/briefings/${briefingId}/share`;
+  const snapshot = (await api(`${endpoint}?recipients=1`)).snapshot;
+  const recipient = snapshot.employees.find(item => item.userId === "u2");
+  assert(recipient?.name.includes("시험계정"));
+  record.briefingId = briefingId; record.runId = run.runId; record.recipient = { userId: "u2", name: recipient.name };
+  db = new Client({ connectionString: "postgresql://mcm_intel_test@127.0.0.1:55439/intel_live", ssl: false, options: "-c default_transaction_read_only=on" });
+  await db.connect();
+  const identity = (await db.query("SELECT current_database() AS name,host(inet_server_addr()) AS host,current_setting('default_transaction_read_only') AS readonly")).rows[0];
+  assert.deepEqual(identity, { name: "intel_live", host: "127.0.0.1", readonly: "on" });
+  const { chromium } = await import(pathToFileURL(process.env.MCM_PLAYWRIGHT_PATH || resolve("../scraper/node_modules/playwright/index.mjs")).href);
+  browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
+  const blocked = [], errors = [];
+  await context.route("**/*", async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.origin !== base || (!["GET", "HEAD"].includes(request.method()) && !(request.method() === "POST" && url.pathname === endpoint))) { blocked.push(`${request.method()} ${url.pathname}`); await route.abort(); return; }
+    await route.continue();
+  });
+  context.on("page", created => created.on("pageerror", error => errors.push(error.message)));
+  page = await context.newPage(); page.setDefaultTimeout(20000);
+  await page.goto(`${base}/sales/rag?tab=scheduled&runId=${run.runId}`);
+  await page.getByRole("button", { name: "공유", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "브리핑 공유", exact: true });
+  const employee = modal.getByRole("button", { name: new RegExp(recipient.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
+  if (!await employee.count()) {
+    const dept = snapshot.departments.find(item => item.deptId === recipient.deptId);
+    await modal.getByRole("button").filter({ hasText: dept.deptName }).click();
+  }
+  await employee.click();
+  for (const name of ["앱 메일함", "모바일 푸시", "메신저"]) await modal.getByRole("checkbox", { name, exact: true }).check();
+  const beforePath = resolve(output, "01-share-options.png"); await page.screenshot({ path: beforePath, fullPage: true }); record.screenshots.push(beforePath);
+  const posted = page.waitForResponse(response => new URL(response.url()).pathname === endpoint && response.request().method() === "POST");
+  const popupPromise = context.waitForEvent("page", { timeout: 20000 }).catch(() => null);
+  await modal.getByRole("button", { name: "공유 (1명)", exact: true }).click();
+  const response = await posted;
+  const result = await response.json(); assert(response.ok(), JSON.stringify(result));
+  record.request = response.request().postDataJSON(); record.result = result;
+  assert.deepEqual(record.request.recipients.map(item => item.userId), ["u2"]);
+  assert.equal(result.shared, 1); assert.equal(result.summary.sent, 3); assert.equal(result.summary.skipped, 1); assert.equal(result.ok, false);
+  for (const channel of ["shared", "inbox", "messenger"]) assert.equal(result.deliveries.find(item => item.channel === channel).status, "sent");
+  const push = result.deliveries.find(item => item.channel === "push"); assert.equal(push.status, "skipped"); assert.match(push.error, /로컬 실증/);
+  await modal.getByText(push.error, { exact: true }).waitFor();
+  const resultPath = resolve(output, "02-share-results.png"); await page.screenshot({ path: resultPath, fullPage: true }); record.screenshots.push(resultPath);
+  check("실제 UI에서 시험 수신자 선택·공유목록/메일/메신저 저장 및 외부 푸시 생략 표시");
+  const inbox = result.deliveries.find(item => item.channel === "inbox");
+  const mail = (await db.query("SELECT m.message_id,m.subject,m.body_text,m.body_html,b.user_id FROM mail_messages m JOIN mailboxes b ON b.mailbox_id=m.mailbox_id WHERE m.message_id=$1", [inbox.providerId])).rows[0];
+  assert.equal(mail?.user_id, "u2"); assert(mail.body_text.includes(briefingId));
+  assert.match(mail.body_html ?? "", /<a href="http:\/\/127\.0\.0\.1:4174\/sales\/rag\?briefingId=/);
+  record.mail = mail;
+  const messenger = result.deliveries.find(item => item.channel === "messenger");
+  assert(messenger.roomId > 0);
+  const chat = await api(`/api/local-demo/chat/${messenger.roomId}`);
+  const messageId = Number(messenger.providerId.split(":")[2]);
+  const message = chat.messages.find(item => item.messageId === messageId);
+  assert.equal(message.sharedRecord.type, "intel_briefing"); assert.equal(message.sharedRecord.id, briefingId); assert.equal(message.sharedRecord.href, `/sales/rag?briefingId=${briefingId}`);
+  record.chat = { roomId: messenger.roomId, message };
+  const popup = await popupPromise;
+  assert(popup, "메신저 공유 결과에서 대화방 창이 열려야 합니다.");
+  await popup.waitForURL(`${base}/m-app/chat/${messenger.roomId}`);
+  const card = popup.locator(`a[href="${message.sharedRecord.href}"]`).last(); await card.waitFor();
+  const chatPath = resolve(output, "03-chat-link-card.png"); await popup.screenshot({ path: chatPath, fullPage: true }); record.screenshots.push(chatPath);
+  const previewPromise = context.waitForEvent("page"); await card.click(); const preview = await previewPromise;
+  await preview.waitForURL(base + message.sharedRecord.href);
+  await preview.getByRole("button", { name: "PDF 다운로드", exact: true }).waitFor();
+  const reportPath = resolve(output, "04-shared-document-deeplink.png"); await preview.screenshot({ path: reportPath, fullPage: true }); record.screenshots.push(reportPath);
+  check("실제 DB 메일·DM 링크 메타데이터와 메신저 창·문서 딥링크 열람");
+  assert.deepEqual(await api(endpoint, { method: "POST", body: JSON.stringify(record.request) }), result);
+  const after = await api(`/api/local-demo/chat/${messenger.roomId}`);
+  assert.equal(after.messages.filter(item => item.messageId === messageId).length, 1); assert.equal(after.messages.length, chat.messages.length);
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM mail_messages WHERE message_id=$1", [inbox.providerId])).rows[0].n, 1);
+  const acl = (await db.query("SELECT * FROM intel_rag_briefing_shares WHERE briefing_id=$1 AND recipient_user_id='u2'", [briefingId])).rows;
+  assert.equal(acl.length, 1);
+  record.explicitShare = acl[0].explicit_share ?? null;
+  assert.equal(acl[0].explicit_share, true);
+  check("같은 UI 요청 재전송 시 성공 채널·DM·메일 중복 없음");
+  assert.deepEqual(errors, []); assert.deepEqual(blocked, []);
+  record.status = "passed";
+} catch (error) {
+  record.status = "failed"; record.error = error instanceof Error ? error.stack : String(error); console.error(record.error); process.exitCode = 1;
+  if (page) await page.screenshot({ path: resolve(output, "failure.png"), fullPage: true }).catch(() => {});
+} finally {
+  record.finishedAt = new Date().toISOString();
+  await writeFile(resolve(output, "result.json"), JSON.stringify(record, null, 2) + "\n");
+  await Promise.allSettled([browser?.close(), db?.end()]);
+  console.log(`검증 기록: ${resolve(output, "result.json")}`);
+}

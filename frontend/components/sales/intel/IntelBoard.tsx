@@ -20,6 +20,8 @@ import { DELETE_REASONS, GradeTag, MatchTypeTag, RelevanceTag, SOURCE_LABEL, SOU
 import { IntelSignalModal } from "./IntelSignalModal";
 import { IntelStatsPanel, type IntelStatsData, type StatsPeriod } from "./IntelStatsPanel";
 import { IntelCollectSettingsPanel, type CollectStateRow } from "./IntelCollectSettingsPanel";
+import { OfficialSourcesPanel } from "./OfficialSourcesPanel";
+import "./intelligence.css";
 
 const PAGE_SIZE = 20;
 
@@ -433,6 +435,9 @@ export function IntelBoard() {
             collectState={collectState}
             onCollected={() => { reload(); reloadStats(); }}
           />
+
+          {/* 공식 정보원(KOSIS·법령·KDI·기업 발표) — RAG & 영업 발굴에서 운영 설정을 이곳으로 옮김(계획서 §3.1) */}
+          <div className="intel-ui"><OfficialSourcesPanel canEdit={canEdit} /></div>
         </div>
 
         {/* ── 우측: 수집현황(C-2) ── */}

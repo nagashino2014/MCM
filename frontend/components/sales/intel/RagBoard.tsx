@@ -6,23 +6,25 @@
 
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookOpenText, Database, RefreshCw, Send, Sparkles, Target, Trash2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { hasPerm, permsOf } from "@/lib/auth/perms";
+import { hasAnyPerm, hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
-import type { Briefing, IntelSignal } from "./intel-shared";
+import type { Briefing, BriefingCapabilities, IntelSignal } from "./intel-shared";
 import { GradeTag, RelevanceTag, SOURCE_LABEL, SOURCE_TABS, TypeTag } from "./intel-shared";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { BriefingReportView } from "./BriefingReportView";
+import { safeIntelUrl } from "./intelligence-client";
 
 // ── 서버 응답 타입(rag-queries 와 동일 shape) ──
 
 interface RagStatusData {
+  capabilities?: BriefingCapabilities;
   embeddingReady: boolean;
   briefingReady: boolean;
   totalSignals: number;
@@ -62,14 +64,19 @@ const EXAMPLE_QUESTIONS = [
 
 // ── 메인 보드 ──
 
-export function RagBoard() {
+/** hideDiscovery — RAG & 영업 발굴의 브리핑 탭에 넣을 때 우측 '영업 발굴 후보'를 숨긴다(영업 발굴 탭의 수집 신호 후보로 이동). */
+export function RagBoard({ embedded = false, hideDiscovery = false }: { embedded?: boolean; hideDiscovery?: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedBriefingId = searchParams.get("briefingId");
   const { data: session } = useSession();
   const canEdit = hasPerm(permsOf(session?.user), "sales.edit");
+  const canViewSales = hasPerm(permsOf(session?.user), "sales.view");
   const { theme } = useCdashTheme();
 
   // 현황·발굴 후보·이력
   const [status, setStatus] = useState<RagStatusData | null>(null);
+  const canCreate = status?.capabilities?.canCreate ?? hasAnyPerm(permsOf(session?.user), ["sales.edit", "intel.briefing.create"]);
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
   const [briefings, setBriefings] = useState<Briefing[]>([]);
   const [sharedBriefings, setSharedBriefings] = useState<SharedBriefingItem[]>([]);
@@ -81,12 +88,13 @@ export function RagBoard() {
     } catch { /* 현황 실패는 화면 유지 */ }
   }, []);
   const reloadCandidates = useCallback(async () => {
+    if (!canViewSales || hideDiscovery) return;
     try {
       const res = await fetch("/api/sales/rag/discovery", { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) setCandidates(Array.isArray(data.candidates) ? data.candidates : []);
     } catch { /* noop */ }
-  }, []);
+  }, [canViewSales, hideDiscovery]);
   const reloadBriefings = useCallback(async () => {
     try {
       const res = await fetch("/api/sales/rag/briefings?limit=20", { cache: "no-store" });
@@ -129,10 +137,18 @@ export function RagBoard() {
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Briefing | null>(null);
+  useEffect(() => {
+    if (!requestedBriefingId) return;
+    let active = true;
+    void fetch(`/api/sales/rag/briefings/${encodeURIComponent(requestedBriefingId)}`, { cache: "no-store" }).then(async response => {
+      const data = await response.json(); if (!response.ok) throw new Error(data.error ?? "공유 브리핑을 열지 못했습니다."); if (active) { setCurrent(data.briefing); setGenError(null); }
+    }).catch(error => { if (active) setGenError(error.message); });
+    return () => { active = false; };
+  }, [requestedBriefingId]);
 
   const generate = async (q?: string) => {
     const text = (q ?? question).trim();
-    if (!text || genBusy) return;
+    if (!text || genBusy || !canCreate) return;
     setGenBusy(true); setGenError(null);
     try {
       const filters: Record<string, string> = {};
@@ -195,6 +211,18 @@ export function RagBoard() {
   // ── 신호 모달(출처·발굴 후보 공용) — 상세 API 로 IntelSignal 확보 후 오픈 ──
   const [selected, setSelected] = useState<IntelSignal | null>(null);
   const openSignal = async (signalId: string) => {
+    const source = current?.sources.find(item => item.signalId === signalId);
+    if (signalId.startsWith("project:")) {
+      if (canViewSales) router.push(`/sales/rag?tab=discovery&projectId=${encodeURIComponent(signalId.slice(8))}`);
+      else setGenError("프로젝트 상세를 열려면 영업 열람 권한이 필요합니다.");
+      return;
+    }
+    if (!canViewSales || signalId.startsWith("official:")) {
+      const url = safeIntelUrl(source?.url);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else setGenError("열 수 있는 원문 링크가 없습니다.");
+      return;
+    }
     try {
       const res = await fetch(`/api/sales/intel/signals/${signalId}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
@@ -210,14 +238,14 @@ export function RagBoard() {
 
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
-      <CdPageHeader
+      {!embedded && <CdPageHeader
         icon={<BookOpenText className="w-5 h-5" />}
         eyebrow="SALES & MARKETING"
         title="RAG & 영업 발굴"
         help="수집한 신호에 관해 질문하면 AI 브리핑과 영업 대상 후보를 확인할 수 있습니다."
-      />
+      />}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start">
+      <div className={`grid grid-cols-1 ${canViewSales ? "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : ""} gap-4 items-start`}>
         {/* ── 좌측: AI 브리핑 + 이력 ── */}
         <div className="flex flex-col gap-4 min-w-0">
           <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
@@ -242,7 +270,7 @@ export function RagBoard() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); if (canEdit) generate(); }
+                  if (e.key === "Enter") { e.preventDefault(); if (canCreate) generate(); }
                 }}
               />
               <select className="cd-select" style={{ width: "auto" }} value={fSource} onChange={(e) => setFSource(e.target.value)}>
@@ -264,8 +292,8 @@ export function RagBoard() {
               <DigitDateInput className="cd-input" style={{ width: 112 }} value={fTo} onChange={setFTo} />
               <button
                 className="cd-btn cd-btn-primary cd-btn-sm"
-                disabled={genBusy || !question.trim() || !canEdit}
-                title={canEdit ? "브리핑 생성" : "편집 권한이 필요합니다"}
+                disabled={genBusy || !question.trim() || !canCreate}
+                title={canCreate ? "브리핑 생성" : "브리핑 생성 권한이 필요합니다"}
                 onClick={() => generate()}
               >
                 {genBusy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
@@ -296,7 +324,8 @@ export function RagBoard() {
             <BriefingReportView
               briefing={current}
               theme={theme}
-              canEdit={canEdit}
+              canEdit={canCreate && current.canManage === true}
+              canOpenProject={canViewSales}
               onClose={() => setCurrent(null)}
               onOpenSignal={openSignal}
               onBriefingUpdate={(b) => { setCurrent(b); reloadBriefings(); }}
@@ -357,7 +386,7 @@ export function RagBoard() {
                         {b.createdAt?.slice(0, 16).replace("T", " ")} · 출처 {b.sources?.length ?? 0}건
                       </p>
                     </button>
-                    {canEdit && (
+                    {b.canManage === true && (
                       <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" title="삭제" onClick={() => removeBriefing(b.briefingId)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -370,7 +399,7 @@ export function RagBoard() {
         </div>
 
         {/* ── 우측: 벡터 DB 현황 + 영업 발굴 후보 ── */}
-        <div className="flex flex-col gap-4 min-w-0">
+        {canViewSales && <div className="flex flex-col gap-4 min-w-0">
           <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
@@ -437,7 +466,7 @@ export function RagBoard() {
           </section>
 
           {/* 영업 발굴 후보 */}
-          <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
+          {!hideDiscovery && <section className="cd-card-bg rounded-2xl border cd-border-c p-4">
             <div className="flex items-center gap-2 mb-1">
               <Target className="w-4 h-4 cd-text-faint" />
               <h2 className="cd-text text-[0.95rem] font-extrabold">영업 발굴 후보</h2>
@@ -478,8 +507,8 @@ export function RagBoard() {
                 ))}
               </div>
             )}
-          </section>
-        </div>
+          </section>}
+        </div>}
       </div>
 
       {selected && (

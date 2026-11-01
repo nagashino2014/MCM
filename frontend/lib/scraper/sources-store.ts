@@ -66,21 +66,32 @@ function mapEndpoint(r: Record<string, unknown>): ScraperEndpointRow {
 const slugify = (s: string) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "src";
 
+// to_jsonb는 319 적용 전의 구형 스키마에서도 동작한다. 관리형 source는 구형 수집기 설정으로 바꾸지 않는다.
+const GENERIC_SOURCE_SQL = "(to_jsonb(s)->>'official_provider') IS NULL AND s.source_id NOT LIKE 'legacy_%'";
+async function requireGenericSource(db: PgDatabase, sourceId: string): Promise<void> {
+  const rows = rowsToObjects(await db.exec("SELECT to_jsonb(s)->>'official_provider' AS official_provider,s.source_id FROM scraper_sources s WHERE source_id=$1 FOR UPDATE", [sourceId]));
+  if (rows[0] && (rows[0].official_provider != null || String(rows[0].source_id).startsWith("legacy_"))) throw Object.assign(new Error("이 정보원은 공식 정보원 화면에서 관리하세요."), { status: 409 });
+}
+async function requireGenericEndpoint(db: PgDatabase, endpointId: string): Promise<void> {
+  const rows = rowsToObjects(await db.exec("SELECT source_id FROM scraper_endpoints WHERE endpoint_id=$1", [endpointId]));
+  if (rows[0]) await requireGenericSource(db, String(rows[0].source_id));
+}
+
 // ── 소스 ──────────────────────────────────────────
 export async function listSources(purpose?: ScraperPurpose): Promise<ScraperSourceRow[]> {
   const db = await getDb();
   const rows = purpose
     ? rowsToObjects(
-        await db.exec("SELECT * FROM scraper_sources WHERE purpose = $1 ORDER BY created_at DESC", [purpose])
+        await db.exec(`SELECT s.* FROM scraper_sources s WHERE purpose = $1 AND ${GENERIC_SOURCE_SQL} ORDER BY created_at DESC`, [purpose])
       )
-    : rowsToObjects(await db.exec("SELECT * FROM scraper_sources ORDER BY created_at DESC"));
+    : rowsToObjects(await db.exec(`SELECT s.* FROM scraper_sources s WHERE ${GENERIC_SOURCE_SQL} ORDER BY created_at DESC`));
   return rows.map(mapSource);
 }
 
 export async function getSource(sourceId: string): Promise<ScraperSourceRow | null> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec("SELECT * FROM scraper_sources WHERE source_id = $1", [sourceId])
+    await db.exec(`SELECT s.* FROM scraper_sources s WHERE source_id = $1 AND ${GENERIC_SOURCE_SQL}`, [sourceId])
   );
   return rows.length ? mapSource(rows[0]) : null;
 }
@@ -159,6 +170,7 @@ export async function updateSource(
   push("updated_by", updatedBy);
   vals.push(sourceId);
   await withDbWrite(async (db) => {
+    await requireGenericSource(db, sourceId);
     await db.run(`UPDATE scraper_sources SET ${sets.join(", ")} WHERE source_id = $${vals.length}`, vals);
   });
   invalidateTickCache(TICK_CACHE_BID_COLLECTORS); // enabled·batch_hour 변경이 수집 틱에 바로 반영되도록
@@ -168,13 +180,14 @@ export async function updateSource(
 export async function getSourceSecret(sourceId: string): Promise<string | null> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec("SELECT auth_secret_enc FROM scraper_sources WHERE source_id = $1", [sourceId])
+    await db.exec(`SELECT auth_secret_enc FROM scraper_sources s WHERE source_id = $1 AND ${GENERIC_SOURCE_SQL}`, [sourceId])
   );
   return decryptSecret(rows[0]?.auth_secret_enc as string | undefined);
 }
 
 export async function deleteSource(sourceId: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await requireGenericSource(db, sourceId);
     await db.run("DELETE FROM scraper_sources WHERE source_id = $1", [sourceId]); // endpoints CASCADE
   });
   invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
@@ -184,7 +197,7 @@ export async function deleteSource(sourceId: string): Promise<void> {
 export async function listEndpoints(sourceId: string): Promise<ScraperEndpointRow[]> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec("SELECT * FROM scraper_endpoints WHERE source_id = $1 ORDER BY created_at ASC", [sourceId])
+    await db.exec(`SELECT e.* FROM scraper_endpoints e JOIN scraper_sources s ON s.source_id=e.source_id WHERE e.source_id = $1 AND ${GENERIC_SOURCE_SQL} ORDER BY e.created_at ASC`, [sourceId])
   );
   return rows.map(mapEndpoint);
 }
@@ -192,7 +205,7 @@ export async function listEndpoints(sourceId: string): Promise<ScraperEndpointRo
 export async function getEndpoint(endpointId: string): Promise<ScraperEndpointRow | null> {
   const db = await getDb();
   const rows = rowsToObjects(
-    await db.exec("SELECT * FROM scraper_endpoints WHERE endpoint_id = $1", [endpointId])
+    await db.exec(`SELECT e.* FROM scraper_endpoints e JOIN scraper_sources s ON s.source_id=e.source_id WHERE endpoint_id = $1 AND ${GENERIC_SOURCE_SQL}`, [endpointId])
   );
   return rows.length ? mapEndpoint(rows[0]) : null;
 }
@@ -207,6 +220,7 @@ export async function createEndpoint(input: {
   const now = new Date().toISOString();
   const endpointId = "sep_" + crypto.randomBytes(7).toString("hex");
   return withDbWrite(async (db) => {
+    await requireGenericSource(db, input.sourceId);
     await db.run(
       `INSERT INTO scraper_endpoints (endpoint_id, source_id, name, api_config, field_mapping, sink_config, enabled, created_at, updated_at)
        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, 0, $7, $7)`,
@@ -262,6 +276,7 @@ export async function updateEndpoint(
   vals.push(new Date().toISOString());
   vals.push(endpointId);
   await withDbWrite(async (db) => {
+    await requireGenericEndpoint(db, endpointId);
     await db.run(`UPDATE scraper_endpoints SET ${sets.join(", ")} WHERE endpoint_id = $${vals.length}`, vals);
   });
   invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
@@ -269,6 +284,7 @@ export async function updateEndpoint(
 
 export async function deleteEndpoint(endpointId: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await requireGenericEndpoint(db, endpointId);
     await db.run("DELETE FROM scraper_endpoints WHERE endpoint_id = $1", [endpointId]);
   });
   invalidateTickCache(TICK_CACHE_BID_COLLECTORS);
@@ -287,7 +303,7 @@ export async function listEnabledCustomCollectors(
               s.created_at AS s_created_at, s.updated_at AS s_updated_at, s.updated_by AS s_updated_by
          FROM scraper_endpoints e
          JOIN scraper_sources s ON s.source_id = e.source_id
-        WHERE s.enabled = 1 AND e.enabled = 1 AND s.purpose = $1`,
+        WHERE s.enabled = 1 AND e.enabled = 1 AND s.purpose = $1 AND ${GENERIC_SOURCE_SQL}`,
       [purpose]
     )
   );
@@ -316,6 +332,7 @@ export const DEFAULT_BATCH_HOUR = 7;
 /** 소스의 마지막 배치 수집일(KST) 기록 — 하루 1회 멱등 판정용. */
 export async function markSourceBatchRun(sourceId: string, kstDate: string): Promise<void> {
   await withDbWrite(async (db) => {
+    await requireGenericSource(db, sourceId);
     await db.run(`UPDATE scraper_sources SET last_batch_date = $1 WHERE source_id = $2`, [kstDate, sourceId]);
   });
   // 오늘 수집 완료를 캐시에도 반영 — 남은 배치 시각 동안 틱이 DB 를 다시 열지 않는다.

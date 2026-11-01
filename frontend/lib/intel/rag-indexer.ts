@@ -6,6 +6,8 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { EMBEDDING_MODEL, embedTexts, isEmbeddingConfigured, toVectorLiteral } from "./embeddings";
 import { INTEL_SIGNAL_TYPE_LABELS, INTEL_SIGNAL_GRADE_LABELS } from "./signal-extractor";
+import { legacySignalSourceCondition } from "./official-sources-visibility";
+import { newsContentQualityCondition } from "./news-content-quality";
 
 const SOURCE_LABEL: Record<string, string> = {
   dart: "DART 전자공시",
@@ -101,6 +103,16 @@ export function buildSignalContent(row: Record<string, unknown>): string {
   return lines.filter(Boolean).join("\n").slice(0, 4000);
 }
 
+/** 검색 JOIN의 현재 원자료를 사용한다. 저장된 임베딩 본문은 표시·분석 문맥으로 재사용하지 않는다. */
+export function currentSignalContent(row: Record<string, unknown>): string {
+  return buildSignalContent({ ...row, ...parseRaw(row.signal_snapshot), facility_name: row.facility_name });
+}
+
+/** 별도 스키마 없이 실제 임베딩 입력 전체를 대조하여 정정 전 벡터의 사용을 보류한다. */
+export function isSignalEmbeddingCurrent(row: Record<string, unknown>): boolean {
+  return typeof row.content === "string" && row.content === currentSignalContent(row);
+}
+
 export interface IndexResult {
   configured: boolean; // VOYAGE_API_KEY 설정 여부
   indexed: number; // 이번 실행으로 적재한 건수
@@ -124,7 +136,7 @@ export async function indexPendingEmbeddings(batchLimit = 200): Promise<IndexRes
          FROM intel_signals s
          LEFT JOIN intel_embeddings e ON e.signal_id = s.signal_id
          LEFT JOIN facilities f ON f.facility_id = s.facility_id
-        WHERE e.signal_id IS NULL
+        WHERE e.signal_id IS NULL AND ${legacySignalSourceCondition()} AND ${newsContentQualityCondition()}
         ORDER BY s.created_at DESC
         LIMIT ${limit}`
     )
@@ -151,7 +163,7 @@ export async function indexPendingEmbeddings(batchLimit = 200): Promise<IndexRes
     await db.exec(
       `SELECT COUNT(*)::int AS remaining
          FROM intel_signals s LEFT JOIN intel_embeddings e ON e.signal_id = s.signal_id
-        WHERE e.signal_id IS NULL`
+        WHERE e.signal_id IS NULL AND ${legacySignalSourceCondition()} AND ${newsContentQualityCondition()}`
     )
   );
   return { configured: true, indexed: rows.length, remaining: Number(remainRows[0]?.remaining ?? 0) };

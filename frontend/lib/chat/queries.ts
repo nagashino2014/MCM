@@ -34,6 +34,7 @@ export interface ChatMessageRow {
   senderPhotoPath: string | null;
   kind: "text" | "file" | "image" | "system";
   body: string;
+  sharedRecord?: ChatSharedRecord | null;
   replyToMessageId: number | null;
   createdAt: string;
   deleted: boolean;
@@ -54,6 +55,23 @@ export interface ChatMessageRow {
     kind: ChatMessageRow["kind"];
     deleted: boolean;
   } | null;
+}
+
+export interface ChatSharedRecord {
+  type: "intel_briefing";
+  id: string;
+  title: string;
+  href: string;
+}
+
+/** 저장된 카드도 고정 문서 경로와 대조한다. 임의 외부 URL은 카드로 내리지 않는다. */
+export function parseChatSharedRecord(value: unknown): ChatSharedRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.type !== "intel_briefing" || typeof record.id !== "string" || !record.id || record.id.length > 160 || typeof record.title !== "string") return null;
+  const href = `/sales/rag?briefingId=${encodeURIComponent(record.id)}`;
+  if (record.href !== href) return null;
+  return { type: "intel_briefing", id: record.id, title: record.title.slice(0, 200), href };
 }
 
 export interface ChatRoomMember {
@@ -255,15 +273,15 @@ export async function listMessages(
   const rows = rowsToObjects(
     await db.exec(
       `SELECT cm.message_id, cm.room_id, cm.sender_id, cm.kind, cm.body, cm.reply_to_message_id,
-              cm.created_at, cm.deleted_at, COALESCE(e.name, u.name) AS sender_name, e.photo_public_path,
+              cm.created_at, cm.deleted_at, to_jsonb(cm)->'shared_record' AS shared_record, COALESCE(e.name, u.name) AS sender_name, e.photo_public_path,
               a.attachment_id, a.file_name, a.content_type, a.byte_size,
-              rm.kind AS reply_kind, rm.body AS reply_body, rm.deleted_at AS reply_deleted_at,
+              rm.message_id AS visible_reply_id, rm.kind AS reply_kind, rm.body AS reply_body, rm.deleted_at AS reply_deleted_at,
               COALESCE(re.name, ru.name) AS reply_sender_name, ra.file_name AS reply_file_name
          FROM chat_messages cm
          JOIN users u ON u.user_id = cm.sender_id
          LEFT JOIN employee_profiles e ON e.user_id = cm.sender_id
          LEFT JOIN chat_attachments a ON a.message_id = cm.message_id
-         LEFT JOIN chat_messages rm ON rm.message_id = cm.reply_to_message_id
+         LEFT JOIN chat_messages rm ON rm.message_id = cm.reply_to_message_id AND rm.room_id = cm.room_id
          LEFT JOIN users ru ON ru.user_id = rm.sender_id
          LEFT JOIN employee_profiles re ON re.user_id = rm.sender_id
          LEFT JOIN chat_attachments ra ON ra.message_id = rm.message_id
@@ -282,7 +300,8 @@ export async function listMessages(
     kind: String(r.kind) as ChatMessageRow["kind"],
     // 소프트 삭제 — 본문은 내리지 않는다.
     body: r.deleted_at != null ? "" : String(r.body ?? ""),
-    replyToMessageId: r.reply_to_message_id != null ? Number(r.reply_to_message_id) : null,
+    sharedRecord: r.deleted_at != null ? null : parseChatSharedRecord(r.shared_record),
+    replyToMessageId: r.visible_reply_id != null ? Number(r.visible_reply_id) : null,
     createdAt: String(r.created_at),
     deleted: r.deleted_at != null,
     attachment:
@@ -296,9 +315,9 @@ export async function listMessages(
           }
         : null,
     replyTo:
-      r.reply_to_message_id != null
+      r.visible_reply_id != null
         ? {
-            messageId: Number(r.reply_to_message_id),
+            messageId: Number(r.visible_reply_id),
             senderName: String(r.reply_sender_name ?? ""),
             preview:
               r.reply_deleted_at != null
@@ -320,8 +339,15 @@ async function insertMessage(
   kind: ChatMessageRow["kind"],
   body: string,
   replyTo: number | null,
-  previewText?: string
+  previewText?: string,
+  sharedRecord?: ChatSharedRecord
 ): Promise<number> {
+  // 모든 메시지 종류가 공유하는 경계. 원문 ID만으로 타방 내용·발신자를 인용할 수 없다.
+  if (replyTo !== null) {
+    if (!Number.isSafeInteger(replyTo) || replyTo <= 0) throw new ChatAccessError("답장할 메시지를 확인하세요.");
+    const original = rowsToObjects(await db.exec("SELECT message_id FROM chat_messages WHERE message_id=$1 AND room_id=$2 AND deleted_at IS NULL", [replyTo, roomId]));
+    if (!original.length) throw new ChatAccessError("이 대화방에서 답장할 메시지를 찾을 수 없습니다.");
+  }
   const now = nowIso();
   const rows = rowsToObjects(
     await db.exec(
@@ -331,6 +357,7 @@ async function insertMessage(
     )
   );
   const messageId = Number(rows[0].message_id);
+  if (sharedRecord) await db.run("UPDATE chat_messages SET shared_record=$2::jsonb WHERE message_id=$1", [messageId, JSON.stringify(sharedRecord)]);
   const preview = (previewText ?? (kind === "system" ? body : body.replace(/\s+/g, " "))).slice(0, PREVIEW_MAX);
   await db.run(
     `UPDATE chat_rooms SET last_message_at = $2, last_message_preview = $3 WHERE room_id = $1`,
@@ -343,6 +370,25 @@ async function insertMessage(
     [roomId, senderId, messageId]
   );
   return messageId;
+}
+
+/** 공유 업무의 기존 트랜잭션 안에서 DM 확보·메시지·전달완료를 함께 저장한다. 푸시는 별도 선택 채널이다. */
+export async function postDirectSharedRecordInTransaction(db: PgDatabase, senderId: string, recipientId: string, body: string, record: ChatSharedRecord): Promise<{ roomId: number; messageId: number }> {
+  const safeRecord = parseChatSharedRecord(record);
+  if (!safeRecord) throw new ChatAccessError("공유 문서 링크가 올바르지 않습니다.");
+  if (!recipientId || recipientId === senderId) throw new ChatAccessError("메신저 공유에는 다른 수신자가 필요합니다.");
+  const text = body.trim();
+  if (!text || text.length > 4000) throw new ChatAccessError("메시지는 1~4,000자 이내로 입력해 주세요.");
+  const pair = [senderId, recipientId].sort();
+  const active = rowsToObjects(await db.exec("SELECT user_id FROM users WHERE user_id=ANY($1::text[]) AND status='active'", [pair]));
+  if (active.length !== 2) throw new ChatAccessError("활성 대화 상대 계정을 확인하세요.");
+  const now = nowIso();
+  const rooms = rowsToObjects(await db.exec(`INSERT INTO chat_rooms(room_type,dm_key,created_by,created_at) VALUES('dm',$1,$2,$3)
+    ON CONFLICT(dm_key) DO UPDATE SET dm_key=EXCLUDED.dm_key RETURNING room_id`, [`dm:${pair[0]}:${pair[1]}`, senderId, now]));
+  const roomId = Number(rooms[0].room_id);
+  for (const userId of pair) await db.run(`INSERT INTO chat_room_members(room_id,user_id,member_role,joined_at) VALUES($1,$2,$3,$4)
+    ON CONFLICT(room_id,user_id) DO UPDATE SET left_at=NULL`, [roomId, userId, userId === senderId ? "owner" : "member", now]);
+  return { roomId, messageId: await insertMessage(db, roomId, senderId, "text", text, null, undefined, safeRecord) };
 }
 
 /** 텍스트 메시지 전송. 반환: 생성된 메시지 id. */

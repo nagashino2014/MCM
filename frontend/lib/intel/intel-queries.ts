@@ -1,9 +1,11 @@
 // intel_signals 조회·상태변경·영업건 전환 쿼리. API & RAG 1차.
 
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { createSalesProject } from "@/lib/sales/queries";
+import { createSalesProjectInTransaction } from "@/lib/sales/queries";
+import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
 import { measureTopSimilarity, recordSignalFeedback, type FeedbackReason } from "./intel-feedback";
 import { INTEL_SIGNAL_TYPE_LABELS, type IntelSignalType, type IntelSignalGrade } from "./signal-extractor";
+import { assertOfficialSignalVisible, legacySignalSourceCondition } from "./official-sources-visibility";
 
 const text = (v: unknown): string | null => {
   if (v == null) return null;
@@ -114,7 +116,7 @@ export function sourceCondition(source: string, params: unknown[], alias = "s.")
 }
 
 function buildSignalWhere(filter: IntelSignalFilter): { where: string[]; params: unknown[] } {
-  const where: string[] = [];
+  const where: string[] = [legacySignalSourceCondition()];
   const params: unknown[] = [];
   if (filter.source) where.push(sourceCondition(filter.source, params));
   if (filter.signalType) { params.push(filter.signalType); where.push(`s.signal_type = $${params.length}`); }
@@ -161,6 +163,7 @@ export async function listIntelSignals(
 export async function getIntelSignal(signalId: string): Promise<IntelSignal | null> {
   const db = await getDb();
   const rows = rowsToObjects(await db.exec(`${SIGNAL_SELECT} WHERE s.signal_id = $1 LIMIT 1`, [signalId]));
+  if (String(rows[0]?.source ?? "").startsWith("official:")) await assertOfficialSignalVisible(signalId, db);
   return rows.length ? mapSignal(rows[0]) : null;
 }
 
@@ -181,15 +184,21 @@ export async function getIntelSignalDetail(signalId: string): Promise<IntelSigna
   );
   if (!rows.length) return null;
   const row = rows[0];
+  if (String(row.source ?? "").startsWith("official:")) await assertOfficialSignalVisible(signalId, db);
   let rawJson: Record<string, unknown> | null = null;
   const rawVal = row.raw_json;
   try {
     const parsed = typeof rawVal === "string" ? JSON.parse(rawVal) : rawVal;
     if (parsed && typeof parsed === "object") rawJson = parsed as Record<string, unknown>;
   } catch { /* 원본 파싱 실패 시 모달은 기본 정보만 표시 */ }
+  if (String(row.source ?? "").startsWith("official:")) rawJson = rawJson ? { documentId: rawJson.documentId, revisionId: rawJson.revisionId } : null;
   return { ...mapSignal(row), summary: text(row.summary), rawJson };
 }
 
+function rethrowSignalDeleteConflict(error: unknown): never {
+  if ((error as { code?: string }).code === "23503") throw Object.assign(new Error("투자 프로젝트의 근거로 연결된 신호는 삭제할 수 없습니다. 신호를 제외 처리하여 검토 목록에서 숨기세요."), { status: 409 });
+  throw error;
+}
 /** 선택 신호 일괄 삭제. 반환: 삭제 건수. */
 /** 개별 삭제 + 사유 피드백 기록. 스냅샷은 DELETE RETURNING 으로 확보(임베딩은 FK CASCADE).
  *  피드백에 남은 (source, external_id)는 수집기가 재수집하지 않는다. 반환: 삭제 여부. */
@@ -233,7 +242,7 @@ export async function deleteSignalWithFeedback(
       deletedBy
     );
     return true;
-  });
+  }).catch(rethrowSignalDeleteConflict);
 }
 
 export async function deleteSignals(signalIds: string[]): Promise<number> {
@@ -246,7 +255,7 @@ export async function deleteSignals(signalIds: string[]): Promise<number> {
       )
     );
     return rows.length;
-  });
+  }).catch(rethrowSignalDeleteConflict);
 }
 
 /** 등급(excluded/monitoring) 일괄 삭제. source 지정 시 해당 소스만. */
@@ -259,7 +268,7 @@ export async function deleteSignalsByGrade(grade: "excluded" | "monitoring", sou
       await db.exec(`DELETE FROM intel_signals WHERE ${where} RETURNING signal_id`, params)
     );
     return rows.length;
-  });
+  }).catch(rethrowSignalDeleteConflict);
 }
 
 /** 처리상태 변경(new/reviewed/dismissed). converted는 전환 함수에서만. */
@@ -283,30 +292,25 @@ export async function linkSignalFacility(signalId: string, facilityId: string): 
 
 /** 신호 → 영업건(lead) 전환. facility 매칭 필수. 반환: projectId. */
 export async function convertSignalToProject(signalId: string, userId: string | null): Promise<string> {
-  const signal = await getIntelSignal(signalId);
-  if (!signal) throw new Error("신호를 찾을 수 없습니다.");
-  if (!signal.facilityId) throw new Error("사업장이 매칭되지 않은 신호는 전환할 수 없습니다.");
-  if (signal.linkedProjectId) return signal.linkedProjectId;
-
-  const label = INTEL_SIGNAL_TYPE_LABELS[signal.signalType] ?? "발주";
-  const title = `${signal.companyName ?? "사업장"} · ${label} 대응`;
-  const projectId = await createSalesProject(
-    {
-      facilityId: signal.facilityId,
-      title,
-      stage: "lead",
-      priority: "normal",
-      memo: `[DART 신호] ${signal.reportName ?? ""} (${signal.disclosedAt ?? ""})\n${signal.url ?? ""}`,
-    },
-    userId
-  );
-
-  const now = new Date().toISOString();
-  await withDbWrite(async (db) => {
-    await db.run(
-      "UPDATE intel_signals SET linked_project_id = $2, status = 'converted', updated_at = $3 WHERE signal_id = $1",
-      [signalId, projectId, now]
-    );
+  if (!userId) throw Object.assign(new Error("로그인이 필요합니다."), { status: 401 });
+  const access = await loadUserAccess(userId);
+  if (!checkPermission(access, "sales.edit")) throw Object.assign(new Error("영업 수정 권한이 없습니다."), { status: 403 });
+  return withDbWrite(async (db) => {
+    const row = rowsToObjects(await db.exec("SELECT * FROM intel_signals WHERE signal_id=$1 FOR UPDATE", [signalId]))[0];
+    if (!row) throw Object.assign(new Error("신호를 찾을 수 없습니다."), { status: 404 });
+    if (row.linked_project_id) {
+      if (!checkPermission(access, "sales.edit", { projectId: String(row.linked_project_id) })) throw Object.assign(new Error("연결된 영업건을 수정할 권한이 없습니다."), { status: 403 });
+      return String(row.linked_project_id);
+    }
+    if (!row.facility_id) throw Object.assign(new Error("사업장이 매칭되지 않은 신호는 전환할 수 없습니다."), { status: 400 });
+    // 기존 단일 전환은 소유부서를 정하지 않는다. 부서 범위 사용자는 새 프로젝트 연결 화면을 사용한다.
+    if (!access.grants.some(g => g.permissionKey === "sales.edit" && g.scopeKind === "all" && g.effect === "allow")) throw Object.assign(new Error("담당 부서를 지정할 수 있는 프로젝트 영업 연결 화면을 사용하세요."), { status: 403 });
+    const label = INTEL_SIGNAL_TYPE_LABELS[row.signal_type as IntelSignalType] ?? "발주";
+    const projectId = await createSalesProjectInTransaction(db, {
+      facilityId: String(row.facility_id), title: String(row.company_name ?? "사업장") + " · " + label + " 대응", stage: "lead", priority: "normal",
+      memo: "[" + String(row.source ?? "수집") + " 신호] " + String(row.report_name ?? "") + " (" + String(row.disclosed_at ?? "") + ")\n" + String(row.url ?? ""),
+    }, userId);
+    await db.run("UPDATE intel_signals SET linked_project_id=$2,status='converted',updated_at=$3 WHERE signal_id=$1", [signalId, projectId, new Date().toISOString()]);
+    return projectId;
   });
-  return projectId;
 }

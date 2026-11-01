@@ -90,6 +90,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/contracts/filings", keys: ["filing.view"] },
   { path: "/finance", keys: ["finance.view"] },
   { path: "/sales", keys: ["sales.view"] },
+  { path: "/sales/rag", keys: ["intel.briefing.view", "sales.view"] },
   // 담당자 정보 관리 화면은 영업 메뉴와 같이 영업 담당자만(298). 데이터 API(contact.view)는 주소록 때문에 전 직원 유지.
   { path: "/sales/contacts", keys: ["sales.view"] },
   // 견적서 작성 화면(라우트는 /approval/quote) — 영업 메뉴 하위이므로 sales.view(298). 견적 결재 문서 열람은 전자결재 문서함 경로라 무관.

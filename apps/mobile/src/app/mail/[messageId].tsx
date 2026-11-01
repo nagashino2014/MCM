@@ -18,6 +18,7 @@ import { useApi } from '@/lib/use-api';
 import { downloadAndShare, downloadAsDataUrl } from '@/lib/download';
 import { displayFrom, mailDate } from '@/app/(tabs)/mail';
 import { useTheme } from '@/theme/useTheme';
+import { routeForLink } from '@/lib/deeplink';
 
 interface Attachment {
   attachmentId: string;
@@ -37,6 +38,7 @@ interface MailDetail {
   sentAt: string | null;
   createdAt: string;
   attachments: Attachment[];
+  briefingLink?: { briefingId: string; title: string; href: string } | null;
 }
 
 const fmtSize = (n?: number | null) =>
@@ -143,6 +145,9 @@ export default function MailViewerScreen() {
 
   const to = data.toAddrs ?? [];
   const cc = data.ccAddrs ?? [];
+  const briefing = data.briefingLink;
+  const briefingRoute = briefing && /^[a-zA-Z0-9_-]{1,128}$/.test(briefing.briefingId)
+    && briefing.href === `/sales/rag?briefingId=${briefing.briefingId}` ? routeForLink(briefing.href) : null;
 
   return (
     <SafeAreaView edges={[]} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
@@ -175,6 +180,10 @@ export default function MailViewerScreen() {
             </View>
           </Pressable>
         </View>
+
+        {briefingRoute ? (
+          <Button label="브리핑 보고서 열기" icon="document-text-outline" onPress={() => router.push(briefingRoute)} full />
+        ) : null}
 
         {/* 본문 — 이미지는 차단·경고 없이 바로 표시한다(사용자 확정 2026-08-10).
             트레이드오프: 원격 이미지 자동 로드 = 발신자 수신확인 픽셀이 동작한다(사내 메일 위주라 수용). */}

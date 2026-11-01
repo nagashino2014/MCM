@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { syncSalesStaffGrants } from "./staff-access";
 import {
   ACTIVITY_TYPE_META,
@@ -117,8 +117,8 @@ async function attachStepTypes(
   // 배열 파라미터 1개로 넘긴다 — 예전 IN ($1…$n) 은 영업건 수만큼 바인드 파라미터가 늘어 PG 한도(65,535)에 걸린다(2026-10-29).
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT project_id, activity_type, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids
-         FROM sales_activities WHERE project_id = ANY($1::text[])`,
+      `SELECT project_id, activity_type, status, scheduled_at, ended_at, occurred_at, created_at, bid_result, bids
+         FROM sales_activities WHERE project_id = ANY($1::text[]) AND status <> 'canceled'`,
       [ids]
     )
   );
@@ -590,9 +590,12 @@ export async function listSalesContacts(
 }
 
 export async function createSalesProject(input: SalesProjectInput, userId: string | null): Promise<string> {
+  return withDbWrite((db) => createSalesProjectInTransaction(db, input, userId));
+}
+
+export async function createSalesProjectInTransaction(db: PgDatabase, input: SalesProjectInput, userId: string | null): Promise<string> {
   const now = new Date().toISOString();
   const projectId = id("sproj");
-  await withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO sales_projects
          (project_id, facility_id, title, stage, owner_employee_id, owner_dept_id, contract_id,
@@ -619,7 +622,6 @@ export async function createSalesProject(input: SalesProjectInput, userId: strin
         now,
       ]
     );
-  });
   return projectId;
 }
 
@@ -658,6 +660,9 @@ export async function updateSalesProject(projectId: string, input: SalesProjectI
 export async function deleteSalesProject(projectId: string): Promise<void> {
   await withDbWrite(async (db) => {
     await db.run("DELETE FROM sales_projects WHERE project_id = $1", [projectId]);
+  }).catch((error: unknown) => {
+    if ((error as { code?: string }).code === "23503") throw Object.assign(new Error("인텔 연결 또는 확정 활동이 있어 영업건을 삭제할 수 없습니다. 연결을 해제하거나 영업건을 종료 처리하세요."), { status: 409 });
+    throw error;
   });
 }
 
@@ -811,7 +816,8 @@ const STAGE_BY_ACTIVITY_TYPE: Record<string, SalesStage> = {
   result: "bidding",
 };
 
-function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
+export function computeStage(rows: Array<Record<string, unknown>>): SalesStage {
+  rows = rows.filter((r) => r.status !== "canceled");
   const result = rows.find((r) => String(r.activity_type) === "result");
   if (result) {
     const br = String(result.bid_result ?? "");
@@ -845,7 +851,7 @@ async function recomputeProjectStage(
   projectId: string,
   now: string
 ): Promise<void> {
-  const rows = rowsToObjects(await db.exec("SELECT activity_type, bid_result, progress_note, scheduled_at, ended_at FROM sales_activities WHERE project_id = $1", [projectId]));
+  const rows = rowsToObjects(await db.exec("SELECT activity_type, status, bid_result, progress_note, scheduled_at, ended_at FROM sales_activities WHERE project_id = $1 AND status <> 'canceled'", [projectId]));
   const stage = computeStage(rows);
   await db.run("UPDATE sales_projects SET stage = $2, updated_at = $3 WHERE project_id = $1", [projectId, stage, now]);
 }
@@ -952,14 +958,13 @@ export async function listActivities(projectId: string, filter: SalesActivityFil
   return rows;
 }
 
-export async function createActivity(
-  projectId: string,
-  input: SalesActivityInput,
-  userId: string | null
-): Promise<string> {
+export async function createActivity(projectId: string, input: SalesActivityInput, userId: string | null): Promise<string> {
+  return withDbWrite((db) => createActivityInTransaction(db, projectId, input, userId));
+}
+
+export async function createActivityInTransaction(db: PgDatabase, projectId: string, input: SalesActivityInput, userId: string | null): Promise<string> {
   const now = new Date().toISOString();
   const activityId = id("sact");
-  await withDbWrite(async (db) => {
     await db.run(
       `INSERT INTO sales_activities
          (activity_id, project_id, activity_type, status, scheduled_at, ended_at, occurred_at, place, summary,
@@ -991,7 +996,6 @@ export async function createActivity(
     await replaceActivityContacts(db, activityId, input.contactPersonIds ?? []);
     await replaceActivityAssignees(db, activityId, input.assignees ?? [], now);
     await recomputeProjectStage(db, projectId, now);
-  });
   return activityId;
 }
 
@@ -1062,6 +1066,9 @@ export async function deleteActivity(activityId: string): Promise<void> {
     const projectId = pr[0]?.project_id ? String(pr[0].project_id) : null;
     await db.run("DELETE FROM sales_activities WHERE activity_id = $1", [activityId]);
     if (projectId) await recomputeProjectStage(db, projectId, now);
+  }).catch((error: unknown) => {
+    if ((error as { code?: string }).code === "23503") throw Object.assign(new Error("인텔 후속 조치에서 확정된 활동은 이력 보존을 위해 삭제할 수 없습니다. 활동을 취소 처리하세요."), { status: 409 });
+    throw error;
   });
 }
 

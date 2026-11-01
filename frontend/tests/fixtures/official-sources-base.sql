@@ -1,0 +1,8 @@
+-- 로컬 전용 integration fixture. 운영 스키마·자료는 사용하지 않는다.
+CREATE TABLE scraper_sources(source_id text PRIMARY KEY,slug text UNIQUE NOT NULL,name text NOT NULL,base_url text,purpose text NOT NULL DEFAULT 'intel',api_profile jsonb,enabled integer NOT NULL DEFAULT 0,created_at text NOT NULL,updated_at text NOT NULL,updated_by text,auth_secret_enc text,catalog jsonb,batch_hour integer,last_batch_date text);
+CREATE TABLE scraper_endpoints(endpoint_id text PRIMARY KEY,source_id text NOT NULL REFERENCES scraper_sources(source_id) ON DELETE CASCADE,name text NOT NULL,api_config jsonb,field_mapping jsonb NOT NULL DEFAULT '{}',sink_config jsonb,enabled integer NOT NULL DEFAULT 0,created_at text NOT NULL,updated_at text NOT NULL,backfill jsonb);
+CREATE TABLE intel_signals(signal_id text PRIMARY KEY,source text,external_id text,company_name text,report_name text,signal_type text,signal_grade text,disclosed_at text,url text,raw_json text,summary text,match_status text,match_type text,status text,industry text,industry_relevance text,relevance_note text,amount numeric,created_at text,updated_at text,UNIQUE(source,external_id));
+ALTER TABLE intel_signals ADD COLUMN corp_code text,ADD COLUMN brn text,ADD COLUMN asset_class text,ADD COLUMN acquire_purpose text,ADD COLUMN counterparty text,ADD COLUMN facility_id text,ADD COLUMN linked_project_id text,ADD COLUMN duplicate_of text,ADD COLUMN region text,ADD COLUMN agency text;
+CREATE TABLE facilities(facility_id text PRIMARY KEY,company_name text);
+CREATE TABLE intel_embeddings(signal_id text PRIMARY KEY,content text);
+CREATE TABLE intel_rag_briefings(briefing_id text PRIMARY KEY,question text,answer_md text,sources jsonb,filters jsonb,model text,status text,created_by text,created_at text,access_scope text);

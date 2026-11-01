@@ -10,7 +10,7 @@ import { CdButton, CdCheckbox, CdDateInput, CdDrawer, CdInput, CdModal, CdSelect
 import type { BriefingChannel, BriefingPreview, BriefingProfile, BriefingProfileInput, BriefingRun } from "@/lib/intel/briefing-types";
 import { permitIndustryLabel, type IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
 import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
-import { INTEL_SERVICE_LABELS, eokToWon, formatIntelAmount, intelApi, intelDate, intelSourceLabel, intelTime, jsonBody, wonToEok } from "./intelligence-client";
+import { INTEL_INTEREST_SERVICES, INTEL_SERVICE_LABELS, eokToWon, formatIntelAmount, intelApi, intelDate, intelSourceLabel, intelTime, jsonBody, wonToEok } from "./intelligence-client";
 import { IntelligenceListInput } from "./IntelligenceListInput";
 import { IntelCard, IntelEmpty, IntelError, IntelNotice, IntelSubhead, IntelTile } from "./intel-ui-kit";
 
@@ -71,6 +71,8 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
 
   function beginEdit(profile: BriefingProfile | "new") {
     const next = profile === "new" ? { ...newProfile(), recipients: session?.user?.id ? [{ userId: session.user.id, channels: ["inbox"] as BriefingChannel[] }] : [] } : structuredClone(profile);
+    // 관심 서비스에서 빠진 HAPs·기타가 남아 있으면 다음 저장 때 정리되도록 편집값에서 뺀다.
+    next.filters.services = next.filters.services.filter((code) => (INTEL_INTEREST_SERVICES as readonly string[]).includes(code));
     setEdit(profile); setForm(next); setFormError("");
     setAmountText({ min: wonToEok(next.filters.amountMin), max: wonToEok(next.filters.amountMax), important: wonToEok(next.importantAmount) });
   }
@@ -173,7 +175,7 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
             </div>
             <div>
               <p className="intel-field-label">관심 서비스 · 공개 근거로 검토 가능한 프로젝트만 포함</p>
-              <div className="flex items-center gap-1 flex-wrap">{Object.entries(INTEL_SERVICE_LABELS).map(([key, label]) => <button type="button" key={key} className="cd-chip cd-chip-sm" data-active={form.filters.services.includes(key)} aria-pressed={form.filters.services.includes(key)} onClick={() => toggleList("services", key)}>{label}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{INTEL_INTEREST_SERVICES.map((key) => [key, INTEL_SERVICE_LABELS[key]] as const).map(([key, label]) => <button type="button" key={key} className="cd-chip cd-chip-sm" data-active={form.filters.services.includes(key)} aria-pressed={form.filters.services.includes(key)} onClick={() => toggleList("services", key)}>{label}</button>)}</div>
             </div>
           </fieldset>
 

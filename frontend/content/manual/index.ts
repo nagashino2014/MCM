@@ -20,6 +20,8 @@ import { WORK_MGMT_ARTICLES } from "./articles/work-mgmt";
 import { HR_PAYROLL_ADMIN_ARTICLES } from "./articles/hr-payroll-admin";
 import { FACILITIES_CONTRACTS_ARTICLES } from "./articles/facilities-contracts";
 import { SALES_ARTICLES } from "./articles/sales";
+import { PROPOSAL_ARTICLES } from "./articles/proposals";
+import { PROPOSAL_HELP } from "./help-topics/proposals";
 import { ADMIN_ARTICLES } from "./articles/admin";
 import { FINANCE_ARTICLES } from "./articles/finance";
 import { APPROVAL_OPS_ARTICLES } from "./articles/approval-ops";
@@ -52,6 +54,7 @@ export const MANUAL_ARTICLES: ManualArticle[] = [
   ...HR_PAYROLL_ADMIN_ARTICLES,
   ...FACILITIES_CONTRACTS_ARTICLES,
   ...SALES_ARTICLES,
+  ...PROPOSAL_ARTICLES,
   ...FINANCE_ARTICLES,
   ...ADMIN_ARTICLES,
   ...APPROVAL_OPS_ARTICLES,
@@ -61,6 +64,7 @@ export const MANUAL_ARTICLES: ManualArticle[] = [
 export const HELP_TOPICS: Readonly<Record<string, HelpTopic>> = Object.fromEntries(
   [
     ...HELP_TOPIC_LIST,
+    ...PROPOSAL_HELP,
     ...COLLAB_MORE_HELP, ...WORK_MGMT_HELP, ...HR_PAYROLL_ADMIN_HELP, ...FACILITIES_CONTRACTS_HELP, ...SALES_HELP, ...ADMIN_HELP,
     ...FINANCE_HELP, ...APPROVAL_OPS_HELP,
   ].map((t) => [t.id, t])

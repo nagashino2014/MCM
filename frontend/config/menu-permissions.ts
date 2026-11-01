@@ -97,6 +97,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/approval/quote", keys: ["sales.view"] },
   // 회사소개서(309) — 목록·지표는 catalog.view, 실적·인물·자산 관리 화면은 catalog.manage. 영업 메뉴 하위지만 sales.view 와 별개.
   { path: "/sales/catalog", keys: ["catalog.view"] },
+  { path: "/sales/proposals", keys: ["catalog.manage"] },
   { path: "/sales/catalog/projects", keys: ["catalog.manage"] },
   { path: "/sales/catalog/people", keys: ["catalog.manage"] },
   { path: "/sales/catalog/assets", keys: ["catalog.manage"] },

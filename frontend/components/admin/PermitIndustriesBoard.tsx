@@ -11,6 +11,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdInput, CdTextarea } from "@/components/cdash/CdField";
+import { CdIconButton } from "@/components/cdash/CdButton";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { refreshPermitIndustries } from "@/lib/ieps/use-permit-industries";
 import type { IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
@@ -175,48 +176,49 @@ export function PermitIndustriesBoard() {
 
       <div className="cd-card rounded-3xl p-5">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead className="cd-table-head">
               <tr className="cd-text-faint text-xs border-b cd-border-c">
                 <th className="py-2 px-2 text-left w-16">순서</th>
-                <th className="py-2 px-2 text-left">업종</th>
-                <th className="py-2 px-2 text-left w-40">ID</th>
+                <th className="py-2 px-2 text-left">업종 · ID</th>
                 <th className="py-2 px-2 text-left">KSIC 코드</th>
                 <th className="py-2 px-2 text-right w-20">사업장</th>
                 <th className="py-2 px-2 text-left w-24">상태</th>
-                <th className="py-2 px-2 text-right w-40">관리</th>
+                <th className="py-2 px-2 text-right">관리</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center cd-text-faint">
+                  <td colSpan={6} className="py-10 text-center cd-text-faint">
                     <Loader2 className="w-4 h-4 animate-spin inline-block mr-2 align-[-2px]" />
                     불러오는 중…
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center cd-text-faint">등록된 업종이 없습니다.</td>
+                  <td colSpan={6} className="py-10 text-center cd-text-faint">등록된 업종이 없습니다.</td>
                 </tr>
               ) : (
                 items.map((item, index) => (
                   <tr key={item.id} className={`border-b cd-border-c ${item.active ? "" : "opacity-60"}`}>
                     <td className="py-2 px-2 whitespace-nowrap">
                       <div className="flex items-center gap-0.5">
-                        <button type="button" className="cd-btn rounded-lg p-1" aria-label={`${item.label} 위로`} disabled={!fromTable || busy || index === 0} onClick={() => move(index, -1)}>
+                        <CdIconButton size="sm" label={`${item.label} 위로`} disabled={!fromTable || busy || index === 0} onClick={() => move(index, -1)}>
                           <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button type="button" className="cd-btn rounded-lg p-1" aria-label={`${item.label} 아래로`} disabled={!fromTable || busy || index === items.length - 1} onClick={() => move(index, 1)}>
+                        </CdIconButton>
+                        <CdIconButton size="sm" label={`${item.label} 아래로`} disabled={!fromTable || busy || index === items.length - 1} onClick={() => move(index, 1)}>
                           <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
+                        </CdIconButton>
                       </div>
                     </td>
                     <td className="py-2 px-2">
                       <div className="font-medium">{item.label}</div>
-                      {item.aliases.length > 0 && <div className="text-[11px] cd-text-faint">옛 이름 {item.aliases.join(", ")}</div>}
+                      <div className="text-[11px] cd-text-faint">
+                        <span className="font-mono">{item.id}</span>
+                        {item.aliases.length > 0 && <> · 옛 이름 {item.aliases.join(", ")}</>}
+                      </div>
                     </td>
-                    <td className="py-2 px-2 font-mono text-[11px] cd-text-faint">{item.id}</td>
                     <td className="py-2 px-2 font-mono text-xs">{codesText(item) || <span className="cd-warn-text">코드 없음 — 사업장 분류 안 됨</span>}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{(counts[item.id] ?? 0).toLocaleString()}</td>
                     <td className="py-2 px-2 whitespace-nowrap">

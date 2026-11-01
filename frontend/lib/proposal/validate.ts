@@ -92,6 +92,9 @@ function diagramSpecOf(rawSpec: unknown): DiagramSpec {
   return out;
 }
 
+/** 블록 하나 검사(id 중복은 문서 단위에서 본다) — AI 제안·붙여넣기가 쓴다 */
+export function validateBlock(raw: unknown): ProposalBlock { return blockOf(raw, validateProposalId); }
+
 function blockOf(raw: unknown, uniqueId: (v: unknown) => string): ProposalBlock {
   const b = obj(raw);
   const id = uniqueId(b.id);
@@ -190,6 +193,7 @@ export function validateProposalDocument(input: unknown): ProposalDocument {
     if (sec.chapter !== undefined) out.chapter = str(sec.chapter, "장", 100);
     if (sec.crumb !== undefined) out.crumb = str(sec.crumb, "절", 100);
     if (sec.summary !== undefined) out.summary = str(sec.summary, "핵심 문장", 600);
+    if (sec.sourceHash !== undefined) { if (typeof sec.sourceHash !== "string" || !/^[0-9a-f]{16}$/.test(sec.sourceHash)) throw new ProposalError("쪽 원고 지문 형식을 확인해 주세요."); out.sourceHash = sec.sourceHash; }
     return out;
   });
   const submissionDate = str(o.submissionDate, "제출일", 10);
@@ -203,6 +207,7 @@ export function validateProposalDocument(input: unknown): ProposalDocument {
   if (o.variables !== undefined) {
     const vars = obj(o.variables);
     out.variables = { siteName: str(vars.siteName, "사업장명", 200), duration: str(vars.duration, "수행기간", 100), companyName: str(vars.companyName, "제안사명", 200) };
+    if (vars.clientNotes !== undefined && vars.clientNotes !== "") out.variables.clientNotes = str(vars.clientNotes, "발주처 메모", 2000);
   }
   if (o.options !== undefined) {
     const op = obj(o.options);

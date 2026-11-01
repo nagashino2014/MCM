@@ -23,6 +23,7 @@ import { getBriefingShareResult, listBriefingShareRecipients, shareBriefingWithC
 import type { BriefingShareInput } from "../lib/intel/briefing-share-types";
 import { getRoomDetail, listMessages } from "../lib/chat/queries";
 import { candidateSummaries, discoveryExtras, intelOverview } from "../lib/intel/discovery-overview";
+import { buildBriefingTree } from "../lib/intel/briefing-tree";
 
 export interface LocalIntelligenceRequest { url: URL; method: string; body: unknown }
 export interface LocalIntelligenceResponse { status?: number; body: unknown; headers?: Record<string,string> }
@@ -159,6 +160,7 @@ export async function handleLocalIntelligenceApi(request:LocalIntelligenceReques
     if(path==="/api/sales/rag/discovery"&&method==="GET")return output({candidates:await listDiscoveryCandidates(pageLimit(request.url,30))});
     if(method==="POST"&&(path==="/api/sales/rag/briefings"||path==="/api/sales/rag/index"||/^\/api\/sales\/rag\/briefings\/[^/]+\/refine$/.test(path)))throw intelError(localMode()==="real"?"이 로컬 서버의 실제 AI 호출은 정기 브리핑에서 지원합니다. ‘지금 생성’을 이용하세요. 구형 수동 질의·임베딩 호출은 제공하지 않습니다.":"로컬 예시 모드에서는 외부 AI·임베딩을 호출하지 않습니다. 정기 브리핑의 ‘지금 생성’에서 시험 DB를 이용한 예시 보고서를 확인하세요.",503);
 
+    if(path==="/api/sales/rag/briefing-tree"&&method==="GET")return output(await buildBriefingTree(ACTOR_ID));
     if(path==="/api/sales/intel/overview"&&method==="GET")return output(await intelOverview(actor,{days:Number(request.url.searchParams.get("days")??14)}));
     if(path==="/api/sales/intel/projects"){
       if(method==="GET"){const result=await queryBriefingProjects(projectFilter(request.url));return output({...result,extras:await discoveryExtras(result.projects.map(p=>p.projectId),actor)});}

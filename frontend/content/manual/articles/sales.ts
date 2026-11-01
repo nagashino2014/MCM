@@ -19,7 +19,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       ] },
       { id: "schedule", title: "관심 설정 — 관심 분야와 정기 일정", blocks: [
         { kind: "steps", items: [
-          "관심 설정 탭에서 [[관심 분야 추가]]를 누르고 이름·업종·지역·관심 기업·정보 유형·투자 규모(억원)·관심 서비스를 입력합니다. 고르지 않은 조건은 제한하지 않습니다. 입력 중 ‘적용 조건’ 줄에서 결과를 바로 확인합니다.",
+          "관심 설정 탭에서 [[관심 분야 추가]]를 누르고 이름·업종·지역·관심 기업·정보 유형·투자 규모(억원)·관심 서비스(통합환경허가·화관법·ESG)를 입력합니다. 고르지 않은 조건은 제한하지 않습니다. 입력 중 ‘적용 조건’ 줄에서 결과를 바로 확인합니다.",
           "주기를 매일·3일마다·매주·매월 중 고르고 시작일과 생성 시작 시각을 정합니다. 시각은 한국 시간입니다. 매월 지정일이 없는 달은 말일에 실행합니다.",
           "개인 또는 지정 수신자 공유를 고르고 수신 채널을 정한 뒤 [[저장]]합니다.",
           "목록에서 조건·주기·다음 실행·수신자를 한눈에 봅니다. [[미리보기]]는 AI를 호출하지 않고 대상 수·대표 후보·정보원 수집 상태를 보여 줍니다. [[지금 생성]]을 누르면 브리핑 탭으로 이동해 작성 상태를 확인합니다.",
@@ -29,7 +29,10 @@ export const SALES_ARTICLES: ManualArticle[] = [
       ] },
       { id: "delivery", title: "브리핑 — 발행본 읽기·공유·재시도", blocks: [
         { kind: "list", items: [
-          "브리핑 탭의 [[정기 발행본]]은 왼쪽 발행 이력과 오른쪽 보고서로 나뉩니다. 관심 분야로 이력을 좁힐 수 있습니다. 질문형 브리핑은 [[AI 질의]]에서 이전과 같이 만듭니다.",
+          "브리핑 탭의 [[정기 발행본]]은 왼쪽 발행 이력과 오른쪽 보고서로 나뉩니다. 질문형 브리핑은 [[AI 질의]]에서 이전과 같이 만듭니다.",
+          "발행 이력의 [[분류 보기]]는 위쪽 관심 서비스 태그(통합환경허가·화관법·ESG) 아래에 통합허가 업종 → 사업장 → 보고서 순의 트리를 보여 줍니다. 사업장 이름 오른쪽 숫자는 그 사업장을 다룬 발행 보고서 수이고, 사업장을 누르면 ‘(발간일) 투자계획·증설·신설’ 형식의 보고서가 펼쳐집니다. 보고서를 누르면 오른쪽에 열립니다.",
+          "사업장은 사업장 마스터의 업종(KSIC)으로 분류합니다. 관심 분야에 적은 관심 기업 중 마스터에 없는 기업은 관심 업종 아래에 ‘마스터 미등록’으로 나오며, [[사업장 등록]]을 누르면 회사명이 채워진 수동 등록 화면이 열립니다. 회사명은 법인 표기와 영문 약자(SK→에스케이)를 맞춰 비교하고, 마스터 별칭도 함께 찾습니다.",
+          "검색창은 업종·사업장·관심 분야 이름을 찾습니다. 기본은 보고서가 있는 사업장만 보이며, 체크를 풀면 등록된 사업장을 모두 봅니다. 실패·변동 없음 회차까지 시간순으로 보려면 [[최근 순]]을 고릅니다.",
           "정기 발행본은 AI 질의와 같은 보고서 화면(핵심 지표·핵심 동향·기업별 투자 카드·영업 시사점·출처 카드)으로 보여 줍니다. 보고서 아래 전달 현황에서 수신자·채널별 상태를 확인합니다.",
           "문장 옆 출처 번호를 누르면 원근거가 열립니다. 연결된 업무는 [[투자 프로젝트 보기]]로 영업 발굴 탭에서 엽니다. 이 버튼은 영업 열람 권한이 있을 때 표시됩니다. PDF 아이콘으로 같은 보고서를 내려받습니다.",
           "정기 발행본은 당시의 근거를 고정해 보관합니다. 같은 투자계획은 대표 근거로 묶고, 서로 다른 공장·금액 범위·취소·지연·정정은 구분합니다.",
@@ -89,7 +92,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       ] },
     ],
     keywords: ["정기 브리핑", "관심 분야", "관심 설정", "주간", "개요", "중요 변화", "영업 발굴", "투자 프로젝트", "KOSIS", "공식 정보원", "후속 활동", "신규 사업장", "검색 발췌", "품질 보류", "재검증"],
-    sources: ["components/sales/intel/SalesIntelligenceBoard.tsx", "components/sales/intel/IntelOverviewPanel.tsx", "components/sales/intel/BriefingPanel.tsx", "components/sales/intel/ScheduledBriefingPanel.tsx", "components/sales/intel/BriefingReportView.tsx", "components/sales/intel/ProjectIntelligencePanel.tsx", "components/sales/intel/SignalCandidatesList.tsx", "components/sales/intel/FacilityCandidatesPanel.tsx", "components/sales/intel/OfficialSourcesPanel.tsx"],
+    sources: ["components/sales/intel/SalesIntelligenceBoard.tsx", "components/sales/intel/IntelOverviewPanel.tsx", "components/sales/intel/BriefingPanel.tsx", "components/sales/intel/BriefingTree.tsx", "components/sales/intel/ScheduledBriefingPanel.tsx", "components/sales/intel/BriefingReportView.tsx", "components/sales/intel/ProjectIntelligencePanel.tsx", "components/sales/intel/SignalCandidatesList.tsx", "components/sales/intel/FacilityCandidatesPanel.tsx", "components/sales/intel/OfficialSourcesPanel.tsx"],
     reviewedAt: "2026-11-01",
   },
   {

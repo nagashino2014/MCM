@@ -58,6 +58,11 @@ function Inner() {
   const toast = useToast();
 
   const [companyName, setCompanyName] = useState("");
+  // RAG & 영업 발굴의 '마스터 미등록' 관심 기업에서 넘어오면 회사명을 채워 둔다(?companyName=).
+  useEffect(() => {
+    const preset = new URLSearchParams(window.location.search).get("companyName")?.trim();
+    if (preset) setCompanyName(preset);
+  }, []);
   const [brn, setBrn] = useState("");
   const [representativeName, setRepresentativeName] = useState("");
   const [siteAddress, setSiteAddress] = useState("");

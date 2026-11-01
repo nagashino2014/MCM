@@ -10,6 +10,8 @@ import type { Briefing, IntelSignal } from "./intel-shared";
 import { RagBoard } from "./RagBoard";
 import { BriefingReportView } from "./BriefingReportView";
 import { IntelCard, IntelChips, IntelEmpty, IntelError, IntelNotice, IntelTile } from "./intel-ui-kit";
+import { BriefingTree } from "./BriefingTree";
+import type { BriefingTreeIndustry } from "@/lib/intel/briefing-tree";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { intelApi, intelTime, jsonBody, safeIntelUrl } from "./intelligence-client";
 
@@ -58,6 +60,22 @@ function PublishedBriefings({ initialRunId, canViewSales, onOpenProject }: { ini
   const [error, setError] = useState("");
   const [resendOpen, setResendOpen] = useState(false);
   const readerRef = useRef<HTMLDivElement>(null);
+  const [listView, setListView] = useState<"tree" | "recent">("tree");
+  const [tree, setTree] = useState<BriefingTreeIndustry[]>([]);
+  const [treeLoading, setTreeLoading] = useState(true);
+  useEffect(() => {
+    if (listView !== "tree") return;
+    setTreeLoading(true);
+    void intelApi<{ industries: BriefingTreeIndustry[] }>("/api/sales/rag/briefing-tree")
+      .then((result) => setTree(result.industries))
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setTreeLoading(false));
+  }, [listView, runs.length]);
+  /** 목록·트리에서 고른 회차를 연다. 좁은 화면에서는 보고서 위치로 내려간다. */
+  const selectRun = (runId: string) => {
+    setSelectedId(runId);
+    if (window.matchMedia("(max-width: 1279px)").matches) readerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const reload = useCallback(async () => {
     try {
@@ -104,27 +122,32 @@ function PublishedBriefings({ initialRunId, canViewSales, onOpenProject }: { ini
   const run = detail?.run;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
-      <IntelCard icon={History} title="발행 이력" count={runs.length || undefined} desc="관심 분야별 정기·수동 발행본">
-        <select className="cd-select w-full mb-2" aria-label="관심 분야" value={profileId} onChange={(event) => { setProfileId(event.target.value); setSelectedId(null); }}>
-          <option value="">전체 관심 분야</option>
-          {profiles.map((profile) => <option key={profile.profileId} value={profile.profileId}>{profile.name}</option>)}
-        </select>
-        {runs.length ? (
-          <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 260px)" }}>
-            {runs.map((item) => (
-              <IntelTile key={item.runId} active={item.runId === selectedId} onClick={() => { setSelectedId(item.runId); if (window.matchMedia("(max-width: 1279px)").matches) readerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="cd-text text-sm font-bold truncate flex-1">{item.profileName}</span>
-                  <RunStatusPill status={item.status} />
-                </div>
-                <p className="cd-text-faint text-[11px] mt-0.5">{item.trigger === "scheduled" ? "정기" : "수동"} · {intelTime(item.scheduledFor)}</p>
-              </IntelTile>
-            ))}
-          </div>
-        ) : (
-          <IntelEmpty>{loading ? "불러오는 중…" : "발행된 브리핑이 없습니다. 관심 설정에서 관심 분야를 등록하고 지금 생성을 누르세요."}</IntelEmpty>
-        )}
+    <div className="grid grid-cols-1 xl:grid-cols-[640px_minmax(0,1fr)] gap-4 items-start">
+      <IntelCard icon={History} title="발행 이력" count={runs.length || undefined} desc="관심 서비스·통합허가 업종·사업장으로 나눠 찾습니다. 숫자는 사업장별 발행 보고서 수입니다."
+        actions={<IntelChips active={listView} onChange={setListView} items={[{ key: "tree" as const, label: "분류 보기" }, { key: "recent" as const, label: "최근 순" }]} />}>
+        {listView === "tree" ? (
+          <BriefingTree industries={tree} loading={treeLoading} selectedRunId={selectedId} onSelect={selectRun} />
+        ) : <>
+          <select className="cd-select w-full mb-2" aria-label="관심 분야" value={profileId} onChange={(event) => { setProfileId(event.target.value); setSelectedId(null); }}>
+            <option value="">전체 관심 분야</option>
+            {profiles.map((profile) => <option key={profile.profileId} value={profile.profileId}>{profile.name}</option>)}
+          </select>
+          {runs.length ? (
+            <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 300px)" }}>
+              {runs.map((item) => (
+                <IntelTile key={item.runId} active={item.runId === selectedId} onClick={() => selectRun(item.runId)}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="cd-text text-sm font-bold truncate flex-1">{item.profileName}</span>
+                    <RunStatusPill status={item.status} />
+                  </div>
+                  <p className="cd-text-faint text-[11px] mt-0.5">{item.trigger === "scheduled" ? "정기" : "수동"} · {intelTime(item.scheduledFor)}</p>
+                </IntelTile>
+              ))}
+            </div>
+          ) : (
+            <IntelEmpty>{loading ? "불러오는 중…" : "발행된 브리핑이 없습니다. 관심 설정에서 관심 분야를 등록하고 지금 생성을 누르세요."}</IntelEmpty>
+          )}
+        </>}
       </IntelCard>
 
       <div ref={readerRef} className="flex flex-col gap-4 min-w-0">

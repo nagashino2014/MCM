@@ -16,7 +16,9 @@ export function safeIntelUrl(value: string | null | undefined): string | undefin
   try { const url = new URL(value || ""); return ["https:", "http:"].includes(url.protocol) ? url.href : undefined; } catch { return undefined; }
 }
 export const INTEL_STAGE_LABELS: Record<string, string> = { unknown: "미확인", mou: "MOU", announced: "투자 발표", approved: "승인", permitting: "인허가", construction: "공사 중", operating: "가동", delayed: "지연", suspended: "중단", canceled: "취소" };
-export const INTEL_SERVICE_LABELS: Record<string, string> = { integrated_permit: "통합환경허가", chem: "화학물질", haps: "유해대기오염물질", esg: "ESG", etc: "기타" };
+export const INTEL_SERVICE_LABELS: Record<string, string> = { integrated_permit: "통합환경허가", chem: "화관법", haps: "유해대기오염물질", esg: "ESG", etc: "기타" };
+/** 관심 분야·브리핑 분류에 쓰는 서비스(HAPs·기타는 관심 조건에서 제외 — 2026-11-01 사용자 결정). 평가(F04) 코드는 그대로 둔다. */
+export const INTEL_INTEREST_SERVICES = ["integrated_permit", "chem", "esg"] as const;
 export { INTEL_SOURCE_LABELS, intelSourceLabel, humanizeSourceKeys } from "@/lib/intel/source-labels";
 
 /** 투자금액 표기 — 원화는 조·억·만 단위로 읽히게, 외화는 통화 코드를 붙인다. */

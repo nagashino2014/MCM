@@ -39,7 +39,7 @@ GPT 작업본(T-050/T-056, 2026-10-30)을 이어받아 지면 어휘·조판기�
 
 ## 설치 및 권한
 
-신규 의존성은 없다(`jszip`·`html-to-image`·`@napi-rs/canvas`·`lucide-react`). DB 변경은 `infra/aws/319_proposal_authoring.sql`(미적용 — GPT 작업본의 317 은 main 의 `317_overtime_form_meal_notice` 와 겹쳐 재번호). 목록·초안·다운로드는 `catalog.manage`, 발행은 추가로 `catalog.publish`.
+신규 의존성은 없다(`jszip`·`html-to-image`·`@napi-rs/canvas`·`lucide-react`). DB 변경은 `infra/aws/324_proposal_authoring.sql`(GPT 작업본의 317 은 main 의 `317_overtime_form_meal_notice`, 319 는 `codex/sales-intelligence-phase1` 의 319~323 과 겹쳐 재번호). 목록·초안·다운로드는 `catalog.manage`, 발행은 추가로 `catalog.publish`.
 
 ## 검증
 

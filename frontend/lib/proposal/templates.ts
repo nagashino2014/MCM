@@ -9,9 +9,9 @@ import { newId } from "./edit";
 
 export const PROPOSAL_TEMPLATES: ReadonlyArray<{ id: ProposalTemplateId; label: string; family: "permit" | "sustainability"; theme: ProposalTheme; description: string }> = [
   { id: "permit-general", label: "통합환경허가 · 일반 산업", family: "permit", theme: "navy", description: "공통 본문 36쪽. 복수 공장 현황 구분, 설비목록·수지·영향분석·BAT 작성 방법, 적용 예시, 품질·일정·사후관리까지." },
-  { id: "permit-power", label: "통합환경허가 · 발전 신규·변경", family: "permit", theme: "ocean", description: "복수 건설사업소의 신규·증설 허가를 독립 트랙으로. 설계·건설·시운전과 허가 일정의 의존관계, 설계사 자료 관리." },
-  { id: "permit-inspection", label: "통합환경허가 · 정기검사 대응", family: "permit", theme: "slate", description: "요약본 + 기존 허가 이행 진단. 서류·현장 진단, 허가조건 이행 점검표, 검사 대응과 개선 우선순위, 변경 필요성 검토." },
-  { id: "sustainability", label: "지속가능경영보고서 발간", family: "sustainability", theme: "forest", description: "수준진단·벤치마킹, 이해관계자·중대성 평가, 지표·원고, 제3자 검증, 디자인·발간, 교육·사후 지원." },
+  { id: "permit-power", label: "통합환경허가 · 발전 신규·변경", family: "permit", theme: "ocean", description: "본문 35쪽. 복수 건설사업소의 신규·증설 허가를 독립 트랙으로. 계획서 8개 장 작성, 설계·건설·시운전과 허가 일정, 허가 이후 관리·보안까지." },
+  { id: "permit-inspection", label: "통합환경허가 · 정기검사 대응", family: "permit", theme: "slate", description: "본문 34쪽. 요약본 5쪽 + 기존 허가 이행 진단. 서류·현장 진단, 법규 리스크 평가, 검사 입회, 변경 필요성 검토, 허가재검토·수준평가까지." },
+  { id: "sustainability", label: "지속가능경영보고서 발간", family: "sustainability", theme: "forest", description: "본문 34쪽. 공시 동향·추진 전략, 수준진단·벤치마킹, 이해관계자·이중 중대성 평가, 지표·원고, 디자인·제3자 검증·ISO 26000, 사업관리·사후 지원." },
 ];
 
 const TITLES: Record<ProposalTemplateId, { title: string; projectName: string; duration: string }> = {
@@ -41,7 +41,7 @@ export function createProposalTemplate(templateId: ProposalTemplateId): Proposal
     templateId: meta.id,
     theme: meta.theme,
     layout: "paged",
-    contentVersion: `${meta.id}-2.0`,
+    contentVersion: `${meta.id}-2.1`,
     variables: { siteName: "대상 사업장", duration: t.duration, companyName: "㈜한국환경안전연구원" },
     options: { cover: "modern", dividers: false, toc: true },
     sections: structuredClone(SECTIONS[meta.id]()),

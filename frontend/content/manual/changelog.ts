@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-01", kind: "개선", title: "용역 제안서 — 작성 필요 목록·찾기·바꾸기·개조식 단축키·표 행·열 옮기기",
+    body: "상단의 작성 필요 칩을 누르면 발행 전에 채울 칸이 나열되고 누르면 그 자리로 이동합니다. 발행을 눌렀을 때 남은 칸이 있으면 목록이 열립니다. 찾기·바꾸기(Ctrl+H)로 문서 전체의 글을 한 번에 바꾸고 Ctrl+Z 한 번으로 되돌립니다. 미리보기 개조식은 Alt+Enter 새 줄·Tab 단계 바꾸기를 쓰고, 표는 행을 중간에 넣거나 행·열을 옮길 수 있습니다.",
+    articles: ["sales.proposals"],
+  },
+  {
     date: "2026-11-01",
     kind: "개선",
     title: "RAG & 영업 발굴 — 개요·브리핑·영업 발굴·신규 사업장·관심 설정으로 개편",

@@ -201,6 +201,37 @@ export function pushLastBlockToNextPage(doc: ProposalDocument, sid: string): { d
   return { doc: { ...doc, sections }, target: created.id };
 }
 
+// ── 목록·표 편집 ─────────────────────────────────────────────────────────────
+export function moveItem<T>(list: T[], i: number, d: number): T[] { const a = [...list]; const j = i + d; if (j < 0 || j >= a.length) return a; [a[i], a[j]] = [a[j], a[i]]; return a; }
+
+type TableBlock = Extract<ProposalBlock, { kind: "table" }>;
+/** at 위치에 빈 행을 넣는다(at = 행 수면 맨 끝). */
+export function insertTableRow(b: TableBlock, at: number): TableBlock {
+  const rows = [...b.rows]; rows.splice(Math.max(0, Math.min(at, rows.length)), 0, b.columns.map(() => "")); return { ...b, rows };
+}
+/** 열을 옮긴다 — 머리글·모든 행의 칸·열 폭이 함께 움직인다. */
+export function moveTableColumn(b: TableBlock, i: number, d: number): TableBlock {
+  const j = i + d;
+  if (j < 0 || j >= b.columns.length) return b;
+  return { ...b, columns: moveItem(b.columns, i, d), rows: b.rows.map((r) => moveItem(r, i, d)), ...(b.widths ? { widths: moveItem(b.widths, i, d) } : {}) };
+}
+
+export type BulletAction = "insert" | "indent" | "outdent" | "remove";
+/** 미리보기 겹친 입력창의 개조식 단축키 — 지금 줄 글을 반영하고 동작을 적용한다. focus 는 다음에 열 줄. */
+export function bulletAction(items: BulletItem[], i: number, value: string, action: BulletAction): { items: BulletItem[]; focus: number } {
+  const next = items.map((x, k) => (k === i ? { ...x, text: value } : x));
+  const cur = next[i];
+  if (!cur) return { items, focus: i };
+  switch (action) {
+    case "insert": next.splice(i + 1, 0, { level: cur.level, text: "", ...(cur.mark ? { mark: cur.mark } : {}) }); return { items: next, focus: i + 1 };
+    case "indent": case "outdent": {
+      const level = Math.max(1, Math.min(3, cur.level + (action === "indent" ? 1 : -1))) as 1 | 2 | 3;
+      next[i] = { ...cur, level }; return { items: next, focus: i };
+    }
+    case "remove": if (next.length < 2) return { items: next, focus: i }; next.splice(i, 1); return { items: next, focus: Math.max(0, i - 1) };
+  }
+}
+
 // ── 실행 취소 ────────────────────────────────────────────────────────────────
 export class History<T> {
   private past: T[] = [];

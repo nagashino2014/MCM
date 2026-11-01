@@ -40,6 +40,8 @@ export interface ProposalSection {
   chapter?: string;
   crumb?: string;
   summary?: string;
+  /** 새 문서를 만들 때의 원고 쪽 지문(lib/proposal/hash.ts) — 새 원고와 비교할 때 사용자가 고친 쪽을 가른다 */
+  sourceHash?: string;
   blocks: ProposalBlock[];
 }
 

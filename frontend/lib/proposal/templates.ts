@@ -6,6 +6,8 @@ import { powerSections } from "./content/power";
 import { inspectionSections } from "./content/inspection";
 import { sustainabilitySections } from "./content/sustainability";
 import { newId } from "./edit";
+import { sectionHash } from "./hash";
+import { validateProposalDocument } from "./validate";
 
 export const PROPOSAL_TEMPLATES: ReadonlyArray<{ id: ProposalTemplateId; label: string; family: "permit" | "sustainability"; theme: ProposalTheme; description: string }> = [
   { id: "permit-general", label: "통합환경허가 · 일반 산업", family: "permit", theme: "navy", description: "공통 본문 36쪽. 복수 공장 현황 구분, 설비목록·수지·영향분석·BAT 작성 방법, 적용 예시, 품질·일정·사후관리까지." },
@@ -31,7 +33,7 @@ const SECTIONS: Record<ProposalTemplateId, () => ProposalSection[]> = {
 export function createProposalTemplate(templateId: ProposalTemplateId): ProposalDocument {
   const meta = PROPOSAL_TEMPLATES.find((t) => t.id === templateId) ?? PROPOSAL_TEMPLATES[0];
   const t = TITLES[meta.id];
-  return {
+  const doc: ProposalDocument = {
     schemaVersion: 2,
     id: newId("prp"),
     title: t.title,
@@ -46,4 +48,7 @@ export function createProposalTemplate(templateId: ProposalTemplateId): Proposal
     options: { cover: "modern", dividers: false, toc: true },
     sections: structuredClone(SECTIONS[meta.id]()),
   };
+  // 저장 검증과 같은 모양(빈 단위 생략 등)으로 맞춘 뒤 쪽마다 원고 지문을 남긴다 — 나중에 새 원고와 비교할 때 사용자가 고친 쪽을 가른다.
+  const checked = validateProposalDocument(doc);
+  return { ...checked, sections: checked.sections.map((s) => ({ ...s, sourceHash: sectionHash(s) })) };
 }

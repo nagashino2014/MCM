@@ -23,7 +23,8 @@ GPT 작업본(T-050/T-056, 2026-10-30)을 이어받아 지면 어휘·조판기�
 - `lib/proposal/diagrams/` — 도식 8종(허브·조직도·전후 비교·피라미드·반원·단계 화살표·중대성 매트릭스·세 원) SVG.
 - `lib/proposal/art.tsx` — 표지(모던·클래식)·간지 배경 그림. 글은 HWPX 문단으로 얹는다.
 - `lib/proposal/hwpx.ts` — 제안서 전용 조판기. 머리말(로마 숫자 장 띠·절)·꼬리말(사업명·쪽 번호·회사명)·표지/목차/간지 쪽 번호 숨김·이름 붙은 문단 스타일(제안-본문·제안-글머리1~3)을 쓴다.
-- `lib/proposal/edit.ts` — 블록 만들기·모양 바꾸기·경로 편집·쪽 넘기기·실행 취소.
+- `lib/proposal/edit.ts` — 블록 만들기·모양 바꾸기·경로 편집·쪽 넘기기·표 행·열 이동·개조식 단축키·실행 취소.
+- `lib/proposal/find.ts` — 문서의 글 칸 목록(미리보기 더블클릭 경로와 같은 문법)·찾기·바꾸기·[작성 필요]/연결 표기 목록. `lib/proposal/hash.ts` — 새 문서의 쪽 원고 지문(`sourceHash`). 계획: [proposal-ai-editing-plan.md](proposal-ai-editing-plan.md).
 - `components/sales/proposal/ProposalStudio.tsx` — 3단 편집기(장·쪽 목록 / A4 미리보기 / 속성). `ProposalPages.tsx` — 미리보기.
 - `lib/proposal/content/` — 4개 양식 원고와 원고 작성 도구(`kit.ts`).
 - `store.ts`·`handlers.ts`·API 라우트는 GPT 작업본 그대로. 발행 시 받는 그림 목록만 `rasterTargets`(도식·인포그래픽·표지·간지)로 바꿨다.
@@ -47,6 +48,7 @@ GPT 작업본(T-050/T-056, 2026-10-30)을 이어받아 지면 어휘·조판기�
 
 ```powershell
 node scripts/test-proposal-content.mjs
+node scripts/test-proposal-edit.mjs
 node scripts/test-proposal-api.mjs
 node scripts/test-proposal-hwpx.mjs
 node scripts/test-menu-route.mjs

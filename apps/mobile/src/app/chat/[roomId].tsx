@@ -24,6 +24,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { API_BASE_URL } from '@/lib/config';
 import { fmtTime } from '@/lib/format';
+import { routeForLink } from '@/lib/deeplink';
 import { openAttachment } from '@/lib/open-attachment';
 import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
@@ -51,6 +52,7 @@ interface ChatMessage {
   createdAt: string;
   deleted: boolean;
   attachment: ChatAttachment | null;
+  sharedRecord?: { type: 'intel_briefing'; id: string; title: string; href: string } | null;
   replyTo: {
     messageId: number;
     senderName: string;
@@ -117,6 +119,9 @@ function dayLabel(iso: string): string {
 export default function ChatRoomScreen() {
   const { roomId: roomIdParam, name } = useLocalSearchParams<{ roomId: string; name?: string }>();
   const roomId = Number(roomIdParam);
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && Number.isSafeInteger(roomId) && roomId > 0) window.name = `mcm-chat-${roomId}`;
+  }, [roomId]);
   const { c } = useTheme();
   const { user } = useAuth();
   const toast = useToast();
@@ -932,6 +937,8 @@ function MessageRow({
   }
   const time = fmtTime(m.createdAt);
   const body = m.deleted ? '삭제된 메시지입니다.' : m.body;
+  const shared = !m.deleted && m.sharedRecord?.type === 'intel_briefing' ? m.sharedRecord : null;
+  const sharedRoute = shared && shared.href === `/sales/rag?briefingId=${encodeURIComponent(shared.id)}` ? routeForLink(shared.href) : null;
   const hasAttachment = !m.deleted && m.attachment != null;
   // 이미지는 버블 패딩 없이 그대로, 파일·텍스트는 버블 패딩.
   const bare = hasAttachment && m.kind === 'image';
@@ -952,7 +959,12 @@ function MessageRow({
         </View>
       ) : null}
       {hasAttachment ? <AttachmentContent m={m} mine={mine} /> : null}
-      {body ? (
+      {shared && sharedRoute ? <Pressable accessibilityRole="link" accessibilityLabel={`브리핑 열기: ${shared.title}`} onPress={() => router.push(sharedRoute)} className="gap-2 rounded-lg border border-cd-border bg-cd-card p-3 active:opacity-70">
+        <Text className="text-[12px] text-cd-muted">공유 브리핑</Text>
+        <Text numberOfLines={3} className="text-[14px] font-medium text-cd-text">{shared.title}</Text>
+        <Text className="text-[13px] text-cd-primary">브리핑 열기</Text>
+      </Pressable> : null}
+      {body && !sharedRoute ? (
         <Text
           className={`text-[14.5px] leading-5 ${
             mine ? (m.deleted ? 'italic text-white/70' : 'text-white') : m.deleted ? 'italic text-cd-faint' : 'text-cd-text'

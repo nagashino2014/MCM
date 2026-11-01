@@ -70,6 +70,7 @@ export const SALES_OUTCOME_LABELS: Partial<Record<SalesBidResult, string>> = {
 export const SALES_SERVICE_CATEGORIES = [
   { code: "integrated_permit", label: "통합허가" },
   { code: "chem", label: "화관법" },
+  { code: "haps", label: "HAPs" },
   { code: "esg", label: "ESG·탄소중립" },
   { code: "etc", label: "기타" },
 ] as const;
@@ -91,6 +92,11 @@ export const SALES_SUBCATEGORIES_BY_CATEGORY: Record<SalesServiceCategory, { cod
     { code: "chem_biz_permit", label: "영업허가" },
     { code: "chem_install_check", label: "설치검사" },
     { code: "chem_diag", label: "화관법진단" },
+  ],
+  haps: [
+    { code: "haps_first", label: "HAPs 최초" },
+    { code: "haps_change", label: "HAPs 변경" },
+    { code: "haps_annual", label: "HAPs 연간" },
   ],
   esg: [
     { code: "esg_mgmt", label: "ESG경영" },

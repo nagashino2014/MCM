@@ -58,12 +58,13 @@ export interface BriefingReport {
     region: string | null;
     status: string | null;
     project: string | null;
+    projectId?: string | null;
     desc: string;
     facts: Array<{ label: string; value: string }>;
     note: { kind: string; text: string } | null;
   }>;
   etcNote: string | null;
-  insights: Array<{ badge: string; text: string }>;
+  insights: Array<{ badge: string; text: string; importance?: number }>;
 }
 
 export interface BriefingSource {
@@ -86,7 +87,12 @@ export interface Briefing {
   filters: { source?: string; grade?: string; from?: string; to?: string };
   model: string | null;
   createdAt: string;
+  createdBy?: string | null;
+  canShare?: boolean;
+  canManage?: boolean;
 }
+
+export interface BriefingCapabilities { canView: boolean; canCreate: boolean; canShare: boolean }
 
 /** 소스 탭 — gosi 는 채널로 분리(토지이음/유역청). key 는 API source 파라미터와 동일. */
 export const SOURCE_TABS = [

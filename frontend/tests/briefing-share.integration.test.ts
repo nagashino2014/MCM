@@ -1,0 +1,171 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { readFile } from "node:fs/promises";
+import { Client } from "pg";
+import { shareBriefingWithChannels, listBriefingShareRecipients, getBriefingShareResult } from "../lib/intel/briefing-share";
+import { assertBriefingAccess } from "../lib/intel/briefing-store";
+import { listSharedBriefings } from "../lib/intel/rag-queries";
+import { listMessages, parseChatSharedRecord } from "../lib/chat/queries";
+import { invalidateDb } from "../lib/db";
+import type { BriefingShareInput } from "../lib/intel/briefing-share-types";
+import { getMessageDetail } from "../lib/mail/messages";
+
+test("독립 PostgreSQL: 브리핑 공유 ACL·메일·DM·푸시 재시도", async t => {
+  const url = new URL(process.env.INTEL_BRIEFING_SHARE_TEST_DATABASE_URL!);
+  assert(["127.0.0.1", "localhost", "[::1]"].includes(url.hostname));
+  assert.equal(url.port, "55439"); assert.equal(url.pathname, "/intel_briefing_share_test");
+  const adminUrl = new URL(url); adminUrl.pathname = "/postgres";
+  const admin = new Client({ connectionString: adminUrl.toString(), ssl: false });
+  try { await admin.connect(); if (!(await admin.query("SELECT 1 FROM pg_database WHERE datname='intel_briefing_share_test'")).rowCount) await admin.query("CREATE DATABASE intel_briefing_share_test"); }
+  finally { await admin.end(); }
+  const db = new Client({ connectionString: url.toString(), ssl: false });
+  t.after(async () => { await Promise.allSettled([invalidateDb(), db.end()]); });
+  await db.connect();
+  await db.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
+  await db.query(await readFile("tests/fixtures/project-intelligence-base.sql", "utf8"));
+  await db.query(`ALTER TABLE users ADD COLUMN email text,ADD COLUMN email_local text,ADD COLUMN name text;
+    ALTER TABLE employee_profiles ADD COLUMN user_id text,ADD COLUMN photo_public_path text,ADD COLUMN position_id text;
+    CREATE TABLE positions(position_id text PRIMARY KEY,position_name text,rank_order integer);
+    UPDATE users SET email=user_id||'@example.invalid',email_local=user_id,name=user_id;
+    UPDATE employee_profiles SET user_id=CASE WHEN employee_id='e1' THEN 'u1' ELSE 'u2' END;
+    CREATE TABLE intel_rag_briefings(briefing_id text PRIMARY KEY,question text NOT NULL,answer_md text,sources jsonb,filters jsonb,model text,status text,error text,created_by text,created_at text);
+    INSERT INTO permission_template_grants VALUES('briefing-u1-view','all','intel.briefing.view','all',NULL,'allow'),('briefing-u1-share','all','intel.briefing.share','all',NULL,'allow'),('briefing-u2-view','restricted','intel.briefing.view','all',NULL,'allow');
+    INSERT INTO permission_templates VALUES('executive',1),('denied',1);
+    INSERT INTO permission_template_grants VALUES('executive-view','executive','intel.briefing.view','all',NULL,'allow'),('executive-share','executive','intel.briefing.share','all',NULL,'allow'),('denied-view','denied','intel.briefing.view','all',NULL,'deny');
+    INSERT INTO users(user_id,role,status,email,email_local,name) VALUES('u3','member','active','u3@example.invalid','u3','임원'),('u4','member','disabled','u4@example.invalid','u4','비활성'),('u5','member','active','u5@example.invalid','u5','거부');
+    INSERT INTO user_permission_assignments(assignment_id,user_id,template_id) VALUES('a3','u3','executive'),('a4','u4','all'),('a5','u5','all'),('a5deny','u5','denied');`);
+  for (const name of ["320_project_intelligence.sql", "131_rag_briefing_share.sql", "095_mail_core.sql", "096_mail_folders.sql", "098_mail_folders_sys_unique.sql", "102_mail_categories_spam.sql", "321_scheduled_intelligence_briefings.sql", "145_chat_core.sql", "323_briefing_share_deliveries.sql"]) await db.query(await readFile(`../infra/aws/${name}`, "utf8"));
+  await db.query(await readFile("../infra/aws/323_briefing_share_deliveries.sql", "utf8"));
+  await db.query(`INSERT INTO mailboxes(mailbox_id,user_id,address,local_part,status,created_at,updated_at) VALUES('mb1','u1','u1@example.invalid','u1','active',now()::text,now()::text),('mb2','u2','u2@example.invalid','u2','active',now()::text,now()::text);
+    INSERT INTO intel_rag_briefings(briefing_id,question,answer_md,sources,filters,model,status,created_by,created_at) VALUES('b1','[시험] 실제 공유 경계','공유 테스트','[]','{}','test-fixture','done','u1',now()::text),('b3','[시험] 임원 소유 보고서','공유 테스트','[]','{}','test-fixture','done','u3',now()::text);`);
+  Object.assign(process.env, { DATABASE_URL: url.toString(), PGSSL: "disable", NODE_ENV: "test" });
+  delete process.env.MCM_DB_EXPECTED_ROLE; delete process.env.MCM_DB_ROLE_REQUIRED; delete process.env.ANTHROPIC_API_KEY;
+  let pushCalls = 0;
+  const successPush = async () => { pushCalls++; return { ok: true, sentTo: 1 }; };
+  const all: BriefingShareInput = { requestKey: "share-all", recipients: [{ userId: "u2", name: "조작된 이름은 저장하지 않음" }], channels: ["shared", "inbox", "push", "messenger"] };
+
+  await t.test("소유자·활성·명시적 열람권한 검사 후 공유 대상 조직도", async () => {
+    const snapshot = await listBriefingShareRecipients("b1", "u1");
+    assert.deepEqual(snapshot.employees.map(e => e.userId).sort(), ["u1", "u2"]);
+    await assert.rejects(() => assertBriefingAccess("b1", "u2"), { status: 404 });
+    await assert.rejects(() => shareBriefingWithChannels("b1", "u2", all), { status: 403 });
+    for (const userId of ["u4", "u5", "missing"]) await assert.rejects(() => shareBriefingWithChannels("b1", "u1", { ...all, requestKey: userId, recipients: [{ userId }] }), { status: 403 });
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM intel_briefing_share_requests")).rows[0].n, 0);
+  });
+  let roomId: number;
+  let actualMailId: string;
+  let scheduledMailId: string;
+  await t.test("목록·메일·DM 실제 저장과 푸시 모의, 재전송 중복 방지", async () => {
+    const first = await shareBriefingWithChannels("b1", "u1", all, { pushSender: successPush });
+    assert.equal(first.ok, true); assert.equal(first.summary.sent, 4); assert.equal(first.shared, 1); assert.equal(pushCalls, 1);
+    roomId = first.deliveries.find(d => d.channel === "messenger")!.roomId!;
+    assert(roomId > 0);
+    const messages = await listMessages(roomId, "u2", {});
+    assert.equal(messages.length, 1); assert.equal(messages[0].sharedRecord?.href, "/sales/rag?briefingId=b1");
+    assert.equal(messages[0].sharedRecord?.id, "b1");
+    await assertBriefingAccess("b1", "u2");
+    assert((await listSharedBriefings("u2")).some(b => b.briefingId === "b1"));
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM mail_messages WHERE mailbox_id='mb2'")).rows[0].n, 1);
+    const mail = (await db.query("SELECT body_html,body_text FROM mail_messages WHERE mailbox_id='mb2' LIMIT 1")).rows[0];
+    assert.match(mail.body_html, /<a href="https?:\/\/[^\"]+\/sales\/rag\?briefingId=b1"/);
+    assert.match(mail.body_html, /브리핑 보고서 열기/);
+    actualMailId = first.deliveries.find(d => d.channel === "inbox")!.providerId!;
+    const repeated = await shareBriefingWithChannels("b1", "u1", all, { pushSender: successPush });
+    assert.deepEqual(repeated, first); assert.equal(pushCalls, 1);
+    assert.equal((await listMessages(roomId, "u2", {})).length, 1);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM mail_messages WHERE mailbox_id='mb2'")).rows[0].n, 1);
+    await assert.rejects(() => shareBriefingWithChannels("b1", "u1", { ...all, channels: ["inbox"] }), { status: 409 });
+  });
+  await t.test("동시 요청도 메시지는 1개, 기존 DM 재사용·나간 멤버 복귀", async () => {
+    await db.query("UPDATE chat_room_members SET left_at=now()::text WHERE room_id=$1 AND user_id='u2'", [roomId]);
+    const request: BriefingShareInput = { requestKey: "concurrent-dm", recipients: [{ userId: "u2" }], channels: ["messenger"] };
+    await Promise.all([shareBriefingWithChannels("b1", "u1", request), shareBriefingWithChannels("b1", "u1", request)]);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM chat_rooms")).rows[0].n, 1);
+    assert.equal((await listMessages(roomId, "u2", {})).length, 2);
+    assert.equal((await db.query("SELECT left_at FROM chat_room_members WHERE room_id=$1 AND user_id='u2'", [roomId])).rows[0].left_at, null);
+  });
+  await t.test("성공 채널 유지·실패만 재시도", async () => {
+    let attempts = 0;
+    const request: BriefingShareInput = { requestKey: "partial", recipients: [{ userId: "u2" }], channels: ["inbox", "push"] };
+    const push = async () => ++attempts === 1 ? { ok: false, error: "provider rejected temporarily" } : { ok: true, sentTo: 1 };
+    const first = await shareBriefingWithChannels("b1", "u1", request, { pushSender: push });
+    assert.equal(first.summary.failed, 1); assert.equal(first.summary.sent, 2);
+    const count = (await db.query("SELECT count(*)::int AS n FROM mail_messages")).rows[0].n;
+    const next = await shareBriefingWithChannels("b1", "u1", request, { pushSender: push });
+    assert.equal(next.summary.sent, 3); assert.equal(attempts, 2);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM mail_messages")).rows[0].n, count);
+  });
+  await t.test("알 수 없는 푸시 결과와 로컬 차단을 성공으로 표시하지 않음", async () => {
+    let attempts = 0;
+    const request: BriefingShareInput = { requestKey: "unknown", recipients: [{ userId: "u2" }], channels: ["push"] };
+    const unknown = async () => { attempts++; return { ok: false, error: "socket timeout" }; };
+    const first = await shareBriefingWithChannels("b1", "u1", request, { pushSender: unknown });
+    assert.equal(first.summary.unknown, 1); assert.equal(first.ok, false);
+    await shareBriefingWithChannels("b1", "u1", request, { pushSender: unknown }); assert.equal(attempts, 1);
+    const blocked = await shareBriefingWithChannels("b1", "u1", { ...request, requestKey: "local-block" }, { blockExternalPush: true, pushSender: () => { throw new Error("외부 호출 금지"); } });
+    assert.equal(blocked.summary.skipped, 1); assert.equal(blocked.ok, false);
+    assert.match(blocked.deliveries.find(d => d.channel === "push")!.error!, /로컬 실증/);
+  });
+  await t.test("영업 권한 없는 임원의 본인 공유와 프로필 외 개별 공유 ACL", async () => {
+    const executive = await shareBriefingWithChannels("b3", "u3", { requestKey: "executive", recipients: [{ userId: "u2" }] });
+    assert.equal(executive.shared, 1);
+    await db.query("INSERT INTO intel_briefing_profiles(profile_id,owner_user_id,name,config) VALUES('p1','u1','비공개 정기','{}')");
+    await db.query("INSERT INTO intel_rag_briefings(briefing_id,question,answer_md,sources,filters,model,status,created_by,created_at,access_scope,profile_id) VALUES('b2','비공개 정기 발행본','본문','[]','{}','test-fixture','done','u1',now()::text,'restricted','p1')");
+    await assert.rejects(() => assertBriefingAccess("b2", "u2"), { status: 404 });
+    const result = await shareBriefingWithChannels("b2", "u1", { requestKey: "scheduled-share", recipients: [{ userId: "u2" }], channels: ["messenger", "inbox"] });
+    assert.equal(result.shared, 1); assert.equal(result.summary.sent, 3);
+    scheduledMailId = result.deliveries.find(d => d.channel === "inbox")!.providerId!;
+    assert.equal((await getMessageDetail("u2", scheduledMailId, { peek: true }))?.briefingLink?.briefingId, "b2");
+    await assertBriefingAccess("b2", "u2");
+    assert((await listSharedBriefings("u2")).some(b => b.briefingId === "b2"));
+    await assert.rejects(() => getBriefingShareResult("b2", "u2", result.requestId), { status: 403 });
+  });
+  await t.test("권리 검증 실패시 새 ACL/발송 없음, 카드 외부 URL과 삭제 본문 차단", async () => {
+    await db.query(`INSERT INTO intel_briefing_runs(run_id,profile_id,trigger,scheduled_for,profile_version,config_snapshot) VALUES('r1','p1','manual',now(),1,'{}');
+      INSERT INTO intel_briefing_snapshots(snapshot_id,run_id,as_of,payload) VALUES('snapshot','r1',now(),'{"items":[{"kind":"official","id":"official:removed","revision":"removed-revision"}]}');
+      UPDATE intel_rag_briefings SET snapshot_id='snapshot' WHERE briefing_id='b2'`);
+    await assert.rejects(() => shareBriefingWithChannels("b2", "u1", { requestKey: "revoked", recipients: [{ userId: "u3" }], channels: ["messenger"] }));
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM intel_rag_briefing_shares WHERE briefing_id='b2' AND recipient_user_id='u3'")).rows[0].n, 0);
+    assert.equal((await getMessageDetail("u2", scheduledMailId, { peek: true }))?.briefingLink, null);
+    assert.equal(parseChatSharedRecord({ type: "intel_briefing", id: "b1", title: "제목", href: "https://evil.invalid" }), null);
+    await db.query("UPDATE chat_messages SET deleted_at=now()::text WHERE message_id=(SELECT min(message_id) FROM chat_messages)");
+    const deleted = (await listMessages(roomId, "u2", {})).find(m => m.deleted)!;
+    assert.equal(deleted.sharedRecord, null); assert.equal(deleted.body, "");
+  });
+  await t.test("공유 메일 구조화 링크는 실제 전달·메일 소유자·현재 권한으로만 반환", async () => {
+    const detail = await getMessageDetail("u2", actualMailId, { peek: true });
+    assert.deepEqual(detail?.briefingLink, { briefingId: "b1", title: "[시험] 실제 공유 경계", href: "/sales/rag?briefingId=b1" });
+    assert.equal(await getMessageDetail("u1", actualMailId, { peek: true }), null);
+    await db.query(`INSERT INTO mail_messages(message_id,mailbox_id,direction,subject,body_html,body_text,created_at)
+      VALUES('briefingshare_forged','mb2','in','[AI 브리핑 공유] 가짜','<a href="https://koensain.app/sales/rag?briefingId=b1">보고서</a>','/sales/rag?briefingId=b1',now()::text)`);
+    assert.equal((await getMessageDetail("u2", "briefingshare_forged", { peek: true }))?.briefingLink, null);
+    await db.query("INSERT INTO permission_template_grants VALUES('temporary-deny','restricted','intel.briefing.view','all',NULL,'deny')");
+    assert.equal((await getMessageDetail("u2", actualMailId, { peek: true }))?.briefingLink, null);
+    await db.query("DELETE FROM permission_template_grants WHERE grant_id='temporary-deny'");
+  });
+  await t.test("DM 저장과 전달 완료는 함께 커밋하고 실패 시 함께 복구", async () => {
+    const before = (await db.query("SELECT count(*)::int AS n FROM chat_messages")).rows[0].n;
+    await db.query(`CREATE FUNCTION fail_shared_dm() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.channel='messenger' AND NEW.status='sent' THEN RAISE EXCEPTION 'fixture delivery failure'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER fail_shared_dm BEFORE UPDATE ON intel_briefing_share_deliveries FOR EACH ROW EXECUTE FUNCTION fail_shared_dm()`);
+    const request: BriefingShareInput = { requestKey: "atomic-message", recipients: [{ userId: "u2" }], channels: ["messenger"] };
+    const failed = await shareBriefingWithChannels("b1", "u1", request);
+    assert.equal(failed.summary.failed, 1);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM chat_messages")).rows[0].n, before);
+    await db.query("DROP TRIGGER fail_shared_dm ON intel_briefing_share_deliveries; DROP FUNCTION fail_shared_dm()");
+    const retried = await shareBriefingWithChannels("b1", "u1", request);
+    assert.equal(retried.summary.sent, 2);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM chat_messages")).rows[0].n, before + 1);
+  });
+  await t.test("만료된 발송 선점은 사내메일 안전복구·외부푸시 unknown 보존", async () => {
+    const request: BriefingShareInput = { requestKey: "expired-lease", recipients: [{ userId: "u2" }], channels: ["inbox", "push"] };
+    const initial = await shareBriefingWithChannels("b1", "u1", request, { pushSender: successPush });
+    const count = (await db.query("SELECT count(*)::int AS n FROM mail_messages")).rows[0].n;
+    const calls = pushCalls;
+    await db.query("UPDATE intel_briefing_share_deliveries SET status='sending',lease_until=now()-interval '1 minute',lease_token='expired' WHERE request_id=$1 AND channel IN('inbox','push')", [initial.requestId]);
+    const observed = await getBriefingShareResult("b1", "u1", initial.requestId);
+    assert.equal(observed.summary.pending, 0); assert.equal(observed.summary.unknown, 1); assert.equal(observed.summary.failed, 1); assert.equal(pushCalls, calls);
+    const recovered = await shareBriefingWithChannels("b1", "u1", request, { pushSender: successPush });
+    assert.equal(recovered.summary.unknown, 1); assert.equal(recovered.summary.sent, 2); assert.equal(pushCalls, calls);
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM mail_messages")).rows[0].n, count);
+  });
+});

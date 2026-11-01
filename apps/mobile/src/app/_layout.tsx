@@ -104,6 +104,7 @@ function RootNavigator() {
         <Stack.Screen name="approval/draft" />
         {/* 대화방은 방이름을 담은 자체 헤더를 그린다 */}
         <Stack.Screen name="chat/[roomId]" />
+        <Stack.Screen name="briefings/[briefingId]" options={{ ...header, title: '공유 브리핑' }} />
         <Stack.Screen name="mail/[messageId]" options={{ ...header, title: '메일' }} />
         <Stack.Screen name="mail/compose" options={{ ...header, title: '메일 쓰기' }} />
         {/* 근태·휴가는 연차 게이지·주 초과근무를 담은 자체 헤더를 그린다 */}

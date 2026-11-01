@@ -3,7 +3,7 @@
 // 메일 3-pane 우측 — 본문 뷰어(G2-2/4): 헤더·첨부·본문(sandbox iframe)·답장/전달/삭제.
 // 외부 발신 HTML 은 XSS 방지를 위해 sandbox iframe(스크립트 차단)으로 렌더한다.
 
-import { Archive, CornerUpRight, Download, ListChecks, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
+import { Archive, CornerUpRight, Download, ExternalLink, ListChecks, Loader2, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
@@ -69,6 +69,11 @@ export function MailViewerPane({
 
   const inTrash = folder === "trash";
   const fromName = detail.fromAddr?.split("@")[0] ?? "-";
+  // 메일 본문에서 주소를 추출하지 않는다. 서버가 공유 원장과 현재 문서 권한으로 확인한 내부 링크만 연다.
+  const briefingLink = detail.briefingLink
+    && /^[a-zA-Z0-9_-]{1,128}$/.test(detail.briefingLink.briefingId)
+    && detail.briefingLink.href === `/sales/rag?briefingId=${encodeURIComponent(detail.briefingLink.briefingId)}`
+      ? detail.briefingLink : null;
 
   return (
     <div className="flex flex-col h-full min-w-0">
@@ -146,6 +151,12 @@ export function MailViewerPane({
           </div>
           <span className="text-xs cd-text-faint shrink-0">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>
         </div>
+        {briefingLink && (
+          <a href={briefingLink.href} target="_blank" rel="noopener noreferrer" className="cd-btn cd-btn-soft cd-btn-sm inline-flex items-center justify-center gap-1.5 self-start">
+            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+            브리핑 보고서 열기
+          </a>
+        )}
         {/* 첨부 칩 — 인라인 이미지(cid, 서명 명함 등)는 본문에 이미 그려지므로 목록에서 뺀다 */}
         {detail.attachments.some((a) => !a.contentId) && (
           <div className="flex flex-wrap gap-1.5">

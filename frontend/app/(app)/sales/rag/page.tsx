@@ -1,9 +1,9 @@
-import { RagBoard } from "@/components/sales/intel/RagBoard";
+import { SalesIntelligenceBoard } from "@/components/sales/intel/SalesIntelligenceBoard";
 
 export default function SalesRagPage() {
   return (
     <div className="p-2 h-full">
-      <RagBoard />
+      <SalesIntelligenceBoard />
     </div>
   );
 }

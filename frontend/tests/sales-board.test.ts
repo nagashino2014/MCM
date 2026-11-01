@@ -127,8 +127,9 @@ test("집계 — KPI·퍼널·세분류 순서·연도별 성과·담당자(겹�
     lost: 1,
   });
   assert.deepEqual(s.funnel, [5, 4, 4, 3, 2]);
-  assert.deepEqual(s.categories[0], { id: "integrated_permit", n: 3, subs: [{ code: "review", n: 2 }, { code: "first", n: 1 }] });
-  assert.deepEqual(s.categories[4], { id: "unset", n: 2, subs: [] });
+  assert.deepEqual(s.categories.find(c => c.id === "integrated_permit"), { id: "integrated_permit", n: 3, subs: [{ code: "review", n: 2 }, { code: "first", n: 1 }] });
+  assert.deepEqual(s.categories.find(c => c.id === "unset"), { id: "unset", n: 2, subs: [] });
+  assert.deepEqual(s.categories.find(c => c.id === "haps"), { id: "haps", n: 0, subs: [] });
   assert.deepEqual(s.outcomes.map((o) => [o.year, o.won, o.lost, o.wonAmt, o.bidAmt, o.priced, o.total]), [
     ["2026", 1, 1, 120000000, 200000000, 2, 2],
     ["2025", 0, 0, 0, 0, 0, 0],

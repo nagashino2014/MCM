@@ -1,0 +1,97 @@
+/* KESI Frosted: 공통 색·반경을 재정의하지 않고 RAG & 영업 발굴 화면의 구성·닫힌 글자 스케일만 연결한다. */
+.intel-ui { color: var(--cd-text); font-size: var(--precision-ui-font-body); line-height: 22px; }
+.intel-ui .intel-section { font-size: var(--precision-ui-font-section); line-height: 24px; font-weight: 600; }
+.intel-ui .intel-compact { font-size: var(--precision-ui-font-input); line-height: 20px; }
+.intel-ui .intel-table { font-size: var(--precision-ui-font-table); line-height: 18px; }
+.intel-ui .intel-meta { font-size: var(--precision-ui-font-meta); line-height: 16px; color: var(--cd-muted); }
+.intel-ui .intel-prose { font-size: var(--precision-ui-font-body); line-height: 24px; max-width: 640px; }
+.intel-ui .intel-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.intel-ui .intel-form { display: grid; gap: 16px; }
+.intel-ui .intel-form > fieldset { display: grid; gap: 16px; border: 0; min-width: 0; }
+.intel-ui .intel-form .flex.flex-col.gap-1 { gap: 8px; }
+.intel-ui .intel-row { border-bottom: 1px solid var(--cd-border); padding: 16px 20px; min-height: var(--precision-ui-table-row-height); }
+.intel-ui .intel-row:last-child { border-bottom: 0; }
+.intel-ui .intel-error { color: var(--cd-error); background: var(--cd-error-soft); padding: 12px 16px; border-radius: var(--cd-radius-card); overflow-wrap: anywhere; }
+.intel-ui .intel-notice { color: var(--cd-text); background: var(--cd-hover); padding: 12px 16px; border-radius: var(--cd-radius-card); overflow-wrap: anywhere; line-height: 24px; }
+.intel-ui .intel-stat-strip { display: flex; flex-wrap: wrap; gap: 0; }
+.intel-ui .intel-stat { padding: 12px 20px; border-right: 1px solid var(--cd-border); min-width: 120px; }
+.intel-ui .intel-stat:last-child { border-right: 0; }
+.intel-ui .intel-stat strong { display: block; font-size: 24px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.intel-ui .intel-stat strong.is-warn { color: var(--cd-warning); }
+.intel-ui .intel-link { color: var(--cd-text); text-decoration: underline; text-underline-offset: 3px; }
+.intel-ui .intel-dl { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 8px 16px; }
+.intel-ui .intel-dl dt { color: var(--cd-muted); }
+.intel-ui .intel-dl dd { overflow-wrap: anywhere; }
+.intel-ui .intel-subsection + .intel-subsection { border-top: 1px solid var(--cd-border); margin-top: 32px; padding-top: 24px; }
+.intel-ui .intel-list { display: grid; gap: 8px; }
+.intel-ui svg { stroke-width: 1.5; }
+.intel-ui .cd-page-header { margin-bottom: 32px; }
+.intel-ui .cd-page-title { font-weight: 600; letter-spacing: -0.01em; }
+
+/* 카드 머리 — 카드 안 여백 20px, 머리와 본문 사이 12px. 표 카드는 머리에만 여백을 주고 표는 가장자리까지 쓴다. */
+.intel-ui .intel-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 20px 20px 12px; }
+.intel-ui .intel-card-head > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.intel-ui .intel-card-body { padding: 0 20px 20px; }
+.intel-ui .intel-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 0 20px 16px; }
+.intel-ui .intel-toolbar > .cd-tabs { margin-right: auto; align-self: center; }
+.intel-ui .intel-card-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--cd-border); }
+
+/* 행 목록 — 항목은 카드가 아니라 행이다(hairline 구분, 51px). */
+.intel-ui .intel-rows { display: flex; flex-direction: column; }
+.intel-ui .intel-rows > li { border-top: 1px solid var(--cd-border); }
+.intel-ui .intel-row-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--precision-ui-table-row-height); padding: 10px 20px; text-align: left; background: transparent; color: inherit; }
+.intel-ui button.intel-row-item { cursor: pointer; transition: background 0.15s ease; }
+.intel-ui button.intel-row-item:hover { background: var(--cd-hover); }
+.intel-ui button.intel-row-item[aria-current="true"] { background: var(--cd-row-selected); }
+.intel-ui .intel-row-main { flex: 1; min-width: 0; }
+.intel-ui .intel-row-title { font-weight: 500; overflow-wrap: anywhere; }
+.intel-ui .intel-row-meta { font-size: var(--precision-ui-font-table); line-height: 18px; color: var(--cd-muted); margin-top: 2px; overflow-wrap: anywhere; }
+.intel-ui .intel-row-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.intel-ui .intel-empty { padding: 20px; color: var(--cd-muted); line-height: 24px; }
+
+/* 화면 배치 */
+.intel-ui .intel-grid-2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1100px) { .intel-ui .intel-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.intel-ui .intel-split { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1200px) { .intel-ui .intel-split { grid-template-columns: 340px minmax(0, 1fr); } }
+.intel-ui .intel-split-list { max-height: calc(100vh - 220px); overflow-y: auto; }
+
+/* 공개 근거 점수 — 상태가 아니므로 무채 막대로만 보인다. */
+.intel-ui .intel-score { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; font-variant-numeric: tabular-nums; }
+.intel-ui .intel-score-bar { width: 48px; height: 4px; border-radius: 999px; background: var(--cd-border); overflow: hidden; }
+.intel-ui .intel-score-bar > span { display: block; height: 100%; background: var(--cd-muted); }
+
+/* 보고서 읽기 — 본문 문단 폭 70자 안팎, 넓은 화면에서는 출처를 오른쪽 칸에 둔다. */
+.intel-ui .intel-report { display: grid; gap: 32px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1440px) { .intel-ui .intel-report.has-rail { grid-template-columns: minmax(0, 720px) minmax(260px, 1fr); } }
+.intel-ui .intel-report-main { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
+.intel-ui .intel-report-main section > h4 { font-size: var(--precision-ui-font-section); line-height: 24px; font-weight: 600; margin-bottom: 12px; }
+.intel-ui .intel-report-list { display: grid; gap: 12px; line-height: 24px; max-width: 720px; }
+.intel-ui .intel-report-list > li { padding-left: 16px; position: relative; }
+.intel-ui .intel-report-list > li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 4px; height: 4px; border-radius: 999px; background: var(--cd-muted); }
+.intel-ui .intel-report-rail { position: sticky; top: 16px; display: flex; flex-direction: column; min-width: 0; }
+.intel-ui .intel-cite { display: inline; padding: 0 2px; margin-left: 1px; font-size: var(--precision-ui-font-meta); line-height: 1; vertical-align: super; color: var(--cd-primary-strong); background: transparent; border: 0; cursor: pointer; font-variant-numeric: tabular-nums; }
+.intel-ui .intel-cite:hover, .intel-ui .intel-cite:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+.intel-ui .intel-source { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 0 8px; padding: 10px 0; border-top: 1px solid var(--cd-border); text-align: left; width: 100%; background: transparent; color: inherit; cursor: pointer; }
+.intel-ui .intel-source:hover .intel-row-title { text-decoration: underline; text-underline-offset: 3px; }
+.intel-ui .intel-source-no { font-size: var(--precision-ui-font-table); color: var(--cd-muted); font-variant-numeric: tabular-nums; line-height: 22px; }
+.intel-ui .intel-project { padding: 20px 0; border-top: 1px solid var(--cd-border); }
+.intel-ui .intel-project:first-of-type { border-top: 0; padding-top: 0; }
+.intel-ui .intel-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 20px; margin-top: 12px; }
+.intel-ui .intel-facts dt { font-size: var(--precision-ui-font-table); line-height: 18px; color: var(--cd-muted); }
+.intel-ui .intel-facts dd { font-size: var(--precision-ui-font-input); line-height: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.intel-ui .intel-insight-group + .intel-insight-group { margin-top: 20px; }
+.intel-ui .intel-insight-group > p { margin-bottom: 8px; }
+
+/* 선택 칩(관심 업종 등) — 선택은 상태이므로 탭 선택 틴트만 쓴다. */
+.intel-ui .intel-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.intel-ui .intel-chip { height: 32px; padding: 0 12px; border: 1px solid var(--cd-border); border-radius: var(--mcm-action-radius, 10px); background: var(--cd-card); color: var(--cd-text); font-size: var(--precision-ui-font-input); transition: background 0.15s ease; }
+.intel-ui .intel-chip:hover { background: var(--cd-hover); }
+.intel-ui .intel-chip[aria-pressed="true"] { background: var(--cd-tab-selected); color: var(--cd-tab-selected-text); border-color: transparent; }
+.intel-ui .intel-field-label { font-size: var(--precision-ui-font-table); line-height: 18px; font-weight: 500; color: var(--cd-muted); margin-bottom: 8px; }
+
+@media (max-width: 767px) {
+  .intel-ui .intel-stat { min-width: 100px; padding: 12px; }
+  .intel-ui .intel-row-item { flex-wrap: wrap; padding: 10px 16px; }
+  .intel-ui .intel-card-head, .intel-ui .intel-toolbar, .intel-ui .intel-card-body { padding-left: 16px; padding-right: 16px; }
+}

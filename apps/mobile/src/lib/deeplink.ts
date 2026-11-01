@@ -9,6 +9,15 @@ export function routeForLink(link: string | null | undefined): Href | null {
   if (!link || typeof link !== "string") return null;
   const path = link.split("?")[0];
 
+  // 브리핑 공유는 문서 ID로 연다. 수신자는 관심조건·예약 권한 없이 공유 문서만 읽을 수 있다.
+  if (path === "/sales/rag") {
+    const query = new URLSearchParams(link.split("?")[1] ?? "");
+    const briefingId = query.get("briefingId"), runId = query.get("runId");
+    if (briefingId && /^[a-zA-Z0-9_-]{1,128}$/.test(briefingId)) return { pathname: "/briefings/[briefingId]", params: { briefingId } };
+    if (runId && /^[a-zA-Z0-9_-]{1,128}$/.test(runId)) return { pathname: "/briefings/[briefingId]", params: { briefingId: "run", runId } };
+    return null;
+  }
+
   // 게시글 상세
   const board = /^\/board\/([^/]+)$/.exec(path);
   if (board) return { pathname: "/board/[postId]", params: { postId: board[1] } };

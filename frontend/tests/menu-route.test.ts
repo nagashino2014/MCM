@@ -173,3 +173,14 @@ test("API 가 관리 권한을 요구하는 화면은 메뉴·URL 도 같은 키
   assert.deepEqual(visibleSubmenu(assets, STAFF_PERMS).map((s) => s.href), ["/assets/reservations", "/assets"]);
   assert.equal(requiredPermissionsForPath("/assets"), null);
 });
+
+// 322: 임원에게 브리핑만 개방해도 다른 영업 화면은 열리지 않는다.
+test("브리핑 전용 권한은 해당 하위 메뉴와 진입 경로만 개방한다", () => {
+  const item=MENU_ITEMS.find(item=>item.href==="/sales")!;
+  const permissions=["intel.briefing.view@all"];
+  assert.equal(isMenuVisible(item,permissions),true);
+  assert.deepEqual(visibleSubmenu(item,permissions).map(item=>item.href),["/sales/rag"]);
+  assert.equal(menuEntryHref(item,permissions),"/sales/rag");
+  assert.deepEqual(requiredPermissionsForPath("/sales/rag"),["intel.briefing.view","sales.view"]);
+  assert.deepEqual(requiredPermissionsForPath("/sales/projects"),["sales.view"]);
+});

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { ArrowDown, ArrowUp, Copy, Download, FilePlus2, FileText, ImagePlus, Plus, Redo2, Save, Send, Trash2, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Download, FilePlus2, FileText, ImagePlus, ListPlus, Plus, Redo2, Save, Search, Send, Sparkles, Trash2, Undo2, X } from "lucide-react";
 import { getFontEmbedCSS, toPng } from "html-to-image";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -23,9 +23,12 @@ import { validateProposalForPublication } from "@/lib/proposal/validate";
 import { COVER_ART_ID, DIVIDER_ART_ID } from "@/lib/proposal/art";
 import { DIAGRAM_ICON_NAMES, DIAGRAM_META, DIAGRAM_TYPES, ORG_GROUPS, type DiagramKind, type DiagramSpec } from "@/lib/proposal/diagrams/types";
 import {
-  BLOCK_LABEL, BLOCK_PALETTE, History, cloneBlock, convertBlock, conversions, defaultDiagram, findBlock, getAtPath, insertSectionAfter, makeBlock,
-  newId, pushLastBlockToNextPage, setAtPath, updateBlock, updateSection,
+  BLOCK_LABEL, BLOCK_PALETTE, History, bulletAction, cloneBlock, convertBlock, conversions, defaultDiagram, findBlock, getAtPath, insertSectionAfter, insertTableRow, makeBlock,
+  moveItem, moveTableColumn, newId, pushLastBlockToNextPage, setAtPath, updateBlock, updateSection, type BulletAction,
 } from "@/lib/proposal/edit";
+import { fieldLabel, findMatches, pendingItems, replaceMatches, type FindMatch, type PendingItem, type TextField } from "@/lib/proposal/find";
+import { pageOverflows } from "@/lib/proposal/measure";
+import { ProposalAiPanel, type AiTarget } from "./ProposalAiPanel";
 import { frameDocument, loadStudioKit, type StudioKit } from "../catalog/studio/kit";
 import "@/components/cdash/cdash.css";
 import "./proposal.css";
@@ -54,15 +57,28 @@ const blockSummary = (b: ProposalBlock): string => {
 };
 
 // ── 미리보기 ─────────────────────────────────────────────────────────────────
-interface EditTarget { sid: string; bid: string; path: string; rect: { x: number; y: number; w: number; h: number }; fontSize: number; value: string; multiline: boolean }
-function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, onSelect, onEdit, onOverflow }: {
-  doc: ProposalDocument; kit: StudioKit; frameRef: React.RefObject<HTMLIFrameElement | null>; zoom: number; selSection: string; selBlock: string; scrollKey: number;
+interface EditTarget { sid: string; bid: string; path: string; rect: { x: number; y: number; w: number; h: number }; fontSize: number; value: string; multiline: boolean; bullet: number | null }
+type FieldRef = Pick<TextField, "sid" | "bid" | "path">;
+const editKey = (f: FieldRef) => `${f.sid}|${f.bid}|${f.path}`;
+/** 미리보기 틀 안에서만 굴린다 — scrollIntoView 는 바깥 화면까지 굴려 상단 바를 가린다. */
+function scrollFrame(el: HTMLElement, at: "start" | "center") {
+  const win = el.ownerDocument.defaultView;
+  if (!win) return;
+  const r = el.getBoundingClientRect();
+  win.scrollBy({ top: at === "start" ? r.top : r.top + r.height / 2 - win.innerHeight / 2 });
+}
+function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, hit, onSelect, onEdit, onBullet, onOverflow }: {
+  doc: ProposalDocument; kit: StudioKit; frameRef: React.RefObject<HTMLIFrameElement | null>; zoom: number; selSection: string; selBlock: string; scrollKey: number; hit: FieldRef | null;
   onSelect: (sid: string, bid: string) => void; onEdit: (sid: string, bid: string, path: string, value: string) => void; onOverflow: (ids: string[]) => void;
+  /** 개조식 줄 단축키 — 다음에 열 줄 번호를 돌려준다 */
+  onBullet: (sid: string, bid: string, index: number, value: string, action: BulletAction) => number | null;
 }) {
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const docRef = useRef(doc); docRef.current = doc;
+  const reopen = useRef<FieldRef | null>(null);
+  const closing = useRef(false);
   const pal = paletteOf(doc);
   const srcDoc = useMemo(() => frameDocument(kit, "pretendard", { extraCss: proposalFrameCss(pal) }), [kit, pal.primary, pal.primary2, pal.accent, pal.tint, pal.tint2, pal.line]); // eslint-disable-line react-hooks/exhaustive-deps
   // 쪽 넘침 검사
@@ -71,8 +87,7 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, onS
     const check = () => {
       const ids: string[] = [];
       mount.querySelectorAll<HTMLElement>("article[data-section]").forEach((page) => {
-        const body = page.querySelector<HTMLElement>(".pp-body"), flow = page.querySelector<HTMLElement>(".pp-flow");
-        const over = !!body && !!flow && flow.offsetHeight > body.clientHeight + 1;
+        const over = pageOverflows(page);
         page.dataset.overflow = String(over);
         if (over) ids.push(page.dataset.section || "");
       });
@@ -88,8 +103,24 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, onS
   useEffect(() => {
     if (!mount) return;
     const target = mount.querySelector<HTMLElement>(`article[data-page="${selSection || "cover"}"]`);
-    target?.scrollIntoView({ block: "start" });
+    if (target) scrollFrame(target, "start");
   }, [mount, scrollKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 겹친 입력창 열기 — 더블클릭과 개조식 단축키(다음 줄 열기)가 같이 쓴다.
+  const openEditor = (el: HTMLElement) => {
+    const fd = frameRef.current?.contentDocument;
+    if (!fd || !wrapRef.current || !frameRef.current) return;
+    const [sid, bid, path] = (el.dataset.edit || "").split("|");
+    const r = el.getBoundingClientRect();
+    const fr = frameRef.current.getBoundingClientRect(), wr = wrapRef.current.getBoundingClientRect();
+    const fs = parseFloat(fd.defaultView?.getComputedStyle(el).fontSize || "12");
+    const multiline = /^(text|summary|items\.\d+\.(text|body)|rows\.\d+\.\d+|note)$/.test(path) || path === "text";
+    const bm = /^items\.(\d+)\.text$/.exec(path);
+    const bullet = bm && findBlock(docRef.current, bid)?.block.kind === "bullets" ? Number(bm[1]) : null;
+    closing.current = false;
+    setEdit({ sid, bid, path, value: getAtPath(docRef.current, sid, bid, path), multiline, bullet, fontSize: Math.max(12, fs * zoom),
+      rect: { x: fr.left - wr.left + r.left, y: fr.top - wr.top + r.top, w: Math.max(160, r.width + 8), h: Math.max(28, r.height + 8) } });
+  };
+  const fieldEl = (f: FieldRef) => mount?.querySelector<HTMLElement>(`[data-edit="${CSS.escape(editKey(f))}"]`) ?? null;
   // 클릭 = 선택, 더블클릭 = 그 자리 글 고치기(겹친 입력창)
   useEffect(() => {
     const fd = frameRef.current?.contentDocument;
@@ -103,22 +134,44 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, onS
     };
     const dbl = (e: MouseEvent) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>("[data-edit]");
-      if (!el || !wrapRef.current || !frameRef.current) return;
-      const [sid, bid, path] = (el.dataset.edit || "").split("|");
-      const r = el.getBoundingClientRect();
-      const fr = frameRef.current.getBoundingClientRect(), wr = wrapRef.current.getBoundingClientRect();
-      const fs = parseFloat(fd.defaultView?.getComputedStyle(el).fontSize || "12");
-      const multiline = /^(text|summary|items\.\d+\.(text|body)|rows\.\d+\.\d+|note)$/.test(path) || path === "text";
-      setEdit({ sid, bid, path, value: getAtPath(docRef.current, sid, bid, path), multiline, fontSize: Math.max(12, fs * zoom),
-        rect: { x: fr.left - wr.left + r.left, y: fr.top - wr.top + r.top, w: Math.max(160, r.width + 8), h: Math.max(28, r.height + 8) } });
+      if (!el) return;
+      openEditor(el);
       e.preventDefault();
     };
     fd.addEventListener("click", click);
     fd.addEventListener("dblclick", dbl);
     return () => { fd.removeEventListener("click", click); fd.removeEventListener("dblclick", dbl); };
-  }, [mount, frameRef, onSelect, zoom]);
+  }, [mount, frameRef, onSelect, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { mount?.style.setProperty("--pp-zoom", String(zoom)); const root = mount?.querySelector<HTMLElement>(".pp-root"); root?.style.setProperty("--pp-zoom", String(zoom)); }, [mount, zoom, doc]);
-  const commit = (value: string | null) => { if (edit && value !== null && value !== edit.value) onEdit(edit.sid, edit.bid, edit.path, value.replace(/\r/g, "")); setEdit(null); };
+  // 개조식 단축키 뒤 — 다시 그린 줄에 입력창을 연다
+  useEffect(() => {
+    const r = reopen.current;
+    if (!r || !mount) return;
+    reopen.current = null;
+    const el = fieldEl(r);
+    if (el) openEditor(el);
+  }, [mount, doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 찾기·작성 필요 목록에서 고른 칸 — 강조하고 화면 가운데로
+  useEffect(() => {
+    if (!mount) return;
+    mount.querySelectorAll("[data-hit]").forEach((el) => el.removeAttribute("data-hit"));
+    if (!hit || hit.bid === "_doc") return;
+    const el = fieldEl(hit);
+    if (el) { el.setAttribute("data-hit", "true"); scrollFrame(el, "center"); }
+  }, [mount, hit, doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const commit = (value: string | null) => { if (closing.current) return; closing.current = true; if (edit && value !== null && value !== edit.value) onEdit(edit.sid, edit.bid, edit.path, value.replace(/\r/g, "")); setEdit(null); };
+  const bulletKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!edit || edit.bullet === null) return false;
+    const value = e.currentTarget.value.replace(/\r/g, "");
+    const action: BulletAction | null = e.key === "Enter" && e.altKey ? "insert" : e.key === "Tab" ? (e.shiftKey ? "outdent" : "indent") : e.key === "Backspace" && value === "" ? "remove" : null;
+    if (!action) return false;
+    e.preventDefault();
+    closing.current = true;
+    const focus = onBullet(edit.sid, edit.bid, edit.bullet, value, action);
+    setEdit(null);
+    if (focus !== null) reopen.current = { sid: edit.sid, bid: edit.bid, path: `items.${focus}.text` };
+    return true;
+  };
   return (
     <div className="proposal-canvas" ref={wrapRef}>
       <iframe ref={frameRef} title="제안서 A4 미리보기" srcDoc={srcDoc} onLoad={() => setMount(frameRef.current?.contentDocument?.getElementById("st-root") ?? null)} />
@@ -127,8 +180,8 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, onS
         <textarea autoFocus className="proposal-inline-edit" defaultValue={edit.value} aria-label="선택한 글 고치기"
           style={{ left: edit.rect.x - 4, top: edit.rect.y - 4, width: edit.rect.w, height: edit.multiline ? Math.max(edit.rect.h, 64) : edit.rect.h, fontSize: edit.fontSize }}
           onBlur={(e) => commit(e.currentTarget.value)}
-          onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); commit(null); } if (e.key === "Enter" && (!edit.multiline || e.ctrlKey)) { e.preventDefault(); commit(e.currentTarget.value); } }} />
-        <div className="proposal-inline-hint" style={{ left: edit.rect.x - 4, top: Math.max(0, edit.rect.y - 26) }}>{edit.multiline ? "Ctrl+Enter 적용 · Esc 취소 · **굵게**" : "Enter 적용 · Esc 취소"}</div>
+          onKeyDown={(e) => { if (bulletKey(e)) return; if (e.key === "Escape") { e.preventDefault(); commit(null); } if (e.key === "Enter" && (!edit.multiline || e.ctrlKey)) { e.preventDefault(); commit(e.currentTarget.value); } }} />
+        <div className="proposal-inline-hint" style={{ left: edit.rect.x - 4, top: Math.max(0, edit.rect.y - 26) }}>{edit.bullet !== null ? "Ctrl+Enter 적용 · Alt+Enter 새 줄 · Tab 단계 · Esc 취소" : edit.multiline ? "Ctrl+Enter 적용 · Esc 취소 · **굵게**" : "Enter 적용 · Esc 취소"}</div>
       </> : null}
     </div>
   );
@@ -152,7 +205,6 @@ function ColorPick({ value, pal, onChange }: { value?: string; pal: ThemePalette
     <label className="custom" title="직접 고르기"><input type="color" value={isHexColor(value) ? value : pal.series?.[0] ?? pal.primary} onChange={(e) => onChange(e.target.value.toUpperCase())} aria-label="색 직접 고르기" /></label>
   </div>;
 }
-function moveItem<T>(list: T[], i: number, d: number): T[] { const a = [...list]; const j = i + d; if (j < 0 || j >= a.length) return a; [a[i], a[j]] = [a[j], a[i]]; return a; }
 function ItemHead({ label, i, n, onMove, onDel }: { label: string; i: number; n: number; onMove: (d: number) => void; onDel: () => void }) {
   return <div className="ih"><span>{label}</span>
     <button type="button" className="icon-btn" aria-label="위로" disabled={i === 0} onClick={() => onMove(-1)}><ArrowUp size={13} /></button>
@@ -180,9 +232,18 @@ function TableEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "table
     <div className="mini-table"><table><thead><tr>{b.columns.map((c, ci) => <th key={ci}><input value={c} aria-label={`${ci + 1}열 머리글`} onChange={(e) => set({ columns: b.columns.map((x, k) => (k === ci ? e.target.value : x)) })} /></th>)}
       <th className="ctl"><button type="button" className="icon-btn" aria-label="열 추가" disabled={b.columns.length >= 12} onClick={() => set({ columns: [...b.columns, "새 열"], rows: b.rows.map((r) => [...r, ""]), widths: undefined })}><Plus size={13} /></button></th></tr></thead>
       <tbody>{b.rows.map((r, ri) => <tr key={ri}>{b.columns.map((_, ci) => <td key={ci}><textarea rows={2} value={r[ci] ?? ""} aria-label={`${ri + 1}행 ${ci + 1}열`} onChange={(e) => set({ rows: b.rows.map((row, k) => (k === ri ? row.map((x, m) => (m === ci ? e.target.value : x)) : row)) })} /></td>)}
-        <td className="ctl"><button type="button" className="icon-btn" aria-label={`${ri + 1}행 삭제`} onClick={() => set({ rows: b.rows.filter((_, k) => k !== ri) })}><Trash2 size={13} /></button></td></tr>)}
+        <td className="ctl"><span className="ctl-stack">
+          <button type="button" className="icon-btn" aria-label={`${ri + 1}행 위로`} disabled={ri === 0} onClick={() => set({ rows: moveItem(b.rows, ri, -1) })}><ArrowUp size={12} /></button>
+          <button type="button" className="icon-btn" aria-label={`${ri + 1}행 아래로`} disabled={ri === b.rows.length - 1} onClick={() => set({ rows: moveItem(b.rows, ri, 1) })}><ArrowDown size={12} /></button>
+          <button type="button" className="icon-btn" aria-label={`${ri + 1}행 아래에 행 넣기`} onClick={() => onChange(insertTableRow(b, ri + 1))}><ListPlus size={12} /></button>
+          <button type="button" className="icon-btn" aria-label={`${ri + 1}행 삭제`} onClick={() => set({ rows: b.rows.filter((_, k) => k !== ri) })}><Trash2 size={12} /></button>
+        </span></td></tr>)}
         <tr><td colSpan={b.columns.length + 1}><button type="button" className="cd-btn cd-btn-ghost" style={{ width: "100%" }} onClick={() => set({ rows: [...b.rows, b.columns.map(() => "")] })}><Plus size={13} />행 추가</button></td></tr></tbody></table></div>
-    {b.columns.length > 1 ? <div className="chips">{b.columns.map((c, ci) => <button key={ci} type="button" onClick={() => set({ columns: b.columns.filter((_, k) => k !== ci), rows: b.rows.map((r) => r.filter((_, k) => k !== ci)), widths: undefined })}>‘{c || ci + 1}’ 열 삭제</button>)}</div> : null}
+    {b.columns.length > 1 ? <div className="chips">{b.columns.map((c, ci) => <span key={ci} className="col-ctl">
+      <button type="button" className="icon-btn" aria-label={`${ci + 1}열 왼쪽으로`} disabled={ci === 0} onClick={() => onChange(moveTableColumn(b, ci, -1))}><ArrowLeft size={12} /></button>
+      <button type="button" onClick={() => set({ columns: b.columns.filter((_, k) => k !== ci), rows: b.rows.map((r) => r.filter((_, k) => k !== ci)), widths: undefined })}>‘{c || ci + 1}’ 열 삭제</button>
+      <button type="button" className="icon-btn" aria-label={`${ci + 1}열 오른쪽으로`} disabled={ci === b.columns.length - 1} onClick={() => onChange(moveTableColumn(b, ci, 1))}><ArrowRight size={12} /></button>
+    </span>)}</div> : null}
     <Field label="열 너비 비율(쉼표, 비우면 자동)"><IN value={b.widths?.join(", ") ?? ""} placeholder="예: 20, 50, 30" onChange={(v) => { const w = v.split(",").map((x) => Number(x.trim())).filter((x) => x > 0); set({ widths: w.length === b.columns.length ? w : undefined }); }} /></Field>
     <Field label="표 아래 주석"><IN value={b.note ?? ""} placeholder="※ 출처·기준일" onChange={(v) => set({ note: v || undefined })} /></Field>
   </>;
@@ -205,7 +266,7 @@ function GanttEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "gantt
       <select className="cd-input" value={t.start} onChange={(e) => set({ tasks: b.tasks.map((x, k) => (k === i ? { ...x, start: Number(e.target.value), end: Math.max(x.end, Number(e.target.value)) } : x)) })}>{opts}</select>
       <select className="cd-input" value={t.end} onChange={(e) => set({ tasks: b.tasks.map((x, k) => (k === i ? { ...x, end: Number(e.target.value), start: Math.min(x.start, Number(e.target.value)) } : x)) })}>{opts}</select>
       <select className="cd-input" value={t.tone ?? "work"} onChange={(e) => set({ tasks: b.tasks.map((x, k) => (k === i ? { ...x, tone: e.target.value as "work" } : x)) })}><option value="work">수행</option><option value="key">핵심</option><option value="report">보고</option></select>
-      <span style={{ display: "flex" }}><button type="button" className="icon-btn" aria-label="위로" disabled={!i} onClick={() => set({ tasks: moveItem(b.tasks, i, -1) })}><ArrowUp size={13} /></button><button type="button" className="icon-btn" aria-label="삭제" onClick={() => set({ tasks: b.tasks.filter((_, k) => k !== i) })}><Trash2 size={13} /></button></span>
+      <span style={{ display: "flex" }}><button type="button" className="icon-btn" aria-label="위로" disabled={!i} onClick={() => set({ tasks: moveItem(b.tasks, i, -1) })}><ArrowUp size={13} /></button><button type="button" className="icon-btn" aria-label="아래로" disabled={i === b.tasks.length - 1} onClick={() => set({ tasks: moveItem(b.tasks, i, 1) })}><ArrowDown size={13} /></button><button type="button" className="icon-btn" aria-label="삭제" onClick={() => set({ tasks: b.tasks.filter((_, k) => k !== i) })}><Trash2 size={13} /></button></span>
     </div>)}
     <button type="button" className="cd-btn cd-btn-ghost" onClick={() => set({ tasks: [...b.tasks, { group: b.tasks[b.tasks.length - 1]?.group, label: "새 과업", start: 0, end: Math.min(1, n - 1) }] })}><Plus size={14} />과업 추가</button>
     <Field label="범례 옆 주석"><IN value={b.note ?? ""} onChange={(v) => set({ note: v || undefined })} placeholder="※ 착수일 기준, 협의에 따라 조정" /></Field>
@@ -278,7 +339,7 @@ function BulletsEditor({ items, onChange }: { items: BulletItem[]; onChange: (it
       <textarea className="cd-input" rows={Math.min(5, Math.max(1, Math.ceil(it.text.length / 34)))} value={it.text} onChange={(e) => onChange(items.map((x, k) => (k === i ? { ...x, text: e.target.value } : x)))}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const next = [...items]; next.splice(i + 1, 0, { level: it.level, text: "" }); onChange(next); }
           if (e.key === "Tab") { e.preventDefault(); const level = Math.max(1, Math.min(3, it.level + (e.shiftKey ? -1 : 1))) as 1 | 2 | 3; onChange(items.map((x, k) => (k === i ? { ...x, level } : x))); } }} />
-      <span style={{ display: "flex", flexDirection: "column" }}><button type="button" className="icon-btn" aria-label="위로" disabled={!i} onClick={() => onChange(moveItem(items, i, -1))}><ArrowUp size={12} /></button><button type="button" className="icon-btn" aria-label="삭제" onClick={() => onChange(items.filter((_, k) => k !== i))}><Trash2 size={12} /></button></span>
+      <span style={{ display: "flex", flexDirection: "column" }}><button type="button" className="icon-btn" aria-label="위로" disabled={!i} onClick={() => onChange(moveItem(items, i, -1))}><ArrowUp size={12} /></button><button type="button" className="icon-btn" aria-label="아래로" disabled={i === items.length - 1} onClick={() => onChange(moveItem(items, i, 1))}><ArrowDown size={12} /></button><button type="button" className="icon-btn" aria-label="삭제" onClick={() => onChange(items.filter((_, k) => k !== i))}><Trash2 size={12} /></button></span>
     </div>)}
     <p className="proposal-muted">Enter 새 줄 · Tab/Shift+Tab 단계 · Shift+Enter 줄바꿈</p>
     <button type="button" className="cd-btn cd-btn-ghost" onClick={() => onChange([...items, { level: 1, text: "" }])}><Plus size={14} />줄 추가</button>
@@ -309,6 +370,69 @@ function BlockFields({ b, onChange, pal }: { b: ProposalBlock; onChange: (b: Pro
   }
 }
 
+// ── 작성 필요 목록 · 찾기·바꾸기 ─────────────────────────────────────────────
+/** 일치 앞뒤 글 — 목록 한 줄에 맞게 자른다 */
+function Snippet({ text, start, end }: { text: string; start: number; end: number }) {
+  const a = Math.max(0, start - 18), z = Math.min(text.length, end + 30);
+  return <>{a > 0 ? "…" : ""}{text.slice(a, start)}<mark>{text.slice(start, end)}</mark>{text.slice(end, z)}{z < text.length ? "…" : ""}</>;
+}
+
+function PendingPanel({ doc, items, current, onGo, onClose }: { doc: ProposalDocument; items: PendingItem[]; current: string; onGo: (f: PendingItem) => void; onClose: () => void }) {
+  const total = items.reduce((a, x) => a + x.count, 0);
+  return <section className="proposal-tool cd-card" aria-label="작성 필요 목록" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+    <div className="row"><strong>{total ? `발행 전에 채울 곳 ${total}곳` : "채울 곳이 없습니다"}</strong>
+      <span className="proposal-muted">누르면 그 자리로 이동합니다.</span>
+      <button type="button" className="icon-btn" aria-label="작성 필요 목록 닫기" onClick={onClose}><X size={15} /></button></div>
+    {items.length ? <div className="list">{items.map((it) => {
+      const key = `${editKey(it)}|${it.kind}`;
+      const at = it.kind === "todo" ? it.value.indexOf("[작성 필요]") : -1;
+      return <button key={key} type="button" className={current === key ? "on" : ""} onClick={() => onGo(it)}>
+        <span className="lb">{fieldLabel(doc, it)}</span>
+        <span className="tx">{it.kind === "todo" ? <Snippet text={it.value} start={at} end={at + 7} /> : <>연결 값 없음: {it.names?.join(", ")}</>}{it.count > 1 ? <small> 외 {it.count - 1}곳</small> : null}</span>
+      </button>;
+    })}</div> : null}
+  </section>;
+}
+
+function FindPanel({ doc, onGo, onReplace, onClose }: { doc: ProposalDocument; onGo: (f: FieldRef) => void; onReplace: (next: ProposalDocument, note: string) => void; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [caseSensitive, setCase] = useState(false);
+  const [sel, setSel] = useState(0);
+  const moved = useRef(false);
+  const matches = useMemo(() => findMatches(doc, query, { caseSensitive }), [doc, query, caseSensitive]);
+  const usable = matches.filter((m) => !m.skip).length;
+  const cur: FindMatch | undefined = matches[Math.min(sel, matches.length - 1)];
+  const go = (i: number) => { if (!matches.length) return; const k = (i + matches.length) % matches.length; moved.current = true; setSel(k); onGo(matches[k]); };
+  /** Enter = 다음(처음엔 지금 곳), Shift+Enter = 이전 */
+  const step = (back: boolean) => go(!moved.current ? sel : back ? sel - 1 : sel + 1);
+  const replaceOne = () => {
+    if (!cur || cur.skip) return;
+    const r = replaceMatches(doc, query, replacement, { caseSensitive, only: new Set([cur.key]) });
+    if (r.replaced) onReplace(r.doc, "1곳을 바꿨습니다.");
+  };
+  const replaceAll = () => {
+    const r = replaceMatches(doc, query, replacement, { caseSensitive });
+    if (r.replaced) onReplace(r.doc, `${r.replaced}곳을 바꿨습니다.${r.skipped ? ` 표식을 가로지르는 ${r.skipped}곳은 건너뛰었습니다.` : ""} Ctrl+Z 로 한 번에 되돌릴 수 있습니다.`);
+  };
+  return <section className="proposal-tool cd-card" aria-label="찾기·바꾸기" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}>
+    <div className="row">
+      <input className="cd-input" autoFocus value={query} placeholder="찾을 말" aria-label="찾을 말" onChange={(e) => { setQuery(e.target.value); setSel(0); moved.current = false; }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); step(e.shiftKey); } }} />
+      <input className="cd-input" value={replacement} placeholder="바꿀 말" aria-label="바꿀 말" onChange={(e) => setReplacement(e.target.value)} />
+      <label className="proposal-muted"><input type="checkbox" checked={caseSensitive} onChange={(e) => setCase(e.target.checked)} /> 대소문자 구분</label>
+      <span className="proposal-muted" role="status">{query ? `${matches.length}곳${matches.length !== usable ? ` (바꿀 수 있는 곳 ${usable})` : ""}` : ""}</span>
+      <button type="button" className="cd-btn" disabled={!cur || !!cur.skip} onClick={replaceOne}>바꾸기</button>
+      <button type="button" className="cd-btn" disabled={!usable} onClick={replaceAll}>모두 바꾸기</button>
+      <button type="button" className="icon-btn" aria-label="찾기·바꾸기 닫기" onClick={onClose}><X size={15} /></button>
+    </div>
+    {matches.length ? <div className="list">{matches.slice(0, 200).map((m, i) => <button key={m.key} type="button" className={cur?.key === m.key ? "on" : ""} onClick={() => go(i)}>
+      <span className="lb">{fieldLabel(doc, m)}</span>
+      <span className="tx"><Snippet text={m.value} start={m.start} end={m.end} />{m.skip ? <small> — {m.skip}</small> : null}</span>
+    </button>)}{matches.length > 200 ? <p className="proposal-muted">앞의 200곳만 보입니다. 찾을 말을 더 길게 적어 주세요.</p> : null}</div> : null}
+  </section>;
+}
+
 // ── 본 화면 ──────────────────────────────────────────────────────────────────
 export function ProposalStudio() {
   const { theme } = useCdashTheme();
@@ -331,17 +455,32 @@ export function ProposalStudio() {
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [overflow, setOverflowState] = useState<string[]>([]);
+  /** 바 아래 도구 — 작성 필요 목록 · 찾기·바꾸기 */
+  const [tool, setTool] = useState<"" | "pending" | "find">("");
+  const [hit, setHit] = useState<FieldRef | null>(null);
+  const [pendingKey, setPendingKey] = useState("");
+  /** AI 수정 대상과, 제안을 얹어 보는 동안의 문서(그동안 편집을 멈춘다) */
+  const [aiTarget, setAiTarget] = useState<AiTarget | null>(null);
+  const [reviewDoc, setReviewDocState] = useState<ProposalDocument | null>(null);
+  const reviewing = useRef(false);
+  const setReviewDoc = (d: ProposalDocument | null) => { reviewing.current = !!d; setReviewDocState(d); };
   const [, force] = useState(0);
   const history = useRef(new History<ProposalDocument>());
   const frameRef = useRef<HTMLIFrameElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const imageTarget = useRef<string>("");
+  const findBtn = useRef<HTMLButtonElement>(null);
+  const todoBtn = useRef<HTMLButtonElement>(null);
+  /** 도구 창 닫기 — 초점을 연 단추로 돌려준다 */
+  const closeTool = (back: React.RefObject<HTMLButtonElement | null>) => { back.current?.focus(); setTool(""); setHit(null); };
   const operation = useRef(false);
   const docRef = useRef<ProposalDocument | null>(null); docRef.current = doc;
   const dirty = !!doc && json(doc) !== saved;
   const section = doc?.sections.find((s) => s.id === selSection) ?? null;
   const found = doc && selBlock ? findBlock(doc, selBlock) : null;
   const onOverflow = useCallback((ids: string[]) => setOverflowState((before) => (json(before) === json(ids) ? before : ids)), []);
+  const pending = useMemo(() => (doc ? pendingItems(doc) : []), [doc]);
+  const pendingTotal = pending.reduce((a, x) => a + x.count, 0);
   const refresh = useCallback(async () => { const data = await api<{ documents: DocumentRow[] }>("/api/sales/proposals"); setDocuments(data.documents); }, []);
   useEffect(() => {
     let live = true;
@@ -359,7 +498,7 @@ export function ProposalStudio() {
   /** 모든 편집은 여기로 — 실행 취소 기록(같은 key 의 연속 입력은 한 단계로 묶는다) */
   const change = useCallback((next: ProposalDocument, key = "") => {
     const cur = docRef.current;
-    if (!cur || operation.current || !canEdit) return;
+    if (!cur || operation.current || reviewing.current || !canEdit) return;
     history.current.push(cur, key);
     setDocState(next);
   }, [canEdit]);
@@ -368,9 +507,16 @@ export function ProposalStudio() {
   const changeBlock = (b: ProposalBlock) => { if (doc) change(updateBlock(doc, b.id, () => b), `b:${b.id}`); };
   const select = useCallback((sid: string, bid: string) => { setSelSection(sid); setSelBlock(bid); }, []);
   const goPage = (sid: string) => { setSelSection(sid); setSelBlock(""); setScrollKey((k) => k + 1); };
+  /** 글 칸으로 이동 — 그 쪽·블록을 고르고 미리보기에서 칸을 강조한다(표지 칸이면 문서 설정) */
+  const goField = (f: FieldRef) => {
+    // 쪽 머리로 먼저 옮기고, 미리보기에 글 요소가 있으면(도식 안 글은 그림이라 없음) 그 칸을 가운데로 다시 옮긴다.
+    if (f.bid === "_doc") goPage(""); else { setSelSection(f.sid); setSelBlock(f.bid === "_page" ? "" : f.bid); setScrollKey((k) => k + 1); }
+    setHit({ sid: f.sid, bid: f.bid, path: f.path });
+  };
   const safeLeave = () => !dirty || window.confirm("저장하지 않은 변경이 있습니다. 변경을 버리고 이동할까요?");
   const open = (next: ProposalDocument, rev: number, savedJson: string, eds: Edition[]) => {
     history.current.reset(); setDocState(next); setRevision(rev); setSaved(savedJson); setEditions(eds); setSelSection(""); setSelBlock(""); setScrollKey((k) => k + 1); setOverflowState([]);
+    setTool(""); setHit(null);
   };
   const load = (id: string) => {
     if (!safeLeave()) return;
@@ -398,8 +544,9 @@ export function ProposalStudio() {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!(e.ctrlKey || e.metaKey) || reviewing.current) return;
       if (e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+      else if (e.key.toLowerCase() === "h" && docRef.current) { e.preventDefault(); setTool((t) => (t === "find" ? "" : "find")); }
       else if (!typing && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if (!typing && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
     };
@@ -413,6 +560,12 @@ export function ProposalStudio() {
     if (!doc) return;
     const snapshot = structuredClone(doc);
     void run("그림 변환·발행 중", async () => {
+      // 발행 검사는 위치를 알려 주지 않으므로 먼저 채울 곳 목록을 열고 첫 자리로 이동한다.
+      const pending = pendingItems(snapshot);
+      if (pending.length) {
+        setTool("pending"); setPendingKey(`${editKey(pending[0])}|${pending[0].kind}`); goField(pending[0]);
+        throw new Error(`발행 전에 채울 곳이 ${pending.reduce((a, x) => a + x.count, 0)}곳 남았습니다. 작성 필요 목록에서 차례로 채워 주세요.`);
+      }
       validateProposalForPublication(snapshot);
       if (overflow.length) throw new Error(`쪽 범위를 넘는 내용이 있습니다(${overflow.length}쪽). 왼쪽 목록의 주황 점 쪽을 줄이거나 [다음 쪽으로 넘기기]를 쓰세요.`);
       const fd = frameRef.current?.contentDocument;
@@ -442,7 +595,7 @@ export function ProposalStudio() {
   };
 
   const addImage = async (file: File, sid: string) => {
-    if (!doc) return;
+    if (!doc || reviewing.current) return;
     if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 8 * 1024 * 1024) { setError("PNG·JPEG 파일을 8MB 이하로 선택하세요."); return; }
     void run("그림 읽는 중", async () => {
       const dataUrl = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("그림 파일을 읽지 못했습니다.")); r.readAsDataURL(file); });
@@ -472,7 +625,13 @@ export function ProposalStudio() {
     change(insertSectionAfter(doc, base?.id ?? null, s)); goPage(s.id);
   };
   const movePage = (i: number, d: number) => { if (doc) change({ ...doc, sections: moveItem(doc.sections, i, d) }); };
-  const dupPage = (s: ProposalSection) => { if (!doc) return; const copy: ProposalSection = { ...structuredClone(s), id: newId("p"), pageId: s.pageId ? `${s.pageId}c` : undefined, blocks: s.blocks.map(cloneBlock) }; change(insertSectionAfter(doc, s.id, copy)); goPage(copy.id); };
+  const dupPage = (s: ProposalSection) => {
+    if (!doc) return;
+    // 복제한 쪽은 원고에서 온 쪽이 아니므로 원고 지문을 넘기지 않는다.
+    const { sourceHash: _hash, ...rest } = structuredClone(s);
+    const copy: ProposalSection = { ...rest, id: newId("p"), pageId: s.pageId ? `${s.pageId}c` : undefined, blocks: s.blocks.map(cloneBlock) };
+    change(insertSectionAfter(doc, s.id, copy)); goPage(copy.id);
+  };
   const delPage = (s: ProposalSection) => { if (!doc || !window.confirm(`‘${s.title || s.pageId || "이 쪽"}’ 쪽을 삭제할까요? 저장 전까지 기존 저장본에는 영향이 없습니다.`)) return; change({ ...doc, sections: doc.sections.filter((x) => x.id !== s.id) }); setSelSection(""); setSelBlock(""); };
   const addBlockTo = (kind: ProposalBlockKind) => {
     if (!doc || !section) return;
@@ -483,6 +642,14 @@ export function ProposalStudio() {
     setSelBlock(b.id);
   };
   const pushOverflow = (sid: string) => { if (!doc) return; const r = pushLastBlockToNextPage(doc, sid); if (r) { change(r.doc); goPage(r.target); } };
+  const bulletOp = (sid: string, bid: string, index: number, value: string, action: BulletAction): number | null => {
+    const cur = docRef.current;
+    const b = cur ? findBlock(cur, bid)?.block : null;
+    if (!cur || !b || b.kind !== "bullets" || operation.current || !canEdit) return null;
+    const r = bulletAction(b.items, index, value, action);
+    change(updateBlock(cur, bid, () => ({ ...b, items: r.items })));
+    return r.focus;
+  };
 
   const pages = doc ? physicalPages(doc) : [];
   const chapters = doc ? chaptersOf(doc) : [];
@@ -521,6 +688,7 @@ export function ProposalStudio() {
     const conv = conversions(b);
     inspector = <div className="inspector">
       <div className="hd"><span className="kind">{BLOCK_LABEL[b.kind]}</span><h2> </h2>
+        <button type="button" className="cd-btn cd-btn-ghost ai-btn" disabled={!canEdit || !!busy} onClick={() => setAiTarget({ scope: "block", sectionId: s.id, blockId: b.id, label: `${s.pageId ?? ""} · ${BLOCK_LABEL[b.kind]}` })}><Sparkles size={14} />AI로 고치기</button>
         <button type="button" className="icon-btn" aria-label="위로" disabled={index === 0} onClick={() => change(updateSection(doc, s.id, (x) => ({ ...x, blocks: moveItem(x.blocks, index, -1) })))}><ArrowUp size={15} /></button>
         <button type="button" className="icon-btn" aria-label="아래로" disabled={index === s.blocks.length - 1} onClick={() => change(updateSection(doc, s.id, (x) => ({ ...x, blocks: moveItem(x.blocks, index, 1) })))}><ArrowDown size={15} /></button>
         <button type="button" className="icon-btn" aria-label="복제" onClick={() => { const c = cloneBlock(b); change(updateSection(doc, s.id, (x) => { const blocks = [...x.blocks]; blocks.splice(index + 1, 0, c); return { ...x, blocks }; })); setSelBlock(c.id); }}><Copy size={15} /></button>
@@ -537,7 +705,8 @@ export function ProposalStudio() {
     const s = section;
     const setS = (patch: Partial<ProposalSection>, key = "") => change(updateSection(doc, s.id, (x) => ({ ...x, ...patch })), key);
     inspector = <div className="inspector">
-      <div className="hd"><span className="kind">쪽</span><h2>{s.pageId ?? ""}</h2></div>
+      <div className="hd"><span className="kind">쪽</span><h2>{s.pageId ?? ""}</h2>
+        <button type="button" className="cd-btn cd-btn-ghost ai-btn" disabled={!canEdit || !!busy} onClick={() => setAiTarget({ scope: "page", sectionId: s.id, label: `${s.pageId ?? ""} 쪽 전체` })}><Sparkles size={14} />AI로 고치기</button></div>
       <div className="two">
         <Field label="장(머리띠)"><input className="cd-input" list="proposal-chapters" value={s.chapter ?? ""} onChange={(e) => setS({ chapter: e.target.value || undefined }, `s:${s.id}:ch`)} /></Field>
         <Field label="절(머리말 오른쪽·목차)"><IN value={s.crumb ?? ""} onChange={(v) => setS({ crumb: v || undefined }, `s:${s.id}:cr`)} /></Field>
@@ -558,6 +727,7 @@ export function ProposalStudio() {
       <div className="two"><Field label="발주처"><IN value={doc.client} onChange={(v) => setDoc({ client: v }, "d:client")} /></Field><Field label="제출일"><IN type="date" value={doc.submissionDate} onChange={(v) => setDoc({ submissionDate: v })} /></Field></div>
       {doc.variables ? (["siteName", "duration", "companyName"] as const).map((k) => <Field key={k} label={PROPOSAL_VARIABLE_LABELS[k]}><IN value={doc.variables![k]} onChange={(v) => setDoc({ variables: { ...doc.variables!, [k]: v } }, `d:${k}`)} /></Field>) : null}
       <p className="proposal-muted">본문의 {"{{siteName}}"}·{"{{client}}"}·{"{{duration}}"} 연결 표기에 위 값이 들어갑니다.</p>
+      {doc.variables ? <Field label="발주처 메모(AI 참고 — 발행본에는 들어가지 않음)"><TA value={doc.variables.clientNotes ?? ""} rows={3} placeholder="업종·주요 설비·쟁점·요구 톤 등" onChange={(v) => setDoc({ variables: { ...doc.variables!, clientNotes: v || undefined } }, "d:notes")} /></Field> : null}
       <div className="sec"><h3>디자인</h3>
         <Field label="색 테마"><div className="swatches">{Object.entries(PROPOSAL_THEMES).map(([k, t]) => <button key={k} type="button" title={t.label} aria-label={t.label} className={doc.theme === k ? "on" : ""} style={{ background: `linear-gradient(135deg, ${t.primary} 60%, ${t.accent} 60%)` }} onClick={() => setDoc({ theme: k as ProposalDocument["theme"] })} />)}</div></Field>
         <Field label="발주처 주색(선택 — 테마 주색을 덮어씀)"><div className="two"><input className="cd-input" type="color" value={isHexColor(brand) ? brand : pal.primary} onChange={(e) => setOpts({ brandColor: e.target.value.toUpperCase() })} /><button type="button" className="cd-btn cd-btn-ghost" disabled={!brand} onClick={() => setOpts({ brandColor: undefined })}>테마 색으로</button></div></Field>
@@ -577,14 +747,22 @@ export function ProposalStudio() {
     {notice && <div className="proposal-notice" role="status">{notice}</div>}
     <div className="proposal-bar">
       <button type="button" className="cd-btn" disabled={!!busy} onClick={() => { if (safeLeave()) setDocState(null); }}>목록</button>
-      <button type="button" className="cd-btn cd-btn-ghost" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" disabled={!history.current.canUndo} onClick={undo}><Undo2 size={15} /></button>
-      <button type="button" className="cd-btn cd-btn-ghost" aria-label="다시 실행" title="다시 실행 (Ctrl+Y)" disabled={!history.current.canRedo} onClick={redo}><Redo2 size={15} /></button>
-      <span className="state" role="status"><b>{busy || (dirty ? "저장하지 않은 변경" : revision ? `저장됨 · ${revision}판` : "새 문서")}</b><span>전체 {totalPages}쪽(본문 {doc.sections.length})</span>{overflow.length ? <span className="warn">넘침 {overflow.length}쪽</span> : null}</span>
+      <button type="button" className="cd-btn cd-btn-ghost" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" disabled={!history.current.canUndo || !!reviewDoc} onClick={undo}><Undo2 size={15} /></button>
+      <button type="button" className="cd-btn cd-btn-ghost" aria-label="다시 실행" title="다시 실행 (Ctrl+Y)" disabled={!history.current.canRedo || !!reviewDoc} onClick={redo}><Redo2 size={15} /></button>
+      <span className="state"><span role="status" className="state-text"><b>{busy || (dirty ? "저장하지 않은 변경" : revision ? `저장됨 · ${revision}판` : "새 문서")}</b><span>전체 {totalPages}쪽(본문 {doc.sections.length})</span>{overflow.length ? <span className="warn">넘침 {overflow.length}쪽</span> : null}</span>
+        {pendingTotal ? <button ref={todoBtn} type="button" className={`todo${tool === "pending" ? " on" : ""}`} aria-expanded={tool === "pending"} onClick={() => setTool((t) => (t === "pending" ? "" : "pending"))}>작성 필요 {pendingTotal}</button> : null}</span>
+      <button ref={findBtn} type="button" className={`cd-btn cd-btn-ghost${tool === "find" ? " on" : ""}`} title="찾기·바꾸기 (Ctrl+H)" aria-expanded={tool === "find"} onClick={() => setTool((t) => (t === "find" ? "" : "find"))}><Search size={15} />찾기·바꾸기</button>
       <span className="proposal-zoom">배율 <select className="cd-input" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>{[0.6, 0.75, 0.9, 1, 1.2, 1.4].map((z) => <option key={z} value={z}>{Math.round(z * 100)}%</option>)}</select></span>
       <button type="button" className="cd-btn" onClick={exportSource} disabled={!!busy}><Download size={15} />편집 원본</button>
-      <button type="button" className="cd-btn" disabled={!canEdit || !!busy || (!dirty && revision > 0)} onClick={save}><Save size={15} />저장</button>
-      <button type="button" className="cd-btn cd-btn-primary" disabled={!canPublish || !!busy} onClick={publish}><Send size={15} />HWPX 발행</button>
+      <button type="button" className="cd-btn" disabled={!canEdit || !!busy || !!reviewDoc || (!dirty && revision > 0)} onClick={save}><Save size={15} />저장</button>
+      <button type="button" className="cd-btn cd-btn-primary" disabled={!canPublish || !!busy || !!reviewDoc} onClick={publish}><Send size={15} />HWPX 발행</button>
     </div>
+    {tool === "pending" ? <PendingPanel doc={doc} items={pending} current={pendingKey} onClose={() => closeTool(todoBtn)}
+      onGo={(it) => { setPendingKey(`${editKey(it)}|${it.kind}`); goField(it); }} /> : null}
+    {aiTarget ? <ProposalAiPanel target={aiTarget} doc={doc} kit={kit} previewing={!!reviewDoc} onPreview={setReviewDoc} onClose={() => setAiTarget(null)}
+      onAccept={(next, note) => { setReviewDoc(null); change(next); setNotice(note); setAiTarget(null); }} /> : null}
+    {tool === "find" ? <FindPanel doc={doc} onClose={() => closeTool(findBtn)} onGo={goField}
+      onReplace={(next, note) => { change(next); setNotice(note); }} /> : null}
     <div className="proposal-ws">
       <aside className="outline" aria-label="문서 구성">
         <button type="button" className={`doc${!selSection ? " on" : ""}`} onClick={() => goPage("")}>표지 · 문서 설정</button>
@@ -606,9 +784,9 @@ export function ProposalStudio() {
         })}
         <button type="button" className="cd-btn add" onClick={() => addPage(section)}><FilePlus2 size={14} />쪽 추가</button>
       </aside>
-      {kit ? <Canvas doc={doc} kit={kit} frameRef={frameRef} zoom={zoom} selSection={selSection} selBlock={selBlock} scrollKey={scrollKey} onSelect={select}
-        onEdit={(sid, bid, path, value) => { const cur = docRef.current; if (cur) change(setAtPath(cur, sid, bid, path, value)); }} onOverflow={onOverflow} /> : <div className="proposal-canvas"><p className="proposal-muted" style={{ padding: 20 }}>미리보기를 준비하고 있습니다.</p></div>}
-      <aside aria-label="속성">{inspector}</aside>
+      {kit ? <Canvas doc={reviewDoc ?? doc} kit={kit} frameRef={frameRef} zoom={zoom} selSection={selSection} selBlock={selBlock} scrollKey={scrollKey} hit={hit} onSelect={select}
+        onEdit={(sid, bid, path, value) => { const cur = docRef.current; if (cur) change(setAtPath(cur, sid, bid, path, value)); }} onBullet={bulletOp} onOverflow={onOverflow} /> : <div className="proposal-canvas"><p className="proposal-muted" style={{ padding: 20 }}>미리보기를 준비하고 있습니다.</p></div>}
+      <aside aria-label="속성"><fieldset className="proposal-lock" disabled={!!reviewDoc}>{inspector}</fieldset></aside>
     </div>
     <input type="file" ref={imageInput} accept="image/png,image/jpeg" hidden onChange={(e) => { const file = e.target.files?.[0]; e.currentTarget.value = ""; if (file && section) void addImage(file, section.id); }} />
     <section className="cd-card proposal-editions" style={{ padding: 16 }}><h2>발행 이력</h2><p className="proposal-muted">발행 시점의 원본과 그림이 함께 보관됩니다. 이후 수정은 이전 발행본을 바꾸지 않습니다.</p>

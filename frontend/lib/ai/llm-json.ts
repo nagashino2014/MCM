@@ -57,6 +57,8 @@ export interface ChatJsonOpts {
    * 최종 모델이 Opus 5 이상일 때만 게이트웨이가 적용한다(강등된 모델에는 붙이지 않음).
    */
   serverFallback?: boolean;
+  /** 긴 고정 시스템 프롬프트를 캐시한다(게이트웨이 cache_control). */
+  cacheSystem?: boolean;
   userId?: string | null;
   subject?: { type: string; id: string } | null;
 }
@@ -88,6 +90,7 @@ export async function anthropicChatJson<T = unknown>(opts: ChatJsonOpts): Promis
       subject: opts.subject,
       // 게이트웨이가 최종 모델(오버라이드·강등 반영)을 보고 Opus 5 이상일 때만 폴백 파라미터를 붙인다.
       serverFallback: opts.serverFallback,
+      cacheSystem: opts.cacheSystem,
     });
     if (!r.ok) throw new LlmError(`llm_http_${r.status}: ${(r.errorText ?? "").slice(0, 200)}`);
     // 안전 분류기 거절 — content 가 비어 있을 수 있으므로 텍스트 파싱 전에 판정한다.

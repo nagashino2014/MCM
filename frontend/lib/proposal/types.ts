@@ -40,6 +40,8 @@ export interface ProposalSection {
   chapter?: string;
   crumb?: string;
   summary?: string;
+  /** 새 문서를 만들 때의 원고 쪽 지문(lib/proposal/hash.ts) — 새 원고와 비교할 때 사용자가 고친 쪽을 가른다 */
+  sourceHash?: string;
   blocks: ProposalBlock[];
 }
 
@@ -66,7 +68,8 @@ export interface ProposalDocument {
   theme: ProposalTheme;
   layout?: "paged";
   contentVersion?: string;
-  variables?: { siteName: string; duration: string; companyName: string };
+  /** clientNotes — 발주처 메모(AI 수정의 참고 자료, 발행본 본문에는 쓰지 않음) */
+  variables?: { siteName: string; duration: string; companyName: string; clientNotes?: string };
   options?: ProposalOptions;
   sections: ProposalSection[];
 }

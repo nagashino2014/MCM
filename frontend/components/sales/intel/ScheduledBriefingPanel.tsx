@@ -8,7 +8,8 @@ import { useSession } from "next-auth/react";
 import { Bell, Eye, Pause, Pencil, Play, Plus, Sparkles } from "lucide-react";
 import { CdButton, CdCheckbox, CdDateInput, CdDrawer, CdInput, CdModal, CdSelect, CdTable, useCdToast } from "@/components/cdash";
 import type { BriefingChannel, BriefingPreview, BriefingProfile, BriefingProfileInput, BriefingRun } from "@/lib/intel/briefing-types";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { permitIndustryLabel, type IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { INTEL_SERVICE_LABELS, eokToWon, formatIntelAmount, intelApi, intelDate, intelSourceLabel, intelTime, jsonBody, wonToEok } from "./intelligence-client";
 import { IntelligenceListInput } from "./IntelligenceListInput";
 import { IntelCard, IntelEmpty, IntelError, IntelNotice, IntelSubhead, IntelTile } from "./intel-ui-kit";
@@ -26,9 +27,9 @@ function newProfile(): BriefingProfileInput {
 }
 
 /** 조건군 사이는 AND, 같은 조건 안은 OR — 화면에 그대로 읽히게 요약한다. */
-export function conditionSummary(input: BriefingProfileInput): string[] {
+export function conditionSummary(input: BriefingProfileInput, industries: IntegratedPermitIndustry[]): string[] {
   const f = input.filters;
-  const industry = (id: string) => INTEGRATED_PERMIT_INDUSTRIES.find((item) => item.id === id)?.label ?? id;
+  const industry = (id: string) => permitIndustryLabel(id, industries);
   const parts: string[] = [];
   parts.push(f.industries.length ? `업종 ${f.industries.map(industry).join("·")}` : "전체 업종");
   if (f.regions.length) parts.push(`지역 ${f.regions.join("·")}`);
@@ -48,6 +49,7 @@ function scheduleText(profile: BriefingProfileInput): string {
 export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolean; onOpenRun: (runId: string) => void }) {
   const { data: session } = useSession();
   const { toast } = useCdToast();
+  const { industries: permitIndustries, all: allPermitIndustries } = usePermitIndustries();
   const [profiles, setProfiles] = useState<BriefingProfile[]>([]);
   const [users, setUsers] = useState<RecipientUser[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
                       <span className="cd-pill cd-pill-outline">{profile.visibility === "private" ? "개인" : "지정 수신자 공유"}</span>
                       <span className="cd-pill cd-pill-outline">{profile.reportLevel === "detailed" ? "상세 보고서" : "핵심 요약"}</span>
                     </div>
-                    <p className="cd-text-muted text-xs mt-1">{conditionSummary(profile).join(" · ")}</p>
+                    <p className="cd-text-muted text-xs mt-1">{conditionSummary(profile, allPermitIndustries).join(" · ")}</p>
                     <p className="cd-text-faint text-[11px] mt-0.5">
                       {profile.enabled ? `다음 실행 ${intelTime(profile.nextRunAt)}` : "정기 실행 중지"} · 수신자 {profile.recipients.length}명{profile.importantAlerts ? " · 중요 변화 즉시 알림" : ""}
                     </p>
@@ -151,12 +153,12 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
         <div className="intel-ui"><form className="intel-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           {formError && <div className="intel-error" role="alert">{formError}</div>}
           <CdInput label="관심 분야 이름" required maxLength={80} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="예: 충청권 반도체 투자 동향" />
-          <p className="intel-notice intel-compact">적용 조건: {conditionSummary(form).join(" · ")}<span className="block cd-text-muted">서로 다른 조건은 모두 만족(AND), 같은 조건 안의 여러 값은 하나만 만족(OR)하면 포함합니다.</span></p>
+          <p className="intel-notice intel-compact">적용 조건: {conditionSummary(form, allPermitIndustries).join(" · ")}<span className="block cd-text-muted">서로 다른 조건은 모두 만족(AND), 같은 조건 안의 여러 값은 하나만 만족(OR)하면 포함합니다.</span></p>
 
           <fieldset><legend className="intel-section mb-3">관심 조건</legend>
             <div>
               <p className="intel-field-label">관심 업종 · {form.filters.industries.length ? `${form.filters.industries.length}개 선택` : "선택하지 않으면 전체"}</p>
-              <div className="flex items-center gap-1 flex-wrap">{INTEGRATED_PERMIT_INDUSTRIES.map((industry) => <button type="button" key={industry.id} className="cd-chip cd-chip-sm" data-active={form.filters.industries.includes(industry.id)} aria-pressed={form.filters.industries.includes(industry.id)} onClick={() => toggleList("industries", industry.id)}>{industry.label}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{permitIndustries.map((industry) => <button type="button" key={industry.id} className="cd-chip cd-chip-sm" data-active={form.filters.industries.includes(industry.id)} aria-pressed={form.filters.industries.includes(industry.id)} onClick={() => toggleList("industries", industry.id)}>{industry.label}</button>)}</div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <IntelligenceListInput label="지역 (쉼표 구분)" placeholder="충청남도, 충청북도" value={form.filters.regions} onChange={(values) => setFilter("regions", values)} />
@@ -213,7 +215,7 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
       <CdDrawer open={preview !== null} onClose={() => setPreview(null)} title={preview ? `${preview.profile.name} · 미리보기` : "미리보기"} widthClass="max-w-3xl">
         {preview && <div className="flex flex-col gap-4 min-w-0">
           <div className="rounded-xl px-4 py-3" style={{ background: "var(--cd-primary-soft)" }}>
-            <p className="cd-text text-sm font-bold">{conditionSummary(preview.profile).join(" · ")}</p>
+            <p className="cd-text text-sm font-bold">{conditionSummary(preview.profile, allPermitIndustries).join(" · ")}</p>
             <p className="cd-text-muted text-xs mt-1">{scheduleText(preview.profile)} KST · {preview.profile.enabled ? `다음 실행 ${intelTime(preview.profile.nextRunAt)}` : "정기 실행 중지"}{preview.data.periodStart ? ` · 분석 기간 ${intelDate(preview.data.periodStart)} ~ ${intelDate(preview.data.periodEnd ?? preview.data.asOf)}` : ""}</p>
             <p className="cd-text-faint text-[11px] mt-0.5">수신자 {preview.profile.recipients.length ? preview.profile.recipients.map((recipient) => `${userName(recipient.userId)}(${recipient.channels.map((channel) => CHANNEL[channel]).join("·")})`).join(", ") : "없음"}</p>
           </div>

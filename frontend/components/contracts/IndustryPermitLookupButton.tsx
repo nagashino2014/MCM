@@ -1,17 +1,17 @@
 "use client";
 
 // 업종 조회(2026-08-26 사용자 요청) — 신규 계약 입력의 업종 선택 옆 버튼.
-// 표준산업분류(KSIC-11) 코드/업종명으로 검색하면 각 항목이 통합허가 대상 20개 업종 중
+// 표준산업분류(KSIC-11) 코드/업종명으로 검색하면 각 항목이 통합허가 대상 업종 중
 // 어디에 해당하는지 판정해 보여주고, [적용]으로 계약 업종을 바로 선택한다.
-// 검색 UI 는 facilities 의 KsicSearchModal 패턴, 판정은 integrated-permit-industries 정본 매핑.
+// 검색 UI 는 facilities 의 KsicSearchModal 패턴, 판정은 관리자 설정 '통합허가 업종'(permit_industries) 매핑.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BadgeCheck, Search, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { loadKsicList, type KsicEntry } from "@/lib/ieps/ksic-lookup";
-import { industryCategoryForCode } from "@/lib/ieps/integrated-permit-industries";
-import { INTEGRATED_PERMIT_OPTION_SUFFIX } from "@/components/contracts/IndustryOptionsEditor";
+import { INTEGRATED_PERMIT_OPTION_SUFFIX, industryCategoryForCode } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 
 type SearchMode = "code" | "name";
 
@@ -26,6 +26,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { industries: permitIndustries } = usePermitIndustries();
 
   useEffect(() => {
     if (!open) return;
@@ -85,7 +86,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
               <Search className="w-5 h-5 cd-text-primary" /> 업종 조회 — 통합허가 대상 판정
             </h3>
             <p className="text-xs cd-text-faint mt-1">
-              표준산업분류(KSIC-11) 코드 또는 업종명으로 검색하면 통합허가 대상 20개 업종 중 어느 업종인지 표시합니다.
+              표준산업분류(KSIC-11) 코드 또는 업종명으로 검색하면 통합허가 대상 업종 중 어느 업종인지 표시합니다.
               대상 업종이면 [적용]으로 계약 업종을 바로 선택할 수 있습니다.
             </p>
           </div>
@@ -135,7 +136,7 @@ export function IndustryPermitLookupButton({ onApply }: { onApply: (optionName: 
           ) : (
             <ul>
               {results.map((entry) => {
-                const category = industryCategoryForCode(entry.code);
+                const category = industryCategoryForCode(entry.code, permitIndustries);
                 return (
                   <li key={entry.code} className="flex items-center gap-3 px-3 py-2 border-b cd-border-c last:border-b-0 hover:bg-[color:var(--cd-surface)]">
                     <span className="font-mono text-xs font-semibold cd-text-primary w-14 shrink-0">{entry.code}</span>

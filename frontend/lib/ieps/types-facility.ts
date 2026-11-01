@@ -55,7 +55,7 @@ export interface FacilityListFilter {
   sidos?: string[];
   sigungu?: string;
   industryCode?: string;
-  /** 통합허가 20개 업종 카테고리 id. 지정 시 industryCode 보다 우선한다. */
+  /** 통합허가 대상 업종 id(permit_industries). 지정 시 industryCode 보다 우선한다. */
   industryCategory?: string;
   airClass?: number;
   waterClass?: number;

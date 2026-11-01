@@ -2,9 +2,13 @@
 // DEFAULTS 가 현재 운영값(기존 하드코딩과 동일)이며, DB 에는 사용자가 바꾼 오버라이드만 저장된다.
 // 야간 배치(intel-batch)와 수동 수집 라우트가 이 설정을 읽어 각 수집기에 옵션으로 전달한다.
 import { rowsToObjects, type PgDatabase } from "@/lib/db";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { DEFAULT_PERMIT_INDUSTRIES, activePermitIndustries } from "@/lib/ieps/integrated-permit-industries";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 
-/** 통합허가 대상 업종 항목 — LLM 업종 태깅 후보군(수집 설정에서 추가/삭제로 신규 편입 대응). */
+/**
+ * 통합허가 대상 업종 항목 — LLM 업종 태깅 후보군.
+ * 단일 원천 permit_industries(325, 관리자 설정 '통합허가 업종')에서 파생한다. 수집 설정에 저장된 목록은 쓰지 않는다.
+ */
 export interface IntelIndustryItem {
   id: string;
   label: string;
@@ -18,7 +22,7 @@ export interface IntelCollectSettings {
     maxAgeMonths: number;
   };
   industries: {
-    /** 통합허가 대상 업종 목록. 기본 = INTEGRATED_PERMIT_INDUSTRIES 파생, 목록 전체 교체 방식 오버라이드 */
+    /** 통합허가 대상 업종 목록 — loadIntelSettings 가 permit_industries(사용 중)로 채운다. 저장값은 무시 */
     list: IntelIndustryItem[];
   };
   dart: {
@@ -73,7 +77,7 @@ export const INTEL_SETTINGS_KEY = "collect";
 export const INTEL_COLLECT_DEFAULTS: IntelCollectSettings = {
   common: { maxAgeMonths: 18 },
   industries: {
-    list: INTEGRATED_PERMIT_INDUSTRIES.map((i) => ({ id: i.id, label: i.label })),
+    list: DEFAULT_PERMIT_INDUSTRIES.map((i) => ({ id: i.id, label: i.label })),
   },
   dart: { enabled: true, days: 1, counterpartyScan: true, supplyLeadScan: true, supplyLeadMaxClassify: 30 },
   eiass: {
@@ -131,7 +135,21 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return out as T;
 }
 
+/** 업종 후보군을 permit_industries(사용 중)로 덮는다 — 관리 화면에서 추가한 업종이 AI 분류 프롬프트에 바로 들어간다. */
+async function withPermitIndustries(db: PgDatabase, settings: IntelCollectSettings): Promise<IntelCollectSettings> {
+  const list = activePermitIndustries(await loadPermitIndustries(db)).map((i) => ({
+    id: i.id,
+    label: i.label,
+    ...(i.note ? { note: i.note } : {}),
+  }));
+  return { ...settings, industries: { list } };
+}
+
 export async function loadIntelSettings(db: PgDatabase): Promise<IntelCollectSettings> {
+  return withPermitIndustries(db, await loadStoredIntelSettings(db));
+}
+
+async function loadStoredIntelSettings(db: PgDatabase): Promise<IntelCollectSettings> {
   try {
     const rows = rowsToObjects(
       await db.exec(`SELECT setting_json FROM intel_settings WHERE setting_key = $1`, [INTEL_SETTINGS_KEY])
@@ -151,7 +169,8 @@ export async function saveIntelSettings(
   patch: unknown,
   updatedBy: string | null
 ): Promise<IntelCollectSettings> {
-  const merged = deepMerge(INTEL_COLLECT_DEFAULTS, patch);
+  // 업종 목록은 permit_industries 가 원천 — 수집 설정에는 저장하지 않는다(기본값으로 고정해 둔다)
+  const merged = { ...deepMerge(INTEL_COLLECT_DEFAULTS, patch), industries: INTEL_COLLECT_DEFAULTS.industries };
   const now = new Date().toISOString();
   await db.run(
     `INSERT INTO intel_settings (setting_key, setting_json, updated_at, updated_by)
@@ -162,7 +181,7 @@ export async function saveIntelSettings(
            updated_by = EXCLUDED.updated_by`,
     [INTEL_SETTINGS_KEY, JSON.stringify(merged), now, updatedBy]
   );
-  return merged;
+  return withPermitIndustries(db, merged);
 }
 
 /** 공시·접수일 하한(ISO 날짜 문자열). maxAgeMonths=0 이면 null(제한 없음). */

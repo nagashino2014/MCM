@@ -12,8 +12,8 @@ import type { DiscoveryExtras } from "@/lib/intel/discovery-overview";
 import { INTEL_SERVICE_LABELS, INTEL_STAGE_LABELS, formatIntelAmount, intelApi, intelDate, intelSourceLabel, intelTime, jsonBody, safeIntelUrl } from "./intelligence-client";
 import { IntelligenceLookup } from "./IntelligenceLookup";
 import { SignalCandidatesList } from "./SignalCandidatesList";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
-import { INDUSTRY_LABEL } from "./intel-shared";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
+import { useIntelIndustryLabel } from "./intel-shared";
 import { IntelBar, IntelCard, IntelChips, IntelEmpty, IntelError, IntelNotice, IntelSubhead, IntelTile, stagePillClass } from "./intel-ui-kit";
 
 // 보조 표면 틴트 — BriefingReportView 의 KPI·회사 카드와 같은 톤.
@@ -74,6 +74,8 @@ function eventSummary(event: IntelProjectEvent): string | null {
 
 export function ProjectIntelligencePanel({ canEdit, initialProjectId, initialReview }: { canEdit: boolean; initialProjectId?: string | null; initialReview?: string | null }) {
   const { toast } = useCdToast();
+  const { industries: permitIndustries } = usePermitIndustries();
+  const industryLabel = useIntelIndustryLabel();
   const [view, setView] = useState<"projects" | "signals">("projects");
   const [signalCount, setSignalCount] = useState<number | undefined>(undefined);
   const [projects, setProjects] = useState<IntelProject[]>([]);
@@ -290,7 +292,7 @@ export function ProjectIntelligencePanel({ canEdit, initialProjectId, initialRev
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="cd-text text-[15px] font-extrabold">{p.companyName ?? "기업 미확인"}</span>
               {p.region && <span className="cd-pill cd-pill-idle">{p.region}</span>}
-              {p.industry && <span className="cd-pill cd-pill-outline">{INDUSTRY_LABEL[p.industry] ?? p.industry}</span>}
+              {p.industry && <span className="cd-pill cd-pill-outline">{industryLabel(p.industry)}</span>}
               <ReviewPill priority={detail.priority} />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
@@ -499,7 +501,7 @@ export function ProjectIntelligencePanel({ canEdit, initialProjectId, initialRev
             <CdInput label="기업명" value={projectForm.companyName ?? ""} onChange={(event) => setProjectForm({ ...projectForm, companyName: event.target.value })} />
             <IntelligenceLookup kind="facility" label="사업장" value={projectForm.facilityId ?? ""} onChange={(id) => setProjectForm({ ...projectForm, facilityId: id || null })} />
             <div className="grid sm:grid-cols-2 gap-4">
-              <CdSelect label="업종" value={projectForm.industry ?? ""} onChange={(event) => setProjectForm({ ...projectForm, industry: event.target.value })}><option value="">미확인</option>{INTEGRATED_PERMIT_INDUSTRIES.map((industry) => <option key={industry.id} value={industry.id}>{industry.label}</option>)}</CdSelect>
+              <CdSelect label="업종" value={projectForm.industry ?? ""} onChange={(event) => setProjectForm({ ...projectForm, industry: event.target.value })}><option value="">미확인</option>{projectForm.industry && !permitIndustries.some((industry) => industry.id === projectForm.industry) && <option value={projectForm.industry}>{industryLabel(projectForm.industry)}</option>}{permitIndustries.map((industry) => <option key={industry.id} value={industry.id}>{industry.label}</option>)}</CdSelect>
               <CdInput label="지역" value={projectForm.region ?? ""} onChange={(event) => setProjectForm({ ...projectForm, region: event.target.value })} />
               <CdSelect label="추진 단계" value={projectForm.stage ?? "unknown"} onChange={(event) => setProjectForm({ ...projectForm, stage: event.target.value as IntelProject["stage"] })}>{Object.entries(INTEL_STAGE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</CdSelect>
               <CdInput label={`투자금액 (${projectForm.currency === "KRW" || !projectForm.currency ? "억원" : projectForm.currency})`} type="number" min={0} step="any" value={projectForm.amount == null ? "" : projectForm.currency === "KRW" || !projectForm.currency ? projectForm.amount / 1e8 : projectForm.amount} onChange={(event) => setProjectForm({ ...projectForm, amount: event.target.value ? Math.round(Number(event.target.value) * (projectForm.currency === "KRW" || !projectForm.currency ? 1e8 : 1)) : null })} />

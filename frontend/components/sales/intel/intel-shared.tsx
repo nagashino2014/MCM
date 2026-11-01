@@ -1,7 +1,9 @@
 // "API&스크래핑" 화면 공용 타입·라벨·소스 탭 정의.
 
 import { INTEL_SIGNAL_TYPE_LABELS, INTEL_SIGNAL_GRADE_LABELS } from "@/lib/intel/signal-extractor";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { useCallback } from "react";
+import { permitIndustryLabel, type IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 
 // API 응답 shape(서버 intel-queries IntelSignal과 동일).
 export interface IntelSignal {
@@ -162,12 +164,21 @@ export const RELEVANCE_PILL: Record<string, string> = {
   none: "cd-pill-outline",
 };
 
-/** 업종 id → 라벨(코드 상수 + 특수 키). 설정 추가 업종은 id=label 이라 그대로 표시. */
-export const INDUSTRY_LABEL: Record<string, string> = {
-  ...Object.fromEntries(INTEGRATED_PERMIT_INDUSTRIES.map((i) => [i.id, i.label])),
+/** intel 업종 특수 키(통합허가 대상 업종 목록 밖) — 규칙 층(industry-rules.ts)이 쓴다. */
+const SPECIAL_INDUSTRY_LABEL: Record<string, string> = {
   "industrial-complex": "산업단지",
   other: "기타(대상)",
 };
+
+/** 업종 id → 이름(관리자 설정 '통합허가 업종', 사용 중지 포함 + 특수 키). 모르는 id 는 그대로 표시. */
+export function intelIndustryLabel(id: string, industries: IntegratedPermitIndustry[]): string {
+  return SPECIAL_INDUSTRY_LABEL[id] ?? permitIndustryLabel(id, industries);
+}
+
+export function useIntelIndustryLabel(): (id: string) => string {
+  const { all } = usePermitIndustries();
+  return useCallback((id: string) => intelIndustryLabel(id, all), [all]);
+}
 
 export function RelevanceTag({ relevance, note }: { relevance: string | null; note?: string | null }) {
   if (!relevance) return null;

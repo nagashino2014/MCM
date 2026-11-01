@@ -17,6 +17,7 @@ const KEY_LABEL: Record<string, string> = {
   "org.edit": "회사 프로필 관리",
   "security.access_log": "접속기록 조회",
   "security.attachment_policy": "첨부 확장자 정책",
+  "master.permit_industry.manage": "통합허가 업종",
   "ai.usage.view": "AI API 사용량",
   "recruit.view": "홍보·채용공고",
   "approval.manage": "결재 운영 설정",

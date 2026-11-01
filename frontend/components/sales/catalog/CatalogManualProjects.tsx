@@ -7,7 +7,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CATALOG_CATEGORIES } from "@/lib/catalog/areas";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import {
   MANUAL_ID_PREFIX,
   buildDisplayTitle,
@@ -169,6 +169,7 @@ export function ManualProjectModal({
   onSave: () => void;
 }) {
   const d = draft;
+  const { industries: permitIndustries } = usePermitIndustries();
   const set = (patch: Partial<ManualDraft>) => d && setDraft({ ...d, ...patch });
   const isPermit = d?.category === CATALOG_CATEGORIES[0];
   const autoTitle = d
@@ -257,7 +258,7 @@ export function ManualProjectModal({
               <span className="text-xs cd-text-muted">업종</span>
               <input className="cd-input" list="manual-industries" value={d.industry} placeholder="예: 발전" onChange={(e) => set({ industry: e.target.value })} />
               <datalist id="manual-industries">
-                {INTEGRATED_PERMIT_INDUSTRIES.map((i) => <option key={i.label} value={i.label} />)}
+                {permitIndustries.map((i) => <option key={i.id} value={i.label} />)}
               </datalist>
             </label>
             <label className="grid gap-1">

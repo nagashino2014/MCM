@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Archive, BadgeCheck, Check, CheckSquare, ChevronDown, ChevronRight, Download, FileArchive, FileText, ListChecks, Mail, Paperclip, Search } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
-import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import type { IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import "@/components/cdash/cdash.css";
@@ -73,6 +75,7 @@ export default function ContractDownloadsPage() {
   const [serviceTypeFilter, setServiceTypeFilter] = useState("");
   const [serviceSubtypeFilter, setServiceSubtypeFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
+  const { industries: permitIndustries, all: allPermitIndustries } = usePermitIndustries();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // 연도/필터를 바꿔도 이전에 본 계약 메타를 유지하기 위한 누적 캐시
@@ -191,12 +194,12 @@ export default function ContractDownloadsPage() {
             contract.counterpartyName.toLowerCase().includes(q) ||
             canonicalServiceSubtype(contract.serviceSubtype).toLowerCase().includes(q);
           const subtypeMatch = !serviceSubtypeFilter || canonicalServiceSubtype(contract.serviceSubtype) === serviceSubtypeFilter;
-          const industryMatch = !industryFilter || matchesIndustry(contract, industryFilter);
+          const industryMatch = !industryFilter || matchesIndustry(contract, industryFilter, allPermitIndustries);
           return textMatch && subtypeMatch && industryMatch;
         }),
       }))
       .filter((group) => group.contracts.length > 0);
-  }, [tree, search, serviceTypeFilter, serviceSubtypeFilter, industryFilter]);
+  }, [tree, search, serviceTypeFilter, serviceSubtypeFilter, industryFilter, allPermitIndustries]);
 
   const targetIds = useMemo(() => {
     if (checked.size > 0) return Array.from(checked);
@@ -564,7 +567,7 @@ export default function ContractDownloadsPage() {
               </select>
               <select className="cd-select text-xs" value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
                 <option value="">업종 전체</option>
-                {INTEGRATED_PERMIT_INDUSTRIES.map((item) => <option key={item.label} value={item.label}>{item.label}</option>)}
+                {permitIndustries.map((item) => <option key={item.id} value={item.label}>{item.label}</option>)}
               </select>
             </div>
             {hiddenSelectedCount > 0 && (
@@ -1050,9 +1053,10 @@ function getDownloadFileName(disposition: string | null): string | null {
   return null;
 }
 
-function matchesIndustry(contract: ContractTreeContractNode, label: string): boolean {
+function matchesIndustry(contract: ContractTreeContractNode, label: string, industries: IntegratedPermitIndustry[]): boolean {
   return matchesIndustryText(
     [contract.industryCategory, contract.facilityIndustryName, contract.facilityIndustryCode],
-    label
+    label,
+    industries
   );
 }

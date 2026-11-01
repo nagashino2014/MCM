@@ -12,7 +12,9 @@ import {
   type StaffComposition,
 } from "@/lib/company/profile";
 import { getEmployeeDetail, type EmployeeDetail } from "@/lib/admin/employee-records";
-import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { permitIndustryFromText, type IntegratedPermitIndustry } from "@/lib/ieps/integrated-permit-industries";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import type { StaffConfig } from "@/lib/bid/package-store";
 
 /*
@@ -112,8 +114,8 @@ const DEGREE_LABELS: Record<string, string> = { bachelor: "학사", master: "석
 const degreeLabel = (level: unknown): string => DEGREE_LABELS[String(level ?? "")] ?? String(level ?? "");
 const DEGREE_ORDER = ["박사", "석사", "학사"];
 
-// 용역개요의 '○○시설' 로 표기하는 비제조 업종 — 나머지는 '○○제조시설'.
-const FACILITY_SUFFIX_INDUSTRIES = new Set(["발전", "증기열공급", "폐기물처리"]);
+// 용역개요의 '○○시설' 로 표기하는 비제조 업종(업종 id — 이름이 바뀌어도 유지) — 나머지는 '○○제조시설'.
+const FACILITY_SUFFIX_INDUSTRIES = new Set(["power", "steam-heat", "waste-incineration"]);
 
 /** 소재지 축약 — 광역시/특별시는 시명 축약(울산광역시→울산), 도 산하는 시·군명(군위군→군위). */
 function shortRegion(sido: string, sigungu: string): string {
@@ -136,15 +138,13 @@ function buildOverview(params: {
   industryName: string;
   industryCode: string;
   serviceSubtype: string;
-}): string {
+}, industries: IntegratedPermitIndustry[]): string {
   const region = shortRegion(params.sido, params.sigungu);
   // 업종 판정 소스: 계약의 업종분류(industry_category) 우선 + 사업장 업종명/코드(트리 필터와 동일)
-  const industry = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
-    matchesIndustryText([params.industryCategory, params.industryName, params.industryCode], i.label)
-  );
+  const industry = permitIndustryFromText([params.industryCategory, params.industryName, params.industryCode], industries);
   const subtype = canonicalServiceSubtype(params.serviceSubtype || null);
   if (!region || !industry || !subtype) return "";
-  const suffix = FACILITY_SUFFIX_INDUSTRIES.has(industry.label) ? "시설" : "제조시설";
+  const suffix = FACILITY_SUFFIX_INDUSTRIES.has(industry.id) ? "시설" : "제조시설";
   return `${region} ${industry.label}${suffix} 통합환경 ${subtype} 대행`;
 }
 
@@ -190,6 +190,7 @@ export async function loadContractRows(
       [contractIds]
     )
   );
+  const permitIndustries = await loadPermitIndustries(db);
   return rows.map((r) => {
     const amount = Number(r.amount ?? 0);
     const started = s(r.started_at) || s(r.contract_date);
@@ -210,7 +211,7 @@ export async function loadContractRows(
           industryName: s(r.industry_name),
           industryCode: s(r.industry_code),
           serviceSubtype: s(r.service_subtype),
-        }),
+        }, permitIndustries),
       amountMillion: amount > 0 ? String(Math.round(amount / 1_000_000)) : "",
       periodText: periodText(started, ended),
       staffCountText: [high > 0 ? `고급:${high}` : "", normal > 0 ? `일반:${normal}` : ""].filter(Boolean).join(" "),
@@ -251,6 +252,7 @@ export async function loadPersonProjects(
     )
   );
   const excluded = new Set(excludedContractIds ?? []);
+  const permitIndustries = await loadPermitIndustries(db);
   const out: PackagePersonProject[] = [];
   for (const r of rows) {
     if (excluded.has(s(r.contract_id))) continue;
@@ -265,7 +267,7 @@ export async function loadPersonProjects(
       // 업종: 선택 목록이 있으면 매칭 필수 — 업종 정보(계약 업종분류·사업장 업종)가 없는 계약은 표시하지 않는다
       if (filter.industries.length > 0) {
         const hit = filter.industries.some((label) =>
-          matchesIndustryText([s(r.industry_category), s(r.industry_name), s(r.industry_code)], label)
+          matchesIndustryText([s(r.industry_category), s(r.industry_name), s(r.industry_code)], label, permitIndustries)
         );
         if (!hit) continue;
       }

@@ -37,7 +37,7 @@ export const REFERENCE_2026_06: ReferenceFigure[] = [
   { key: "chem", label: "장외·화관법", value: "216건(11쪽 예방관리계획서 120건)", number: 216, page: "26쪽", metric: "projects.area.2" },
   { key: "esg", label: "ESG·탄소중립", value: "6건(ESG 보고서 4 + 탄소중립 2)", number: 6, page: "26쪽", metric: "projects.area.4" },
   { key: "other", label: "기타 용역(환경 인허가·연구·교육)", value: "집계 없음(대기총량 20건 등 문장만)", number: null, page: "11쪽", metric: "projects.area.5" },
-  { key: "industries", label: "통합허가 수행 업종", value: "20개 업종", number: 20, page: "8쪽", metric: "permit.industries", note: "자동 집계는 통합허가 20업종 라벨로 판정된 업종만 센다" },
+  { key: "industries", label: "통합허가 수행 업종", value: "20개 업종", number: 20, page: "8쪽", metric: "permit.industries", note: "자동 집계는 통합허가 대상 업종(관리자 설정 '통합허가 업종') 이름으로 판정된 업종만 센다" },
   { key: "staff", label: "임직원(종업원)", value: "31명(3쪽) / 33명(17쪽)", number: 33, page: "3·17쪽", metric: "staff.total" },
   { key: "technical", label: "기술인력", value: "28명(3쪽) / 32명(17쪽)", number: 32, page: "3·17쪽", metric: "staff.technical" },
   { key: "exec", label: "임원", value: "6명(고문 포함)", number: 6, page: "18쪽", metric: "staff.exec" },

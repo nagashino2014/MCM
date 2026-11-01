@@ -3,6 +3,10 @@
 The IEPS annual reports usually contain one of the legally scoped integrated
 permit target industries rather than arbitrary KSIC names.  This module keeps a
 small deterministic target-industry dictionary ahead of the broad KSIC lookup.
+
+KSIC codes follow the 11th revision (2024), the same table as ``ksic_lookup`` and the
+app's ``permit_industries`` (2026-11-01: 10th-revision codes such as 20301·17121 were
+being written to facilities and misclassified — see docs/permit-industries-ksic-diff-2026-11-01.md).
 """
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ TARGET_INDUSTRIES: List[Dict[str, Any]] = [
     {
         "label": "합성고무 및 합성수지 제조업",
         "aliases": ["합성고무", "합성수지", "기타 플라스틱 물질 제조업"],
-        "exactCodes": ["20301", "20302"],
+        "exactCodes": ["20201", "20202"],
     },
     {
         "label": "1차 철강 제조업",
@@ -68,7 +72,7 @@ TARGET_INDUSTRIES: List[Dict[str, Any]] = [
     {
         "label": "비료 및 질소화합물 제조업",
         "aliases": ["비료", "질소화합물"],
-        "prefixCodes": ["202"],
+        "prefixCodes": ["2031"],
     },
     {
         "label": "기초화학물질 제조업",
@@ -98,42 +102,42 @@ TARGET_INDUSTRIES: List[Dict[str, Any]] = [
     {
         "label": "화학 살균ㆍ살충제 및 농업용 약제 제조업",
         "aliases": ["농약", "살균제", "살충제", "농업용 약제"],
-        "exactCodes": ["20412"],
+        "exactCodes": ["20321"],
     },
     {
         "label": "일반용 도료 및 관련제품 제조업",
         "aliases": ["도료", "페인트"],
-        "exactCodes": ["20421"],
+        "exactCodes": ["20411"],
     },
     {
         "label": "요업용 도포제 및 관련제품 제조업",
         "aliases": ["유약", "요업용 도포제"],
-        "exactCodes": ["20422"],
+        "exactCodes": ["20412"],
     },
     {
         "label": "계면활성제 제조업",
         "aliases": ["계면활성제"],
-        "exactCodes": ["20431"],
+        "exactCodes": ["20421"],
     },
     {
         "label": "치약, 비누 및 기타 세제 제조업",
         "aliases": ["치약", "비누", "세제"],
-        "exactCodes": ["20432"],
+        "exactCodes": ["20422"],
     },
     {
         "label": "화장품 제조업",
         "aliases": ["화장품"],
-        "exactCodes": ["20433"],
+        "exactCodes": ["20423"],
     },
     {
         "label": "접착제 및 젤라틴 제조업",
         "aliases": ["접착제", "젤라틴"],
-        "exactCodes": ["20492"],
+        "exactCodes": ["20493"],
     },
     {
         "label": "화약 및 불꽃제품 제조업",
         "aliases": ["화약", "불꽃제품"],
-        "exactCodes": ["20493"],
+        "exactCodes": ["20494"],
     },
     {
         "label": "기타 분류 안된 화학제품 제조업",
@@ -143,8 +147,7 @@ TARGET_INDUSTRIES: List[Dict[str, Any]] = [
     {
         "label": "펄프, 종이 및 판지 제조업",
         "aliases": ["펄프", "신문용지", "인쇄지", "판지", "기타 종이"],
-        "prefixCodes": ["1711"],
-        "exactCodes": ["17121", "17122", "17123", "17129"],
+        "prefixCodes": ["1710"],
     },
     {
         "label": "기타 종이 및 판지제품 제조업",
@@ -154,8 +157,8 @@ TARGET_INDUSTRIES: List[Dict[str, Any]] = [
     {
         "label": "전자부품 제조업",
         "aliases": ["평판", "회로기판", "기타 전자부품"],
-        "prefixCodes": ["2621", "2692"],
-        "exactCodes": ["26221", "26929"],
+        "prefixCodes": ["2621", "2629"],
+        "exactCodes": ["26221", "26299"],
     },
     {
         "label": "도축, 육류가공 및 저장처리업",

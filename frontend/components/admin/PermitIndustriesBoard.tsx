@@ -296,7 +296,7 @@ export function PermitIndustriesBoard() {
                 label="KSIC 정확 일치(5자리)"
                 value={draft.exactCodes}
                 placeholder="예: 35300, 38210"
-                hint="쉼표로 구분합니다."
+                hint="KSIC 11차 코드 · 쉼표로 구분합니다."
                 onChange={(e) => setDraft({ ...draft, exactCodes: e.target.value })}
               />
               <CdInput

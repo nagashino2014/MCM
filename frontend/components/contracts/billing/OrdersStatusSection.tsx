@@ -10,7 +10,7 @@ import type { FeatureCollection, Geometry } from "geojson";
 import type { Topology, GeometryCollection as TopoGeometryCollection } from "topojson-specification";
 import { SIDO_LIST, shortenSido } from "@scraper/lib/ieps/region";
 import ApexChart from "@/components/contracts/dashboard/ApexChart";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { filterOrdersStatusRows } from "@/lib/ieps/orders-status-filter";
 import type { ContractOrdersStatusRow, ContractOrdersYearlyEntry } from "@/lib/ieps/contracts";
 import {
@@ -103,6 +103,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
   const [year, setYear] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [industryId, setIndustryId] = useState<string | null>(null);
+  const { industries: permitIndustries, all: allPermitIndustries } = usePermitIndustries();
   const [sido, setSido] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const scrollPendingRef = useRef<boolean>(false);
@@ -192,13 +193,13 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
 
   // 지도/요약용: 지역 선택 전 단계 필터 (용역 + 업종)
   const baseRows = useMemo(
-    () => filterOrdersStatusRows(data?.rows ?? [], { category, industryId }),
-    [data, category, industryId]
+    () => filterOrdersStatusRows(data?.rows ?? [], { category, industryId }, allPermitIndustries),
+    [data, category, industryId, allPermitIndustries]
   );
   // 리스트용: 지역 선택까지 반영
   const listRows = useMemo(
-    () => filterOrdersStatusRows(baseRows, { sido }),
-    [baseRows, sido]
+    () => filterOrdersStatusRows(baseRows, { sido }, allPermitIndustries),
+    [baseRows, sido, allPermitIndustries]
   );
 
   // 상태 복원 시 선택된 계약이 보이도록 리스트를 스크롤
@@ -257,8 +258,8 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
 
   // 인덱스 상단(총 수주액/용역별 도넛)은 용역 필터와 무관하게 선택 지역의 전체 용역을 집계한다.
   const summaryAllRows = useMemo(
-    () => filterOrdersStatusRows(data?.rows ?? [], { sido }),
-    [data, sido]
+    () => filterOrdersStatusRows(data?.rows ?? [], { sido }, allPermitIndustries),
+    [data, sido, allPermitIndustries]
   );
 
   const handleExport = async (format: "xlsx" | "pdf") => {
@@ -340,7 +341,7 @@ export function OrdersStatusSection({ theme, scopeQuery = "", readOnly = false }
             }
           >
             <option value="">업종 전체</option>
-            {INTEGRATED_PERMIT_INDUSTRIES.map((item) => (
+            {permitIndustries.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>

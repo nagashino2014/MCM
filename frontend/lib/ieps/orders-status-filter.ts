@@ -6,6 +6,8 @@ import { shortenSido } from "@scraper/lib/ieps/region";
 import {
   findIntegratedPermitIndustry,
   industryCodeMatchesCategory,
+  permitIndustryFromLabel,
+  type IntegratedPermitIndustry,
 } from "@/lib/ieps/integrated-permit-industries";
 import type { ContractOrdersStatusRow } from "@/lib/ieps/contracts";
 
@@ -18,8 +20,12 @@ export interface OrdersStatusFilter {
   sido?: string | null;
 }
 
-export function rowMatchesIndustry(row: ContractOrdersStatusRow, industryId: string): boolean {
-  const industry = findIntegratedPermitIndustry(industryId);
+export function rowMatchesIndustry(
+  row: ContractOrdersStatusRow,
+  industryId: string,
+  industries: IntegratedPermitIndustry[]
+): boolean {
+  const industry = findIntegratedPermitIndustry(industryId, industries);
   if (!industry) return true;
   const codes = String(row.facilityIndustryCode ?? "")
     .split(/[\s,/]+/)
@@ -28,16 +34,18 @@ export function rowMatchesIndustry(row: ContractOrdersStatusRow, industryId: str
   if (codes.some((code) => industryCodeMatchesCategory(code, industry))) return true;
   // 코드가 없으면 계약에 기록된 업종 분류 텍스트로 폴백
   const text = String(row.industryCategory ?? "");
-  return text.length > 0 && text.includes(industry.label);
+  return text.length > 0 && (text.includes(industry.label) || permitIndustryFromLabel(text, industries)?.id === industry.id);
 }
 
 export function filterOrdersStatusRows(
   rows: ContractOrdersStatusRow[],
-  filter: OrdersStatusFilter
+  filter: OrdersStatusFilter,
+  /** 통합허가 대상 업종 목록(permit_industries) — industryId 판정용 */
+  industries: IntegratedPermitIndustry[]
 ): ContractOrdersStatusRow[] {
   return rows.filter((row) => {
     if (filter.category && row.category !== filter.category) return false;
-    if (filter.industryId && !rowMatchesIndustry(row, filter.industryId)) return false;
+    if (filter.industryId && !rowMatchesIndustry(row, filter.industryId, industries)) return false;
     if (filter.sido) {
       const short = shortenSido(row.sido) ?? row.sido ?? "미상";
       if (short !== filter.sido) return false;

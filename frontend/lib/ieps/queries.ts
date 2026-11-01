@@ -15,7 +15,8 @@ import {
   parseIndustriesFromValue,
   type IndustryDisplay,
 } from "./formatters";
-import { INTEGRATED_PERMIT_INDUSTRIES, findIntegratedPermitIndustry } from "./integrated-permit-industries";
+import { activePermitIndustries, findIntegratedPermitIndustry } from "./integrated-permit-industries";
+import { loadPermitIndustries, permitIndustryKsicCondition } from "./permit-industries-server";
 import type { FacilityGroupCompanyRole, FacilityGroupInfo, FacilityGroupMembershipRelationType } from "./facility-group";
 import type { FacilityOperatingEntityInfo, FacilityOperatingRelationType } from "./facility-operating-entity";
 import {
@@ -808,7 +809,7 @@ export interface FacilityListFilter {
   sidos?: string[];
   sigungu?: string;
   industryCode?: string;
-  /** 통합허가 20개 업종 카테고리 id. 지정 시 industryCode 보다 우선한다. */
+  /** 통합허가 대상 업종 id(permit_industries). 지정 시 industryCode 보다 우선한다. */
   industryCategory?: string;
   /** 복수 업종 카테고리(모바일 필터). 지정 시 industryCategory/industryCode 보다 우선(OR). */
   industryCategories?: string[];
@@ -900,19 +901,22 @@ export async function listFacilities(
     }
   }
   // 업종 카테고리(단수/복수) — industry_code 는 복수 업종이 줄바꿈/쉼표로 연결될 수 있어
-  // 코드 단위로 분해해 비교한다. 코드 값은 상수(INTEGRATED_PERMIT_INDUSTRIES)에서만 오므로
-  // 리터럴 삽입이 안전하다. 복수 지정 시 카테고리 간 OR.
+  // 코드 단위로 분해해 비교한다. 코드 값은 관리 화면(permit_industries) 입력값이므로 매개변수로 넘긴다.
+  // 복수 지정 시 카테고리 간 OR.
   const industryCategoryIds = filter.industryCategories?.length
     ? filter.industryCategories
     : filter.industryCategory
       ? [filter.industryCategory]
       : [];
   const industryConds: string[] = [];
-  for (const catId of industryCategoryIds) {
-    const cat = findIntegratedPermitIndustry(catId);
-    if (!cat) continue;
-    for (const code of cat.exactCodes) industryConds.push(`TRIM(ic) = '${code}'`);
-    for (const prefix of cat.prefixCodes) industryConds.push(`TRIM(ic) LIKE '${prefix}%'`);
+  if (industryCategoryIds.length) {
+    const permitIndustries = await loadPermitIndustries(db);
+    for (const catId of industryCategoryIds) {
+      const cat = findIntegratedPermitIndustry(catId, permitIndustries);
+      if (!cat) continue;
+      const cond = permitIndustryKsicCondition(cat, params);
+      if (cond) industryConds.push(cond);
+    }
   }
   if (industryConds.length > 0) {
     where.push(
@@ -1104,7 +1108,7 @@ export interface FacilityFilterOptions {
 }
 
 export interface FacilityBrowseStats {
-  /** 통합허가 20업종 카테고리별 사업장 수(0건 포함) — {id, label, count} */
+  /** 통합허가 대상 업종(permit_industries 사용 중) 카테고리별 사업장 수(0건 포함) — {id, label, count} */
   industries: { id: string; label: string; count: number }[];
   /** 용역 진행 중 사업장 수(완료판정 = 허가일/최종 대금단위 발행, completions-status 와 동일) */
   contractActive: number;
@@ -1116,16 +1120,15 @@ export interface FacilityBrowseStats {
 export async function getFacilityBrowseStats(): Promise<FacilityBrowseStats> {
   invalidateDb();
   const db = await getDb();
-  // 카테고리별 FILTER 식 — 코드 값은 상수에서만 오므로 리터럴 삽입 안전(listFacilities 와 동일 관례)
-  const catFilters = INTEGRATED_PERMIT_INDUSTRIES.map((cat, i) => {
-    const conds = [
-      ...cat.exactCodes.map((code) => `TRIM(ic) = '${code}'`),
-      ...cat.prefixCodes.map((prefix) => `TRIM(ic) LIKE '${prefix}%'`),
-    ];
-    if (!conds.length) return `0::int AS cat_${i}`;
+  // 카테고리별 FILTER 식 — 코드 값은 관리 화면 입력값이므로 매개변수로 넘긴다(listFacilities 와 동일)
+  const permitIndustries = activePermitIndustries(await loadPermitIndustries(db));
+  const params: unknown[] = [];
+  const catFilters = permitIndustries.map((cat, i) => {
+    const cond = permitIndustryKsicCondition(cat, params);
+    if (!cond) return `0::int AS cat_${i}`;
     return `COUNT(*) FILTER (WHERE EXISTS (
       SELECT 1 FROM regexp_split_to_table(COALESCE(f.industry_code, ''), '[\\n,/]+') AS ic
-      WHERE ${conds.join(" OR ")}))::int AS cat_${i}`;
+      WHERE ${cond}))::int AS cat_${i}`;
   });
   const rows = rowsToObjects(
     await db.exec(
@@ -1144,12 +1147,13 @@ export async function getFacilityBrowseStats(): Promise<FacilityBrowseStats> {
            WHERE sp.facility_id = f.facility_id
              AND sp.status = 'open' AND sp.stage NOT IN ('won','lost','hold')))::int AS sales_active
        FROM facilities f
-       WHERE f.deleted_at IS NULL`
+       WHERE f.deleted_at IS NULL`,
+      params
     )
   );
   const row = rows[0] ?? {};
   return {
-    industries: INTEGRATED_PERMIT_INDUSTRIES.map((cat, i) => ({
+    industries: permitIndustries.map((cat, i) => ({
       id: cat.id,
       label: cat.label,
       count: Number(row[`cat_${i}`] ?? 0),

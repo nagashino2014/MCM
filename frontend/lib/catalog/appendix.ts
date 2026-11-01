@@ -5,7 +5,12 @@
  */
 import { DASHBOARD_SERVICE_CATEGORIES } from "@/lib/ieps/contract-categories";
 import { CATALOG_CATEGORIES, SOFTWARE_CATEGORY } from "./areas";
-import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { canonicalServiceSubtype } from "@/lib/ieps/integrated-permit";
+import {
+  permitIndustriesSnapshot,
+  permitIndustryFromText,
+  type IntegratedPermitIndustry,
+} from "@/lib/ieps/integrated-permit-industries";
 import { REGION_GROUPS, REGION_UNKNOWN } from "./regions";
 
 export type DisplayOverride = "auto" | "always" | "never";
@@ -138,11 +143,15 @@ export function isInitialPermit(row: Pick<CatalogProjectRow, "category" | "subty
   return row.category === PERMIT_CATEGORY && INITIAL_PERMIT_SUBTYPES.includes(row.subtype.trim());
 }
 
-/** 업종 대외 표기 — 통합허가 20개 업종 라벨(계약 업종분류·사업장 업종명/코드 매칭), 없으면 계약 업종분류·사업장 업종명. */
-export function buildDisplayIndustry(row: Pick<CatalogProjectRow, "industryCategory" | "industryName" | "industryCode">): string {
-  const hit = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
-    matchesIndustryText([row.industryCategory, row.industryName, row.industryCode], i.label)
-  );
+/**
+ * 업종 대외 표기 — 통합허가 대상 업종 이름(계약 업종분류·사업장 업종명/코드 매칭), 없으면 계약 업종분류·사업장 업종명.
+ * 업종 목록은 관리자 설정 '통합허가 업종'(permit_industries) — 넘기지 않으면 마지막으로 읽은 목록(서버는 listCatalogProjects 가 읽는다).
+ */
+export function buildDisplayIndustry(
+  row: Pick<CatalogProjectRow, "industryCategory" | "industryName" | "industryCode">,
+  industries: IntegratedPermitIndustry[] = permitIndustriesSnapshot()
+): string {
+  const hit = permitIndustryFromText([row.industryCategory, row.industryName, row.industryCode], industries);
   return hit?.label ?? (row.industryCategory.trim() || row.industryName.trim());
 }
 

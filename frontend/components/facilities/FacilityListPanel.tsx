@@ -13,9 +13,10 @@ import { PaginationControls } from "@/components/ui/PaginationControls";
 import { formatCompanyName } from "@/lib/ieps/formatters";
 import { FACILITY_SERVICE_LABELS, type FacilityServiceCategory } from "@/lib/ieps/facility-service";
 import {
-  INTEGRATED_PERMIT_INDUSTRIES,
+  findIntegratedPermitIndustry,
   industryCodeMatchesCategory,
 } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { filenameFromDisposition } from "@/lib/client-download";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -110,8 +111,9 @@ export function FacilityListPanel({
 }: Props) {
   const [integratedMode, setIntegratedMode] = useState(false);
   const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
+  const { industries: permitIndustries, all: allPermitIndustries } = usePermitIndustries();
 
-  // 통합허가 20개 업종별 사업장 수: 필터 옵션의 코드별 건수를 카테고리에 합산.
+  // 통합허가 대상 업종별 사업장 수(관리자 설정 '통합허가 업종'): 필터 옵션의 코드별 건수를 카테고리에 합산.
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const entry of filterOptions?.industries ?? []) {
@@ -119,14 +121,14 @@ export function FacilityListPanel({
         .split(/[\n,/]+/)
         .map((c) => c.trim())
         .filter(Boolean);
-      for (const category of INTEGRATED_PERMIT_INDUSTRIES) {
+      for (const category of permitIndustries) {
         if (codes.some((code) => industryCodeMatchesCategory(code, category))) {
           counts.set(category.id, (counts.get(category.id) ?? 0) + entry.count);
         }
       }
     }
     return counts;
-  }, [filterOptions]);
+  }, [filterOptions, permitIndustries]);
 
   // 지역은 칩 다중 선택으로 통일 — "복수 지역 선택" 체크박스 + 읽기전용 슬롯 input 조합을
   // 폐지하고 sidos 배열을 직접 다룬다(선택하면 칩 추가, × 로 제거).
@@ -147,7 +149,7 @@ export function FacilityListPanel({
   };
 
   const industryLabel = integratedMode
-    ? INTEGRATED_PERMIT_INDUSTRIES.find((c) => c.id === filter.industryCategory)?.label
+    ? (filter.industryCategory ? findIntegratedPermitIndustry(filter.industryCategory, allPermitIndustries)?.label : undefined)
     : filterOptions?.industries.find((i) => String(i.code) === filter.industryCode)?.code;
 
   const buildExportParams = (format: "xlsx" | "pdf") => {
@@ -239,7 +241,7 @@ export function FacilityListPanel({
             />
           )}
 
-          {/* 업종 — 통합허가 기준 토글에 따라 20개 카테고리 / 원본 코드. */}
+          {/* 업종 — 통합허가 기준 토글에 따라 통합허가 대상 업종 / 원본 코드. */}
           <FilterDropdown
             align="left"
             menuWidthClass="w-64"
@@ -248,7 +250,7 @@ export function FacilityListPanel({
             onClear={industryLabel ? () => onFilterChange({ ...filter, industryCode: "", industryCategory: "", offset: 0 }) : undefined}
             items={
               integratedMode
-                ? INTEGRATED_PERMIT_INDUSTRIES.map((c) => ({
+                ? permitIndustries.map((c) => ({
                     key: c.id,
                     label: `${c.label} (${categoryCounts.get(c.id) ?? 0})`,
                     onSelect: () => onFilterChange({ ...filter, industryCategory: c.id, industryCode: "", offset: 0 }),

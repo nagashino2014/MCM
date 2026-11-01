@@ -1,6 +1,6 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { DASHBOARD_SERVICE_CATEGORIES } from "@/lib/ieps/contract-categories";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit";
+import { activePermitIndustries, permitIndustriesSnapshot } from "@/lib/ieps/integrated-permit-industries";
 import { CATALOG_CATEGORIES, SOFTWARE_PRODUCTS } from "./areas";
 import {
   CHANGE_PERMIT_SUBTYPES,
@@ -90,7 +90,7 @@ export const METRIC_DEFS: MetricDef[] = [
     id: "permit.industries",
     label: "통합허가 수행 업종",
     unit: "개",
-    footnote: `통합환경허가 용역을 수행한 통합허가 대상 업종 수(대상 ${INTEGRATED_PERMIT_INDUSTRIES.length}개 업종 중, 사업장 업종 기준).`,
+    footnote: "통합환경허가 용역을 수행한 통합허가 대상 업종 수(관리 › 통합허가 업종 기준, 사업장 업종 기준).",
   },
   // 사업 분야별 누적 계약 수 — 분야 번호는 디자인 시스템 분야 색 area-1..6 과 같다(lib/catalog/areas.ts)
   ...CATALOG_CATEGORIES.map((category, i) => ({
@@ -279,8 +279,8 @@ export async function computeCatalogMetrics(pre?: {
   const permitRows = projects.filter((p) => p.category === DASHBOARD_SERVICE_CATEGORIES[0]);
   const changeCompleted = permitRows.filter((p) => CHANGE_PERMIT_SUBTYPES.includes(p.subtype.trim()) && isCompleted(p)).length;
   const clients = new Set(projects.map((p) => p.counterpartyName.trim()).filter(Boolean)).size;
-  // 통합허가 수행 업종 — 20개 대상 업종 라벨로 판정된 것만 센다
-  const permitLabels = new Set(INTEGRATED_PERMIT_INDUSTRIES.map((i) => i.label));
+  // 통합허가 수행 업종 — 대상 업종 이름으로 판정된 것만 센다(listCatalogProjects 가 갱신한 목록)
+  const permitLabels = new Set(activePermitIndustries(permitIndustriesSnapshot()).map((i) => i.label));
   const permitIndustries = new Set(permitRows.map((p) => buildDisplayIndustry(p)).filter((l) => permitLabels.has(l))).size;
   const areaCounts = Object.fromEntries(
     CATALOG_CATEGORIES.map((c, i) => [`projects.area.${i + 1}`, { value: projects.filter((p) => p.category === c).length }])

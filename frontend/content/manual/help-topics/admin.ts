@@ -195,4 +195,18 @@ export const ADMIN_HELP: HelpTopic[] = [
     sources: ["components/admin/IntegrationHealthBoard.tsx"],
     reviewedAt: "2026-10-30",
   },
+  {
+    id: "admin.permit-industries",
+    label: "통합허가 업종 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "여기 목록이 사업장 업종 필터·계약 업종 옵션·영업 발굴·브리핑 업종 선택·AI 업종 분류에 함께 쓰입니다.",
+        "[[업종 추가]]에서 ID 는 만든 뒤 바꿀 수 없습니다. KSIC 코드가 있어야 사업장이 분류됩니다.",
+        "업종은 지우지 않고 [[사용 중지]]합니다. 저장된 기록의 업종 이름은 그대로 보입니다.",
+      ] },
+    ],
+    more: { article: "admin.permit-industries", section: "edit" },
+    sources: ["components/admin/PermitIndustriesBoard.tsx"],
+    reviewedAt: "2026-11-01",
+  },
 ];

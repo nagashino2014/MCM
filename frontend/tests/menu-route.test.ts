@@ -21,7 +21,7 @@ const SALES_STAFF_PERMS = [...STAFF_PERMS, "sales.view@all", "sales.edit@all", "
 const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finance.view@all", "sales.view@all"];
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
-  assert.equal(MENU_ITEMS.length, 26);
+  assert.equal(MENU_ITEMS.length, 27);
   assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 80);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
@@ -122,6 +122,10 @@ test("서브메뉴별 권한키 — 본인용과 관리용이 섞인 메뉴는 �
   const admin = MENU_ITEMS.find((item) => item.title === "사용자 관리")!;
   assert.equal(isMenuVisible(admin, ["security.access_log@all"]), true);
   assert.deepEqual(visibleSubmenu(admin, ["security.access_log@all"]).map((s) => s.href), ["/admin/access-log"]);
+  // 통합허가 업종(325) — 업종 관리 키 보유자만, 일반 직원에게는 보이지 않는다
+  const permitIndustries = MENU_ITEMS.find((item) => item.href === "/admin/permit-industries")!;
+  assert.equal(isMenuVisible(permitIndustries, ["master.permit_industry.manage@all"]), true);
+  assert.equal(isMenuVisible(permitIndustries, STAFF_PERMS), false);
   const contracts = MENU_ITEMS.find((item) => item.title === "계약")!;
   assert.deepEqual(visibleSubmenu(contracts, STAFF_PERMS).map((s) => s.href).includes("/contracts/filings"), false);
   // Dashboard·수주/수금/발행 현황은 billing.view(관리자·인사/회계·대표이사)만(298)

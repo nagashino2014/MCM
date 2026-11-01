@@ -1,8 +1,10 @@
 // 정기 발행본 분류 트리 — 통합허가 업종 → 사업장(마스터·관심 기업·미등록 기업) → 그 사업장을 다룬 발행 보고서.
+// 업종 목록은 관리자 설정 '통합허가 업종'(permit_industries)의 사용 중 업종이다 — 업종을 추가하면 트리에도 바로 나온다.
 // 열람 범위는 발행 이력 목록과 같다(listBriefingRuns: 소유자·명시 수신자). 조회 전용.
 
 import { getDb, rowsToObjects } from "@/lib/db";
-import { INTEGRATED_PERMIT_INDUSTRIES, industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
+import { activePermitIndustries, industryCodeMatchesCategory, splitKsicCodes } from "@/lib/ieps/integrated-permit-industries";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import { listBriefingProfiles, listBriefingRuns } from "./briefing-store";
 
 type Row = Record<string, unknown>;
@@ -173,16 +175,23 @@ export async function buildBriefingTree(userId: string): Promise<{ industries: B
 
   // ── 트리 조립 ──
   const industries = new Map<string, BriefingTreeIndustry>();
-  for (const item of INTEGRATED_PERMIT_INDUSTRIES) industries.set(item.id, { id: item.id, label: item.label, entities: [] });
+  const permitIndustries = activePermitIndustries(await loadPermitIndustries(db));
+  for (const item of permitIndustries) industries.set(item.id, { id: item.id, label: item.label, entities: [] });
   industries.set(UNCLASSIFIED_INDUSTRY, { id: UNCLASSIFIED_INDUSTRY, label: "업종 미분류", entities: [] });
   const industryOf = (id: string | null | undefined) => industries.get(id && industries.has(id) ? id : UNCLASSIFIED_INDUSTRY)!;
 
   for (const f of facilities) {
     const id = String(f.facility_id);
-    industryOf(industryIdFromKsic(str(f.industry_code))).entities.push({
-      key: `facility:${id}`, kind: "facility", facilityId: id, name: String(f.company_name),
-      detail: [str(f.region_sido), str(f.region_sigungu)].filter(Boolean).join(" ") || str(f.site_address), reports: reportsFor(`facility:${id}`),
-    });
+    // 업종 코드가 여럿인 사업장은 해당 업종마다 보인다(사업장 마스터 필터·통계와 같은 규칙).
+    const codes = splitKsicCodes(str(f.industry_code));
+    const matched = permitIndustries.filter((industry) => codes.some((code) => industryCodeMatchesCategory(code, industry)));
+    const reports = reportsFor(`facility:${id}`);
+    for (const industry of matched.length ? matched.map((item) => item.id) : [UNCLASSIFIED_INDUSTRY]) {
+      industryOf(industry).entities.push({
+        key: `facility:${id}`, kind: "facility", facilityId: id, name: String(f.company_name),
+        detail: [str(f.region_sido), str(f.region_sigungu)].filter(Boolean).join(" ") || str(f.site_address), reports,
+      });
+    }
   }
   // 관심 기업 — 마스터에 같은 회사가 있으면 그 사업장 노드가 대신한다.
   const placed = new Set<string>();

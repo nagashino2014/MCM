@@ -131,6 +131,7 @@ export type AuditAction =
   | "approval_precheck_llm"
   | "mail_send"
   | "attachment_policy_change" // 첨부 확장자 정책(262) — 전사 기본·인원별 예외 변경
+  | "permit_industry_change" // 통합허가 대상 업종(325) — 추가·수정·사용 중지·순서
   | "auth_find_id"
   | "auth_password_reset"
   | "admin_password_sync"
@@ -174,7 +175,9 @@ export type AuditAction =
   | "catalog_render"
   // 회사소개서 발행(P7) — 발행본 확정·배포 기록
   | "catalog_publish"
-  | "catalog_distribution";
+  | "catalog_distribution"
+  // 용역 제안서 AI 수정 채택(바꾼 칸 수만, 글 내용 없음)
+  | "proposal_ai_apply";
 
 export interface AuditEntry {
   actorUserId: string | null;

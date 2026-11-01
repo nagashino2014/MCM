@@ -43,9 +43,14 @@ import { AgencyReportList } from "@/components/contracts/AgencyReportList";
 import { AmendmentHistorySection } from "@/components/contracts/AmendmentHistorySection";
 import { BAROBILL_BANKS } from "@/components/finance/FinLogo";
 import { checkDateFields } from "@/lib/contracts/date-field";
-import { INTEGRATED_PERMIT_OPTION_SUFFIX, IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
+import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { IndustryPermitLookupButton } from "@/components/contracts/IndustryPermitLookupButton";
-import { findIntegratedPermitIndustry, industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
+import {
+  INTEGRATED_PERMIT_OPTION_SUFFIX,
+  findIntegratedPermitIndustry,
+  industryIdFromKsic,
+  type IntegratedPermitIndustry,
+} from "@/lib/ieps/integrated-permit-industries";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
 import { createRateCard, rateCardHasContent, rateCardStageOptions, upgradeRateCard } from "@/lib/contracts/rate-card";
@@ -206,9 +211,9 @@ interface FacilitySearchItem {
 }
 
 /** 사업장 KSIC → 계약 업종 옵션명("반도체(통합허가)" 형식). 대상 업종이 아니면 null. */
-function industryOptionFromKsic(industryCode?: string | null): string | null {
-  const id = industryIdFromKsic(industryCode);
-  const label = id ? findIntegratedPermitIndustry(id)?.label : null;
+function industryOptionFromKsic(industryCode: string | null | undefined, industries: IntegratedPermitIndustry[]): string | null {
+  const id = industryIdFromKsic(industryCode, industries);
+  const label = id ? findIntegratedPermitIndustry(id, industries)?.label : null;
   return label ? `${label}${INTEGRATED_PERMIT_OPTION_SUFFIX}` : null;
 }
 
@@ -2206,7 +2211,7 @@ function NewContractModal({
   const [quickRegistering, setQuickRegistering] = useState(false);
   const [outsourcingEntityOptions, setOutsourcingEntityOptions] = useState<FacilitySearchItem[]>([]);
   const [outsourcingTypeOptions, setOutsourcingTypeOptions] = useState(DEFAULT_OUTSOURCING_TYPES);
-  const { industryOptions, setIndustryOptions } = useContractIndustryOptions();
+  const { industryOptions, setIndustryOptions, permitIndustries } = useContractIndustryOptions();
   const documentFileRef = useRef<File | null>(null);
   const [documentFileName, setDocumentFileName] = useState("");
   const outsourcingFileRef = useRef<File | null>(null);
@@ -2708,7 +2713,7 @@ function NewContractModal({
                           counterpartyQuery: entity.companyName,
                           counterpartyBusinessRegistrationNo: entity.businessRegistrationNo ?? null,
                           // 사업장 마스터의 KSIC 로 업종 프리필(비어 있을 때만 — 공장별로 다를 수 있어 수정 가능)
-                          industryCategory: state.industryCategory || industryOptionFromKsic(entity.industryCode) || state.industryCategory,
+                          industryCategory: state.industryCategory || industryOptionFromKsic(entity.industryCode, permitIndustries) || state.industryCategory,
                         })
                       }
                     >
@@ -2867,7 +2872,7 @@ function NewContractModal({
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
-                {/* KSIC 코드·업종명 → 통합허가 20개 업종 판정(2026-08-26 — 반도체/전자부품 등 유사 업종 구분) */}
+                {/* KSIC 코드·업종명 → 통합허가 대상 업종 판정(2026-08-26 — 반도체/전자부품 등 유사 업종 구분) */}
                 <IndustryPermitLookupButton onApply={(optionName) => onChange({ ...state, industryCategory: optionName })} />
                 <IndustryOptionsEditorButton options={industryOptions} onOptionsChange={setIndustryOptions} />
               </div>

@@ -5,7 +5,7 @@ import { Building2, Download, Minus, Plus, Upload, X } from "lucide-react";
 import { EmployeeAvatar } from "@/components/ui/EmployeeAvatar";
 import type { FacilityDetail } from "@/lib/ieps/types-facility";
 import { GroupManagementModal } from "@/components/facilities/FacilityDetailPanel";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import {
@@ -136,6 +136,7 @@ function NewFacilityModal({ theme, onClose, onCreated }: { theme: string; onClos
   const [representativeName, setRepresentativeName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [industryName, setIndustryName] = useState("");
+  const { industries: permitIndustries } = usePermitIndustries();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -206,7 +207,7 @@ function NewFacilityModal({ theme, onClose, onCreated }: { theme: string; onClos
             <label className="cd-label">업종(통합허가 대상)</label>
             <select className="cd-select mb-4" value={industryName} onChange={(e) => setIndustryName(e.target.value)}>
               <option value="">업종 선택</option>
-              {INTEGRATED_PERMIT_INDUSTRIES.map((i) => <option key={i.id} value={i.label}>{i.label}</option>)}
+              {permitIndustries.map((i) => <option key={i.id} value={i.label}>{i.label}</option>)}
             </select>
             <div className="flex justify-end gap-2">
               <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={onClose}>취소</button>

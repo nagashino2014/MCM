@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Play, RefreshCw, RotateCcw, Save, X } from "lucide-react";
-import type { IntelCollectSettings, IntelIndustryItem } from "@/lib/intel/intel-settings";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
+import Link from "next/link";
+import type { IntelCollectSettings } from "@/lib/intel/intel-settings";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { CdTabs } from "@/components/cdash/CdTabs";
 
 // press-client.ts 의 PRESS_SOURCE_LABELS 와 동일 — 해당 모듈은 undici(node 전용) 의존이라
@@ -110,60 +111,29 @@ function KeywordChips({
   );
 }
 
-/** 통합허가 대상 업종 편집기 — 업종 태깅(관련성 판단) 후보군. 신규 편입 업종 추가/제외 대응. */
-function IndustryChips({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: IntelIndustryItem[];
-  onChange: (next: IntelIndustryItem[]) => void;
-  disabled?: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-  const defaults: IntelIndustryItem[] = INTEGRATED_PERMIT_INDUSTRIES.map((i) => ({ id: i.id, label: i.label }));
-  const add = () => {
-    const label = draft.trim();
-    if (!label || value.some((v) => v.label === label)) { setDraft(""); return; }
-    // 기본 20종과 같은 라벨이면 원래 id 를 복원(KSIC 매핑·규칙 층 연동 유지), 신규는 라벨 자체가 id
-    const known = defaults.find((d) => d.label === label);
-    onChange([...value, known ?? { id: label, label }]);
-    setDraft("");
-  };
+/**
+ * 통합허가 대상 업종 — 업종 태깅(관련성 판단) 후보군. 읽기 전용.
+ * 단일 원천은 관리자 설정 '통합허가 업종'(permit_industries, 325) — 수집 설정에서는 추가·삭제하지 않는다.
+ */
+function IndustryChips() {
+  const { industries } = usePermitIndustries();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-1 flex-wrap">
-        {value.map((it) => (
+        {industries.map((it) => (
           <span key={it.id} className="cd-chip cd-chip-sm" title={it.note ?? it.id}>
             {it.label}
-            {!disabled && (
-              <button type="button" onClick={() => onChange(value.filter((v) => v.id !== it.id))} title="삭제">
-                <X className="w-3 h-3" />
-              </button>
-            )}
           </span>
         ))}
-        {value.length === 0 && <span className="cd-text-faint text-xs">업종 없음 — 태깅이 동작하지 않습니다</span>}
+        {industries.length === 0 && <span className="cd-text-faint text-xs">업종 없음 — 태깅이 동작하지 않습니다</span>}
       </div>
-      {!disabled && (
-        <div className="flex items-center gap-1.5">
-          <input
-            className="cd-input"
-            style={{ maxWidth: 220 }}
-            value={draft}
-            placeholder="업종명 입력 후 Enter"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          />
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={add}>추가</button>
-          <button
-            type="button" className="cd-btn cd-btn-ghost cd-btn-sm" title="기본 20종으로 복원"
-            onClick={() => onChange(defaults)}
-          >
-            기본값 복원
-          </button>
-        </div>
-      )}
+      <span className="cd-text-faint text-xs">
+        업종 추가·수정은{" "}
+        <Link href="/admin/permit-industries" className="cd-text-primary font-semibold underline-offset-2 hover:underline">
+          관리 › 통합허가 업종
+        </Link>
+        에서 합니다. 사업장 마스터·계약·영업 화면에 함께 반영됩니다.
+      </span>
     </div>
   );
 }
@@ -356,12 +326,8 @@ export function IntelCollectSettingsPanel({
                   onChange={(e) => set("common", { maxAgeMonths: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FieldRow>
-              <FieldRow label="통합허가 대상 업종" hint="업종 태깅(관련성 판단)의 후보군 — 신규 편입 업종은 여기에 추가하세요">
-                <IndustryChips
-                  value={settings.industries?.list ?? []}
-                  disabled={!canEdit}
-                  onChange={(list) => set("industries", { list })}
-                />
+              <FieldRow label="통합허가 대상 업종" hint="업종 태깅(관련성 판단)의 후보군 — 관리 › 통합허가 업종에서 관리합니다">
+                <IndustryChips />
               </FieldRow>
             </>
           )}

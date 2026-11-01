@@ -4,8 +4,7 @@
 
 import { rowsToObjects, type PgDatabase } from "@/lib/db";
 import { industryIdFromKsic } from "@/lib/ieps/integrated-permit-industries";
-
-export { industryIdFromKsic };
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 
 export type IndustryRelevance = "direct" | "supply_chain" | "low" | "none";
 
@@ -17,8 +16,8 @@ export interface IndustryTag {
 
 export const EMPTY_INDUSTRY_TAG: IndustryTag = { industry: null, relevance: null, note: null };
 
-// industryIdFromKsic 는 클라이언트 안전 모듈(ieps/integrated-permit-industries.ts)로 이동(2026-08-26 —
-// 계약 모달의 업종 프리필이 공유). 여기서는 위 re-export 로 기존 import 경로를 유지한다.
+// industryIdFromKsic 는 클라이언트 안전 모듈(ieps/integrated-permit-industries.ts)에 있고 업종 목록을 인자로 받는다
+// (단일 원천 permit_industries, 325). 규칙 층의 고정 id(power·waste-incineration 등)는 업종 id 가 고정 slug 라 유지된다.
 
 /**
  * facilities 매칭 신호의 태그 — 마스터(통합허가 대상 사업장)가 정답이므로 relevance=direct.
@@ -29,7 +28,10 @@ export async function industryTagForFacility(db: PgDatabase, facilityId: string)
     const rows = rowsToObjects(
       await db.exec(`SELECT industry_code FROM facilities WHERE facility_id = $1`, [facilityId])
     );
-    const id = industryIdFromKsic(rows.length ? (rows[0].industry_code as string | null) : null);
+    const id = industryIdFromKsic(
+      rows.length ? (rows[0].industry_code as string | null) : null,
+      await loadPermitIndustries(db)
+    );
     return { industry: id ?? "other", relevance: "direct", note: null };
   } catch {
     return { industry: "other", relevance: "direct", note: null };

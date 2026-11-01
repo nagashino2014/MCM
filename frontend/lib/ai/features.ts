@@ -6,7 +6,7 @@
  * - critical: 사용자 대면 경로(예산 초과 시 마지막까지 살려야 하는 기능). 비필수는 P2 예산 정책이 먼저 차단한다.
  */
 
-export type AiFeatureGroup = "전자결재" | "업무보고" | "문서 파싱" | "양식 분석" | "영업 인텔" | "회사소개서" | "스크래퍼";
+export type AiFeatureGroup = "전자결재" | "업무보고" | "문서 파싱" | "양식 분석" | "영업 인텔" | "회사소개서" | "용역 제안서" | "스크래퍼";
 
 export interface AiFeatureDef {
   label: string;
@@ -60,6 +60,9 @@ export const AI_FEATURES = {
   "catalog.infographic_suggest": { label: "회사소개서 인포그래픽 유형 순위", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   "catalog.copy_fit": { label: "회사소개서 넘침 문구 줄이기", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   "catalog.project_label": { label: "회사소개서 실적 대외 표기 제안", group: "회사소개서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
+  // 용역 제안서(docs/proposal-ai-editing-plan.md §3) — 글만 고치는 JSON op, 수치·작성 필요 칸은 사람이.
+  "proposal.rewrite": { label: "용역 제안서 블록·쪽 AI 수정", group: "용역 제안서", critical: false, defaultModel: "claude-opus-5", vision: false },
+  "proposal.copy_fit": { label: "용역 제안서 넘침 문구 줄이기", group: "용역 제안서", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   // 스크래퍼 소스 분석
   "scraper.analyze_source:profile": { label: "소스 분석 — API 프로필 생성", group: "스크래퍼", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "scraper.analyze_source:catalog": { label: "소스 분석 — 카탈로그 목록 추출", group: "스크래퍼", critical: false, defaultModel: "claude-sonnet-5", vision: false },

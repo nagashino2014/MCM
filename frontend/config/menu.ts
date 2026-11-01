@@ -18,6 +18,7 @@ import {
   CalendarDays,
   CalendarClock,
   ListChecks,
+  Layers,
   CarFront,
   SlidersHorizontal,
   Landmark,
@@ -338,6 +339,13 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "회사 프로필 관리",
     href: "/admin/company-profile",
     icon: Building2,
+    group: "system",
+  },
+  // 통합허가 대상 업종 단일 원천(325) — 사업장·계약·영업·AI 분류가 같은 목록을 읽는다. master.permit_industry.manage RBAC 가드.
+  {
+    title: "통합허가 업종",
+    href: "/admin/permit-industries",
+    icon: Layers,
     group: "system",
   },
   // 홍보·채용공고 — 클로드 디자인 핸드오프 템플릿 기반 채용공고 편집기(마이그 212, recruit.*).

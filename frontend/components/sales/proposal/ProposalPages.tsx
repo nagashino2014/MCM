@@ -35,6 +35,7 @@ body.pk-doc.st-frame{overflow:auto;background:#e6e8eb;margin:0}#st-root{padding:
 .pp-flow{display:flow-root}
 .pp-b{position:relative;border-radius:2px}
 .pp-b[data-sel=true]{outline:1.5px solid var(--p2);outline-offset:2px;background:color-mix(in srgb,var(--t1) 35%,transparent)}
+[data-hit=true]{outline:2px solid #E08A00;outline-offset:1px;background:#FFF1CC;border-radius:2px}
 [data-edit]{cursor:text}[data-edit]:hover{box-shadow:inset 0 -1px 0 var(--gl)}[data-edit][contenteditable=true]{outline:1.5px dashed var(--ac);background:#fffbe6}
 .pp-ptitle{font-size:${TYPE.pageTitle}px;font-weight:700;color:var(--ink);line-height:1.38;margin:2px 0 ${SPACE.titleAfter}px;word-break:keep-all;letter-spacing:-.2px}
 .pp-lead{background:var(--gp);border-left:3px solid var(--p1);padding:9px 12px;margin:0 0 ${SPACE.leadAfter}px;font-size:${TYPE.lead}px;font-weight:700;color:var(--ink);line-height:1.55;word-break:keep-all}

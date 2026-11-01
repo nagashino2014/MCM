@@ -17,7 +17,7 @@ import { buildOrgChartFromMaster } from "@/lib/catalog/org-chart";
 import { listAdvisors, listCatalogPeople, listExtraPeople, type CatalogPerson } from "@/lib/catalog/people";
 import { MASTER_DOC_ID, getAppendixRules, getDocumentTheme, listCatalogProjects } from "@/lib/catalog/projects";
 import { REGION_GROUPS, REGION_UNKNOWN } from "@/lib/catalog/regions";
-import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit";
+import { activePermitIndustries, permitIndustriesSnapshot } from "@/lib/ieps/integrated-permit-industries";
 import { getCompanyProfile, listCredentials, listHistory } from "@/lib/company/profile";
 import { AREA_DISPLAY_NAME, CLIENT_GROUP_LABEL, MATRIX_DESC, OFFICE_CONTENT, VISION_CONTENT } from "./master-content";
 import { initialOf, maskNamesIn, nameMasker } from "./masking";
@@ -297,8 +297,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       .map(caseRow),
   }));
 
-  // 통합허가 수행 업종(20개 업종 라벨) — 계약 수 많은 순
-  const labelSet = new Set(INTEGRATED_PERMIT_INDUSTRIES.map((x) => x.label));
+  // 통합허가 수행 업종(대상 업종 이름, listCatalogProjects 가 갱신한 목록) — 계약 수 많은 순
+  const labelSet = new Set(activePermitIndustries(permitIndustriesSnapshot()).map((x) => x.label));
   const industryCount = new Map<string, number>();
   for (const p of projects.filter((r) => r.category === CATALOG_CATEGORIES[0])) {
     const l = buildDisplayIndustry(p);

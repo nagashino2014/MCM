@@ -1,5 +1,6 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { categoryCaseSql } from "@/lib/ieps/contracts";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import {
   MANUAL_ID_PREFIX,
   sanitizeAppendixRules,
@@ -44,6 +45,8 @@ function mapMeta(r: Record<string, unknown>): ContractCatalogMeta | null {
 /** 삭제되지 않은 전체 계약(RBAC 범위 없음 — 회사소개서는 전사 실적) + 계약 없는 실적(뒤에 붙임). */
 export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
   const db = await getDb();
+  // 업종 표기(buildDisplayIndustry)가 쓰는 통합허가 업종 목록 스냅숏을 갱신해 둔다(관리자 설정 '통합허가 업종')
+  await loadPermitIndustries(db);
   const catCase = categoryCaseSql("c.service_type");
   const rows = rowsToObjects(
     await db.exec(

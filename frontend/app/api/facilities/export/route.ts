@@ -3,9 +3,11 @@ import { requirePermission, authErrorToResponse } from "@/lib/auth/guards";
 import { listFacilities, type FacilityListFilter } from "@/lib/ieps/queries";
 import { formatCompanyName } from "@/lib/ieps/formatters";
 import {
-  INTEGRATED_PERMIT_INDUSTRIES,
+  activePermitIndustries,
+  findIntegratedPermitIndustry,
   industryCodeMatchesCategory,
 } from "@/lib/ieps/integrated-permit-industries";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import {
   createTablePdf,
   createTableWorkbook,
@@ -64,8 +66,9 @@ export async function GET(req: NextRequest) {
 
     // 선택된 업종 레이블
     const industryCategoryId = searchParams.get("industryCategory") || "";
+    const permitIndustries = await loadPermitIndustries();
     const industryLabel = industryCategoryId
-      ? INTEGRATED_PERMIT_INDUSTRIES.find((c) => c.id === industryCategoryId)?.label ?? ""
+      ? findIntegratedPermitIndustry(industryCategoryId, permitIndustries)?.label ?? ""
       : "";
     const isIntegrated = Boolean(industryCategoryId);
     const hasContractHistory = searchParams.get("hasContractHistory") === "1";
@@ -94,7 +97,7 @@ export async function GET(req: NextRequest) {
         .split(/[\s,/]+/)
         .map((c) => c.trim())
         .filter(Boolean);
-      const category = INTEGRATED_PERMIT_INDUSTRIES.find((cat) =>
+      const category = activePermitIndustries(permitIndustries).find((cat) =>
         codes.some((code) => industryCodeMatchesCategory(code, cat))
       );
       const firstName = String(f.industryName ?? "")

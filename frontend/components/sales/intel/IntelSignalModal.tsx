@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Ban, Building2, ExternalLink, FileText, Plus, RefreshCw, X } from "lucide-react";
 import type { IntelSignal, IntelSignalDetail } from "./intel-shared";
-import { GradeTag, INDUSTRY_LABEL, MatchTypeTag, RELEVANCE_LABEL, RelevanceTag, SOURCE_LABEL, TypeTag } from "./intel-shared";
+import { GradeTag, MatchTypeTag, useIntelIndustryLabel, RELEVANCE_LABEL, RelevanceTag, SOURCE_LABEL, TypeTag } from "./intel-shared";
 
 interface FacilityOption {
   facilityId: string;
@@ -158,6 +158,7 @@ export function IntelSignalModal({
   onChanged: () => void;
   onConverted: (projectId: string) => void;
 }) {
+  const industryLabel = useIntelIndustryLabel();
   const s = signal;
   const [detail, setDetail] = useState<IntelSignalDetail | null>(null);
   const [busy, setBusy] = useState(false);
@@ -256,7 +257,7 @@ export function IntelSignalModal({
           {s.industry && (
             <Row
               label="대상 업종"
-              value={`${INDUSTRY_LABEL[s.industry] ?? s.industry}${s.industryRelevance ? ` (관련성 ${RELEVANCE_LABEL[s.industryRelevance] ?? s.industryRelevance})` : ""}`}
+              value={`${industryLabel(s.industry)}${s.industryRelevance ? ` (관련성 ${RELEVANCE_LABEL[s.industryRelevance] ?? s.industryRelevance})` : ""}`}
             />
           )}
           {s.relevanceNote && <Row label="유발 경로" value={s.relevanceNote} />}

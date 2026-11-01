@@ -2,6 +2,7 @@
  * 회사소개서 권역·업종군 상수(클라이언트 안전 — DB 접근 없음).
  * 권역 열은 현행 회사소개서(2026.06판) 수행실적 총괄표와 같다: 영남권을 대구·경북 / 부산·울산·경남 두 열로 나눈다.
  */
+import { permitIndustriesSnapshot, permitIndustryFromLabel } from "@/lib/ieps/integrated-permit-industries";
 
 export interface RegionGroup {
   id: string;
@@ -63,20 +64,23 @@ export function regionGroupLabel(id: string): string {
 
 /**
  * 통합허가 적용 차년도(업종군) — 현행 회사소개서 8장의 '1차년도 발전·폐기물 … 5차년도 반도체 등' 묶음.
- * 키는 lib/ieps/integrated-permit.ts INTEGRATED_PERMIT_INDUSTRIES 의 업종 라벨.
+ * 값은 통합허가 대상 업종 id(permit_industries, 325 — 이름이 바뀌어도 묶음이 유지된다).
  * 근거: 영업부 「통합허가(최초허가) 완료현황(2026.05.15. 기준)」 99개소를 업종별로 묶으면 소개서 8장의 31·22·9·8·29 와
  *   일치하는 묶음 — 화학 계열(무기화학·기타화학·화장품)은 3차, 반도체는 전자와 함께 4차, 섬유·알코올·자동차부품·플라스틱·
- *   육가공·이차전지는 5차. 20개 업종 밖(케이블 등)은 '업종 미판정'으로 따로 센다(소개서는 5차에 넣었다).
+ *   육가공·이차전지는 5차. 묶음에 없는 업종(새로 편입된 업종·케이블 등)은 '업종 미판정'으로 따로 센다(소개서는 5차에 넣었다).
  */
 export const PERMIT_COHORTS: Array<{ id: string; label: string; industries: string[] }> = [
-  { id: "cohort1", label: "1차년도 발전·폐기물", industries: ["발전", "증기열공급", "폐기물처리"] },
-  { id: "cohort2", label: "2차년도 철강·비철", industries: ["철강", "비철"] },
-  { id: "cohort3", label: "3차년도 석유화학", industries: ["유기화학", "석유정제", "무기화학", "비료", "기타화학"] },
-  { id: "cohort4", label: "4차년도 제지·전자", industries: ["종이·펄프", "전자부품", "반도체"] },
-  { id: "cohort5", label: "5차년도 반도체 등", industries: ["섬유·염색", "육류가공", "알콜음료", "플라스틱", "자동차부품", "시멘트", "이차전지"] },
+  { id: "cohort1", label: "1차년도 발전·폐기물", industries: ["power", "steam-heat", "waste-incineration"] },
+  { id: "cohort2", label: "2차년도 철강·비철", industries: ["steel", "nonferrous"] },
+  { id: "cohort3", label: "3차년도 석유화학", industries: ["organic-chem", "oil-refining", "inorganic-chem", "fertilizer", "fine-chem"] },
+  { id: "cohort4", label: "4차년도 제지·전자", industries: ["pulp-paper", "electronics", "semiconductor"] },
+  { id: "cohort5", label: "5차년도 반도체 등", industries: ["textile-dyeing", "slaughter-meat", "alcohol", "plastics", "auto-parts", "cement", "secondary-battery"] },
 ];
 
+/** 업종 표기 이름(buildDisplayIndustry 결과) → 차년도 묶음 id. 이름은 관리자 설정 '통합허가 업종'으로 id 를 찾는다. */
 export function permitCohortId(industryLabel: string): string | null {
   if (!industryLabel) return null;
-  return PERMIT_COHORTS.find((c) => c.industries.includes(industryLabel))?.id ?? null;
+  const industryId = permitIndustryFromLabel(industryLabel, permitIndustriesSnapshot())?.id;
+  if (!industryId) return null;
+  return PERMIT_COHORTS.find((c) => c.industries.includes(industryId))?.id ?? null;
 }

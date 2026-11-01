@@ -27,7 +27,9 @@ import {
   X,
 } from "lucide-react";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
-import { INTEGRATED_PERMIT_INDUSTRIES, canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { canonicalServiceSubtype, matchesIndustryText } from "@/lib/ieps/integrated-permit";
+import { permitIndustryFromText } from "@/lib/ieps/integrated-permit-industries";
+import { usePermitIndustries } from "@/lib/ieps/use-permit-industries";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -451,6 +453,7 @@ export function BidPackageBoard() {
   const [mainCategoryFilter, setMainCategoryFilter] = useState("");
   const [subtypeFilter, setSubtypeFilter] = useState("");
   const [industryFilter, setIndustryFilter] = useState("");
+  const { industries: permitIndustries, all: allPermitIndustries } = usePermitIndustries();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [nodeCache, setNodeCache] = useState<Map<string, TreeContract>>(new Map());
@@ -677,12 +680,12 @@ export function BidPackageBoard() {
           const subtypeMatch = !subtypeFilter || canonicalServiceSubtype(c.serviceSubtype) === subtypeFilter;
           const industryMatch =
             !industryFilter ||
-            matchesIndustryText([c.industryCategory, c.facilityIndustryName, c.facilityIndustryCode], industryFilter);
+            matchesIndustryText([c.industryCategory, c.facilityIndustryName, c.facilityIndustryCode], industryFilter, allPermitIndustries);
           return textMatch && subtypeMatch && industryMatch;
         }),
       }))
       .filter((g) => g.contracts.length > 0);
-  }, [tree, search, mainCategoryFilter, subtypeFilter, industryFilter]);
+  }, [tree, search, mainCategoryFilter, subtypeFilter, industryFilter, allPermitIndustries]);
 
   // 선택 계약의 대분류(혼합 선택 차단·수행실적 설정 태그의 기준)
   const selectedMainCategory = useMemo(() => {
@@ -708,13 +711,11 @@ export function BidPackageBoard() {
     for (const id of contractIds) {
       const n = nodeCache.get(id);
       if (!n) continue;
-      const hit = INTEGRATED_PERMIT_INDUSTRIES.find((i) =>
-        matchesIndustryText([n.industryCategory, n.facilityIndustryName, n.facilityIndustryCode], i.label)
-      );
+      const hit = permitIndustryFromText([n.industryCategory, n.facilityIndustryName, n.facilityIndustryCode], allPermitIndustries);
       if (hit) values.add(hit.label);
     }
     return Array.from(values);
-  }, [contractIds, nodeCache]);
+  }, [contractIds, nodeCache, allPermitIndustries]);
 
   // 서버(생성·미리보기)에 보내는 확정 필터 — '모두 적용'이면 파생 태그 전체를 목록으로 채운다
   // (서버는 목록 기반 매칭: 업종 목록이 있으면 업종 정보 없는 계약은 제외된다)
@@ -1144,7 +1145,7 @@ export function BidPackageBoard() {
                 </select>
                 <select className="cd-select text-xs shrink-0" style={{ width: "13ch" }} value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)}>
                   <option value="">업종 전체</option>
-                  {INTEGRATED_PERMIT_INDUSTRIES.map((i) => <option key={i.label} value={i.label}>{i.label}</option>)}
+                  {permitIndustries.map((i) => <option key={i.id} value={i.label}>{i.label}</option>)}
                 </select>
                 <select className="cd-select text-xs shrink-0" style={{ width: "11ch" }} value={year} onChange={(e) => setYear(e.target.value)}>
                   <option value="">전체 연도</option>

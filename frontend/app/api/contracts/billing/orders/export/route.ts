@@ -3,6 +3,7 @@ import { authErrorToResponse } from "@/lib/auth/guards";
 import { requireBillingScope } from "@/lib/auth/billing-scope";
 import { getContractOrdersStatus } from "@/lib/ieps/contracts";
 import { filterOrdersStatusRows } from "@/lib/ieps/orders-status-filter";
+import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import { createTablePdf, createTableWorkbook, type TableDocumentSpec } from "@/lib/export/table-document";
 import { shortenSido } from "@scraper/lib/ieps/region";
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
       category: categoryParam,
       industryId: sp.get("industry") || null,
       sido: sidoParam,
-    });
+    }, await loadPermitIndustries());
 
     const rows: string[][] = filtered.map((row, idx) => [
       String(idx + 1),

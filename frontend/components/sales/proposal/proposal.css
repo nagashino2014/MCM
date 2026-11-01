@@ -51,8 +51,10 @@
 .proposal-tool .list p { margin: 6px 10px; }
 @media (max-width: 1100px) { .proposal-tool .list button { grid-template-columns: 1fr; gap: 2px; } .proposal-tool .row .cd-input { width: 100%; } }
 .proposal-zoom { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--cd-muted); white-space: nowrap; flex-shrink: 0; }
-.proposal-ws { display: grid; grid-template-columns: 236px minmax(0, 1fr) 372px; gap: 12px; height: calc(100vh - 190px); min-height: 560px; }
-@media (max-width: 1360px) { .proposal-ws { grid-template-columns: 210px minmax(0, 1fr) 330px; } }
+/* 쪽 목록은 FHD 에서 378px(2026-11-01 사용자 요청: 236px 의 1.6배) — 좁은 화면은 단계적으로 줄여 A4 미리보기 폭을 지킨다 */
+.proposal-ws { display: grid; grid-template-columns: 378px minmax(0, 1fr) 372px; gap: 12px; height: calc(100vh - 190px); min-height: 560px; }
+@media (max-width: 1600px) { .proposal-ws { grid-template-columns: 300px minmax(0, 1fr) 372px; } }
+@media (max-width: 1360px) { .proposal-ws { grid-template-columns: 240px minmax(0, 1fr) 330px; } }
 @media (max-width: 1080px) { .proposal-ws { grid-template-columns: minmax(0, 1fr); height: auto; } .proposal-ws > aside.outline { max-height: 260px; } .proposal-canvas { height: 70vh; } }
 .proposal-ws > aside, .proposal-canvas { background: var(--cd-surface); border: 1px solid var(--cd-border); border-radius: var(--cd-radius-card, 10px); min-height: 0; }
 .proposal-ws > aside { overflow: auto; }
@@ -63,12 +65,14 @@
 .outline .ch i { font-style: normal; min-width: 18px; height: 16px; border-radius: 4px; background: var(--cd-primary); color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; }
 .outline .row { display: flex; align-items: center; border-radius: 8px; }
 .outline .row:hover { background: var(--cd-hover); }
-.outline .pg { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: left; padding: 5px 8px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12px; color: inherit; cursor: pointer; }
-.outline .pg .id { color: var(--cd-muted); font-size: 10.5px; min-width: 26px; font-variant-numeric: tabular-nums; }
+.outline .pg { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; text-align: left; padding: 5px 6px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12px; color: inherit; cursor: pointer; }
+.outline .pg .id { color: var(--cd-muted); font-size: 10.5px; min-width: 22px; font-variant-numeric: tabular-nums; }
 .outline .pg .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outline .pg .of { width: 6px; height: 6px; border-radius: 50%; background: var(--cd-warning); flex: none; }
-.outline .acts { display: none; gap: 1px; padding-right: 3px; }
-.outline .row:hover .acts, .outline .row:focus-within .acts { display: flex; }
+/* 위·아래·복제·삭제는 제목 오른쪽 고정 칸 — 숨겨도 자리를 비워 두어 마우스를 올려도 제목이 밀리거나 단추가 겹치지 않는다 */
+.outline .acts { display: flex; flex: none; gap: 0; padding: 0 4px; visibility: hidden; }
+.outline .acts .icon-btn { width: 22px; }
+.outline .row:hover .acts, .outline .row:focus-within .acts, .outline .row:has(.pg.on) .acts { visibility: visible; }
 .icon-btn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--cd-muted); border-radius: 6px; cursor: pointer; }
 .icon-btn:hover:not(:disabled) { background: var(--cd-hover); color: var(--cd-text); }
 .icon-btn:disabled { opacity: .35; cursor: not-allowed; }

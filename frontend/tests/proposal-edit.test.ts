@@ -6,6 +6,7 @@ import { createProposalTemplate, PROPOSAL_TEMPLATES } from "@/lib/proposal/templ
 import { bulletAction, insertTableRow, moveTableColumn } from "@/lib/proposal/edit";
 import { fieldLabel, findMatches, pendingItems, replaceMatches, setField, textFields } from "@/lib/proposal/find";
 import { sectionHash } from "@/lib/proposal/hash";
+import { outlineLabel } from "@/lib/proposal/text";
 import { ProposalError, validateProposalDocument } from "@/lib/proposal/validate";
 import type { ProposalBlock, ProposalDocument } from "@/lib/proposal/types";
 
@@ -148,6 +149,18 @@ test("쪽 원고 지문 — 새 문서 모든 쪽에 있고 저장 검증 뒤에
       assert.equal(sectionHash(s), s.sourceHash, `${t.id} ${s.pageId}: 고치지 않은 쪽은 지문이 같다`);
     }
   }
+});
+
+test("쪽 목록 이름 — 25자 안의 명사구로 줄이고, 넘치면 낱말 경계에서 자른다", () => {
+  for (const t of PROPOSAL_TEMPLATES) for (const s of createProposalTemplate(t.id).sections) if (s.title) assert.ok(outlineLabel(s.title).length <= 25, `${s.pageId}: ${outlineLabel(s.title)}`);
+  assert.equal(outlineLabel("자료에서 허가와 운영까지 여섯 작업을 연결합니다"), "자료에서 허가와 운영까지 여섯 작업 연결");
+  assert.equal(outlineLabel("자료의 유무와 사용할 수 있는 상태를 함께 확인합니다"), "자료의 유무와 사용할 수 있는 상태 확인");
+  assert.equal(outlineLabel("서로 다른 공장을 하나의 현황으로 합치지 않습니다"), "서로 다른 공장을 하나의 현황으로 합치지 않음");
+  assert.equal(outlineLabel("설비목록을 모든 장의 공통 기준으로 만듭니다"), "설비목록을 모든 장의 공통 기준으로 만듦");
+  assert.equal(outlineLabel("세부 수행계획 — 현황 분석에서 계획서 작성까지"), "세부 수행계획");
+  assert.equal(outlineLabel("수행 조직과 역할별 책임"), "수행 조직과 역할별 책임");
+  const cut = outlineLabel("통합허가 대행업 등록 이후 발전·산업 전 업종을 수행해 왔습니다");
+  assert.ok(cut.endsWith("…") && cut.length <= 25 && !/\s…$/.test(cut));
 });
 
 test("쪽 원고 지문 — 글을 고치면 달라지고, 잘못된 형식은 저장되지 않는다", () => {

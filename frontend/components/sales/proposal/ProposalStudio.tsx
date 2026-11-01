@@ -28,6 +28,7 @@ import {
 } from "@/lib/proposal/edit";
 import { fieldLabel, findMatches, pendingItems, replaceMatches, type FindMatch, type PendingItem, type TextField } from "@/lib/proposal/find";
 import { pageOverflows } from "@/lib/proposal/measure";
+import { outlineLabel } from "@/lib/proposal/text";
 import { ProposalAiPanel, type AiTarget } from "./ProposalAiPanel";
 import { frameDocument, loadStudioKit, type StudioKit } from "../catalog/studio/kit";
 import "@/components/cdash/cdash.css";
@@ -772,7 +773,7 @@ export function ProposalStudio() {
           return <div key={s.id}>
             {head ? <div className="ch"><i>{chapters[ci]?.roman}</i>{s.chapter}</div> : null}
             <div className="row">
-              <button type="button" className={`pg${selSection === s.id ? " on" : ""}`} onClick={() => goPage(s.id)}><span className="id">{s.pageId ?? i + 1}</span><span className="tt">{s.title || <em>이어지는 쪽</em>}</span>{overflow.includes(s.id) ? <span className="of" title="내용 넘침" /> : null}</button>
+              <button type="button" className={`pg${selSection === s.id ? " on" : ""}`} onClick={() => goPage(s.id)}><span className="id">{s.pageId ?? i + 1}</span><span className="tt" title={s.title || undefined}>{s.title ? outlineLabel(s.title) : <em>이어지는 쪽</em>}</span>{overflow.includes(s.id) ? <span className="of" title="내용 넘침" /> : null}</button>
               <span className="acts">
                 <button type="button" className="icon-btn" aria-label="위로" disabled={!i} onClick={() => movePage(i, -1)}><ArrowUp size={13} /></button>
                 <button type="button" className="icon-btn" aria-label="아래로" disabled={i === doc.sections.length - 1} onClick={() => movePage(i, 1)}><ArrowDown size={13} /></button>

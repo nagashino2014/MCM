@@ -20,7 +20,8 @@ import {
   type PressItem,
   type PressSourceKey,
 } from "./press-client";
-import { classifyNews, type NewsClassification } from "./news-classifier";
+import { classifyNewsDetailed, type NewsClassification } from "./news-classifier";
+import type { NewsInputKind } from "./news-content-quality";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { buildFacilityMatcher } from "./facility-matcher";
 import { INTEL_COLLECT_DEFAULTS, isOlderThanCutoff, type IntelIndustryItem } from "./intel-settings";
@@ -75,6 +76,8 @@ export interface CollectPressResult {
   newFound: number; // DB에 없던 신규 수
   kwPassed: number; // 제목/부서 필터 통과 수
   classified: number; // Haiku 분류 수
+  failed: number; // 응답·원문 근거 검증 실패 또는 본문 확보 실패
+  skipped: number; // 배경·검토 필요·비대상 판정
   signals: number; // isSignal=true 수
   inserted: number; // 신규 저장
   matched: number; // facilities 매칭(트랙A) 수
@@ -91,7 +94,7 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
   const adapterEnabled = (key: PressSourceKey) => opts.adapters?.[key] !== false;
 
   const result: CollectPressResult = {
-    scanned: 0, newFound: 0, kwPassed: 0, classified: 0, signals: 0,
+    scanned: 0, newFound: 0, kwPassed: 0, classified: 0, failed: 0, skipped: 0, signals: 0,
     inserted: 0, matched: 0, newLead: 0,
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
   };
@@ -136,19 +139,25 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
   for (const it of candidates) {
     if (result.classified >= maxClassify) break;
     let body: string | null = it.body;
+    // RSS 설명·목록 요약은 본문으로 승격하지 않는다. 직접 확보한 본문만 구분한다.
+    let inputKind: NewsInputKind = "search_excerpt";
     if (!body) {
       try {
         body = await fetchPressBody(it);
+        if (body) inputKind = "full_text";
       } catch (err) {
         console.error(`[collect-press] body fetch 실패 url=${it.url}`, err);
-        body = null; // 본문 실패 시 제목만으로 분류
+        body = null;
       }
       await sleep(BODY_THROTTLE_MS);
     }
-    const cls = await classifyNews(it.title, body ?? it.title, opts.industries);
+    const classification = await classifyNewsDetailed(it.title, body ?? "", opts.industries, undefined,
+      { inputKind, publishedAt: it.publishedAt });
     result.classified++;
     await sleep(HAIKU_THROTTLE_MS);
-    if (!cls || !cls.isSignal) continue;
+    const cls = classification.classification;
+    if (classification.status === "failed" || !cls) { result.failed++; continue; }
+    if (!cls.isSignal) { result.skipped++; continue; }
     result.signals++;
     const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
     const tag: IndustryTag = facilityId
@@ -166,7 +175,8 @@ export async function collectPressSignals(opts: CollectPressOptions = {}): Promi
     const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
       if (blocklist.has(feedbackKey("press", p.it.url))) continue;
-      const grade = GRADE_BY_CONFIDENCE[p.cls.confidence];
+      const grade = p.cls.contentQuality?.inputKind !== "full_text" && p.cls.confidence === "high"
+        ? "candidate" : GRADE_BY_CONFIDENCE[p.cls.confidence];
       const matched = !!p.facilityId;
       const raw = JSON.stringify({
         sourceKey: p.it.sourceKey, dept: p.it.dept, body: p.body, classification: p.cls,

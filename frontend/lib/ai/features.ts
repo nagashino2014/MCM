@@ -52,6 +52,7 @@ export const AI_FEATURES = {
   "intel.eiass_classify": { label: "EIASS 협의건 판별", group: "영업 인텔", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   "intel.dart_supply_classify": { label: "DART 공급계약 발주처 분류", group: "영업 인텔", critical: false, defaultModel: "claude-haiku-4-5", vision: false },
   "intel.rag_briefing": { label: "AI 브리핑 생성", group: "영업 인텔", critical: false, defaultModel: "claude-sonnet-5", vision: false },
+  "intel.scheduled_briefing": { label: "정기 영업 브리핑", group: "영업 인텔", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "intel.rag_briefing:refine": { label: "AI 브리핑 추가 분석", group: "영업 인텔", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   // 회사소개서(docs/company-catalog-blueprint.md §7) — 디자인 시스템 안에서 내용만 고친다. 숫자는 지표 id 로만.
   "catalog.section_write": { label: "회사소개서 쪽 문안 작성·수정", group: "회사소개서", critical: false, defaultModel: "claude-opus-5", vision: false },

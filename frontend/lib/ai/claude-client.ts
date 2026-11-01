@@ -13,7 +13,7 @@ import { computeCostUsd, getModelPrices, normalizeModelFamily, type ClaudeUsage 
 import { currentAiEnv, logAiUsage, type AiCallStatus } from "./usage-log";
 import { getFeatureModelOverride, loadAiSettings } from "./settings";
 import { afterCallBudgetCheck, budgetGate, getOrgBudgetPct } from "./budget";
-import { buildThinkingParams } from "./model-caps";
+import { buildThinkingParams, type ThinkingSetting } from "./model-caps";
 
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
@@ -40,6 +40,8 @@ export interface ClaudeMessagesRequest {
   /** 요청 모델. 미지정 시 기능 기본값(features.ts). */
   model?: string;
   max_tokens: number;
+  /** 호출 작업의 기본 추론 설정. 관리자가 저장한 기능 설정이 항상 우선한다. */
+  thinkingDefaults?: ThinkingSetting;
   system?: string;
   /** Anthropic MessageParam 배열 그대로(text/image/document 블록 포함). */
   messages: unknown[];
@@ -175,7 +177,7 @@ export async function claudeMessages(req: ClaudeMessagesRequest): Promise<Claude
   }
 
   // thinking/effort(P4) — 기능 설정 → 모델 능력표로 걸러 body 에 반영. 호출부 extra 가 우선.
-  const thinking = buildThinkingParams(modelFamily, settings.featureThinking[req.feature]);
+  const thinking = buildThinkingParams(modelFamily, { ...req.thinkingDefaults, ...settings.featureThinking[req.feature] });
   const system = req.system
     ? req.cacheSystem
       ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]

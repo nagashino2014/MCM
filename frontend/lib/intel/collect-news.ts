@@ -5,7 +5,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { searchNews, type NewsItem } from "./naver-news-client";
-import { classifyNews, type NewsClassification } from "./news-classifier";
+import { classifyNewsDetailed, type NewsClassification } from "./news-classifier";
 import { buildFacilityMatcher } from "./facility-matcher";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
@@ -42,6 +42,8 @@ export interface CollectNewsOptions {
 export interface CollectNewsResult {
   scanned: number; // 검색으로 모은 유니크 뉴스 수
   classified: number; // Haiku 분류한 뉴스 수
+  failed: number; // 응답 미완료·JSON·원문 근거 검증 실패
+  skipped: number; // 배경·검토 필요·비대상 판정
   signals: number; // isSignal=true (발주 신호) 수
   inserted: number; // 신규 저장
   matched: number; // facilities 매칭(증설=트랙A) 수
@@ -56,7 +58,7 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   const maxClassify = opts.maxClassify != null && opts.maxClassify >= 0 ? opts.maxClassify : Infinity;
 
   const result: CollectNewsResult = {
-    scanned: 0, classified: 0, signals: 0, inserted: 0, matched: 0, newLead: 0,
+    scanned: 0, classified: 0, failed: 0, skipped: 0, signals: 0, inserted: 0, matched: 0, newLead: 0,
     byGrade: { confirmed: 0, candidate: 0, monitoring: 0, excluded: 0 },
   };
 
@@ -90,10 +92,13 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   const prepared: Prepared[] = [];
   for (const it of news) {
     if (result.classified >= maxClassify) break;
-    const cls = await classifyNews(it.title, it.description, opts.industries, feedbackBlock);
+    const classification = await classifyNewsDetailed(it.title, it.description, opts.industries, feedbackBlock,
+      { inputKind: "search_excerpt", publishedAt: it.pubDate });
     result.classified++;
     await sleep(HAIKU_THROTTLE_MS);
-    if (!cls || !cls.isSignal) continue;
+    const cls = classification.classification;
+    if (classification.status === "failed" || !cls) { result.failed++; continue; }
+    if (!cls.isSignal) { result.skipped++; continue; }
     result.signals++;
     // 회사명 → facilities 매칭(조달대행 기관 제외는 매처 내부에서 처리)
     const facilityId = matcher.matchName(cls.companyName)?.facilityId ?? null;
@@ -112,7 +117,8 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
     const blocklist = await loadFeedbackBlocklist(wdb);
     for (const p of prepared) {
       if (blocklist.has(feedbackKey("news", p.it.link))) continue;
-      const grade = GRADE_BY_CONFIDENCE[p.cls.confidence];
+      // 검색 발췌만으로 확정 신호를 만들지 않는다. 분류기 외에도 저장 경계에서 제한한다.
+      const grade = p.cls.confidence === "high" ? "candidate" : GRADE_BY_CONFIDENCE[p.cls.confidence];
       const matched = !!p.facilityId;
       const raw = JSON.stringify({
         press: p.it.press, originalLink: p.it.originalLink, description: p.it.description,

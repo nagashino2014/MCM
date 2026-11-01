@@ -1,6 +1,9 @@
+import { requireBriefingPermission } from "@/lib/intel/briefing-api-access";
 import { NextRequest, NextResponse } from "next/server";
-import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
+import { authErrorToResponse } from "@/lib/auth/guards";
 import { refineBriefing } from "@/lib/intel/rag-queries";
+import { assertBriefingAccess } from "@/lib/intel/briefing-store";
+import { getBriefingDocumentPermissions } from "@/lib/intel/briefing-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,13 +16,14 @@ interface RouteContext {
 // 브리핑 추가 분석(보강). body: { instruction: string }
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("sales.edit", { fallbackRoles: ["editor"] });
+    const actor = await requireBriefingPermission("create");
     const { briefingId } = await ctx.params;
+    await assertBriefingAccess(briefingId, actor.userId, true);
     const body = (await req.json().catch(() => ({}))) as { instruction?: string };
     const instruction = (body.instruction ?? "").trim();
     if (!instruction) return NextResponse.json({ error: "추가 분석 요청 내용을 입력하세요." }, { status: 400 });
     const briefing = await refineBriefing(briefingId, instruction, actor.userId || null);
-    return NextResponse.json({ briefing });
+    return NextResponse.json({ briefing: { ...briefing, ...await getBriefingDocumentPermissions(briefing.briefingId, actor.userId) } });
   } catch (err) {
     return authErrorToResponse(err);
   }

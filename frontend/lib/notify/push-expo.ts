@@ -37,6 +37,8 @@ export type PushEventKey =
   | "todo.comment"
   | "todo.status"
   | "catalog.pending"
+  | "intel.briefing"
+  | "intel.important"
   | "ops.integration";
 
 /**
@@ -69,10 +71,14 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "todo.comment": true,
   "todo.status": true,
   "catalog.pending": true,
+  "intel.briefing": true,
+  "intel.important": true,
   "ops.integration": true,
 };
 
 export const PUSH_EVENTS: { key: PushEventKey; label: string; description: string }[] = [
+  { key: "intel.briefing", label: "정기 영업 브리핑", description: "구독 중인 관심 분야의 정기 보고서가 준비됐을 때" },
+  { key: "intel.important", label: "중요 영업 변화", description: "구독 중인 투자 프로젝트의 중요한 변화가 확인됐을 때" },
   { key: "chat.message", label: "메신저 새 메시지", description: "대화방에 새 메시지가 왔을 때(방별 알림 끄기와 별개)" },
   { key: "approval.step_pending", label: "결재 차례 도착", description: "내가 결재할 문서가 올라왔을 때" },
   { key: "approval.result", label: "기안 결과", description: "내가 올린 문서가 승인·반려됐을 때" },

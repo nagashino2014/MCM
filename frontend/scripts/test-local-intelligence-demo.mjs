@@ -1,0 +1,56 @@
+// 예시 모드인 localhost 서버에만 가상 검증 자료를 저장한다. 실제 AI 모드에서는 실행하지 않는다.
+import assert from "node:assert/strict";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+const base = "http://127.0.0.1:4174";
+async function read(path) { const response = await fetch(base + path); const body = await response.json(); assert(response.ok, JSON.stringify(body)); return body; }
+const health = await read("/api/local-demo/health");
+assert.equal(health.localIntelligenceDemo, true);
+assert.equal(health.mode, "demo", "예시 검증은 demo 모드에서만 실행할 수 있습니다. 실제 모드의 유료 AI 호출을 막기 위해 중단했습니다.");
+assert.equal(health.database, "intel_demo", "예시 검증 DB가 아니므로 중단했습니다.");
+assert.equal(health.externalServices, false, "외부 서비스가 연결된 서버에서는 예시 검증을 실행하지 않습니다.");
+const { chromium } = await import(pathToFileURL(process.env.MCM_PLAYWRIGHT_PATH || resolve("../scraper/node_modules/playwright/index.mjs")).href);
+assert.equal((await fetch(base + "/api/sales/rag/profiles", { method: "POST", headers: { origin: "https://example.invalid", "content-type": "application/json" }, body: "{}" })).status, 403);
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
+  const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+  const suffix = Date.now().toString().slice(-7), name = `직접 실증 ${suffix}`;
+  await page.goto(base + "/sales/rag?tab=scheduled");
+  await page.getByRole("button", { name: "관심 분야 추가", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "관심 분야 추가" });
+  await form.getByLabel("관심 분야 이름").fill(name);
+  await form.getByRole("button", { name: "저장", exact: true }).click(); await form.waitFor({ state: "hidden" });
+  await page.reload(); await page.getByLabel("관심 분야", { exact: true }).selectOption({ label: name });
+  await page.getByRole("button", { name: "지금 생성", exact: true }).click();
+  await page.getByRole("button", { name: "PDF 다운로드" }).waitFor();
+  const profile = (await read("/api/sales/rag/profiles")).profiles.find((profile) => profile.name === name);
+  const runs = (await read(`/api/sales/rag/runs?profileId=${profile.profileId}`)).runs;
+  const run = await read(`/api/sales/rag/runs/${runs[0].runId}`); assert.equal(run.run.status, "published"); assert(run.deliveries.some((delivery) => delivery.channel === "inbox" && delivery.status === "sent"));
+  const download = page.waitForEvent("download"); await page.getByRole("button", { name: "PDF 다운로드" }).click(); assert((await download).suggestedFilename().endsWith(".pdf"));
+  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click(); await page.getByRole("button", { name: "시험 수신함" }).click();
+  await page.getByRole("dialog", { name: "시험 수신함" }).getByText(`[영업 브리핑] ${name}`, { exact: true }).waitFor(); await page.keyboard.press("Escape");
+  const projects = (await read("/api/sales/intel/projects")).projects;
+  const project = projects.find((project) => project.facilityId && project.companyName?.includes("예시")) ?? projects.find((project) => project.facilityId);
+  await page.goto(base + `/sales/rag?tab=projects&projectId=${project.projectId}`);
+  await page.getByRole("button", { name: "내 우선순위", exact: true }).click();
+  const priority = page.getByRole("dialog", { name: "내 검토 우선순위 조정" });
+  await priority.getByLabel("우선순위", { exact: true }).selectOption("high"); await priority.getByLabel("조정 사유").fill("로컬 화면에서 저장 확인"); await priority.getByRole("button", { name: "저장", exact: true }).click(); await priority.waitFor({ state: "hidden" });
+  assert.equal((await read(`/api/sales/intel/projects/${project.projectId}`)).manualPriority.reason, "로컬 화면에서 저장 확인");
+  await page.getByRole("button", { name: "영업·계약 연결", exact: true }).click();
+  const link = page.getByRole("dialog", { name: "영업·계약 연결" });
+  await link.getByLabel("연결 방법").selectOption("create"); await link.getByLabel("영업건명").fill(name + " 영업"); await link.getByLabel("용역 범위").fill(name + " 공장 허가");
+  await link.getByLabel("영업 담당자").selectOption("e1"); await link.getByRole("button", { name: "저장", exact: true }).click(); await link.waitFor({ state: "hidden" });
+  const detail = await read(`/api/sales/intel/projects/${project.projectId}`); const business = detail.links.find((item) => item.title === name + " 영업"); assert(business?.salesProjectId);
+  await page.getByRole("button", { name: "활동 제안", exact: true }).click();
+  const action = page.getByRole("dialog", { name: "후속 활동 검토" });
+  await action.getByLabel("활동 제목").fill(name + " 현장 협의"); await action.getByLabel("영업건 검색").fill(name); await action.getByRole("button", { name: "검색", exact: true }).click(); await action.getByLabel("영업건", { exact: true }).selectOption(business.salesProjectId);
+  await action.getByLabel("담당자", { exact: true }).selectOption("e1"); await action.getByLabel("예정일", { exact: true }).fill("20261031"); await action.getByLabel(/^종료일/).fill("20261031");
+  await action.getByRole("button", { name: "저장", exact: true }).click(); await action.waitFor({ state: "hidden" });
+  await page.getByRole("row").filter({ hasText: name + " 현장 협의" }).getByRole("button", { name: "검토", exact: true }).click();
+  await action.getByRole("button", { name: "저장", exact: true }).click(); await action.waitFor({ state: "hidden" });
+  const savedSales = await read(`/api/local-demo/sales/${business.salesProjectId}`); assert(savedSales.activities.some((item) => item.status === "planned" && item.summary.includes(name)));
+  await page.goto(base + `/sales/${business.salesProjectId}`); await page.getByText("영업 연결 결과", { exact: true }).waitFor(); await page.getByText(name + " 현장 협의", { exact: false }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log("PASS: 실제 UI 저장·새로고침 보존 / 예시 발행·사내 수신함·PDF / 개인 우선순위 / 새 영업건·예정 활동 / 외부 출처 쓰기 차단");
+} finally { await browser.close(); }

@@ -45,6 +45,10 @@ const nextConfig = {
         destination: "/m-app/chat/[roomId].html",
       },
       {
+        source: "/m-app/briefings/:briefingId([a-zA-Z0-9_-]+)",
+        destination: "/m-app/briefings/[briefingId].html",
+      },
+      {
         source: "/m-app/:route((?!_expo/)(?!assets/)[^.]+)",
         destination: "/m-app/:route.html",
       },

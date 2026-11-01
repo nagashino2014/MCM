@@ -5,6 +5,7 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getMailboxByUser, getSystemFolderId } from "@/lib/mail/mailbox";
 import { cleanSnippet } from "@/lib/mail/mime";
+import { getVerifiedMailBriefingLink, type MailBriefingLink } from "@/lib/intel/briefing-share-mail";
 
 export interface MailListItem {
   messageId: string;
@@ -421,6 +422,8 @@ export interface MailMessageDetail {
   ccAddrs: { name?: string; address: string }[];
   bodyHtml: string | null;
   bodyText: string | null;
+  /** 실제 공유 전달 기록과 소유권·현재 문서 접근권한이 확인된 보고서 링크. */
+  briefingLink?: MailBriefingLink | null;
   sentAt: string | null;
   receivedAt: string | null;
   createdAt: string;
@@ -485,6 +488,7 @@ export async function getMessageDetail(
     ccAddrs: parseAddrs(r.cc_addrs),
     bodyHtml: r.body_html != null ? String(r.body_html) : null,
     bodyText: r.body_text != null ? String(r.body_text) : null,
+    briefingLink: await getVerifiedMailBriefingLink(db, messageId, mailbox.mailboxId, userId),
     sentAt: r.sent_at != null ? String(r.sent_at) : null,
     receivedAt: r.received_at != null ? String(r.received_at) : null,
     createdAt: String(r.created_at),

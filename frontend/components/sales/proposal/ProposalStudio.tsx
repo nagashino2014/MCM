@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Download, FilePlus2, FileText, ImagePlus, ListPlus, Plus, Redo2, Save, Search, Send, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Download, FilePlus2, FileText, ImagePlus, ListPlus, Plus, Redo2, Save, Search, Send, Sparkles, Trash2, Undo2, X } from "lucide-react";
 import { getFontEmbedCSS, toPng } from "html-to-image";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -27,6 +27,8 @@ import {
   moveItem, moveTableColumn, newId, pushLastBlockToNextPage, setAtPath, updateBlock, updateSection, type BulletAction,
 } from "@/lib/proposal/edit";
 import { fieldLabel, findMatches, pendingItems, replaceMatches, type FindMatch, type PendingItem, type TextField } from "@/lib/proposal/find";
+import { pageOverflows } from "@/lib/proposal/measure";
+import { ProposalAiPanel, type AiTarget } from "./ProposalAiPanel";
 import { frameDocument, loadStudioKit, type StudioKit } from "../catalog/studio/kit";
 import "@/components/cdash/cdash.css";
 import "./proposal.css";
@@ -85,8 +87,7 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, hit
     const check = () => {
       const ids: string[] = [];
       mount.querySelectorAll<HTMLElement>("article[data-section]").forEach((page) => {
-        const body = page.querySelector<HTMLElement>(".pp-body"), flow = page.querySelector<HTMLElement>(".pp-flow");
-        const over = !!body && !!flow && flow.offsetHeight > body.clientHeight + 1;
+        const over = pageOverflows(page);
         page.dataset.overflow = String(over);
         if (over) ids.push(page.dataset.section || "");
       });
@@ -458,6 +459,11 @@ export function ProposalStudio() {
   const [tool, setTool] = useState<"" | "pending" | "find">("");
   const [hit, setHit] = useState<FieldRef | null>(null);
   const [pendingKey, setPendingKey] = useState("");
+  /** AI 수정 대상과, 제안을 얹어 보는 동안의 문서(그동안 편집을 멈춘다) */
+  const [aiTarget, setAiTarget] = useState<AiTarget | null>(null);
+  const [reviewDoc, setReviewDocState] = useState<ProposalDocument | null>(null);
+  const reviewing = useRef(false);
+  const setReviewDoc = (d: ProposalDocument | null) => { reviewing.current = !!d; setReviewDocState(d); };
   const [, force] = useState(0);
   const history = useRef(new History<ProposalDocument>());
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -492,7 +498,7 @@ export function ProposalStudio() {
   /** 모든 편집은 여기로 — 실행 취소 기록(같은 key 의 연속 입력은 한 단계로 묶는다) */
   const change = useCallback((next: ProposalDocument, key = "") => {
     const cur = docRef.current;
-    if (!cur || operation.current || !canEdit) return;
+    if (!cur || operation.current || reviewing.current || !canEdit) return;
     history.current.push(cur, key);
     setDocState(next);
   }, [canEdit]);
@@ -538,7 +544,7 @@ export function ProposalStudio() {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!(e.ctrlKey || e.metaKey) || reviewing.current) return;
       if (e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
       else if (e.key.toLowerCase() === "h" && docRef.current) { e.preventDefault(); setTool((t) => (t === "find" ? "" : "find")); }
       else if (!typing && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -589,7 +595,7 @@ export function ProposalStudio() {
   };
 
   const addImage = async (file: File, sid: string) => {
-    if (!doc) return;
+    if (!doc || reviewing.current) return;
     if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 8 * 1024 * 1024) { setError("PNG·JPEG 파일을 8MB 이하로 선택하세요."); return; }
     void run("그림 읽는 중", async () => {
       const dataUrl = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("그림 파일을 읽지 못했습니다.")); r.readAsDataURL(file); });
@@ -682,6 +688,7 @@ export function ProposalStudio() {
     const conv = conversions(b);
     inspector = <div className="inspector">
       <div className="hd"><span className="kind">{BLOCK_LABEL[b.kind]}</span><h2> </h2>
+        <button type="button" className="cd-btn cd-btn-ghost ai-btn" disabled={!canEdit || !!busy} onClick={() => setAiTarget({ scope: "block", sectionId: s.id, blockId: b.id, label: `${s.pageId ?? ""} · ${BLOCK_LABEL[b.kind]}` })}><Sparkles size={14} />AI로 고치기</button>
         <button type="button" className="icon-btn" aria-label="위로" disabled={index === 0} onClick={() => change(updateSection(doc, s.id, (x) => ({ ...x, blocks: moveItem(x.blocks, index, -1) })))}><ArrowUp size={15} /></button>
         <button type="button" className="icon-btn" aria-label="아래로" disabled={index === s.blocks.length - 1} onClick={() => change(updateSection(doc, s.id, (x) => ({ ...x, blocks: moveItem(x.blocks, index, 1) })))}><ArrowDown size={15} /></button>
         <button type="button" className="icon-btn" aria-label="복제" onClick={() => { const c = cloneBlock(b); change(updateSection(doc, s.id, (x) => { const blocks = [...x.blocks]; blocks.splice(index + 1, 0, c); return { ...x, blocks }; })); setSelBlock(c.id); }}><Copy size={15} /></button>
@@ -698,7 +705,8 @@ export function ProposalStudio() {
     const s = section;
     const setS = (patch: Partial<ProposalSection>, key = "") => change(updateSection(doc, s.id, (x) => ({ ...x, ...patch })), key);
     inspector = <div className="inspector">
-      <div className="hd"><span className="kind">쪽</span><h2>{s.pageId ?? ""}</h2></div>
+      <div className="hd"><span className="kind">쪽</span><h2>{s.pageId ?? ""}</h2>
+        <button type="button" className="cd-btn cd-btn-ghost ai-btn" disabled={!canEdit || !!busy} onClick={() => setAiTarget({ scope: "page", sectionId: s.id, label: `${s.pageId ?? ""} 쪽 전체` })}><Sparkles size={14} />AI로 고치기</button></div>
       <div className="two">
         <Field label="장(머리띠)"><input className="cd-input" list="proposal-chapters" value={s.chapter ?? ""} onChange={(e) => setS({ chapter: e.target.value || undefined }, `s:${s.id}:ch`)} /></Field>
         <Field label="절(머리말 오른쪽·목차)"><IN value={s.crumb ?? ""} onChange={(v) => setS({ crumb: v || undefined }, `s:${s.id}:cr`)} /></Field>
@@ -719,6 +727,7 @@ export function ProposalStudio() {
       <div className="two"><Field label="발주처"><IN value={doc.client} onChange={(v) => setDoc({ client: v }, "d:client")} /></Field><Field label="제출일"><IN type="date" value={doc.submissionDate} onChange={(v) => setDoc({ submissionDate: v })} /></Field></div>
       {doc.variables ? (["siteName", "duration", "companyName"] as const).map((k) => <Field key={k} label={PROPOSAL_VARIABLE_LABELS[k]}><IN value={doc.variables![k]} onChange={(v) => setDoc({ variables: { ...doc.variables!, [k]: v } }, `d:${k}`)} /></Field>) : null}
       <p className="proposal-muted">본문의 {"{{siteName}}"}·{"{{client}}"}·{"{{duration}}"} 연결 표기에 위 값이 들어갑니다.</p>
+      {doc.variables ? <Field label="발주처 메모(AI 참고 — 발행본에는 들어가지 않음)"><TA value={doc.variables.clientNotes ?? ""} rows={3} placeholder="업종·주요 설비·쟁점·요구 톤 등" onChange={(v) => setDoc({ variables: { ...doc.variables!, clientNotes: v || undefined } }, "d:notes")} /></Field> : null}
       <div className="sec"><h3>디자인</h3>
         <Field label="색 테마"><div className="swatches">{Object.entries(PROPOSAL_THEMES).map(([k, t]) => <button key={k} type="button" title={t.label} aria-label={t.label} className={doc.theme === k ? "on" : ""} style={{ background: `linear-gradient(135deg, ${t.primary} 60%, ${t.accent} 60%)` }} onClick={() => setDoc({ theme: k as ProposalDocument["theme"] })} />)}</div></Field>
         <Field label="발주처 주색(선택 — 테마 주색을 덮어씀)"><div className="two"><input className="cd-input" type="color" value={isHexColor(brand) ? brand : pal.primary} onChange={(e) => setOpts({ brandColor: e.target.value.toUpperCase() })} /><button type="button" className="cd-btn cd-btn-ghost" disabled={!brand} onClick={() => setOpts({ brandColor: undefined })}>테마 색으로</button></div></Field>
@@ -738,18 +747,20 @@ export function ProposalStudio() {
     {notice && <div className="proposal-notice" role="status">{notice}</div>}
     <div className="proposal-bar">
       <button type="button" className="cd-btn" disabled={!!busy} onClick={() => { if (safeLeave()) setDocState(null); }}>목록</button>
-      <button type="button" className="cd-btn cd-btn-ghost" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" disabled={!history.current.canUndo} onClick={undo}><Undo2 size={15} /></button>
-      <button type="button" className="cd-btn cd-btn-ghost" aria-label="다시 실행" title="다시 실행 (Ctrl+Y)" disabled={!history.current.canRedo} onClick={redo}><Redo2 size={15} /></button>
+      <button type="button" className="cd-btn cd-btn-ghost" aria-label="실행 취소" title="실행 취소 (Ctrl+Z)" disabled={!history.current.canUndo || !!reviewDoc} onClick={undo}><Undo2 size={15} /></button>
+      <button type="button" className="cd-btn cd-btn-ghost" aria-label="다시 실행" title="다시 실행 (Ctrl+Y)" disabled={!history.current.canRedo || !!reviewDoc} onClick={redo}><Redo2 size={15} /></button>
       <span className="state"><span role="status" className="state-text"><b>{busy || (dirty ? "저장하지 않은 변경" : revision ? `저장됨 · ${revision}판` : "새 문서")}</b><span>전체 {totalPages}쪽(본문 {doc.sections.length})</span>{overflow.length ? <span className="warn">넘침 {overflow.length}쪽</span> : null}</span>
         {pendingTotal ? <button ref={todoBtn} type="button" className={`todo${tool === "pending" ? " on" : ""}`} aria-expanded={tool === "pending"} onClick={() => setTool((t) => (t === "pending" ? "" : "pending"))}>작성 필요 {pendingTotal}</button> : null}</span>
       <button ref={findBtn} type="button" className={`cd-btn cd-btn-ghost${tool === "find" ? " on" : ""}`} title="찾기·바꾸기 (Ctrl+H)" aria-expanded={tool === "find"} onClick={() => setTool((t) => (t === "find" ? "" : "find"))}><Search size={15} />찾기·바꾸기</button>
       <span className="proposal-zoom">배율 <select className="cd-input" value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>{[0.6, 0.75, 0.9, 1, 1.2, 1.4].map((z) => <option key={z} value={z}>{Math.round(z * 100)}%</option>)}</select></span>
       <button type="button" className="cd-btn" onClick={exportSource} disabled={!!busy}><Download size={15} />편집 원본</button>
-      <button type="button" className="cd-btn" disabled={!canEdit || !!busy || (!dirty && revision > 0)} onClick={save}><Save size={15} />저장</button>
-      <button type="button" className="cd-btn cd-btn-primary" disabled={!canPublish || !!busy} onClick={publish}><Send size={15} />HWPX 발행</button>
+      <button type="button" className="cd-btn" disabled={!canEdit || !!busy || !!reviewDoc || (!dirty && revision > 0)} onClick={save}><Save size={15} />저장</button>
+      <button type="button" className="cd-btn cd-btn-primary" disabled={!canPublish || !!busy || !!reviewDoc} onClick={publish}><Send size={15} />HWPX 발행</button>
     </div>
     {tool === "pending" ? <PendingPanel doc={doc} items={pending} current={pendingKey} onClose={() => closeTool(todoBtn)}
       onGo={(it) => { setPendingKey(`${editKey(it)}|${it.kind}`); goField(it); }} /> : null}
+    {aiTarget ? <ProposalAiPanel target={aiTarget} doc={doc} kit={kit} previewing={!!reviewDoc} onPreview={setReviewDoc} onClose={() => setAiTarget(null)}
+      onAccept={(next, note) => { setReviewDoc(null); change(next); setNotice(note); setAiTarget(null); }} /> : null}
     {tool === "find" ? <FindPanel doc={doc} onClose={() => closeTool(findBtn)} onGo={goField}
       onReplace={(next, note) => { change(next); setNotice(note); }} /> : null}
     <div className="proposal-ws">
@@ -773,9 +784,9 @@ export function ProposalStudio() {
         })}
         <button type="button" className="cd-btn add" onClick={() => addPage(section)}><FilePlus2 size={14} />쪽 추가</button>
       </aside>
-      {kit ? <Canvas doc={doc} kit={kit} frameRef={frameRef} zoom={zoom} selSection={selSection} selBlock={selBlock} scrollKey={scrollKey} hit={hit} onSelect={select}
+      {kit ? <Canvas doc={reviewDoc ?? doc} kit={kit} frameRef={frameRef} zoom={zoom} selSection={selSection} selBlock={selBlock} scrollKey={scrollKey} hit={hit} onSelect={select}
         onEdit={(sid, bid, path, value) => { const cur = docRef.current; if (cur) change(setAtPath(cur, sid, bid, path, value)); }} onBullet={bulletOp} onOverflow={onOverflow} /> : <div className="proposal-canvas"><p className="proposal-muted" style={{ padding: 20 }}>미리보기를 준비하고 있습니다.</p></div>}
-      <aside aria-label="속성">{inspector}</aside>
+      <aside aria-label="속성"><fieldset className="proposal-lock" disabled={!!reviewDoc}>{inspector}</fieldset></aside>
     </div>
     <input type="file" ref={imageInput} accept="image/png,image/jpeg" hidden onChange={(e) => { const file = e.target.files?.[0]; e.currentTarget.value = ""; if (file && section) void addImage(file, section.id); }} />
     <section className="cd-card proposal-editions" style={{ padding: 16 }}><h2>발행 이력</h2><p className="proposal-muted">발행 시점의 원본과 그림이 함께 보관됩니다. 이후 수정은 이전 발행본을 바꾸지 않습니다.</p>

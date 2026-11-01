@@ -68,7 +68,8 @@ export interface ProposalDocument {
   theme: ProposalTheme;
   layout?: "paged";
   contentVersion?: string;
-  variables?: { siteName: string; duration: string; companyName: string };
+  /** clientNotes — 발주처 메모(AI 수정의 참고 자료, 발행본 본문에는 쓰지 않음) */
+  variables?: { siteName: string; duration: string; companyName: string; clientNotes?: string };
   options?: ProposalOptions;
   sections: ProposalSection[];
 }

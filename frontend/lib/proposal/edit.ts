@@ -63,7 +63,8 @@ export function makeBlock(kind: ProposalBlockKind): ProposalBlock {
 }
 
 const linesOf = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
-const stripMark = (s: string) => s.replace(/^\s*(?:[○❍◦●□■❑▪\-–·•※⇒✓]|\d+[.)])\s*/, "");
+/** 글 앞 글머리 기호·번호를 뗀다(기호는 level·mark 로 그린다) */
+export const stripMark = (s: string) => s.replace(/^\s*(?:[○❍◦●□■❑▪\-–·•※⇒✓]|\d+[.)])\s*/, "");
 
 /** 내용을 지키며 바꿀 수 있는 모양 */
 export function conversions(b: ProposalBlock): ProposalBlockKind[] {

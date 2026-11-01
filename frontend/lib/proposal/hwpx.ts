@@ -171,6 +171,11 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
   const none = st.fill({});
   const solid = (w: number, c: string): Side => ({ type: "SOLID", width: w, color: c });
   const ruleSide = solid(0.12, NEUTRAL.rule);
+  /** 빈 간격 문단 — 1pt 글자, 위 간격으로 pt 만큼 띄운다(다음 문단과 같은 쪽에) */
+  const gap = (pt: number) => pXml(P({ before: Math.max(0, pt - 1), line: 100, keepNext: true }), [{ char: C(1), text: "" }]);
+  // 2.1: 구조는 그래파이트·회색 면, 주색은 포인트에만(미리보기 proposalFrameCss 와 같은 역할 배분)
+  const G = NEUTRAL.graphite;
+  const gLine = solid(0.12, NEUTRAL.line);
 
   // 이름 붙은 스타일(한글 F6 목록) — 본문·글머리·제목
   const S = {
@@ -210,8 +215,8 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
     const h = hu(17);
     const cells: Cell[] = [
       { w: wNo, h, fill: st.fill({ fill: pal.primary, bottom: solid(0.5, pal.primary) }), paras: cellPara(roman, { size: TYPE.header, bold: true, color: "#FFFFFF", align: "CENTER" }), margin: [hu(1), hu(1), hu(1), hu(1)] },
-      { w: wCh, h, fill: st.fill({ bottom: solid(0.5, pal.primary) }), paras: cellPara(chapter, { size: TYPE.header, bold: true, color: pal.primary }), margin: [hu(7), hu(2), hu(1), hu(1)] },
-      { w: wCr, h, fill: st.fill({ bottom: ruleSide }), paras: cellPara(crumb, { size: 8.5, color: NEUTRAL.muted, align: "RIGHT" }), margin: [hu(2), hu(1), hu(1), hu(1)] },
+      { w: wCh, h, fill: st.fill({ bottom: solid(0.5, G) }), paras: cellPara(chapter, { size: TYPE.header, bold: true, color: NEUTRAL.ink }), margin: [hu(7), hu(2), hu(1), hu(1)] },
+      { w: wCr, h, fill: st.fill({ bottom: gLine }), paras: cellPara(crumb, { size: 8.5, color: NEUTRAL.muted, align: "RIGHT" }), margin: [hu(2), hu(1), hu(1), hu(1)] },
     ];
     return `<hp:ctrl><hp:header id="${hfId++}" applyPageType="BOTH"><hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="TOP" linkListIDRef="0" linkListNextIDRef="0" textWidth="${BODY_W}" textHeight="${Math.round(PAGE.header * MM)}" hasTextRef="0" hasNumRef="0">` +
       wrapTable(tableXml([cells], { fill: none })) + `</hp:subList></hp:header></hp:ctrl>`;
@@ -219,13 +224,13 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
   const footerCtrl = () => {
     const w3 = Math.round(BODY_W / 3);
     const h = hu(14);
-    const top = st.fill({ top: ruleSide });
+    const top = st.fill({ top: gLine });
     const pageNum = `<hp:ctrl><hp:autoNum num="1" numType="PAGE"><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar="" supscript="0"/></hp:autoNum></hp:ctrl>`;
     const pc = C(TYPE.footer, true, NEUTRAL.ink2);
     const cells: Cell[] = [
       { w: w3, h, fill: top, paras: cellPara(doc.projectName, { size: TYPE.footer, color: NEUTRAL.muted }), margin: [0, hu(2), hu(3), 0] },
       { w: BODY_W - w3 * 2, h, fill: top, paras: pXml(P({ align: "CENTER", line: LINE.table }), [{ char: pc, text: "- " }, { char: pc, xml: pageNum }, { char: pc, text: " -" }]), margin: [0, 0, hu(3), 0] },
-      { w: w3, h, fill: top, paras: cellPara(doc.variables?.companyName || "", { size: TYPE.footer, bold: true, color: pal.primary, align: "RIGHT" }), margin: [hu(2), 0, hu(3), 0] },
+      { w: w3, h, fill: top, paras: cellPara(doc.variables?.companyName || "", { size: TYPE.footer, bold: true, color: NEUTRAL.ink, align: "RIGHT" }), margin: [hu(2), 0, hu(3), 0] },
     ];
     return `<hp:ctrl><hp:footer id="${hfId++}" applyPageType="BOTH"><hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="BOTTOM" linkListIDRef="0" linkListNextIDRef="0" textWidth="${BODY_W}" textHeight="${Math.round(PAGE.footer * MM)}" hasTextRef="0" hasNumRef="0">` +
       wrapTable(tableXml([cells], { fill: none })) + `</hp:subList></hp:footer></hp:ctrl>`;
@@ -245,8 +250,9 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
   const blockXml = async (b: ProposalBlock): Promise<string> => {
     switch (b.kind) {
       case "heading": {
-        if (b.level === 1) return pXml(P({ before: SPACE.h1[0], after: SPACE.h1[1], line: 130, keepNext: true, border: st.fill({ bottom: solid(0.4, pal.primary) }), offsetBottom: 3 }), [{ char: C(TYPE.h1, true, pal.primary), text: b.text }]);
-        if (b.level === 2) return pXml(P({ before: SPACE.h2[0], after: SPACE.h2[1], line: 130, keepNext: true, left: 7, border: st.fill({ left: solid(1, pal.primary2) }), offsetLeft: 7 }), [{ char: C(TYPE.h2, true), text: b.text }]);
+        // 한글의 문단 테두리는 문단 위·아래 간격까지 감싼다 — 테두리 문단의 간격은 0 으로 두고 빈 간격 문단으로 띄운다(실측 2026-11-01)
+        if (b.level === 1) return pXml(P({ before: SPACE.h1[0], line: 130, keepNext: true, border: st.fill({ bottom: solid(0.4, G) }), offsetBottom: 4 }), [{ char: C(TYPE.h1, true), text: b.text }]) + gap(SPACE.h1[1]);
+        if (b.level === 2) return gap(SPACE.h2[0]) + pXml(P({ line: 130, keepNext: true, left: 7, border: st.fill({ left: solid(1, pal.primary) }), offsetLeft: 7 }), [{ char: C(TYPE.h2, true), text: b.text }]) + gap(SPACE.h2[1]);
         return pXml(P({ before: SPACE.h3[0], after: SPACE.h3[1], line: 140, keepNext: true }), [{ char: C(TYPE.h3, true, pal.primary), text: "□ " }, { char: C(TYPE.h3, true), text: b.text }]);
       }
       case "text":
@@ -255,27 +261,27 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         return b.items.map((it) => {
           const mk = it.mark ? BULLET[it.mark] : BULLET[it.level];
           const size = it.mark === "note" ? TYPE.note : BULLET_SIZE[it.level];
-          const base = it.mark === "note" ? NEUTRAL.muted : it.mark === "result" ? pal.primary : it.level === 1 ? NEUTRAL.ink : NEUTRAL.ink2;
-          const mkColor = it.mark === "result" || it.mark === "check" ? pal.accent : it.mark === "note" ? NEUTRAL.muted : it.level === 1 ? pal.primary : NEUTRAL.ink2;
+          const base = it.mark === "note" ? NEUTRAL.muted : it.level === 1 || it.mark === "result" ? NEUTRAL.ink : NEUTRAL.ink2;
+          const mkColor = it.mark === "result" || it.mark === "check" ? pal.primary : it.mark === "note" ? NEUTRAL.muted : it.level === 1 ? pal.primary : NEUTRAL.ink2;
           const para = P({ left: BULLET_LEFT[it.level], indent: -(BULLET_HANG[mk] ?? 10), after: SPACE.bullet });
           return pXml(para, [{ char: C(size, it.level === 1 || it.mark === "check" || it.mark === "result", mkColor), text: mk + " " }, ...richRuns(it.text, size, base, it.mark === "result")],
             { style: it.mark ? undefined : S[`b${it.level}` as "b1"] });
         }).join("");
       case "lead": {
-        const runs = [...(b.label ? [{ char: st.char({ size: 8, bold: true, color: "#FFFFFF", shade: pal.primary }), text: ` ${b.label} ` }, { char: C(TYPE.lead), text: "  " }] : []), ...richRuns(b.text, TYPE.lead, pal.primary, true)];
-        return wrapTable(tableXml([[{ w: BODY_W, h: estH([{ text: b.text, size: TYPE.lead }], BODY_W), fill: st.fill({ fill: pal.tint, left: solid(1, pal.primary) }), paras: pXml(P({ align: "LEFT", line: 145 }), runs), margin: [hu(10), hu(8), hu(7), hu(7)] }]], { fill: none, after: SPACE.leadAfter }));
+        const runs = [...(b.label ? [{ char: st.char({ size: 8, bold: true, color: "#FFFFFF", shade: pal.primary }), text: ` ${b.label} ` }, { char: C(TYPE.lead), text: "  " }] : []), ...richRuns(b.text, TYPE.lead, NEUTRAL.ink, true)];
+        return wrapTable(tableXml([[{ w: BODY_W, h: estH([{ text: b.text, size: TYPE.lead }], BODY_W), fill: st.fill({ fill: NEUTRAL.panel, left: solid(1, pal.primary) }), paras: pXml(P({ align: "LEFT", line: 155 }), runs), margin: [hu(12), hu(10), hu(9), hu(9)] }]], { fill: none, after: SPACE.leadAfter }));
       }
       case "callout": {
-        const fill = b.variant === "point" ? st.fill({ fill: pal.tint2, top: solid(0.5, pal.accent) }) : st.fill({ fill: NEUTRAL.panel, left: ruleSide, right: ruleSide, top: ruleSide, bottom: ruleSide });
-        const paras = pXml(P({ align: "LEFT", line: 140, after: 2 }), [{ char: C(TYPE.callout - 1, true, b.variant === "point" ? pal.accent : NEUTRAL.ink2), text: b.title }]) + cellPara(b.text, { size: TYPE.callout, line: 155 });
-        return wrapTable(tableXml([[{ w: BODY_W, h: estH([{ text: b.title, size: TYPE.callout }, { text: b.text, size: TYPE.callout }], BODY_W), fill, paras, margin: [hu(10), hu(10), hu(7), hu(7)] }]], { fill: none, before: 4, after: SPACE.block }));
+        const fill = b.variant === "point" ? st.fill({ fill: NEUTRAL.panel2, top: solid(0.6, pal.primary) }) : st.fill({ fill: NEUTRAL.panel2, left: gLine, right: gLine, top: gLine, bottom: gLine });
+        const paras = pXml(P({ align: "LEFT", line: 140, after: 2 }), [{ char: C(TYPE.callout - 1, true, b.variant === "point" ? pal.primary : NEUTRAL.ink2), text: b.title }]) + cellPara(b.text, { size: TYPE.callout, line: 165 });
+        return wrapTable(tableXml([[{ w: BODY_W, h: estH([{ text: b.title, size: TYPE.callout }, { text: b.text, size: TYPE.callout }], BODY_W), fill, paras, margin: [hu(12), hu(12), hu(10), hu(10)] }]], { fill: none, before: 4, after: SPACE.block }));
       }
       case "stage": {
         const wl = Math.round(Math.max(18, textWidth(b.label, TYPE.stage) / (MM / PT) + 8) * MM);
         const h = hu(22);
         return wrapTable(tableXml([[
           { w: wl, h, fill: st.fill({ fill: pal.primary }), paras: cellPara(b.label, { size: TYPE.stage, bold: true, color: "#FFFFFF", align: "CENTER" }), margin: [hu(8), hu(8), hu(4), hu(4)] },
-          { w: BODY_W - wl, h, fill: st.fill({ fill: pal.tint }), paras: cellPara(b.text, { size: TYPE.stage, bold: true, color: pal.primary }), margin: [hu(9), hu(8), hu(4), hu(4)] },
+          { w: BODY_W - wl, h, fill: st.fill({ fill: NEUTRAL.panel }), paras: cellPara(b.text, { size: TYPE.stage, bold: true, color: NEUTRAL.ink }), margin: [hu(9), hu(8), hu(4), hu(4)] },
         ]], { fill: none, before: 8, after: 9 }));
       }
       case "cards": {
@@ -289,11 +295,11 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
           rows.push(Array.from({ length: cols }, (_, k): Cell => {
             const it = slice[k];
             if (!it) return { w, h: hMax, fill: none, paras: pXml(P({}), []) };
-            const c = b.multi && pal.series ? pal.series[(i + k) % 6] : undefined;
-            const no = b.numbered ? pXml(P({ align: "LEFT", line: 120 }), [{ char: C(9, true, c ?? pal.accent), text: String(i + k + 1).padStart(2, "0") }]) : "";
+            const c = it.color ?? (b.multi && pal.series ? pal.series[(i + k) % 6] : undefined);
+            const no = b.numbered ? pXml(P({ align: "LEFT", line: 120 }), [{ char: C(9, true, c ?? pal.primary), text: String(i + k + 1).padStart(2, "0") }]) : "";
             return {
-              w, h: hMax, valign: "TOP", fill: st.fill({ fill: c ? mixWhite(c, 0.93) : pal.tint2, top: solid(0.6, c ?? (it.key ? pal.accent : pal.primary)) }),
-              paras: no + pXml(P({ align: "LEFT", line: 130, after: 3 }), [{ char: C(TYPE.cardTitle, true, pal.primary), text: it.title }]) + cellPara(it.body, { size: TYPE.cardBody, color: NEUTRAL.ink2, line: 150 }),
+              w, h: hMax, valign: "TOP", fill: st.fill({ fill: c ? mixWhite(c, 0.93) : NEUTRAL.panel2, top: solid(0.6, c ?? (it.key ? pal.primary : G)) }),
+              paras: no + pXml(P({ align: "LEFT", line: 130, after: 3 }), [{ char: C(TYPE.cardTitle, true), text: it.title }]) + cellPara(it.body, { size: TYPE.cardBody, color: NEUTRAL.ink2, line: 160 }),
               margin: [hu(SPACE.cardPad), hu(SPACE.cardPad), hu(SPACE.cardPad - 1), hu(SPACE.cardPad)],
             };
           }));
@@ -310,13 +316,13 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         const head: Cell[] = [], body: Cell[] = [];
         b.items.forEach((it, i) => {
           if (i) {
-            head.push({ w: arrowW, h: hHead, fill: none, paras: cellPara("▶", { size: 9, color: pal.accent, align: "CENTER" }), margin: [0, 0, 0, 0] });
+            head.push({ w: arrowW, h: hHead, fill: none, paras: cellPara("▶", { size: 9, color: NEUTRAL.steel, align: "CENTER" }), margin: [0, 0, 0, 0] });
             body.push({ w: arrowW, h: hBody, fill: none, paras: pXml(P({}), []), margin: [0, 0, 0, 0] });
           }
-          const sc = b.multi && pal.series ? pal.series[i % 6] : undefined;
-          const hf = st.fill({ fill: sc ?? (i % 4 === 2 ? pal.primary2 : pal.primary) });
-          head.push({ w, h: hHead, fill: hf, paras: pXml(P({ align: "LEFT", line: 130 }), [{ char: C(TYPE.stepTitle - 1, true, pal.tint), text: String(i + 1).padStart(2, "0") + "  " }, { char: C(TYPE.stepTitle, true, "#FFFFFF"), text: it.title }]), margin: [hu(SPACE.stepPad + 1), hu(SPACE.stepPad), hu(SPACE.stepPad), hu(SPACE.stepPad)] });
-          body.push({ w, h: hBody, valign: "TOP", fill: st.fill({ fill: sc ? mixWhite(sc, 0.93) : pal.tint2 }), paras: cellPara(it.body, { size: TYPE.stepBody, color: NEUTRAL.ink2, line: 150 }), margin: [hu(SPACE.stepPad + 1), hu(SPACE.stepPad), hu(SPACE.stepPad), hu(SPACE.stepPad + 1)] });
+          const sc = it.color ?? (b.multi && pal.series ? pal.series[i % 6] : undefined);
+          const hf = st.fill({ fill: sc ?? G });
+          head.push({ w, h: hHead, fill: hf, paras: pXml(P({ align: "LEFT", line: 130 }), [{ char: C(TYPE.stepTitle - 1, true, sc ? mixWhite(sc, 0.7) : "#B9BEC5"), text: String(i + 1).padStart(2, "0") + "  " }, { char: C(TYPE.stepTitle, true, "#FFFFFF"), text: it.title }]), margin: [hu(SPACE.stepPad + 1), hu(SPACE.stepPad), hu(SPACE.stepPad), hu(SPACE.stepPad)] });
+          body.push({ w, h: hBody, valign: "TOP", fill: st.fill({ fill: sc ? mixWhite(sc, 0.93) : NEUTRAL.panel2 }), paras: cellPara(it.body, { size: TYPE.stepBody, color: NEUTRAL.ink2, line: 160 }), margin: [hu(SPACE.stepPad + 1), hu(SPACE.stepPad), hu(SPACE.stepPad), hu(SPACE.stepPad + 1)] });
         });
         return wrapTable(tableXml([head, body], { fill: none, before: 2, after: SPACE.block }));
       }
@@ -325,8 +331,8 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         const n = b.items.length;
         const w = Math.floor((BODY_W - gap * (n + 1)) / n);
         const cells = b.items.map((it): Cell => ({
-          w, h: hu(46), fill: st.fill({ top: solid(0.6, pal.primary) }),
-          paras: pXml(P({ align: "CENTER", line: 115 }), [{ char: C(TYPE.kpi, true, pal.primary), text: it.value }, ...(it.unit ? [{ char: C(10, true, pal.primary), text: " " + it.unit }] : [])]) +
+          w, h: hu(48), fill: st.fill({ top: solid(0.6, G) }),
+          paras: pXml(P({ align: "CENTER", line: 115 }), [{ char: C(TYPE.kpi, true, pal.primary), text: it.value }, ...(it.unit ? [{ char: C(10, true, NEUTRAL.ink2), text: " " + it.unit }] : [])]) +
             cellPara(it.label, { size: TYPE.kpiLabel, color: NEUTRAL.muted, align: "CENTER" }),
           margin: [hu(3), hu(3), hu(5), hu(2)],
         }));
@@ -336,13 +342,13 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         const weights = tableWidths(b);
         const widths = weights.map((x) => Math.floor(BODY_W * x));
         widths[widths.length - 1] += BODY_W - widths.reduce((s, x) => s + x, 0);
-        const thick = solid(0.4, pal.primary);
+        const thick = solid(0.4, G);
         const head: Cell[] = b.columns.map((c, ci) => {
           const isLast = ci === b.columns.length - 1;
-          const fill = b.style === "grid" ? st.fill({ fill: pal.primary, left: solid(0.12, pal.primary), right: solid(0.12, pal.primary), top: solid(0.12, pal.primary), bottom: solid(0.12, pal.primary) })
-            : b.style === "clean" ? st.fill({ fill: pal.tint, top: thick, bottom: solid(0.12, pal.line) })
-            : st.fill({ fill: pal.tint, top: thick, bottom: ruleSide, left: ci ? ruleSide : undefined, right: isLast ? undefined : ruleSide });
-          return { w: widths[ci], h: estH([{ text: c, size: TYPE.table }], widths[ci]), header: true, fill, paras: cellPara(c, { bold: true, align: "CENTER", color: b.style === "grid" ? "#FFFFFF" : pal.primary }) };
+          const fill = b.style === "grid" ? st.fill({ fill: G, left: solid(0.12, G), right: solid(0.12, G), top: solid(0.12, G), bottom: solid(0.12, G) })
+            : b.style === "clean" ? st.fill({ fill: NEUTRAL.panel, top: thick, bottom: gLine })
+            : st.fill({ fill: NEUTRAL.panel, top: thick, bottom: ruleSide, left: ci ? ruleSide : undefined, right: isLast ? undefined : ruleSide });
+          return { w: widths[ci], h: estH([{ text: c, size: TYPE.table }], widths[ci]), header: true, fill, paras: cellPara(c, { bold: true, align: "CENTER", color: b.style === "grid" ? "#FFFFFF" : NEUTRAL.ink }) };
         });
         const rows = b.rows.map((r, ri) => {
           const isLastRow = ri === b.rows.length - 1;
@@ -350,10 +356,10 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
           return b.columns.map((_, ci): Cell => {
             const first = ci === 0 && (b.firstCol || b.style === "form");
             const isLast = ci === b.columns.length - 1;
-            const fill = b.style === "grid" ? st.fill({ fill: first ? pal.tint2 : undefined, left: ruleSide, right: ruleSide, top: ruleSide, bottom: ruleSide })
-              : b.style === "clean" ? st.fill({ fill: first ? pal.tint2 : undefined, bottom: isLastRow ? thick : solid(0.12, NEUTRAL.rule) })
-              : st.fill({ fill: first ? pal.tint : undefined, bottom: ruleSide, left: ci ? ruleSide : undefined, right: isLast ? undefined : ruleSide });
-            return { w: widths[ci], h, fill, paras: cellPara(r[ci] || "", { bold: first, color: first ? pal.primary : NEUTRAL.ink, align: first ? "CENTER" : "LEFT" }) };
+            const fill = b.style === "grid" ? st.fill({ fill: first ? NEUTRAL.panel : undefined, left: ruleSide, right: ruleSide, top: ruleSide, bottom: ruleSide })
+              : b.style === "clean" ? st.fill({ fill: first ? NEUTRAL.panel : undefined, bottom: isLastRow ? thick : solid(0.12, NEUTRAL.rule) })
+              : st.fill({ fill: first ? NEUTRAL.panel : undefined, bottom: ruleSide, left: ci ? ruleSide : undefined, right: isLast ? undefined : ruleSide });
+            return { w: widths[ci], h, fill, paras: cellPara(r[ci] || "", { bold: first, color: NEUTRAL.ink, align: first ? "CENTER" : "LEFT" }) };
           });
         });
         const title = b.title ? pXml(P({ before: 9, after: 4, line: 130, keepNext: true }), [{ char: C(7.5, false, pal.primary), text: "■ " }, { char: C(TYPE.tableTitle, true), text: b.title }]) : "";
@@ -367,19 +373,19 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         const wp = Math.floor((BODY_W - wg - wt) / n);
         const wtAdj = BODY_W - wg - wp * n;
         const white = solid(0.12, "#FFFFFF");
-        const hf = st.fill({ fill: pal.primary, left: white, right: white, top: white, bottom: white });
+        const hf = st.fill({ fill: G, left: white, right: white, top: white, bottom: white });
         const head: Cell[] = [
           ...(hasGroup ? [{ w: wg, h: hu(16), header: true, fill: hf, paras: cellPara("구분", { size: TYPE.gantt, bold: true, color: "#FFFFFF", align: "CENTER" }) }] : []),
           { w: wtAdj, h: hu(16), header: true, fill: hf, paras: cellPara("세부 과업", { size: TYPE.gantt, bold: true, color: "#FFFFFF", align: "CENTER" }) },
           ...b.periods.map((p): Cell => ({ w: wp, h: hu(16), header: true, fill: hf, paras: cellPara(p, { size: TYPE.gantt - 1, bold: true, color: "#FFFFFF", align: "CENTER" }), margin: [0, 0, hu(2), hu(2)] })),
         ];
-        const tone = { work: pal.primary2, key: pal.primary, report: pal.accent } as const;
+        const tone = { work: NEUTRAL.steel, key: pal.primary, report: pal.accent } as const;
         const rows = b.tasks.map((t, ri): Cell[] => {
           const cont = ri > 0 && (t.group || "") === (b.tasks[ri - 1].group || "");
           const h = Math.max(hu(15), estH([{ text: t.label, size: TYPE.gantt }], wtAdj, 5));
           const grid = { left: ruleSide, right: ruleSide, top: ruleSide, bottom: ruleSide };
           return [
-            ...(hasGroup ? [{ w: wg, h, fill: st.fill({ fill: pal.tint, left: ruleSide, right: ruleSide, top: cont ? undefined : ruleSide, bottom: ri < b.tasks.length - 1 && (b.tasks[ri + 1].group || "") === (t.group || "") ? undefined : ruleSide }), paras: cellPara(cont ? "" : t.group || "", { size: TYPE.gantt, bold: true, color: pal.primary, align: "CENTER" }) }] : []),
+            ...(hasGroup ? [{ w: wg, h, fill: st.fill({ fill: NEUTRAL.panel, left: ruleSide, right: ruleSide, top: cont ? undefined : ruleSide, bottom: ri < b.tasks.length - 1 && (b.tasks[ri + 1].group || "") === (t.group || "") ? undefined : ruleSide }), paras: cellPara(cont ? "" : t.group || "", { size: TYPE.gantt, bold: true, color: NEUTRAL.ink, align: "CENTER" }) }] : []),
             { w: wtAdj, h, fill: st.fill(grid), paras: cellPara(t.label, { size: TYPE.gantt }) },
             ...b.periods.map((_, pi): Cell => {
               const on = pi >= t.start && pi <= t.end;
@@ -390,7 +396,7 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
         });
         const title = b.title ? pXml(P({ before: 9, after: 4, line: 130, keepNext: true }), [{ char: C(7.5, false, pal.primary), text: "■ " }, { char: C(TYPE.tableTitle, true), text: b.title }]) : "";
         const legend = pXml(P({ after: 8, line: 130 }), [
-          { char: C(8, false, pal.primary2), text: "■" }, { char: C(8, false, NEUTRAL.muted), text: " 수행   " },
+          { char: C(8, false, NEUTRAL.steel), text: "■" }, { char: C(8, false, NEUTRAL.muted), text: " 수행   " },
           { char: C(8, false, pal.primary), text: "■" }, { char: C(8, false, NEUTRAL.muted), text: " 핵심 과업   " },
           { char: C(8, false, pal.accent), text: "■" }, { char: C(8, false, NEUTRAL.muted), text: " 보고·제출   " },
           { char: C(8, false, pal.primary), text: "● 보고회·협의" }, ...(b.note ? [{ char: C(8, false, NEUTRAL.muted), text: "   " + b.note }] : []),
@@ -455,18 +461,18 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
     }
     if (pg.kind === "toc") {
       out.push(pXml(P({ line: 130, before: 6 }), [{ char: C(9, true, pal.accent, 30), xml: lead.join(""), text: "CONTENTS" }], { pageBreak }));
-      out.push(pXml(P({ line: 130, after: 14 }), [{ char: C(22, true, pal.primary, 40), text: "목 차" }]));
+      out.push(pXml(P({ line: 130, after: 14 }), [{ char: C(22, true, NEUTRAL.ink, 40), text: "목 차" }]));
       const wNo = Math.round(9 * MM), wPg = Math.round(14 * MM), wLb = BODY_W - wNo - wPg;
       const rows: Cell[][] = tocEntries(doc).map((e) => {
         if (e.level === 1) {
-          const bf = st.fill({ bottom: solid(0.4, pal.primary) });
+          const bf = st.fill({ bottom: solid(0.4, G) });
           return [
             { w: wNo, h: hu(24), fill: st.fill({ fill: pal.primary, bottom: solid(0.4, pal.primary) }), paras: cellPara(e.roman ?? "", { size: 11, bold: true, color: "#FFFFFF", align: "CENTER" }), margin: [0, 0, hu(3), hu(3)] },
-            { w: wLb, h: hu(24), fill: bf, paras: cellPara(e.label, { size: 12.5, bold: true, color: pal.primary }), margin: [hu(8), 0, hu(8), hu(3)] },
-            { w: wPg, h: hu(24), fill: bf, paras: cellPara(String(e.pageNo), { size: 10.5, bold: true, color: pal.primary, align: "RIGHT" }), margin: [0, 0, hu(8), hu(3)] },
+            { w: wLb, h: hu(24), fill: bf, paras: cellPara(e.label, { size: 12.5, bold: true, color: NEUTRAL.ink }), margin: [hu(8), 0, hu(8), hu(3)] },
+            { w: wPg, h: hu(24), fill: bf, paras: cellPara(String(e.pageNo), { size: 10.5, bold: true, color: NEUTRAL.ink, align: "RIGHT" }), margin: [0, 0, hu(8), hu(3)] },
           ];
         }
-        const dot = st.fill({ bottom: { type: "DOT", width: 0.12, color: NEUTRAL.rule } });
+        const dot = st.fill({ bottom: { type: "DOT", width: 0.12, color: NEUTRAL.line } });
         return [
           { w: wNo, h: hu(18), fill: none, paras: pXml(P({}), []) },
           { w: wLb, h: hu(18), fill: dot, paras: cellPara(e.label, { size: 10.5, color: NEUTRAL.ink2 }), margin: [hu(14), 0, hu(4), hu(4)] },
@@ -482,7 +488,7 @@ export async function renderProposalHwpx(sourceDocument: ProposalDocument, figur
     const headKey = `${roman}|${s.chapter ?? ""}|${s.crumb ?? ""}`;
     if (headKey !== lastHead) { lead.push(headerCtrl(roman, s.chapter ?? "", s.crumb ?? "")); lastHead = headKey; }
     const chunks: string[] = [];
-    if (s.title) chunks.push(pXml(P({ line: 135, after: SPACE.titleAfter, before: 2 }), [{ char: C(TYPE.pageTitle, true, pal.primary), text: s.title }]));
+    if (s.title) chunks.push(pXml(P({ line: 135, after: SPACE.titleAfter, before: 2 }), [{ char: C(TYPE.pageTitle, true), text: s.title }]));
     if (s.summary) chunks.push(await blockXml({ kind: "lead", id: `${s.id}-summary`, text: s.summary }));
     for (const b of s.blocks) chunks.push(await blockXml(b));
     if (!chunks.length) chunks.push(pXml(P({}), []));

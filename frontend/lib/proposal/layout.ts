@@ -25,7 +25,7 @@ export function coverLines(doc: ProposalDocument): FlowLine[] {
       { key: "projectName", text: doc.projectName, size: 15, tone: "ink", before: 24, align: "center" },
       { key: "siteName", text: site, size: 11, tone: "mu", before: 8, align: "center" },
       { key: "submissionDate", text: date, size: 13, bold: true, tone: "ink2", before: 170, align: "center" },
-      { key: "companyName", text: co, size: 17, bold: true, tone: "p1", before: 120, align: "center" },
+      { key: "companyName", text: co, size: 17, bold: true, tone: "ink", before: 120, align: "center" },
     ];
   }
   return [
@@ -34,7 +34,7 @@ export function coverLines(doc: ProposalDocument): FlowLine[] {
     { key: "projectName", text: doc.projectName, size: 14, tone: "ink", before: 22, inset: 73 },
     { key: "siteName", text: site, size: 11, tone: "mu", before: 6 },
     { key: "submissionDate", text: date, size: 12, bold: true, tone: "ink2", before: 110 },
-    { key: "companyName", text: co, size: 16, bold: true, tone: "p1", before: 230 },
+    { key: "companyName", text: co, size: 16, bold: true, tone: "ink", before: 230 },
   ];
 }
 export function dividerLines(roman: string, name: string, crumbs: string[]): FlowLine[] {

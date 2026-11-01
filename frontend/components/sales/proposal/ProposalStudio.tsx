@@ -17,7 +17,7 @@ import { ProposalPages, proposalFrameCss } from "./ProposalPages";
 import { materializeDocument, PROPOSAL_VARIABLE_LABELS } from "@/lib/proposal/materialize";
 import { createProposalTemplate, PROPOSAL_TEMPLATES } from "@/lib/proposal/templates";
 import { optionsOf, type BulletItem, type CardItem, type ProposalBlock, type ProposalBlockKind, type ProposalDocument, type ProposalSection } from "@/lib/proposal/types";
-import { PROPOSAL_THEMES, chaptersOf, contrast, isHexColor, paletteOf } from "@/lib/proposal/design";
+import { NEUTRAL, PROPOSAL_THEMES, SERIES_LABEL, chaptersOf, contrast, isHexColor, paletteOf, seriesOf, type SeriesPalette, type ThemePalette } from "@/lib/proposal/design";
 import { physicalPages } from "@/lib/proposal/layout";
 import { validateProposalForPublication } from "@/lib/proposal/validate";
 import { COVER_ART_ID, DIVIDER_ART_ID } from "@/lib/proposal/art";
@@ -143,6 +143,15 @@ const IN = ({ value, onChange, placeholder, type = "text" }: { value: string | n
 function Chips<T extends string | number>({ value, options, onChange }: { value: T; options: Array<{ v: T; label: string }>; onChange: (v: T) => void }) {
   return <div className="chips">{options.map((o) => <button key={String(o.v)} type="button" className={o.v === value ? "on" : ""} onClick={() => onChange(o.v)}>{o.label}</button>)}</div>;
 }
+/** 항목 색 — 자동(팔레트 순서) · 현재 팔레트 6색 · 그래파이트 · 직접 고르기 */
+function ColorPick({ value, pal, onChange }: { value?: string; pal: ThemePalette; onChange: (c: string | undefined) => void }) {
+  const preset = [...(pal.series ?? []), NEUTRAL.graphite, pal.primary].filter((c, i, a) => a.indexOf(c) === i);
+  return <div className="color-pick" role="group" aria-label="항목 색">
+    <button type="button" className={!value ? "auto on" : "auto"} onClick={() => onChange(undefined)}>자동</button>
+    {preset.map((c) => <button key={c} type="button" className={value === c ? "on" : ""} style={{ background: c }} title={c} aria-label={`색 ${c}`} onClick={() => onChange(c)} />)}
+    <label className="custom" title="직접 고르기"><input type="color" value={isHexColor(value) ? value : pal.series?.[0] ?? pal.primary} onChange={(e) => onChange(e.target.value.toUpperCase())} aria-label="색 직접 고르기" /></label>
+  </div>;
+}
 function moveItem<T>(list: T[], i: number, d: number): T[] { const a = [...list]; const j = i + d; if (j < 0 || j >= a.length) return a; [a[i], a[j]] = [a[j], a[i]]; return a; }
 function ItemHead({ label, i, n, onMove, onDel }: { label: string; i: number; n: number; onMove: (d: number) => void; onDel: () => void }) {
   return <div className="ih"><span>{label}</span>
@@ -151,12 +160,13 @@ function ItemHead({ label, i, n, onMove, onDel }: { label: string; i: number; n:
     <button type="button" className="icon-btn" aria-label="삭제" onClick={onDel}><Trash2 size={13} /></button></div>;
 }
 
-function CardsEditor({ items, onChange, withKey }: { items: CardItem[]; onChange: (items: CardItem[]) => void; withKey?: boolean }) {
+function CardsEditor({ items, onChange, withKey, pal }: { items: CardItem[]; onChange: (items: CardItem[]) => void; withKey?: boolean; pal?: ThemePalette }) {
   return <>{items.map((it, i) => <div className="item-card" key={i}>
     <ItemHead label={`${i + 1}`} i={i} n={items.length} onMove={(d) => onChange(moveItem(items, i, d))} onDel={() => onChange(items.filter((_, k) => k !== i))} />
     <IN value={it.title} onChange={(v) => onChange(items.map((x, k) => (k === i ? { ...x, title: v } : x)))} placeholder="제목" />
     <TA value={it.body} rows={3} onChange={(v) => onChange(items.map((x, k) => (k === i ? { ...x, body: v } : x)))} placeholder="내용(줄바꿈 가능, - 로 시작하면 목록)" />
     {withKey ? <label className="proposal-muted"><input type="checkbox" checked={!!it.key} onChange={(e) => onChange(items.map((x, k) => (k === i ? { ...x, key: e.target.checked || undefined } : x)))} /> 포인트 색으로 강조</label> : null}
+    {pal ? <ColorPick value={it.color} pal={pal} onChange={(c) => onChange(items.map((x, k) => (k === i ? { ...x, color: c } : x)))} /> : null}
   </div>)}
   <button type="button" className="cd-btn cd-btn-ghost" onClick={() => onChange([...items, { title: "새 항목", body: "" }])}><Plus size={14} />항목 추가</button></>;
 }
@@ -202,7 +212,7 @@ function GanttEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "gantt
   </>;
 }
 
-function DiagramEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "diagram" }>; onChange: (b: ProposalBlock) => void }) {
+function DiagramEditor({ b, onChange, pal }: { b: Extract<ProposalBlock, { kind: "diagram" }>; onChange: (b: ProposalBlock) => void; pal: ThemePalette }) {
   const spec = b.spec; const meta = DIAGRAM_META[spec.kind];
   const setSpec = (patch: Partial<DiagramSpec>) => onChange({ ...b, spec: { ...spec, ...patch } });
   const setItem = (i: number, patch: Partial<DiagramSpec["items"][number]>) => setSpec({ items: spec.items.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
@@ -212,6 +222,8 @@ function DiagramEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "dia
       onClick={() => { if (t.kind === spec.kind) return; const keep = spec.items.length >= t.min && spec.items.length <= t.max; const next: DiagramSpec = keep ? { ...spec, kind: t.kind } : defaultDiagram(t.kind as DiagramKind); if (t.center && !next.center) next.center = { label: "가운데 제목" }; onChange({ ...b, spec: next, widthMm: t.size[0], heightMm: t.size[1] }); }}>{t.label}</button>)}</div></Field>
     <p className="proposal-muted">{meta.use} · 항목 {meta.min}~{meta.max}개. 항목 수가 맞으면 모양만 바뀌고 내용은 그대로 둡니다.</p>
     <Field label="색"><Chips value={spec.tone ?? "multi"} options={[{ v: "multi", label: "항목마다 다른 색" }, { v: "theme", label: "테마 단색" }]} onChange={(v) => setSpec({ tone: v === "multi" ? undefined : v })} /></Field>
+    <p className="proposal-muted">항목 색은 아래 항목마다 바꿀 수 있습니다. 문서 전체의 다색 팔레트는 표지·문서 설정의 도식 팔레트에서 고릅니다.</p>
+    {spec.items.some((it) => it.color) ? <button type="button" className="cd-btn cd-btn-ghost" style={{ alignSelf: "flex-start" }} onClick={() => setSpec({ items: spec.items.map(({ color: _c, ...x }) => x) })}>항목 색 모두 자동으로</button> : null}
     <div className="two"><Field label="가로(mm)"><IN type="number" value={b.widthMm} onChange={(v) => onChange({ ...b, widthMm: Math.max(40, Math.min(174, Number(v) || 40)) })} /></Field><Field label="세로(mm)"><IN type="number" value={b.heightMm} onChange={(v) => onChange({ ...b, heightMm: Math.max(20, Math.min(240, Number(v) || 20)) })} /></Field></div>
     {meta.center ? <div className="two"><Field label="가운데 제목"><IN value={spec.center?.label ?? ""} onChange={(v) => setSpec({ center: { ...spec.center, label: v } })} /></Field><Field label="가운데 설명"><IN value={spec.center?.desc ?? ""} onChange={(v) => setSpec({ center: { label: spec.center?.label ?? "", desc: v || undefined } })} /></Field></div> : null}
     {spec.kind === "beforeAfter" || spec.kind === "scatter" ? <div className="two"><Field label={spec.kind === "scatter" ? "계열 a 이름" : "왼쪽 머리"}><IN value={spec.legend?.[0] ?? ""} onChange={(v) => setSpec({ legend: [v, spec.legend?.[1] ?? ""] })} /></Field><Field label={spec.kind === "scatter" ? "계열 b 이름" : "오른쪽 머리"}><IN value={spec.legend?.[1] ?? ""} onChange={(v) => setSpec({ legend: [spec.legend?.[0] ?? "", v] })} /></Field></div> : null}
@@ -225,6 +237,7 @@ function DiagramEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "dia
       {meta.fields.includes("group") ? <select className="cd-input" value={it.group ?? (spec.kind === "org" ? "unit" : "a")} onChange={(e) => setItem(i, { group: e.target.value })}>
         {spec.kind === "org" ? ORG_GROUPS.map((g) => <option key={g.id} value={g.id}>{g.label}</option>) : <><option value="a">{spec.legend?.[0] || "계열 a"}</option><option value="b">{spec.legend?.[1] || "계열 b"}</option></>}</select> : null}
       {meta.fields.includes("icon") ? <select className="cd-input" value={it.icon ?? ""} onChange={(e) => setItem(i, { icon: e.target.value || undefined })}><option value="">아이콘 자동</option>{DIAGRAM_ICON_NAMES.map((n) => <option key={n} value={n}>{n}</option>)}</select> : null}
+      {spec.kind !== "org" || !["top", "left", "right"].includes(it.group || "unit") ? <ColorPick value={it.color} pal={pal} onChange={(c) => setItem(i, { color: c })} /> : null}
     </div>)}
     <button type="button" className="cd-btn cd-btn-ghost" disabled={spec.items.length >= meta.max} onClick={() => setSpec({ items: [...spec.items, { id: newId("i").slice(0, 20), label: "새 항목" }] })}><Plus size={14} />항목 추가</button>
   </>;
@@ -272,7 +285,7 @@ function BulletsEditor({ items, onChange }: { items: BulletItem[]; onChange: (it
   </>;
 }
 
-function BlockFields({ b, onChange }: { b: ProposalBlock; onChange: (b: ProposalBlock) => void }) {
+function BlockFields({ b, onChange, pal }: { b: ProposalBlock; onChange: (b: ProposalBlock) => void; pal: ThemePalette }) {
   switch (b.kind) {
     case "heading": return <><Field label="단계"><Chips value={b.level} options={[{ v: 1, label: "1. 절 제목" }, { v: 2, label: "1.1 항 제목" }, { v: 3, label: "□ 소제목" }]} onChange={(v) => onChange({ ...b, level: v as 1 | 2 | 3 })} /></Field><Field label="제목"><IN value={b.text} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
     case "text": return <Field label="본문 — **굵게** 는 주색 굵은 글자"><TA value={b.text} rows={8} onChange={(v) => onChange({ ...b, text: v })} /></Field>;
@@ -280,8 +293,8 @@ function BlockFields({ b, onChange }: { b: ProposalBlock; onChange: (b: Proposal
     case "lead": return <><Field label="라벨(선택)"><IN value={b.label ?? ""} placeholder="예: 핵심" onChange={(v) => onChange({ ...b, label: v || undefined })} /></Field><Field label="핵심 메시지"><TA value={b.text} rows={3} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
     case "callout": return <><Field label="종류"><Chips value={b.variant} options={[{ v: "note", label: "참고 상자" }, { v: "point", label: "포인트 상자" }]} onChange={(v) => onChange({ ...b, variant: v, title: b.title || (v === "point" ? "POINT" : "참고") })} /></Field><Field label="머리"><IN value={b.title} onChange={(v) => onChange({ ...b, title: v })} /></Field><Field label="내용"><TA value={b.text} rows={5} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
     case "stage": return <div className="two"><Field label="라벨"><IN value={b.label} onChange={(v) => onChange({ ...b, label: v })} /></Field><Field label="이름"><IN value={b.text} onChange={(v) => onChange({ ...b, text: v })} /></Field></div>;
-    case "cards": return <><Field label="열 수"><Chips value={b.columns} options={[{ v: 2, label: "2열" }, { v: 3, label: "3열" }, { v: 4, label: "4열" }]} onChange={(v) => onChange({ ...b, columns: v as 2 })} /></Field><label className="proposal-muted"><input type="checkbox" checked={b.numbered} onChange={(e) => onChange({ ...b, numbered: e.target.checked })} /> 01·02 번호</label><label className="proposal-muted"><input type="checkbox" checked={!!b.multi} onChange={(e) => onChange({ ...b, multi: e.target.checked || undefined })} /> 항목마다 다른 색</label><CardsEditor items={b.items} withKey onChange={(items) => onChange({ ...b, items })} /></>;
-    case "steps": return <><p className="proposal-muted">2~6단계를 한 줄 흐름으로 그립니다. 더 많으면 표나 도식(단계 화살표)을 쓰세요.</p><label className="proposal-muted"><input type="checkbox" checked={!!b.multi} onChange={(e) => onChange({ ...b, multi: e.target.checked || undefined })} /> 항목마다 다른 색</label><CardsEditor items={b.items} onChange={(items) => onChange({ ...b, items: items.slice(0, 6) })} /></>;
+    case "cards": return <><Field label="열 수"><Chips value={b.columns} options={[{ v: 2, label: "2열" }, { v: 3, label: "3열" }, { v: 4, label: "4열" }]} onChange={(v) => onChange({ ...b, columns: v as 2 })} /></Field><label className="proposal-muted"><input type="checkbox" checked={b.numbered} onChange={(e) => onChange({ ...b, numbered: e.target.checked })} /> 01·02 번호</label><label className="proposal-muted"><input type="checkbox" checked={!!b.multi} onChange={(e) => onChange({ ...b, multi: e.target.checked || undefined })} /> 항목마다 다른 색</label><CardsEditor items={b.items} withKey pal={pal} onChange={(items) => onChange({ ...b, items })} /></>;
+    case "steps": return <><p className="proposal-muted">2~6단계를 한 줄 흐름으로 그립니다. 더 많으면 표나 도식(단계 화살표)을 쓰세요.</p><label className="proposal-muted"><input type="checkbox" checked={!!b.multi} onChange={(e) => onChange({ ...b, multi: e.target.checked || undefined })} /> 항목마다 다른 색</label><CardsEditor items={b.items} pal={pal} onChange={(items) => onChange({ ...b, items: items.slice(0, 6) })} /></>;
     case "kpis": return <>{b.items.map((it, i) => <div className="item-card" key={i}><ItemHead label={`${i + 1}`} i={i} n={b.items.length} onMove={(d) => onChange({ ...b, items: moveItem(b.items, i, d) })} onDel={() => onChange({ ...b, items: b.items.filter((_, k) => k !== i) })} />
       <div className="two"><IN value={it.value} placeholder="수치" onChange={(v) => onChange({ ...b, items: b.items.map((x, k) => (k === i ? { ...x, value: v } : x)) })} /><IN value={it.unit ?? ""} placeholder="단위" onChange={(v) => onChange({ ...b, items: b.items.map((x, k) => (k === i ? { ...x, unit: v || undefined } : x)) })} /></div>
       <IN value={it.label} placeholder="이름" onChange={(v) => onChange({ ...b, items: b.items.map((x, k) => (k === i ? { ...x, label: v } : x)) })} /></div>)}
@@ -289,7 +302,7 @@ function BlockFields({ b, onChange }: { b: ProposalBlock; onChange: (b: Proposal
       <p className="proposal-muted">실적·인력 수치는 기준일이 있는 확인된 값만 씁니다.</p></>;
     case "table": return <TableEditor b={b} onChange={onChange} />;
     case "gantt": return <GanttEditor b={b} onChange={onChange} />;
-    case "diagram": return <DiagramEditor b={b} onChange={onChange} />;
+    case "diagram": return <DiagramEditor b={b} pal={pal} onChange={onChange} />;
     case "figure": return <FigureEditor b={b} onChange={onChange} />;
     case "image": return <><Field label="캡션"><IN value={b.title} onChange={(v) => onChange({ ...b, title: v })} /></Field>{b.dataUrl ? <img className="proposal-thumb" src={b.dataUrl} alt={b.title} /> : <p className="proposal-alert">그림 파일을 고르세요.</p>}
       <div className="two"><Field label="가로(mm)"><IN type="number" value={b.widthMm} onChange={(v) => { const w = Math.max(20, Math.min(174, Number(v) || 20)); onChange({ ...b, widthMm: w, heightMm: Math.round(b.heightMm * w / b.widthMm * 10) / 10 }); }} /></Field><Field label="세로(mm)"><IN type="number" value={b.heightMm} onChange={(v) => onChange({ ...b, heightMm: Math.max(10, Math.min(240, Number(v) || 10)) })} /></Field></div></>;
@@ -515,7 +528,7 @@ export function ProposalStudio() {
       </div>
       <button type="button" className="cd-btn cd-btn-ghost" style={{ alignSelf: "flex-start" }} onClick={() => setSelBlock("")}>← {s.pageId ?? ""} 쪽 설정</button>
       {conv.length ? <div className="sec"><h3>모양 바꾸기 <small className="proposal-muted">내용 유지</small></h3><div className="chips">{conv.map((k) => <button key={k} type="button" onClick={() => change(updateBlock(doc, b.id, (x) => convertBlock(x, k)))}>{BLOCK_LABEL[k]}</button>)}</div></div> : null}
-      <div className="sec"><BlockFields b={b} onChange={changeBlock} />
+      <div className="sec"><BlockFields b={b} pal={pal} onChange={changeBlock} />
         {b.kind === "image" ? <button type="button" className="cd-btn" onClick={() => { imageTarget.current = b.id; imageInput.current?.click(); }}><ImagePlus size={14} />파일 바꾸기</button> : null}</div>
       <div className="sec"><h3>다른 쪽으로 옮기기</h3><select className="cd-input" value="" onChange={(e) => { const to = e.target.value; if (!to) return; const moved = { ...doc, sections: doc.sections.map((x) => (x.id === s.id ? { ...x, blocks: x.blocks.filter((y) => y.id !== b.id) } : x.id === to ? { ...x, blocks: [...x.blocks, b] } : x)) }; change(moved); goPage(to); setSelBlock(b.id); }}>
         <option value="">쪽 선택…</option>{doc.sections.filter((x) => x.id !== s.id).map((x) => <option key={x.id} value={x.id}>{x.pageId ? `${x.pageId} · ` : ""}{x.title || "(이어지는 쪽)"}</option>)}</select></div>
@@ -549,6 +562,8 @@ export function ProposalStudio() {
         <Field label="색 테마"><div className="swatches">{Object.entries(PROPOSAL_THEMES).map(([k, t]) => <button key={k} type="button" title={t.label} aria-label={t.label} className={doc.theme === k ? "on" : ""} style={{ background: `linear-gradient(135deg, ${t.primary} 60%, ${t.accent} 60%)` }} onClick={() => setDoc({ theme: k as ProposalDocument["theme"] })} />)}</div></Field>
         <Field label="발주처 주색(선택 — 테마 주색을 덮어씀)"><div className="two"><input className="cd-input" type="color" value={isHexColor(brand) ? brand : pal.primary} onChange={(e) => setOpts({ brandColor: e.target.value.toUpperCase() })} /><button type="button" className="cd-btn cd-btn-ghost" disabled={!brand} onClick={() => setOpts({ brandColor: undefined })}>테마 색으로</button></div></Field>
         {isHexColor(brand) && contrast(brand, "#FFFFFF") < 4.5 ? <p className="proposal-alert">흰 글자 대비가 4.5:1 미만이라 적용하지 않습니다. 더 짙은 색을 고르세요.</p> : null}
+        <Field label="도식 팔레트(도식·다색 카드·단계 흐름)"><div className="palette-pick">{(Object.keys(SERIES_LABEL) as SeriesPalette[]).map((k) => <button key={k} type="button" className={(opts!.palette ?? "calm") === k ? "on" : ""} onClick={() => setOpts({ palette: k === "calm" ? undefined : k })}>
+          <span className="strip">{seriesOf(doc.theme, k, pal.primary).map((c) => <i key={c} style={{ background: c }} />)}</span><span>{SERIES_LABEL[k]}</span></button>)}</div></Field>
         <Field label="표지"><Chips value={opts!.cover} options={[{ v: "modern", label: "모던(띠·원 장식)" }, { v: "classic", label: "클래식(가운데 정렬·테두리)" }]} onChange={(v) => setOpts({ cover: v })} /></Field>
         <label className="proposal-muted"><input type="checkbox" checked={opts!.toc} onChange={(e) => setOpts({ toc: e.target.checked })} /> 목차 쪽</label>
         <label className="proposal-muted"><input type="checkbox" checked={opts!.dividers} onChange={(e) => setOpts({ dividers: e.target.checked })} /> 장 간지(장마다 1쪽 추가 — 쪽수 제한이 있으면 끄세요)</label>

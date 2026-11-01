@@ -10,7 +10,7 @@ export type TableStyle = "grid" | "clean" | "form";
 export type BulletMark = "note" | "result" | "check";
 
 export interface BulletItem { level: 1 | 2 | 3; text: string; mark?: BulletMark }
-export interface CardItem { title: string; body: string; key?: boolean }
+export interface CardItem { title: string; body: string; key?: boolean; /** 항목 색 직접 지정(#rrggbb) — 다색일 때 */ color?: string }
 export interface KpiItem { value: string; unit?: string; label: string }
 export interface GanttTask { group?: string; label: string; start: number; end: number; tone?: "work" | "report" | "key"; marks?: number[] }
 
@@ -51,6 +51,8 @@ export interface ProposalOptions {
   dividers: boolean;
   /** 목차 쪽 */
   toc: boolean;
+  /** 도식 팔레트 — 없으면 calm(차분한 6색) */
+  palette?: "calm" | "earth" | "mono";
 }
 
 export interface ProposalDocument {

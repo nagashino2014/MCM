@@ -17,6 +17,8 @@ export interface DiagramItem {
   /** 산점도 좌표 0~100 */
   x?: number;
   y?: number;
+  /** 항목 색 직접 지정(#rrggbb) — 다색 팔레트 대신 */
+  color?: string;
 }
 
 export interface DiagramSpec {

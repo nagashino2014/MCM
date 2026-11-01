@@ -45,9 +45,14 @@ function Ico({ name, x, y, s, color, fallback = 0 }: { name?: string; x: number;
   return <C x={x} y={y} width={s} height={s} stroke={color} strokeWidth={2} fill="none" />;
 }
 
-/** 항목 색 — 다색(기본)이면 팔레트 6색을 순서대로, 테마 단색이면 fallback. 글자는 색을 입히지 않고 표식(면·선·아이콘)만 칠한다. */
-const isMulti = (spec: DiagramSpec, pal: ThemePalette) => spec.tone !== "theme" && !!pal.series?.length;
-const itemColor = (spec: DiagramSpec, pal: ThemePalette, i: number, fallback: string) => (isMulti(spec, pal) ? pal.series![i % pal.series!.length] : fallback);
+/**
+ * 항목 색 — 항목에 직접 지정한 색 > 다색(기본)이면 팔레트 6색을 순서대로 > 테마 단색이면 fallback.
+ * 글자는 색을 입히지 않고 표식(면·선·아이콘)만 칠한다. 중심·상위 노드는 그래파이트(2.1).
+ */
+const isMulti = (spec: DiagramSpec, pal: ThemePalette, it?: DiagramItem) => !!it?.color || (spec.tone !== "theme" && !!pal.series?.length);
+const itemColor = (spec: DiagramSpec, pal: ThemePalette, i: number, fallback: string, it: DiagramItem | undefined = spec.items[i]) =>
+  it?.color ?? (isMulti(spec, pal) ? pal.series![i % pal.series!.length] : fallback);
+const HUB = NEUTRAL.graphite;
 const soft = (c: string) => mixWhite(c, 0.86);
 const softer = (c: string) => mixWhite(c, 0.93);
 
@@ -80,20 +85,20 @@ function Hub({ spec, box, pal }: Props) {
       const circleX = cx + (isLeft ? -1 : 1) * rc * Math.sqrt(Math.max(0, 1 - ((y - cy) / (rc + 4)) ** 2));
       return (
         <g key={it.id}>
-          <line x1={edgeX} y1={y} x2={Math.abs(y - cy) < rc ? circleX : cx + (isLeft ? -rc : rc) * 0.6} y2={Math.abs(y - cy) < rc ? y : cy + Math.sign(y - cy) * rc * 0.8} stroke={isMulti(spec, pal) ? mixWhite(itemColor(spec, pal, offset + i, pal.line), 0.35) : pal.line} strokeWidth={1} strokeDasharray="2 2" />
-          <circle cx={x0 + iconS / 2 + 2} cy={ty + 8} r={iconS / 2 + 3} fill={isMulti(spec, pal) ? soft(itemColor(spec, pal, offset + i, pal.primary)) : pal.tint} />
+          <line x1={edgeX} y1={y} x2={Math.abs(y - cy) < rc ? circleX : cx + (isLeft ? -rc : rc) * 0.6} y2={Math.abs(y - cy) < rc ? y : cy + Math.sign(y - cy) * rc * 0.8} stroke={isMulti(spec, pal, spec.items[offset + i]) ? mixWhite(itemColor(spec, pal, offset + i, pal.line), 0.35) : pal.line} strokeWidth={1} strokeDasharray="2 2" />
+          <circle cx={x0 + iconS / 2 + 2} cy={ty + 8} r={iconS / 2 + 3} fill={isMulti(spec, pal, spec.items[offset + i]) ? soft(itemColor(spec, pal, offset + i, pal.primary)) : pal.tint} />
           <Ico name={it.icon} x={x0 + 2 + 1} y={ty + 1} s={iconS - 2} color={itemColor(spec, pal, offset + i, pal.primary)} fallback={offset + i} />
-          <T x={tx} y={ty} lines={label} fs={9.5} fill={pal.primary} weight={700} anchor="start" valign="top" lh={1.3} />
+          <T x={tx} y={ty} lines={label} fs={9.5} fill={NEUTRAL.ink} weight={700} anchor="start" valign="top" lh={1.3} />
           <T x={tx} y={ty + label.length * 12.5 + 1} lines={lines} fs={8} fill={NEUTRAL.ink2} anchor="start" valign="top" lh={1.3} />
         </g>
       );
     });
     return (
       <>
-        <circle cx={cx} cy={cy} r={rc + 6} fill="none" stroke={pal.line} strokeWidth={6} />
-        <circle cx={cx} cy={cy} r={rc} fill={pal.primary} />
+        <circle cx={cx} cy={cy} r={rc + 6} fill="none" stroke={NEUTRAL.rule} strokeWidth={6} />
+        <circle cx={cx} cy={cy} r={rc} fill={HUB} />
         <T x={cx} y={cy - (spec.center?.desc ? 6 : 0)} lines={wrap(center, rc * 1.55, 10.5)} fs={10.5} fill="#FFFFFF" weight={700} />
-        {spec.center?.desc ? <T x={cx} y={cy + 18} lines={wrap(spec.center.desc, rc * 1.5, 7.5)} fs={7.5} fill={mixWhite(pal.primary, 0.75)} /> : null}
+        {spec.center?.desc ? <T x={cx} y={cy + 18} lines={wrap(spec.center.desc, rc * 1.5, 7.5)} fs={7.5} fill={mixWhite(HUB, 0.72)} /> : null}
         {side(left, true, 0)}
         {side(right, false, left.length)}
       </>
@@ -109,18 +114,18 @@ function Hub({ spec, box, pal }: Props) {
     <>
       {pills.map((p, i) => {
         const a = -Math.PI / 2 + (2 * Math.PI * i) / items.length;
-        return <line key={`s${i}`} x1={cx} y1={cy} x2={cx + rx * Math.cos(a)} y2={cy + ry * Math.sin(a)} stroke={isMulti(spec, pal) ? mixWhite(itemColor(spec, pal, i, pal.line), 0.45) : pal.line} strokeWidth={1.2} />;
+        return <line key={`s${i}`} x1={cx} y1={cy} x2={cx + rx * Math.cos(a)} y2={cy + ry * Math.sin(a)} stroke={isMulti(spec, pal, spec.items[i]) ? mixWhite(itemColor(spec, pal, i, pal.line), 0.45) : pal.line} strokeWidth={1.2} />;
       })}
-      <circle cx={cx} cy={cy} r={rc + 5} fill={pal.tint} />
-      <circle cx={cx} cy={cy} r={rc} fill={pal.primary} />
+      <circle cx={cx} cy={cy} r={rc + 5} fill={NEUTRAL.panel} />
+      <circle cx={cx} cy={cy} r={rc} fill={HUB} />
       <T x={cx} y={cy} lines={wrap(center, rc * 1.6, 10.5)} fs={10.5} fill="#FFFFFF" weight={700} />
       {pills.map((p, i) => {
         const a = -Math.PI / 2 + (2 * Math.PI * i) / items.length;
         const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
         return (
           <g key={p.it.id}>
-            <rect x={x - p.pw / 2} y={y - p.ph / 2} width={p.pw} height={p.ph} rx={p.ph / 2} fill={isMulti(spec, pal) ? softer(itemColor(spec, pal, i, pal.primary2)) : "#FFFFFF"} stroke={itemColor(spec, pal, i, pal.primary2)} strokeWidth={1.4} />
-            <T x={x} y={y} lines={p.lines} fs={fs} fill={pal.primary} weight={700} />
+            <rect x={x - p.pw / 2} y={y - p.ph / 2} width={p.pw} height={p.ph} rx={p.ph / 2} fill={isMulti(spec, pal, spec.items[i]) ? softer(itemColor(spec, pal, i, pal.primary2)) : "#FFFFFF"} stroke={itemColor(spec, pal, i, pal.primary2)} strokeWidth={1.4} />
+            <T x={x} y={y} lines={p.lines} fs={fs} fill={NEUTRAL.ink} weight={700} />
           </g>
         );
       })}
@@ -154,15 +159,15 @@ function Org({ spec, box, pal }: Props) {
     const joinX = isLeft ? x0 + bw + 10 : x0 - 10;
     return (
       <g>
-        <line x1={joinX} y1={y0 + bh / 2} x2={joinX} y2={y0 + total - bh / 2} stroke={pal.primary2} strokeWidth={1} />
-        <line x1={joinX} y1={(y0 + y0 + total) / 2} x2={cx} y2={(y0 + y0 + total) / 2} stroke={pal.primary2} strokeWidth={1} />
+        <line x1={joinX} y1={y0 + bh / 2} x2={joinX} y2={y0 + total - bh / 2} stroke={NEUTRAL.steel} strokeWidth={1} />
+        <line x1={joinX} y1={(y0 + y0 + total) / 2} x2={cx} y2={(y0 + y0 + total) / 2} stroke={NEUTRAL.steel} strokeWidth={1} />
         {list.map((it, i) => {
           const y = y0 + i * (bh + g);
           return (
             <g key={it.id}>
-              <line x1={isLeft ? x0 + bw : x0} y1={y + bh / 2} x2={joinX} y2={y + bh / 2} stroke={pal.primary2} strokeWidth={1} />
-              <rect x={x0} y={y} width={bw} height={bh} rx={3} fill={isLeft ? "#FFFFFF" : pal.tint} stroke={pal.primary2} strokeWidth={1} />
-              <T x={x0 + bw / 2} y={y + bh / 2} lines={[[it.label, it.desc].filter(Boolean).join(" ")]} fs={8.5} fill={pal.primary} weight={isLeft ? 600 : 700} />
+              <line x1={isLeft ? x0 + bw : x0} y1={y + bh / 2} x2={joinX} y2={y + bh / 2} stroke={NEUTRAL.steel} strokeWidth={1} />
+              <rect x={x0} y={y} width={bw} height={bh} rx={3} fill={isLeft ? "#FFFFFF" : NEUTRAL.panel} stroke={NEUTRAL.line} strokeWidth={1} />
+              <T x={x0 + bw / 2} y={y + bh / 2} lines={[[it.label, it.desc].filter(Boolean).join(" ")]} fs={8.5} fill={NEUTRAL.ink} weight={isLeft ? 600 : 700} />
             </g>
           );
         })}
@@ -172,23 +177,23 @@ function Org({ spec, box, pal }: Props) {
   const ux = (i: number) => (w - (n * unitW + (n - 1) * gap)) / 2 + i * (unitW + gap);
   return (
     <>
-      <line x1={cx} y1={topH + 2} x2={cx} y2={busY} stroke={pal.primary2} strokeWidth={1.2} />
-      {units.length > 1 ? <line x1={ux(0) + unitW / 2} y1={busY} x2={ux(n - 1) + unitW / 2} y2={busY} stroke={pal.primary2} strokeWidth={1.2} /> : null}
+      <line x1={cx} y1={topH + 2} x2={cx} y2={busY} stroke={NEUTRAL.steel} strokeWidth={1.2} />
+      {units.length > 1 ? <line x1={ux(0) + unitW / 2} y1={busY} x2={ux(n - 1) + unitW / 2} y2={busY} stroke={NEUTRAL.steel} strokeWidth={1.2} /> : null}
       {stack(left, true)}
       {stack(right, false)}
       {top ? (
         <g>
-          <rect x={cx - topW / 2} y={2} width={topW} height={topH} rx={4} fill={pal.primary} />
+          <rect x={cx - topW / 2} y={2} width={topW} height={topH} rx={4} fill={HUB} />
           <T x={cx} y={2 + (top.desc ? 13 : topH / 2)} lines={[top.label]} fs={10} fill="#FFFFFF" weight={700} />
-          {top.desc ? <T x={cx} y={2 + 27} lines={[top.desc]} fs={8} fill={mixWhite(pal.primary, 0.78)} /> : null}
+          {top.desc ? <T x={cx} y={2 + 27} lines={[top.desc]} fs={8} fill={mixWhite(HUB, 0.75)} /> : null}
         </g>
       ) : null}
       {units.map((u, i) => (
         <g key={u.id}>
-          <line x1={ux(i) + unitW / 2} y1={busY} x2={ux(i) + unitW / 2} y2={busY + 12} stroke={pal.primary2} strokeWidth={1.2} />
-          <rect x={ux(i)} y={busY + 12} width={unitW} height={22} rx={3} fill={itemColor(spec, pal, i, pal.primary2)} />
+          <line x1={ux(i) + unitW / 2} y1={busY} x2={ux(i) + unitW / 2} y2={busY + 12} stroke={NEUTRAL.steel} strokeWidth={1.2} />
+          <rect x={ux(i)} y={busY + 12} width={unitW} height={22} rx={3} fill={itemColor(spec, pal, i, pal.primary2, u)} />
           <T x={ux(i) + unitW / 2} y={busY + 23} lines={wrap(u.label, unitW - 8, 9).slice(0, 1)} fs={9} fill="#FFFFFF" weight={700} />
-          <rect x={ux(i)} y={busY + 34} width={unitW} height={unitBodyH} fill={isMulti(spec, pal) ? softer(itemColor(spec, pal, i, pal.primary2)) : pal.tint2} stroke={isMulti(spec, pal) ? mixWhite(itemColor(spec, pal, i, pal.primary2), 0.6) : pal.line} strokeWidth={0.8} />
+          <rect x={ux(i)} y={busY + 34} width={unitW} height={unitBodyH} fill={isMulti(spec, pal, u) ? softer(itemColor(spec, pal, i, pal.primary2, u)) : pal.tint2} stroke={isMulti(spec, pal, u) ? mixWhite(itemColor(spec, pal, i, pal.primary2, u), 0.6) : pal.line} strokeWidth={0.8} />
           <T x={ux(i) + unitW / 2} y={busY + 38} lines={unitLines[i]} fs={8} fill={NEUTRAL.ink2} valign="top" lh={1.3} />
         </g>
       ))}
@@ -222,16 +227,17 @@ function BeforeAfter({ spec, box, pal }: Props) {
       {rows.map((r, ri) => {
         const rh = r.rh + extra; const y0 = y; y += rh + 5;
         const c = itemColor(spec, pal, ri, pal.primary2);
+        const multi = isMulti(spec, pal, r.it);
         return (
           <g key={r.it.id}>
-            <rect x={0} y={y0} width={labelW} height={rh} rx={3} fill={isMulti(spec, pal) ? soft(c) : pal.tint} />
-            {isMulti(spec, pal) ? <rect x={0} y={y0} width={3} height={rh} fill={c} /> : null}
-            <T x={labelW / 2} y={y0 + rh / 2} lines={r.l} fs={9} fill={pal.primary} weight={700} />
+            <rect x={0} y={y0} width={labelW} height={rh} rx={3} fill={multi ? soft(c) : NEUTRAL.panel} />
+            {multi ? <rect x={0} y={y0} width={3} height={rh} fill={c} /> : null}
+            <T x={labelW / 2} y={y0 + rh / 2} lines={r.l} fs={9} fill={NEUTRAL.ink} weight={700} />
             <rect x={xa} y={y0} width={colW} height={rh} rx={3} fill={NEUTRAL.panel} />
             <T x={xa + 8} y={y0 + rh / 2} lines={r.a} fs={fs} fill={NEUTRAL.ink2} anchor="start" lh={1.35} />
-            <path d={`M${xa + colW + 5} ${y0 + rh / 2 - 6} L${xa + colW + arrowW - 5} ${y0 + rh / 2} L${xa + colW + 5} ${y0 + rh / 2 + 6} Z`} fill={isMulti(spec, pal) ? c : pal.accent} />
+            <path d={`M${xa + colW + 5} ${y0 + rh / 2 - 6} L${xa + colW + arrowW - 5} ${y0 + rh / 2} L${xa + colW + 5} ${y0 + rh / 2 + 6} Z`} fill={multi ? c : NEUTRAL.steel} />
             <rect x={xb} y={y0} width={colW} height={rh} rx={3} fill="#FFFFFF" stroke={c} strokeWidth={1.2} />
-            <T x={xb + 8} y={y0 + rh / 2} lines={r.b} fs={fs} fill={pal.primary} weight={600} anchor="start" lh={1.35} />
+            <T x={xb + 8} y={y0 + rh / 2} lines={r.b} fs={fs} fill={NEUTRAL.ink} weight={600} anchor="start" lh={1.35} />
           </g>
         );
       })}
@@ -256,7 +262,7 @@ function Pyramid({ spec, box, pal }: Props) {
         const yt = i * (lh + gap), yb = yt + lh;
         const wt = pw * (i / n), wb = pw * ((i + 1) / n);
         const mid = x0 + pw / 2;
-        const fill = isMulti(spec, pal) ? itemColor(spec, pal, i, pal.primary) : tones[i] ?? tones[tones.length - 1];
+        const fill = isMulti(spec, pal, it) ? itemColor(spec, pal, i, pal.primary) : tones[i] ?? tones[tones.length - 1];
         const pts = `${mid - wt / 2},${yt} ${mid + wt / 2},${yt} ${mid + wb / 2},${yb} ${mid - wb / 2},${yb}`;
         const label = wrap(it.label, Math.max(40, (wt + wb) / 2 - 16), 9.5);
         const dl = wrap(it.desc || "", w - pw - 34, 8.5);
@@ -287,7 +293,8 @@ function Arc({ spec, box, pal }: Props) {
   const r0 = Math.min(h - 100, w * 0.18, 76);
   const r1 = r0 + 16;
   const r2 = r1 + 30;
-  const tones = isMulti(spec, pal) ? pal.series! : [pal.primary2, pal.accent, mixWhite(pal.primary2, 0.35), mixWhite(pal.accent, 0.25)];
+  const base = isMulti(spec, pal) ? pal.series! : [pal.primary2, pal.accent, mixWhite(pal.primary2, 0.35), mixWhite(pal.accent, 0.25)];
+  const tones = items.map((it, i) => it.color ?? base[i % base.length]);
   const arcPath = (a0: number, a1: number, ra: number, rb: number) => {
     const p = (r: number, a: number) => `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`;
     return `M${p(ra, a0)} A${ra} ${ra} 0 0 1 ${p(ra, a1)} L${p(rb, a1)} A${rb} ${rb} 0 0 0 ${p(rb, a0)} Z`;
@@ -296,14 +303,14 @@ function Arc({ spec, box, pal }: Props) {
     <>
       {items.map((it, i) => {
         const a0 = Math.PI + (Math.PI * i) / n + 0.012, a1 = Math.PI + (Math.PI * (i + 1)) / n - 0.012;
-        return <path key={`seg${i}`} d={arcPath(a0, a1, r1, r0 + 2)} fill={tones[i % tones.length]} />;
+        return <path key={`seg${i}`} d={arcPath(a0, a1, r1, r0 + 2)} fill={tones[i]} />;
       })}
-      <path d={`M${cx - r0} ${cy} A${r0} ${r0} 0 0 1 ${cx + r0} ${cy} Z`} fill={pal.primary} />
+      <path d={`M${cx - r0} ${cy} A${r0} ${r0} 0 0 1 ${cx + r0} ${cy} Z`} fill={HUB} />
       <T x={cx} y={cy - r0 * 0.42} lines={wrap(spec.center?.label || "", r0 * 1.5, 10)} fs={10} fill="#FFFFFF" weight={700} />
-      {spec.center?.desc ? <T x={cx} y={cy - r0 * 0.12} lines={wrap(spec.center.desc, r0 * 1.5, 7.5)} fs={7.5} fill={mixWhite(pal.primary, 0.75)} /> : null}
+      {spec.center?.desc ? <T x={cx} y={cy - r0 * 0.12} lines={wrap(spec.center.desc, r0 * 1.5, 7.5)} fs={7.5} fill={mixWhite(HUB, 0.72)} /> : null}
       {items.map((it, i) => {
         const a = Math.PI + (Math.PI * (i + 0.5)) / n;
-        const tone = tones[i % tones.length];
+        const tone = tones[i];
         const ix = cx + r2 * Math.cos(a), iy = cy + r2 * Math.sin(a);
         const lx = cx + (r2 + 26) * Math.cos(a), ly = cy + (r2 + 26) * Math.sin(a);
         const anchor = Math.cos(a) < -0.25 ? "end" : Math.cos(a) > 0.25 ? "start" : "middle";
@@ -312,8 +319,8 @@ function Arc({ spec, box, pal }: Props) {
           <g key={it.id}>
             <line x1={cx + r1 * Math.cos(a)} y1={cy + r1 * Math.sin(a)} x2={ix} y2={iy} stroke={tone} strokeWidth={1} />
             <circle cx={ix} cy={iy} r={15} fill="#FFFFFF" stroke={tone} strokeWidth={1.8} />
-            <Ico name={it.icon} x={ix - 8} y={iy - 8} s={16} color={isMulti(spec, pal) ? tone : tone === pal.accent ? pal.accent : pal.primary} fallback={i} />
-            <T x={lx} y={anchor === "middle" ? ly - 10 : ly} lines={lines} fs={9} fill={pal.primary} weight={700} anchor={anchor} />
+            <Ico name={it.icon} x={ix - 8} y={iy - 8} s={16} color={isMulti(spec, pal, it) ? tone : tone === pal.accent ? pal.accent : pal.primary} fallback={i} />
+            <T x={lx} y={anchor === "middle" ? ly - 10 : ly} lines={lines} fs={9} fill={NEUTRAL.ink} weight={700} anchor={anchor} />
           </g>
         );
       })}
@@ -328,7 +335,7 @@ function Chevrons({ spec, box, pal }: Props) {
   const n = items.length;
   const tip = 11, gap = 3, headH = 30;
   const cw = (w - (n - 1) * (gap - tip)) / n;
-  const tones = items.map((_, i) => (isMulti(spec, pal) ? itemColor(spec, pal, i, pal.primary) : n === 1 ? pal.primary : mixWhite(pal.primary, (0.42 * (n - 1 - i)) / (n - 1))));
+  const tones = items.map((it, i) => (isMulti(spec, pal, it) ? itemColor(spec, pal, i, pal.primary) : n === 1 ? pal.primary : mixWhite(pal.primary, (0.42 * (n - 1 - i)) / (n - 1))));
   return (
     <>
       {items.map((it, i) => {
@@ -342,7 +349,7 @@ function Chevrons({ spec, box, pal }: Props) {
           <g key={it.id}>
             <polygon points={pts} fill={fill} />
             <T x={x0 + (cw - tip) / 2 + notch / 2} y={headH / 2} lines={wrap(it.label, cw - tip - 14, 9.5).slice(0, 2)} fs={9.5} fill={onColor(fill)} weight={700} />
-            <rect x={x0} y={headH + 6} width={cw - tip} height={h - headH - 7} fill={isMulti(spec, pal) ? softer(fill) : pal.tint2} />
+            <rect x={x0} y={headH + 6} width={cw - tip} height={h - headH - 7} fill={isMulti(spec, pal, it) ? softer(fill) : pal.tint2} />
             <rect x={x0} y={headH + 6} width={cw - tip} height={2} fill={fill} />
             <T x={x0 + 7} y={headH + 14} lines={lines} fs={8.5} fill={NEUTRAL.ink2} anchor="start" valign="top" lh={1.4} />
           </g>
@@ -360,7 +367,7 @@ function Scatter({ spec, box, pal }: Props) {
   const pw = w - padL - padR, ph = h - padB - padT;
   const X = (v: number) => padL + (Math.max(0, Math.min(100, v)) / 100) * pw;
   const Y = (v: number) => padT + ph - (Math.max(0, Math.min(100, v)) / 100) * ph;
-  const colorOf = (g?: string) => (isMulti(spec, pal) ? itemColor(spec, pal, g === "b" ? 1 : 0, pal.primary) : g === "b" ? pal.accent : pal.primary);
+  const colorOf = (g?: string) => (isMulti(spec, pal) ? pal.series![g === "b" ? 1 : 0] : g === "b" ? pal.accent : pal.primary);
   return (
     <>
       <rect x={padL} y={padT} width={pw} height={ph} fill="#FFFFFF" stroke={pal.line} strokeWidth={0.8} />
@@ -385,7 +392,7 @@ function Scatter({ spec, box, pal }: Props) {
         const right = x < padL + pw * 0.75;
         return (
           <g key={it.id}>
-            <circle cx={x} cy={y} r={4.5} fill={colorOf(it.group)} stroke="#FFFFFF" strokeWidth={1} />
+            <circle cx={x} cy={y} r={4.5} fill={it.color ?? colorOf(it.group)} stroke="#FFFFFF" strokeWidth={1} />
             <T x={x + (right ? 7 : -7)} y={y} lines={[it.label]} fs={8} fill={NEUTRAL.ink} anchor={right ? "start" : "end"} />
           </g>
         );
@@ -401,7 +408,7 @@ function Venn({ spec, box, pal }: Props) {
   const r = Math.min(h / 2 - 2, w / 5.3);
   const d = r * 1.62;
   const cx = w / 2, cy = h / 2;
-  const fills = isMulti(spec, pal) ? [0, 1, 2].map((i) => itemColor(spec, pal, i, pal.primary)) : [mixWhite(pal.primary2, 0.22), pal.primary2, pal.primary];
+  const fills = (isMulti(spec, pal) ? [0, 1, 2].map((i) => itemColor(spec, pal, i, pal.primary)) : [mixWhite(pal.primary2, 0.22), pal.primary2, pal.primary]).map((c, i) => items[i]?.color ?? c);
   return (
     <>
       {items.map((it, i) => {

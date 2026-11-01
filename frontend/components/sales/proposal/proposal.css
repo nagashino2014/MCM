@@ -95,6 +95,18 @@
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .swatches button { width: 30px; height: 30px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
 .swatches button.on { border-color: var(--cd-text); box-shadow: 0 0 0 2px var(--cd-surface) inset; }
+.color-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.color-pick button { width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--cd-border); padding: 0; cursor: pointer; }
+.color-pick button.on { outline: 2px solid var(--cd-text); outline-offset: 1px; }
+.color-pick button.auto { width: auto; padding: 0 7px; background: var(--cd-surface); color: var(--cd-muted); font: inherit; font-size: 11px; }
+.color-pick button.auto.on { color: var(--cd-primary); border-color: var(--cd-primary); outline: none; }
+.color-pick .custom { position: relative; width: 20px; height: 20px; border-radius: 6px; border: 1px dashed var(--cd-border); overflow: hidden; cursor: pointer; background: conic-gradient(#c96 0 25%, #69c 0 50%, #9c6 0 75%, #c69 0); }
+.color-pick .custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.palette-pick { display: flex; flex-direction: column; gap: 5px; }
+.palette-pick button { display: flex; align-items: center; gap: 9px; border: 1px solid var(--cd-border); background: var(--cd-surface); color: var(--cd-text); border-radius: var(--mcm-action-radius, 10px); padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.palette-pick button.on { border-color: var(--cd-primary); background: var(--cd-primary-soft); color: var(--cd-primary); font-weight: 650; }
+.palette-pick .strip { display: flex; border-radius: 4px; overflow: hidden; }
+.palette-pick .strip i { width: 14px; height: 14px; }
 .gantt-row { display: grid; grid-template-columns: 1fr 1.4fr 52px 52px 70px auto; gap: 4px; align-items: center; }
 .gantt-row input, .gantt-row select { font-size: 12px; padding: 4px 5px; min-width: 0; }
 .proposal-thumb { max-width: 100%; max-height: 160px; object-fit: contain; border: 1px solid var(--cd-border); border-radius: 8px; background: #fff; }

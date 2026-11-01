@@ -80,6 +80,7 @@ function diagramSpecOf(rawSpec: unknown): DiagramSpec {
     const group = optStr(it.group, "도식 분류", 20); if (group) out.group = group;
     const a = optStr(it.a, "도식 이전", 200); if (a !== undefined) out.a = a;
     const b = optStr(it.b, "도식 이후", 200); if (b !== undefined) out.b = b;
+    if (it.color !== undefined) { if (!isHexColor(it.color)) throw new ProposalError("도식 항목 색은 #RRGGBB 형식이어야 합니다."); out.color = it.color.toUpperCase(); }
     for (const k of ["x", "y"] as const) if (it[k] !== undefined) { if (typeof it[k] !== "number" || !Number.isFinite(it[k]) || (it[k] as number) < 0 || (it[k] as number) > 100) throw new ProposalError("도식 좌표는 0~100이어야 합니다."); out[k] = it[k] as number; }
     return out;
   });
@@ -112,7 +113,8 @@ function blockOf(raw: unknown, uniqueId: (v: unknown) => string): ProposalBlock 
     case "cards": case "steps": {
       const items = arr(b.items, b.kind === "cards" ? "카드" : "단계", 1, b.kind === "cards" ? 12 : 6).map((x): CardItem => {
         const it = obj(x);
-        return { title: str(it.title, "항목 제목", 120), body: str(it.body, "항목 내용", 2000), ...(it.key === true ? { key: true } : {}) };
+        if (it.color !== undefined && !isHexColor(it.color)) throw new ProposalError("항목 색은 #RRGGBB 형식이어야 합니다.");
+        return { title: str(it.title, "항목 제목", 120), body: str(it.body, "항목 내용", 2000), ...(it.key === true ? { key: true } : {}), ...(it.color ? { color: String(it.color).toUpperCase() } : {}) };
       });
       const multi = b.multi === true ? { multi: true } : {};
       if (b.kind === "steps") return { kind: "steps", id, items, ...multi };
@@ -206,6 +208,7 @@ export function validateProposalDocument(input: unknown): ProposalDocument {
     const op = obj(o.options);
     if (!["modern", "classic"].includes(String(op.cover))) throw new ProposalError("표지 모양을 확인해 주세요.");
     const options: ProposalOptions = { cover: op.cover as "modern" | "classic", dividers: op.dividers === true, toc: op.toc !== false };
+    if (op.palette !== undefined) { if (!["calm", "earth", "mono"].includes(String(op.palette))) throw new ProposalError("도식 팔레트를 확인해 주세요."); options.palette = op.palette as ProposalOptions["palette"]; }
     if (op.brandColor !== undefined && op.brandColor !== "") { if (!isHexColor(op.brandColor)) throw new ProposalError("발주처 주색은 #RRGGBB 형식이어야 합니다."); options.brandColor = op.brandColor; }
     out.options = options;
   }

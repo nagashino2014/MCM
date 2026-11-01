@@ -9,11 +9,13 @@ import JSZip from "jszip";
 import { createProposalTemplate, PROPOSAL_TEMPLATES } from "@/lib/proposal/templates";
 import { renderProposalHwpx } from "@/lib/proposal/hwpx";
 import { rasterTargets, validateProposalDocument, validateProposalForPublication } from "@/lib/proposal/validate";
-import type { ProposalBlock, ProposalDocument } from "@/lib/proposal/types";
+import { optionsOf, type ProposalBlock, type ProposalDocument } from "@/lib/proposal/types";
 import { escapeXml } from "@/lib/letter/hwpx";
 import { materializeDocument } from "@/lib/proposal/materialize";
 import { physicalPages, tocEntries } from "@/lib/proposal/layout";
-import { BODY_WIDTH_MM, BULLET_LEFT, SERIES, paletteOf, parseRich, seriesFor } from "@/lib/proposal/design";
+import { BODY_WIDTH_MM, BULLET_LEFT, NEUTRAL, SERIES, SERIES_EARTH, paletteOf, parseRich, seriesFor } from "@/lib/proposal/design";
+import { renderToStaticMarkup } from "react-dom/server";
+import { renderDiagram } from "@/lib/proposal/diagrams/render";
 
 const outDir = process.env.PROPOSAL_TEST_OUT || path.resolve(".next/proposal-hwpx-validation");
 const MM = 7200 / 25.4;
@@ -214,4 +216,40 @@ test("도식 다색 팔레트: 테마마다 시작 색만 돌리고, 발주처 �
   const header = await (await JSZip.loadAsync(await renderProposalHwpx(doc, figures(doc)))).file("Contents/header.xml")!.async("string");
   const s = seriesFor("navy");
   for (const c of [s[0], s[1], s[2]]) assert.ok(header.includes(`color="${c}"`) || header.includes(`faceColor="${c}"`), `다색 ${c}`);
+});
+
+test("2.1 회색 구조·도식 팔레트·항목 색: 단색 단계 머리는 그래파이트, 팔레트 선택·항목 직접 색이 미리보기와 HWPX에 같이 반영된다", async () => {
+  // 팔레트 선택
+  const base = { theme: "navy" as const, options: { cover: "modern" as const, toc: true, dividers: false } };
+  assert.deepEqual(paletteOf(base).series, seriesFor("navy"));
+  assert.deepEqual(paletteOf({ ...base, options: { ...base.options, palette: "earth" } }).series, [...SERIES_EARTH]);
+  const mono = paletteOf({ ...base, options: { ...base.options, palette: "mono" } });
+  assert.equal(mono.series![0], mono.primary, "모노톤 첫 색은 테마 주색");
+  assert.ok(mono.series!.includes("#59616B"), "모노톤은 회색 단계를 섞는다");
+  // 검증 — 형식이 틀린 색·팔레트는 거절, 정상 값은 대문자로 정규화
+  const doc = syntheticDocument("permit-general");
+  doc.options = { ...optionsOf(doc), palette: "earth" };
+  doc.sections = [{ id: "gray_section", title: "회색", chapter: "검증", blocks: [
+    { kind: "steps", id: "gray_steps", items: [{ title: "가", body: "" }, { title: "나", body: "", color: "#aa3311" }] },
+    { kind: "cards", id: "gray_cards", columns: 2, numbered: false, items: [{ title: "가", body: "" }, { title: "나", body: "", color: "#11AA33" }] },
+  ] }];
+  const v = validateProposalDocument(doc);
+  const steps = v.sections[0].blocks[0];
+  assert.ok(steps.kind === "steps" && steps.items[1].color === "#AA3311");
+  assert.equal(v.options?.palette, "earth");
+  assert.throws(() => validateProposalDocument({ ...doc, options: { ...doc.options, palette: "neon" as "calm" } }));
+  const bad = JSON.parse(JSON.stringify(doc)); bad.sections[0].blocks[1].items[0].color = "red";
+  assert.throws(() => validateProposalDocument(bad));
+  // HWPX — 단색 단계 머리 그래파이트, 직접 지정 색은 다색이 꺼져 있어도 칠한다
+  const header = await (await JSZip.loadAsync(await renderProposalHwpx(v, figures(v)))).file("Contents/header.xml")!.async("string");
+  assert.ok(header.includes(`faceColor="${NEUTRAL.graphite}"`), "단계 머리 그래파이트");
+  assert.ok(header.includes('faceColor="#AA3311"'), "단계 항목 직접 색");
+  assert.ok(header.includes('color="#11AA33"'), "카드 항목 직접 색(윗선)");
+  // 도식 — 항목 직접 색이 팔레트보다 앞서고, 허브 가운데는 그래파이트
+  const pal = paletteOf(v);
+  const svg = renderToStaticMarkup(renderDiagram({ kind: "chevrons", items: [{ id: "a", label: "가", color: "#123456" }, { id: "b", label: "나" }] }, { w: 400, h: 120 }, pal));
+  assert.ok(svg.includes('fill="#123456"'), "도식 항목 직접 색");
+  assert.ok(svg.includes(`fill="${SERIES_EARTH[1]}"`), "나머지 항목은 선택한 팔레트 순서");
+  const hub = renderToStaticMarkup(renderDiagram({ kind: "hub", center: { label: "중심" }, items: [{ id: "a", label: "가" }, { id: "b", label: "나" }, { id: "c", label: "다" }] }, { w: 400, h: 240 }, pal));
+  assert.ok(hub.includes(`fill="${NEUTRAL.graphite}"`), "허브 가운데 그래파이트");
 });

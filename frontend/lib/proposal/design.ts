@@ -1,6 +1,7 @@
 // 제안서 디자인 시스템 2.0 — 미리보기 CSS 와 HWPX 조판이 같은 값을 쓴다(한 곳에서만 정의).
 // 색: MCM 회사소개서 tokens(navy·steel 계열) + ESG-KESI kesi_report_ds(slate·burgundy·ocean) 를 제안서 세로 지면용으로 정리.
 // 원칙(ESG DS 계승): 그라데이션·그림자 없음, 표 세로선 최소화, 장식은 주색 선·옅은 면 두 가지로만.
+// 2.1(2026-11-01 사용자 요청): 구조(표 머리·단계 머리·제목·선)는 그래파이트 회색, 옅은 면은 회색 — 테마 주색은 포인트(장 배지·강조·번호)에만.
 import type { ProposalDocument, ProposalTheme } from "./types";
 
 export interface ThemePalette {
@@ -36,16 +37,35 @@ export const PROPOSAL_THEMES: Record<ProposalTheme, ThemePalette> = {
  * 순서 고정, 테마마다 시작 색만 돌린다(네이비·슬레이트=블루, 오션=틸, 포레스트=세이지, 버건디=로즈).
  */
 export const SERIES = ["#41668D", "#A78657", "#705783", "#74986C", "#895155", "#4F9B9A"] as const;
+/** 흙빛 6색 — 오커·슬레이트·올리브·모브·모스·클레이(C≈0.07, 같은 검증: 색약 ΔE 13.7, 정상시 ΔE 18.9) */
+export const SERIES_EARTH = ["#A3885A", "#3F6789", "#8A9260", "#80536C", "#669A7E", "#87534F"] as const;
 const SERIES_START: Record<ProposalTheme, number> = { navy: 0, ocean: 5, slate: 0, forest: 3, burgundy: 4 };
 export const seriesFor = (theme: ProposalTheme): string[] => { const k = SERIES_START[theme] ?? 0; return [...SERIES.slice(k), ...SERIES.slice(0, k)]; };
+export type SeriesPalette = "calm" | "earth" | "mono";
+export const SERIES_LABEL: Record<SeriesPalette, string> = { calm: "차분한 6색", earth: "흙빛 6색", mono: "모노톤(회색 + 주색)" };
+/** 문서의 도식 팔레트 — 모노톤은 테마 주색과 회색 단계만 쓴다 */
+export function seriesOf(theme: ProposalTheme, kind: SeriesPalette | undefined, primary: string): string[] {
+  if (kind === "earth") return [...SERIES_EARTH];
+  if (kind === "mono") return [primary, "#59616B", mixWhite(primary, 0.4), "#8A9199", mixWhite(primary, 0.62), "#B3B9BF"];
+  return seriesFor(theme);
+}
 
 /** 무채색 — 테마와 무관 */
 export const NEUTRAL = {
-  ink: "#1B1F27",
-  ink2: "#3C4452",
-  muted: "#6B7380",
-  rule: "#D3D8DF",
-  panel: "#F2F4F7",
+  ink: "#1F2328",
+  ink2: "#454B53",
+  muted: "#737A83",
+  rule: "#D9DCE0",
+  /** 그래파이트 — 표·단계 머리, 제목 선, 머리말 선, 간지 바탕 */
+  graphite: "#3A3F46",
+  /** 중간 회색 — 일정 막대(일반 과업)·보조 선 */
+  steel: "#8E959D",
+  /** 회색 선(표 안쪽 굵은 선·칸 구분) */
+  line: "#C4C9CF",
+  /** 옅은 회색 면 — 핵심 메시지·표 첫 열·구분 칸 */
+  panel: "#F1F2F4",
+  /** 더 옅은 회색 면 — 카드·단계 본문 */
+  panel2: "#F7F8F9",
   white: "#FFFFFF",
 } as const;
 
@@ -62,11 +82,12 @@ export const isHexColor = (v: unknown): v is string => typeof v === "string" && 
 
 /** 발주처 주색 덮어쓰기(ESG DS tokens.py 방식) — 흰 글자 대비 4.5:1 미만이면 쓰지 않는다. */
 export function paletteOf(doc: Pick<ProposalDocument, "theme" | "options">): ThemePalette {
-  const base: ThemePalette = { ...(PROPOSAL_THEMES[doc.theme] ?? PROPOSAL_THEMES.navy), series: seriesFor(doc.theme) };
+  const theme = PROPOSAL_THEMES[doc.theme] ?? PROPOSAL_THEMES.navy;
+  const kind = doc.options?.palette;
   const brand = doc.options?.brandColor;
-  if (!isHexColor(brand) || contrast(brand, "#FFFFFF") < 4.5) return base;
+  if (!isHexColor(brand) || contrast(brand, "#FFFFFF") < 4.5) return { ...theme, series: seriesOf(doc.theme, kind, theme.primary) };
   const primary = brand.toUpperCase();
-  return { ...base, primary, primary2: mixWhite(primary, 0.28), tint: mixWhite(primary, 0.89), tint2: mixWhite(primary, 0.95), line: mixWhite(primary, 0.72) };
+  return { ...theme, primary, primary2: mixWhite(primary, 0.28), tint: mixWhite(primary, 0.89), tint2: mixWhite(primary, 0.95), line: mixWhite(primary, 0.72), series: seriesOf(doc.theme, kind, primary) };
 }
 
 /** 글자 크기(pt) — 원본 4종은 본문 12~14pt 명조였으나 정보 밀도를 위해 10.5pt 고딕으로 정리했다. */
@@ -100,14 +121,14 @@ export const TYPE = {
 
 /** 세로 간격(pt) — 문단 앞·뒤, 표 칸 여백. 미리보기 CSS 와 HWPX paraPr·cellMargin 이 같은 값을 쓴다. */
 export const SPACE = {
-  titleAfter: 10, leadAfter: 13,
-  h1: [14, 8], h2: [14, 7], h3: [11, 4],
-  text: 6, bullet: 3.5, block: 12,
-  cellX: 6, cellY: 5, cardPad: 10, stepPad: 7,
+  titleAfter: 12, leadAfter: 16,
+  h1: [18, 9], h2: [17, 8], h3: [13, 5],
+  text: 8, bullet: 5.5, block: 16,
+  cellX: 7, cellY: 6, cardPad: 11, stepPad: 8,
 } as const;
 
-/** 줄 간격(%) */
-export const LINE = { body: 165, tight: 135, table: 140 } as const;
+/** 줄 간격(%) — 2.1 에서 165→175 로 넓혔다(사용자 요청: 항목 간 행간 여유) */
+export const LINE = { body: 175, tight: 140, table: 150 } as const;
 
 /** 지면(mm) — A4 세로. 본문 폭 174mm */
 export const PAGE = {
@@ -135,7 +156,7 @@ export const BULLET_SIZE = { 1: TYPE.body, 2: TYPE.bullet2, 3: TYPE.bullet3 } as
 
 export const ROMAN = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ"];
 
-export const PROPOSAL_DESIGN_VERSION = "proposal-2.0";
+export const PROPOSAL_DESIGN_VERSION = "proposal-2.1";
 
 /** 본문 인라인 강조 — **굵게** 는 주색 굵은 글자. 원본의 '청색 굵은 핵심 구절' 관습을 따른다. */
 export interface RichRun { text: string; strong?: boolean }

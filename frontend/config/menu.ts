@@ -298,6 +298,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { title: "견적서 작성", href: "/approval/quote", permissionKey: "sales.view" },
       // 회사소개서(카탈로그) — 지표·실적 노출·인물·고객사 로고(catalog.view, 관리 화면은 catalog.manage). docs/company-catalog-blueprint.md
       { title: "회사소개서", href: "/sales/catalog" },
+      { title: "용역 제안서", href: "/sales/proposals" },
     ],
     group: "main",
   },

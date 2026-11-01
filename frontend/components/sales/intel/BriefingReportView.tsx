@@ -13,7 +13,7 @@ import { CdButton } from "@/components/cdash/CdButton";
 import type { Briefing, BriefingSource } from "./intel-shared";
 import { SOURCE_LABEL } from "./intel-shared";
 import { BriefingShareModal } from "./BriefingShareModal";
-import { INTEL_STAGE_LABELS } from "./intelligence-client";
+import { INTEL_STAGE_LABELS, humanizeSourceKeys, intelSourceLabel } from "./intelligence-client";
 
 // 연한 파랑 틴트(핵심 동향 콜아웃 기준색) — KPI·회사 카드의 보조 표면과 함께 컴포넌트 공통 톤.
 // color-mix 로 라이트/다크 토큰에 모두 적응한다.
@@ -174,7 +174,8 @@ export function BriefingReportView({
   onBriefingUpdate,
 }: {
   briefing: Briefing;
-  onClose: () => void;
+  /** 없으면 닫기 버튼을 숨긴다(정기 발행본 읽기). */
+  onClose?: () => void;
   onOpenSignal: (signalId: string) => void;
   /** 포털 모달(cdash-vars) 테마 — RagBoard 의 useCdashTheme 값 */
   theme?: string;
@@ -340,9 +341,11 @@ export function BriefingReportView({
               </button>
             </>
           )}
-          <button className="cd-btn cd-btn-ghost cd-btn-sm" title="결과 닫기" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </button>
+          {onClose && (
+            <button className="cd-btn cd-btn-ghost cd-btn-sm" title="결과 닫기" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
       {refineBusy && (
@@ -452,10 +455,10 @@ export function BriefingReportView({
                   {report.etcNote && (() => {
                     // 인용 칩이 문장 곳곳에 흩어지지 않도록 — 텍스트와 분리해 우측에 모아 정렬
                     const cites = [...report.etcNote.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1]));
-                    const text = report.etcNote.replace(/\s*\[\d+\]/g, "").replace(/\s{2,}/g, " ").trim();
+                    const text = humanizeSourceKeys(report.etcNote.replace(/\s*\[\d+\]/g, "")).replace(/[ \t]{2,}/g, " ").trim();
                     return (
                       <div className="rounded-xl px-4 py-3 flex items-center gap-2 flex-wrap" style={{ background: SOFT_SURFACE }}>
-                        <span className="cd-text-muted text-[12.5px] leading-relaxed flex-1 min-w-[200px]">{text}</span>
+                        <span className="cd-text-muted text-[12.5px] leading-relaxed flex-1 min-w-[200px] whitespace-pre-line">{text}</span>
                         {cites.length > 0 && (
                           <span className="flex items-center gap-0.5 flex-wrap shrink-0">
                             {cites.map((n, j) => <CiteChip key={j} n={n} ctx={ctx} muted />)}
@@ -531,7 +534,7 @@ export function BriefingReportView({
                           {n}
                         </span>
                         <span className="cd-text-faint text-[10px] font-extrabold tracking-wider shrink-0">
-                          {(SOURCE_LABEL[src.source] ?? src.source).toUpperCase()}
+                          {SOURCE_LABEL[src.source] ?? intelSourceLabel(src.source)}
                         </span>
                         <span className="cd-text text-[13px] font-bold truncate">{src.companyName ?? "회사 미상"}</span>
                         {cited && <span className="cd-pill cd-pill-info shrink-0" style={{ fontSize: 10 }}>본문 인용</span>}
@@ -577,7 +580,7 @@ export function BriefingReportView({
                 {popover.n}
               </span>
               <span className="text-[10px] font-extrabold tracking-wider opacity-70">
-                {(SOURCE_LABEL[popover.source.source] ?? popover.source.source).toUpperCase()}
+                {SOURCE_LABEL[popover.source.source] ?? intelSourceLabel(popover.source.source)}
               </span>
               <span className="text-[12.5px] font-bold truncate">{popover.source.companyName ?? "회사 미상"}</span>
               {popover.source.score != null && (

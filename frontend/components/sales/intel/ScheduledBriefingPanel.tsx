@@ -5,11 +5,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { CdBadge, CdButton, CdCheckbox, CdDateInput, CdDrawer, CdEmptyState, CdInput, CdModal, CdSelect, CdTable, useCdToast } from "@/components/cdash";
+import { Bell, Eye, Pause, Pencil, Play, Plus, Sparkles } from "lucide-react";
+import { CdButton, CdCheckbox, CdDateInput, CdDrawer, CdInput, CdModal, CdSelect, CdTable, useCdToast } from "@/components/cdash";
 import type { BriefingChannel, BriefingPreview, BriefingProfile, BriefingProfileInput, BriefingRun } from "@/lib/intel/briefing-types";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 import { INTEL_SERVICE_LABELS, eokToWon, formatIntelAmount, intelApi, intelDate, intelSourceLabel, intelTime, jsonBody, wonToEok } from "./intelligence-client";
 import { IntelligenceListInput } from "./IntelligenceListInput";
+import { IntelCard, IntelEmpty, IntelError, IntelNotice, IntelSubhead, IntelTile } from "./intel-ui-kit";
 
 const CADENCE = { daily: "매일", every3days: "3일마다", weekly: "매주", monthly: "매월" };
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -104,35 +106,46 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
   const userName = (id: string) => users.find((user) => user.userId === id)?.name ?? "알 수 없는 사용자";
 
   return (
-    <div className="intel-stack">
-      {error && <div role="alert" className="intel-error">{error}</div>}
-      <section className="cd-card">
-        <div className="intel-card-head">
-          <div><h2 className="intel-section">관심 분야</h2><span className="intel-table cd-text-muted">{profiles.length}개</span></div>
-          {canEdit && <CdButton variant="primary" onClick={() => beginEdit("new")}>관심 분야 추가</CdButton>}
-        </div>
+    <div className="flex flex-col gap-4 min-w-0">
+      {error && <IntelError>{error}</IntelError>}
+      <IntelCard icon={Bell} title="관심 분야" count={profiles.length || undefined}
+        desc="조건·주기·수신자를 저장하면 정기 브리핑을 만들어 보냅니다. 미리보기는 AI를 호출하지 않습니다."
+        actions={canEdit ? <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => beginEdit("new")}><Plus className="w-3.5 h-3.5" />관심 분야 추가</button> : undefined}>
         {!loading && !profiles.length ? (
-          <div className="intel-card-body"><CdEmptyState title="등록된 관심 분야가 없습니다." /></div>
+          <IntelEmpty>등록된 관심 분야가 없습니다. 관심 분야 추가로 업종·지역·기업 조건과 주기를 정하세요.</IntelEmpty>
         ) : (
-          <CdTable bare loading={loading} rows={profiles} rowKey={(profile) => profile.profileId} columns={[
-            { key: "name", header: "관심 분야 · 조건", render: (profile) => <><p className="font-medium">{profile.name}</p><p className="intel-table cd-text-muted">{conditionSummary(profile).join(" · ")}</p></> },
-            { key: "schedule", header: "주기 · 다음 실행", render: (profile) => <><p>{scheduleText(profile)}</p><p className="intel-table cd-text-muted">{profile.enabled ? `다음 ${intelTime(profile.nextRunAt)}` : "정기 실행 중지"}</p></> },
-            { key: "recipients", header: "수신자", widthClass: "w-40", render: (profile) => <><p>{profile.recipients.length ? `${profile.recipients.length}명` : "없음"}</p><p className="intel-table cd-text-muted">{profile.visibility === "private" ? "개인" : "지정 수신자 공유"} · {profile.reportLevel === "detailed" ? "상세" : "핵심 요약"}</p></> },
-            { key: "status", header: "정기 실행", widthClass: "w-28", render: (profile) => profile.enabled ? <CdBadge tone="success">사용</CdBadge> : <CdBadge tone="idle">중지</CdBadge> },
-            { key: "actions", header: "", align: "right", render: (profile) => (
-              <div className="flex justify-end gap-2 flex-wrap">
-                <CdButton size="sm" variant="ghost" disabled={busy === profile.profileId} onClick={() => void showPreview(profile)}>미리보기</CdButton>
-                {canEdit && profile.canManage && <>
-                  <CdButton size="sm" variant="ghost" disabled={busy === profile.profileId} onClick={() => void toggle(profile)}>{profile.enabled ? "일시중지" : "재개"}</CdButton>
-                  <CdButton size="sm" variant="ghost" onClick={() => beginEdit(profile)}>수정</CdButton>
-                  <CdButton size="sm" disabled={busy === profile.profileId} onClick={() => void runNow(profile)}>지금 생성</CdButton>
-                </>}
-              </div>
-            ) },
-          ]} />
+          <div className="flex flex-col gap-2">
+            {profiles.map((profile) => (
+              <IntelTile key={profile.profileId}>
+                <div className="flex items-start gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[240px]">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="cd-text text-sm font-bold">{profile.name}</span>
+                      {profile.enabled ? <span className="cd-pill cd-pill-success">정기 실행</span> : <span className="cd-pill cd-pill-idle">중지</span>}
+                      <span className="cd-pill cd-pill-outline">{scheduleText(profile)}</span>
+                      <span className="cd-pill cd-pill-outline">{profile.visibility === "private" ? "개인" : "지정 수신자 공유"}</span>
+                      <span className="cd-pill cd-pill-outline">{profile.reportLevel === "detailed" ? "상세 보고서" : "핵심 요약"}</span>
+                    </div>
+                    <p className="cd-text-muted text-xs mt-1">{conditionSummary(profile).join(" · ")}</p>
+                    <p className="cd-text-faint text-[11px] mt-0.5">
+                      {profile.enabled ? `다음 실행 ${intelTime(profile.nextRunAt)}` : "정기 실행 중지"} · 수신자 {profile.recipients.length}명{profile.importantAlerts ? " · 중요 변화 즉시 알림" : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy === profile.profileId} onClick={() => void showPreview(profile)}><Eye className="w-3.5 h-3.5" />미리보기</button>
+                    {canEdit && profile.canManage && <>
+                      <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy === profile.profileId} onClick={() => void toggle(profile)}>{profile.enabled ? <><Pause className="w-3.5 h-3.5" />일시중지</> : <><Play className="w-3.5 h-3.5" />재개</>}</button>
+                      <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => beginEdit(profile)}><Pencil className="w-3.5 h-3.5" />수정</button>
+                      <button className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy === profile.profileId} onClick={() => void runNow(profile)}><Sparkles className="w-3.5 h-3.5" />지금 생성</button>
+                    </>}
+                  </div>
+                </div>
+              </IntelTile>
+            ))}
+          </div>
         )}
-        <p className="intel-table cd-text-muted intel-card-foot">미리보기는 AI를 호출하지 않습니다. 지금 생성과 정기 실행은 AI 사용량이 기록되며, 직전 발행 이후 변동이 없으면 보고서를 만들지 않습니다.</p>
-      </section>
+        <p className="cd-text-faint text-[11px] mt-3">지금 생성과 정기 실행은 AI 사용량이 기록되며, 직전 발행 이후 변동이 없으면 보고서를 만들지 않습니다.</p>
+      </IntelCard>
 
       <CdModal open={edit !== null} onClose={() => busy !== "save" && setEdit(null)} title={edit === "new" ? "관심 분야 추가" : "관심 분야 수정"} size="xl" closeOnBackdrop={false} footer={<><CdButton disabled={busy === "save"} onClick={() => setEdit(null)}>취소</CdButton><CdButton variant="primary" disabled={busy === "save"} onClick={() => void save()}>{busy === "save" ? "저장 중…" : "저장"}</CdButton></>}>
         <div className="intel-ui"><form className="intel-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
@@ -143,7 +156,7 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
           <fieldset><legend className="intel-section mb-3">관심 조건</legend>
             <div>
               <p className="intel-field-label">관심 업종 · {form.filters.industries.length ? `${form.filters.industries.length}개 선택` : "선택하지 않으면 전체"}</p>
-              <div className="intel-chips">{INTEGRATED_PERMIT_INDUSTRIES.map((industry) => <button type="button" key={industry.id} className="intel-chip" aria-pressed={form.filters.industries.includes(industry.id)} onClick={() => toggleList("industries", industry.id)}>{industry.label}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{INTEGRATED_PERMIT_INDUSTRIES.map((industry) => <button type="button" key={industry.id} className="cd-chip cd-chip-sm" data-active={form.filters.industries.includes(industry.id)} aria-pressed={form.filters.industries.includes(industry.id)} onClick={() => toggleList("industries", industry.id)}>{industry.label}</button>)}</div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <IntelligenceListInput label="지역 (쉼표 구분)" placeholder="충청남도, 충청북도" value={form.filters.regions} onChange={(values) => setFilter("regions", values)} />
@@ -154,11 +167,11 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
             <CdCheckbox label="투자 규모가 확인되지 않은 정보도 포함" checked={form.filters.includeUnknownScale} onChange={(event) => setFilter("includeUnknownScale", event.target.checked)} />
             <div>
               <p className="intel-field-label">정보 유형 · 선택하지 않으면 전체</p>
-              <div className="intel-chips">{Object.entries(SIGNAL_TYPES).map(([key, label]) => <button type="button" key={key} className="intel-chip" aria-pressed={form.filters.signalTypes.includes(key)} onClick={() => toggleList("signalTypes", key)}>{label}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{Object.entries(SIGNAL_TYPES).map(([key, label]) => <button type="button" key={key} className="cd-chip cd-chip-sm" data-active={form.filters.signalTypes.includes(key)} aria-pressed={form.filters.signalTypes.includes(key)} onClick={() => toggleList("signalTypes", key)}>{label}</button>)}</div>
             </div>
             <div>
               <p className="intel-field-label">관심 서비스 · 공개 근거로 검토 가능한 프로젝트만 포함</p>
-              <div className="intel-chips">{Object.entries(INTEL_SERVICE_LABELS).map(([key, label]) => <button type="button" key={key} className="intel-chip" aria-pressed={form.filters.services.includes(key)} onClick={() => toggleList("services", key)}>{label}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{Object.entries(INTEL_SERVICE_LABELS).map(([key, label]) => <button type="button" key={key} className="cd-chip cd-chip-sm" data-active={form.filters.services.includes(key)} aria-pressed={form.filters.services.includes(key)} onClick={() => toggleList("services", key)}>{label}</button>)}</div>
             </div>
           </fieldset>
 
@@ -177,7 +190,7 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
             <CdCheckbox label="일부 정보원 수집이 늦어도 확인된 자료로 작성" checked={form.allowPartialSources} onChange={(event) => setForm({ ...form, allowPartialSources: event.target.checked })} />
             {!form.allowPartialSources || form.requiredSources.length ? <div>
               <p className="intel-field-label">반드시 갱신돼야 하는 정보원</p>
-              <div className="intel-chips">{SOURCES.map((source) => <button type="button" key={source} className="intel-chip" aria-pressed={form.requiredSources.includes(source)} onClick={() => setForm({ ...form, requiredSources: form.requiredSources.includes(source) ? form.requiredSources.filter((value) => value !== source) : [...form.requiredSources, source] })}>{intelSourceLabel(source)}</button>)}</div>
+              <div className="flex items-center gap-1 flex-wrap">{SOURCES.map((source) => <button type="button" key={source} className="cd-chip cd-chip-sm" data-active={form.requiredSources.includes(source)} aria-pressed={form.requiredSources.includes(source)} onClick={() => setForm({ ...form, requiredSources: form.requiredSources.includes(source) ? form.requiredSources.filter((value) => value !== source) : [...form.requiredSources, source] })}>{intelSourceLabel(source)}</button>)}</div>
             </div> : null}
             <CdCheckbox label="중요 변화 즉시 알림 (단계 진전·지연·취소·정정, 기준 금액 이상의 투자)" checked={form.importantAlerts} onChange={(event) => setForm({ ...form, importantAlerts: event.target.checked })} />
             {form.importantAlerts && <CdInput label="중요 투자금액 기준 (억원)" type="number" min={0} step="any" value={amountText.important} onChange={(event) => setAmountText({ ...amountText, important: event.target.value })} />}
@@ -198,37 +211,47 @@ export function ScheduledBriefingPanel({ canEdit, onOpenRun }: { canEdit: boolea
       </CdModal>
 
       <CdDrawer open={preview !== null} onClose={() => setPreview(null)} title={preview ? `${preview.profile.name} · 미리보기` : "미리보기"} widthClass="max-w-3xl">
-        {preview && <div className="intel-ui intel-stack">
-          <dl className="intel-dl">
-            <dt>적용 조건</dt><dd>{conditionSummary(preview.profile).join(" · ")}</dd>
-            <dt>주기</dt><dd>{scheduleText(preview.profile)} KST</dd>
-            <dt>다음 실행</dt><dd>{preview.profile.enabled ? intelTime(preview.profile.nextRunAt) : "정기 실행 중지"}</dd>
-            <dt>수신자</dt><dd>{preview.profile.recipients.length ? preview.profile.recipients.map((recipient) => `${userName(recipient.userId)}(${recipient.channels.map((channel) => CHANNEL[channel]).join("·")})`).join(", ") : "없음"}</dd>
-            {preview.data.periodStart && <><dt>분석 기간</dt><dd>{intelDate(preview.data.periodStart)} ~ {intelDate(preview.data.periodEnd ?? preview.data.asOf)}</dd></>}
-          </dl>
-          <div className="intel-stat-strip border rounded-lg cd-border-c">
-            <div className="intel-stat"><span className="intel-table cd-text-muted">대상 프로젝트</span><strong>{preview.data.totalProjects.toLocaleString()}</strong></div>
-            <div className="intel-stat"><span className="intel-table cd-text-muted">관련 신호</span><strong>{preview.data.totalSignals.toLocaleString()}</strong></div>
-            <div className="intel-stat"><span className="intel-table cd-text-muted">직전 이후 변경</span><strong>{preview.data.changedCount.toLocaleString()}</strong></div>
+        {preview && <div className="flex flex-col gap-4 min-w-0">
+          <div className="rounded-xl px-4 py-3" style={{ background: "var(--cd-primary-soft)" }}>
+            <p className="cd-text text-sm font-bold">{conditionSummary(preview.profile).join(" · ")}</p>
+            <p className="cd-text-muted text-xs mt-1">{scheduleText(preview.profile)} KST · {preview.profile.enabled ? `다음 실행 ${intelTime(preview.profile.nextRunAt)}` : "정기 실행 중지"}{preview.data.periodStart ? ` · 분석 기간 ${intelDate(preview.data.periodStart)} ~ ${intelDate(preview.data.periodEnd ?? preview.data.asOf)}` : ""}</p>
+            <p className="cd-text-faint text-[11px] mt-0.5">수신자 {preview.profile.recipients.length ? preview.profile.recipients.map((recipient) => `${userName(recipient.userId)}(${recipient.channels.map((channel) => CHANNEL[channel]).join("·")})`).join(", ") : "없음"}</p>
           </div>
-          {preview.data.initialBaseline && <p className="intel-notice intel-compact">첫 보고서는 기존 자료 초기 분석으로 작성합니다.</p>}
-          {preview.data.coverageNote && <p className="intel-prose cd-text-muted">{preview.data.coverageNote}</p>}
+          <div className="grid grid-cols-3 gap-2">
+            {([["대상 프로젝트", preview.data.totalProjects], ["관련 신호", preview.data.totalSignals], ["직전 이후 변경", preview.data.changedCount]] as const).map(([label, value]) => (
+              <div key={label} className="rounded-xl border cd-border-c px-3 py-2">
+                <p className="cd-text-muted text-[11px] font-bold">{label}</p>
+                <p className="cd-text text-xl font-extrabold mt-0.5">{value.toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+          {preview.data.initialBaseline && <IntelNotice>첫 보고서는 기존 자료 초기 분석으로 작성합니다.</IntelNotice>}
+          {preview.data.coverageNote && <p className="cd-text-muted text-xs leading-relaxed">{preview.data.coverageNote}</p>}
           <section>
-            <h3 className="intel-section mb-3">정보원 수집 상태</h3>
-            <CdTable bare rows={preview.data.sourceHealth} rowKey={(source) => source.source} columns={[
-              { key: "source", header: "정보원", render: (source) => intelSourceLabel(source.source) },
-              { key: "status", header: "상태", widthClass: "w-28", render: (source) => <CdBadge tone={HEALTH[source.status]?.tone ?? "idle"}>{HEALTH[source.status]?.label ?? source.status}</CdBadge> },
-              { key: "last", header: "최근 성공", render: (source) => <span className="intel-table">{source.lastSuccessAt ? intelTime(source.lastSuccessAt) : source.message}</span> },
-            ]} />
+            <IntelSubhead>정보원 수집 상태</IntelSubhead>
+            <div className="flex flex-col">
+              {preview.data.sourceHealth.map((source) => (
+                <div key={source.source} className="flex items-center gap-2 py-1.5 border-b cd-border-c last:border-b-0">
+                  <span className="cd-text text-xs font-bold flex-1 min-w-0 truncate">{intelSourceLabel(source.source)}</span>
+                  <span className="cd-text-faint text-[11px] truncate">{source.lastSuccessAt ? `최근 성공 ${intelTime(source.lastSuccessAt)}` : source.message}</span>
+                  <span className={`cd-pill ${source.status === "fresh" ? "cd-pill-success" : source.status === "stale" ? "cd-pill-warn" : "cd-pill-error"}`}>{HEALTH[source.status]?.label ?? source.status}</span>
+                </div>
+              ))}
+            </div>
           </section>
           <section>
-            <h3 className="intel-section mb-3">대표 후보 <span className="intel-table cd-text-muted font-normal">{preview.data.items.length}건</span></h3>
-            <ul className="intel-rows border-b cd-border-c">{preview.data.items.slice(0, 30).map((item) => (
-              <li key={`${item.kind}:${item.id}`} className="py-3 flex justify-between gap-4">
-                <div className="min-w-0"><p>{item.title}</p><p className="intel-table cd-text-muted">{[item.companyName, intelSourceLabel(item.source), intelDate(item.publishedAt)].filter(Boolean).join(" · ")}</p></div>
-                {item.changed && <CdBadge tone="info">새 변경</CdBadge>}
-              </li>
-            ))}</ul>
+            <IntelSubhead>대표 후보 {preview.data.items.length}건</IntelSubhead>
+            <div className="flex flex-col gap-1.5">{preview.data.items.slice(0, 30).map((item) => (
+              <IntelTile key={`${item.kind}:${item.id}`}>
+                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                  <span className="cd-text text-sm font-bold truncate">{item.companyName ?? item.title}</span>
+                  <span className="cd-pill cd-pill-outline">{intelSourceLabel(item.source)}</span>
+                  {item.changed && <span className="cd-pill cd-pill-info">새 변경</span>}
+                </div>
+                {item.companyName && <p className="cd-text-muted text-[11px] truncate mt-1">{item.title}</p>}
+                <p className="cd-text-faint text-[11px] mt-0.5">{intelDate(item.publishedAt)}</p>
+              </IntelTile>
+            ))}</div>
           </section>
         </div>}
       </CdDrawer>

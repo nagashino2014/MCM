@@ -4,8 +4,8 @@
 // 확정 순위와 분리해 '정보 보완 필요'로 보여 준다. 공개 근거 점수(최대 85)와 내부 관계 보정(최대 15)은 섞지 않는다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { CdBadge, CdButton, CdCheckbox, CdDateInput, CdDrawer, CdIconButton, CdInput, CdModal, CdSelect, CdTable, CdTabs, CdTextarea, useCdToast } from "@/components/cdash";
+import { CalendarPlus, ExternalLink, Factory, HelpCircle, Layers, Link2, Merge, Pencil, Plus, RefreshCw, Search, Split, Target } from "lucide-react";
+import { CdButton, CdCheckbox, CdDateInput, CdDrawer, CdInput, CdModal, CdSelect, CdTable, CdTextarea, useCdToast } from "@/components/cdash";
 import { ACTIVITY_TYPES, SALES_ACTIVITY_TYPE_LABELS, type SalesActivityType, type SalesEmployeeOption } from "@/lib/sales/types";
 import type { ActionSuggestion, IntelProject, IntelProjectEvent, IntelProjectInput, PublicPriority, ServiceAssessment } from "@/lib/intel/project-intelligence-types";
 import type { DiscoveryExtras } from "@/lib/intel/discovery-overview";
@@ -14,6 +14,10 @@ import { IntelligenceLookup } from "./IntelligenceLookup";
 import { SignalCandidatesList } from "./SignalCandidatesList";
 import { INTEGRATED_PERMIT_INDUSTRIES } from "@/lib/ieps/integrated-permit-industries";
 import { INDUSTRY_LABEL } from "./intel-shared";
+import { IntelBar, IntelCard, IntelChips, IntelEmpty, IntelError, IntelNotice, IntelSubhead, IntelTile, stagePillClass } from "./intel-ui-kit";
+
+// 보조 표면 틴트 — BriefingReportView 의 KPI·회사 카드와 같은 톤.
+const TINT_BG = "color-mix(in srgb, var(--cd-primary) 5%, var(--cd-card))";
 
 type Signal = { signal_id: string; report_name: string | null; source: string; company_name: string | null; url: string | null; summary: string | null; disclosed_at: string | null };
 type BusinessLink = { linkId: string; salesProjectId: string | null; contractId: string | null; title: string | null; serviceCode: string | null; stage?: string | null };
@@ -32,33 +36,31 @@ const EVENT_TYPE: Record<string, string> = { discovered: "프로젝트 등록", 
 // ── 목록·개요 공용 표시 ──
 
 export function PriorityScore({ priority }: { priority?: PublicPriority | null }) {
-  if (!priority) return <span className="cd-text-muted">–</span>;
-  const ratio = priority.maximum ? Math.max(0, Math.min(100, (priority.score / priority.maximum) * 100)) : 0;
+  if (!priority) return <span className="cd-text-faint">–</span>;
   return (
-    <span className="intel-score" title={`공개 근거 ${priority.score}/${priority.maximum}점 · 정보 보완 시 최대 ${priority.possibleScore}점`}>
-      <span className="intel-score-bar" aria-hidden><span style={{ width: `${ratio}%` }} /></span>
-      <span className="intel-compact">{priority.score}</span>
+    <span className="flex items-center gap-2 min-w-0" title={`공개 근거 ${priority.score}/${priority.maximum}점 · 정보 보완 시 최대 ${priority.possibleScore}점`}>
+      <IntelBar value={priority.score} max={priority.maximum} height={4} />
+      <span className="cd-text text-xs font-extrabold tabular-nums">{priority.score}</span>
     </span>
   );
 }
 
 export function ReviewPill({ priority }: { priority?: PublicPriority | null }) {
-  return priority && !priority.needsReview ? <CdBadge tone="success">우선 검토</CdBadge> : <CdBadge tone="idle">정보 보완</CdBadge>;
+  return priority && !priority.needsReview ? <span className="cd-pill cd-pill-success">우선 검토</span> : <span className="cd-pill cd-pill-idle">정보 보완</span>;
 }
 
 /** 규칙 엔진의 산정 이유에 남은 내부 단계 키를 화면 용어로 바꾼다. */
 const plainReason = (text: string) => text.replace(/\b(unknown|mou|announced|approved|permitting|construction|operating|delayed|suspended|canceled)\b/g, (key) => INTEL_STAGE_LABELS[key] ?? key);
 
-function StageText({ stage }: { stage: string }) {
-  const tone = stage === "canceled" ? "cd-error-text" : stage === "delayed" || stage === "suspended" ? "cd-warn-text" : stage === "unknown" ? "cd-text-muted" : "";
-  return <span className={tone}>{INTEL_STAGE_LABELS[stage] ?? stage}</span>;
+function StagePill({ stage }: { stage: string }) {
+  return <span className={stagePillClass(stage)}>{INTEL_STAGE_LABELS[stage] ?? stage}</span>;
 }
 
-function salesLinkText(extra?: DiscoveryExtras) {
-  if (!extra) return <span className="cd-text-muted">–</span>;
-  if (extra.overdueActions) return <span className="cd-warn-text">기한 경과 {extra.overdueActions}</span>;
-  if (extra.linkCount) return <span>연결 {extra.linkCount}{extra.openActions ? ` · 활동 ${extra.openActions}` : ""}</span>;
-  return <span className="cd-text-muted">{extra.openActions ? `활동 ${extra.openActions}` : "미연결"}</span>;
+function salesLinkPill(extra?: DiscoveryExtras) {
+  if (!extra) return <span className="cd-text-faint">–</span>;
+  if (extra.overdueActions) return <span className="cd-pill cd-pill-error">기한 경과 {extra.overdueActions}</span>;
+  if (extra.linkCount) return <span className="cd-pill cd-pill-success">연결 {extra.linkCount}{extra.openActions ? ` · 활동 ${extra.openActions}` : ""}</span>;
+  return extra.openActions ? <span className="cd-pill cd-pill-info">활동 {extra.openActions}</span> : <span className="cd-text-faint text-xs">미연결</span>;
 }
 
 /** 이력에서 의미 있는 변화만 앞세우고, 근거 문서만 다시 확인한 기록은 접는다. */
@@ -70,7 +72,7 @@ function eventSummary(event: IntelProjectEvent): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-export function ProjectIntelligencePanel({ canEdit, initialProjectId }: { canEdit: boolean; initialProjectId?: string | null }) {
+export function ProjectIntelligencePanel({ canEdit, initialProjectId, initialReview }: { canEdit: boolean; initialProjectId?: string | null; initialReview?: string | null }) {
   const { toast } = useCdToast();
   const [view, setView] = useState<"projects" | "signals">("projects");
   const [signalCount, setSignalCount] = useState<number | undefined>(undefined);
@@ -80,7 +82,7 @@ export function ProjectIntelligencePanel({ canEdit, initialProjectId }: { canEdi
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const [reviewState, setReviewState] = useState<ReviewFilter>("");
+  const [reviewState, setReviewState] = useState<ReviewFilter>(initialReview === "confirmed" || initialReview === "needs_review" ? initialReview : "");
   const [stageFilter, setStageFilter] = useState("");
   const [serviceFilter, setServiceFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -213,215 +215,276 @@ export function ProjectIntelligencePanel({ canEdit, initialProjectId }: { canEdi
   const missingPriority = detail?.priority?.components.filter((component) => component.points === null) ?? [];
 
   return (
-    <div className="intel-stack">
-      {error && <div className="intel-error" role="alert">{error}</div>}
-      <section className="cd-card">
-        <div className="intel-card-head">
-          <CdTabs variant="underline" active={view} onChange={setView} items={[
-            { key: "projects", label: "투자 프로젝트" },
-            { key: "signals", label: "수집 신호 후보", count: signalCount },
-          ]} />
-          {view === "projects" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <CdIconButton label="새로고침" onClick={() => void reload()} disabled={loading}><RefreshCw className="w-4 h-4" /></CdIconButton>
-              {canEdit && <><CdButton variant="soft" disabled={busy} onClick={() => void sync()}>수집 신호 정리</CdButton><CdButton variant="primary" onClick={() => editProject(true)}>프로젝트 추가</CdButton></>}
-            </div>
-          )}
-        </div>
+    <div className="flex flex-col gap-4 min-w-0">
+      {error && <IntelError>{error}</IntelError>}
+      <IntelCard
+        icon={view === "projects" ? Factory : Target}
+        title={view === "projects" ? "투자 프로젝트" : "수집 신호 후보"}
+        count={view === "projects" ? total.toLocaleString() : signalCount}
+        desc={view === "projects" ? "여러 출처의 같은 투자를 묶은 단위입니다. 공개 근거 점수(최대 85점) 높은 순으로 보여 줍니다." : "사업장이 매칭되고 확정·후보 등급이며 아직 영업건이 없는 개별 신호입니다. 눌러서 영업건으로 전환합니다."}
+        actions={<>
+          <IntelChips items={[{ key: "projects" as const, label: "투자 프로젝트" }, { key: "signals" as const, label: "수집 신호 후보" }]} active={view} onChange={setView} />
+          {view === "projects" && <>
+            <button className="cd-btn cd-btn-ghost cd-btn-sm" title="새로고침" onClick={() => void reload()} disabled={loading}><RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /></button>
+            {canEdit && <>
+              <button className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy} onClick={() => void sync()}><Layers className="w-3.5 h-3.5" />수집 신호 정리</button>
+              <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => editProject(true)}><Plus className="w-3.5 h-3.5" />프로젝트 추가</button>
+            </>}
+          </>}
+        </>}
+      >
         {view === "signals" ? <SignalCandidatesList canEdit={canEdit} onCount={setSignalCount} /> : <>
-          <div className="intel-toolbar">
-            <CdTabs variant="pill" active={reviewState} onChange={(key) => applyFilter(() => setReviewState(key))} items={[
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <IntelChips active={reviewState} onChange={(key) => applyFilter(() => setReviewState(key))} items={[
               { key: "" as ReviewFilter, label: "전체" },
               { key: "confirmed" as ReviewFilter, label: "우선 검토" },
               { key: "needs_review" as ReviewFilter, label: "정보 보완 필요" },
             ]} />
-            <CdSelect label="추진 단계" value={stageFilter} onChange={(event) => applyFilter(() => setStageFilter(event.target.value))}>
-              <option value="">전체</option>
+            <span className="flex-1" />
+            <select className="cd-select" style={{ width: "auto" }} aria-label="추진 단계" value={stageFilter} onChange={(event) => applyFilter(() => setStageFilter(event.target.value))}>
+              <option value="">단계 전체</option>
               {Object.entries(INTEL_STAGE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </CdSelect>
-            <CdSelect label="검토 가능 서비스" value={serviceFilter} onChange={(event) => applyFilter(() => setServiceFilter(event.target.value))}>
-              <option value="">전체</option>
+            </select>
+            <select className="cd-select" style={{ width: "auto" }} aria-label="검토 가능 서비스" value={serviceFilter} onChange={(event) => applyFilter(() => setServiceFilter(event.target.value))}>
+              <option value="">서비스 전체</option>
               {Object.entries(INTEL_SERVICE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </CdSelect>
-            <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); applyFilter(() => setQuery(search.trim())); }}>
-              <CdInput label="기업·프로젝트 검색" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="예: SK하이닉스" />
-              <CdButton type="submit">검색</CdButton>
+            </select>
+            <form className="flex items-center gap-1.5 rounded-xl border cd-border-c px-2 py-1" onSubmit={(event) => { event.preventDefault(); applyFilter(() => setQuery(search.trim())); }}>
+              <Search className="w-3.5 h-3.5 cd-text-faint" />
+              <input className="bg-transparent outline-none cd-text text-sm w-44" aria-label="기업·프로젝트 검색" placeholder="기업·프로젝트 검색" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <button type="submit" className="cd-btn cd-btn-ghost cd-btn-sm">검색</button>
             </form>
           </div>
-          {reviewState === "needs_review" && (
-            <p className="intel-table cd-text-muted px-5 pb-3">서비스 적합성이나 추진 단계가 확인되지 않아 확정 순위에서 분리한 후보입니다. 상세에서 부족한 항목을 확인하세요.</p>
-          )}
-          <CdTable
-            bare
-            loading={loading}
-            rows={projects}
-            rowKey={(project) => project.projectId}
-            onRowClick={(project) => { setDetailTab("summary"); setShowAllEvents(false); setShowInsufficient(false); void open(project.projectId); }}
-            empty={query || stageFilter || serviceFilter || reviewState ? "조건에 맞는 투자 프로젝트가 없습니다." : "정리된 투자 프로젝트가 없습니다. 수집 신호 정리를 실행하세요."}
-            columns={[
-              { key: "title", header: "투자 프로젝트", render: (project) => <><p className="font-medium">{project.title}</p><p className="intel-table cd-text-muted">{project.companyName ?? "기업 미확인"} · {project.region ?? "지역 미확인"}</p></> },
-              { key: "stage", header: "추진 단계", widthClass: "w-24", render: (project) => <StageText stage={project.stage} /> },
-              { key: "amount", header: "투자금액", align: "right", widthClass: "w-32", render: (project) => <span className={`tabular-nums ${project.amount === null ? "cd-text-muted" : ""}`}>{formatIntelAmount(project.amount, project.currency)}</span> },
-              { key: "services", header: "검토 가능 서비스", render: (project) => { const codes = extras[project.projectId]?.services ?? []; return codes.length ? codes.map((code) => INTEL_SERVICE_LABELS[code] ?? code).join(", ") : <span className="cd-text-muted">판단 자료 부족</span>; } },
-              { key: "sales", header: "영업 연결", widthClass: "w-32", render: (project) => salesLinkText(extras[project.projectId]) },
-              { key: "priority", header: "공개 근거 점수", align: "right", widthClass: "w-36", render: (project) => <PriorityScore priority={project.priority} /> },
-              { key: "review", header: "검토", widthClass: "w-28", render: (project) => <ReviewPill priority={project.priority} /> },
-            ]}
-          />
-          <div className="intel-card-foot">
-            <span className="intel-table cd-text-muted">{total ? `${(offset + 1).toLocaleString()}–${Math.min(total, offset + PAGE).toLocaleString()} / 총 ${total.toLocaleString()}건 · 점수 높은 순` : "0건"}</span>
-            <div className="flex gap-2">
-              <CdButton size="sm" disabled={!offset || loading} onClick={() => setOffset(Math.max(0, offset - PAGE))}>이전</CdButton>
-              <CdButton size="sm" disabled={offset + PAGE >= total || loading} onClick={() => setOffset(offset + PAGE)}>다음</CdButton>
+          {reviewState === "needs_review" && <p className="cd-text-muted text-xs mb-2">서비스 적합성이나 추진 단계가 확인되지 않아 확정 순위에서 분리한 후보입니다. 상세에서 부족한 항목을 확인하세요.</p>}
+          <div className="rounded-xl border cd-border-c overflow-hidden">
+            <CdTable
+              bare
+              loading={loading}
+              rows={projects}
+              rowKey={(project) => project.projectId}
+              onRowClick={(project) => { setDetailTab("summary"); setShowAllEvents(false); setShowInsufficient(false); void open(project.projectId); }}
+              empty={query || stageFilter || serviceFilter || reviewState ? "조건에 맞는 투자 프로젝트가 없습니다." : "정리된 투자 프로젝트가 없습니다. 수집 신호 정리를 실행하세요."}
+              columns={[
+                { key: "title", header: "투자 프로젝트", render: (project) => <><div className="flex items-center gap-1.5 min-w-0 flex-wrap"><span className="cd-text text-sm font-bold">{project.companyName ?? "기업 미확인"}</span><ReviewPill priority={project.priority} /></div><p className="cd-text-muted text-[11px] mt-0.5">{project.title}</p><p className="cd-text-faint text-[11px]">{project.region ?? "지역 미확인"}</p></> },
+                { key: "stage", header: "추진 단계", widthClass: "w-24", render: (project) => <StagePill stage={project.stage} /> },
+                { key: "amount", header: "투자금액", align: "right", widthClass: "w-32", render: (project) => <span className={`tabular-nums ${project.amount === null ? "cd-text-faint" : "cd-text font-bold"}`}>{formatIntelAmount(project.amount, project.currency)}</span> },
+                { key: "services", header: "검토 가능 서비스", render: (project) => { const codes = extras[project.projectId]?.services ?? []; return codes.length ? <div className="flex gap-1 flex-wrap">{codes.map((code) => <span key={code} className="cd-pill cd-pill-outline">{INTEL_SERVICE_LABELS[code] ?? code}</span>)}</div> : <span className="cd-text-faint text-xs">판단 자료 부족</span>; } },
+                { key: "sales", header: "영업 연결", widthClass: "w-32", render: (project) => salesLinkPill(extras[project.projectId]) },
+                { key: "priority", header: "공개 근거 점수", widthClass: "w-40", render: (project) => <PriorityScore priority={project.priority} /> },
+              ]}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap mt-3">
+            <span className="cd-text-faint text-xs">{total ? `${(offset + 1).toLocaleString()}–${Math.min(total, offset + PAGE).toLocaleString()} / 총 ${total.toLocaleString()}건 · 점수 높은 순` : "0건"}</span>
+            <div className="flex gap-1.5">
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={!offset || loading} onClick={() => setOffset(Math.max(0, offset - PAGE))}>이전</button>
+              <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={offset + PAGE >= total || loading} onClick={() => setOffset(offset + PAGE)}>다음</button>
             </div>
           </div>
         </>}
-      </section>
+      </IntelCard>
 
       <CdDrawer open={detail !== null} onClose={() => !dialog && !unlink && setDetail(null)} title={p?.title ?? "투자 프로젝트"} widthClass="max-w-4xl">
-        {detail && p && <div className="intel-ui intel-stack">
+        {detail && p && <div className="flex flex-col gap-4 min-w-0">
           <div>
-            <p className="intel-compact cd-text-muted">{[p.companyName ?? "기업 미확인", p.region ?? "지역 미확인", p.industry ? (INDUSTRY_LABEL[p.industry] ?? p.industry) : null].filter(Boolean).join(" · ")}</p>
-            <div className="intel-stat-strip mt-3 border rounded-lg cd-border-c">
-              <div className="intel-stat"><span className="intel-table cd-text-muted">추진 단계</span><strong className="intel-section"><StageText stage={p.stage} /></strong></div>
-              <div className="intel-stat"><span className="intel-table cd-text-muted">투자금액 · {AMOUNT_SCOPE[p.amountScope] ?? "범위 미확인"}</span><strong className="intel-section">{formatIntelAmount(p.amount, p.currency)}</strong></div>
-              <div className="intel-stat"><span className="intel-table cd-text-muted">공개 근거 점수</span><strong className="intel-section">{detail.priority ? `${detail.priority.score} / ${detail.priority.maximum}` : "–"}</strong></div>
-              <div className="intel-stat"><span className="intel-table cd-text-muted">영업·계약 연결</span><strong className="intel-section">{detail.links.length ? `${detail.links.length}건` : "없음"}</strong></div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="cd-text text-[15px] font-extrabold">{p.companyName ?? "기업 미확인"}</span>
+              {p.region && <span className="cd-pill cd-pill-idle">{p.region}</span>}
+              {p.industry && <span className="cd-pill cd-pill-outline">{INDUSTRY_LABEL[p.industry] ?? p.industry}</span>}
+              <ReviewPill priority={detail.priority} />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+              {[
+                { label: "추진 단계", value: <StagePill stage={p.stage} /> },
+                { label: `투자금액 · ${AMOUNT_SCOPE[p.amountScope] ?? "범위 미확인"}`, value: <span className="cd-text text-lg font-extrabold">{formatIntelAmount(p.amount, p.currency)}</span> },
+                { label: "공개 근거 점수", value: <span className="cd-text text-lg font-extrabold">{detail.priority ? <>{detail.priority.score}<span className="cd-text-faint text-xs font-bold"> / {detail.priority.maximum}</span></> : "–"}</span> },
+                { label: "영업·계약 연결", value: <span className="cd-text text-lg font-extrabold">{detail.links.length ? `${detail.links.length}건` : <span className="cd-text-faint text-sm">없음</span>}</span> },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border cd-border-c px-3 py-2" style={{ background: TINT_BG }}>
+                  <p className="cd-text-muted text-[11px] font-bold">{item.label}</p>
+                  <div className="mt-1">{item.value}</div>
+                </div>
+              ))}
             </div>
           </div>
-          {writable && <div className="flex flex-wrap gap-2">
-            <CdButton variant="primary" onClick={() => { startDialog("link"); setLinkMode("sales"); setScopeKey(""); setSalesTitle(p.title); setPriorityChoice(detail.manualPriority?.priority ?? "normal"); void loadEmployees(); }}>영업·계약 연결</CdButton>
-            <CdButton onClick={() => beginAction()}>후속 활동 등록</CdButton>
-            <CdButton variant="ghost" onClick={() => editProject(false)}>사실 수정</CdButton>
-            <CdButton variant="ghost" onClick={() => { startDialog("merge"); setMergeQuery(p.companyName ?? ""); setMergeOptions([]); }}>중복 병합</CdButton>
-            <CdButton variant="ghost" onClick={() => { startDialog("split"); setChosenSignals([]); setSplitTitle(""); }}>근거 분리</CdButton>
+          {writable && <div className="flex flex-wrap gap-1.5">
+            <button className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => { startDialog("link"); setLinkMode("sales"); setScopeKey(""); setSalesTitle(p.title); setPriorityChoice(detail.manualPriority?.priority ?? "normal"); void loadEmployees(); }}><Link2 className="w-3.5 h-3.5" />영업·계약 연결</button>
+            <button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => beginAction()}><CalendarPlus className="w-3.5 h-3.5" />후속 활동 등록</button>
+            <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => editProject(false)}><Pencil className="w-3.5 h-3.5" />사실 수정</button>
+            <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { startDialog("merge"); setMergeQuery(p.companyName ?? ""); setMergeOptions([]); }}><Merge className="w-3.5 h-3.5" />중복 병합</button>
+            <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => { startDialog("split"); setChosenSignals([]); setSplitTitle(""); }}><Split className="w-3.5 h-3.5" />근거 분리</button>
           </div>}
 
-          <CdTabs variant="underline" active={detailTab} onChange={setDetailTab} items={[
+          <IntelChips active={detailTab} onChange={setDetailTab} items={[
             { key: "summary" as DetailTab, label: "개요" },
-            { key: "evidence" as DetailTab, label: "근거·이력", count: detail.signals.length },
+            { key: "evidence" as DetailTab, label: `근거·이력 ${detail.signals.length}` },
             { key: "priority" as DetailTab, label: "서비스·우선순위" },
-            { key: "sales" as DetailTab, label: "영업·활동", count: detail.links.length + detail.actions.length },
+            { key: "sales" as DetailTab, label: `영업·활동 ${detail.links.length + detail.actions.length}` },
           ]} />
 
-          {detailTab === "summary" && <div>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">확인된 사실</h3>
-              {p.publicSummary && <p className="intel-prose mb-4">{p.publicSummary}</p>}
-              <dl className="intel-dl">
-                <dt>기업</dt><dd>{p.companyName ?? "미확인"}</dd>
-                <dt>사업장</dt><dd>{p.facilityId ? "등록된 사업장과 연결됨" : "사업장 미확인 — 영업건을 만들려면 먼저 사업장을 연결합니다."}</dd>
-                <dt>추진 단계</dt><dd><StageText stage={p.stage} /></dd>
-                <dt>투자금액</dt><dd>{formatIntelAmount(p.amount, p.currency)}{p.amount != null ? ` (${AMOUNT_SCOPE[p.amountScope] ?? "범위 미확인"})` : ""}</dd>
-                <dt>예정 기간</dt><dd>{p.expectedStartAt || p.expectedEndAt ? `${intelDate(p.expectedStartAt)} ~ ${intelDate(p.expectedEndAt)}` : "미확인"}</dd>
-                <dt>근거 자료</dt><dd>{detail.signals.length}건 · 최근 갱신 {intelTime(p.updatedAt)}</dd>
+          {detailTab === "summary" && <div className="flex flex-col gap-4">
+            {p.publicSummary && (
+              <div className="rounded-xl px-4 py-3" style={{ background: TINT_BG, borderLeft: "3px solid var(--cd-primary)" }}>
+                <p className="cd-text text-sm leading-relaxed">{p.publicSummary}</p>
+              </div>
+            )}
+            <section>
+              <IntelSubhead>확인된 사실</IntelSubhead>
+              <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+                <dt className="cd-text-muted">기업</dt><dd className="cd-text">{p.companyName ?? "미확인"}</dd>
+                <dt className="cd-text-muted">사업장</dt><dd className="cd-text">{p.facilityId ? "등록된 사업장과 연결됨" : <span className="cd-warn-text">사업장 미확인 — 영업건을 만들려면 먼저 사업장을 연결합니다.</span>}</dd>
+                <dt className="cd-text-muted">추진 단계</dt><dd><StagePill stage={p.stage} /></dd>
+                <dt className="cd-text-muted">투자금액</dt><dd className="cd-text">{formatIntelAmount(p.amount, p.currency)}{p.amount != null ? ` (${AMOUNT_SCOPE[p.amountScope] ?? "범위 미확인"})` : ""}</dd>
+                <dt className="cd-text-muted">예정 기간</dt><dd className="cd-text">{p.expectedStartAt || p.expectedEndAt ? `${intelDate(p.expectedStartAt)} ~ ${intelDate(p.expectedEndAt)}` : "미확인"}</dd>
+                <dt className="cd-text-muted">근거 자료</dt><dd className="cd-text">{detail.signals.length}건 · 최근 갱신 {intelTime(p.updatedAt)}</dd>
               </dl>
             </section>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">서비스 관련 가능성</h3>
-              {possible.length ? <ul className="intel-list">{possible.map((service) => (
-                <li key={service.serviceCode}><p className="font-medium">{service.label}</p><p className="intel-prose cd-text-muted">{service.rationale}</p></li>
-              ))}</ul> : <p className="intel-prose cd-text-muted">공개 근거로 판단할 수 있는 서비스가 없습니다. 법적 적용 여부는 담당자 확인이 필요합니다.</p>}
+            <section>
+              <IntelSubhead>서비스 관련 가능성</IntelSubhead>
+              {possible.length ? <div className="flex flex-col gap-1.5">{possible.map((service) => (
+                <IntelTile key={service.serviceCode}>
+                  <div className="flex items-center gap-1.5"><span className="cd-text text-sm font-bold">{service.label}</span><span className="cd-pill cd-pill-success">검토 가능</span></div>
+                  <p className="cd-text-muted text-xs mt-1 leading-relaxed">{service.rationale}</p>
+                </IntelTile>
+              ))}</div> : <IntelEmpty>공개 근거로 판단할 수 있는 서비스가 없습니다. 법적 적용 여부는 담당자 확인이 필요합니다.</IntelEmpty>}
             </section>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">추가 확인사항</h3>
-              {possible.some((service) => service.questions.length) || missingPriority.length ? <ul className="intel-report-list">
-                {possible.flatMap((service) => service.questions.map((question, index) => <li key={`${service.serviceCode}:${index}`}>{question}</li>))}
-                {missingPriority.map((component) => <li key={component.key}>{component.label}: {plainReason(component.reason)}</li>)}
-              </ul> : <p className="intel-prose cd-text-muted">추가로 확인할 항목이 없습니다.</p>}
+            <section>
+              <IntelSubhead>추가 확인사항</IntelSubhead>
+              {possible.some((service) => service.questions.length) || missingPriority.length ? <ul className="flex flex-col gap-1.5">
+                {possible.flatMap((service) => service.questions.map((question, index) => <li key={`${service.serviceCode}:${index}`} className="flex gap-2 text-sm cd-text"><HelpCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--cd-primary)" }} />{question}</li>))}
+                {missingPriority.map((component) => <li key={component.key} className="flex gap-2 text-sm cd-text"><HelpCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--cd-warning)" }} />{component.label}: {plainReason(component.reason)}</li>)}
+              </ul> : <IntelEmpty>추가로 확인할 항목이 없습니다.</IntelEmpty>}
             </section>
-            {!!detail.recommendedActions?.length && <section className="intel-subsection">
-              <h3 className="intel-section mb-3">권장 활동</h3>
-              <ul className="intel-list">{detail.recommendedActions.map((suggestion) => (
-                <li key={suggestion.key} className="flex justify-between items-start gap-4">
-                  <div><p className="font-medium">{suggestion.title}</p><p className="intel-table cd-text-muted mt-1">권장 기한 {suggestion.suggestedDate} · {suggestion.defaultAssignee?.name ?? "담당자 지정 필요"}</p></div>
-                  {writable && <CdButton size="sm" onClick={() => beginRecommended(suggestion)}>검토 등록</CdButton>}
-                </li>
-              ))}</ul>
+            {!!detail.recommendedActions?.length && <section>
+              <IntelSubhead>권장 활동</IntelSubhead>
+              <div className="flex flex-col gap-1.5">{detail.recommendedActions.map((suggestion) => (
+                <IntelTile key={suggestion.key}>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap"><span className="cd-text text-sm font-bold">{suggestion.title}</span><span className="cd-pill cd-pill-outline">{SALES_ACTIVITY_TYPE_LABELS[suggestion.activityType] ?? suggestion.activityType}</span></div>
+                      <p className="cd-text-faint text-[11px] mt-1">권장 기한 {suggestion.suggestedDate} · {suggestion.defaultAssignee?.name ?? "담당자 지정 필요"}</p>
+                    </div>
+                    {writable && <button className="cd-btn cd-btn-soft cd-btn-sm shrink-0" onClick={() => beginRecommended(suggestion)}>검토 등록</button>}
+                  </div>
+                </IntelTile>
+              ))}</div>
             </section>}
           </div>}
 
-          {detailTab === "evidence" && <div>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">근거 자료</h3>
-              {detail.signals.length ? <ul className="intel-rows border-b cd-border-c">{detail.signals.map((signal) => (
-                <li key={signal.signal_id} className="py-3">
-                  {safeIntelUrl(signal.url) ? <a href={safeIntelUrl(signal.url)} target="_blank" rel="noopener noreferrer" className="intel-link">{signal.report_name ?? signal.company_name ?? "근거 자료"}</a> : <span className="font-medium">{signal.report_name ?? signal.company_name ?? "근거 자료"}</span>}
-                  <p className="intel-table cd-text-muted mt-1">{intelSourceLabel(signal.source)} · {intelDate(signal.disclosed_at)}</p>
-                  {signal.summary && <p className="intel-compact mt-2 cd-text-muted">{signal.summary}</p>}
-                </li>
-              ))}</ul> : <p className="intel-prose cd-text-muted">열람할 수 있는 근거 자료가 없습니다.</p>}
-            </section>
-            <section className="intel-subsection">
-              <div className="flex justify-between items-center gap-4 mb-3">
-                <h3 className="intel-section">변화 이력</h3>
-                {hiddenEvents > 0 && <CdButton size="sm" variant="ghost" onClick={() => setShowAllEvents(!showAllEvents)}>{showAllEvents ? "주요 변화만 보기" : `근거 갱신 ${hiddenEvents}건 함께 보기`}</CdButton>}
-              </div>
-              <ul className="intel-rows border-b cd-border-c">{(showAllEvents ? detail.events : meaningfulEvents).map((event) => (
-                <li key={event.eventId} className="py-3 flex justify-between gap-4">
-                  <div>
-                    <p className="font-medium">{EVENT_TYPE[event.eventType] ?? "사실 갱신"}{event.correctsEventId ? " · 정정" : ""}</p>
-                    <p className="intel-table cd-text-muted mt-1">{eventSummary(event) ?? "단계·금액 변화 없음"} · 발생 {intelDate(event.occurredAt)} · 확인 {intelTime(event.discoveredAt)}</p>
+          {detailTab === "evidence" && <div className="flex flex-col gap-4">
+            <section>
+              <IntelSubhead>근거 자료</IntelSubhead>
+              {detail.signals.length ? <div className="flex flex-col gap-1.5">{detail.signals.map((signal) => (
+                <IntelTile key={signal.signal_id}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="cd-pill cd-pill-outline">{intelSourceLabel(signal.source)}</span>
+                    <span className="cd-text-faint text-[11px]">{intelDate(signal.disclosed_at)}</span>
                   </div>
-                  {event.mode === "initial_backfill" && <span className="intel-table cd-text-muted shrink-0">기존 자료 초기 분석</span>}
-                </li>
-              ))}</ul>
+                  {safeIntelUrl(signal.url)
+                    ? <a href={safeIntelUrl(signal.url)} target="_blank" rel="noopener noreferrer" className="cd-text text-sm font-bold mt-1 inline-flex items-center gap-1 hover:underline">{signal.report_name ?? signal.company_name ?? "근거 자료"}<ExternalLink className="w-3 h-3 cd-text-faint" /></a>
+                    : <p className="cd-text text-sm font-bold mt-1">{signal.report_name ?? signal.company_name ?? "근거 자료"}</p>}
+                  {signal.summary && <p className="cd-text-muted text-xs mt-1 leading-relaxed">{signal.summary}</p>}
+                </IntelTile>
+              ))}</div> : <IntelEmpty>열람할 수 있는 근거 자료가 없습니다.</IntelEmpty>}
+            </section>
+            <section>
+              <IntelSubhead right={hiddenEvents > 0 && <button className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setShowAllEvents(!showAllEvents)}>{showAllEvents ? "주요 변화만 보기" : `근거 갱신 ${hiddenEvents}건 함께 보기`}</button>}>변화 이력</IntelSubhead>
+              <ol className="flex flex-col">
+                {(showAllEvents ? detail.events : meaningfulEvents).map((event) => (
+                  <li key={event.eventId} className="relative pl-5 pb-3 last:pb-0">
+                    <span className="absolute left-1 top-1.5 w-2 h-2 rounded-full" style={{ background: eventSummary(event) ? "var(--cd-primary)" : "var(--cd-border)" }} />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="cd-text text-sm font-bold">{EVENT_TYPE[event.eventType] ?? "사실 갱신"}</span>
+                      {event.correctsEventId && <span className="cd-pill cd-pill-warn">정정</span>}
+                      {event.mode === "initial_backfill" && <span className="cd-pill cd-pill-idle">기존 자료 초기 분석</span>}
+                    </div>
+                    <p className="cd-text-muted text-xs mt-0.5">{eventSummary(event) ?? "단계·금액 변화 없음"}</p>
+                    <p className="cd-text-faint text-[11px]">발생 {intelDate(event.occurredAt)} · 확인 {intelTime(event.discoveredAt)}</p>
+                  </li>
+                ))}
+              </ol>
             </section>
           </div>}
 
-          {detailTab === "priority" && <div>
-            <section className="intel-subsection">
-              <div className="flex justify-between items-center gap-4 mb-3">
-                <h3 className="intel-section">공개 근거 우선순위</h3>
-                {writable && <div className="flex gap-2"><CdButton size="sm" variant="ghost" disabled={busy} onClick={() => void reassess()}>다시 평가</CdButton><CdButton size="sm" onClick={() => { startDialog("priority"); setPriorityChoice(detail.manualPriority?.priority ?? "normal"); setReason(detail.manualPriority?.reason ?? ""); }}>내 우선순위</CdButton></div>}
-              </div>
+          {detailTab === "priority" && <div className="flex flex-col gap-4">
+            <section>
+              <IntelSubhead right={writable && <div className="flex gap-1.5"><button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => void reassess()}>다시 평가</button><button className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => { startDialog("priority"); setPriorityChoice(detail.manualPriority?.priority ?? "normal"); setReason(detail.manualPriority?.reason ?? ""); }}>내 우선순위</button></div>}>공개 근거 우선순위</IntelSubhead>
               {detail.priority ? <>
-                <p className="intel-prose mb-3">{detail.priority.score}/{detail.priority.maximum}점 · 정보 보완 시 최대 {detail.priority.possibleScore}점 · 근거 신뢰도 {detail.priority.confidence === "confirmed" ? "확정" : detail.priority.confidence === "candidate" ? "후보" : "미확인"}</p>
-                <CdTable bare rows={detail.priority.components} rowKey={(component) => component.key} columns={[
-                  { key: "label", header: "항목", render: (component) => component.label },
-                  { key: "score", header: "점수", align: "right", widthClass: "w-24", render: (component) => component.points === null ? <span className="cd-text-muted">정보 부족</span> : <span className="tabular-nums">{component.points}/{component.maximum}</span> },
-                  { key: "reason", header: "산정 이유", render: (component) => plainReason(component.reason) },
-                ]} />
-                <p className="intel-meta mt-2">규칙 {detail.priority.ruleVersion}</p>
-              </> : <p className="intel-prose cd-text-muted">아직 평가하지 않았습니다.</p>}
-              {detail.manualPriority && <p className="intel-prose mt-4">내 검토 우선순위 {MANUAL_PRIORITY[detail.manualPriority.priority] ?? detail.manualPriority.priority} · {detail.manualPriority.reason}<span className="block intel-table cd-text-muted">{detail.manualPriority.actorName} · {intelTime(detail.manualPriority.updatedAt)} · 공개 점수·공유 브리핑에는 반영하지 않음</span></p>}
-              {detail.internalContext && <p className="intel-prose cd-text-muted mt-4">내 열람 범위의 관계 보정 {detail.internalContext.relationshipPoints}/{detail.internalContext.maximum}점 — {detail.internalContext.reason}</p>}
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className="cd-text text-2xl font-extrabold">{detail.priority.score}</span>
+                  <span className="cd-text-muted text-sm">/ {detail.priority.maximum}점 · 정보 보완 시 최대 {detail.priority.possibleScore}점</span>
+                  <span className="cd-text-faint text-xs ml-auto">근거 신뢰도 {detail.priority.confidence === "confirmed" ? "확정" : detail.priority.confidence === "candidate" ? "후보" : "미확인"}</span>
+                </div>
+                <IntelBar value={detail.priority.score} max={detail.priority.maximum} />
+                <div className="flex flex-col mt-3">
+                  {detail.priority.components.map((component) => (
+                    <div key={component.key} className="flex items-center gap-2 py-1.5 border-b cd-border-c last:border-b-0">
+                      <span className="cd-text text-xs font-bold shrink-0" style={{ width: 96 }}>{component.label}</span>
+                      <IntelBar value={component.points ?? 0} max={component.maximum} height={4} />
+                      <span className="cd-text-muted text-[11px] shrink-0 tabular-nums" style={{ minWidth: 56, textAlign: "right" }}>{component.points === null ? "정보 부족" : `${component.points} / ${component.maximum}`}</span>
+                      <span className="cd-text-faint text-[11px] flex-[2] min-w-0 truncate" title={plainReason(component.reason)}>{plainReason(component.reason)}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="cd-text-faint text-[11px] mt-2">규칙 {detail.priority.ruleVersion}</p>
+              </> : <IntelEmpty>아직 평가하지 않았습니다.</IntelEmpty>}
+              {detail.manualPriority && <IntelNotice><span className="font-bold">내 검토 우선순위 {MANUAL_PRIORITY[detail.manualPriority.priority] ?? detail.manualPriority.priority}</span> · {detail.manualPriority.reason}<span className="block cd-text-faint text-[11px] mt-0.5">{detail.manualPriority.actorName} · {intelTime(detail.manualPriority.updatedAt)} · 공개 점수·공유 브리핑에는 반영하지 않음</span></IntelNotice>}
+              {detail.internalContext && <p className="cd-text-muted text-xs mt-2">내 열람 범위의 관계 보정 {detail.internalContext.relationshipPoints}/{detail.internalContext.maximum}점 — {detail.internalContext.reason}</p>}
             </section>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">서비스 수요 가설</h3>
-              <ul className="intel-rows border-b cd-border-c">{[...possible, ...(showInsufficient ? insufficient : [])].map((service) => (
-                <li key={service.serviceCode} className="py-3">
-                  <div className="flex items-center gap-2"><p className="font-medium">{service.label}</p>{service.status === "possible" ? <CdBadge tone="success">검토 가능</CdBadge> : <CdBadge tone="idle">판단 자료 부족</CdBadge>}</div>
-                  <p className="intel-prose cd-text-muted mt-1">{service.rationale}</p>
-                  {service.questions.length > 0 && <ul className="intel-report-list intel-compact mt-2">{service.questions.map((question, index) => <li key={index}>{question}</li>)}</ul>}
-                </li>
-              ))}</ul>
-              {insufficient.length > 0 && <CdButton size="sm" variant="ghost" className="mt-3" onClick={() => setShowInsufficient(!showInsufficient)}>{showInsufficient ? "판단 자료 부족 항목 접기" : `판단 자료 부족 ${insufficient.length}건 보기`}</CdButton>}
-              <p className="intel-meta mt-3">공개 근거 기준 가설입니다. 법적 의무 여부를 자동으로 확정하지 않습니다.</p>
+            <section>
+              <IntelSubhead>서비스 수요 가설</IntelSubhead>
+              <div className="flex flex-col gap-1.5">{[...possible, ...(showInsufficient ? insufficient : [])].map((service) => (
+                <IntelTile key={service.serviceCode}>
+                  <div className="flex items-center gap-1.5"><span className="cd-text text-sm font-bold">{service.label}</span>{service.status === "possible" ? <span className="cd-pill cd-pill-success">검토 가능</span> : <span className="cd-pill cd-pill-idle">판단 자료 부족</span>}</div>
+                  <p className="cd-text-muted text-xs mt-1 leading-relaxed">{service.rationale}</p>
+                  {service.questions.length > 0 && <ul className="mt-1.5 flex flex-col gap-0.5">{service.questions.map((question, index) => <li key={index} className="cd-text text-xs">· {question}</li>)}</ul>}
+                </IntelTile>
+              ))}</div>
+              {insufficient.length > 0 && <button className="cd-btn cd-btn-ghost cd-btn-sm mt-2" onClick={() => setShowInsufficient(!showInsufficient)}>{showInsufficient ? "판단 자료 부족 항목 접기" : `판단 자료 부족 ${insufficient.length}건 보기`}</button>}
+              <p className="cd-text-faint text-[11px] mt-2">공개 근거 기준 가설입니다. 법적 의무 여부를 자동으로 확정하지 않습니다.</p>
             </section>
           </div>}
 
-          {detailTab === "sales" && <div>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">연결된 영업·계약</h3>
-              {detail.links.length ? <ul className="intel-rows border-b cd-border-c">{detail.links.map((link) => (
-                <li key={link.linkId} className="py-3 flex justify-between items-center gap-4">
-                  <div>
-                    <a className="intel-link" href={link.salesProjectId ? `/sales/${encodeURIComponent(link.salesProjectId)}` : `/contracts/${encodeURIComponent(link.contractId!)}`}>{link.title ?? (link.salesProjectId ? "영업건" : "계약")}</a>
-                    <p className="intel-table cd-text-muted mt-1">{link.salesProjectId ? "영업건" : "계약"}{link.serviceCode ? ` · ${INTEL_SERVICE_LABELS[link.serviceCode] ?? link.serviceCode}` : ""}</p>
+          {detailTab === "sales" && <div className="flex flex-col gap-4">
+            <section>
+              <IntelSubhead>연결된 영업·계약</IntelSubhead>
+              {detail.links.length ? <div className="flex flex-col gap-1.5">{detail.links.map((link) => (
+                <IntelTile key={link.linkId}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <a className="cd-text text-sm font-bold hover:underline" href={link.salesProjectId ? `/sales/${encodeURIComponent(link.salesProjectId)}` : `/contracts/${encodeURIComponent(link.contractId!)}`}>{link.title ?? (link.salesProjectId ? "영업건" : "계약")}</a>
+                        <span className="cd-pill cd-pill-idle">{link.salesProjectId ? "영업건" : "계약"}</span>
+                        {link.serviceCode && <span className="cd-pill cd-pill-outline">{INTEL_SERVICE_LABELS[link.serviceCode] ?? link.serviceCode}</span>}
+                      </div>
+                    </div>
+                    {writable && <button className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" onClick={() => { setUnlink(link); setReason(""); setFormError(""); }}>연결 해제</button>}
                   </div>
-                  {writable && <CdButton size="sm" variant="ghost" onClick={() => { setUnlink(link); setReason(""); setFormError(""); }}>연결 해제</CdButton>}
-                </li>
-              ))}</ul> : <p className="intel-prose cd-text-muted">현재 열람 범위에 연결된 영업·계약이 없습니다.</p>}
+                </IntelTile>
+              ))}</div> : <IntelEmpty>현재 열람 범위에 연결된 영업·계약이 없습니다.</IntelEmpty>}
             </section>
-            <section className="intel-subsection">
-              <h3 className="intel-section mb-3">후속 활동</h3>
-              <CdTable bare rows={detail.actions} rowKey={(item) => item.actionId} empty="등록된 후속 활동이 없습니다. 개요의 권장 활동을 검토 등록하거나 후속 활동을 등록하세요." columns={[
-                { key: "title", header: "활동", render: (item) => <><p>{item.title}</p><p className="intel-table cd-text-muted">{SALES_ACTIVITY_TYPE_LABELS[item.activityType] ?? item.activityType}</p></> },
-                { key: "date", header: "예정일", widthClass: "w-28", render: (item) => item.scheduledAt ? intelDate(item.scheduledAt) : <span className="cd-text-muted">미정</span> },
-                { key: "status", header: "상태", widthClass: "w-32", render: (item) => (item.activityStatus === "planned" && (item.endedAt ?? item.scheduledAt) && Date.parse(`${item.endedAt ?? item.scheduledAt}+09:00`) < Date.now()) ? <CdBadge tone="error">기한 경과</CdBadge> : ACTION_STATUS[item.activityStatus ?? item.status] ?? item.status },
-                { key: "action", header: "", widthClass: "w-28", align: "right", render: (item) => item.status === "accepted" && item.salesProjectId ? <a className="intel-link" href={`/sales/${encodeURIComponent(item.salesProjectId)}`}>영업건 보기</a> : writable && item.status !== "rejected" ? <CdButton size="sm" onClick={() => beginAction(item)}>검토</CdButton> : null },
-              ]} />
+            <section>
+              <IntelSubhead>후속 활동</IntelSubhead>
+              {detail.actions.length ? <div className="flex flex-col gap-1.5">{detail.actions.map((item) => {
+                const overdue = item.activityStatus === "planned" && !!(item.endedAt ?? item.scheduledAt) && Date.parse(`${item.endedAt ?? item.scheduledAt}+09:00`) < Date.now();
+                return (
+                  <IntelTile key={item.actionId}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="cd-text text-sm font-bold">{item.title}</span>
+                          {overdue ? <span className="cd-pill cd-pill-error">기한 경과</span> : <span className={`cd-pill ${item.status === "accepted" ? "cd-pill-info" : "cd-pill-idle"}`}>{ACTION_STATUS[item.activityStatus ?? item.status] ?? item.status}</span>}
+                          <span className="cd-pill cd-pill-outline">{SALES_ACTIVITY_TYPE_LABELS[item.activityType] ?? item.activityType}</span>
+                        </div>
+                        <p className="cd-text-faint text-[11px] mt-0.5">{item.scheduledAt ? `예정 ${intelDate(item.scheduledAt)}` : "예정일 미정"}</p>
+                      </div>
+                      {item.status === "accepted" && item.salesProjectId
+                        ? <a className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" href={`/sales/${encodeURIComponent(item.salesProjectId)}`}>영업건 보기</a>
+                        : writable && item.status !== "rejected" ? <button className="cd-btn cd-btn-soft cd-btn-sm shrink-0" onClick={() => beginAction(item)}>검토</button> : null}
+                    </div>
+                  </IntelTile>
+                );
+              })}</div> : <IntelEmpty>등록된 후속 활동이 없습니다. 개요의 권장 활동을 검토 등록하거나 후속 활동을 등록하세요.</IntelEmpty>}
             </section>
           </div>}
         </div>}

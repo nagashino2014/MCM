@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CdBadge, CdButton, CdCheckbox, CdInput, CdModal, CdSelect, CdTable, CdTextarea, useCdToast } from "@/components/cdash";
+import { Landmark, RefreshCw } from "lucide-react";
+import { CdButton, CdCheckbox, CdInput, CdModal, CdSelect, CdTextarea, useCdToast } from "@/components/cdash";
 import type { KosisSeriesConfig, OfficialCollectResult, OfficialSourceUpdate, OfficialSourceView } from "@/lib/intel/official-sources-types";
 import { intelApi, intelTime, jsonBody, safeIntelUrl } from "./intelligence-client";
+import { IntelCard, IntelEmpty, IntelError, IntelTile } from "./intel-ui-kit";
 
 const PERMISSIONS = { collectionAllowed: "자동 수집 허용 확인", storageAllowed: "본문 저장 허용 확인", aiAllowed: "AI 분석 허용 확인", internalReportAllowed: "사내 보고서 이용 허용 확인" } as const;
 const blankSeries = (): KosisSeriesConfig => ({ label: "", orgId: "", tblId: "", itmId: "", objL1: "", prdSe: "M" });
@@ -45,17 +47,22 @@ export function OfficialSourcesPanel({ canEdit }: { canEdit: boolean }) {
   function seriesChange(index: number, value: Partial<KosisSeriesConfig>) {
     if (form) setForm({ ...form, config: { ...form.config, series: (form.config.series ?? []).map((series, i) => i === index ? { ...series, ...value } : series) } });
   }
-  return <div className="intel-stack">
-    {error && <div className="intel-error" role="alert">{error}</div>}
-    <section className="cd-card"><div className="p-5 flex flex-wrap justify-between gap-4"><h2 className="intel-section">공식 정보원</h2><CdButton disabled={busy} onClick={() => void reload()}>새로고침</CdButton></div>
-      <CdTable bare rows={sources} rowKey={(source) => source.providerId} loading={loading} columns={[
-        { key: "name", header: "정보원", render: (source) => <a className="intel-link" href={safeIntelUrl(source.homeUrl)} target="_blank" rel="noreferrer">{source.name}</a> },
-        { key: "state", header: "상태", render: (source) => <CdBadge tone={source.state === "active" ? "success" : source.state === "error" ? "error" : "idle"}>{source.stateLabel}</CdBadge> },
-        { key: "last", header: "최근 수집 (KST)", render: (source) => intelTime(source.lastSuccessAt) },
-        { key: "next", header: "주기", render: (source) => source.referenceOnly ? "원문 참조" : source.intervalHours === 24 ? "매일" : source.intervalHours === 168 ? "매주" : `${source.intervalHours}시간` },
-        { key: "action", header: "상세", render: (source) => <CdButton size="sm" onClick={() => open(source)}>{canManage && !source.referenceOnly ? "설정" : "보기"}</CdButton> },
-      ]} />
-    </section>
+  return <div className="flex flex-col gap-4 min-w-0">
+    {error && <IntelError>{error}</IntelError>}
+    <IntelCard icon={Landmark} title="공식 정보원" count={sources.filter((source) => source.state === "active").length ? `활성 ${sources.filter((source) => source.state === "active").length}` : undefined}
+      desc="KOSIS·국가법령정보·KDI·기업 공식 발표. 이용 범위·인증·실수집 검증이 끝나야 정기 브리핑에 쓰입니다."
+      actions={<button className="cd-btn cd-btn-ghost cd-btn-sm" title="새로고침" disabled={busy || loading} onClick={() => void reload()}><RefreshCw className="w-3.5 h-3.5" /></button>}>
+      {sources.length ? <div className="flex flex-col gap-1.5">{sources.map((source) => (
+        <IntelTile key={source.providerId} onClick={() => open(source)}>
+          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <span className="cd-text text-sm font-bold truncate">{source.name}</span>
+            <span className={`cd-pill ${source.state === "active" ? "cd-pill-success" : source.state === "error" ? "cd-pill-error" : source.referenceOnly ? "cd-pill-outline" : "cd-pill-idle"}`}>{source.stateLabel}</span>
+            <span className="cd-text-faint text-[11px] ml-auto shrink-0">{canManage && !source.referenceOnly ? "설정" : "보기"} →</span>
+          </div>
+          <p className="cd-text-faint text-[11px] mt-0.5">{source.referenceOnly ? "원문 참조" : source.intervalHours === 24 ? "매일" : source.intervalHours === 168 ? "매주" : `${source.intervalHours}시간마다`} · 최근 수집 {intelTime(source.lastSuccessAt)}</p>
+        </IntelTile>
+      ))}</div> : <IntelEmpty>{loading ? "불러오는 중…" : "등록된 공식 정보원이 없습니다."}</IntelEmpty>}
+    </IntelCard>
     <CdModal open={selected !== null} onClose={() => !busy && setSelected(null)} title={selected?.name ?? "공식 정보원"} size="xl" closeOnBackdrop={false} footer={<>
       <CdButton disabled={busy} onClick={() => setSelected(null)}>닫기</CdButton>
       {canManage && selected && !selected.referenceOnly && <><CdButton disabled={busy} onClick={() => void collect(selected)}>저장값 수집 확인</CdButton><CdButton variant="primary" disabled={busy} onClick={() => void save()}>{busy ? "처리 중…" : "설정 저장"}</CdButton></>}

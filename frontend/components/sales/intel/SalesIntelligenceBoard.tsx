@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { hasAnyPerm, hasPerm, permsOf } from "@/lib/auth/perms";
+import { BookOpenText } from "lucide-react";
 import { CdPageHeader, CdTabs, useCdashTheme } from "@/components/cdash";
 import { IntelOverviewPanel } from "./IntelOverviewPanel";
 import { BriefingPanel } from "./BriefingPanel";
@@ -75,6 +76,8 @@ export function SalesIntelligenceBoard() {
   return (
     <div className="cdash cd-fields-white intel-ui p-2 min-w-0" data-theme={theme}>
       <CdPageHeader
+        icon={<BookOpenText className="w-5 h-5" />}
+        eyebrow="SALES & MARKETING"
         title="RAG & 영업 발굴"
         helpTopic="sales.intelligence"
         tabs={activeTab ? <CdTabs items={tabs} active={activeTab} onChange={(key) => navigate(key)} /> : undefined}
@@ -91,7 +94,7 @@ export function SalesIntelligenceBoard() {
           />
         )}
         {activeTab === "discovery" && (
-          <ProjectIntelligencePanel canEdit={canEdit} initialProjectId={arg("projectId")} />
+          <ProjectIntelligencePanel canEdit={canEdit} initialProjectId={arg("projectId")} initialReview={arg("review")} />
         )}
         {activeTab === "candidates" && (
           <FacilityCandidatesPanel canEdit={canEdit} onOpenProject={(projectId) => navigate("discovery", { projectId })} />

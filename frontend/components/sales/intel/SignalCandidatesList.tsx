@@ -5,10 +5,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CdBadge, useCdashTheme } from "@/components/cdash";
-import { INTEL_SIGNAL_GRADE_LABELS, INTEL_SIGNAL_TYPE_LABELS } from "@/lib/intel/signal-extractor";
+import { useCdashTheme } from "@/components/cdash";
 import type { IntelSignal } from "./intel-shared";
-import { RELEVANCE_LABEL } from "./intel-shared";
+import { GradeTag, RelevanceTag, TypeTag } from "./intel-shared";
+import { IntelEmpty, IntelError, IntelTile } from "./intel-ui-kit";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { intelApi, intelDate, intelSourceLabel } from "./intelligence-client";
 
@@ -43,37 +43,26 @@ export function SignalCandidatesList({ canEdit, onCount }: { canEdit: boolean; o
 
   return (
     <>
-      {error && <div className="intel-card-body"><div className="intel-error" role="alert">{error}</div></div>}
-      <p className="intel-table cd-text-muted px-5 pb-3">사업장과 매칭된 확정·후보 등급 신호 중 아직 영업건으로 전환하지 않은 것입니다. 투자 프로젝트로 정리되기 전의 개별 신호를 바로 전환할 때 씁니다.</p>
+      {error && <div className="mb-2"><IntelError>{error}</IntelError></div>}
       {items.length > 0 ? (
-        <ul className="intel-rows">
+        <div className="flex flex-col gap-1.5">
           {items.map((item) => (
-            <li key={item.signalId}>
-              <button type="button" className="intel-row-item" onClick={() => void open(item.signalId)}>
-                <div className="intel-row-main">
-                  <p className="intel-row-title">{item.companyName ?? item.facilityName ?? "기업 미확인"}</p>
-                  <p className="intel-row-meta">{item.summary ?? item.reportName ?? "요약 없음"}</p>
-                  <p className="intel-row-meta">
-                    {[
-                      INTEL_SIGNAL_TYPE_LABELS[item.signalType as keyof typeof INTEL_SIGNAL_TYPE_LABELS] ?? item.signalType,
-                      item.industryRelevance ? `업종 관련 ${RELEVANCE_LABEL[item.industryRelevance] ?? item.industryRelevance}` : null,
-                      intelSourceLabel(item.source),
-                      item.facilityName ? `사업장 ${item.facilityName}` : null,
-                      item.disclosedAt ? intelDate(item.disclosedAt) : null,
-                    ].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-                <div className="intel-row-side">
-                  <CdBadge tone={item.signalGrade === "confirmed" ? "success" : "idle"}>
-                    {INTEL_SIGNAL_GRADE_LABELS[item.signalGrade as keyof typeof INTEL_SIGNAL_GRADE_LABELS] ?? item.signalGrade}
-                  </CdBadge>
-                </div>
-              </button>
-            </li>
+            <IntelTile key={item.signalId} onClick={() => void open(item.signalId)}>
+              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                <span className="cd-text text-sm font-bold truncate">{item.companyName ?? item.facilityName ?? "기업 미확인"}</span>
+                <TypeTag type={item.signalType} />
+                <GradeTag grade={item.signalGrade} />
+                <RelevanceTag relevance={item.industryRelevance} note={item.relevanceNote} />
+                <span className="cd-pill cd-pill-outline">{intelSourceLabel(item.source)}</span>
+              </div>
+              <p className="cd-text-muted text-[11px] truncate mt-1">{item.summary ?? item.reportName ?? "—"}</p>
+              {item.industryRelevance === "supply_chain" && item.relevanceNote && <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "var(--cd-primary)" }}>↳ {item.relevanceNote}</p>}
+              <p className="cd-text-faint text-[11px] mt-0.5">{[item.facilityName ? `사업장 ${item.facilityName}` : null, item.disclosedAt ? intelDate(item.disclosedAt) : null].filter(Boolean).join(" · ")}</p>
+            </IntelTile>
           ))}
-        </ul>
+        </div>
       ) : (
-        <p className="intel-empty">{loading ? "불러오는 중…" : "전환할 수집 신호 후보가 없습니다."}</p>
+        <IntelEmpty>{loading ? "불러오는 중…" : "전환할 수집 신호 후보가 없습니다."}</IntelEmpty>
       )}
       {selected && (
         <IntelSignalModal

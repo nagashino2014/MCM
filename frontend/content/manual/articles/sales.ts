@@ -30,8 +30,8 @@ export const SALES_ARTICLES: ManualArticle[] = [
       { id: "delivery", title: "브리핑 — 발행본 읽기·공유·재시도", blocks: [
         { kind: "list", items: [
           "브리핑 탭의 [[정기 발행본]]은 왼쪽 발행 이력과 오른쪽 보고서로 나뉩니다. 관심 분야로 이력을 좁힐 수 있습니다. 질문형 브리핑은 [[AI 질의]]에서 이전과 같이 만듭니다.",
-          "보고서는 요약 → 핵심 동향 → 우선 검토 프로젝트 → 영업 시사점(우선 검토·확인 필요·참고 묶음) → 수집 범위·상태 순서입니다. 넓은 화면에서는 출처가 오른쪽에 붙습니다.",
-          "문장 끝 위첨자 번호를 누르면 원근거가 열립니다. 연결된 업무는 [[프로젝트 상세]]로 영업 발굴 탭에서 엽니다. 이 버튼은 영업 열람 권한이 있을 때 표시됩니다. [[PDF]]에도 같은 보고서가 담깁니다.",
+          "정기 발행본은 AI 질의와 같은 보고서 화면(핵심 지표·핵심 동향·기업별 투자 카드·영업 시사점·출처 카드)으로 보여 줍니다. 보고서 아래 전달 현황에서 수신자·채널별 상태를 확인합니다.",
+          "문장 옆 출처 번호를 누르면 원근거가 열립니다. 연결된 업무는 [[투자 프로젝트 보기]]로 영업 발굴 탭에서 엽니다. 이 버튼은 영업 열람 권한이 있을 때 표시됩니다. PDF 아이콘으로 같은 보고서를 내려받습니다.",
           "정기 발행본은 당시의 근거를 고정해 보관합니다. 같은 투자계획은 대표 근거로 묶고, 서로 다른 공장·금액 범위·취소·지연·정정은 구분합니다.",
           "본인이 만든 보고서는 [[공유]]로 브리핑 열람 권한이 있는 활성 사용자를 선택해 전달합니다. 공유받은 브리핑 목록에 항상 등록되며 앱 메일함·모바일 푸시·메신저를 추가로 고를 수 있습니다. 메신저는 기존 1:1 대화방을 재사용하고 없으면 새로 만듭니다.",
           "보고서 아래 전달 현황에서 수신자·채널별 상태를 봅니다. 발행은 모든 채널의 전달 완료를 뜻하지 않습니다. 실패·예산 제한 원인을 해결한 뒤 [[실패 건 재시도]]를 누르면 성공한 채널은 다시 보내지 않습니다.",
@@ -53,7 +53,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       ] },
       { id: "projects", title: "영업 발굴 — 투자 프로젝트에서 영업으로", blocks: [
         { kind: "steps", items: [
-          "영업 발굴 탭의 투자 프로젝트 목록은 공개 근거 점수 순입니다. [[우선 검토]]는 서비스 적합성과 추진 단계가 확인된 후보, [[정보 보완 필요]]는 그중 하나가 확인되지 않아 확정 순위와 분리한 후보입니다. 추진 단계·검토 가능 서비스·검색으로 더 좁힙니다.",
+          "영업 발굴 탭의 투자 프로젝트 목록은 공개 근거 점수 순입니다. 위쪽 칩으로 투자 프로젝트와 수집 신호 후보를 바꿔 봅니다. [[우선 검토]]는 서비스 적합성과 추진 단계가 확인된 후보, [[정보 보완 필요]]는 그중 하나가 확인되지 않아 확정 순위와 분리한 후보입니다. 추진 단계·검토 가능 서비스·검색으로 더 좁힙니다.",
           "금액은 억원 단위로 표시합니다. 영업 연결 열에서 연결된 영업·계약 수와 기한이 지난 활동을 바로 봅니다.",
           "행을 누르면 상세가 열립니다. 개요에서 확인된 사실·서비스 관련 가능성·추가 확인사항을 구분해 읽습니다. 서비스 가능성은 검토 가설이며 법적 의무나 수주 확률을 확정하지 않습니다.",
           "근거·이력에서 원문과 단계·금액 변화를 확인합니다. 근거 문서만 다시 확인한 기록은 접혀 있습니다.",
@@ -89,7 +89,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       ] },
     ],
     keywords: ["정기 브리핑", "관심 분야", "관심 설정", "주간", "개요", "중요 변화", "영업 발굴", "투자 프로젝트", "KOSIS", "공식 정보원", "후속 활동", "신규 사업장", "검색 발췌", "품질 보류", "재검증"],
-    sources: ["components/sales/intel/SalesIntelligenceBoard.tsx", "components/sales/intel/IntelOverviewPanel.tsx", "components/sales/intel/BriefingPanel.tsx", "components/sales/intel/ScheduledBriefingPanel.tsx", "components/sales/intel/ScheduledBriefingReport.tsx", "components/sales/intel/ProjectIntelligencePanel.tsx", "components/sales/intel/SignalCandidatesList.tsx", "components/sales/intel/FacilityCandidatesPanel.tsx", "components/sales/intel/OfficialSourcesPanel.tsx"],
+    sources: ["components/sales/intel/SalesIntelligenceBoard.tsx", "components/sales/intel/IntelOverviewPanel.tsx", "components/sales/intel/BriefingPanel.tsx", "components/sales/intel/ScheduledBriefingPanel.tsx", "components/sales/intel/BriefingReportView.tsx", "components/sales/intel/ProjectIntelligencePanel.tsx", "components/sales/intel/SignalCandidatesList.tsx", "components/sales/intel/FacilityCandidatesPanel.tsx", "components/sales/intel/OfficialSourcesPanel.tsx"],
     reviewedAt: "2026-11-01",
   },
   {

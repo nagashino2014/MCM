@@ -3,11 +3,13 @@
 // 브리핑 — 정기 발행본(목록 + 읽기)과 AI 질의(기존 질문형 RAG 화면, 구조 보존)를 한 탭에서 오간다.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CdBadge, CdButton, CdModal, CdSelect, CdTable, CdTabs, useCdashTheme, useCdToast } from "@/components/cdash";
+import { FileText, History, RefreshCw, Send } from "lucide-react";
+import { CdButton, CdModal, useCdashTheme, useCdToast } from "@/components/cdash";
 import type { BriefingChannel, BriefingDelivery, BriefingProfile, BriefingRun } from "@/lib/intel/briefing-types";
 import type { Briefing, IntelSignal } from "./intel-shared";
 import { RagBoard } from "./RagBoard";
-import { ScheduledBriefingReport } from "./ScheduledBriefingReport";
+import { BriefingReportView } from "./BriefingReportView";
+import { IntelCard, IntelChips, IntelEmpty, IntelError, IntelNotice, IntelTile } from "./intel-ui-kit";
 import { IntelSignalModal } from "./IntelSignalModal";
 import { intelApi, intelTime, jsonBody, safeIntelUrl } from "./intelligence-client";
 
@@ -22,15 +24,15 @@ const CHANNEL: Record<BriefingChannel, string> = { inbox: "사내 메일함", em
 
 export function RunStatusPill({ status }: { status: BriefingRun["status"] }) {
   if (status === "published") return null;
-  const tone = status === "failed" || status === "blocked_budget" ? "error" : ACTIVE.includes(status) ? "info" : "idle";
-  return <CdBadge tone={tone}>{status === "no_change" ? "변동 없음" : RUN_STATUS[status]}</CdBadge>;
+  const tone = status === "failed" || status === "blocked_budget" ? "cd-pill-error" : ACTIVE.includes(status) ? "cd-pill-info" : "cd-pill-idle";
+  return <span className={`cd-pill ${tone} shrink-0`}>{status === "no_change" ? "변동 없음" : RUN_STATUS[status]}</span>;
 }
 
 export function BriefingPanel({ initialView, initialRunId, canViewSales, onOpenProject }: { initialView: View; initialRunId?: string | null; canViewSales: boolean; onOpenProject: (projectId: string) => void }) {
   const [view, setView] = useState<View>(initialView);
   return (
-    <div className="intel-stack">
-      <CdTabs variant="underline" active={view} onChange={setView} items={[
+    <div className="flex flex-col gap-3 min-w-0">
+      <IntelChips active={view} onChange={setView} items={[
         { key: "published" as View, label: "정기 발행본" },
         { key: "ask" as View, label: "AI 질의" },
       ]} />
@@ -55,7 +57,7 @@ function PublishedBriefings({ initialRunId, canViewSales, onOpenProject }: { ini
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resendOpen, setResendOpen] = useState(false);
-  const readerRef = useRef<HTMLElement>(null);
+  const readerRef = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -102,72 +104,64 @@ function PublishedBriefings({ initialRunId, canViewSales, onOpenProject }: { ini
   const run = detail?.run;
 
   return (
-    <div className="intel-split">
-      <section className="cd-card">
-        <div className="intel-card-head">
-          <div><h2 className="intel-section">발행 이력</h2><span className="intel-table cd-text-muted">{runs.length}건</span></div>
-        </div>
-        <div className="intel-toolbar">
-          <CdSelect label="관심 분야" value={profileId} className="w-full" onChange={(event) => { setProfileId(event.target.value); setSelectedId(null); }}>
-            <option value="">전체 관심 분야</option>
-            {profiles.map((profile) => <option key={profile.profileId} value={profile.profileId}>{profile.name}</option>)}
-          </CdSelect>
-        </div>
-        <div className="intel-split-list">
-          {runs.length ? (
-            <ul className="intel-rows">
-              {runs.map((item) => (
-                <li key={item.runId}>
-                  <button type="button" className="intel-row-item" aria-current={item.runId === selectedId} onClick={() => { setSelectedId(item.runId); if (window.matchMedia("(max-width: 1199px)").matches) readerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-                    <div className="intel-row-main">
-                      <p className="intel-row-title">{item.profileName}</p>
-                      <p className="intel-row-meta">{item.trigger === "scheduled" ? "정기" : "수동"} · {intelTime(item.scheduledFor)}</p>
-                    </div>
-                    <div className="intel-row-side"><RunStatusPill status={item.status} /></div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="intel-empty">{loading ? "불러오는 중…" : "발행된 브리핑이 없습니다. 관심 설정에서 관심 분야를 등록하고 지금 생성을 누르세요."}</p>
-          )}
-        </div>
-      </section>
+    <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
+      <IntelCard icon={History} title="발행 이력" count={runs.length || undefined} desc="관심 분야별 정기·수동 발행본">
+        <select className="cd-select w-full mb-2" aria-label="관심 분야" value={profileId} onChange={(event) => { setProfileId(event.target.value); setSelectedId(null); }}>
+          <option value="">전체 관심 분야</option>
+          {profiles.map((profile) => <option key={profile.profileId} value={profile.profileId}>{profile.name}</option>)}
+        </select>
+        {runs.length ? (
+          <div className="flex flex-col gap-1.5 overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 260px)" }}>
+            {runs.map((item) => (
+              <IntelTile key={item.runId} active={item.runId === selectedId} onClick={() => { setSelectedId(item.runId); if (window.matchMedia("(max-width: 1279px)").matches) readerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="cd-text text-sm font-bold truncate flex-1">{item.profileName}</span>
+                  <RunStatusPill status={item.status} />
+                </div>
+                <p className="cd-text-faint text-[11px] mt-0.5">{item.trigger === "scheduled" ? "정기" : "수동"} · {intelTime(item.scheduledFor)}</p>
+              </IntelTile>
+            ))}
+          </div>
+        ) : (
+          <IntelEmpty>{loading ? "불러오는 중…" : "발행된 브리핑이 없습니다. 관심 설정에서 관심 분야를 등록하고 지금 생성을 누르세요."}</IntelEmpty>
+        )}
+      </IntelCard>
 
-      <section ref={readerRef} className="cd-card min-w-0">
-        {error && <div className="intel-card-body pt-5"><div className="intel-error" role="alert">{error}</div></div>}
+      <div ref={readerRef} className="flex flex-col gap-4 min-w-0">
+        {error && <IntelError>{error}</IntelError>}
         {run ? <>
-          <div className="intel-card-head">
-            <div className="flex-col !items-start">
-              <h2 className="intel-section">{detail?.briefing?.question ?? run.profileName}</h2>
-              <p className="intel-table cd-text-muted">{run.trigger === "scheduled" ? "정기" : "수동"} · 기준 {intelTime(run.scheduledFor)}{run.status !== "published" ? ` · ${RUN_STATUS[run.status]}` : ""}</p>
-            </div>
-            {canManage && (run.status === "failed" || detail?.deliveries.some((item) => item.status === "failed" || item.status === "unknown")) && (
-              <div className="flex gap-2">
-                <CdButton size="sm" disabled={busy} onClick={() => void retry()}>실패 건 재시도</CdButton>
-                {detail?.deliveries.some((item) => item.status === "unknown") && <CdButton size="sm" variant="ghost" disabled={busy} onClick={() => setResendOpen(true)}>확인 필요 건 재전송</CdButton>}
-              </div>
-            )}
-          </div>
-          <div className="intel-card-body intel-stack">
-            {run.error && <div className="intel-error" role="alert">{run.error}</div>}
-            {detail?.briefing
-              ? <ScheduledBriefingReport briefing={detail.briefing} onOpenSource={(id) => void openEvidence(id)} canOpenProject={canViewSales} />
-              : <p className="intel-notice">{run.status === "no_change" ? "직전 발행 이후 새로운 주요 변동이 없어 보고서를 만들지 않았습니다." : ACTIVE.includes(run.status) ? "보고서를 작성하고 있습니다. 15초마다 상태를 확인합니다." : "열람할 보고서가 없습니다."}</p>}
-            {detail && detail.deliveries.length > 0 && <section className="intel-subsection">
-              <h3 className="intel-section mb-3">전달 현황</h3>
-              <CdTable bare rows={detail.deliveries} rowKey={(item) => item.deliveryId} columns={[
-                { key: "user", header: "수신자", render: (item) => users.find((user) => user.userId === item.userId)?.name ?? "알 수 없는 사용자" },
-                { key: "channel", header: "채널", render: (item) => CHANNEL[item.channel] },
-                { key: "status", header: "상태", render: (item) => item.status === "failed" ? <CdBadge tone="error" title={item.error ?? undefined}>실패</CdBadge> : item.status === "unknown" ? <CdBadge tone="warn">확인 필요</CdBadge> : DELIVERY[item.status] },
-              ]} />
-            </section>}
-          </div>
-        </> : <p className="intel-empty">{loading ? "불러오는 중…" : "왼쪽 목록에서 브리핑을 선택하세요."}</p>}
-      </section>
+          {run.error && <IntelError>{run.error}</IntelError>}
+          {detail?.briefing
+            ? <BriefingReportView briefing={detail.briefing} theme={theme} canOpenProject={canViewSales} onOpenSignal={(id) => void openEvidence(id)} />
+            : <IntelCard icon={FileText} title={run.profileName} desc={`${run.trigger === "scheduled" ? "정기" : "수동"} · 기준 ${intelTime(run.scheduledFor)}`} actions={<RunStatusPill status={run.status} />}>
+                <IntelNotice>{run.status === "no_change" ? "직전 발행 이후 새로운 주요 변동이 없어 보고서를 만들지 않았습니다." : ACTIVE.includes(run.status) ? "보고서를 작성하고 있습니다. 15초마다 상태를 확인합니다." : "열람할 보고서가 없습니다."}</IntelNotice>
+              </IntelCard>}
+          {detail && (detail.deliveries.length > 0 || canManage) && (
+            <IntelCard icon={Send} title="전달 현황" desc={`${run.trigger === "scheduled" ? "정기" : "수동"} 실행 · 기준 ${intelTime(run.scheduledFor)} · ${RUN_STATUS[run.status]}`}
+              actions={canManage && (run.status === "failed" || detail.deliveries.some((item) => item.status === "failed" || item.status === "unknown")) ? <>
+                <button className="cd-btn cd-btn-soft cd-btn-sm" disabled={busy} onClick={() => void retry()}><RefreshCw className="w-3.5 h-3.5" />실패 건 재시도</button>
+                {detail.deliveries.some((item) => item.status === "unknown") && <button className="cd-btn cd-btn-ghost cd-btn-sm" disabled={busy} onClick={() => setResendOpen(true)}>확인 필요 건 재전송</button>}
+              </> : undefined}>
+              {detail.deliveries.length ? (
+                <div className="flex flex-col">
+                  {detail.deliveries.map((item) => (
+                    <div key={item.deliveryId} className="flex items-center gap-2 py-1.5 border-b cd-border-c last:border-b-0 text-sm">
+                      <span className="cd-text font-bold flex-1 min-w-0 truncate">{users.find((user) => user.userId === item.userId)?.name ?? "알 수 없는 사용자"}</span>
+                      <span className="cd-pill cd-pill-outline">{CHANNEL[item.channel]}</span>
+                      <span className={`cd-pill ${item.status === "sent" ? "cd-pill-success" : item.status === "failed" ? "cd-pill-error" : item.status === "unknown" ? "cd-pill-warn" : "cd-pill-idle"}`} title={item.error ?? undefined}>{DELIVERY[item.status]}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <IntelEmpty>전달 대상이 없습니다.</IntelEmpty>}
+            </IntelCard>
+          )}
+        </> : (
+          <IntelCard icon={FileText} title="보고서"><IntelEmpty>{loading ? "불러오는 중…" : "왼쪽 목록에서 브리핑을 선택하세요."}</IntelEmpty></IntelCard>
+        )}
+      </div>
 
       <CdModal open={resendOpen} onClose={() => !busy && setResendOpen(false)} title="전달 확인 필요 건 재전송" footer={<><CdButton onClick={() => setResendOpen(false)} disabled={busy}>취소</CdButton><CdButton variant="primary" disabled={busy} onClick={() => void retry(true)}>재전송</CdButton></>}>
-        <p className="intel-ui intel-prose">발송 중 연결이 끊긴 건은 이미 전달되었을 수 있습니다. 채널 기록을 확인한 뒤 재전송하면 같은 알림이 다시 전달될 수 있습니다.</p>
+        <p className="cd-text text-sm leading-relaxed">발송 중 연결이 끊긴 건은 이미 전달되었을 수 있습니다. 채널 기록을 확인한 뒤 재전송하면 같은 알림이 다시 전달될 수 있습니다.</p>
       </CdModal>
       {signal && <IntelSignalModal signal={signal} theme={theme} onClose={() => setSignal(null)} onChanged={() => {}} onConverted={() => {}} canEdit={false} />}
     </div>

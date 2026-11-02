@@ -53,6 +53,12 @@ export type AuditAction =
   | "facility_promote"
   | "contract_invoice_upload"
   | "contract_document_upload"
+  // 매입 계약(331)
+  | "purchase_contract_create"
+  | "purchase_contract_update"
+  | "purchase_contract_delete"
+  | "purchase_contract_payment_update"
+  | "purchase_contract_document_upload"
   | "contract_outsourcing_update"
   | "contract_dedupe_resolve"
   | "agency_report_create"

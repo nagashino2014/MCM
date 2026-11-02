@@ -135,6 +135,31 @@ export function getContractDocumentStorageKey(params: {
   return { storageKey, fileName, folderName };
 }
 
+/**
+ * 매입 계약서 S3 키(331) — 매출 계약서와 같은 폴더 규칙을 purchase-contracts/ 접두 아래에 둔다.
+ *   purchase-contracts/documents/{YYYY}/(계약일) 계약명/(문서일)계약명 매입계약서.pdf
+ * 다운로드 라우트(/api/purchase-contracts/documents)가 이 접두를 검사하므로 바꾸지 말 것.
+ */
+export const PURCHASE_CONTRACT_DOCUMENT_PREFIX = "purchase-contracts/documents/";
+
+export function getPurchaseContractDocumentStorageKey(params: {
+  contractDate: string;
+  documentDate: string;
+  contractTitle: string;
+  docType: "contract" | "amendment";
+  seq?: number;
+}): { storageKey: string; fileName: string; folderName: string } {
+  const contractDate = parseIsoDate(params.contractDate, "계약일자");
+  const year = String(contractDate.getFullYear());
+  const folderName = sanitizePathSegment(`(${params.contractDate}) ${params.contractTitle}`);
+  const title = sanitizePathSegment(params.contractTitle);
+  const kind = params.docType === "amendment" ? "매입 변경계약서" : "매입계약서";
+  const seq = params.seq && params.seq > 1 ? `(${params.seq})` : "";
+  const fileName = sanitizeFilename(`(${params.documentDate})${title} ${kind}${seq}.pdf`);
+  const storageKey = ["purchase-contracts", "documents", year, folderName, fileName].join("/");
+  return { storageKey, fileName, folderName };
+}
+
 export function getInvoiceStorageKey(params: {
   issueDate: string;
   contractTitle: string;

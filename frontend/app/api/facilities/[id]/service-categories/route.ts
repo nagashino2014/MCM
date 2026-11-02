@@ -5,8 +5,10 @@ import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
   normalizeFacilityCompanySize,
   normalizeServiceCategories,
+  normalizeTradeRoles,
   type FacilityCompanySize,
   type FacilityServiceCategory,
+  type FacilityTradeRole,
 } from "@/lib/ieps/facility-service";
 
 export const runtime = "nodejs";
@@ -19,6 +21,8 @@ interface RouteContext {
 interface Body {
   serviceCategories?: FacilityServiceCategory[];
   companySize?: FacilityCompanySize | null;
+  /** 거래 구분(331) — 생략하면 기존 값을 유지한다(구 클라이언트 호환). */
+  tradeRoles?: FacilityTradeRole[];
 }
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
@@ -49,13 +53,18 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
         now,
         id,
       ]);
+      // 거래 구분(331) — 매출처·매입처. 본문에 있을 때만 바꾼다.
+      const tradeRoles = body.tradeRoles !== undefined ? normalizeTradeRoles(body.tradeRoles) : null;
+      if (tradeRoles) {
+        await db.run("UPDATE facilities SET trade_roles = $1::text[], updated_at = $2 WHERE facility_id = $3", [tradeRoles, now, id]);
+      }
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "facility_service_update",
         targetTable: "facilities",
         targetId: id,
         before,
-        after: { serviceCategories: categories, companySize },
+        after: { serviceCategories: categories, companySize, ...(tradeRoles ? { tradeRoles } : {}) },
       });
     });
 

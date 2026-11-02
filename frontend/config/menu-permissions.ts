@@ -84,6 +84,8 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   // ── 사업 운영 ──
   { path: "/facilities", keys: ["facility.view"] },
   { path: "/contracts", keys: ["contract.view"] },
+  // 매입 계약 관리(331) — 회계·총무 성격이라 contract.view 와 분리한 purchase.view
+  { path: "/contracts/purchase", keys: ["purchase.view"] },
   // 계약 Dashboard·수주/수금/발행 현황 — 민감 현황이라 billing.view(관리자·인사/회계·대표이사·영업관리)로 한정(298, 2026-10-19)
   { path: "/contracts/dashboard", keys: ["billing.view"] },
   { path: "/contracts/billing", keys: ["billing.view"] },

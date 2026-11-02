@@ -191,4 +191,34 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     sources: ["components/contracts/billing/ReceivableActionsCard.tsx", "lib/ieps/receivables.ts"],
     reviewedAt: "2026-10-20",
   },
+  // ── 매입 계약 관리(331) ──
+  {
+    id: "purchase.ledger",
+    label: "매입 계약 원장 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "부모 노드는 계약 유형 4가지(외주 계약·정기 구독·임대 계약·관리 계약)이고, 한 번에 한 유형만 펼쳐집니다.",
+        "계약 금액은 청구·수금 단계 금액 합계입니다. 모든 단계가 지급 완료된 계약에는 제목 옆에 작은 점이 찍힙니다.",
+        "연도 선택은 계약일 기준이고, 검색은 계약명·업체·분류를 봅니다.",
+        "매입 계약은 매출 계약 원장과 별도 표에 저장되어 매출 통계·수주 현황에 섞이지 않습니다.",
+      ] },
+    ],
+    more: { article: "contracts.purchase", section: "ledger" },
+    sources: ["components/contracts/purchase/PurchaseContractsBoard.tsx", "lib/contracts/purchase/queries.ts"],
+    reviewedAt: "2026-11-02",
+  },
+  {
+    id: "purchase.stages",
+    label: "매입 청구·수금 단계 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "단계마다 **세금계산서 수취**(수취일·계산서 금액)와 **대금 지급**(지급일·지급액)을 따로 기록합니다. 지급액을 비우면 청구금액 전액으로 기록됩니다.",
+        "**후보 계산서 찾기**는 홈택스에서 수집한 매입 계산서 중 계약상대 사업자번호가 같은 건을 단계 금액에 가까운 순으로 보여 줍니다. 연결하면 수취 정보가 채워지고, 한 계산서는 한 단계에만 연결됩니다.",
+        "단계 금액을 바꾸면 계약금액이 합계로 다시 계산됩니다. 순서는 화살표로 바꿉니다.",
+      ] },
+    ],
+    more: { article: "contracts.purchase", section: "stages" },
+    sources: ["components/contracts/purchase/PurchaseContractDetailPanel.tsx", "components/contracts/purchase/PurchaseStageModal.tsx"],
+    reviewedAt: "2026-11-02",
+  },
 ];

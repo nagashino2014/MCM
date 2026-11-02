@@ -21,8 +21,11 @@ import {
   FACILITY_SERVICE_COLORS,
   FACILITY_SERVICE_LABELS,
   FACILITY_SERVICE_ORDER,
+  FACILITY_TRADE_ROLE_LABELS,
+  FACILITY_TRADE_ROLE_ORDER,
   type FacilityAlias,
   type FacilityCompanySize,
+  type FacilityTradeRole,
   type FacilityManualProduct,
   type FacilityServiceCategory,
 } from "@/lib/ieps/facility-service";
@@ -2544,6 +2547,10 @@ function EditView({
     detail.serviceCategories.length ? detail.serviceCategories : ["integrated"]
   );
   const [companySize, setCompanySize] = useState<FacilityCompanySize | "">(detail.companySize ?? "");
+  // 거래 구분(331) — 매출처·매입처 복수. 매입 계약 상대 업체 검색에서 매입처를 먼저 보여 주는 근거.
+  const [tradeRoles, setTradeRoles] = useState<FacilityTradeRole[]>(
+    (detail.tradeRoles ?? []).filter((r): r is FacilityTradeRole => (FACILITY_TRADE_ROLE_ORDER as string[]).includes(r))
+  );
   const [manualProducts, setManualProducts] = useState(
     detail.manualProducts.length
       ? detail.manualProducts.map((product) => ({
@@ -2638,6 +2645,7 @@ function EditView({
         body: JSON.stringify({
           serviceCategories,
           companySize: companySize || null,
+          tradeRoles,
         }),
       });
       const saveManualProducts = fetch("/api/facilities/" + detail.facilityId + "/manual-products", {
@@ -2982,6 +2990,27 @@ function EditView({
               <option key={size} value={size}>{FACILITY_COMPANY_SIZE_LABELS[size]}</option>
             ))}
           </select>
+        </div>
+        {/* 거래 구분(331) — 매출처·매입처 복수 선택. 매출 계약 발주처는 마이그레이션이 매출처로 백필했다. */}
+        <div className="flex flex-col gap-2 md:col-span-2">
+          <span className="text-[11px] font-medium cd-text-faint">거래 구분</span>
+          <div className="flex flex-wrap gap-4">
+            {FACILITY_TRADE_ROLE_ORDER.map((role) => (
+              <label key={role} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
+                <input
+                  type="checkbox"
+                  checked={tradeRoles.includes(role)}
+                  onChange={(e) =>
+                    setTradeRoles((prev) =>
+                      e.target.checked ? FACILITY_TRADE_ROLE_ORDER.filter((r) => r === role || prev.includes(r)) : prev.filter((r) => r !== role)
+                    )
+                  }
+                />
+                {FACILITY_TRADE_ROLE_LABELS[role]}
+              </label>
+            ))}
+            <span className="text-[11px] cd-text-faint font-normal">매입처로 표시한 업체는 매입 계약 입력에서 먼저 검색됩니다.</span>
+          </div>
         </div>
       </div>
 

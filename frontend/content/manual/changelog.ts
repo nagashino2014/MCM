@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-02", kind: "개선", title: "정기 발행본 — 분류 트리 업종에 아이콘 표시",
+    body: "발행 이력 분류 보기의 업종 이름 왼쪽에 업종별 아이콘을 붙이고 업종 글자 굵기를 한 단계 낮췄습니다. 관리 화면에서 새로 추가한 업종은 공장 아이콘으로 보입니다.",
+    articles: ["sales.rag", "sales.intelligence"],
+  },
+  {
     date: "2026-11-01",
     kind: "수정",
     title: "통합허가 업종 — 업종 코드를 KSIC 11차로 통일",

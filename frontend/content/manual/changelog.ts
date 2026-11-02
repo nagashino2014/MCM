@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-02", kind: "수정", title: "정기 브리핑 — 투자계획 한 건의 금액 범위 문제로 보고서 전체가 보류되던 문제",
+    body: "근거 대조 검수 뒤에도 투자 대상 시설이나 금액 범위(회사 전체 금액·여러 사업 합계)를 확정하지 못한 투자계획이 남으면 보고서 전체를 보류했습니다. 이제 그 투자계획만 빼고 발행하며, 뺀 항목의 제목을 보고서 하단에 적습니다.",
+    articles: ["sales.rag", "sales.intelligence"],
+  },
+  {
     date: "2026-11-02", kind: "수정", title: "전자세금계산서 발행 — 비고의 지급 비중이 틀리게 나오던 문제",
     body: "발행 창 비고의 ‘단계명 : 비중%’을 계약의 청구 단계 금액 합계 기준으로 계산합니다. 단계 금액은 공급가액인데 계약금액이 부가세 포함으로 저장된 계약에서 50%가 45.45%로 나오던 문제가 고쳐졌습니다.",
     articles: ["contracts.manage"],

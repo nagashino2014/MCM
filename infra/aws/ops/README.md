@@ -66,11 +66,12 @@ revision에 남는 것을 의도적으로 수용할 때에만 `-AcknowledgePinne
 `CannotPullContainerError`로 매번 실패했다(EventBridge `FailedInvocations`는 0이라 경보 없음).
 두 target을 745로 다시 고정하고(같은 날 16시 next:748 배포와 함께 748로 재고정·보호 태그) next 리포 정책을 "`schedule-pin-*` 태그 보호 + 최근 30개"로 바꿨다(ecr.tf).
 2026-11-01 13시 RAG 영업 발굴 마이그레이션 319~323 적용·next:751 배포와 함께 두 target을 751로 동반 전환하고 `schedule-pin-751`을 붙였다(절차: `docs/sales-intelligence-phase1-staging-runbook.md` §5).
+2026-11-02 09시 통합허가 업종 일원화(마이그레이션 325~330, 11-01 적용)가 든 next:754 배포 뒤 두 target을 754로 옮기고 `schedule-pin-754`를 붙였다.
 스케줄을 새 revision으로 고정할 때마다 그 이미지(묶음·하위 매니페스트 모두)에 보호 태그를 붙인다.
 배포 가드(`staging-assert-next-schedules-pinned.ps1`)는 고정 이미지가 없거나 보호 태그가 없으면 배포를 막는다.
 
 ```powershell
-.\infra\aws\ops\staging-protect-pinned-image.ps1 -Revision 751   # 멱등
+.\infra\aws\ops\staging-protect-pinned-image.ps1 -Revision 754   # 멱등
 ```
 
 이 고정 검사는 `staging-deploy-next.ps1` 경로의 새 revision 등록을 막는다. 콘솔 수동 등록,

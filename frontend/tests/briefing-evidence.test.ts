@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { INITIAL_BASELINE_EVIDENCE_LIMIT, selectBriefingEvidence, selectBriefingEvidenceWithin } from "../lib/intel/briefing-runner";
+import { INITIAL_BASELINE_EVIDENCE_LIMIT, isBudgetBlockedError, selectBriefingEvidence, selectBriefingEvidenceWithin } from "../lib/intel/briefing-runner";
 import type { BriefingEvidence, BriefingPreview } from "../lib/intel/briefing-types";
 
 const item = (id: string, kind: BriefingEvidence["kind"], extra: Partial<BriefingEvidence> = {}): BriefingEvidence => ({ id, kind, revision: "r1", title: id, text: "검증 근거", companyName: "검증 회사", region: null, source: kind === "signal" ? "news" : kind, url: null, publishedAt: "2026-10-01T00:00:00Z", discoveredAt: "2026-10-02T00:00:00Z", changed: false, amount: null, temporalClass: "background", ...extra });
@@ -52,4 +52,9 @@ test("첫 보고서라도 상한 안이면 모두 분석하고 정기 보고서�
   assert.deepEqual(selectBriefingEvidenceWithin({ ...preview(small), initialBaseline: true }), { items: small, analyzedProjects: 1, omittedProjects: 0 });
   const many = Array.from({ length: 1201 }, (_, i) => item(`project:p${i}`, "project", { changed: true }));
   assert.throws(() => selectBriefingEvidenceWithin(preview(many)), /1,200/);
+});
+
+test("검증 문구 속 '예산' 낱말은 AI 예산 차단으로 분류하지 않는다", () => {
+  assert.equal(isBudgetBlockedError("llm_budget_exceeded: 월 한도 초과"), true);
+  assert.equal(isBudgetBlockedError("투자계획의 유지·재확인을 뒷받침하는 직접 근거가 없습니다. (… 전사 예산·투자 규율의 유지는 …)"), false);
 });

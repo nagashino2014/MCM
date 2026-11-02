@@ -102,6 +102,10 @@ export async function generateScheduledBriefing(preview: BriefingPreview, profil
   generated.report.kpis[0] = { label: "선별 투자계획", value: `${generated.report.companies.length}개`, sub: `대상 후보 ${preview.totalProjects}개에서 중복·무관 자료 정리` };
   return generated;
 }
+/** AI 예산 게이트 차단만 blocked_budget 으로 본다. 검증 문구 속 '예산'(예: 전사 예산) 같은 낱말로 판단하지 않는다. */
+export function isBudgetBlockedError(message: string): boolean {
+  return /llm_budget_exceeded|budget_blocked/.test(message);
+}
 export async function executeClaimedBriefing(run: ClaimedRun, generate = generateScheduledBriefing): Promise<BriefingRunStatus> {
   let heartbeatError: unknown = null;
   const timer = setInterval(() => { void heartbeat(run).catch(error => { heartbeatError = error; }); }, 30000);
@@ -160,7 +164,7 @@ export async function executeClaimedBriefing(run: ClaimedRun, generate = generat
     }); return status;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const budget = /budget|예산/.test(message); const code = (error as { status?: number }).status;
+    const budget = isBudgetBlockedError(message); const code = (error as { status?: number }).status;
     const transient = code === 429 || code === 502 || /timeout|타임아웃|ECONN/.test(message);
     const db = await getDb();
     await db.run("UPDATE intel_briefing_runs SET status=$3,error=$4,next_attempt_at=$5,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE run_id=$1 AND lease_token=$2", [run.runId, run.token, budget ? "blocked_budget" : "failed", message.slice(0, 1000), transient && run.attempt < 3 ? new Date(Date.now() + run.attempt * 60000).toISOString() : "9999-12-31T00:00:00Z"]);

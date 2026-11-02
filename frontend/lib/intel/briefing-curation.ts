@@ -17,10 +17,12 @@ export interface BriefingCurationInput {
   linkedProjectMetadata?: BriefingEvidence[];
 }
 type Invoke = (request: ClaudeMessagesRequest) => Promise<ClaudeMessagesResult>;
+export interface DroppedDigestItem { section: "trends" | "investments" | "insights"; title: string; message: string }
+const DROPPED_SECTION_LABEL: Record<DroppedDigestItem["section"], string> = { trends: "핵심 동향", investments: "투자계획", insights: "영업 시사점" };
 interface DigestValidationOptions {
   checkInvestmentScope?: boolean; evidence?: readonly BriefingEvidence[];
-  /** 주면 시설 범위 검사에 걸린 투자계획을 실패시키지 않고 빼서 여기에 모은다(최종 검수 전용). */
-  droppedInvestments?: Array<{ title: string; message: string }>;
+  /** 주면 시설 범위·근거 검사에 걸린 항목을 실패시키지 않고 빼서 여기에 모은다(최종 검수 전용). 핵심 동향이 모두 빠지면 보류. */
+  droppedItems?: DroppedDigestItem[];
 }
 const key = (text: string) => text.normalize("NFKC").toLowerCase().replace(/\[\d+\]/g, "").replace(/[^\p{L}\p{N}]/gu, "");
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -216,7 +218,7 @@ export function validateBriefingDigest(text: string, allowedReferences: Readonly
       if (section === "investments" && options.checkInvestmentScope !== false) {
         const issue = investmentIssues({ title: String(row.title), topic: row.topic, text: row.text }, index)[0];
         // 투자계획은 근거가 부족하면 빼는 항목이다. 검수 후에도 범위가 맞지 않으면 보고서 전체를 막지 않고 그 항목만 뺀다.
-        if (issue && options.droppedInvestments) { options.droppedInvestments.push({ title: String(row.title).trim(), message: issue.message }); return []; }
+        if (issue && options.droppedItems) { options.droppedItems.push({ section, title: String(row.title).trim(), message: issue.message }); return []; }
         if (issue) throw invalid(section, index, issue.field, issue.detail, issue.message);
       }
       if (section === "insights" && !["우선 검토", "확인 필요", "참고"].includes(String(row.badge))) throw invalid(section, index, "badge", `입력은 ${shape(row.badge)}; 우선 검토·확인 필요·참고 중 하나여야 합니다.`, "영업 시사점의 검토 분류가 올바르지 않습니다.");
@@ -227,8 +229,17 @@ export function validateBriefingDigest(text: string, allowedReferences: Readonly
   if (!trends.length) throw invalid("trends", null, "trends", "현재 0개", "AI 요약의 핵심 동향이 비어 있습니다.");
   const digest = { trends, investments: read("investments") as InvestmentItem[], insights: sortBriefingInsights(read("insights") as InsightItem[]) };
   if (options.checkInvestmentScope !== false && options.evidence) {
-    const issue = evidenceIssues(digest, options.evidence)[0];
-    if (issue) throw invalid(issue.section, issue.item - 1, issue.field, issue.detail, issue.message);
+    const issues = evidenceIssues(digest, options.evidence);
+    if (issues.length && options.droppedItems) {
+      // 근거가 부족한 주장도 항목 단위 문제다. 최종 검수에서는 그 항목만 빼고, 핵심 동향이 하나도 남지 않으면 보류한다.
+      const keep = <T extends DigestItem & { title?: string }>(section: DroppedDigestItem["section"], rows: T[]): T[] => rows.filter((row, index) => {
+        const issue = issues.find(issue => issue.section === section && issue.item === index + 1);
+        if (issue) options.droppedItems!.push({ section, title: row.title ?? row.topic, message: issue.message });
+        return !issue;
+      });
+      digest.trends = keep("trends", digest.trends); digest.investments = keep("investments", digest.investments); digest.insights = keep("insights", digest.insights);
+      if (!digest.trends.length) throw invalid(issues[0].section, issues[0].item - 1, issues[0].field, issues[0].detail, issues[0].message);
+    } else if (issues.length) throw invalid(issues[0].section, issues[0].item - 1, issues[0].field, issues[0].detail, issues[0].message);
   }
   return digest;
 }
@@ -277,7 +288,7 @@ function evidenceBlock(item: BriefingEvidence, index: number, items: BriefingEvi
 export async function curateBriefingReport(input: BriefingCurationInput, invoke: Invoke = claudeMessages): Promise<{ report: BriefingReport; sources: RagBriefingSource[]; model: string | null }> {
   if (!input.items.length || input.items.length > 1200) throw briefingError("요약할 근거 범위를 확인하세요(최대 1,200개).", 422);
   let model: string | null = null;
-  const droppedInvestments: Array<{ title: string; message: string }> = [];
+  const droppedItems: DroppedDigestItem[] = [];
   const officialBackground = new Set(input.requireOfficialBackground ? input.items.flatMap((item, i) => item.kind === "official" && !item.companyName ? [i + 1] : []) : []);
   const ask = async (content: string, allowed: ReadonlySet<number>, merge: boolean, review = false): Promise<BriefingDigest> => {
     const backgroundRefs = [...officialBackground].filter(n => allowed.has(n));
@@ -289,7 +300,7 @@ export async function curateBriefingReport(input: BriefingCurationInput, invoke:
     if (!response.ok || !response.text) throw briefingError(`AI 생성 실패: ${response.errorText?.slice(0, 160) ?? response.status}`, response.status === 429 ? 429 : 502);
     if (response.data?.stop_reason === "max_tokens") throw briefingError("AI 요약이 분량 제한으로 잘려 발행을 보류했습니다.", 422);
     model = response.model;
-    const digest = validateBriefingDigest(response.text, allowed, { checkInvestmentScope: review, evidence: input.items, droppedInvestments: review ? droppedInvestments : undefined });
+    const digest = validateBriefingDigest(response.text, allowed, { checkInvestmentScope: review, evidence: input.items, droppedItems: review ? droppedItems : undefined });
     if (backgroundRefs.length && !digest.trends.some(item => item.references.some(n => officialBackground.has(n)))) throw briefingError("공식 산업동향이 핵심 동향에 반영되지 않아 발행을 보류했습니다.", 422);
     return digest;
   };
@@ -353,5 +364,5 @@ export async function curateBriefingReport(input: BriefingCurationInput, invoke:
     const stage = typeof facts.stage === "string" ? facts.stage : null;
     return { name: e.companyName ?? project?.companyName ?? "기업 미확인", region: e.region ?? project?.region ?? null, status: stage === "unknown" ? "미확인" : stage, project: item.title, projectId: project?.id.slice("project:".length) ?? null, desc: cite(item), facts: project?.amount == null ? [] : [{ label: "공개 투자액", value: `${project.amount.toLocaleString("ko-KR")} ${String(facts.currency ?? "KRW")} (${String(facts.amountScope ?? "범위 미확인")})` }], note: null };
   }));
-  return { model, sources, report: { kpis: input.kpis, trends: digest.trends.map(item => cite(item)), companies, insights: digest.insights.map(item => ({ badge: item.badge, text: cite(item), importance: item.importance })), etcNote: [input.etcNote, `전체 근거 ${input.items.length}개를 검토해 핵심 동향 ${digest.trends.length}개·투자계획 ${companies.length}개로 통합했습니다. 중복·비선정 원자료는 수집 DB에 보존됩니다.`, droppedInvestments.length ? `근거 대조 검수에서 투자 대상 시설이나 금액 범위를 확정하지 못한 투자계획 ${droppedInvestments.length}건(${droppedInvestments.map(d => d.title).join(", ")})은 제외했습니다.` : null].filter(Boolean).join("\n") } };
+  return { model, sources, report: { kpis: input.kpis, trends: digest.trends.map(item => cite(item)), companies, insights: digest.insights.map(item => ({ badge: item.badge, text: cite(item), importance: item.importance })), etcNote: [input.etcNote, `전체 근거 ${input.items.length}개를 검토해 핵심 동향 ${digest.trends.length}개·투자계획 ${companies.length}개로 통합했습니다. 중복·비선정 원자료는 수집 DB에 보존됩니다.`, droppedItems.length ? `근거 대조 검수에서 투자 대상 시설·금액 범위나 직접 근거를 확인하지 못한 항목 ${droppedItems.length}건(${droppedItems.map(d => `${DROPPED_SECTION_LABEL[d.section]} ${d.title}`).join(", ")})은 제외했습니다.` : null].filter(Boolean).join("\n") } };
 }

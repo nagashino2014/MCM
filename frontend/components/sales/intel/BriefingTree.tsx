@@ -4,7 +4,11 @@
 // 사업장 마스터에 없는 기업은 '마스터 미등록'으로 표시하고 수동 등록 화면으로 안내한다.
 
 import { useMemo, useState } from "react";
-import { Building2, ChevronDown, ChevronRight, FileText, Plus, Search } from "lucide-react";
+import {
+  Anvil, Atom, BatteryCharging, Beef, BrickWall, Building2, Cable, Car, ChevronDown, ChevronRight, CircleHelp, CircuitBoard, Cpu,
+  Factory, FileText, FlaskConical, Fuel, Heater, Package, Plus, Recycle, ScrollText, Search, Shirt, Sprout, TestTubes, Wine, Zap,
+  type LucideIcon,
+} from "lucide-react";
 import type { BriefingTreeEntity, BriefingTreeIndustry, BriefingTreeReport } from "@/lib/intel/briefing-tree";
 import { INTEL_INTEREST_SERVICES, INTEL_SERVICE_LABELS } from "./intelligence-client";
 import { IntelChips, IntelEmpty } from "./intel-ui-kit";
@@ -12,6 +16,15 @@ import { IntelChips, IntelEmpty } from "./intel-ui-kit";
 const TYPE_LABEL: Record<string, string> = { investment: "투자계획", expansion: "증설", new_site: "신설", other: "기타" };
 const TYPE_ORDER = ["investment", "expansion", "new_site", "other"];
 type ServiceKey = "" | (typeof INTEL_INTEREST_SERVICES)[number];
+
+/** 업종 노드 아이콘 — 업종 ID 기준. 관리 화면에서 새로 추가한 업종은 공장 아이콘으로 표시한다. */
+const INDUSTRY_ICON: Record<string, LucideIcon> = {
+  power: Zap, "steam-heat": Heater, "waste-incineration": Recycle, steel: Anvil, nonferrous: Cable,
+  "organic-chem": FlaskConical, "oil-refining": Fuel, "inorganic-chem": Atom, "fine-chem": TestTubes, fertilizer: Sprout,
+  "pulp-paper": ScrollText, electronics: CircuitBoard, semiconductor: Cpu, "textile-dyeing": Shirt, "slaughter-meat": Beef,
+  alcohol: Wine, plastics: Package, "auto-parts": Car, cement: BrickWall, "secondary-battery": BatteryCharging,
+  unclassified: CircleHelp,
+};
 
 /** 보고서 노드 글자 — '(발간일) 투자계획·증설·신설'. 세 유형이 없을 때만 '기타'로 적는다. */
 export function reportNodeText(report: BriefingTreeReport): string {
@@ -85,11 +98,13 @@ export function BriefingTree({ industries, loading, selectedRunId, onSelect }: {
         <div role="tree" aria-label="업종별 발행 보고서" className="flex flex-col overflow-y-auto pr-0.5" style={{ maxHeight: "calc(100vh - 340px)" }}>
           {view.map((industry) => {
             const open = searching || openIndustries.has(industry.id);
+            const Icon = INDUSTRY_ICON[industry.id] ?? Factory;
             return (
               <div key={industry.id} role="treeitem" aria-expanded={open} className="border-b cd-border-c last:border-b-0">
                 <button type="button" className="w-full flex items-center gap-1.5 py-2 px-1 cd-row-hover rounded-lg text-left" onClick={() => toggle(openIndustries, industry.id, setOpenIndustries)}>
                   {open ? <ChevronDown className="w-3.5 h-3.5 cd-text-faint" /> : <ChevronRight className="w-3.5 h-3.5 cd-text-faint" />}
-                  <span className="cd-text text-sm font-extrabold">{industry.label}</span>
+                  <Icon className="w-4 h-4 shrink-0" style={{ color: "var(--cd-primary)" }} aria-hidden />
+                  <span className="cd-text text-sm font-bold">{industry.label}</span>
                   <span className="cd-text-faint text-[11px]">사업장 {industry.entities.length}</span>
                   {industry.reportCount > 0 && <span className="cd-pill cd-pill-info ml-auto">보고서 {industry.reportCount}</span>}
                 </button>

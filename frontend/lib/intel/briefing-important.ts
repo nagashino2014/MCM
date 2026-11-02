@@ -7,11 +7,12 @@ import type { BriefingProfileInput } from "./briefing-types";
 export async function synchronizeBriefingProjects(): Promise<{ created: number; updated: number }> {
   const db = await getDb();
   await db.run("INSERT INTO intel_briefing_runtime(key,value) VALUES('initial_cutoff',to_jsonb(now()::text)) ON CONFLICT(key) DO NOTHING");
-  const cutoff = json<string>(rowsToObjects(await db.exec("SELECT value FROM intel_briefing_runtime WHERE key='initial_cutoff'"))[0].value);
+  // 스테이징 pg 드라이버는 jsonb 문자열을 이미 풀어 주므로 JSON.parse 하지 않고 DB에서 시각으로 바꿔 읽는다.
+  const cutoff = new Date(rowsToObjects(await db.exec("SELECT (value#>>'{}')::timestamptz AS cutoff FROM intel_briefing_runtime WHERE key='initial_cutoff'"))[0].cutoff as string | Date).getTime();
   const pending = rowsToObjects(await db.exec(`SELECT DISTINCT s.signal_id,s.created_at,s.updated_at FROM intel_signals s LEFT JOIN intel_project_signals ps ON ps.signal_id=s.signal_id LEFT JOIN intel_projects p ON p.project_id=ps.project_id LEFT JOIN intel_briefing_signal_checks c ON c.signal_id=s.signal_id WHERE s.duplicate_of IS NULL AND s.signal_grade<>'excluded' AND (ps.signal_id IS NULL OR s.updated_at::timestamptz>p.source_checked_at) AND (c.signal_id IS NULL OR s.updated_at::timestamptz>c.source_updated_at) ORDER BY s.created_at ASC LIMIT 500`));
   let created = 0, updated = 0;
   for (const mode of ["initial_backfill", "live"] as const) {
-    const selected = pending.filter(s => (Date.parse(String(s.updated_at ?? s.created_at)) <= Date.parse(cutoff)) === (mode === "initial_backfill"));
+    const selected = pending.filter(s => (Date.parse(String(s.updated_at ?? s.created_at)) <= cutoff) ===(mode === "initial_backfill"));
     const ids = selected.map(s => String(s.signal_id));
     if (!ids.length) continue;
     const revisionIds=rowsToObjects(await db.exec("SELECT current_revision_id FROM intel_source_documents WHERE signal_id=ANY($1::text[]) AND current_revision_id IS NOT NULL",[ids])).map(r=>String(r.current_revision_id));

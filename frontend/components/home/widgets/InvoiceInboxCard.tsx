@@ -2,7 +2,8 @@
 
 import { CdDateInput } from "@/components/cdash/CdField";
 import { useState } from "react";
-import { Inbox, Check } from "lucide-react";
+import { Inbox, Check, FileText } from "lucide-react";
+import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
 import { HomeCard } from "../HomeCard";
 import { useHomeWidget } from "../useHomeWidget";
 
@@ -27,13 +28,18 @@ function todayKst(): string {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** H11 — 발행 요청 수신함(회계). 인라인 발행 폼(발행일·금액) → milestone PATCH. */
+/**
+ * H11 — 발행 요청 수신함(회계).
+ * [발행 처리] = 바로빌 전자세금계산서 발행 모달(발행 성공 시 단계가 발행 완료로 기록돼 요청이 해소된다, 2026-11-02).
+ * [이미 발행함] = 홈택스 등 앱 밖에서 발행한 건의 기록용 인라인 폼(발행일·금액) → milestone PATCH.
+ */
 export function InvoiceInboxCard() {
   const w = useHomeWidget<{ items: InboxItem[] }>("/api/home/invoice-requests/inbox");
   const [formFor, setFormFor] = useState<string | null>(null);
   const [date, setDate] = useState<string>(todayKst());
   const [amount, setAmount] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [issueTarget, setIssueTarget] = useState<InboxItem | null>(null);
 
   if (w.status === "forbidden") return null;
   const items = w.status === "ok" ? w.data.items : [];
@@ -130,17 +136,39 @@ export function InvoiceInboxCard() {
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => openForm(item)}
-                className="cd-btn cd-btn-soft text-[11px] px-2.5 py-1 self-start"
-              >
-                발행 처리
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIssueTarget(item)}
+                  className="cd-btn cd-btn-soft text-[11px] px-2.5 py-1"
+                >
+                  <FileText className="w-3 h-3" />
+                  발행 처리
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openForm(item)}
+                  className="cd-btn cd-btn-ghost text-[11px] px-2 py-1"
+                  title="홈택스 등 앱 밖에서 이미 발행한 경우 발행일·금액만 기록"
+                >
+                  이미 발행함
+                </button>
+              </div>
             )}
           </li>
         ))}
       </ul>
+      {issueTarget && (
+        <TaxInvoiceIssueModal
+          contractId={issueTarget.contractId}
+          milestoneId={issueTarget.milestoneId}
+          onClose={() => setIssueTarget(null)}
+          onIssued={() => {
+            setIssueTarget(null);
+            w.reload();
+          }}
+        />
+      )}
     </HomeCard>
   );
 }

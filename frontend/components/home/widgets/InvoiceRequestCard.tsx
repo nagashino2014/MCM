@@ -5,6 +5,7 @@ import { FileText, ChevronDown, ChevronRight, Folder, FolderOpen, Send, X } from
 import { HomeCard } from "../HomeCard";
 import { useHomeWidget } from "../useHomeWidget";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import { InvoiceRequestDialog, type BillingContactView, type InvoiceRequestTarget } from "./InvoiceRequestDialog";
 
 interface Milestone {
   milestoneId: string;
@@ -20,6 +21,8 @@ interface ContractNode {
   contractTitle: string | null;
   serviceType: string | null;
   facilityName: string | null;
+  billingContactMissing?: boolean;
+  billingContacts?: BillingContactView[];
   milestones: Milestone[];
 }
 
@@ -42,6 +45,7 @@ export function InvoiceRequestCard() {
   const w = useHomeWidget<{ contracts: ContractNode[] }>("/api/home/invoice-requests/mine");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [requestTarget, setRequestTarget] = useState<InvoiceRequestTarget | null>(null);
 
   const contracts = w.status === "ok" ? w.data.contracts : [];
   const pendingCount = useMemo(
@@ -60,26 +64,18 @@ export function InvoiceRequestCard() {
     });
   };
 
-  const request = async (contractId: string, milestoneId: string) => {
-    const note = window.prompt("발행 요청 메모(선택). 비워도 됩니다.") ?? "";
-    setBusy(milestoneId);
-    try {
-      const res = await fetch(
-        `/api/contracts/${contractId}/milestones/${milestoneId}/invoice-request`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ note }),
-        }
-      );
-      if (res.ok) w.reload();
-      else {
-        const j = await res.json().catch(() => ({}));
-        alert(j.error ?? "발행 요청에 실패했습니다.");
-      }
-    } finally {
-      setBusy(null);
-    }
+  // 요청 메모 + (발주처에 계산서 담당자가 없으면) 담당자 정보를 대화상자에서 받는다.
+  const request = (c: ContractNode, m: Milestone) => {
+    setRequestTarget({
+      contractId: c.contractId,
+      milestoneId: m.milestoneId,
+      contractTitle: c.contractTitle,
+      facilityName: c.facilityName,
+      stageLabel: m.stageLabel,
+      amount: m.amount,
+      billingContactMissing: Boolean(c.billingContactMissing),
+      billingContacts: c.billingContacts ?? [],
+    });
   };
 
   const cancel = async (contractId: string, milestoneId: string) => {
@@ -166,7 +162,7 @@ export function InvoiceRequestCard() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => request(c.contractId, m.milestoneId)}
+                        onClick={() => request(c, m)}
                         disabled={busy === m.milestoneId}
                         className="cd-btn cd-btn-primary text-[11px] px-2 py-1 shrink-0 disabled:opacity-50"
                       >
@@ -180,6 +176,14 @@ export function InvoiceRequestCard() {
           );
         })}
       </div>
+      <InvoiceRequestDialog
+        target={requestTarget}
+        onClose={() => setRequestTarget(null)}
+        onRequested={() => {
+          setRequestTarget(null);
+          w.reload();
+        }}
+      />
     </HomeCard>
   );
 }

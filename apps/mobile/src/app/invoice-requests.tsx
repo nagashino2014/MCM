@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
+import { TaxInvoiceIssueSheet } from '@/components/invoice/TaxInvoiceIssueSheet';
 import {
   Badge,
   Button,
@@ -29,8 +30,11 @@ import { useTheme } from '@/theme/useTheme';
  * 세금계산서 발행 요청(IR-M1) — 블루프린트 docs/mobile-invoice-workreport-blueprint.md.
  *
  * 실무자: 내가 참여한 용역의 미발행 대금 단위를 골라 발행 담당자에게 요청/취소.
- * 담당자(billing.receivable.manage): 요청 수신함 확인 + 발행 완료 처리(IR-M2 — 웹 수신함
- * 위젯과 같은 마일스톤 PATCH, 권한은 서버 contract.edit 가드). 바로빌 전자발행 자체는 웹에서.
+ * 담당자(billing.receivable.manage): 요청 수신함 확인 + 바로빌 전자세금계산서 발행(2026-11-02 —
+ * TaxInvoiceIssueSheet, 웹 발행 모달과 같은 API) 또는 앱 밖에서 발행한 건의 완료 기록(IR-M2 — 웹 수신함
+ * 위젯과 같은 마일스톤 PATCH, 권한은 서버 contract.edit 가드).
+ * 발주처에 세금계산서 담당자가 없으면 요청 시 담당자 정보(성명·직급·부서·연락처·이메일)가 필수고,
+ * 있으면 현재 담당자를 보여 주며 [담당자 변경]으로 바꿀 수 있다.
  * 역할 분기는 전용 권한 API 없이 수신함 API 의 403 을 신호로 쓴다(권한 로직 이원화 방지).
  */
 
@@ -48,6 +52,10 @@ interface MyContract {
   contractTitle: string | null;
   serviceType: string | null;
   facilityName: string | null;
+  /** 발주처에 세금계산서 담당자가 없음 — 요청 시 담당자 입력 필수. */
+  billingContactMissing?: boolean;
+  /** 현재 등록된 계산서 담당자 — 요청 시트에서 확인하고 필요하면 변경한다. */
+  billingContacts?: { name: string; title: string | null; department: string | null; phone: string | null; email: string }[];
   milestones: Milestone[];
 }
 interface InboxItem {
@@ -64,6 +72,16 @@ interface InboxItem {
 }
 
 type Tab = 'inbox' | 'mine';
+
+const EMPTY_CONTACT = { name: '', title: '', department: '', phone: '', email: '' };
+const CONTACT_FIELDS: { key: keyof typeof EMPTY_CONTACT; label: string; placeholder: string }[] = [
+  { key: 'name', label: '성명', placeholder: '홍길동' },
+  { key: 'title', label: '직급', placeholder: '과장' },
+  { key: 'department', label: '부서', placeholder: '재무팀' },
+  { key: 'phone', label: '연락처', placeholder: '010-0000-0000' },
+  { key: 'email', label: '이메일', placeholder: 'tax@example.com' },
+];
+const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
 const won = (n: number | null) => (n == null ? '금액 미정' : `${n.toLocaleString('ko-KR')}원`);
 const fmtAmount = (v: string) => {
@@ -129,6 +147,13 @@ export default function InvoiceRequestsScreen() {
   // 요청 시트(미요청 단계 탭) / 취소 확인(요청됨 단계 탭) / 수신함 상세
   const [requestFor, setRequestFor] = useState<{ contract: MyContract; m: Milestone } | null>(null);
   const [note, setNote] = useState('');
+  // 세금계산서 담당자 입력 — 발주처에 담당자가 없을 때(목록 플래그 또는 서버 422) 필수.
+  const [contact, setContact] = useState(EMPTY_CONTACT);
+  const [needContact, setNeedContact] = useState(false);
+  const [changingContact, setChangingContact] = useState(false);
+  const editingContact = needContact || changingContact;
+  // 바로빌 전자발행 시트 대상(수신함 상세에서 연다).
+  const [issueTarget, setIssueTarget] = useState<{ contractId: string; milestoneId: string } | null>(null);
   const [cancelFor, setCancelFor] = useState<{ contract: MyContract; m: Milestone } | null>(null);
   const [detail, setDetail] = useState<InboxItem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -176,10 +201,11 @@ export default function InvoiceRequestsScreen() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: note.trim() || null }),
+          body: JSON.stringify({ note: note.trim() || null, billingContact: editingContact ? contact : undefined }),
         }
       );
-      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      const d = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+      if (d.code === 'billing_contact_required') setNeedContact(true);
       if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
       toast.show('발행을 요청했습니다. 담당자에게 알림이 전달됩니다.', 'success');
       setRequestFor(null);
@@ -292,6 +318,9 @@ export default function InvoiceRequestsScreen() {
                       if (m.requested) setCancelFor({ contract: ct, m });
                       else {
                         setNote('');
+                        setContact(EMPTY_CONTACT);
+                        setNeedContact(Boolean(ct.billingContactMissing));
+                        setChangingContact(false);
                         setRequestFor({ contract: ct, m });
                       }
                     }}
@@ -321,11 +350,6 @@ export default function InvoiceRequestsScreen() {
           ))
         )}
 
-        {inbox.allowed === true && tab === 'inbox' && inbox.items?.length ? (
-          <Text className="px-1 text-center text-[11.5px] leading-4 text-cd-faint">
-            계산서 발행(바로빌 전자발행)은 웹 홈의 발행 요청 수신함에서 진행합니다.
-          </Text>
-        ) : null}
       </ScrollView>
 
       {/* 발행 요청 시트 */}
@@ -335,7 +359,12 @@ export default function InvoiceRequestsScreen() {
         title="발행 요청"
         footer={
           <View className="flex-1">
-            <GradientButton label="발행 요청" loading={busy} onPress={() => void submitRequest()} />
+            <GradientButton
+              label="발행 요청"
+              loading={busy}
+              disabled={editingContact && (CONTACT_FIELDS.some((f) => !contact[f.key].trim()) || !isEmail(contact.email))}
+              onPress={() => void submitRequest()}
+            />
           </View>
         }>
         {requestFor ? (
@@ -353,6 +382,60 @@ export default function InvoiceRequestsScreen() {
                   <Text className="text-[14px] font-extrabold text-cd-text">{won(requestFor.m.amount)}</Text>
                 </View>
               </View>
+              {!needContact && requestFor.contract.billingContacts?.length ? (
+                <View className="gap-2 rounded-xl border border-cd-border p-3">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[13px] font-extrabold text-cd-text">세금계산서 담당자</Text>
+                    <Button
+                      label={changingContact ? '변경 취소' : '담당자 변경'}
+                      variant="ghost"
+                      size="sm"
+                      onPress={() => {
+                        setChangingContact((v) => !v);
+                        setContact(EMPTY_CONTACT);
+                      }}
+                    />
+                  </View>
+                  {requestFor.contract.billingContacts.map((bc, i) => (
+                    <View key={`${bc.email}:${i}`} className={changingContact ? 'opacity-50' : ''}>
+                      <Text className="text-[13px] font-semibold text-cd-text">
+                        {[bc.name, bc.title, bc.department].filter(Boolean).join(' · ')}
+                      </Text>
+                      <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                        {[bc.phone, bc.email].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {editingContact ? (
+                <View className="gap-2.5 rounded-xl border border-cd-warning p-3">
+                  <Text className="text-[13px] font-extrabold text-cd-text">
+                    {needContact ? '세금계산서 담당자 (필수)' : '새 세금계산서 담당자'}
+                  </Text>
+                  <Text className="text-[11.5px] leading-4 text-cd-muted">
+                    {needContact
+                      ? '이 발주처에 세금계산서 담당자가 등록되어 있지 않습니다. 계산서를 받을 담당자를 입력하면 사업장 담당자로 함께 등록됩니다.'
+                      : '입력한 담당자가 이 발주처의 세금계산서 담당자가 됩니다. 기존 담당자는 사업장 담당자로 남고 계산서 담당만 해제됩니다.'}
+                  </Text>
+                  {CONTACT_FIELDS.map((f) => (
+                    <Input
+                      key={f.key}
+                      label={f.label}
+                      value={contact[f.key]}
+                      placeholder={f.placeholder}
+                      onChangeText={(v) => setContact((prev) => ({ ...prev, [f.key]: v }))}
+                      autoCapitalize={f.key === 'email' ? 'none' : undefined}
+                      keyboardType={f.key === 'email' ? 'email-address' : f.key === 'phone' ? 'phone-pad' : undefined}
+                      error={
+                        f.key === 'email' && contact.email.trim() && !isEmail(contact.email)
+                          ? '이메일 형식이 올바르지 않습니다.'
+                          : undefined
+                      }
+                    />
+                  ))}
+                </View>
+              ) : null}
               <Textarea
                 label="요청 메모 (선택)"
                 minHeight={64}
@@ -383,7 +466,7 @@ export default function InvoiceRequestsScreen() {
 
       {/* 수신함 상세 */}
       <Sheet
-        visible={!!detail && !datePicker}
+        visible={!!detail && !datePicker && !issueTarget}
         onClose={() => {
           setDetail(null);
           setIssueOpen(false);
@@ -401,10 +484,18 @@ export default function InvoiceRequestsScreen() {
             <View className="mt-1 flex-row items-start gap-2 rounded-xl bg-cd-primary-soft px-3 py-2.5">
               <Ionicons name="information-circle" size={15} color={c.primary} />
               <Text className="flex-1 text-[12px] leading-4 text-cd-primary">
-                계산서 발행(바로빌 전자발행)은 웹 홈의 발행 요청 수신함에서 진행합니다. 이미 발행을
-                마쳤다면 아래에서 완료 처리하세요 — 요청이 목록에서 사라집니다.
+                [계산서 발행]으로 바로빌 전자세금계산서를 발행하면 요청이 목록에서 사라집니다. 홈택스 등
+                앱 밖에서 이미 발행했다면 [이미 발행함]으로 기록만 남기세요.
               </Text>
             </View>
+            {!issueOpen ? (
+              <Button
+                label="계산서 발행"
+                icon="document-text-outline"
+                onPress={() => setIssueTarget({ contractId: detail.contractId, milestoneId: detail.milestoneId })}
+                full
+              />
+            ) : null}
 
             {/* 발행 완료 처리(IR-M2) — 웹 수신함 위젯과 동일한 마킹 */}
             {issueOpen ? (
@@ -429,8 +520,8 @@ export default function InvoiceRequestsScreen() {
               </View>
             ) : (
               <Button
-                label="발행 완료 처리"
-                variant="soft"
+                label="이미 발행함"
+                variant="ghost"
                 icon="checkmark-done-outline"
                 onPress={() => {
                   setIssueDate(todayKst());
@@ -443,6 +534,16 @@ export default function InvoiceRequestsScreen() {
           </View>
         ) : null}
       </Sheet>
+
+      <TaxInvoiceIssueSheet
+        target={issueTarget}
+        onClose={() => setIssueTarget(null)}
+        onIssued={() => {
+          setIssueTarget(null);
+          setDetail(null);
+          void reloadAll();
+        }}
+      />
 
       <DatePickerSheet
         visible={datePicker}

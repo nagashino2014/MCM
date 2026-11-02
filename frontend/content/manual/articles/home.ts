@@ -12,6 +12,7 @@ export const HOME_ARTICLES: ManualArticle[] = [
       "결재 대기·안 읽은 메일·오늘 일정 같은 숫자 카드를 누르면 해당 목록으로 이동합니다.",
       "내 연차·초과근무, 내 차례인 결재, 캘린더, 오늘 할 일 등을 한 화면에서 봅니다.",
       "[[홈 화면 편집]]으로 카드를 켜고 끄고, 위치·크기를 바꾸고, 배치를 3개까지 저장합니다.",
+      "세금계산서 발행 요청 카드에서 대금 단계 발행을 요청하고, 회계 담당자는 발행 요청 수신함에서 바로빌로 바로 발행합니다.",
     ],
     sections: [
       {
@@ -25,6 +26,22 @@ export const HOME_ARTICLES: ManualArticle[] = [
             "캘린더 카드의 태그(본인·영업·부서·선택 등)를 눌러 보이는 일정을 고릅니다.",
           ] },
           { kind: "tip", text: "홈 캘린더의 ‘선택’ 대상(최대 10명)과 일정 메뉴의 ‘선택’ 대상은 서로 다른 설정입니다." },
+        ],
+      },
+      {
+        id: "invoice-request",
+        title: "세금계산서 발행 요청·수신함",
+        blocks: [
+          { kind: "p", text: "용역 참여자는 ‘세금계산서 발행 요청’ 카드에서 대금 단계의 [[발행 요청]]을 누르고, 필요하면 요청 메모를 적어 보냅니다." },
+          { kind: "warn", text: "발주처 사업장에 세금계산서 담당자(이메일이 있는 ‘계산서’ 태그 담당자)가 없으면 담당자의 성명·직급·부서·연락처·이메일을 모두 입력해야 요청됩니다. 입력한 담당자는 그 사업장의 계산서 담당자로 함께 등록됩니다." },
+          { kind: "p", text: "담당자가 이미 있으면 요청 창에 현재 계산서 담당자가 보입니다. 바뀌었다면 [[담당자 변경]]을 눌러 새 담당자를 입력합니다. 새 담당자가 계산서 담당자가 되고, 기존 담당자는 사업장 담당자로 남되 계산서 담당만 해제됩니다." },
+          { kind: "steps", items: [
+            "회계 담당자는 ‘발행 요청 수신함’ 카드에서 요청 건의 [[발행 처리]]를 누릅니다.",
+            "[[전자세금계산서 발행]] 창에서 공급받는자·수신처·금액·작성일자를 확인합니다. 요청할 때 등록한 계산서 담당자가 대표 수신처로 채워져 있습니다.",
+            "‘…원 발행’을 누르면 바로빌로 발급되고, 그 단계가 발행 완료로 기록되어 요청이 수신함에서 사라집니다.",
+          ] },
+          { kind: "p", text: "홈택스 등 앱 밖에서 이미 발행했다면 [[이미 발행함]]을 눌러 발행일·금액만 기록합니다. 모바일 앱의 발행 요청 화면에서도 요청 상세의 ‘계산서 발행’으로 같은 발행을 할 수 있습니다(여러 품목·단계 묶음 발행은 웹에서)." },
+          { kind: "warn", text: "발급된 계산서는 취소할 수 없습니다. 발행하려면 계산서 발행 권한이 있어야 합니다." },
         ],
       },
       {
@@ -43,8 +60,15 @@ export const HOME_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["홈", "대시보드", "위젯", "카드", "배치", "프리셋"],
-    sources: ["components/home/HomeBoard.tsx", "components/home/HomeEditGrid.tsx"],
-    reviewedAt: "2026-10-20",
+    keywords: ["홈", "대시보드", "위젯", "카드", "배치", "프리셋", "발행 요청", "수신함", "세금계산서 담당자", "바로빌"],
+    sources: [
+      "components/home/HomeBoard.tsx",
+      "components/home/HomeEditGrid.tsx",
+      "components/home/widgets/InvoiceRequestCard.tsx",
+      "components/home/widgets/InvoiceRequestDialog.tsx",
+      "components/home/widgets/InvoiceInboxCard.tsx",
+      "components/contracts/TaxInvoiceIssueModal.tsx",
+    ],
+    reviewedAt: "2026-11-02",
   },
 ];

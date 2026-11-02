@@ -6,6 +6,7 @@
  * mutation(요청/취소/발행)은 각 라우트에서 withDbWrite 로 직접 처리하고, 여기서는 조회만 담당한다.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
+import { HAS_BILLING_CONTACT_SQL, listBillingContacts, type BillingContactView } from "@/lib/facilities/billing-contact";
 
 /** H10 트리의 대금단위(자식 노드). */
 export interface InvoiceRequestMilestone {
@@ -24,6 +25,13 @@ export interface InvoiceRequestContract {
   contractTitle: string | null;
   serviceType: string | null;
   facilityName: string | null;
+  /**
+   * 발주처 사업장에 세금계산서 담당자(이메일 있는 'billing' 태그)가 없음 — 발행 요청 시 담당자 입력이 필수다.
+   * 발주처가 연결되지 않은 계약은 false(담당자를 둘 곳이 없다).
+   */
+  billingContactMissing: boolean;
+  /** 현재 등록된 계산서 담당자 — 요청 창에서 확인하고 필요하면 변경한다. */
+  billingContacts: BillingContactView[];
   milestones: InvoiceRequestMilestone[];
 }
 
@@ -39,7 +47,10 @@ export async function listInvoiceRequestsMine(userId: string): Promise<InvoiceRe
       `SELECT c.contract_id,
               c.contract_title,
               c.service_type,
+              c.counterparty_facility_id,
               f.company_name AS facility_name,
+              (c.counterparty_facility_id IS NOT NULL
+                 AND NOT ${HAS_BILLING_CONTACT_SQL("c.counterparty_facility_id")}) AS billing_contact_missing,
               m.milestone_id,
               m.stage_label,
               m.stage_order,
@@ -58,6 +69,9 @@ export async function listInvoiceRequestsMine(userId: string): Promise<InvoiceRe
     )
   );
 
+  const facilityIds = [...new Set(rows.map((r) => r.counterparty_facility_id).filter((v) => v != null).map(String))];
+  const contactsByFacility = await listBillingContacts(db, facilityIds);
+
   const byContract = new Map<string, InvoiceRequestContract>();
   for (const r of rows) {
     const contractId = String(r.contract_id);
@@ -68,6 +82,9 @@ export async function listInvoiceRequestsMine(userId: string): Promise<InvoiceRe
         contractTitle: r.contract_title != null ? String(r.contract_title) : null,
         serviceType: r.service_type != null ? String(r.service_type) : null,
         facilityName: r.facility_name != null ? String(r.facility_name) : null,
+        billingContactMissing: r.billing_contact_missing === true,
+        billingContacts:
+          r.counterparty_facility_id != null ? contactsByFacility.get(String(r.counterparty_facility_id)) ?? [] : [],
         milestones: [],
       };
       byContract.set(contractId, node);

@@ -3,6 +3,7 @@ import { AuthError, authErrorToResponse, requireSession } from "@/lib/auth/guard
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { checkPermission, hasPermission, loadUserAccess } from "@/lib/auth/rbac";
+import { hasBillingContact, parseBillingContact, replaceBillingContact, upsertBillingContact } from "@/lib/facilities/billing-contact";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,13 +48,17 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     const body = await req.json().catch(() => ({}));
     const note = String(body?.note ?? "").trim() || null;
+    const billingContact = parseBillingContact(body?.billingContact);
+    if (billingContact.error) {
+      return NextResponse.json({ error: billingContact.error, code: "billing_contact_invalid" }, { status: 400 });
+    }
     const now = new Date().toISOString();
 
     const result = await withDbWrite(async (db) => {
       const rows = rowsToObjects(
         await db.exec(
           `SELECT m.stage_label, m.amount, m.invoice_issued, m.invoice_requested_at,
-                  c.contract_title, f.company_name AS facility_name
+                  c.contract_title, c.counterparty_facility_id, f.company_name AS facility_name
              FROM contract_payment_milestones m
              JOIN contracts c ON c.contract_id = m.contract_id
              LEFT JOIN facilities f ON f.facility_id = c.counterparty_facility_id
@@ -68,6 +73,21 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       }
       if (row.invoice_requested_at) {
         throw new AuthError("이미 발행 요청된 단계입니다.", 409);
+      }
+
+      // 발주처 사업장에 세금계산서 담당자가 없으면 요청자가 담당자 정보를 함께 보내야 한다(2026-11-02).
+      // 발주처가 연결되지 않은 계약은 담당자를 둘 곳이 없어 검사하지 않는다(발행 화면에서 직접 입력).
+      // 담당자가 있어도 요청 창에서 [담당자 변경]으로 새 담당자를 보내면 그 사람으로 바꾼다.
+      const facilityId = row.counterparty_facility_id != null ? String(row.counterparty_facility_id) : null;
+      let billingContactId: number | null = null;
+      if (facilityId) {
+        const exists = await hasBillingContact(db, facilityId);
+        if (!exists && !billingContact.value) throw new BillingContactRequired();
+        if (billingContact.value) {
+          billingContactId = exists
+            ? await replaceBillingContact(db, facilityId, billingContact.value, now)
+            : await upsertBillingContact(db, facilityId, billingContact.value, now);
+        }
       }
 
       await db.run(
@@ -117,12 +137,30 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         targetId: milestoneId,
         after: { contractId, note, requestedBy: employeeId },
       });
+      if (billingContactId != null && facilityId) {
+        await recordAuditLogInline(db, {
+          actorUserId: actor.userId,
+          action: "facility_contact_person_create",
+          targetTable: "facility_contact_people",
+          targetId: String(billingContactId),
+          after: { facilityId, via: "invoice_request", milestoneId, ...billingContact.value },
+        });
+      }
       return { requestedAt: now };
     });
 
     return NextResponse.json({ ok: true, requestedAt: result.requestedAt });
   } catch (err) {
+    if (err instanceof BillingContactRequired) {
+      return NextResponse.json({ error: err.message, code: "billing_contact_required" }, { status: 422 });
+    }
     return authErrorToResponse(err);
+  }
+}
+
+class BillingContactRequired extends Error {
+  constructor() {
+    super("이 발주처에 세금계산서 담당자가 등록되어 있지 않습니다. 담당자 정보(성명·직급·부서·연락처·이메일)를 입력해 주세요.");
   }
 }
 

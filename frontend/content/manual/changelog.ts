@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-02", kind: "수정", title: "전자세금계산서 발행 — 비고의 지급 비중이 틀리게 나오던 문제",
+    body: "발행 창 비고의 ‘단계명 : 비중%’을 계약의 청구 단계 금액 합계 기준으로 계산합니다. 단계 금액은 공급가액인데 계약금액이 부가세 포함으로 저장된 계약에서 50%가 45.45%로 나오던 문제가 고쳐졌습니다.",
+    articles: ["contracts.manage"],
+  },
+  {
     date: "2026-11-02", kind: "수정", title: "정기 브리핑 — 범위가 넓은 관심 분야의 첫 보고서가 실패하던 문제",
     body: "첫 보고서는 최근 석 달 자료를 모두 새 자료로 보기 때문에 업종을 여러 개 고르면 분석 상한을 넘어 실패했습니다. 이제 최근 발표 프로젝트부터 상한까지 분석해 발행하고, 다루지 못한 프로젝트 수를 보고서 하단에 적습니다. 자료가 많을 때 AI가 한 항목에 근거를 5개 넘게 달아 발행이 멈추던 문제도 고쳤습니다.",
     articles: ["sales.rag", "sales.intelligence"],

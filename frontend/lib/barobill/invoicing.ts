@@ -152,10 +152,13 @@ export async function listRecentInvoices(limit = 100): Promise<TaxInvoiceListRow
 /**
  * 단계 비중(%) — amount_ratio 는 0~1 비율이지만 실데이터 대부분이 비어 있어(2026-08-18 실측)
  * 단계 금액 ÷ 계약 총액을 우선 쓴다. 소수 둘째 자리까지만 남긴다(30 / 33.33).
+ * 계약 총액은 이 계약의 단계 금액 합계(stage_total)를 먼저 쓴다 — contracts.contract_amount 는
+ * 부가세 포함 값이 섞여 있어 공급가액 단계와 나누면 50% 가 45.45% 로 나왔다(2026-11-02 제보).
  */
 function stageRatioPct(row: Record<string, unknown>): number | null {
-  const contractAmount = Number(row.contract_amount ?? 0);
-  const stageAmount = Number(row.invoice_amount ?? row.amount ?? 0);
+  const stageTotal = Number(row.stage_total ?? 0);
+  const contractAmount = stageTotal > 0 ? stageTotal : Number(row.contract_amount ?? 0);
+  const stageAmount = Number(stageTotal > 0 ? row.amount ?? row.invoice_amount ?? 0 : row.invoice_amount ?? row.amount ?? 0);
   const pct =
     contractAmount > 0 && stageAmount > 0
       ? (stageAmount / contractAmount) * 100
@@ -216,6 +219,7 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     await db.exec(
       `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
               c.contract_title, c.contract_amount, c.counterparty_facility_id,
+              (SELECT SUM(s.amount) FROM contract_payment_milestones s WHERE s.contract_id = m.contract_id) AS stage_total,
               f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address,
               -- 공급받는자 업태·종목(2026-08-26) — 사업자등록증 파싱 값. 없으면 빈 값으로 발행된다.
               f.business_certificate_business_type, f.business_certificate_business_item
@@ -256,7 +260,8 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     contractTitle: String(row.contract_title ?? ""),
     stageLabel: String(row.stage_label ?? ""),
     stageAmount: Number(row.invoice_amount ?? row.amount ?? 0),
-    contractAmount: Number(row.contract_amount ?? 0),
+    // 묶음 발행 비고의 비중 기준 — 단계 비중과 같은 기준(단계 합계 우선)을 쓴다.
+    contractAmount: Number(row.stage_total ?? 0) > 0 ? Number(row.stage_total) : Number(row.contract_amount ?? 0),
     defaultRemark: stageRemark(String(row.stage_label ?? ""), stageRatioPct(row)),
     writeDate: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
     invoicer: {

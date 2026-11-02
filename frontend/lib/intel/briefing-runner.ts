@@ -34,8 +34,17 @@ async function heartbeat(run: ClaimedRun): Promise<void> {
   const db = await getDb();
   assertClaim(rowsToObjects(await db.exec("UPDATE intel_briefing_runs SET lease_until=now()+interval '5 minutes',updated_at=now() WHERE run_id=$1 AND lease_token=$2 AND status IN ('running','ready') AND lease_until>now() RETURNING run_id", [run.runId, run.token])));
 }
+/** 정기 보고서가 한 번에 분석하는 근거 상한. 넘으면 실패로 알린다. */
+export const BRIEFING_EVIDENCE_LIMIT = 1200;
+/** 첫 보고서(93일 전체가 새 자료) 분석 상한 — 요약 4묶음 분량. 넘으면 최근 프로젝트부터 채우고 보고서에 생략 수를 적는다. */
+export const INITIAL_BASELINE_EVIDENCE_LIMIT = 360;
+export interface BriefingEvidenceSelection { items: BriefingEvidence[]; analyzedProjects: number; omittedProjects: number }
+
 export function selectBriefingEvidence(preview: BriefingPreview): BriefingEvidence[] {
-  // 모든 프로젝트와 변경·산업동향은 요약 문맥에 포함한다. 상한은 실패로 알려 부분 성공을 만들지 않는다.
+  return selectBriefingEvidenceWithin(preview).items;
+}
+export function selectBriefingEvidenceWithin(preview: BriefingPreview): BriefingEvidenceSelection {
+  // 모든 프로젝트와 변경·산업동향은 요약 문맥에 포함한다. 정기 보고서의 상한은 실패로 알려 부분 성공을 만들지 않는다.
   const selectedIds = new Set(preview.items.filter(e => e.kind === "project" || e.changed || e.kind === "official").map(e => e.id));
   const byId = new Map(preview.items.map(e => [e.id, e]));
   // 이미 보고한 원문도 선택 프로젝트의 대표 근거 비교에 필요하다. 권리·관심 조건을 통과한 현재 스냅샷 안에서만 보강한다.
@@ -43,8 +52,30 @@ export function selectBriefingEvidence(preview: BriefingPreview): BriefingEviden
     for (const id of project.relatedEvidenceIds ?? []) if (byId.has(id) && byId.get(id)!.kind !== "project") selectedIds.add(id);
   }
   const selected = preview.items.filter(e => selectedIds.has(e.id));
-  if (selected.length > 1200) throw briefingError("새 분석 자료가 1,200건을 넘습니다. 프로필 범위를 나누어 주세요.", 422);
-  return selected;
+  const projectCount = selected.filter(e => e.kind === "project").length;
+  if (preview.initialBaseline && selected.length > INITIAL_BASELINE_EVIDENCE_LIMIT) return limitInitialBaseline(selected, projectCount);
+  if (selected.length > BRIEFING_EVIDENCE_LIMIT) throw briefingError("새 분석 자료가 1,200건을 넘습니다. 프로필 범위를 나누어 주세요.", 422);
+  return { items: selected, analyzedProjects: projectCount, omittedProjects: 0 };
+}
+/** 첫 보고서는 공식 산업동향을 먼저 담고, 프로젝트를 최근 발표 순으로 원근거와 묶어 상한까지 채운다. 생략 수는 보고서에 적는다. */
+function limitInitialBaseline(selected: BriefingEvidence[], projectCount: number): BriefingEvidenceSelection {
+  const byId = new Map(selected.map(e => [e.id, e]));
+  const eventAt = (e: BriefingEvidence) => { const t = Date.parse(e.publishedAt ?? e.discoveredAt); return Number.isNaN(t) ? 0 : t; };
+  const linked = new Set(selected.filter(e => e.kind === "project").flatMap(e => e.relatedEvidenceIds ?? []));
+  const units: BriefingEvidence[][] = [
+    ...selected.filter(e => e.kind === "official").map(e => [e]),
+    ...[...selected.filter(e => e.kind === "project"), ...selected.filter(e => e.kind === "signal" && !linked.has(e.id))]
+      .sort((a, b) => eventAt(b) - eventAt(a) || a.id.localeCompare(b.id))
+      .map(e => e.kind === "project" ? [e, ...(e.relatedEvidenceIds ?? []).map(id => byId.get(id)).filter((x): x is BriefingEvidence => !!x && x.kind !== "project")] : [e]),
+  ];
+  const kept = new Set<string>(); let analyzedProjects = 0;
+  for (const unit of units) {
+    const added = unit.filter(e => !kept.has(e.id));
+    if (kept.size + added.length > INITIAL_BASELINE_EVIDENCE_LIMIT) continue;
+    added.forEach(e => kept.add(e.id));
+    if (unit[0].kind === "project") analyzedProjects++;
+  }
+  return { items: selected.filter(e => kept.has(e.id)), analyzedProjects, omittedProjects: projectCount - analyzedProjects };
 }
 export function validateBriefingNarrative(text: string, evidenceCount: number): { trends: string[]; insights: Array<{ badge: string; text: string }> } {
   let data: { trends?: unknown; insights?: unknown };
@@ -59,9 +90,10 @@ export function validateBriefingNarrative(text: string, evidenceCount: number): 
   return { trends, insights };
 }
 export async function generateScheduledBriefing(preview: BriefingPreview, profile: BriefingProfile, runId: string): Promise<GeneratedBriefing> {
-  const selected = selectBriefingEvidence(preview);
+  const { items: selected, analyzedProjects, omittedProjects } = selectBriefingEvidenceWithin(preview);
   const kpis = [{ label: "대상 프로젝트 후보", value: `${preview.totalProjects}개`, sub: "중복 선별 전 조건 전체 집계" }, { label: "수집 신호", value: `${preview.totalSignals}건`, sub: "프로젝트 수와 별도" }, { label: "새로 확인한 자료", value: `${preview.changedCount}건`, sub: "늦게 수집된 과거 자료 포함" }, { label: "분석 기준", value: (preview.periodEnd ?? preview.asOf).slice(0, 10), sub: "발표일과 수집일 구분" }];
-  const etcNote = [preview.coverageNote, preview.sourceHealth.some(s => s.status !== "fresh") ? `일부 자료 수집 상태 확인 필요: ${preview.sourceHealth.filter(s => s.status !== "fresh").map(s => intelSourceLabel(s.source)).join(", ")}` : null].filter(Boolean).join("\n") || null;
+  const limitNote = omittedProjects ? `첫 보고서는 범위가 넓어 조건에 맞는 프로젝트 ${(analyzedProjects + omittedProjects).toLocaleString("ko-KR")}개 중 최근 발표 ${analyzedProjects.toLocaleString("ko-KR")}개만 분석했습니다. 나머지 ${omittedProjects.toLocaleString("ko-KR")}개는 관심 기업·지역으로 범위를 나누면 함께 분석합니다.` : null;
+  const etcNote = [limitNote, preview.coverageNote, preview.sourceHealth.some(s => s.status !== "fresh") ? `일부 자료 수집 상태 확인 필요: ${preview.sourceHealth.filter(s => s.status !== "fresh").map(s => intelSourceLabel(s.source)).join(", ")}` : null].filter(Boolean).join("\n") || null;
   if (!preview.changedCount) return { model: null, sources: [], report: { kpis, trends: ["새로운 주요 변동이 없습니다."], companies: [], insights: [], etcNote } };
   if (!process.env.ANTHROPIC_API_KEY) throw briefingError("AI API 키가 설정되지 않아 정기 브리핑을 생성할 수 없습니다.", 503);
   const generated = await curateBriefingReport({ items: selected, question: profile.name, reportLevel: profile.reportLevel, requireOfficialBackground: true,

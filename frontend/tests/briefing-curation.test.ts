@@ -87,7 +87,10 @@ test("진단 보강 후에도 유효 인용의 본문 삽입·외부 번호·대
   assert.throws(()=>check([{...entry(1),text:"이미 유효한 근거 [1]"}]),/본문.*본문 출처 번호 중복 표기: 있음/);
   assert.throws(()=>check([{...entry(1),references:[1,99]}]),/근거 번호.*사용할 수 없는 번호 1개/);
   assert.throws(()=>check([{...entry(1),references:[2]}]),/대표 근거 포함: 아니요/);
-  assert.throws(()=>check([{...entry(1),references:[1,2,3,4,5,6]}]),/서로 다른 근거 6개/);
+  assert.throws(()=>check([{...entry(1),references:[2,3,4,5,6,99]}]),/서로 다른 근거 6개.*사용할 수 없는 번호 1개/);
+  assert.throws(()=>check([{...entry(1),representative:1,references:[2,3,4,5,6,7].filter(n=>n!==7)}]),/대표 근거 포함: 아니요/);
+  // 묶음 합치기에서 모인 유효 번호 6개는 실패시키지 않고 대표 근거를 앞에 두고 5개로 줄인다.
+  assert.deepEqual(check([{...entry(3),references:[1,2,3,4,5,6]}]).trends[0].references,[3,1,2,4,5]);
   assert.throws(()=>check([entry(1),entry(2,entry(1).topic)]),/핵심 동향 2번 주제: 앞선 항목과 중복/);
   assert.throws(()=>check(Array.from({length:16},()=>entry(1))),/현재 16개, 허용 15개/);
 });

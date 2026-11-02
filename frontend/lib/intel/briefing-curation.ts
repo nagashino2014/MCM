@@ -198,7 +198,10 @@ export function validateBriefingDigest(text: string, allowedReferences: Readonly
     const topics = new Set<string>(), texts = new Set<string>();
     return rows.map((value, index) => {
       const row = record(value);
-      const refs = Array.isArray(row.references) ? [...new Set(row.references)] : [];
+      const listed = Array.isArray(row.references) ? [...new Set(row.references)] : [];
+      // 묶음 요약을 합치면 같은 사업의 근거 번호가 모여 5개를 넘기 쉽다. 모두 유효한 번호이고 대표 근거가 있으면 대표를 앞에 두고 5개만 남긴다.
+      const refs = listed.length > 5 && listed.includes(row.representative) && listed.every(n => Number.isInteger(n) && allowedReferences.has(n as number))
+        ? [row.representative, ...listed.filter(n => n !== row.representative)].slice(0, 5) : listed;
       if (!refs.length || refs.length > 5 || refs.some(n => !Number.isInteger(n) || !allowedReferences.has(n as number)) || !refs.includes(row.representative)) throw invalid(section, index, "references/representative", `입력은 ${shape(row.references)}; 서로 다른 근거 ${refs.length}개(최대 5개); 사용할 수 없는 번호 ${refs.filter(n => !Number.isInteger(n) || !allowedReferences.has(n as number)).length}개; 대표 근거 포함: ${yesNo(refs.includes(row.representative))}`, "AI 요약의 대표 근거나 출처 번호가 유효하지 않습니다.");
       if (typeof row.topic !== "string" || !key(row.topic) || row.topic.length > 180) throw invalid(section, index, "topic", `입력은 ${shape(row.topic)}; 허용 180자; 주제에 문자·숫자 포함: ${yesNo(typeof row.topic === "string" && !!key(row.topic))}`);
       if (typeof row.text !== "string" || !row.text.trim() || row.text.length > 900 || /\[\d+\]/.test(row.text)) throw invalid(section, index, "text", `입력은 ${shape(row.text)}; 허용 900자; 빈 내용: ${yesNo(typeof row.text === "string" && !row.text.trim())}; 본문 출처 번호 중복 표기: ${typeof row.text === "string" && /\[\d+\]/.test(row.text) ? "있음" : "없음"}`);

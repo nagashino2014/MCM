@@ -66,6 +66,29 @@ export const FACILITY_COMPANY_SIZE_ORDER: FacilityCompanySize[] = [
   "small",
 ];
 
+/** 거래 구분(331) — 매출처·매입처 복수. facilities.trade_roles text[]. 매입 계약 상대 업체 검색·배지에 쓴다. */
+export type FacilityTradeRole = "sales" | "purchase";
+
+export const FACILITY_TRADE_ROLE_ORDER: FacilityTradeRole[] = ["sales", "purchase"];
+
+export const FACILITY_TRADE_ROLE_LABELS: Record<FacilityTradeRole, string> = {
+  sales: "매출처",
+  purchase: "매입처",
+};
+
+export const normalizeTradeRoles = (values: unknown): FacilityTradeRole[] => {
+  const list = Array.isArray(values) ? values : values == null ? [] : [values];
+  const seen = new Set<FacilityTradeRole>();
+  for (const value of list) {
+    const raw = String(value ?? "").trim();
+    const key = (FACILITY_TRADE_ROLE_ORDER as string[]).includes(raw)
+      ? (raw as FacilityTradeRole)
+      : FACILITY_TRADE_ROLE_ORDER.find((k) => FACILITY_TRADE_ROLE_LABELS[k] === raw);
+    if (key) seen.add(key);
+  }
+  return FACILITY_TRADE_ROLE_ORDER.filter((role) => seen.has(role));
+};
+
 export const normalizeFacilityServiceCategory = (
   value: unknown
 ): FacilityServiceCategory | null => {

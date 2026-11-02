@@ -6,6 +6,14 @@ import { certificateAnalysisWarning } from "./business-certificate-status";
 
 import { getDb, invalidateDb, rowsToObjects } from "../db";
 
+/** text[] 열(331 trade_roles) — pg 가 배열로 주면 그대로, '{a,b}' 문자열로 주면 풀어서 문자열 배열로. */
+function parsePgTextArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((v) => String(v));
+  if (typeof value !== "string") return [];
+  const inner = value.trim().replace(/^\{|\}$/g, "");
+  return inner ? inner.split(",").map((v) => v.trim().replace(/^"|"$/g, "")).filter(Boolean) : [];
+}
+
 type DbHandle = Awaited<ReturnType<typeof getDb>>;
 import {
   cleanProductName,
@@ -822,6 +830,8 @@ export interface FacilityListFilter {
   missing?: FacilityMissingField[];
   /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장(해지·완료 포함). */
   hasContractHistory?: boolean;
+  /** 거래 구분(331) — 매출처/매입처로 지정된 사업장만(매입 계약 상대 업체 검색). */
+  tradeRole?: "sales" | "purchase";
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
@@ -955,6 +965,11 @@ export async function listFacilities(
       SELECT 1 FROM contracts c
       WHERE c.counterparty_facility_id = f.facility_id
         AND c.deleted_at IS NULL)`);
+  }
+  // 거래 구분(331) — 매입 계약 상대 업체 검색은 매입처로 지정된 사업장을 먼저 보여 준다.
+  if (filter.tradeRole) {
+    where.push(`$${params.length + 1} = ANY(COALESCE(f.trade_roles, '{}'))`);
+    params.push(filter.tradeRole);
   }
   if (filter.integratedPermitTarget) {
     where.push(
@@ -1226,6 +1241,8 @@ export interface FacilityDetail {
   corporateRegistrationNo?: string | null;
   representativeName: string | null;
   orgCategory?: string | null;
+  /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
+  tradeRoles?: string[];
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
@@ -1355,7 +1372,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
-              region_sido, region_sigungu, source, memo, logo_path, company_size, created_at, updated_at
+              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, created_at, updated_at
          FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [facilityId]
     );
@@ -1527,6 +1544,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
     corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
+    tradeRoles: parsePgTextArray(f.trade_roles),
     siteAddress:
       f.site_address != null
         ? isTruthyFlag(f.site_address_verbatim)

@@ -5,6 +5,7 @@ import { Download, Loader2, X } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
+import { FileDropZone } from "@/components/ui/FileDropZone";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
 import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
 import { RateCardEditor, type RateCardData, type RateCardRound } from "@/components/contracts/RateCardEditor";
@@ -84,7 +85,8 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "closing", label: "준공일 및 기타" },
 ];
 
-const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
+// '번역'은 2026-11-02 사용자 요청으로 제외(매입 계약 관리의 외주 분류와 맞춤).
+const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인"];
 const DEFAULT_TERMINATION_REASONS = ["사업장 폐쇄", "허가대상 제외", "대금 미지급"];
 const DEFAULT_SUSPENSION_REASONS = ["사업추진 유보", "가동 지연", "관련허가 지연", "대금 미지급"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
@@ -1228,20 +1230,18 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 <textarea className="cd-input min-h-[80px]" value={outsourcing.memo}
                   onChange={(e) => setOutsourcing({ ...outsourcing, memo: e.target.value })} />
               </label>
-              <label className="grid gap-1 text-sm col-span-2">
+              <div className="grid gap-1 text-sm col-span-2">
                 <span className="font-semibold cd-text-muted">외주 계약서 PDF</span>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
+                {/* 끌어다 놓기·클릭 첨부(2026-11-02) — 파일은 ref 에 두고 이름 state 로 다시 그린다 */}
+                <FileDropZone
+                  value={outsourcingFileName ? outsourcingFileRef.current : null}
+                  onChange={(file) => {
                     outsourcingFileRef.current = file;
                     setOutsourcingFileName(file?.name ?? "");
                   }}
+                  hint="외주 계약서 PDF 1개 · 30MB 이하"
                 />
-                {outsourcingFileName && <span className="text-[11px] cd-text-faint">선택됨: {outsourcingFileName}</span>}
-              </label>
+              </div>
             </div>
           )}
 
@@ -1326,11 +1326,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     </label>
                   ))}
                 </div>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                  onChange={(e) => setAmendmentFile(e.target.files?.[0] ?? null)}
+                <FileDropZone
+                  value={amendmentFile}
+                  onChange={setAmendmentFile}
+                  hint={amendmentDocType === "amendment" ? "변경계약서 PDF 1개 · 30MB 이하" : "원 계약서 PDF 1개 · 30MB 이하"}
                 />
                 <span className="text-[11px] cd-text-faint">
                   업로드 시 원 계약 폴더에 동일 형식(

@@ -1,20 +1,13 @@
 "use client";
 
-import { Suspense, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Virtuoso } from "react-virtuoso";
-import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 import {
   Calendar,
-  ChevronDown,
-  ChevronRight,
-  Download,
   FileSignature,
   FileText,
-  Folder,
-  FolderClosed,
-  FolderOpen,
   GitCommitHorizontal,
   GripVertical,
   Paperclip,
@@ -32,9 +25,13 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdHelp } from "@/components/cdash/CdHelp";
-import { CdTabs } from "@/components/cdash/CdTabs";
 import "@/components/cdash/cdash.css";
 import { resolveServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+// 트리 행·PDF 뷰어·금액 표기는 매입 계약 원장(331)과 공유하려고 공용 파일로 옮겼다(모양 동일).
+import { TreeChildRow, TreeGroupHeader, type TreeFlatRow } from "@/components/contracts/ContractTreeRows";
+import { DraggablePdfViewer, type PdfViewerDoc } from "@/components/contracts/DraggablePdfViewer";
+import { formatExactAmount } from "@/lib/contracts/format-money";
+import { FileDropZone } from "@/components/ui/FileDropZone";
 import ContractChangeModal from "@/components/contracts/ContractChangeModal";
 import ContractStaffingModal from "@/components/contracts/ContractStaffingModal";
 import TaxInvoiceIssueModal from "@/components/contracts/TaxInvoiceIssueModal";
@@ -217,13 +214,6 @@ function industryOptionFromKsic(industryCode: string | null | undefined, industr
   return label ? `${label}${INTEGRATED_PERMIT_OPTION_SUFFIX}` : null;
 }
 
-interface PdfViewerDoc {
-  label: string;
-  url: string;
-  fileName: string;
-  documentId?: string;
-}
-
 /**
  * 계약서 뷰어 탭 — 계약서 → 변경계약서(차수 순, 같은 차수는 올린 순) 순서.
  * 기본으로 여는 문서는 종전처럼 가장 최근 원 계약서(없으면 첫 문서).
@@ -269,7 +259,8 @@ interface PdfViewerState {
   initialIndex?: number;
 }
 
-const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인", "번역"];
+// '번역'은 2026-11-02 사용자 요청으로 제외(매입 계약 관리의 외주 분류와 맞춤).
+const DEFAULT_OUTSOURCING_TYPES = ["도면 작성", "산업안전 관련", "측정/분석", "디자인"];
 const PAYMENT_METHOD_OPTIONS = ["현금", "어음 : 1개월 이하", "어음 : 2개월 이하", "어음 : 2개월 이상"];
 // 어음 종류 제안 목록(자유 입력) — 담당자가 어음 상품을 특정할 수 있게 명기해 둔다(마이그 201).
 const NOTE_KIND_OPTIONS = ["전자어음", "외담대(외상매출채권 담보대출)", "상생협력론", "구매론", "종이어음"];
@@ -484,14 +475,15 @@ function ContractsInner() {
    * when the group is currently expanded. Per-row `style` is precomputed once
    * so that the row component does not redo the lookup on every render.
    */
-  const flatRows = useMemo<TreeFlatRow[]>(() => {
-    const rows: TreeFlatRow[] = [];
+  const flatRows = useMemo<TreeFlatRow<ContractTreeContractNode>[]>(() => {
+    const rows: TreeFlatRow<ContractTreeContractNode>[] = [];
     for (const group of filteredGroups) {
       const style = resolveServiceTypeStyle(group.serviceType);
       const isOpen = expanded[group.serviceType] === true;
       rows.push({
         kind: "group",
-        serviceType: group.serviceType,
+        groupKey: group.serviceType,
+        label: group.serviceType,
         count: group.contracts.length,
         isOpen,
         style,
@@ -608,12 +600,13 @@ function ContractsInner() {
                   data={deferredFlatRows}
                   increaseViewportBy={400}
                   computeItemKey={(_, row) =>
-                    row.kind === "group" ? "g:" + row.serviceType : "c:" + row.contract.contractId
+                    row.kind === "group" ? "g:" + row.groupKey : "c:" + row.contract.contractId
                   }
                   itemContent={(_, row) =>
                     row.kind === "group" ? (
                       <TreeGroupHeader
-                        serviceType={row.serviceType}
+                        groupKey={row.groupKey}
+                        label={row.label}
                         count={row.count}
                         isOpen={row.isOpen}
                         style={row.style}
@@ -621,7 +614,12 @@ function ContractsInner() {
                       />
                     ) : (
                       <TreeChildRow
-                        contract={row.contract}
+                        nodeId={row.contract.contractId}
+                        title={row.contract.contractTitle}
+                        contractDate={row.contract.contractDate}
+                        currentAmount={row.contract.currentAmount}
+                        contractStatus={row.contract.contractStatus}
+                        isFullyCollected={row.contract.isFullyCollected}
                         isSelected={row.contract.contractId === selectedId}
                         isLastChild={row.isLastChild}
                         childColor={row.style.childColor}
@@ -3110,39 +3108,34 @@ function NewContractModal({
                 onChange={(e) => onChange({ ...state, outsourcing: { ...state.outsourcing, memo: e.target.value } })}
               />
             </label>
-            <label className="grid gap-1 text-sm col-span-2">
+            <div className="grid gap-1 text-sm col-span-2">
               <span className="font-semibold cd-text-muted">외주 계약서 PDF 첨부</span>
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                onChange={(e) => {
-                  const nextFile = e.target.files?.[0] ?? null;
-                  outsourcingFileRef.current = nextFile;
-                  setOutsourcingFileName(nextFile?.name ?? "");
+              {/* 끌어다 놓기·클릭 첨부(2026-11-02) — 파일은 ref 에 두고 이름 state 로 다시 그린다 */}
+              <FileDropZone
+                value={outsourcingFileName ? outsourcingFileRef.current : null}
+                onChange={(file) => {
+                  outsourcingFileRef.current = file;
+                  setOutsourcingFileName(file?.name ?? "");
                 }}
+                hint="외주 계약서 PDF 1개 · 30MB 이하"
               />
-              {outsourcingFileName && <span className="text-xs cd-text-faint">선택됨: {outsourcingFileName}</span>}
-            </label>
+            </div>
           </div>
         )}
 
         {tab === "document" && (
           <div className="grid gap-4">
-            <label className="grid gap-1 text-sm">
+            <div className="grid gap-1 text-sm">
               <span className="font-semibold cd-text-muted">계약서 PDF 첨부</span>
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:cd-fill-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                onChange={(e) => {
-                  const nextFile = e.target.files?.[0] ?? null;
-                  documentFileRef.current = nextFile;
-                  setDocumentFileName(nextFile?.name ?? "");
+              <FileDropZone
+                value={documentFileName ? documentFileRef.current : null}
+                onChange={(file) => {
+                  documentFileRef.current = file;
+                  setDocumentFileName(file?.name ?? "");
                 }}
+                hint="계약서 PDF 1개 · 30MB 이하"
               />
-              {documentFileName && <span className="text-xs cd-text-faint">선택됨: {documentFileName}</span>}
-            </label>
+            </div>
             <p className="text-xs cd-text-faint">
               저장 경로는 계약일 기준 <code>매출계약서/년도/(계약일) 계약명</code> 논리 경로로 생성됩니다.
             </p>
@@ -3542,124 +3535,6 @@ function NewStageModal({
   );
 }
 
-function DraggablePdfViewer({
-  title,
-  url: singleUrl,
-  docs,
-  initialIndex = 0,
-  onClose,
-}: {
-  title: string;
-  url: string;
-  docs?: PdfViewerDoc[];
-  initialIndex?: number;
-  onClose: () => void;
-}) {
-  const [docIndex, setDocIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, (docs?.length ?? 1) - 1)));
-  const activeDoc = docs?.[docIndex];
-  const url = activeDoc?.url ?? singleUrl;
-  const [position, setPosition] = useState(() => ({
-    x: typeof window === "undefined"
-      ? 96
-      : Math.max(16, Math.round((window.innerWidth - Math.min(1280, window.innerWidth - 32)) / 2)),
-    y: 24,
-  }));
-  const dragOffset = useRef<{ x: number; y: number } | null>(null);
-
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    dragOffset.current = {
-      x: event.clientX - position.x,
-      y: event.clientY - position.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragOffset.current) return;
-    const width = Math.min(1280, window.innerWidth - 32);
-    const height = Math.min(1100, window.innerHeight - 32);
-    setPosition({
-      x: Math.min(Math.max(8, event.clientX - dragOffset.current.x), Math.max(8, window.innerWidth - width - 8)),
-      y: Math.min(Math.max(8, event.clientY - dragOffset.current.y), Math.max(8, window.innerHeight - height - 8)),
-    });
-  };
-
-  const stopDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    dragOffset.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
-  return (
-    <div
-      className="fixed z-[60] rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow-dialog)] overflow-hidden flex flex-col"
-      style={{
-        left: position.x,
-        top: position.y,
-        width: "min(1280px, calc(100vw - 32px))",
-        height: "min(1100px, calc(100vh - 32px))",
-      }}
-    >
-      <div
-        className="h-12 shrink-0 px-4 border-b cd-border-c cd-surface-bg flex items-center justify-between gap-3 cursor-move select-none"
-        onPointerDown={startDrag}
-        onPointerMove={moveDrag}
-        onPointerUp={stopDrag}
-        onPointerCancel={stopDrag}
-      >
-        <div className="min-w-0 flex items-center gap-2">
-          <FileText className="w-4 h-4 cd-text-primary shrink-0" />
-          <span className="text-sm cd-text truncate">{title}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {/* 지금 보고 있는 문서 내려받기 — 같은 출처 프록시라 download 속성으로 저장된다 */}
-          <a
-            href={url}
-            download={activeDoc?.fileName ?? true}
-            onPointerDown={(event) => event.stopPropagation()}
-            className="cd-action cd-btn cd-btn-ghost px-2 py-1 text-xs cd-text-muted flex items-center gap-1 whitespace-nowrap"
-            title="현재 문서 다운로드"
-          >
-            <Download className="w-3.5 h-3.5" />
-            다운로드
-          </a>
-          <button
-            type="button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClose();
-            }}
-            className="rounded-lg p-1 cd-text-faint hover:bg-[color:var(--cd-surface)] hover:text-[color:var(--cd-text)]"
-            title="닫기"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      {docs && docs.length > 1 && (
-        <div className="shrink-0 px-4 pt-1 border-b cd-border-c cd-card-bg">
-          <CdTabs
-            items={docs.map((d, i) => ({ key: String(i), label: d.label }))}
-            active={String(docIndex)}
-            onChange={(key) => setDocIndex(Number(key))}
-          />
-        </div>
-      )}
-      <iframe
-        key={url}
-        title={activeDoc?.label ?? title}
-        src={withPdfViewerDefaults(url)}
-        className="w-full flex-1 min-h-0 cd-surface-bg"
-      />
-    </div>
-  );
-}
-
-function withPdfViewerDefaults(url: string): string {
-  const [base] = url.split("#", 1);
-  return `${base}#toolbar=1&navpanes=0&view=FitH`;
-}
-
 function ContractDeleteModal({
   contractTitle,
   onClose,
@@ -3796,135 +3671,6 @@ function CollectionProgressCard({
     </div>
   );
 }
-
-type TreeFlatRow =
-  | {
-      kind: "group";
-      serviceType: string;
-      count: number;
-      isOpen: boolean;
-      style: ServiceTypeStyle;
-    }
-  | {
-      kind: "child";
-      contract: ContractTreeContractNode;
-      isLastChild: boolean;
-      style: ServiceTypeStyle;
-    };
-
-interface TreeGroupHeaderProps {
-  serviceType: string;
-  count: number;
-  isOpen: boolean;
-  style: ServiceTypeStyle;
-  onToggle: (serviceType: string) => void;
-}
-
-const TreeGroupHeader = memo(function TreeGroupHeader({
-  serviceType,
-  count,
-  isOpen,
-  style,
-  onToggle,
-}: TreeGroupHeaderProps) {
-  // Switch the parent folder icon between closed and open variants so that
-  // expanding a group is reinforced visually beyond the chevron rotation.
-  const ParentIcon = isOpen ? FolderOpen : Folder;
-  const handleClick = useCallback(() => onToggle(serviceType), [onToggle, serviceType]);
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[color:var(--cd-surface)] border-b cd-border-c"
-    >
-      {isOpen ? (
-        <ChevronDown className="w-4 h-4 cd-text-faint" />
-      ) : (
-        <ChevronRight className="w-4 h-4 cd-text-faint" />
-      )}
-      <ParentIcon
-        className="w-4 h-4 fill-current transition-transform"
-        style={{ color: style.parentColor }}
-      />
-      <span className="text-sm cd-text">{serviceType}</span>
-      <span className="text-[11px] cd-text-faint ml-auto">{count}건</span>
-    </button>
-  );
-});
-
-interface TreeChildRowProps {
-  contract: ContractTreeContractNode;
-  isSelected: boolean;
-  isLastChild: boolean;
-  childColor: string;
-  onSelect: (contractId: string) => void;
-}
-
-const TreeChildRow = memo(function TreeChildRow({
-  contract,
-  isSelected,
-  isLastChild,
-  childColor,
-  onSelect,
-}: TreeChildRowProps) {
-  const handleClick = useCallback(() => onSelect(contract.contractId), [onSelect, contract.contractId]);
-  // Selected child rows show an "open folder" icon to mirror the active-state
-  // metaphor used by the parent group header.
-  const ChildIcon = isSelected ? FolderOpen : FolderClosed;
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className={
-        "relative w-full flex items-center gap-2 pl-12 pr-3 py-2 text-left text-xs hover:bg-[color:var(--cd-surface)] " +
-        (isSelected ? "cd-tint-primary border-l-4 border-[color:var(--cd-primary)]" : "border-l-4 border-transparent")
-      }
-    >
-      <span
-        aria-hidden
-        className={
-          "pointer-events-none absolute left-7 w-px bg-[var(--cd-border)] " +
-          (isLastChild ? "top-0 h-1/2" : "top-0 bottom-0")
-        }
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute left-7 top-1/2 w-3 h-px bg-[var(--cd-border)]"
-      />
-      <ChildIcon
-        className="w-3.5 h-3.5 fill-current shrink-0"
-        style={{ color: childColor }}
-      />
-      <span className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="truncate cd-text">{contract.contractTitle}</span>
-        {contract.contractStatus === "terminated" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] text-white" style={{ background: "#FF7171" }}>
-            계약해지
-          </span>
-        )}
-        {contract.contractStatus === "suspended" && (
-          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] cd-text" style={{ background: "#FFD966" }}>
-            계약중지
-          </span>
-        )}
-        {contract.isFullyCollected && (
-          <span
-            aria-label="수금 완료"
-            title="수금 완료"
-            className="shrink-0 w-1.5 h-1.5 rounded-full"
-            style={{ background: childColor }}
-          />
-        )}
-      </span>
-      <span className="w-[88px] text-right text-[11px] font-mono cd-text-faint ml-2 shrink-0 tabular-nums">
-        {contract.contractDate ?? "-"}
-      </span>
-      <span className="w-[72px] text-right text-[11px] font-mono cd-text-faint ml-1 shrink-0 tabular-nums">
-        {formatMoney(contract.currentAmount)}
-      </span>
-    </button>
-  );
-});
 
 function DateInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const displayValue = formatDateProgressive(value);
@@ -4118,25 +3864,6 @@ function formatThousands(value: string): string {
 /** Remove every non-digit character (commas, spaces, etc.) from a string. */
 function stripDigits(value: string): string {
   return value.replace(/[^0-9]/g, "");
-}
-
-function formatMoney(value: unknown): string {
-  const n = typeof value === "number" ? value : Number(value ?? 0);
-  if (!Number.isFinite(n) || n === 0) return "-";
-  if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, "") + "억";
-  if (Math.abs(n) >= 10000) return Math.round(n / 10000).toLocaleString() + "만";
-  return n.toLocaleString();
-}
-
-/**
- * Render the exact amount with thousands separators (e.g. `8,640,000`).
- * Used in milestone tables where the user wants the full claim/collection
- * amount visible rather than the abbreviated 만/억 form.
- */
-function formatExactAmount(value: unknown): string {
-  const n = typeof value === "number" ? value : Number(value ?? 0);
-  if (!Number.isFinite(n) || n === 0) return "-";
-  return Math.round(n).toLocaleString("en-US");
 }
 
 /**

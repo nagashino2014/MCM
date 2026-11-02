@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { curateBriefingReport, evidenceCompleteness, validateBriefingDigest, type BriefingDigest, type BriefingCurationInput } from "../lib/intel/briefing-curation";
+import { curateBriefingReport, evidenceCompleteness, validateBriefingDigest, type BriefingDigest, type BriefingCurationInput, type DroppedDigestItem } from "../lib/intel/briefing-curation";
 import { separateAmbiguousProjectLinks, sortBriefingInsights } from "../lib/intel/briefing-report-policy";
 import { parseBriefingReport, type BriefingReport } from "../lib/intel/rag-queries";
 import type { BriefingEvidence } from "../lib/intel/briefing-types";
@@ -250,7 +250,7 @@ test("검수 입력에 기계가 찾은 행별 문제를 전달하고 검수본�
   });assert.equal(calls,2);assert.equal(result.report.companies.length,1);
   calls=0;const held=await curateBriefingReport(input(sources),async()=>{calls++;return response(draft);});assert.equal(calls,2);
   // 검수본에 남은 범위 문제 항목은 발행하지 않고 빼며, 뺀 사실을 보고서 하단에 적는다.
-  assert.equal(held.report.companies.length,0);assert.match(String(held.report.etcNote),/투자계획 3건\(회사 용인 Y2 공장, 청주 신규시설\(명칭 미상\), 청주 P&T7 공장\)은 제외/);
+  assert.equal(held.report.companies.length,0);assert.match(String(held.report.etcNote),/항목 3건\(투자계획 회사 용인 Y2 공장, 투자계획 청주 신규시설\(명칭 미상\), 투자계획 청주 P&T7 공장\)은 제외/);
 });
 
 test("최종 검수 1회가 원자료 전체로 초안을 교정하며 분리된 같은 근거 사업의 업무 링크는 보류한다",async()=>{
@@ -274,7 +274,7 @@ test("정상 초안도 검수 1회를 거치고 검수의 잘못된 번호·범�
   const valid:BriefingDigest={trends:[entry(1)],investments:[],insights:[]};let calls=0;
   await curateBriefingReport(input([item(1)]),async()=>{calls++;return response(valid);});assert.equal(calls,2);
   calls=0;const scoped=await curateBriefingReport(input([item(1)]),async()=>{calls++;return response(calls===1?valid:{...valid,investments:[{...entry(1,"회사|Y2·M17|투자","별개 시설 투자"),title:"Y2·M17 공장"}]});});
-  assert.equal(calls,2);assert.equal(scoped.report.companies.length,0);assert.match(String(scoped.report.etcNote),/Y2·M17 공장\)은 제외/);
+  assert.equal(calls,2);assert.equal(scoped.report.companies.length,0);assert.match(String(scoped.report.etcNote),/투자계획 Y2·M17 공장\)은 제외/);
   for(const failure of ["refs","api"]){
     calls=0;
     await assert.rejects(curateBriefingReport(input([item(1)]),async()=>{
@@ -437,15 +437,26 @@ test("실제 두 금액 오류를 검수에 전달하고 개별액만 남긴 카
   });
   assert.equal(calls,2);assert.match(result.report.companies[0].desc,/35조2000억원/);assert.doesNotMatch(result.report.companies.map(row=>row.desc).join(" "),/54조3000|40조/);assert.match(result.report.trends[0],/두 사업.*54조3000/);
   calls=0;const held=await curateBriefingReport(input(sources),async()=>{calls++;return response(draft);});assert.equal(calls,2);
-  assert.equal(held.report.companies.length,0);assert.doesNotMatch(held.report.companies.map(row=>row.desc).join(" "),/54조3000|40조/);assert.match(String(held.report.etcNote),/투자계획 2건/);
+  assert.equal(held.report.companies.length,0);assert.doesNotMatch(held.report.companies.map(row=>row.desc).join(" "),/54조3000|40조/);assert.match(String(held.report.etcNote),/항목 2건/);
 });
 
 test("최종 검수에서는 시설 범위가 맞지 않는 투자계획만 빼고 나머지는 발행한다",()=>{
   const investment=(n:number,title:string,text:string)=>({...entry(n,`SK하이닉스|${title}|투자`,text),title});
   const digest=JSON.stringify({trends:[entry(1)],investments:[investment(1,"청주 P&T7 패키징 공장","P&T7 클린룸 일정을 앞당겼다. 회사 전체 설비투자액은 40조원 후반대다."),investment(2,"청주 M15X 공장","M15X 공장의 개별 투자액은 300억원이다.")],insights:[]});
   assert.throws(()=>validateBriefingDigest(digest,new Set([1,2])),/개별 시설 외 범위/,"수집 기본값은 계속 거부한다");
-  const dropped:Array<{title:string;message:string}>=[];
-  const result=validateBriefingDigest(digest,new Set([1,2]),{droppedInvestments:dropped});
+  const dropped:DroppedDigestItem[]=[];
+  const result=validateBriefingDigest(digest,new Set([1,2]),{droppedItems:dropped});
   assert.deepEqual(result.investments.map(item=>item.title),["청주 M15X 공장"]);
   assert.deepEqual(dropped.map(item=>item.title),["청주 P&T7 패키징 공장"]);
+});
+
+test("최종 검수에서 직접 근거가 없는 항목만 빼고, 핵심 동향이 모두 빠지면 보류한다",async()=>{
+  const sources=[item(1,{title:"Y2 신규시설 투자",text:"지난달 Y2 투자계획을 결정했다."}),item(2,{title:"M15X 가동",text:"M15X 공장이 가동을 시작했다."})];
+  const unsupported=entry(1,"회사|Y2|계획","투자 감속론에도 Y2 투자계획은 유지되는 것으로 전해졌다.");
+  const supported=entry(2,"회사|M15X|가동","M15X 공장이 가동을 시작했다는 보도다.");
+  let calls=0;
+  const result=await curateBriefingReport(input(sources),async()=>{calls++;return response({trends:[unsupported,supported],investments:[],insights:[]});});
+  assert.equal(calls,2);assert.equal(result.report.trends.length,1);assert.match(result.report.trends[0],/M15X/);
+  assert.match(String(result.report.etcNote),/항목 1건\(핵심 동향 회사\|Y2\|계획\)은 제외/);
+  calls=0;await assert.rejects(curateBriefingReport(input(sources),async()=>{calls++;return response({trends:[unsupported],investments:[],insights:[]});}),/유지·재확인을 뒷받침하는 직접 근거/);
 });

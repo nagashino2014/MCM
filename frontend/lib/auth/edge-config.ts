@@ -135,6 +135,11 @@ export const edgeAuthConfig: NextAuthConfig = {
       //   전 직원 일제 차단을 피하기 위한 유예. config.ts 가 다음 Node 요청에서 채운다.
       const perms = Array.isArray(user.perms) ? user.perms : null;
       if (perms) {
+        // 직원 증명사진 조회는 아바타로 전 화면에서 쓰여 관리 키 없이도 열어야 한다(라우트가 인증만 확인).
+        //   업로드(POST)는 그대로 관리 영역 차단 + 라우트의 staffing.edit 판정을 받는다.
+        if (request.method === "GET" && /^\/api\/admin\/employees\/[^/]+\/photo$/.test(path)) {
+          return true;
+        }
         if (path.startsWith("/api/admin")) {
           return hasAnyPerm(perms, ADMIN_AREA_KEYS)
             ? true

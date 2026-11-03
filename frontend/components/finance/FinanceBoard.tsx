@@ -198,7 +198,7 @@ function LedgerFilterColumn({
   };
 
   return (
-    <div className="flex flex-col gap-2 w-full lg:w-[380px] shrink-0">
+    <div className="flex flex-col gap-2 w-full lg:w-[380px] xl:w-full shrink-0">
       <div className="flex items-center gap-1.5 flex-wrap">
         {[1, 3, 6, 12].map((m) => (
           <button
@@ -1288,20 +1288,22 @@ function BankLedgerPanel() {
 
   return (
     <div className="space-y-4">
-      {/* 필터(좌) + 등록 계좌 태그(우) — PDF 컨셉 레이아웃 */}
+      {/* 필터(좌) + 등록 계좌 태그(우) — 분개장 필터와 같은 좌 3 : 우 7 그리드라 태그 너비가 같다(2026-11-03 사용자 요청) */}
       <div className="cd-card p-4">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <LedgerFilterColumn
-            keywordPlaceholder="거래상대·메모·거래종류 검색"
-            onApply={(f) => {
-              setFilter(f);
-              setPage(0);
-            }}
-          />
-          <div className="min-w-0 flex-1">
+        <div className="grid grid-cols-1 xl:grid-cols-10 gap-x-8 gap-y-4">
+          <div className="min-w-0 xl:col-span-3">
+            <LedgerFilterColumn
+              keywordPlaceholder="거래상대·메모·거래종류 검색"
+              onApply={(f) => {
+                setFilter(f);
+                setPage(0);
+              }}
+            />
+          </div>
+          <div className="min-w-0 xl:col-span-7">
             <div className="cd-label text-xs mb-2">등록 계좌</div>
-            {/* 태그 폭 30% 축소(max-w) + 미선택 테두리 선명화(cd-faint) — 사용자 확정 */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 max-w-[700px]">
+            {/* 미선택 테두리 선명화(cd-faint) — 사용자 확정 */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
               {bankAccounts.map((acc) => (
                 <button
                   key={acc.id}
@@ -1309,7 +1311,7 @@ function BankLedgerPanel() {
                   onClick={() => toggleAccount(acc.id)}
                   data-active={selectedAccount === acc.id}
                   aria-pressed={selectedAccount === acc.id}
-                  className="cd-choice flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
+                  className="cd-choice w-full flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                   style={
                     selectedAccount === acc.id
                       ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1544,20 +1546,22 @@ function CardLedgerPanel() {
 
   return (
     <div className="space-y-4">
-      {/* 필터(좌) + 등록 카드 태그(우: 카드사 5열 1행 + 카드 7열 3행, 우측 끝 일치) */}
+      {/* 필터(좌) + 등록 카드 태그(우: 카드사 5열 + 카드 7열) — 분개장 필터와 같은 좌 3 : 우 7 그리드(2026-11-03 사용자 요청) */}
       <div className="cd-card p-4">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <LedgerFilterColumn
-            keywordPlaceholder="상호·업태 검색"
-            onApply={(f) => {
-              setFilter(f);
-              setPage(0);
-            }}
-          />
-          <div className="min-w-0 flex-1">
+        <div className="grid grid-cols-1 xl:grid-cols-10 gap-x-8 gap-y-4">
+          <div className="min-w-0 xl:col-span-3">
+            <LedgerFilterColumn
+              keywordPlaceholder="상호·업태 검색"
+              onApply={(f) => {
+                setFilter(f);
+                setPage(0);
+              }}
+            />
+          </div>
+          <div className="min-w-0 xl:col-span-7">
             <div className="cd-label text-xs mb-2">등록 카드</div>
-            {/* 카드사 5열·카드 7열이 같은 max-w 컨테이너를 공유 → 우측 끝 일치 + 태그 폭 30% 축소 */}
-            <div className="max-w-[700px]">
+            {/* 카드사 5열·카드 7열이 같은 우측 칸을 공유 → 우측 끝 일치 */}
+            <div>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mb-2">
                 {cardCompanies.map((company) => (
                   <button
@@ -1566,7 +1570,7 @@ function CardLedgerPanel() {
                     onClick={() => toggleCompany(company.code)}
                     data-active={selectedCompany === company.code}
                     aria-pressed={selectedCompany === company.code}
-                    className="cd-choice flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
+                    className="cd-choice w-full flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm text-left transition-colors"
                     style={
                       selectedCompany === company.code
                         ? { borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)", color: "var(--cd-primary)" }
@@ -1580,7 +1584,7 @@ function CardLedgerPanel() {
                 {cardCompanies.length === 0 && <span className="text-sm cd-text-muted col-span-full">등록된 카드가 없습니다.</span>}
               </div>
               {/* 카드 태그는 카드사를 선택했을 때만, 해당 카드사 것만 노출(사용자 확정) */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-7 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-7 gap-1.5">
                 {companyCards.map((card) => (
                   <button
                     key={card.id}

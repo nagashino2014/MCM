@@ -345,8 +345,9 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
           </div>
         )}
 
-        {/* 기본 60vh, 결과 기입·수신처 편집을 펼치면 420px까지 줄어든다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
-        <div className="relative flex-[1_1_60vh] min-h-[420px] bg-[color:var(--cd-surface)]">
+        {/* 기본 84vh(종전 60vh의 1.4배, 2026-11-03), 결과 기입·수신처 편집을 펼치면 420px까지 줄어든다.
+            모달이 max-h 94vh 라 화면 높이를 넘지 않는다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
+        <div className="relative flex-[1_1_84vh] min-h-[420px] bg-[color:var(--cd-surface)]">
           {quote && <iframe title="견적서 미리보기" src={`/api/quotes/${encodeURIComponent(quoteId)}/pdf?disposition=inline`} className="absolute inset-0 w-full h-full" />}
         </div>
       </div>

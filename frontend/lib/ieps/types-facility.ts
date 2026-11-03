@@ -116,6 +116,8 @@ export interface FacilityDetail {
   orgCategory?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];
+  /** 계약 유형 중 매입 계약(334) — outsourcing·subscription·lease·management 복수. */
+  purchaseContractTypes?: string[];
   siteAddress: string | null;
   additionalSiteAddresses: string[];
   phoneNumber: string | null;

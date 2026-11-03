@@ -13,7 +13,9 @@ export type FacilityCompanySize =
   | "public_enterprise"
   | "large"
   | "mid"
-  | "small";
+  | "small"
+  | "incorporated_association"
+  | "nonprofit";
 
 export interface FacilityAlias {
   id?: number;
@@ -62,6 +64,8 @@ export const FACILITY_COMPANY_SIZE_LABELS: Record<FacilityCompanySize, string> =
   large: "대기업",
   mid: "중견기업",
   small: "중소기업",
+  incorporated_association: "사단법인",
+  nonprofit: "비영리법인",
 };
 
 export const FACILITY_COMPANY_SIZE_ORDER: FacilityCompanySize[] = [
@@ -71,6 +75,8 @@ export const FACILITY_COMPANY_SIZE_ORDER: FacilityCompanySize[] = [
   "large",
   "mid",
   "small",
+  "incorporated_association",
+  "nonprofit",
 ];
 
 /** 거래 구분(331) — 매출처·매입처 복수. facilities.trade_roles text[]. 매입 계약 상대 업체 검색·배지에 쓴다. */

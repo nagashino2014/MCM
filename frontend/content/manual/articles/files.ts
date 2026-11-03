@@ -51,10 +51,24 @@ export const FILES_ARTICLES: ManualArticle[] = [
           { kind: "warn", text: "문서 삭제는 결재 운영 담당(관리자·인사/회계)만 할 수 있습니다." },
         ],
       },
+      {
+        id: "letter-attachments",
+        title: "공문과 첨부서류 함께 보기",
+        blocks: [
+          { kind: "list", items: [
+            "첨부서류가 있는 공문을 열면 왼쪽 칸 위에 공문과 첨부서류 목록이, 그 아래에 공문 쪽 뒤로 첨부서류 쪽이 순서대로 보입니다. 목록의 문서나 쪽 미리보기를 누르면 그 위치로 이동합니다.",
+            "첨부서류는 목록 오른쪽 내려받기 아이콘으로 하나씩 받습니다. 공문만 받으려면 목록의 공문 줄에 있는 PDF·한글을 누릅니다.",
+            "위쪽 PDF 아이콘은 공문과 첨부서류를 하나로 합친 PDF를, 한글 아이콘은 하나로 합친 한글(HWPX) 파일을 내려받습니다.",
+            "한글 결합은 첨부서류가 모두 HWPX일 때만 켜집니다. 스캔본·PDF·이미지·워드·엑셀·HWP(구 형식)가 하나라도 있으면 한글 아이콘이 흐려지고, 마우스를 올리면 끈 이유가 보입니다. 이때도 PDF 결합은 받을 수 있습니다.",
+            "워드·엑셀·한글 첨부는 PDF로 바꿔 보여 줍니다. 바꾸지 못한 첨부는 목록에 ‘미리보기 불가’로 표시되며, 내려받아 확인합니다.",
+          ] },
+          { kind: "tip", text: "발송공문·발송견적 미리보기 창은 화면 높이 안에서 크게 열립니다. 발송 이력이나 수신처 편집을 펼치면 그만큼 줄어듭니다." },
+        ],
+      },
     ],
-    keywords: ["문서함", "완료 문서", "보존", "발송공문", "발송견적", "참조 문서", "계약서", "과거 공문", "열람 권한"],
-    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx", "components/approval/QuoteRecordsTable.tsx", "app/api/quotes/route.ts"],
-    reviewedAt: "2026-10-21",
+    keywords: ["문서함", "완료 문서", "보존", "발송공문", "발송견적", "참조 문서", "계약서", "과거 공문", "열람 권한", "첨부서류", "결합 다운로드", "공문 첨부"],
+    sources: ["components/approval/ApprovalArchiveBoard.tsx", "components/approval/LetterRecordsTable.tsx", "components/approval/LetterBundlePane.tsx", "components/approval/QuoteRecordsTable.tsx", "app/api/quotes/route.ts", "lib/letter/bundle.ts"],
+    reviewedAt: "2026-11-03",
   },
   {
     id: "files.personal",

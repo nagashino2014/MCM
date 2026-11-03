@@ -58,11 +58,12 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
         "줄마다 합의(의견 확인) 또는 승인(결재 권한)을 고릅니다.",
         "결재자가 부재 중이면 그 사람이 정해 둔 대결자가 대신 결재하거나 다음 결재자로 넘어갑니다. 마지막 결재자는 넘어가지 않습니다.",
         "로그인 계정이 없는 직원은 지정할 수 없습니다. 자주 쓰는 결재선은 [[프리셋 저장]]해 두세요.",
+        "결재선이 정해진 양식은 내 소속에 맞는 결재자가 자동으로 채워지고 바꿀 수 없습니다. 결재자를 찾지 못하면 이유가 빨갛게 표시되고 상신이 막힙니다.",
       ] },
     ],
     more: { article: "approval.draft", section: "line" },
     sources: ["components/approval/ApprovalDraftBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-03",
   },
   {
     id: "approval.draft-watchers",

@@ -8,7 +8,7 @@
 // 결재선 패널은 ApprovalDraftBoard(:704-810)의 마크업·프리셋 로직을 이식했다(회귀 방지 위해
 // 원본은 수정하지 않음 — work-plan 탭 복제와 같은 관행).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
@@ -35,6 +36,8 @@ import {
   type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
 } from "@/lib/letter/types";
 import "@/components/cdash/cdash.css";
+
+const FIXED_LINE_VALUES: Record<string, unknown> = {};
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -445,7 +448,11 @@ export function ApprovalLetterBoard() {
   const [issueDate, setIssueDate] = useState("");
   const [contactPhone, setContactPhone] = useState(COMPANY_PHONE);
   const [contactEmail, setContactEmail] = useState(COMPANY_CONTACT_EMAIL);
-  const [line, setLine] = useState<LineStep[]>([]);
+  const [freeLine, setLine] = useState<LineStep[]>([]);
+  // 고정 결재선(335) — 강제 양식이면 결재선은 규칙 해석 결과로 고정된다(편집 불가, 서버도 같은 규칙으로 강제).
+  const fixedLine = useFixedLine(LETTER_FORM_ID, FIXED_LINE_VALUES);
+  const fixedSteps = useMemo(() => fixedLineToSteps(fixedLine.result), [fixedLine.result]);
+  const line = fixedLine.locked ? fixedSteps : freeLine;
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
@@ -879,13 +886,15 @@ export function ApprovalLetterBoard() {
     const html = editorRef.current?.innerHTML ?? "";
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
     if (letterKind === "proof" && (!proofReceiver.company.trim() || !proofReceiver.address.trim())) return "내용증명형은 수신 주소·회사명을 입력하세요.";
+    const fixedBlock = fixedLineBlockMessage(fixedLine.result);
+    if (fixedBlock) return fixedBlock;
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     if (manualOn && !noLocked) {
       if (!parseLetterNo(manualNo)) return "공문번호 일련번호를 4~5자리 숫자로 입력하세요(예: 01036).";
       if (manualCheck && !manualCheck.available) return `이미 사용 중인 공문번호입니다 — ${manualCheck.usedBy}`;
     }
     return null;
-  }, [subject, recipients, ccRefs, extCcRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck]);
+  }, [subject, recipients, ccRefs, extCcRefs, letterKind, proofReceiver, line, manualOn, noLocked, manualNo, manualCheck, fixedLine.result]);
 
   /** 대금청구서 생성 완료 — 첨부에 추가하고, 비어 있는 제목·본문·붙임·수신처를 채운다. */
   const onPaymentCreated = useCallback(
@@ -1421,6 +1430,10 @@ export function ApprovalLetterBoard() {
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
 
+            {fixedLine.result?.enforced ? (
+              <FixedLineList result={fixedLine.result} />
+            ) : (
+            <>
             {presets.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
@@ -1469,6 +1482,8 @@ export function ApprovalLetterBoard() {
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
+            </>
+            )}
 
             {/* 참조/열람자 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">

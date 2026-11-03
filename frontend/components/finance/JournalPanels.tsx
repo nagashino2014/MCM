@@ -8,7 +8,7 @@
 // FinanceBoard 의 소메뉴 "전표·장부" 그룹에서 렌더된다(cdash 스타일 관례 동일).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Check, Download, RefreshCw, Trash2, Upload, Undo2, XCircle } from "lucide-react";
+import { AlertTriangle, Check, Download, RefreshCw, Search, Trash2, Upload, Undo2, XCircle } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 import { FinLogo } from "@/components/finance/FinLogo";
@@ -248,6 +248,8 @@ export function JournalPanel() {
   const [side, setSide] = useState<"bank" | "card">("bank");
   const [pick, setPick] = useState<PickFilter>({ type: "none" });
   const [acctFilter, setAcctFilter] = useState<Set<string>>(() => new Set());
+  // 키워드 검색(2026-11-03 사용자 요청) — 불러온 전표 안에서 적요·거래처·계정·금액으로 거른다.
+  const [keyword, setKeyword] = useState("");
   const [connections, setConnections] = useState<ConnectionTag[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -408,7 +410,21 @@ export function JournalPanel() {
 
   const pendingCount = useMemo(() => entries.filter((e) => e.status === "pending").length, [entries]);
   // 사후 지정 가능 건 = 카드 전표 중 결재문서에 귀속되지 않은 것
-  const pageEntries = useMemo(() => entries.slice(offset, offset + PAGE_SIZE), [entries, offset]);
+  const visibleEntries = useMemo(() => {
+    const q = keyword.trim().toLowerCase();
+    if (!q) return entries;
+    const digits = q.replace(/[,\s원]/g, "");
+    const numeric = /^\d+$/.test(digits);
+    return entries.filter((e) => {
+      const text = [e.description, e.partyName, e.entryDate, SOURCE_LABEL[e.sourceKind], ...e.lines.flatMap((l) => [l.accountName, l.memo])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (text.includes(q)) return true;
+      return numeric && [e.total, ...e.lines.map((l) => l.debit || l.credit)].some((n) => String(n).includes(digits));
+    });
+  }, [entries, keyword]);
+  const pageEntries = useMemo(() => visibleEntries.slice(offset, offset + PAGE_SIZE), [visibleEntries, offset]);
   const assignable = useMemo(() => pageEntries.filter((e) => e.sourceKind === "card" && !e.expenseKindLocked), [pageEntries]);
   const bankTags = useMemo(() => connections.filter((c) => c.kind === "bank"), [connections]);
   const cardCompanies = useMemo(
@@ -451,10 +467,29 @@ export function JournalPanel() {
                 ))}
               </select>
             </div>
-            <div className="grid gap-2 items-center mt-2" style={{ gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)" }}>
-              <DigitDateInput fill value={range.from} onChange={(v) => setRange({ from: v, to: range.to })} />
-              <span className="cd-text-muted">~</span>
-              <DigitDateInput fill value={range.to} onChange={(v) => setRange({ from: range.from, to: v })} />
+            {/* 좌: 키워드 검색 / 우: 일자 지정 — 같은 너비로 반씩 나눈다(2026-11-03 사용자 요청) */}
+            <div className="grid gap-2 items-center mt-2 grid-cols-2">
+              <span className="relative flex items-center min-w-0">
+                <Search className="w-3.5 h-3.5 cd-text-faint absolute left-2" />
+                <input
+                  type="search"
+                  className="cd-input"
+                  style={{ width: "100%", minWidth: 0, paddingLeft: 26 }}
+                  placeholder="적요·거래처·계정·금액 검색"
+                  aria-label="전표 키워드 검색"
+                  value={keyword}
+                  onChange={(e) => {
+                    setKeyword(e.target.value);
+                    setOffset(0);
+                    setChecked(new Set());
+                  }}
+                />
+              </span>
+              <div className="grid gap-1 items-center min-w-0" style={{ gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)" }}>
+                <DigitDateInput fill value={range.from} onChange={(v) => setRange({ from: v, to: range.to })} />
+                <span className="cd-text-muted">~</span>
+                <DigitDateInput fill value={range.to} onChange={(v) => setRange({ from: range.from, to: v })} />
+              </div>
             </div>
 
             <div className="cd-label text-xs mt-3 mb-1.5">구분</div>
@@ -757,11 +792,18 @@ export function JournalPanel() {
                 </td>
               </tr>
             )}
+            {!loading && entries.length > 0 && visibleEntries.length === 0 && (
+              <tr>
+                <td colSpan={9} className="py-6 text-center cd-text-muted text-sm">
+                  &lsquo;{keyword.trim()}&rsquo;와 일치하는 전표가 없습니다.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
       <div className="mt-3">
-        <PaginationControls total={entries.length} limit={PAGE_SIZE} offset={offset} loading={loading} onPageChange={setOffset} />
+        <PaginationControls total={visibleEntries.length} limit={PAGE_SIZE} offset={offset} loading={loading} onPageChange={setOffset} />
       </div>
 
       {/* 동일 거래처 일괄 확정 — 체크를 풀면 그 건은 대상에서 빠진다(확정 필요 상태 유지). */}

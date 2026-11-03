@@ -1,5 +1,6 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { DASHBOARD_SERVICE_CATEGORIES } from "./contract-categories";
+import { withCurrentContractDocumentNames } from "@/lib/contracts/document-names";
 
 export interface ContractListFilter {
   q?: string;
@@ -522,7 +523,8 @@ export async function getContractDetail(contractId: string) {
       [contractId]
     )
   );
-  const documents = rowsToObjects(
+  // 표시·다운로드 이름은 현재 계약일·계약명 기준 — 변경계약 전에 올린 문서도 새 이름으로 내려받는다.
+  const documents = withCurrentContractDocumentNames(rowsToObjects(
     await db.exec(
       `SELECT document_id, contract_id, document_type, display_name, original_filename,
               public_path, storage_provider, storage_key, byte_size, sha256, source,
@@ -533,7 +535,8 @@ export async function getContractDetail(contractId: string) {
        ORDER BY created_at DESC`,
       [contractId]
     )
-  );
+  ), String(contract.contract_date ?? "").trim() || String(contract.started_at ?? "").trim() || null,
+  contract.contract_title != null ? String(contract.contract_title) : null);
   const changes = rowsToObjects(
     await db.exec(
       `SELECT *

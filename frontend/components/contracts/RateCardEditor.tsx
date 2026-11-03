@@ -44,15 +44,18 @@ export function RateCardEditor({
   data,
   onChange,
   onAddStages,
+  hideDualPrice = false,
 }: {
   data: RateCardData;
   onChange: (data: RateCardData) => void;
   /** 변경계약 모달 등에서 차수 파생 단계(선급금/준공금)를 청구·수금 단계로 바로 추가할 때 제공 */
   onAddStages?: (round: RateCardRound, stages: RateCardStageOption[]) => void;
+  /** 매입 계약(333)에서는 허가/신고 단가 구분이 없다 — 체크박스를 숨기고 단가 1종으로 고정한다. */
+  hideDualPrice?: boolean;
 }) {
   const [activeRoundId, setActiveRoundId] = useState(data.rounds[0]?.id ?? "");
   const activeRound = data.rounds.find((r) => r.id === activeRoundId) ?? data.rounds[0];
-  const dual = data.dualPrice;
+  const dual = hideDualPrice ? false : data.dualPrice;
   const groups = rateCardGroupNames(data);
   // 단일 차수 + 지급 단위 없음 = 구분 소계 청구(에이에스이코리아식). 요약도 그 기준으로.
   const groupMode = data.rounds.length === 1 && validPayments(data.rounds[0]).length === 0;
@@ -135,10 +138,12 @@ export function RateCardEditor({
           ① 단가 기준표 (항목·단가)
           <CdHelp topic="contracts.rate-card" />
         </span>
-        <label className="inline-flex items-center gap-1.5 text-[11px] cd-text-muted select-none">
-          <input type="checkbox" checked={dual} onChange={(e) => onChange({ ...data, dualPrice: e.target.checked })} />
-          허가/신고 단가 구분(단가 2종)
-        </label>
+        {!hideDualPrice && (
+          <label className="inline-flex items-center gap-1.5 text-[11px] cd-text-muted select-none">
+            <input type="checkbox" checked={dual} onChange={(e) => onChange({ ...data, dualPrice: e.target.checked })} />
+            허가/신고 단가 구분(단가 2종)
+          </label>
+        )}
       </div>
 
       <div className={`cd-table-head grid ${masterCols} gap-1.5 text-[11px] cd-text-faint px-1 py-2`}>

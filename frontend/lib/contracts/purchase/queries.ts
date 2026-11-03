@@ -1,6 +1,15 @@
+import crypto from "node:crypto";
 import { getDb, rowsToObjects, type PgDatabase } from "@/lib/db";
-import { PURCHASE_CONTRACT_TYPES, type PurchaseContractType } from "./options";
-import type { PurchaseContractDetail, PurchaseInvoiceCandidate, PurchaseTreeGroup, PurchaseTreeNode, PurchaseTreePayload } from "./types";
+import { PURCHASE_CONTRACT_TYPES, type PurchaseContractType, type PurchaseMonthlyKind } from "./options";
+import type {
+  PurchaseContractDetail,
+  PurchaseInvoiceCandidate,
+  PurchaseMonthlyEntry,
+  PurchaseMonthlyPayload,
+  PurchaseTreeGroup,
+  PurchaseTreeNode,
+  PurchaseTreePayload,
+} from "./types";
 
 /**
  * 매입 계약 조회(331) — 매출 lib/ieps/contracts.ts 의 listContractsForTree/getContractDetail 과 같은 구조.
@@ -145,19 +154,156 @@ export async function getPurchaseContractDetail(purchaseContractId: string): Pro
       [purchaseContractId]
     )
   );
-  return { contract, milestones, documents };
+  // 333 — 단가표 유무·월별 금액 연도·연결 차량 자산(등록증)
+  const rateCard = rowsToObjects(
+    await db.exec(`SELECT 1 AS present FROM purchase_contract_rate_cards WHERE purchase_contract_id = $1`, [purchaseContractId])
+  );
+  const monthlyYears = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT year FROM purchase_contract_monthly_amounts WHERE purchase_contract_id = $1 ORDER BY year DESC`,
+      [purchaseContractId]
+    )
+  )
+    .map((r) => Number(r.year))
+    .filter((y) => Number.isFinite(y));
+  let linkedAsset: PurchaseContractDetail["linkedAsset"] = null;
+  if (contract.linked_asset_id) {
+    const asset = rowsToObjects(
+      await db.exec(`SELECT asset_id, name, registration_doc_key, registration_doc_name FROM reservable_assets WHERE asset_id = $1`, [
+        String(contract.linked_asset_id),
+      ])
+    )[0];
+    if (asset) {
+      linkedAsset = {
+        assetId: String(asset.asset_id),
+        name: String(asset.name ?? ""),
+        registrationDocKey: asset.registration_doc_key != null && String(asset.registration_doc_key) ? String(asset.registration_doc_key) : null,
+        registrationDocName: asset.registration_doc_name != null ? String(asset.registration_doc_name) : null,
+      };
+    }
+  }
+  return { contract, milestones, documents, hasRateCard: rateCard.length > 0, monthlyYears, linkedAsset };
 }
 
-/** 계약금액 = 단계 금액 합계(단계가 없으면 그대로 둔다). 단계 생성·수정·삭제 뒤 같은 트랜잭션에서 부른다. */
+/**
+ * 계약금액 = 단계 금액 합계 — 외주 계약만. 정기 구독은 월 구독료를 본문에서 받아 저장하고 임대·관리는 비해당이라
+ * 단계 합계로 덮어쓰지 않는다(333). 단계 생성·수정·삭제 뒤 같은 트랜잭션에서 부른다.
+ */
 export async function recalcPurchaseContractAmount(db: PgDatabase, purchaseContractId: string, now: string): Promise<void> {
   await db.run(
     `UPDATE purchase_contracts p
         SET contract_amount = s.total, updated_at = $2
        FROM (SELECT SUM(COALESCE(amount, 0)) AS total, COUNT(*) AS n
                FROM purchase_contract_milestones WHERE purchase_contract_id = $1) s
-      WHERE p.purchase_contract_id = $1 AND s.n > 0`,
+      WHERE p.purchase_contract_id = $1 AND s.n > 0 AND p.contract_type = 'outsourcing'`,
     [purchaseContractId, now]
   );
+}
+
+/* ─── 월별 금액(333) ─── */
+
+/** 한 해 12칸(비어 있는 달도 채워서)과 연도별 합계. */
+export async function listMonthlyAmounts(purchaseContractId: string, kind: PurchaseMonthlyKind, year: number): Promise<PurchaseMonthlyPayload> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT m.month, m.amount, m.purpose, m.detail, m.document_id, d.public_path AS document_path, d.display_name AS document_name
+         FROM purchase_contract_monthly_amounts m
+         LEFT JOIN purchase_contract_documents d ON d.document_id = m.document_id
+        WHERE m.purchase_contract_id = $1 AND m.kind = $2 AND m.year = $3
+        ORDER BY m.month`,
+      [purchaseContractId, kind, year]
+    )
+  );
+  const byMonth = new Map<number, Record<string, unknown>>();
+  for (const r of rows) byMonth.set(Number(r.month), r);
+  const months: PurchaseMonthlyEntry[] = [];
+  for (let month = 1; month <= 12; month++) {
+    const r = byMonth.get(month);
+    const detailRaw = r?.detail;
+    months.push({
+      month,
+      amount: r ? toNumberOrNull(r.amount) : null,
+      purpose: r?.purpose != null ? String(r.purpose) : "",
+      detail: typeof detailRaw === "string" ? (JSON.parse(detailRaw) as Record<string, unknown>) : ((detailRaw as Record<string, unknown>) ?? {}),
+      documentId: r?.document_id != null ? String(r.document_id) : null,
+      documentPath: r?.document_path != null ? String(r.document_path) : null,
+      documentName: r?.document_name != null ? String(r.document_name) : null,
+    });
+  }
+  const totals = rowsToObjects(
+    await db.exec(
+      `SELECT year, SUM(COALESCE(amount, 0)) AS total
+         FROM purchase_contract_monthly_amounts
+        WHERE purchase_contract_id = $1 AND kind = $2
+        GROUP BY year ORDER BY year`,
+      [purchaseContractId, kind]
+    )
+  );
+  return {
+    kind,
+    year,
+    months,
+    yearlyTotals: totals.map((t) => ({ year: Number(t.year), total: toNumber(t.total) })),
+  };
+}
+
+export interface MonthlyUpsertRow {
+  month: number;
+  amount: number | null;
+  purpose?: string | null;
+  detail?: Record<string, unknown> | null;
+  documentId?: string | null;
+}
+
+/**
+ * 한 해의 월별 금액 upsert — 금액·목적·명세서가 모두 비면 행을 지운다. detail/documentId 가 undefined 면 기존 값 유지
+ * (월별 표의 금액만 고칠 때 명세서 파싱 결과를 날리지 않는다).
+ */
+export async function upsertMonthlyAmounts(
+  db: PgDatabase,
+  purchaseContractId: string,
+  kind: PurchaseMonthlyKind,
+  year: number,
+  rows: MonthlyUpsertRow[],
+  now: string
+): Promise<void> {
+  for (const row of rows) {
+    const month = Math.floor(Number(row.month));
+    if (!Number.isFinite(month) || month < 1 || month > 12) continue;
+    const amount = row.amount != null && Number.isFinite(Number(row.amount)) ? Number(row.amount) : null;
+    const purpose = row.purpose == null ? undefined : String(row.purpose).trim() || null;
+    const existing = rowsToObjects(
+      await db.exec(
+        `SELECT entry_id, purpose, detail, document_id FROM purchase_contract_monthly_amounts
+          WHERE purchase_contract_id = $1 AND kind = $2 AND year = $3 AND month = $4`,
+        [purchaseContractId, kind, year, month]
+      )
+    )[0];
+    const nextPurpose = purpose === undefined ? (existing?.purpose != null ? String(existing.purpose) : null) : purpose;
+    const nextDetail = row.detail === undefined ? existing?.detail ?? {} : (row.detail ?? {});
+    const nextDocument = row.documentId === undefined ? (existing?.document_id != null ? String(existing.document_id) : null) : row.documentId;
+    const empty = amount == null && !nextPurpose && !nextDocument && Object.keys((nextDetail as Record<string, unknown>) ?? {}).length === 0;
+    if (empty) {
+      if (existing) await db.run(`DELETE FROM purchase_contract_monthly_amounts WHERE entry_id = $1`, [String(existing.entry_id)]);
+      continue;
+    }
+    if (existing) {
+      await db.run(
+        `UPDATE purchase_contract_monthly_amounts
+            SET amount = $2, purpose = $3, detail = $4::jsonb, document_id = $5, updated_at = $6
+          WHERE entry_id = $1`,
+        [String(existing.entry_id), amount, nextPurpose, JSON.stringify(nextDetail), nextDocument, now]
+      );
+    } else {
+      await db.run(
+        `INSERT INTO purchase_contract_monthly_amounts
+           (entry_id, purchase_contract_id, kind, year, month, amount, purpose, detail, document_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $10)`,
+        ["pma_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16), purchaseContractId, kind, year, month, amount, nextPurpose, JSON.stringify(nextDetail), nextDocument, now]
+      );
+    }
+  }
 }
 
 /**

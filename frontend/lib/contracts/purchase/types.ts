@@ -33,6 +33,29 @@ export interface PurchaseContractDetail {
   contract: Record<string, unknown>;
   milestones: Array<Record<string, unknown>>;
   documents: Array<Record<string, unknown>>;
+  /** 333 — 단가 기준표 저장 여부·월별 금액이 있는 연도 목록(상세 화면 탭 초기값). */
+  hasRateCard?: boolean;
+  monthlyYears?: number[];
+  /** 차량 렌트 — 연결된 자산관리 차량(reservable_assets)의 등록증 키·이름. */
+  linkedAsset?: { assetId: string; name: string; registrationDocKey: string | null; registrationDocName: string | null } | null;
+}
+
+/** 월별 금액 한 칸(333 purchase_contract_monthly_amounts). */
+export interface PurchaseMonthlyEntry {
+  month: number;
+  amount: number | null;
+  purpose: string;
+  detail: Record<string, unknown>;
+  documentId: string | null;
+  documentPath: string | null;
+  documentName: string | null;
+}
+
+export interface PurchaseMonthlyPayload {
+  kind: string;
+  year: number;
+  months: PurchaseMonthlyEntry[];
+  yearlyTotals: Array<{ year: number; total: number }>;
 }
 
 /** 홈택스 매입 세금계산서 후보(연결용 요약). */

@@ -418,6 +418,10 @@ export function QuoteRecordsTable({
                 <td className="py-2 pr-3" onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center gap-1.5">
                     {(q.version ?? 1) > 1 && <span className="text-[11px] font-mono cd-text-faint">v{q.version}</span>}
+                    {/* 초안/최종안(336) — 최종안만 결재를 거친 견적 */}
+                    <span className={`text-[11px] ${q.docStage === "final" ? "cd-text-primary font-semibold" : "cd-text-faint"}`}>
+                      {q.docStage === "final" ? "최종안" : "초안"}
+                    </span>
                     {canRequote && (
                     <a
                       href={`/approval/quote?revise=${encodeURIComponent(q.docId)}`}

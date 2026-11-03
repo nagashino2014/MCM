@@ -24,6 +24,8 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
+import { DocStageSwitch, LockedVersionNotice } from "@/components/approval/DocStagePanel";
+import { DOC_STAGE_LABEL, docStageOf, isDraftSent, versionStateLabel, type DocStage } from "@/lib/approval/doc-stage";
 import type { LetterRecipient } from "@/lib/letter/types";
 import {
   DEFAULT_MD_GRADES,
@@ -209,6 +211,8 @@ export function QuoteBoard() {
   const sp = useSearchParams();
   const editDocId = sp.get("docId");
   const reviseDocId = sp.get("revise"); // 재견적 진입(269) — 이 용역 건의 최신 버전을 복사해 새 문서로 작성
+  // [최종안으로 확정](336) — 송부한 초안을 복사해 최종안 단계로 시작한다
+  const reviseStage: DocStage = sp.get("stage") === "final" ? "final" : "draft";
 
   const [docId, setDocId] = useState<string | null>(editDocId);
   const [subject, setSubject] = useState("");
@@ -243,6 +247,9 @@ export function QuoteBoard() {
   const [revision, setRevision] = useState<{ rootDocId: string; fromDocId: string; items: QuoteRevisionItem[] } | null>(null);
   const [revisionReason, setRevisionReason] = useState<QuoteRevisionReason | "">("");
   const [prevTotalAmount, setPrevTotalAmount] = useState<number | null>(null);
+  // 초안/최종안(336) — 초안은 결재 없이 [초안 송부], 최종안만 결재선으로 상신. 송부한 초안은 잠긴다
+  const [stage, setStage] = useState<DocStage>(reviseDocId ? reviseStage : "draft");
+  const [draftSentAt, setDraftSentAt] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   // 재편집 문서의 상태·반려 사유·삭제 권한(서버 판정) — 반려 배너와 기안 삭제 버튼 노출용.
@@ -373,8 +380,11 @@ export function QuoteBoard() {
         const v = (d.fieldValues ?? {}) as Partial<QuoteFieldValues>;
         setEditMeta(toEditDocMeta(d));
         setDocNo(d.docNo ?? null);
-        // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여)
-        if (d.docNo && d.status === "draft") {
+        setStage(docStageOf(v as Record<string, unknown>));
+        setDraftSentAt(isDraftSent(v as Record<string, unknown>) ? String(v.draft_sent_at) : null);
+        // 상신 전 임시저장인데 번호가 있으면 = 직접 지정해 둔 문서(자동 채번은 상신 시 부여).
+        // 초안 송부(336)로 채번된 번호는 잠긴 버전이라 직접 지정 표시를 하지 않는다.
+        if (d.docNo && d.status === "draft" && !isDraftSent(v as Record<string, unknown>)) {
           const parsed = parseQuoteNo(String(d.docNo));
           if (parsed) {
             setManualOn(true);
@@ -485,6 +495,7 @@ export function QuoteBoard() {
         );
         setPrevTotalAmount(copiedSites.reduce((acc, s) => acc + (Number(s?.amounts?.final) || 0), 0));
         setRevision({ rootDocId: String(rvData.rootDocId ?? reviseDocId), fromDocId: latest, items });
+        if (reviseStage === "final") setRevisionReason("finalize");
       } catch (err) {
         alert((err as Error).message);
       } finally {
@@ -899,6 +910,7 @@ export function QuoteBoard() {
       contact_mobile: contactMobile || undefined,
       sites,
       situation: situation.length ? situation : undefined,
+      doc_stage: stage,
       // 재견적(269) — 원본 견적에는 넣지 않는다
       ...(revision
         ? {
@@ -920,7 +932,10 @@ export function QuoteBoard() {
         } · ${sites.length}개 사업장 · ${won(totalFinal)}원`,
       } as Partial<QuoteFieldValues>),
     };
-  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation, revision, nextVersion, revisionReason, prevTotalAmount, isMulti]);
+  }, [subject, serviceType, serviceSubtype, sendMode, recipients, ccRefs, issueDate, contactEmail, contactMobile, sites, situation, stage, revision, nextVersion, revisionReason, prevTotalAmount, isMulti]);
+
+  // 잠긴 버전 — 송부한 초안·결재 중·승인 문서는 고치지 않는다(재견적으로 새 버전, 336)
+  const locked = !!draftSentAt || editMeta?.status === "in_progress" || editMeta?.status === "approved";
 
   const persist = useCallback(
     // docIdOverride: save 직후 submit — setDocId 비동기로 인한 이중 문서·채번 이중 소모 방지(공문 실사고 교훈)
@@ -960,7 +975,7 @@ export function QuoteBoard() {
     [subject, recipients, sites]
   );
   const autosaveSave = useCallback(() => persist("save"), [persist]);
-  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null, hasContent, getSnapshot, save: autosaveSave });
+  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null && !locked, hasContent, getSnapshot, save: autosaveSave });
 
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "건명을 입력하세요.";
@@ -986,9 +1001,10 @@ export function QuoteBoard() {
           return `[${s.siteLabel}] 합계(${won(s.amounts.sum)}원)가 제약을 벗어났습니다 — 견적가보다 크고 초과폭이 ${won(check.cap)}원 미만이어야 합니다.`;
       }
     }
-    if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
+    // 결재선은 최종안만 — 초안은 결재 없이 송부한다(336)
+    if (stage === "final" && line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line, stage]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -1014,17 +1030,34 @@ export function QuoteBoard() {
   }, [buildFieldValues, manualOn, noLocked, manualNo, docNo, nextNo, issueDate]);
 
   const send = useCallback(
-    async (action: "save" | "submit") => {
-      if (action === "submit") {
+    async (action: "save" | "submit" | "draft-send") => {
+      if (action !== "save") {
         const msg = validate();
         if (msg) return alert(msg);
       }
-      setBusy(action);
+      if (action === "draft-send") {
+        const what = sendMode === "mail" ? "참조 담당자에게 견적서 PDF 를 메일로 보냅니다" : "제출용 견적서 PDF 를 만듭니다";
+        if (!window.confirm(`초안 v${nextVersion}을 결재 없이 송부합니다 — ${what}.\n송부한 버전은 잠기고, 고칠 때는 재견적으로 새 버전을 만듭니다. 계속할까요?`)) return;
+      }
+      setBusy(action === "draft-send" ? "save" : action);
       try {
         const saved = await persist("save");
         markSaved();
         if (action === "save") {
           alert("임시저장되었습니다.");
+          return;
+        }
+        if (action === "draft-send") {
+          const res = await fetch("/api/quotes/draft-send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ docId: saved.docId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error((data as { error?: string })?.error ?? "초안 송부 실패");
+          alert(`초안을 송부했습니다. 견적번호: ${(data as { docNo?: string }).docNo ?? "-"}`);
+          // 잠긴 버전으로 다시 연다 — 이력·[새 버전 만들기]·[최종안으로 확정]이 보인다
+          window.location.href = `/approval/quote?docId=${encodeURIComponent(saved.docId)}`;
           return;
         }
         const done = await persist("submit", saved.docId);
@@ -1038,8 +1071,15 @@ export function QuoteBoard() {
         setBusy(null);
       }
     },
-    [validate, persist, markSaved, sendMode, router]
+    [validate, persist, markSaved, sendMode, router, nextVersion]
   );
+
+  /** 새 버전(재견적) — stage=final 이면 [최종안으로 확정] */
+  const openNewVersion = (fromDocId: string, nextStage: DocStage) => {
+    const qs = new URLSearchParams({ revise: fromDocId });
+    if (nextStage === "final") qs.set("stage", "final");
+    window.location.href = `/approval/quote?${qs.toString()}`;
+  };
 
   const site = sites[activeSite];
   // 복수 업무는 항목 트리를 직접 구성해 역산하므로 항상 산정형
@@ -1058,7 +1098,7 @@ export function QuoteBoard() {
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
-                disabled={busy != null || loading}
+                disabled={busy != null || loading || locked}
                 onClick={() => send("save")}
                 title="작성 중인 견적서를 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
               >
@@ -1072,8 +1112,21 @@ export function QuoteBoard() {
           <div className="cd-card rounded-lg p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
           <>
-          <div className="max-w-[1032px]">
+          <div className="max-w-[1032px] flex flex-col gap-3">
             <RejectedBanner meta={editMeta} />
+            {locked && docId && (
+              <LockedVersionNotice
+                reason={
+                  draftSentAt
+                    ? "송부한 초안은 고칠 수 없습니다. 발주처 의견을 반영하려면 새 버전(재견적)을 만드세요."
+                    : editMeta?.status === "approved"
+                      ? "결재가 끝난 최종안입니다. 내용을 바꾸려면 새 버전(재견적)을 만드세요."
+                      : "결재 중인 최종안입니다. 내용을 바꾸려면 결재가 끝난 뒤 새 버전을 만드세요."
+                }
+                onNewVersion={() => openNewVersion(docId, "draft")}
+                onFinalize={draftSentAt ? () => openNewVersion(docId, "final") : undefined}
+              />
+            )}
           </div>
           <div className="flex flex-col xl:flex-row gap-5 items-start">
             {/* 좌: 기본정보 + 사업장 탭 — 폭은 공문 작성(1032px, 전자결재 작성 양식 273mm)과 동일 */}
@@ -1092,7 +1145,10 @@ export function QuoteBoard() {
                         <span className="font-mono text-[11px] cd-text-faint">{it.quoteNo ?? "-"}</span>
                         <span className="cd-text-faint">발송일 {shortDate(it.sentAt ?? it.issueDate ?? it.submittedAt)}</span>
                         <span className="cd-text">{it.drafterName ?? "-"}</span>
-                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">{DOC_STATUS_LABEL[it.status] ?? "결재 중"}</span>
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text">{DOC_STAGE_LABEL[it.stage ?? "draft"]}</span>
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text-faint">
+                          {it.stage === "final" || !it.draftSentAt ? (DOC_STATUS_LABEL[it.status] ?? "결재 중") : versionStateLabel({ stage: it.stage, status: it.status, draftSentAt: it.draftSentAt })}
+                        </span>
                         <span className="ml-auto flex items-center gap-1.5 flex-wrap">
                           <span className="text-[11px] rounded-full px-2 py-0.5 border cd-border-c cd-text tabular-nums">
                             {it.prevTotalAmount != null ? `금액변동 : ${won(it.prevTotalAmount)}원 → ${won(it.totalAmount)}원` : `최초 견적 ${won(it.totalAmount)}원`}
@@ -1920,8 +1976,11 @@ export function QuoteBoard() {
               </div>
             </div>
 
-            {/* 우: 결재선 (ApprovalLetterBoard/DraftBoard 이식) */}
+            {/* 우: 문서 단계(336) + 결재선 (ApprovalLetterBoard/DraftBoard 이식) — 결재선은 최종안만 */}
             <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+              <DocStageSwitch stage={stage} onChange={setStage} disabled={locked} />
+              {stage === "final" && (
+              <div className="border-t cd-border-c pt-3 flex flex-col gap-3">
               <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
                 <Users className="w-4 h-4 cd-text-primary" /> 결재선
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
@@ -1964,6 +2023,8 @@ export function QuoteBoard() {
                   <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
                 </button>
               </div>
+              </div>
+              )}
               <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
                 <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                   <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
@@ -1994,18 +2055,26 @@ export function QuoteBoard() {
                 </button>
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
+                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("save")}>
                   <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "임시저장"}
                 </button>
                 <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 견적서 PDF 로 미리보기">
                   <FileText className="w-3.5 h-3.5" /> {busy === "preview" ? "생성 중..." : "미리보기"}
                 </button>
-                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
-                  <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
-                </button>
+                {stage === "draft" ? (
+                  <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("draft-send")}>
+                    <Send className="w-3.5 h-3.5" /> 초안 송부
+                  </button>
+                ) : (
+                  <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("submit")}>
+                    <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
+                  </button>
+                )}
               </div>
               <p className="text-[11px] cd-text-faint">
-                상신 시 견적번호 확정 → 승인 완료 시 xlsx/PDF 생성 → {sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.
+                {stage === "draft"
+                  ? `송부 시 견적번호 확정 → xlsx/PDF 생성 → ${sendMode === "mail" ? "참조자 메일 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다(결재 없음).`
+                  : `상신 시 견적번호 확정 → 승인 완료 시 xlsx/PDF 생성 → ${sendMode === "mail" ? "참조자 메일 자동 발송(PDF)" : "발송견적 탭에서 다운로드(직접 제출)"} 순으로 처리됩니다.`}
               </p>
             </div>
           </div>

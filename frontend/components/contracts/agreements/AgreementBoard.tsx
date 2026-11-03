@@ -6,13 +6,15 @@
 // 단일 원천으로 갑지 문구·지급방법 조문 양쪽 자동 생성) → 조문 편집(자동 번호 재부여) →
 // PDF 미리보기 → 전자결재 상신(persist docIdOverride — 이중 채번 방지, 공문 실사고 교훈).
 // 승인 후에는 자동 발송하지 않는다 — 목록에서 수동 발송(2026-08-10 ① 확정).
+// 버전 관리(336, 2026-11-03): 초안은 결재 없이 [초안 송부]로 발주처에 보내고 그 버전은 잠긴다(수정은 [새 버전]).
+// 최종안만 결재선으로 상신하고 승인 후 [발주처 발송]. 버전 이력·비교는 AgreementVersions.tsx.
 // 결재선 패널·발주처 픽커는 QuoteBoard/ApprovalLetterBoard 의 것을 재사용/이식했다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown, ArrowUp, BookmarkPlus, BookOpen, Building2, Eye, FileSignature, FileText, Link2, ListPlus,
-  Pencil, Plus, RefreshCw, Save, Search, Send, Settings2, Trash2, Users, X,
+  CopyPlus, Pencil, Plus, RefreshCw, Save, Search, Send, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -23,6 +25,9 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import { ClauseLibraryModal } from "@/components/contracts/agreements/ClauseLibraryModal";
+import { AgreementCompareModal, AgreementVersionCard } from "@/components/contracts/agreements/AgreementVersions";
+import { DocStageSwitch, LockedVersionNotice } from "@/components/approval/DocStagePanel";
+import { DOC_STAGE_LABEL, docStageOf, isDraftSent, versionStateLabel, type DocStage, type DocVersionItem } from "@/lib/approval/doc-stage";
 import type { LetterRecipient } from "@/lib/letter/types";
 import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
 import { amountLine, computeAmounts, distributePayments, paymentClauseBody } from "@/lib/agreement/compose";
@@ -78,6 +83,21 @@ interface DocListRow {
   sentAt: string | null;
   pdfKey: string | null;
   hwpxKey: string | null;
+  // 버전 관리(336)
+  rootDocId: string;
+  version: number;
+  stage: DocStage;
+  draftSentAt: string | null;
+}
+
+/** 발송 다이얼로그 대상 — 목록 행 또는 작성 화면의 현재 문서 */
+interface SendTarget {
+  docId: string;
+  title: string;
+  stage: DocStage;
+  version: number;
+  /** 작성 화면에서 연 경우 — 송부 후 목록으로 돌아간다 */
+  fromEditor?: boolean;
 }
 
 // lib/deliverable/data.ts searchContracts(ContractSearchRow) 반환 필드 그대로
@@ -158,8 +178,11 @@ export function AgreementBoard() {
   const router = useRouter();
   const sp = useSearchParams();
   const editDocId = sp.get("docId");
+  // 새 버전(336) — 이 버전을 복사해 새 문서로 작성. stage=final 이면 [최종안으로 확정](최종안 단계로 시작)
+  const reviseDocId = sp.get("revise");
+  const reviseStage: DocStage = sp.get("stage") === "final" ? "final" : "draft";
 
-  const [mode, setMode] = useState<"list" | "edit">(editDocId ? "edit" : "list");
+  const [mode, setMode] = useState<"list" | "edit">(editDocId || reviseDocId ? "edit" : "list");
 
   // ── 목록 ──
   const [docs, setDocs] = useState<DocListRow[]>([]);
@@ -206,7 +229,14 @@ export function AgreementBoard() {
   const [facilityModal, setFacilityModal] = useState(false);
 
   const [busy, setBusy] = useState<"save" | "submit" | "preview" | null>(null);
-  const [loading, setLoading] = useState(!!editDocId);
+  const [loading, setLoading] = useState(!!editDocId || !!reviseDocId);
+  // 초안/최종안·버전(336) — versionRoot 는 새 버전 문서에만(원본 v1 은 null)
+  const [stage, setStage] = useState<DocStage>(reviseDocId ? reviseStage : "draft");
+  const [draftSentAt, setDraftSentAt] = useState<string | null>(null);
+  const [versionRoot, setVersionRoot] = useState<{ rootDocId: string; fromDocId: string } | null>(null);
+  const [revisionNote, setRevisionNote] = useState("");
+  const [versions, setVersions] = useState<DocVersionItem[]>([]);
+  const [compare, setCompare] = useState<{ older: string; newer: string } | null>(null);
   const [editMeta, setEditMeta] = useState<EditDocMeta | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -428,7 +458,68 @@ export function AgreementBoard() {
     }
   };
 
-  // ── 재편집(임시저장/반려) — field_values 복원 ──
+  // ── 문서 → 작성 화면 복원(재편집·새 버전 공용) ──
+  type LoadedDoc = {
+    title?: string;
+    fieldValues?: Partial<AgreementFieldValues>;
+    steps?: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }[];
+    watchers?: { userId: string; name: string | null; kind: string }[];
+  };
+  const restoreFromDoc = async (d: LoadedDoc, isCancelled: () => boolean, opts: { copyLine: boolean }) => {
+    const v = (d.fieldValues ?? {}) as Partial<AgreementFieldValues>;
+    setSubject(d.title ?? v.title ?? "");
+    if (v.serviceType) setServiceType(v.serviceType);
+    if (v.serviceSubtype) setServiceSubtype(v.serviceSubtype);
+    if (v.orderer) {
+      setOrderer({ ...EMPTY_ORDERER, ...v.orderer });
+      if (v.orderer.name) setOrdererList([{ facilityId: v.orderer.facilityId ?? undefined, name: v.orderer.name } as LetterRecipient]);
+    }
+    if (v.amountSupply != null) setAmountSupply(Number(v.amountSupply) || 0);
+    if (Array.isArray(v.payments)) setPayments(v.payments);
+    if (v.periodText) setPeriodText(v.periodText);
+    if (v.scopeText != null) setScopeText(v.scopeText);
+    if (v.issueDate) setIssueDate(v.issueDate);
+    if (v.attachNote != null) setAttachNote(v.attachNote);
+    setContractId(v.contractId ?? null);
+    setQuotationId(v.quotationId ?? null);
+    if (v.contractId) setLinkLabel("계약 연동");
+    else if (v.quotationId) setLinkLabel("견적 연동");
+    // 템플릿·조문 스냅 복원 — 템플릿 로드 후 스냅으로 덮어쓴다(편집분 보존)
+    if (v.templateId) {
+      const tRes = await fetch(`/api/contracts/agreements/templates?templateId=${encodeURIComponent(v.templateId)}`, { cache: "no-store" });
+      if (tRes.ok) {
+        const tData = await tRes.json();
+        if (!isCancelled() && tData?.template) setTemplate(tData.template);
+      }
+    }
+    if (Array.isArray(v.clauses)) {
+      // 템플릿 변경 이펙트가 기본 조문으로 리셋한 뒤에 스냅으로 복원되도록 지연 적용
+      setTimeout(() => {
+        if (isCancelled()) return;
+        setClauses(v.clauses as AgreementClause[]);
+        setHasClausePage(v.hasClausePage ?? (v.clauses as AgreementClause[]).length > 0);
+      }, 0);
+    }
+    if (opts.copyLine) {
+      setLine(
+        (d.steps ?? []).map((s) => ({
+          stepType: s.stepType === "agree" ? "agree" : "approve",
+          assigneeUserId: s.assigneeUserId,
+          assigneeName: s.assigneeName ?? "",
+          assigneePosition: s.assigneePosition,
+        }))
+      );
+    }
+    setWatchers(
+      (d.watchers ?? []).map((w) => ({
+        userId: w.userId,
+        name: w.name ?? "",
+        kind: w.kind === "view" ? "view" : "ref",
+      }))
+    );
+  };
+
+  // ── 재편집(임시저장/반려/잠긴 버전 열람) — field_values 복원 ──
   useEffect(() => {
     if (!editDocId) return;
     let cancelled = false;
@@ -441,54 +532,11 @@ export function AgreementBoard() {
         const d = data.doc;
         const v = (d.fieldValues ?? {}) as Partial<AgreementFieldValues>;
         setEditMeta(toEditDocMeta(d));
-        setSubject(d.title ?? v.title ?? "");
-        if (v.serviceType) setServiceType(v.serviceType);
-        if (v.serviceSubtype) setServiceSubtype(v.serviceSubtype);
-        if (v.orderer) {
-          setOrderer({ ...EMPTY_ORDERER, ...v.orderer });
-          if (v.orderer.name) setOrdererList([{ facilityId: v.orderer.facilityId ?? undefined, name: v.orderer.name } as LetterRecipient]);
-        }
-        if (v.amountSupply != null) setAmountSupply(Number(v.amountSupply) || 0);
-        if (Array.isArray(v.payments)) setPayments(v.payments);
-        if (v.periodText) setPeriodText(v.periodText);
-        if (v.scopeText != null) setScopeText(v.scopeText);
-        if (v.issueDate) setIssueDate(v.issueDate);
-        if (v.attachNote != null) setAttachNote(v.attachNote);
-        setContractId(v.contractId ?? null);
-        setQuotationId(v.quotationId ?? null);
-        if (v.contractId) setLinkLabel("계약 연동");
-        else if (v.quotationId) setLinkLabel("견적 연동");
-        // 템플릿·조문 스냅 복원 — 템플릿 로드 후 스냅으로 덮어쓴다(편집분 보존)
-        if (v.templateId) {
-          const tRes = await fetch(`/api/contracts/agreements/templates?templateId=${encodeURIComponent(v.templateId)}`, { cache: "no-store" });
-          if (tRes.ok) {
-            const tData = await tRes.json();
-            if (!cancelled && tData?.template) setTemplate(tData.template);
-          }
-        }
-        if (Array.isArray(v.clauses)) {
-          // 템플릿 변경 이펙트가 기본 조문으로 리셋한 뒤에 스냅으로 복원되도록 지연 적용
-          setTimeout(() => {
-            if (cancelled) return;
-            setClauses(v.clauses as AgreementClause[]);
-            setHasClausePage(v.hasClausePage ?? (v.clauses as AgreementClause[]).length > 0);
-          }, 0);
-        }
-        setLine(
-          (d.steps ?? []).map((s: { stepType: string; assigneeUserId: string; assigneeName: string | null; assigneePosition: string | null }) => ({
-            stepType: s.stepType === "agree" ? "agree" : "approve",
-            assigneeUserId: s.assigneeUserId,
-            assigneeName: s.assigneeName ?? "",
-            assigneePosition: s.assigneePosition,
-          }))
-        );
-        setWatchers(
-          (d.watchers ?? []).map((w: { userId: string; name: string | null; kind: string }) => ({
-            userId: w.userId,
-            name: w.name ?? "",
-            kind: w.kind === "view" ? "view" : "ref",
-          }))
-        );
+        setStage(docStageOf(v as Record<string, unknown>));
+        setDraftSentAt(isDraftSent(v as Record<string, unknown>) ? String(v.draft_sent_at) : null);
+        setRevisionNote(v.revisionNote ?? "");
+        setVersionRoot(v.versionRootDocId ? { rootDocId: v.versionRootDocId, fromDocId: v.revisionOfDocId ?? v.versionRootDocId } : null);
+        await restoreFromDoc(d, () => cancelled, { copyLine: true });
       } catch (err) {
         alert((err as Error).message);
       } finally {
@@ -498,7 +546,51 @@ export function AgreementBoard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editDocId]);
+
+  // ── 새 버전(336) — 고른 버전을 복사해 새 문서(docId 없음)로. 결재선은 최종안 상신 때 새로 정한다 ──
+  useEffect(() => {
+    if (!reviseDocId || editDocId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/approval/docs/${encodeURIComponent(reviseDocId)}`, { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "계약서를 불러오지 못했습니다.");
+        if (cancelled) return;
+        const d = data.doc;
+        const v = (d.fieldValues ?? {}) as Partial<AgreementFieldValues>;
+        setDocId(null);
+        setEditMeta(null);
+        setDraftSentAt(null);
+        setRevisionNote("");
+        setVersionRoot({ rootDocId: v.versionRootDocId ?? reviseDocId, fromDocId: reviseDocId });
+        await restoreFromDoc(d, () => cancelled, { copyLine: false });
+      } catch (err) {
+        alert((err as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviseDocId, editDocId]);
+
+  // 버전 이력 — 현재 문서(또는 복사 원본)가 속한 묶음 전체
+  const versionAnchor = docId ?? versionRoot?.fromDocId ?? null;
+  const loadVersions = useCallback(() => {
+    if (!versionAnchor) return setVersions([]);
+    fetch(`/api/contracts/agreements/versions?docId=${encodeURIComponent(versionAnchor)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setVersions(Array.isArray(d?.items) ? d.items : []))
+      .catch(() => {});
+  }, [versionAnchor]);
+  useEffect(() => {
+    if (mode === "edit") loadVersions();
+  }, [mode, loadVersions]);
 
   // ── field_values 조립 ──
   const buildFieldValues = useCallback((): AgreementFieldValues => {
@@ -518,6 +610,15 @@ export function AgreementBoard() {
       attachNote: hasClausePage ? attachNote : undefined,
       clauses,
       hasClausePage,
+      // 초안/최종안·버전(336) — 원본(v1)에는 버전 키를 넣지 않는다(서버가 새 버전만 max+1 확정)
+      doc_stage: stage,
+      ...(versionRoot
+        ? {
+            versionRootDocId: versionRoot.rootDocId,
+            revisionOfDocId: versionRoot.fromDocId,
+            revisionNote: revisionNote.trim() || undefined,
+          }
+        : {}),
       // 양식별 조회 표시용
       ...({
         orderer_display: orderer.name,
@@ -525,7 +626,12 @@ export function AgreementBoard() {
         template_display: template?.name ?? "미지정",
       } as unknown as Partial<AgreementFieldValues>),
     };
-  }, [template, contractId, quotationId, serviceType, serviceSubtype, subject, orderer, amounts.supply, payments, periodText, scopeText, issueDate, attachNote, clauses, hasClausePage]);
+  }, [template, contractId, quotationId, serviceType, serviceSubtype, subject, orderer, amounts.supply, payments, periodText, scopeText, issueDate, attachNote, clauses, hasClausePage, stage, versionRoot, revisionNote]);
+
+  // 잠긴 버전 — 송부한 초안·결재 중·승인 문서는 고치지 않는다(새 버전으로)
+  const locked = !!draftSentAt || editMeta?.status === "in_progress" || editMeta?.status === "approved";
+  const currentVersion = versions.find((it) => it.docId === docId)?.version
+    ?? (versionRoot ? Math.max(1, ...versions.filter((it) => it.draftSentAt || it.status !== "draft").map((it) => it.version)) + 1 : 1);
 
   const persist = useCallback(
     // docIdOverride: save 직후 submit — setDocId 비동기로 인한 이중 문서·채번 이중 소모 방지(공문 실사고 교훈)
@@ -561,7 +667,7 @@ export function AgreementBoard() {
   );
   const autosaveSave = useCallback(() => persist("save"), [persist]);
   const { lastSavedAt, lastError, markSaved } = useAutosave({
-    ready: mode === "edit" && !loading && busy == null,
+    ready: mode === "edit" && !loading && busy == null && !locked,
     hasContent,
     getSnapshot,
     save: autosaveSave,
@@ -577,9 +683,10 @@ export function AgreementBoard() {
     if (paySum !== amounts.supply)
       return `지급 단계 금액 합(${won(paySum)})이 공급가(${won(amounts.supply)})와 다릅니다.`;
     if (!periodText.trim()) return "계약기간을 입력하세요.";
-    if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
+    // 결재선은 최종안만 — 초안은 결재 없이 송부한다(336)
+    if (stage === "final" && line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, template, orderer, amounts.supply, payments, periodText, line]);
+  }, [subject, template, orderer, amounts.supply, payments, periodText, line, stage]);
 
   const openPreview = useCallback(async () => {
     if (!template) return alert("계약서 양식이 없습니다.");
@@ -605,12 +712,12 @@ export function AgreementBoard() {
   }, [template, buildFieldValues]);
 
   const send = useCallback(
-    async (action: "save" | "submit") => {
-      if (action === "submit") {
+    async (action: "save" | "submit" | "draft-send") => {
+      if (action !== "save") {
         const msg = validate();
         if (msg) return alert(msg);
       }
-      setBusy(action);
+      setBusy(action === "draft-send" ? "save" : action);
       try {
         const saved = await persist("save");
         markSaved();
@@ -618,8 +725,13 @@ export function AgreementBoard() {
           alert("임시저장되었습니다.");
           return;
         }
+        if (action === "draft-send") {
+          // 초안 송부 — 저장한 문서로 발송 다이얼로그를 연다(수신 담당자·첨부 확정 후 결재 없이 발송)
+          openSendDialog({ docId: saved.docId, title: subject, stage: "draft", version: currentVersion, fromEditor: true });
+          return;
+        }
         await persist("submit", saved.docId);
-        alert("상신되었습니다. 결재 승인이 완료되면 목록에서 발주처 담당자에게 발송할 수 있습니다(자동 발송 없음).");
+        alert("최종안을 상신했습니다. 결재 승인이 완료되면 목록에서 발주처 담당자에게 발송할 수 있습니다(자동 발송 없음).");
         setMode("list");
         router.replace("/contracts/agreements");
       } catch (err) {
@@ -628,8 +740,17 @@ export function AgreementBoard() {
         setBusy(null);
       }
     },
-    [validate, persist, markSaved, router]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [validate, persist, markSaved, router, subject, currentVersion]
   );
+
+  /** 새 버전 — 고른 버전을 복사해 새 문서로(stage=final 이면 최종안으로 확정) */
+  const openNewVersion = (fromDocId: string, nextStage: DocStage) => {
+    const qs = new URLSearchParams({ revise: fromDocId });
+    if (nextStage === "final") qs.set("stage", "final");
+    // 같은 컴포넌트가 쿼리만 바뀌어 다시 그려지므로 전체 이동으로 상태를 초기화한다
+    window.location.href = `/contracts/agreements?${qs.toString()}`;
+  };
 
   // ── 조문 편집 ──
   const updateClause = (i: number, patch: Partial<AgreementClause>) =>
@@ -724,15 +845,15 @@ export function AgreementBoard() {
     }
   };
 
-  // 수동 발송(승인 후) 다이얼로그 — 수신 담당자·첨부 구성을 확정해 발송(① 확정).
-  const [sendTarget, setSendTarget] = useState<DocListRow | null>(null);
+  // 발송 다이얼로그 — 수신 담당자·첨부 구성을 확정해 발송(① 확정). 초안 송부(336)도 같은 다이얼로그.
+  const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
   const [sendRecipients, setSendRecipients] = useState<LetterRecipient[]>([]);
   const [sendIncludeHwpx, setSendIncludeHwpx] = useState(true);
   const [sendIncludePdf, setSendIncludePdf] = useState(false);
   const [sendNote, setSendNote] = useState("");
 
-  const openSendDialog = (row: DocListRow) => {
-    setSendTarget(row);
+  const openSendDialog = (target: SendTarget) => {
+    setSendTarget(target);
     setSendRecipients([]);
     setSendIncludeHwpx(true);
     setSendIncludePdf(false);
@@ -766,15 +887,71 @@ export function AgreementBoard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string })?.error ?? "발송 실패");
-      alert("발송되었습니다.");
+      alert(sendTarget.stage === "draft" ? `초안 v${sendTarget.version}을 송부했습니다. 이 버전은 잠기며, 고칠 때는 [새 버전]을 만드세요.` : "발송되었습니다.");
+      const fromEditor = sendTarget.fromEditor;
       setSendTarget(null);
-      loadDocs();
+      if (fromEditor) {
+        setMode("list");
+        router.replace("/contracts/agreements");
+      } else {
+        loadDocs();
+      }
     } catch (err) {
       alert((err as Error).message);
     } finally {
       setSendBusy(null);
     }
   };
+
+  // 발주처 발송·초안 송부 다이얼로그 — 수신 담당자·첨부 구성 확정(① 수동 발송 확정). 목록·작성 화면 공용
+  const sendDialog = sendTarget && (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setSendTarget(null)}>
+      <div className="cdash cd-fields-white rounded-lg cd-solid-bg shadow-[var(--cd-shadow-dialog)] w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center px-5 py-3 border-b cd-border-c">
+          <span className="text-sm font-semibold cd-text">
+            {sendTarget.stage === "draft" ? `초안 v${sendTarget.version} 송부` : "발주처 발송"} — {sendTarget.title}
+          </span>
+          <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setSendTarget(null)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
+          <RecipientPicker
+            label="수신 담당자 *"
+            hint="발주처 담당자를 검색해 추가하세요(주소록·명함 데이터). 목록에 없으면 직접 입력으로 추가합니다."
+            list={sendRecipients}
+            onChange={setSendRecipients}
+          />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] cd-text-faint">첨부 구성 — 초안 협의는 편집 가능한 HWPX 가 기본입니다</span>
+            <label className="flex items-center gap-2 text-[13px] cd-text">
+              <input type="checkbox" checked={sendIncludeHwpx} onChange={(e) => setSendIncludeHwpx(e.target.checked)} />
+              계약서 HWPX (한글 편집본 — 기본)
+            </label>
+            <label className="flex items-center gap-2 text-[13px] cd-text">
+              <input type="checkbox" checked={sendIncludePdf} onChange={(e) => setSendIncludePdf(e.target.checked)} />
+              계약서 PDF (열람본)
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] cd-text-faint">추가 안내 문구 (선택 — 메일 본문에 삽입)</span>
+            <textarea className="cd-input text-[13px] min-h-[64px]" value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="예: 5조 지급 조건은 협의 결과를 반영했습니다. 확인 부탁드립니다." />
+          </label>
+          <p className="text-[11px] cd-text-faint">
+            발신은 기안자 계정 메일로 나가며, 결재선의 참조/열람자가 내부 참조(Cc)로 함께 받습니다.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t cd-border-c">
+          <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold" onClick={() => setSendTarget(null)}>
+            취소
+          </button>
+          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={sendBusy != null} onClick={runSend}>
+            <Send className="w-3.5 h-3.5" /> {sendBusy ? "발송 중..." : "발송"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // ══════════ 렌더 ══════════
 
@@ -836,12 +1013,15 @@ export function AgreementBoard() {
                 </thead>
                 <tbody>
                   {docs.map((row) => {
-                    const editable = row.docStatus === "draft" || row.docStatus === "rejected";
+                    // 송부한 초안·결재 중·승인 버전은 잠긴다 — 고칠 때는 [새 버전](336)
+                    const rowLocked = !!row.draftSentAt || row.docStatus === "in_progress" || row.docStatus === "approved";
+                    const editable = (row.docStatus === "draft" || row.docStatus === "rejected") && !rowLocked;
                     const canSend = row.sendStatus === "approved" || row.sendStatus === "failed";
                     return (
                       <tr key={row.docId} className="border-b cd-border-c last:border-b-0">
                         <td className="py-2.5 pr-3 cd-text font-medium">
                           {row.title || "(무제)"}
+                          <span className="cd-text-faint text-[11px] ml-1.5 font-mono">v{row.version}</span>
                           {row.docNo ? <span className="cd-text-faint text-[11px] ml-1.5">{row.docNo}</span> : null}
                         </td>
                         <td className="py-2.5 pr-3 cd-text">{row.ordererName ?? "—"}</td>
@@ -857,9 +1037,15 @@ export function AgreementBoard() {
                           </div>
                         </td>
                         <td className="py-2.5 pr-3">
-                          <StatusPill kind={row.docStatus === "approved" ? "ok" : row.docStatus === "rejected" ? "bad" : row.docStatus === "in_progress" ? "busy" : "idle"}>
-                            {DOC_STATUS_LABEL[row.docStatus] ?? row.docStatus}
-                          </StatusPill>
+                          {/* 초안(336)은 결재가 없다 — 단계와 송부 여부를 표시. 기존(단계 미지정) 승인 건은 종전대로 */}
+                          {row.stage === "draft" && row.docStatus === "draft" ? (
+                            <StatusPill kind={row.draftSentAt ? "ok" : "idle"}>{versionStateLabel({ stage: row.stage, status: row.docStatus, draftSentAt: row.draftSentAt })}</StatusPill>
+                          ) : (
+                            <StatusPill kind={row.docStatus === "approved" ? "ok" : row.docStatus === "rejected" ? "bad" : row.docStatus === "in_progress" ? "busy" : "idle"}>
+                              {row.stage === "final" ? `${DOC_STAGE_LABEL.final} ` : ""}
+                              {DOC_STATUS_LABEL[row.docStatus] ?? row.docStatus}
+                            </StatusPill>
+                          )}
                         </td>
                         <td className="py-2.5 pr-3">
                           {row.sendStatus ? (
@@ -878,6 +1064,16 @@ export function AgreementBoard() {
                             <a className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1" href={`/contracts/agreements?docId=${encodeURIComponent(row.docId)}`}>
                               <Pencil className="w-3 h-3" /> 편집
                             </a>
+                          )}
+                          {rowLocked && (
+                            <button
+                              type="button"
+                              className="cd-btn rounded-lg border cd-border-c px-2 py-1 text-[11px] inline-flex items-center gap-1 mr-1 align-middle"
+                              onClick={() => openNewVersion(row.docId, "draft")}
+                              title="이 버전을 복사해 새 버전을 만듭니다(송부·결재한 버전은 고칠 수 없습니다)"
+                            >
+                              <CopyPlus className="w-3 h-3" /> 새 버전
+                            </button>
                           )}
                           {/* 승인 완료면 산출물이 아직 S3 에 없어도 온디맨드 렌더로 받을 수 있다
                               (발송 전에는 pdfKey/hwpxKey 가 비어 있다 — 발송 시 생성·보관).
@@ -923,53 +1119,7 @@ export function AgreementBoard() {
           )}
         </div>
 
-        {/* 발주처 발송 다이얼로그 — 수신 담당자·첨부 구성 확정(① 수동 발송 확정) */}
-        {sendTarget && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ background: "rgba(15,20,34,0.5)" }} onClick={() => setSendTarget(null)}>
-            <div className="cdash cd-fields-white rounded-lg cd-solid-bg shadow-[var(--cd-shadow-dialog)] w-full max-w-[640px] flex flex-col overflow-hidden" data-theme={theme} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center px-5 py-3 border-b cd-border-c">
-                <span className="text-sm font-semibold cd-text">발주처 발송 — {sendTarget.title}</span>
-                <button type="button" className="ml-auto cd-text-faint hover:cd-text" onClick={() => setSendTarget(null)}>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-5 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
-                <RecipientPicker
-                  label="수신 담당자 *"
-                  hint="발주처 담당자를 검색해 추가하세요(주소록·명함 데이터). 목록에 없으면 직접 입력으로 추가합니다."
-                  list={sendRecipients}
-                  onChange={setSendRecipients}
-                />
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] cd-text-faint">첨부 구성 — 초안 협의는 편집 가능한 HWPX 가 기본입니다</span>
-                  <label className="flex items-center gap-2 text-[13px] cd-text">
-                    <input type="checkbox" checked={sendIncludeHwpx} onChange={(e) => setSendIncludeHwpx(e.target.checked)} />
-                    계약서 HWPX (한글 편집본 — 기본)
-                  </label>
-                  <label className="flex items-center gap-2 text-[13px] cd-text">
-                    <input type="checkbox" checked={sendIncludePdf} onChange={(e) => setSendIncludePdf(e.target.checked)} />
-                    계약서 PDF (열람본)
-                  </label>
-                </div>
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] cd-text-faint">추가 안내 문구 (선택 — 메일 본문에 삽입)</span>
-                  <textarea className="cd-input text-[13px] min-h-[64px]" value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="예: 5조 지급 조건은 협의 결과를 반영했습니다. 확인 부탁드립니다." />
-                </label>
-                <p className="text-[11px] cd-text-faint">
-                  발신은 기안자 계정 메일로 나가며, 결재선의 참조/열람자가 내부 참조(Cc)로 함께 받습니다.
-                </p>
-              </div>
-              <div className="flex items-center justify-end gap-2 px-5 py-3 border-t cd-border-c">
-                <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold" onClick={() => setSendTarget(null)}>
-                  취소
-                </button>
-                <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={sendBusy != null} onClick={runSend}>
-                  <Send className="w-3.5 h-3.5" /> {sendBusy ? "발송 중..." : "발송"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {sendDialog}
       </div>
     );
   }
@@ -989,7 +1139,7 @@ export function AgreementBoard() {
               <button
                 type="button"
                 className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
-                disabled={busy != null || loading}
+                disabled={busy != null || loading || locked}
                 onClick={() => send("save")}
                 title="작성 중인 계약서를 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
               >
@@ -1003,12 +1153,43 @@ export function AgreementBoard() {
           <div className="cd-card rounded-lg p-10 text-center text-sm cd-text-faint">불러오는 중...</div>
         ) : (
           <>
-            <div className="max-w-[1032px]">
+            <div className="max-w-[1032px] flex flex-col gap-3">
               <RejectedBanner meta={editMeta} />
+              {locked && docId && (
+                <LockedVersionNotice
+                  reason={
+                    draftSentAt
+                      ? `v${currentVersion} 초안은 발주처에 송부되어 고칠 수 없습니다. 의견을 반영하려면 새 버전을 만드세요.`
+                      : editMeta?.status === "approved"
+                        ? `v${currentVersion} 최종안은 결재가 끝난 버전입니다. 내용을 바꾸려면 새 버전을 만드세요.`
+                        : `v${currentVersion} 최종안은 결재 중입니다. 내용을 바꾸려면 결재가 끝난 뒤 새 버전을 만드세요.`
+                  }
+                  onNewVersion={() => openNewVersion(docId, "draft")}
+                  onFinalize={draftSentAt ? () => openNewVersion(docId, "final") : undefined}
+                />
+              )}
             </div>
             <div className="flex flex-col xl:flex-row gap-5 items-start">
               {/* 좌: 작성 카드들 — 폭은 견적·공문 작성(1032px)과 동일 */}
               <div className="flex-1 min-w-0 max-w-[1032px] flex flex-col gap-4 w-full">
+                {/* 버전 이력(336) — 같은 계약서의 전 버전. 두 버전을 골라 비교 */}
+                {versions.length > 0 && (
+                  <AgreementVersionCard items={versions} currentDocId={docId} onCompare={(older, newer) => setCompare({ older, newer })} />
+                )}
+                {versionRoot && !locked && (
+                  <div className="cd-card rounded-lg p-5 flex flex-col gap-1.5">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] cd-text-faint">변경 메모 — v{currentVersion}에서 바뀐 점(발주처 검토 의견 반영 내용 등)</span>
+                      <input
+                        className="cd-input text-sm"
+                        value={revisionNote}
+                        maxLength={200}
+                        placeholder="예: 제5조 지급 조건을 발주처 요청대로 30/40/30에서 50/50으로 변경"
+                        onChange={(e) => setRevisionNote(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                )}
                 {/* 기본 정보 */}
                 <div className="cd-card rounded-lg p-5 flex flex-col gap-3.5">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1415,10 +1596,13 @@ export function AgreementBoard() {
                 )}
               </div>
 
-              {/* 우: 결재선 (QuoteBoard 이식) */}
+              {/* 우: 문서 단계(336) + 결재선 (QuoteBoard 이식) — 결재선은 최종안만 */}
               <div className="cd-card rounded-lg p-5 w-full xl:w-[320px] shrink-0 flex flex-col gap-3">
+                <DocStageSwitch stage={stage} onChange={setStage} disabled={locked} />
+                {stage === "final" && (
+                <div className="border-t cd-border-c pt-3 flex flex-col gap-3">
                 <h3 className="font-semibold cd-text text-sm flex items-center gap-2">
-                  <Users className="w-4 h-4 cd-text-primary" /> 결재선 (검토)
+                  <Users className="w-4 h-4 cd-text-primary" /> 결재선
                   <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
                 </h3>
                 {presets.length > 0 && (
@@ -1459,6 +1643,8 @@ export function AgreementBoard() {
                     <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
                   </button>
                 </div>
+                </div>
+                )}
                 <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
                   <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                     <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
@@ -1484,18 +1670,26 @@ export function AgreementBoard() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("save")}>
+                  <button type="button" className="cd-btn rounded-lg border cd-border-c px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("save")}>
                     <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "임시저장"}
                   </button>
                   <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={openPreview} title="현재 내용을 계약서 PDF 로 미리보기">
                     <FileText className="w-3.5 h-3.5" /> {busy === "preview" ? "생성 중..." : "미리보기"}
                   </button>
-                  <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null} onClick={() => send("submit")}>
-                    <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
-                  </button>
+                  {stage === "draft" ? (
+                    <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("draft-send")}>
+                      <Send className="w-3.5 h-3.5" /> 초안 송부
+                    </button>
+                  ) : (
+                    <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={busy != null || locked} onClick={() => send("submit")}>
+                      <Send className="w-3.5 h-3.5" /> {busy === "submit" ? "상신 중..." : "상신"}
+                    </button>
+                  )}
                 </div>
                 <p className="text-[11px] cd-text-faint">
-                  승인 완료 후 목록에서 [발주처 발송] 버튼으로 담당자에게 발송합니다(자동 발송 없음). 초안은 기본 HWPX 첨부로 발송됩니다.
+                  {stage === "draft"
+                    ? "송부할 담당자와 첨부(기본 HWPX)를 고른 뒤 결재 없이 보냅니다."
+                    : "승인 완료 후 목록에서 [발주처 발송] 버튼으로 담당자에게 발송합니다(자동 발송 없음)."}
                 </p>
               </div>
             </div>
@@ -1522,6 +1716,11 @@ export function AgreementBoard() {
             </div>
           </div>
         </div>
+      )}
+
+      {sendDialog}
+      {compare && versionAnchor && (
+        <AgreementCompareModal theme={theme} anyDocId={versionAnchor} olderDocId={compare.older} newerDocId={compare.newer} onClose={() => setCompare(null)} />
       )}
 
       {facilityModal && (

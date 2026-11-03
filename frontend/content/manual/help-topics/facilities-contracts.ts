@@ -129,15 +129,29 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     label: "계약서 작성 도움말",
     blocks: [
       { kind: "list", items: [
-        "흐름: [[새 계약서]] 작성 → [[상신]](전자결재) → 승인 → 목록의 [[발주처 발송]]. 승인돼도 자동으로 발송되지 않습니다.",
-        "결재: 작성 중 · 결재 진행 · 승인 · 반려(편집은 작성 중·반려일 때만). 발송: 발송 대기 · 발송 중 · 발송 완료 · 발송 실패(실패 시 [[재발송]]).",
-        "발송 메일은 기안자 계정으로 나가고 결재선의 참조/열람자가 Cc로 받습니다. 초안 협의용 HWPX가 기본 첨부입니다.",
-        "작성 화면은 5분마다 자동 저장됩니다.",
+        "흐름: [[새 계약서]] 작성 → 초안 [[초안 송부]](결재 없음) → 의견 반영은 [[새 버전]] → 최종안 [[상신]] → 승인 → 목록의 [[발주처 발송]]. 승인돼도 자동으로 발송되지 않습니다.",
+        "결재: 초안은 초안 작성 중 · 초안 송부, 최종안은 작성 중 · 결재 진행 · 승인 · 반려. 발송: 발송 대기 · 발송 중 · 발송 완료 · 발송 실패([[재발송]]).",
+        "발송 메일은 기안자 계정으로 나가고 참조/열람자가 Cc로 받습니다. 초안 협의용 HWPX가 기본 첨부입니다.",
+        "작성 화면은 5분마다 자동 저장됩니다. 송부한 초안과 결재 중·승인된 최종안은 잠겨 있습니다.",
       ] },
     ],
     more: { article: "contracts.agreements", section: "flow" },
     sources: ["components/contracts/agreements/AgreementBoard.tsx", "lib/agreement/types.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-03",
+  },
+  {
+    id: "contracts.agreement-versions",
+    label: "계약서 버전 이력 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "같은 계약서의 모든 버전입니다. 송부한 초안과 결재한 최종안은 그대로 보존되고, 고칠 때마다 새 버전이 생깁니다.",
+        "송부 횟수·마지막 송부 일시를 보여 주며, PDF로 그 버전의 지면을 열 수 있습니다.",
+        "두 버전에 체크하고 [[버전 비교]]를 누르면 갑지 항목과 조문별 차이를 봅니다.",
+      ] },
+    ],
+    more: { article: "contracts.agreements", section: "versions" },
+    sources: ["components/contracts/agreements/AgreementVersions.tsx"],
+    reviewedAt: "2026-11-03",
   },
   {
     id: "contracts.deliverables",

@@ -5,6 +5,7 @@
 // 초안 발송의 기본 첨부는 HWPX(④ 확정), PDF 는 검토·보관·결재 심사 지면.
 
 import { getDoc } from "@/lib/approval/docs";
+import { docStageOf } from "@/lib/approval/doc-stage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { readStorageObject } from "@/lib/contracts/document-bundle";
 import { getTemplate, setAgreementArtifacts } from "./store";
@@ -64,7 +65,9 @@ export async function generateAgreementArtifacts(
   if (!tpl) throw new Error("계약서 양식을 찾을 수 없습니다.");
 
   const year = (doc.completedAt ?? doc.submittedAt ?? new Date().toISOString()).slice(0, 4);
-  const fileBase = sanitizeFilename(doc.title || fv.title || "계약서");
+  // 초안은 버전을 파일명에 붙인다 — 발주처가 여러 차례 받은 초안을 구분하도록(336)
+  const versionSuffix = docStageOf(doc.fieldValues) === "draft" ? ` 초안 v${Number(fv.version ?? 1) || 1}` : "";
+  const fileBase = sanitizeFilename(`${doc.title || fv.title || "계약서"}${versionSuffix}`);
   // overlay 템플릿이면 원본 HWPX 를 S3 에서 읽어 값만 주입한다(서식 100% 보존, 148)
   let overlay: { source: Uint8Array; profile: TemplateProfile } | null = null;
   if (tpl.renderMode === "overlay" && tpl.sourceKey && tpl.profile?.docs?.length) {

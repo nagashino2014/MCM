@@ -22,7 +22,7 @@ import { FACILITY_COMPANY_SIZE_LABELS, FACILITY_SERVICE_LABELS, type FacilityCom
  *      (1) 대기 종 규모  (실측 — permit_scales.air_class)
  *      (2) 수질 종 규모  (실측 — permit_scales.water_class)
  *      (3) 대상 용역 분류별 비율 (CONCEPT — 통합허가/화관법/HAPs/ESG)
- *      (4) 사업장 분류별 비율    (국가기관/지자체/공기업/대기업/중견기업/중소기업)
+ *      (4) 사업장 분류별 비율    (국가기관/지자체/공기업/대기업/중견기업/중소기업/사단법인/비영리법인)
  *  - 사업장 30건 리스트 — `/facilities?focus=<id>` 진입 링크
  *  - 위치: 부모 컨테이너 기준 절대 좌표(x, y) — 부모(RegionMap)가 클램핑 처리
  */

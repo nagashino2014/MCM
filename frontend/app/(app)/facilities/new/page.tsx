@@ -549,7 +549,8 @@ function Inner() {
             />
           </Field>
         </div>
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 사업장 분류 칸은 종전 절반 폭(전체의 1/4)으로 오른쪽 끝에 두고, 남는 폭에 계약 유형 체크박스를 한 줄로 둔다(2026-11-03 사용자 요청). */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-4">
           <Field label="계약 유형">
             <FacilityContractTypeFields
               serviceCategories={serviceCategories}

@@ -1,4 +1,4 @@
-import type { ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
+import { resolveServiceTypeStyle, type ServiceTypeStyle } from "@/lib/ieps/contract-tree-style";
 
 /**
  * 매입 계약 유형·분류 옵션(2026-11-02 사용자 요청) — 신규 입력 모달·서버 검증·트리 그룹이 공유하는 단일 원천.
@@ -229,15 +229,15 @@ export function defaultPurchaseAccount(type: string | null | undefined, category
 }
 
 /**
- * 트리 아이콘 색 — 매출 원장(lib/ieps/contract-tree-style.ts STYLE_TABLE)의 5색과 겹치지 않는 4색.
- * 부모는 진한 톤, 자식은 같은 계열의 옅은 톤(Office "Accent + Lighter 40%" 짝)으로 매출 트리와 같은 규칙.
+ * 트리 아이콘 색 — 부모는 진한 톤, 자식은 같은 계열의 옅은 톤(Office "Accent + Lighter 40%" 짝)으로 매출 트리와 같은 규칙.
+ * 2026-11-03 사용자 요청: 매출 원장(lib/ieps/contract-tree-style.ts STYLE_TABLE)의 통합허가·화관법·HAPs·ESG 색을
+ * 순서대로 그대로 쓴다(외주 계약 → 정기 구독 → 임대 계약 → 관리 계약). 사업장 '계약 유형'의 매입 태그는 childColor 를 쓴다.
  */
-// 2026-11-02 사용자 지정 순서: 외주 계약 보라 → 정기 구독 민트 → 임대 계약 노랑 → 관리 계약 오렌지(밝은 톤).
 export const PURCHASE_TYPE_STYLE: Record<PurchaseContractType, ServiceTypeStyle> = {
-  outsourcing: { parentColor: "#8E7CC3", childColor: "#B4A7D6" },
-  subscription: { parentColor: "#2FC58F", childColor: "#9CE8CA" },
-  lease: { parentColor: "#F5C518", childColor: "#FBE28A" },
-  management: { parentColor: "#FF8C42", childColor: "#FFC49B" },
+  outsourcing: resolveServiceTypeStyle("통합허가"),
+  subscription: resolveServiceTypeStyle("화관법"),
+  lease: resolveServiceTypeStyle("HAPs"),
+  management: resolveServiceTypeStyle("ESG"),
 };
 
 export const PURCHASE_FALLBACK_STYLE: ServiceTypeStyle = { parentColor: "#7F7F7F", childColor: "#BFBFBF" };

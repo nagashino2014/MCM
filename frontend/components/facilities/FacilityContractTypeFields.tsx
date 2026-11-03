@@ -19,7 +19,9 @@ const TAG_TEXT_COLOR = "#1f2430";
 /**
  * 사업장 '계약 유형'(2026-11-03 사용자 요청) — 사업장 수동 등록·편집 양식이 공유한다.
  *   매출 계약: 기존 대상 용역 카테고리 5종(facility_service_categories), 태그 색 FACILITY_SERVICE_COLORS.
- *   매입 계약: 매입 계약 유형 4종(facilities.purchase_contract_types, 334), 태그 색은 매입 계약 트리의 유형 아이콘 색.
+ *   매입 계약: 매입 계약 유형 4종(facilities.purchase_contract_types, 334), 태그 색은 PURCHASE_TYPE_STYLE.childColor
+ *     (매출 통합허가·화관법·HAPs·ESG 태그 색과 같다).
+ * 매출·매입 두 묶음을 한 줄에 나란히 두고(매입은 오른쪽), 폭이 모자라면 묶음 단위로 줄바꿈한다.
  */
 export function FacilityContractTypeFields({
   serviceCategories,
@@ -33,7 +35,7 @@ export function FacilityContractTypeFields({
   onPurchaseContractTypesChange: (next: PurchaseContractType[]) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="w-14 shrink-0 text-[11px] font-medium cd-text-faint">매출 계약</span>
         <div className="flex flex-wrap gap-2">
@@ -73,7 +75,7 @@ export function FacilityContractTypeFields({
                   )
                 }
               />
-              <span className="rounded-full px-2 py-0.5" style={{ background: PURCHASE_TYPE_STYLE[type.key].parentColor, color: TAG_TEXT_COLOR }}>
+              <span className="rounded-full px-2 py-0.5" style={{ background: PURCHASE_TYPE_STYLE[type.key].childColor, color: TAG_TEXT_COLOR }}>
                 {type.label}
               </span>
             </label>

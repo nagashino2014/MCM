@@ -1243,6 +1243,8 @@ export interface FacilityDetail {
   orgCategory?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];
+  /** 계약 유형 중 매입 계약(334) — outsourcing·subscription·lease·management 복수. */
+  purchaseContractTypes?: string[];
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;
@@ -1372,7 +1374,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
-              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, created_at, updated_at
+              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, purchase_contract_types, created_at, updated_at
          FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [facilityId]
     );
@@ -1545,6 +1547,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
     tradeRoles: parsePgTextArray(f.trade_roles),
+    purchaseContractTypes: parsePgTextArray(f.purchase_contract_types),
     siteAddress:
       f.site_address != null
         ? isTruthyFlag(f.site_address_verbatim)

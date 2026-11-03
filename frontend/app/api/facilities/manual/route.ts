@@ -13,6 +13,7 @@ import { normalizeInput } from "@scraper/lib/facility-quality/rules";
 import { markReviewedWrite } from "@/lib/ieps/facility-update";
 import {
   normalizeFacilityCompanySize,
+  normalizePurchaseContractTypes,
   normalizeServiceCategories,
   type FacilityCompanySize,
   type FacilityServiceCategory,
@@ -39,6 +40,8 @@ interface CreateBody {
   memo?: string | null;
   aliases?: { alias?: string; aliasType?: string | null; note?: string | null; isPrimary?: boolean }[];
   serviceCategories?: FacilityServiceCategory[];
+  /** 계약 유형 중 매입 계약(334) — outsourcing·subscription·lease·management. */
+  purchaseContractTypes?: string[];
   companySize?: FacilityCompanySize | null;
   // 사업자등록번호가 같은 사업장(예: 동일 법인의 본사/공장)을 관계 법인으로 묶기 위해
   // 사용자가 중복을 확인한 뒤 그대로 등록하도록 허용하는 플래그.
@@ -193,6 +196,14 @@ export async function POST(req: NextRequest) {
           [facilityId, category, now, actor.userId]
         );
       }
+      // 계약 유형 중 매입 계약(334) — 고른 값이 있을 때만 쓴다(모바일 간이 등록 등 구 클라이언트는 기본값 '{}').
+      const purchaseContractTypes = normalizePurchaseContractTypes(body.purchaseContractTypes);
+      if (purchaseContractTypes.length) {
+        await db.run("UPDATE facilities SET purchase_contract_types = $1::text[] WHERE facility_id = $2", [
+          purchaseContractTypes,
+          facilityId,
+        ]);
+      }
       for (const alias of body.aliases ?? []) {
         const text = alias.alias?.trim();
         if (!text) continue;
@@ -224,6 +235,7 @@ export async function POST(req: NextRequest) {
           additionalSiteAddresses,
           source,
           serviceCategories: services,
+          purchaseContractTypes,
           companySize: normalizeFacilityCompanySize(body.companySize),
           businessCertificateBusinessType: normalizeText(body.businessCertificateBusinessType),
           businessCertificateBusinessItem: normalizeText(body.businessCertificateBusinessItem),

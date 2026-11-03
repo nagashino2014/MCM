@@ -14,13 +14,12 @@ import "@/components/cdash/cdash.css";
 import {
   FACILITY_COMPANY_SIZE_LABELS,
   FACILITY_COMPANY_SIZE_ORDER,
-  FACILITY_SERVICE_COLORS,
-  FACILITY_SERVICE_LABELS,
-  FACILITY_SERVICE_ORDER,
   type FacilityCompanySize,
   type FacilityServiceCategory,
 } from "@/lib/ieps/facility-service";
+import type { PurchaseContractType } from "@/lib/contracts/purchase/options";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
+import { FacilityContractTypeFields } from "@/components/facilities/FacilityContractTypeFields";
 
 interface IndustryInputRow {
   code: string;
@@ -91,6 +90,7 @@ function Inner() {
   const [certificateWarning, setCertificateWarning] = useState<string | null>(null);
   const [alias, setAlias] = useState("");
   const [serviceCategories, setServiceCategories] = useState<FacilityServiceCategory[]>(["integrated"]);
+  const [purchaseContractTypes, setPurchaseContractTypes] = useState<PurchaseContractType[]>([]);
   const [companySize, setCompanySize] = useState<FacilityCompanySize | "">("");
   const [memo, setMemo] = useState("");
   const [pending, setPending] = useState(false);
@@ -136,6 +136,7 @@ function Inner() {
           businessCertificateOcrText: certificateOcrText || null,
           aliases: alias.trim() ? [{ alias: alias.trim(), aliasType: "site", isPrimary: true }] : [],
           serviceCategories,
+          purchaseContractTypes,
           companySize: companySize || null,
           memo: memo || null,
           allowDuplicateBusinessRegistrationNo: options?.allowDuplicateBrn ?? false,
@@ -549,25 +550,13 @@ function Inner() {
           </Field>
         </div>
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="대상 용역 카테고리">
-            <div className="flex flex-wrap gap-2">
-              {FACILITY_SERVICE_ORDER.map((category) => (
-                <label key={category} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
-                  <input
-                    type="checkbox"
-                    checked={serviceCategories.includes(category)}
-                    onChange={(e) =>
-                      setServiceCategories((prev) =>
-                        e.target.checked ? [...prev, category] : prev.filter((item) => item !== category)
-                      )
-                    }
-                  />
-                  <span className="rounded-full px-2 py-0.5" style={{ background: FACILITY_SERVICE_COLORS[category] }}>
-                    {FACILITY_SERVICE_LABELS[category]}
-                  </span>
-                </label>
-              ))}
-            </div>
+          <Field label="계약 유형">
+            <FacilityContractTypeFields
+              serviceCategories={serviceCategories}
+              onServiceCategoriesChange={setServiceCategories}
+              purchaseContractTypes={purchaseContractTypes}
+              onPurchaseContractTypesChange={setPurchaseContractTypes}
+            />
           </Field>
           <Field label="사업장 분류">
             <select

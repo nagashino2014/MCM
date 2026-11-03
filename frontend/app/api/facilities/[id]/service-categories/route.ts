@@ -4,6 +4,7 @@ import { withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import {
   normalizeFacilityCompanySize,
+  normalizePurchaseContractTypes,
   normalizeServiceCategories,
   normalizeTradeRoles,
   type FacilityCompanySize,
@@ -23,6 +24,8 @@ interface Body {
   companySize?: FacilityCompanySize | null;
   /** 거래 구분(331) — 생략하면 기존 값을 유지한다(구 클라이언트 호환). */
   tradeRoles?: FacilityTradeRole[];
+  /** 계약 유형 중 매입 계약(334) — 생략하면 기존 값을 유지한다(구 클라이언트 호환). */
+  purchaseContractTypes?: string[];
 }
 
 export async function PUT(req: NextRequest, ctx: RouteContext) {
@@ -58,13 +61,27 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
       if (tradeRoles) {
         await db.run("UPDATE facilities SET trade_roles = $1::text[], updated_at = $2 WHERE facility_id = $3", [tradeRoles, now, id]);
       }
+      // 계약 유형 중 매입 계약(334) — 외주·정기 구독·임대·관리. 본문에 있을 때만 바꾼다.
+      const purchaseContractTypes =
+        body.purchaseContractTypes !== undefined ? normalizePurchaseContractTypes(body.purchaseContractTypes) : null;
+      if (purchaseContractTypes) {
+        await db.run(
+          "UPDATE facilities SET purchase_contract_types = $1::text[], updated_at = $2 WHERE facility_id = $3",
+          [purchaseContractTypes, now, id]
+        );
+      }
       await recordAuditLogInline(db, {
         actorUserId: actor.userId,
         action: "facility_service_update",
         targetTable: "facilities",
         targetId: id,
         before,
-        after: { serviceCategories: categories, companySize, ...(tradeRoles ? { tradeRoles } : {}) },
+        after: {
+          serviceCategories: categories,
+          companySize,
+          ...(tradeRoles ? { tradeRoles } : {}),
+          ...(purchaseContractTypes ? { purchaseContractTypes } : {}),
+        },
       });
     });
 

@@ -20,7 +20,6 @@ import {
   FACILITY_COMPANY_SIZE_ORDER,
   FACILITY_SERVICE_COLORS,
   FACILITY_SERVICE_LABELS,
-  FACILITY_SERVICE_ORDER,
   FACILITY_TRADE_ROLE_LABELS,
   FACILITY_TRADE_ROLE_ORDER,
   type FacilityAlias,
@@ -37,6 +36,8 @@ import type {
 import type { FacilityOperatingRelationType } from "@/lib/ieps/facility-operating-entity";
 import { FacilityOrdersModal } from "@/components/facilities/FacilityOrdersModal";
 import KsicSearchModal from "@/components/facilities/KsicSearchModal";
+import { FacilityContractTypeFields } from "@/components/facilities/FacilityContractTypeFields";
+import { isPurchaseContractType, type PurchaseContractType } from "@/lib/contracts/purchase/options";
 
 const GROUP_COMPANY_ROLE_LABELS: Record<FacilityGroupCompanyRole, string> = {
   group_representative: "그룹 대표기업",
@@ -2551,6 +2552,10 @@ function EditView({
   const [tradeRoles, setTradeRoles] = useState<FacilityTradeRole[]>(
     (detail.tradeRoles ?? []).filter((r): r is FacilityTradeRole => (FACILITY_TRADE_ROLE_ORDER as string[]).includes(r))
   );
+  // 계약 유형 중 매입 계약(334) — 외주·정기 구독·임대·관리 복수.
+  const [purchaseContractTypes, setPurchaseContractTypes] = useState<PurchaseContractType[]>(
+    (detail.purchaseContractTypes ?? []).filter(isPurchaseContractType)
+  );
   const [manualProducts, setManualProducts] = useState(
     detail.manualProducts.length
       ? detail.manualProducts.map((product) => ({
@@ -2646,6 +2651,7 @@ function EditView({
           serviceCategories,
           companySize: companySize || null,
           tradeRoles,
+          purchaseContractTypes,
         }),
       });
       const saveManualProducts = fetch("/api/facilities/" + detail.facilityId + "/manual-products", {
@@ -2962,25 +2968,13 @@ function EditView({
 
       <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 cd-surface-bg border cd-border-c rounded-lg p-3">
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-medium cd-text-faint">대상 용역 카테고리</span>
-          <div className="flex flex-wrap gap-2">
-            {FACILITY_SERVICE_ORDER.map((category) => (
-              <label key={category} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
-                <input
-                  type="checkbox"
-                  checked={serviceCategories.includes(category)}
-                  onChange={(e) =>
-                    setServiceCategories((prev) =>
-                      e.target.checked ? [...prev, category] : prev.filter((item) => item !== category)
-                    )
-                  }
-                />
-                <span className="rounded-full px-2 py-0.5" style={{ background: FACILITY_SERVICE_COLORS[category] }}>
-                  {FACILITY_SERVICE_LABELS[category]}
-                </span>
-              </label>
-            ))}
-          </div>
+          <span className="text-[11px] font-medium cd-text-faint">계약 유형</span>
+          <FacilityContractTypeFields
+            serviceCategories={serviceCategories}
+            onServiceCategoriesChange={setServiceCategories}
+            purchaseContractTypes={purchaseContractTypes}
+            onPurchaseContractTypesChange={setPurchaseContractTypes}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium cd-text-faint">사업장 분류</span>

@@ -1,3 +1,10 @@
+import {
+  isPurchaseContractType,
+  PURCHASE_CONTRACT_TYPES,
+  PURCHASE_TYPE_ORDER,
+  type PurchaseContractType,
+} from "@/lib/contracts/purchase/options";
+
 export type FacilityServiceCategory = "integrated" | "chemicals" | "haps" | "esg" | "other";
 
 export type FacilityCompanySize =
@@ -87,6 +94,21 @@ export const normalizeTradeRoles = (values: unknown): FacilityTradeRole[] => {
     if (key) seen.add(key);
   }
   return FACILITY_TRADE_ROLE_ORDER.filter((role) => seen.has(role));
+};
+
+/**
+ * 계약 유형 중 매입 계약(334) — facilities.purchase_contract_types text[]. 유형 4종과 태그 색은 매입 계약 관리
+ * (lib/contracts/purchase/options.ts)의 PURCHASE_CONTRACT_TYPES·트리 유형 아이콘 색(PURCHASE_TYPE_STYLE.parentColor)을 그대로 쓴다.
+ */
+export const normalizePurchaseContractTypes = (values: unknown): PurchaseContractType[] => {
+  const list = Array.isArray(values) ? values : values == null ? [] : [values];
+  const seen = new Set<PurchaseContractType>();
+  for (const value of list) {
+    const raw = String(value ?? "").trim();
+    const key = isPurchaseContractType(raw) ? raw : PURCHASE_CONTRACT_TYPES.find((t) => t.label === raw)?.key;
+    if (key) seen.add(key);
+  }
+  return PURCHASE_TYPE_ORDER.filter((type) => seen.has(type));
 };
 
 export const normalizeFacilityServiceCategory = (

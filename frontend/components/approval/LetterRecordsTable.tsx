@@ -4,12 +4,14 @@
 // 목록: official_letters 대장(시스템 생성 + 과거 이관 imported). 행 클릭 → PDF 미리보기 팝업.
 // 팝업: iframe PDF + PDF/HWPX 다운로드 아이콘 버튼(사업장 마스터 30px 아이콘 패턴,
 // FacilityListPanel.tsx:304) + 발송 상태·재발송 + 수신처·참조 사후 편집(백필 문서 메일 보완).
+// 첨부서류가 있으면 공문 + 첨부 이어 보기(LetterBundlePane)와 결합 PDF/HWPX 다운로드(2026-11-03).
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { RecipientEditGrid } from "@/components/approval/LetterRecipientGrid";
 import { LetterImportModal } from "@/components/approval/LetterImportModal";
+import { LetterBundlePane, type LetterAttachmentMeta } from "@/components/approval/LetterBundlePane";
 import { useClientPaging } from "@/components/ui/PaginationControls";
 import { LETTER_SEND_STATUS_LABEL, type LetterRecipient, type LetterSendStatus, type OfficialLetterRow } from "@/lib/letter/types";
 
@@ -43,6 +45,9 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
   // 열람은 전 직원(2026-10-21). 재발송·수신처 편집 = 기안자 본인·결재 운영 권한, 이관 등록 삭제 = 결재 운영 권한
   const [canManage, setCanManage] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  // 첨부서류(2026-11-03) — 있으면 미리보기를 공문 + 첨부 이어 보기로, 상단 아이콘을 결합 다운로드로 바꾼다
+  const [attachments, setAttachments] = useState<LetterAttachmentMeta[]>([]);
+  const [hwpCombine, setHwpCombine] = useState<{ enabled: boolean; reason: string | null }>({ enabled: true, reason: null });
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/letters/${encodeURIComponent(letterId)}`, { cache: "no-store" });
@@ -51,6 +56,8 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
       setLetter(data.letter);
       setCanManage(data.canManage === true);
       setCanEdit(data.canEdit === true);
+      setAttachments(Array.isArray(data.attachments) ? data.attachments : []);
+      setHwpCombine(data.hwpCombine ?? { enabled: true, reason: null });
       setRecipients(data.letter.recipients ?? []);
       setCcRefs(data.letter.ccRefs ?? []);
     }
@@ -166,23 +173,36 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            {/* PDF·HWPX 다운로드 — 사업장 마스터 30px 아이콘 버튼 패턴 */}
+            {/* PDF·HWPX 다운로드 — 사업장 마스터 30px 아이콘 버튼 패턴. 첨부가 있으면 공문 + 첨부 결합 파일 */}
             <button
               type="button"
               className="flex items-center justify-center"
               style={{ width: 30, height: 30 }}
-              title="PDF 다운로드"
-              onClick={() => window.open(`/api/letters/${encodeURIComponent(letterId)}/pdf`, "_blank")}
+              title={attachments.length ? "PDF 다운로드(공문 + 첨부서류 결합)" : "PDF 다운로드"}
+              onClick={() =>
+                window.open(`/api/letters/${encodeURIComponent(letterId)}/${attachments.length ? "bundle" : "pdf"}`, "_blank")
+              }
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/pdfico.png" alt="PDF" style={{ width: 30, height: 30 }} />
             </button>
+            {/* 한글 결합은 첨부가 모두 HWPX 일 때만 — 끈 경우 disabled 대신 aria-disabled 로 두어 툴팁(사유)이 뜨게 한다 */}
             <button
               type="button"
-              className="flex items-center justify-center"
+              className={`flex items-center justify-center ${attachments.length && !hwpCombine.enabled ? "opacity-35 cursor-not-allowed" : ""}`}
               style={{ width: 30, height: 30 }}
-              title="한글 파일 다운로드(HWPX/HWP)"
-              onClick={() => window.open(`/api/letters/${encodeURIComponent(letterId)}/hwpx`, "_blank")}
+              aria-disabled={attachments.length > 0 && !hwpCombine.enabled}
+              title={
+                !attachments.length
+                  ? "한글 파일 다운로드(HWPX/HWP)"
+                  : hwpCombine.enabled
+                    ? "한글 파일 다운로드(공문 + 첨부서류 결합 HWPX)"
+                    : `한글 결합 다운로드 꺼짐 — ${hwpCombine.reason ?? ""}`
+              }
+              onClick={() => {
+                if (attachments.length && !hwpCombine.enabled) return;
+                window.open(`/api/letters/${encodeURIComponent(letterId)}/${attachments.length ? "bundle?format=hwpx" : "hwpx"}`, "_blank");
+              }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/icons/hwpxico.png" alt="HWPX" style={{ width: 30, height: 30 }} />
@@ -260,10 +280,13 @@ export function LetterViewModal({ letterId, theme, onClose, onChanged }: { lette
           </div>
         )}
 
-        {/* 기본 60vh, 발송 이력·수신처 편집을 펼치면 420px까지 줄어든다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
-        <div className="relative flex-[1_1_60vh] min-h-[420px] bg-[color:var(--cd-surface)]">
+        {/* 기본 84vh(종전 60vh의 1.4배, 2026-11-03), 발송 이력·수신처 편집을 펼치면 420px까지 줄어든다.
+            모달이 max-h 94vh 라 화면 높이를 넘지 않는다 — iframe 이 칸을 채워 하단이 잘리지 않게(FHD 실사 10-21) */}
+        <div className="relative flex-[1_1_84vh] min-h-[420px] bg-[color:var(--cd-surface)]">
           {letter &&
-            (letter.pdfKey || letter.docId ? (
+            (attachments.length > 0 ? (
+              <LetterBundlePane letterId={letterId} attachments={attachments} letterTitle={letter.letterNo ?? "미채번"} />
+            ) : letter.pdfKey || letter.docId ? (
               <iframe title="공문 미리보기" src={`/api/letters/${encodeURIComponent(letterId)}/pdf?disposition=inline`} className="absolute inset-0 w-full h-full" />
             ) : (
               <div className="flex flex-col items-center justify-center h-full min-h-[420px] gap-2 cd-text-faint text-sm">

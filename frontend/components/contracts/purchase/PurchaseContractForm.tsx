@@ -4,21 +4,33 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
-import { formatAmount } from "@/components/ui/AmountInput";
+import { AmountInput, formatAmount } from "@/components/ui/AmountInput";
 import { FACILITY_TRADE_ROLE_LABELS } from "@/lib/ieps/facility-service";
 import {
   PURCHASE_CONTRACT_TYPES,
+  amountHint,
+  amountLabel,
+  amountMode,
+  defaultPurchaseAccount,
+  endDateLabel,
   flagAvailability,
+  flagForced,
+  isPurchaseAccountAllowed,
+  purchaseAccountCodesOf,
   purchaseCategoriesOf,
   relatedContractMode,
+  startDateLabel,
 } from "@/lib/contracts/purchase/options";
+import { parseTypeDetails, type PurchaseTypeDetails } from "@/lib/contracts/purchase/type-details";
 import type { PurchaseAccountOption } from "@/lib/contracts/purchase/types";
 import { purchaseApi, type PurchaseFacilityItem, type RelatedContractItem } from "@/lib/contracts/purchase/client";
 
 /**
- * 매입 계약 "계약 상세정보" 폼(331) — 신규 입력·계약 정보 수정 모달이 공유한다.
+ * 매입 계약 "계약 상세정보" 폼(331·333) — 신규 입력·변경계약 입력 모달이 공유한다.
  * 배치(2026-11-02 사용자 요청): 계약명 → 계약상대 업체 → [계약 유형 | 계약 분류] → (조건부) 관련 매출 계약 →
- * [계약금액(단계 합계) | 계약일] → [준공일 | 단가 계약·추가 지출·종량제] → [계정과목 | 메모].
+ * [계약금액 | 계약일] → [준공일 | 단가 계약·추가 지출·종량제] → [계정과목 | 메모].
+ * 2차(2026-11-03): 라벨·입력 방식이 유형을 따른다 — 정기 구독은 '정기 구독료'를 직접 입력, 임대·관리는 금액 비해당,
+ * 계약일/준공일 라벨은 startDateLabel/endDateLabel, 계정과목은 유형별 목록만, 관리 계약은 종량제 고정.
  */
 export interface PurchaseFormState {
   contractTitle: string;
@@ -31,6 +43,8 @@ export interface PurchaseFormState {
   relatedContractQuery: string;
   relatedContractId: string;
   relatedContractLabel: string;
+  /** 정기 구독의 월 구독료(콤마 없는 숫자 문자열). 다른 유형은 빈 값. */
+  contractAmount: string;
   contractDate: string;
   completedAt: string;
   isUnitPrice: boolean;
@@ -38,6 +52,8 @@ export interface PurchaseFormState {
   isMetered: boolean;
   accountCode: string;
   memo: string;
+  /** 임대 계약 분류 탭의 상세(333). */
+  typeDetails: PurchaseTypeDetails;
 }
 
 export function createEmptyPurchaseFormState(): PurchaseFormState {
@@ -53,13 +69,15 @@ export function createEmptyPurchaseFormState(): PurchaseFormState {
     relatedContractQuery: "",
     relatedContractId: "",
     relatedContractLabel: "",
+    contractAmount: "",
     contractDate: "",
     completedAt: "",
     isUnitPrice: false,
     hasExtraSpend: false,
     isMetered: false,
-    accountCode: "",
+    accountCode: defaultPurchaseAccount(first.key, first.categories[0]),
     memo: "",
+    typeDetails: {},
   };
 }
 
@@ -81,13 +99,15 @@ export function purchaseFormStateFromRow(row: Record<string, unknown>): Purchase
     relatedContractLabel: row.related_contract_title
       ? `${s(row.related_contract_title)}${row.related_counterparty_name ? ` · ${s(row.related_counterparty_name)}` : ""}`
       : "",
+    contractAmount: amountMode(s(row.contract_type)) === "manual" && row.contract_amount != null ? String(Math.round(Number(row.contract_amount))) : "",
     contractDate: s(row.contract_date).slice(0, 10),
     completedAt: s(row.completed_at).slice(0, 10),
     isUnitPrice: Number(row.is_unit_price ?? 0) === 1,
     hasExtraSpend: Number(row.has_extra_spend ?? 0) === 1,
-    isMetered: Number(row.is_metered ?? 0) === 1,
+    isMetered: Number(row.is_metered ?? 0) === 1 || !!flagForced(s(row.contract_type)).metered,
     accountCode: s(row.account_code),
     memo: s(row.memo),
+    typeDetails: parseTypeDetails(row.type_details),
   };
 }
 
@@ -99,6 +119,7 @@ export function purchaseFormToBody(state: PurchaseFormState) {
     contractType: state.contractType,
     contractCategory: state.contractCategory,
     relatedContractId: state.relatedContractId || null,
+    contractAmount: amountMode(state.contractType) === "manual" && state.contractAmount ? Number(state.contractAmount) : null,
     contractDate: state.contractDate || null,
     completedAt: state.completedAt || null,
     isUnitPrice: state.isUnitPrice,
@@ -106,6 +127,7 @@ export function purchaseFormToBody(state: PurchaseFormState) {
     isMetered: state.isMetered,
     accountCode: state.accountCode || null,
     memo: state.memo || null,
+    typeDetails: state.typeDetails,
   };
 }
 
@@ -117,7 +139,29 @@ export function validatePurchaseForm(state: PurchaseFormState): string | null {
   if (relatedContractMode(state.contractType, state.contractCategory) === "required" && !state.relatedContractId) {
     return `${state.contractCategory} 외주 계약은 관련 매출 계약을 선택해야 합니다.`;
   }
+  if (state.contractType === "lease" && state.contractCategory === "차량 렌트" && !(state.typeDetails.vehicle?.name ?? "").trim()) {
+    return "차량 렌트 탭에서 차종을 입력해 주세요(자산관리 차량으로 등록됩니다).";
+  }
   return null;
+}
+
+/** 유형·분류가 바뀌면 켤 수 없는 플래그를 끄고(강제 플래그는 켜고), 계정과목을 유형 목록 안으로 맞춘다. */
+export function applyPurchaseTypeRules(state: PurchaseFormState): PurchaseFormState {
+  const avail = flagAvailability(state.contractType, state.contractCategory);
+  const forced = flagForced(state.contractType);
+  const related = relatedContractMode(state.contractType, state.contractCategory);
+  const accountCode = isPurchaseAccountAllowed(state.contractType, state.accountCode)
+    ? state.accountCode
+    : defaultPurchaseAccount(state.contractType, state.contractCategory);
+  return {
+    ...state,
+    isUnitPrice: avail.unitPrice && state.isUnitPrice,
+    hasExtraSpend: avail.extraSpend && state.hasExtraSpend,
+    isMetered: forced.metered ? true : avail.metered && state.isMetered,
+    contractAmount: amountMode(state.contractType) === "manual" ? state.contractAmount : "",
+    accountCode,
+    ...(related === "hidden" ? { relatedContractQuery: "", relatedContractId: "", relatedContractLabel: "" } : {}),
+  };
 }
 
 export function PurchaseContractForm({
@@ -138,8 +182,13 @@ export function PurchaseContractForm({
   const categories = purchaseCategoriesOf(state.contractType);
   const relatedMode = relatedContractMode(state.contractType, state.contractCategory);
   const avail = flagAvailability(state.contractType, state.contractCategory);
+  const forced = flagForced(state.contractType);
+  const mode = amountMode(state.contractType);
+  // 유형별 허용 계정만 — 목록 순서는 PURCHASE_ACCOUNT_CODES 순(분류별 기본값이 맨 앞은 아니므로 select 는 값으로 고정).
+  const allowedCodes = purchaseAccountCodesOf(state.contractType);
+  const typeAccounts = allowedCodes.map((code) => accounts.find((a) => a.accountCode === code)).filter((a): a is PurchaseAccountOption => !!a);
 
-  // 계정과목 목록 — 비용·자산 계정만(서버 필터).
+  // 계정과목 목록 — 비용 계정만(서버 필터).
   useEffect(() => {
     let alive = true;
     purchaseApi<{ accounts: PurchaseAccountOption[] }>("/api/purchase-contracts/account-codes")
@@ -203,11 +252,13 @@ export function PurchaseContractForm({
     };
   }, [state.relatedContractQuery, state.relatedContractId, state.relatedContractLabel, canSearchSales, relatedMode]);
 
+  // 유형·분류가 바뀌면 계정과목은 분류 기본값으로 다시 잡는다(사용자가 고른 값이 새 목록에 없으면 되돌아간다).
   const setType = (contractType: string) => {
     const first = purchaseCategoriesOf(contractType)[0] ?? "";
-    onChange(applyFlagRules({ ...state, contractType, contractCategory: first }));
+    onChange(applyPurchaseTypeRules({ ...state, contractType, contractCategory: first, accountCode: defaultPurchaseAccount(contractType, first), typeDetails: {} }));
   };
-  const setCategory = (contractCategory: string) => onChange(applyFlagRules({ ...state, contractCategory }));
+  const setCategory = (contractCategory: string) =>
+    onChange(applyPurchaseTypeRules({ ...state, contractCategory, accountCode: defaultPurchaseAccount(state.contractType, contractCategory), typeDetails: {} }));
 
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -272,7 +323,7 @@ export function PurchaseContractForm({
         )}
       </div>
 
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm content-start">
         <span className="font-semibold cd-text-muted">계약 유형</span>
         <select className="cd-select" value={state.contractType} onChange={(e) => setType(e.target.value)}>
           {PURCHASE_CONTRACT_TYPES.map((t) => (
@@ -280,7 +331,7 @@ export function PurchaseContractForm({
           ))}
         </select>
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm content-start">
         <span className="font-semibold cd-text-muted">계약 분류</span>
         <select className="cd-select" value={state.contractCategory} onChange={(e) => setCategory(e.target.value)}>
           {categories.map((c) => (
@@ -340,59 +391,62 @@ export function PurchaseContractForm({
         </div>
       )}
 
-      <label className="grid gap-1 text-sm">
-        <span className="font-semibold cd-text-muted">계약금액</span>
-        <input className="cd-input tabular-nums" value={amount > 0 ? formatAmount(amount) : ""} readOnly placeholder="청구·수금 단계 합계" />
-        <span className="text-[11px] cd-text-faint">청구·수금 단계에 등록한 대금 지급 조건 합계액이 표시됩니다.</span>
+      {/* 좌·우 칸은 content-start 로 위에 붙여 힌트 줄 유무와 관계없이 입력란 상단·높이를 맞춘다(2026-11-03 사용자 지적). */}
+      <label className="grid gap-1 text-sm content-start">
+        <span className="font-semibold cd-text-muted">{amountLabel(state.contractType)}</span>
+        {mode === "manual" ? (
+          <AmountInput className="cd-input tabular-nums" value={state.contractAmount} onChange={(contractAmount) => onChange({ ...state, contractAmount })} placeholder={amountHint(state.contractType)} />
+        ) : (
+          <input className="cd-input tabular-nums" value={mode === "milestone_sum" && amount > 0 ? formatAmount(amount) : ""} readOnly disabled={mode === "disabled"} placeholder={amountHint(state.contractType)} />
+        )}
+        <span className="text-[11px] cd-text-faint">
+          {mode === "milestone_sum" && "청구·수금 단계에 등록한 대금 지급 조건 합계액이 표시됩니다."}
+          {mode === "manual" && "1개월 기준 구독료를 적습니다. 추가 지출은 '추가 지출' 탭에서 월별로 기록합니다."}
+          {mode === "disabled" && "임대·관리 계약은 분류 탭과 월별 표에서 금액을 다룹니다."}
+        </span>
       </label>
-      <label className="grid gap-1 text-sm">
-        <span className="font-semibold cd-text-muted">계약일</span>
+      <label className="grid gap-1 text-sm content-start">
+        <span className="font-semibold cd-text-muted">{startDateLabel(state.contractType)}</span>
         <AutoDateInput className="cd-input tabular-nums" value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate })} />
       </label>
 
-      <label className="grid gap-1 text-sm">
-        <span className="font-semibold cd-text-muted">준공일</span>
+      <label className="grid gap-1 text-sm content-start">
+        <span className="font-semibold cd-text-muted">{endDateLabel(state.contractType)}</span>
         <AutoDateInput className="cd-input tabular-nums" value={state.completedAt} onChange={(completedAt) => onChange({ ...state, completedAt })} />
+        {state.contractType === "lease" && <span className="text-[11px] cd-text-faint">렌트·임대 계약 종료일이 정해져 있으면 적습니다.</span>}
       </label>
-      <div className="grid gap-1 text-sm">
+      <div className="grid gap-1 text-sm content-start">
         <span className="font-semibold cd-text-muted">계약 조건</span>
-        {/* 단가 계약=외주 계약, 추가 지출=정기 구독, 종량제=복합기 렌트·관리 계약에서만 켤 수 있다. 세부 설정은 후속. */}
+        {/* 단가 계약=외주 계약, 추가 지출=정기 구독, 종량제=복합기·비데·정수기 렌트·관리 계약(관리 계약은 고정). 체크 시 해당 탭이 열린다. */}
         <div className="flex flex-wrap items-center gap-4 min-h-[38px]">
           <FlagCheckbox label="단가 계약" checked={state.isUnitPrice} disabled={!avail.unitPrice} onChange={(isUnitPrice) => onChange({ ...state, isUnitPrice })} title="외주 계약에서만 선택할 수 있습니다" />
           <FlagCheckbox label="추가 지출" checked={state.hasExtraSpend} disabled={!avail.extraSpend} onChange={(hasExtraSpend) => onChange({ ...state, hasExtraSpend })} title="정기 구독에서만 선택할 수 있습니다" />
-          <FlagCheckbox label="종량제" checked={state.isMetered} disabled={!avail.metered} onChange={(isMetered) => onChange({ ...state, isMetered })} title="임대 계약(복합기 렌트)·관리 계약에서만 선택할 수 있습니다" />
+          <FlagCheckbox
+            label="종량제"
+            checked={state.isMetered}
+            disabled={!avail.metered || !!forced.metered}
+            onChange={(isMetered) => onChange({ ...state, isMetered })}
+            title={forced.metered ? "관리 계약은 종량제로 고정됩니다" : "임대 계약(복합기·비데·정수기 렌트)·관리 계약에서만 선택할 수 있습니다"}
+          />
         </div>
       </div>
 
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm content-start">
         <span className="font-semibold cd-text-muted">매입 계정과목</span>
         <select className="cd-select" value={state.accountCode} onChange={(e) => onChange({ ...state, accountCode: e.target.value })}>
           <option value="">미지정</option>
-          {accounts.map((a) => (
+          {typeAccounts.map((a) => (
             <option key={a.accountCode} value={a.accountCode}>{a.accountCode} {a.name}</option>
           ))}
         </select>
-        <span className="text-[11px] cd-text-faint">재무 전표·장부의 계정과목(비용·자산)입니다. 매입 계산서 분개의 참고 계정으로 씁니다.</span>
+        <span className="text-[11px] cd-text-faint">이 계약 유형에 맞는 비용 계정만 보입니다. 분류를 고르면 기본 계정이 잡히고, 매입 계산서 분개의 참고 계정으로 씁니다.</span>
       </label>
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-sm content-start">
         <span className="font-semibold cd-text-muted">메모</span>
         <textarea className="cd-input min-h-[70px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
       </label>
     </div>
   );
-}
-
-/** 유형·분류가 바뀌면 켤 수 없는 플래그를 끈다. */
-function applyFlagRules(state: PurchaseFormState): PurchaseFormState {
-  const avail = flagAvailability(state.contractType, state.contractCategory);
-  const related = relatedContractMode(state.contractType, state.contractCategory);
-  return {
-    ...state,
-    isUnitPrice: avail.unitPrice && state.isUnitPrice,
-    hasExtraSpend: avail.extraSpend && state.hasExtraSpend,
-    isMetered: avail.metered && state.isMetered,
-    ...(related === "hidden" ? { relatedContractQuery: "", relatedContractId: "", relatedContractLabel: "" } : {}),
-  };
 }
 
 function FlagCheckbox({ label, checked, disabled, onChange, title }: { label: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void; title: string }) {

@@ -353,6 +353,7 @@ export function PurchaseContractsBoard() {
       {editModalOpen && detail && (
         <PurchaseChangeModal
           detail={detail}
+          onOpenPdf={setPdfViewer}
           onClose={() => setEditModalOpen(false)}
           onSaved={() => {
             setEditModalOpen(false);

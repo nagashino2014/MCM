@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { hasPermission } from "@/lib/auth/rbac";
 import { isDocDrafter } from "@/lib/approval/docs";
+import { hwpCombineStatus, listLetterAttachments } from "@/lib/letter/bundle";
 import { deleteImportedLetter, getLetterById, updateLetterMeta } from "@/lib/letter/store";
 import type { LetterRecipient } from "@/lib/letter/types";
 
@@ -20,7 +21,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ let
     if (!letter) return NextResponse.json({ error: "공문을 찾을 수 없습니다." }, { status: 404 });
     const canManage = await hasPermission(ctx.userId, "approval.manage");
     const canEdit = canManage || (await isDocDrafter(ctx.userId, letter.docId));
-    return NextResponse.json({ letter, canManage, canEdit });
+    // 첨부서류 목록·한글 결합 가능 여부(2026-11-03) — 뷰어 왼쪽 목록과 한글 아이콘 툴팁용
+    const attachments = await listLetterAttachments(letter).catch(() => []);
+    const hwpCombine = hwpCombineStatus(letter, attachments);
+    return NextResponse.json({
+      letter,
+      canManage,
+      canEdit,
+      attachments: attachments.map((a) => ({ index: a.index, name: a.name, size: a.size })),
+      hwpCombine,
+    });
   } catch (err) {
     return authErrorToResponse(err);
   }

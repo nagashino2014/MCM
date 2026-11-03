@@ -1,52 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { FileDropZone } from "@/components/ui/FileDropZone";
+import { useCdashTheme } from "@/components/cdash/useCdashTheme";
+import type { PdfViewerDoc } from "@/components/contracts/DraggablePdfViewer";
+import { createRateCard, rateCardHasContent, type RateCardData } from "@/lib/contracts/rate-card";
+import { monthlyKindFor, purchaseTabsFor, type PurchaseTabKey } from "@/lib/contracts/purchase/options";
 import type { PurchaseContractDetail } from "@/lib/contracts/purchase/types";
 import { purchaseApi, purchaseJson } from "@/lib/contracts/purchase/client";
 import { ModalShell, num, str } from "./primitives";
 import { PurchaseContractForm, purchaseFormStateFromRow, purchaseFormToBody, validatePurchaseForm } from "./PurchaseContractForm";
+import { PurchaseRateCardTab } from "./PurchaseRateCardTab";
+import { PurchaseLeaseDetailFields } from "./PurchaseLeaseDetailFields";
+import { PurchaseMonthlySection } from "./PurchaseMonthlySection";
 
 /**
- * 매입 변경계약 입력(331, 2026-11-02 사용자 요청) — 계약 정보 변경과 계약서 PDF 첨부를 한 창에서 한다.
- * 계약서 업로드는 신규 계약 입력과 이 창에서만 가능하다(상세 화면 즉시 업로드는 두지 않는다).
- * 매출 변경계약 모달처럼 첨부 종류를 '변경'(변경계약서)·'누락'(원 계약서)으로 고르며, 차수 표는 없고
- * 변경계약서 문서 수가 차수가 된다(N차 변경계약서 파일명).
+ * 매입 변경계약 입력(331·333, 2026-11-02 사용자 요청) — 계약 정보 변경과 계약서 PDF 첨부를 한 창에서 한다.
+ * 2차: 신규 모달과 같은 유형별 탭(단가 계약·임대 상세·월별 금액). 월별 금액은 저장된 계약이라 PurchaseMonthlySection 이
+ * 즉시 저장하고, 단가 기준표는 바뀐 경우에만 저장 시 PUT 한다. 관리 계약은 계약서 PDF 탭이 없다.
  */
 export function PurchaseChangeModal({
   detail,
   onClose,
   onSaved,
+  onOpenPdf,
 }: {
   detail: PurchaseContractDetail;
   onClose: () => void;
   onSaved: () => void;
+  onOpenPdf: (state: { title: string; url: string; docs?: PdfViewerDoc[]; initialIndex?: number }) => void;
 }) {
   const toast = useToast();
-  const [tab, setTab] = useState<"info" | "document">("info");
+  const { theme } = useCdashTheme();
+  const [tab, setTab] = useState<PurchaseTabKey>("basic");
   const [form, setForm] = useState(() => purchaseFormStateFromRow(detail.contract));
   const [changedAt, setChangedAt] = useState(new Date().toISOString().slice(0, 10));
   const [docType, setDocType] = useState<"amendment" | "contract">("amendment");
   const [file, setFile] = useState<File | null>(null);
+  const [registrationFile, setRegistrationFile] = useState<File | null>(null);
+  const [rateCard, setRateCard] = useState<RateCardData>(createRateCard);
+  const [rateLoadedJson, setRateLoadedJson] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const amount = detail.milestones.reduce((acc, m) => acc + num(m.amount), 0);
   const id = str(detail.contract.purchase_contract_id);
   const amendmentCount = detail.documents.filter((d) => str(d.document_type) === "amendment").length;
   const hasOriginal = detail.documents.some((d) => str(d.document_type) === "contract");
 
+  const tabs = useMemo(() => {
+    const list = purchaseTabsFor(form).filter((t) => t.key !== "milestones"); // 단계는 상세 화면의 단계 표에서 편집
+    return list;
+  }, [form]);
+  useEffect(() => {
+    if (!tabs.some((t) => t.key === tab)) setTab("basic");
+  }, [tabs, tab]);
+
+  // 단가 기준표 — 외주 계약이면 열 때 한 번 읽는다(바뀐 경우에만 저장).
+  useEffect(() => {
+    if (str(detail.contract.contract_type) !== "outsourcing") return;
+    let alive = true;
+    purchaseApi<{ card: RateCardData }>(`/api/purchase-contracts/${encodeURIComponent(id)}/rate-card`)
+      .then((json) => {
+        if (!alive) return;
+        setRateCard(json.card);
+        setRateLoadedJson(JSON.stringify(json.card));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id, detail.contract.contract_type]);
+
+  const monthlyKind = monthlyKindFor(form.contractType);
+  const savedKind = monthlyKindFor(str(detail.contract.contract_type));
+  const linkedAsset = detail.linkedAsset ?? null;
+
   const submit = async () => {
     const formError = validatePurchaseForm(form);
     if (formError) {
       toast.show(formError, "error");
-      setTab("info");
+      setTab(formError.includes("차종") ? "leaseDetail" : "basic");
       return;
     }
     setSaving(true);
     try {
       await purchaseApi(`/api/purchase-contracts/${encodeURIComponent(id)}`, { method: "PATCH", ...purchaseJson(purchaseFormToBody(form)) });
-      if (file) {
+      if (form.contractType === "outsourcing" && form.isUnitPrice && JSON.stringify(rateCard) !== rateLoadedJson && (rateCardHasContent(rateCard) || rateLoadedJson)) {
+        await purchaseApi(`/api/purchase-contracts/${encodeURIComponent(id)}/rate-card`, { method: "PUT", ...purchaseJson({ card: rateCard }) });
+      }
+      if (registrationFile && form.contractType === "lease" && form.contractCategory === "차량 렌트") {
+        const fd = new FormData();
+        fd.set("file", registrationFile);
+        await purchaseApi(`/api/purchase-contracts/${encodeURIComponent(id)}/vehicle-registration`, { method: "POST", body: fd });
+      }
+      if (file && form.contractType !== "management") {
         const fd = new FormData();
         fd.set("documentType", docType);
         fd.set("documentDate", docType === "amendment" ? changedAt || new Date().toISOString().slice(0, 10) : form.contractDate || changedAt);
@@ -65,11 +113,8 @@ export function PurchaseChangeModal({
 
   return (
     <ModalShell title="변경계약 입력" onClose={onClose} wide>
-      <div className="border-b cd-border-c px-5 pt-4 flex gap-2">
-        {([
-          ["info", "계약 정보 변경"],
-          ["document", "계약서 PDF"],
-        ] as const).map(([key, label]) => (
+      <div className="border-b cd-border-c px-5 pt-4 flex gap-2 flex-wrap">
+        {tabs.map(({ key, label }) => (
           <button
             key={key}
             type="button"
@@ -79,12 +124,12 @@ export function PurchaseChangeModal({
               (tab === key ? "cd-card-bg cd-text-primary border-[color:var(--cd-primary)]" : "cd-surface-bg cd-text-faint cd-border-c")
             }
           >
-            {label}
+            {key === "basic" ? "계약 정보 변경" : label}
           </button>
         ))}
       </div>
       <div className="p-5 min-h-[420px]">
-        {tab === "info" && (
+        {tab === "basic" && (
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm max-w-[240px]">
               <span className="font-semibold cd-text-muted">변경일</span>
@@ -94,6 +139,33 @@ export function PurchaseChangeModal({
             <PurchaseContractForm state={form} onChange={setForm} amount={amount} />
           </div>
         )}
+
+        {tab === "ratecard" && <PurchaseRateCardTab data={rateCard} onChange={setRateCard} />}
+
+        {tab === "leaseDetail" && (
+          <PurchaseLeaseDetailFields
+            category={form.contractCategory}
+            value={form.typeDetails}
+            onChange={(typeDetails) => setForm({ ...form, typeDetails })}
+            registrationFile={registrationFile}
+            onRegistrationFile={setRegistrationFile}
+            existingRegistration={
+              linkedAsset?.registrationDocKey
+                ? { name: linkedAsset.registrationDocName ?? "차량 등록증", path: `/api/assets/documents?key=${encodeURIComponent(linkedAsset.registrationDocKey)}` }
+                : null
+            }
+            linkedAssetId={linkedAsset?.assetId ?? null}
+          />
+        )}
+
+        {(tab === "extra" || tab === "metered" || tab === "feeStatus") && monthlyKind && (
+          monthlyKind === savedKind ? (
+            <PurchaseMonthlySection purchaseContractId={id} kind={monthlyKind} years={detail.monthlyYears ?? []} canEdit theme={theme} onOpenPdf={onOpenPdf} />
+          ) : (
+            <p className="rounded-lg border cd-border-c p-4 text-xs cd-text-muted">계약 유형을 바꾼 뒤 먼저 저장하면 월별 금액을 입력할 수 있습니다.</p>
+          )
+        )}
+
         {tab === "document" && (
           <div className="grid gap-3">
             <div className="flex items-center gap-4 text-[12px] cd-text">

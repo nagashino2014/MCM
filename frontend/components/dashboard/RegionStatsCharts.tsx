@@ -35,6 +35,8 @@ export const SIZE_PALETTE = [
   "rgba(237, 125, 49, 0.78)",
   "rgba(255, 192, 0, 0.72)",
   "rgba(91, 155, 213, 0.62)",
+  "rgba(142, 124, 195, 0.72)",
+  "rgba(47, 197, 143, 0.62)",
 ];
 
 export function bucketsToSlices(

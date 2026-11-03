@@ -4,11 +4,15 @@
 //           백필 시 크게 — 예: 400이면 소규모 전량). DB/DART/ANTHROPIC 설정은 next task def env 재사용.
 // DART 과거 백필: INTEL_BATCH_DART_BGN_DE/END_DE(YYYYMMDD, DART 제약상 창은 최대 30일) +
 //                INTEL_BATCH_ONLY=dart(다른 소스 skip). 청크 분할·순차 실행은 호출측 책임.
+// 뉴스 기간 다시 수집: INTEL_BATCH_ONLY=news_backfill + INTEL_BATCH_NEWS_FROM/TO(YYYYMMDD, KST 발행일·포함),
+//                INTEL_BATCH_NEWS_MAX_CLASSIFY(분류 상한, 기본 무제한), INTEL_BATCH_NEWS_DRY_RUN=1(검색만).
+//                기간을 나눠 태스크 여러 개로 병렬 실행할 수 있다(발행일 기준이라 겹치지 않는다).
 import { getDb } from "@/lib/db";
 import { collectDartSignals } from "@/lib/intel/collect";
 import { collectEiassSignals } from "@/lib/intel/collect-eiass";
 import { collectGosiSignals } from "@/lib/intel/collect-gosi";
 import { collectNewsSignals } from "@/lib/intel/collect-news";
+import { collectNewsBackfill } from "@/lib/intel/collect-news-backfill";
 import { collectPressSignals } from "@/lib/intel/collect-press";
 import { indexPendingEmbeddings, markNewsDuplicates } from "@/lib/intel/rag-indexer";
 import { disclosureCutoffIso, loadIntelSettings } from "@/lib/intel/intel-settings";
@@ -38,6 +42,25 @@ async function main() {
   // INTEL_BATCH_ONLY=dart 면 다른 소스는 건너뛴다(백필 반복 실행 시 낭비 방지)
   const only = (process.env.INTEL_BATCH_ONLY ?? "").trim().toLowerCase();
   console.log(`[intel-batch] start days=${days} cutoff=${cutoff ?? "none"}${dartBgnDe ? ` dartRange=${dartBgnDe}~${dartEndDe ?? "today"}` : ""}${only ? ` only=${only}` : ""}`);
+
+  // 뉴스 기간 다시 수집 — 다른 소스는 돌리지 않는다(심장박동도 남기지 않는다: 야간 수집과 별개).
+  if (only === "news_backfill") {
+    const ymd = (v: string | undefined) => (/^\d{8}$/.test(v ?? "") ? `${v!.slice(0, 4)}-${v!.slice(4, 6)}-${v!.slice(6, 8)}` : null);
+    const from = ymd(process.env.INTEL_BATCH_NEWS_FROM);
+    const to = ymd(process.env.INTEL_BATCH_NEWS_TO);
+    if (!from || !to || from > to) throw new Error("INTEL_BATCH_NEWS_FROM/TO(YYYYMMDD) 가 필요합니다");
+    const max = Number(process.env.INTEL_BATCH_NEWS_MAX_CLASSIFY);
+    const started = Date.now();
+    const r = await collectNewsBackfill({
+      from, to,
+      keywords: settings.news.keywords,
+      industries: settings.industries.list,
+      ...(max > 0 ? { maxClassify: max } : {}),
+      dryRun: process.env.INTEL_BATCH_NEWS_DRY_RUN === "1",
+    });
+    console.log(`[intel-batch] news_backfill done in ${Math.round((Date.now() - started) / 1000)}s`, JSON.stringify(r));
+    process.exit(0);
+  }
 
   if (settings.dart.enabled && (!only || only === "dart")) {
     const started = Date.now();

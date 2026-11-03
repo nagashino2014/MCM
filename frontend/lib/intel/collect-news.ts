@@ -3,10 +3,10 @@
 // DART collect.ts 의 facilities 매칭 패턴 재사용. source='news', news_stage='detailed'.
 
 import crypto from "node:crypto";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { searchNews, type NewsItem } from "./naver-news-client";
 import { classifyNewsDetailed, type NewsClassification } from "./news-classifier";
-import { buildFacilityMatcher } from "./facility-matcher";
+import { buildFacilityMatcher, type FacilityMatcher } from "./facility-matcher";
 import { type IntelSignalGrade } from "./signal-extractor";
 import { EMPTY_INDUSTRY_TAG, industryTagForFacility, type IndustryTag } from "./industry-rules";
 import type { IntelIndustryItem } from "./intel-settings";
@@ -85,13 +85,51 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
   const news = [...byLink.values()];
   result.scanned = news.length;
 
-  // 3) Haiku 분류 → 신호만 선별 + 회사명 매칭 + 업종 태깅(매칭이면 facilities 마스터 우선)
+  // 3)~4) Haiku 분류 → 적재(기간 다시 수집과 공용)
+  await classifyAndStoreNews(db, news, { industries: opts.industries, maxClassify }, result, { matcher });
+
+  const nowIso = new Date().toISOString();
+  await withDbWrite(async (wdb) => {
+    await wdb.run(
+      `INSERT INTO intel_collect_state (source, last_run_at, last_cursor, updated_at)
+       VALUES ('news',$1,$1,$1)
+       ON CONFLICT (source) DO UPDATE SET last_run_at = EXCLUDED.last_run_at, updated_at = EXCLUDED.updated_at`,
+      [nowIso]
+    );
+  });
+
+  return result;
+}
+
+/** 분류 문맥 — 기간 다시 수집처럼 여러 묶음을 처리할 때 매처·few-shot 을 한 번만 만든다. */
+export interface NewsClassifyContext {
+  matcher?: FacilityMatcher;
+  feedbackBlock?: string;
+  /** 분류 100건마다 진행 상황 콜백(긴 다시 수집 로그용) */
+  onClassified?: (result: CollectNewsResult) => void;
+}
+
+/**
+ * 뉴스 묶음을 Haiku 로 분류해 신호만 적재한다 — 야간 수집(collectNewsSignals)과 기간 다시 수집이 공용.
+ * result 에 누적 집계한다. news 는 이미 기수집 link 를 걸러낸 목록이어야 한다.
+ */
+export async function classifyAndStoreNews(
+  db: PgDatabase,
+  news: NewsItem[],
+  opts: { industries?: IntelIndustryItem[]; maxClassify?: number },
+  result: CollectNewsResult,
+  ctx: NewsClassifyContext = {}
+): Promise<void> {
+  // Haiku 분류 → 신호만 선별 + 회사명 매칭 + 업종 태깅(매칭이면 facilities 마스터 우선)
   // 삭제 피드백 few-shot: 최근 삭제 사례를 "이런 것은 false" 실례로 프롬프트에 주입(배치당 1회 로드)
-  const feedbackBlock = formatFeedbackExamples(await loadFeedbackExamples(db, "news"));
+  const feedbackBlock = ctx.feedbackBlock ?? formatFeedbackExamples(await loadFeedbackExamples(db, "news"));
+  const matcher = ctx.matcher ?? (await buildFacilityMatcher(db));
+  const maxClassify = opts.maxClassify ?? Infinity;
   interface Prepared { it: NewsItem; cls: NewsClassification; facilityId: string | null; tag: IndustryTag }
   const prepared: Prepared[] = [];
   for (const it of news) {
     if (result.classified >= maxClassify) break;
+    if (ctx.onClassified && result.classified > 0 && result.classified % 100 === 0) ctx.onClassified(result);
     const classification = await classifyNewsDetailed(it.title, it.description, opts.industries, feedbackBlock,
       { inputKind: "search_excerpt", publishedAt: it.pubDate });
     result.classified++;
@@ -110,7 +148,7 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
     prepared.push({ it, cls, facilityId, tag });
   }
 
-  // 4) upsert (source='news', news_stage='detailed')
+  // upsert (source='news', news_stage='detailed')
   const nowIso = new Date().toISOString();
   await withDbWrite(async (wdb) => {
     // 사용자가 사유와 함께 삭제한 신호는 재수집하지 않는다(intel_signal_feedback)
@@ -162,13 +200,5 @@ export async function collectNewsSignals(opts: CollectNewsOptions = {}): Promise
         );
       }
     }
-    await wdb.run(
-      `INSERT INTO intel_collect_state (source, last_run_at, last_cursor, updated_at)
-       VALUES ('news',$1,$1,$1)
-       ON CONFLICT (source) DO UPDATE SET last_run_at = EXCLUDED.last_run_at, updated_at = EXCLUDED.updated_at`,
-      [nowIso]
-    );
   });
-
-  return result;
 }

@@ -38,6 +38,7 @@ export const AI_FEATURES = {
   "company.finance_parse:statement": { label: "회사 표준재무제표 파싱", group: "문서 파싱", critical: false, defaultModel: "claude-sonnet-5", vision: true },
   "company.finance_parse:credit": { label: "회사 신용평가등급 파싱", group: "문서 파싱", critical: false, defaultModel: "claude-haiku-4-5", vision: true },
   "contract.permit_review_parse": { label: "허가 검토결과서 파싱", group: "문서 파싱", critical: false, defaultModel: "claude-sonnet-5", vision: true },
+  "purchase.fee_statement_parse": { label: "관리비 명세서 파싱", group: "문서 파싱", critical: false, defaultModel: "claude-sonnet-5", vision: true },
   // 양식 분석
   "bid.form_analyze": { label: "입찰 서류 양식 분석", group: "양식 분석", critical: false, defaultModel: "claude-sonnet-5", vision: false },
   "deliverable.template_analyze": { label: "착수·준공계 양식 분석(HWPX)", group: "양식 분석", critical: false, defaultModel: "claude-sonnet-5", vision: false },

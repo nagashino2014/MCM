@@ -146,14 +146,15 @@ export function getPurchaseContractDocumentStorageKey(params: {
   contractDate: string;
   documentDate: string;
   contractTitle: string;
-  docType: "contract" | "amendment";
+  /** fee_statement(333) = 관리 계약의 월별 관리비 명세서 — 문서일 자리에 YYYY-MM 을 넘긴다. */
+  docType: "contract" | "amendment" | "fee_statement";
   seq?: number;
 }): { storageKey: string; fileName: string; folderName: string } {
   const contractDate = parseIsoDate(params.contractDate, "계약일자");
   const year = String(contractDate.getFullYear());
   const folderName = sanitizePathSegment(`(${params.contractDate}) ${params.contractTitle}`);
   const title = sanitizePathSegment(params.contractTitle);
-  const kind = params.docType === "amendment" ? "매입 변경계약서" : "매입계약서";
+  const kind = params.docType === "amendment" ? "매입 변경계약서" : params.docType === "fee_statement" ? "관리비 명세서" : "매입계약서";
   const seq = params.seq && params.seq > 1 ? `(${params.seq})` : "";
   const fileName = sanitizeFilename(`(${params.documentDate})${title} ${kind}${seq}.pdf`);
   const storageKey = ["purchase-contracts", "documents", year, folderName, fileName].join("/");

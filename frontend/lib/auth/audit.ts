@@ -59,6 +59,8 @@ export type AuditAction =
   | "purchase_contract_delete"
   | "purchase_contract_payment_update"
   | "purchase_contract_document_upload"
+  | "purchase_contract_rate_card_update"
+  | "purchase_contract_monthly_update"
   | "contract_outsourcing_update"
   | "contract_dedupe_resolve"
   | "agency_report_create"

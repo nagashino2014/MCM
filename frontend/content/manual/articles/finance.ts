@@ -192,7 +192,7 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["계좌 원장", "입출금", "법인카드", "카드 원장", "계정과목", "자동분류", "가맹점 고정", "사업자번호 정정", "경비 환급", "식대 불지급"],
     sources: ["components/finance/FinanceBoard.tsx", "components/finance/CardMerchantCorrectionPanel.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-03",
   },
   {
     id: "finance.invoice",
@@ -553,6 +553,7 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
     summary: [
       "전표는 카드·계좌·세금계산서·결재 문서·급여·감가상각에서 **자동으로** 만들어집니다. 직접 입력하는 화면은 없습니다.",
       "[[분개장]]에서 [[재생성]]으로 전표를 만들고, 계정이 불분명한 [[확정 필요]] 건만 계정을 골라 확정합니다.",
+      "분개장 기간 입력 왼쪽의 검색 칸에 적요·거래처·계정 이름·금액을 넣으면 조회한 기간의 전표 안에서 바로 걸러 봅니다.",
       "[[계정별원장]]·[[시산표·백테스트]]와 손익·재무상태표는 모두 이 전표를 기준으로 계산됩니다.",
     ],
     sections: [
@@ -634,7 +635,7 @@ export const FINANCE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["전표", "분개", "자동분개", "분개장", "재생성", "확정 필요", "가지급금", "가수금", "계정별원장", "시산표", "백테스트", "세무법인"],
     sources: ["components/finance/JournalPanels.tsx", "components/finance/FinanceBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-03",
   },
   {
     id: "finance.pnl",

@@ -316,7 +316,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "용역 분류를 펼쳐 계약을 고릅니다. 검색은 계약명·거래처·세분류로, 연도 선택은 계약일 기준입니다.",
             "목록의 [[계약해지]]·[[계약중지]] 배지와 수금 완료 점으로 상태를 구분합니다. 아래 줄에 계약 건수·수행·완료(중지·해지) 건수가 나옵니다.",
-            "상세 위쪽의 [[계약서 보기]]는 계약서와 변경계약서를 탭으로 넘겨 봅니다. [[공정표/수행인력]]에서 공정표와 수행부서·수행인력을 지정합니다.",
+            "상세 위쪽의 [[계약서 보기]]는 계약서와 변경계약서를 탭으로 넘겨 봅니다. 내려받는 파일 이름은 지금의 계약일·계약명을 따르므로, 변경계약으로 계약일·계약명을 고치면 이미 올린 계약서도 새 이름으로 내려받습니다. [[공정표/수행인력]]에서 공정표와 수행부서·수행인력을 지정합니다.",
             "오른쪽 [[수금 진척도]] 카드는 계약금액 대비 수금 비율입니다.",
           ] },
           {
@@ -475,7 +475,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-02",
+    reviewedAt: "2026-11-03",
   },
   {
     id: "contracts.dashboard",

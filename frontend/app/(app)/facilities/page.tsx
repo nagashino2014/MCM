@@ -98,7 +98,8 @@ function Inner() {
       setItems(json.items || []);
       setTotal(json.total || 0);
       if (json.filters) setFilters(json.filters);
-      if (selectedId && !(json.items || []).some((item) => item.facilityId === selectedId)) {
+      // ?focus=<id> 로 들어온 사업장은 첫 쪽 목록에 없어도 선택을 유지한다(모달 → 사업장 화면에서 보기).
+      if (selectedId && selectedId !== focusId && !(json.items || []).some((item) => item.facilityId === selectedId)) {
         setSelectedId(json.items?.[0]?.facilityId ?? null);
       } else if (!selectedId && (json.items?.length ?? 0) > 0) {
         setSelectedId(json.items[0].facilityId);
@@ -108,7 +109,7 @@ function Inner() {
     } finally {
       setLoading(false);
     }
-  }, [filter, selectedId]);
+  }, [filter, selectedId, focusId]);
 
   useEffect(() => {
     reload();

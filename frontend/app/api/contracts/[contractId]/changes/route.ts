@@ -5,6 +5,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { rowsToObjects } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { syncContractAmountToMilestones } from "@/lib/contracts/contract-amount";
+import { syncContractDocumentNames } from "@/lib/contracts/document-names";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -249,6 +250,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         values.push(now);
         values.push(contractId);
         await db.run(`UPDATE contracts SET ${contractUpdates.join(", ")} WHERE contract_id = $${values.length}`, values);
+      }
+      // 계약일·계약명을 정정하면 올려 둔 계약서·변경계약서의 다운로드 이름도 함께 바꾼다(2026-11-03).
+      if (body.newContractDate !== undefined || typeof body.newContractTitle === "string") {
+        await syncContractDocumentNames(db, contractId, now);
       }
       // 계약금액 = 단계 합으로 맞춘 뒤, 이 이벤트의 이전 금액·증감을 실제 값으로 고쳐 둔다.
       const synced = await syncContractAmountToMilestones(db, contractId, now);

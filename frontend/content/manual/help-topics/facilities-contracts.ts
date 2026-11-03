@@ -221,4 +221,34 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     sources: ["components/contracts/purchase/PurchaseContractDetailPanel.tsx", "components/contracts/purchase/PurchaseStageModal.tsx"],
     reviewedAt: "2026-11-02",
   },
+  // ── 매입 계약 2차(333) — 월별 금액·관리비 명세서 ──
+  {
+    id: "purchase.monthly",
+    label: "월별 금액 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "정기 구독의 **추가 지출**, 복합기·비데·정수기 렌트의 **종량제 요금**은 달마다 금액이 달라 월별 표로 적습니다. 우상단에서 연도를 고르고 칸을 채우면 잠시 뒤 자동 저장됩니다.",
+        "추가 지출은 지출 목적(예: LLM 분석량 증가)을 함께 적습니다. 종량제는 **분개장으로 이동**으로 재무 분개장을 열어 청구 자료와 맞춰 봅니다.",
+        "우하단은 그 해 총액, 아래 그래프는 연도별 추이입니다. 비어 있는 달은 집계에서 빠집니다.",
+      ] },
+    ],
+    more: { article: "contracts.purchase", section: "type-tabs" },
+    sources: ["components/contracts/purchase/PurchaseMonthlySection.tsx", "components/contracts/purchase/PurchaseMonthlyPanel.tsx"],
+    reviewedAt: "2026-11-03",
+  },
+  {
+    id: "purchase.fee-statement",
+    label: "관리비 납부 현황 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "관리 계약(사무실 관리비)은 계약서 대신 **매월 관리비 명세서 PDF**를 올려 청구 내역을 쌓습니다. **관리비 명세서 PDF 업로드**로 올리면 AI가 부과 연·월, 납기내 금액, 공급가액·부가세, 납부기한, 항목별 금액(과세·비과세·면세)을 읽어 확인 창에 보여 줍니다.",
+        "확인 창에서 틀린 값을 고친 뒤 **월별 표에 반영**하면 그 달 칸에 납기내 금액이 들어가고 명세서 아이콘으로 PDF 를 다시 볼 수 있습니다. 같은 달을 다시 반영하면 덮어씁니다.",
+        "자동 인식이 실패하면(AI 키 미설정·양식 불일치) 빈 확인 창이 열려 직접 적습니다. 항목 없이 총액만 저장해도 됩니다.",
+        "읽은 항목은 재무 분개에 자동으로 넘어가지 않습니다(계정과목 분배는 후속).",
+      ] },
+    ],
+    more: { article: "contracts.purchase", section: "type-tabs" },
+    sources: ["components/contracts/purchase/PurchaseMonthlySection.tsx", "components/contracts/purchase/FeeStatementPreviewModal.tsx", "lib/contracts/purchase/fee-statement-llm.ts"],
+    reviewedAt: "2026-11-03",
+  },
 ];

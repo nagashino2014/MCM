@@ -1,7 +1,7 @@
 "use client";
 
 // 메일 목록 보낸 사람 팝업(10-21) — 주소를 누르면 메일 쓰기·주소록 추가·주소 복사·차단 + 보낸 사람으로 검색 + 메일 분류 지정.
-// 메일 분류 지정 = 이 주소로 온 받은편지함 메일을 그 분류로 묶고, 이후 수신 메일도 자동 분류(lib/mail/sender-rules.ts, 마이그 305).
+// 메일 분류 지정 = 이 주소로 온 받은편지함 메일을 그 분류로 묶고, 이후 수신 메일도 자동 분류(lib/mail/sender-rules.ts, 마이그 305·337).
 // 포털은 .cdash 루트 밖이라 cdash-vars + data-theme 를 직접 붙인다(CdModal 과 같은 규칙).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";

@@ -53,10 +53,11 @@ export const MAIL_ARTICLES: ManualArticle[] = [
               ["주소 복사", "주소를 클립보드에 복사합니다."],
               ["차단", "받은편지함의 이 주소 메일을 스팸함으로 옮기고, 이후 받는 메일도 스팸함으로 보냅니다."],
               ["[[보낸 사람으로 검색]]", "지금 폴더에서 이 주소로 검색합니다."],
-              ["메일 분류 지정", "고른 분류(받은편지함 카테고리)로 이 주소의 받은편지함 메일을 묶고, 앞으로 받는 메일도 자동으로 그 분류에 넣습니다. [[자동 분류 해제]]로 끌 수 있습니다."],
+              ["메일 분류 지정", "고른 분류(받은편지함 카테고리)로 이 주소에서 온 받은편지함 메일을 모두 옮기고(다른 분류에 있던 메일 포함), 앞으로 받는 메일도 자동으로 그 분류에 넣습니다. 주소의 대소문자·표시 이름은 따지지 않습니다. [[자동 분류 해제]]로 끌 수 있습니다."],
             ],
           },
-          { kind: "tip", text: "분류는 받은편지함 아래 [[새 카테고리]]로 먼저 만들어 둡니다. 자동 분류를 해제해도 이미 분류된 메일은 그대로입니다." },
+          { kind: "tip", text: "분류는 받은편지함 아래 [[새 카테고리]]로 먼저 만들어 둡니다. 자동 분류를 해제하면 이 규칙으로 옮겨진 메일이 원래 분류(없었으면 미분류)로 돌아갑니다. 그 사이 직접 다른 분류로 바꾸거나 보관한 메일은 그대로 둡니다." },
+          { kind: "p", text: "MCM이 보내는 알림·브리핑(no-reply@)과 주간 할 일 요약(noreply@)은 한 발신자로 묶여, 어느 쪽에서 분류를 지정해도 함께 분류됩니다." },
         ],
       },
       {
@@ -103,7 +104,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램"],
     sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-03",
   },
   {
     id: "mail.compose",

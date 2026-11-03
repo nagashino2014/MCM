@@ -47,6 +47,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         );
         if (related.length === 0) throw Object.assign(new Error("관련 매출 계약을 찾을 수 없습니다."), { status: 400 });
       }
+      // 계정과목 존재 검사 — journal_accounts 외래키는 재무 설치 지문을 깨서 332 에서 뺐다.
+      if (input.accountCode) {
+        const account = rowsToObjects(
+          await db.exec("SELECT account_code FROM journal_accounts WHERE account_code = $1", [input.accountCode])
+        );
+        if (account.length === 0) throw Object.assign(new Error("계정과목을 찾을 수 없습니다."), { status: 400 });
+      }
       await db.run(
         `UPDATE purchase_contracts
             SET contract_title = $2, counterparty_facility_id = $3, contract_type = $4, contract_category = $5,

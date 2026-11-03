@@ -15,7 +15,8 @@ import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
 import { assignManualNoticeNo } from "@/lib/notice/store";
 import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
-import { markAgreementApproved } from "@/lib/agreement/store";
+import { markAgreementApproved, markAgreementDraftSendable, resolveAgreementVersion } from "@/lib/agreement/store";
+import { docStageOf, isDraftSent } from "@/lib/approval/doc-stage";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
 import { findLineProxyAbsence, kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
 import { fixedLineReady, resolveFixedLine } from "@/lib/approval/fixed-line";
@@ -245,6 +246,9 @@ const NOTICE_FORM_ID = "frm-internal-notice";
 // = lib/quote/types.ts QUOTE_RULE_PREFIX/QUOTE_NO_LABEL_BY_SERVICE_TYPE (DB 계층은 클라이언트 모듈 미참조)
 const QUOTE_RULE_PREFIX = "견적:";
 const QUOTE_FORM_ID = "frm-quotation"; // = lib/quote/types.ts QUOTE_FORM_ID (동일 사유)
+const AGREEMENT_FORM_ID = "frm-agreement"; // = lib/agreement/types.ts AGREEMENT_FORM_ID
+/** 초안/최종안 단계를 쓰는 양식(336) — 초안은 결재 없이 송부, 최종안만 결재 */
+const STAGED_FORM_IDS = new Set([QUOTE_FORM_ID, AGREEMENT_FORM_ID]);
 const QUOTE_NO_LABELS: Record<string, string> = {
   통합허가: "통합허가",
   "장외&화관법": "화관법",
@@ -350,18 +354,28 @@ export async function saveDoc(params: {
   const watchers = (params.watchers ?? []).filter((w) => w.userId && (w.kind === "ref" || w.kind === "view"));
 
   const fieldValues: Record<string, unknown> = { ...(params.fieldValues ?? {}) };
+  const staged = STAGED_FORM_IDS.has(params.formId);
+  // 초안 송부 잠금 표지는 서버만 기록한다(336) — 클라이언트가 보낸 값은 버린다
+  if (staged) delete fieldValues.draft_sent_at;
   await withDbWrite(async (txn) => {
     if (params.docId) {
       const owned = rowsToObjects(
-        await txn.exec(`SELECT drafter_user_id, status FROM approval_docs WHERE doc_id = $1`, [params.docId])
+        await txn.exec(`SELECT drafter_user_id, status, field_values FROM approval_docs WHERE doc_id = $1`, [params.docId])
       );
       if (!owned.length) throw new Error("문서를 찾을 수 없습니다.");
       if (String(owned[0].drafter_user_id) !== params.actorUserId) throw new Error("본인 기안만 수정할 수 있습니다.");
       if (!["draft", "rejected"].includes(String(owned[0].status))) throw new Error("작성중/반려 문서만 수정할 수 있습니다.");
+      if (staged && isDraftSent(owned[0].field_values as Record<string, unknown> | null)) {
+        throw userError("발주처에 송부한 초안은 고칠 수 없습니다 — [새 버전]으로 수정본을 만드세요.", 409);
+      }
     }
     // 견적 재견적(269) — 같은 용역 건의 상신된 버전 max+1 을 저장마다 재계산해 기안 시 자동 버전업
     if (params.formId === QUOTE_FORM_ID && typeof fieldValues.quote_root_doc_id === "string" && fieldValues.quote_root_doc_id) {
       fieldValues.quote_version = await resolveQuoteVersion(txn, fieldValues.quote_root_doc_id, docId);
+    }
+    // 계약서 새 버전(336) — 같은 방식으로 송부·상신된 버전 max+1
+    if (params.formId === AGREEMENT_FORM_ID && typeof fieldValues.versionRootDocId === "string" && fieldValues.versionRootDocId) {
+      fieldValues.version = await resolveAgreementVersion(txn, fieldValues.versionRootDocId, docId);
     }
     await txn.run(
       `INSERT INTO approval_docs
@@ -455,7 +469,13 @@ export async function saveDoc(params: {
       } else {
         // 지정 해제 — 자동 채번으로 되돌린다. 상신 이력이 있는 문서(반려 후 재편집)는
         // 이미 확정된 번호를 유지해야 하므로 건드리지 않는다.
-        await txn.run(`UPDATE approval_docs SET doc_no = NULL WHERE doc_id = $1 AND submitted_at IS NULL`, [docId]);
+        // 초안 송부(336)를 시도한 견적은 대장이 있고 번호가 지면에 나갔을 수 있으므로 유지한다.
+        await txn.run(
+          `UPDATE approval_docs SET doc_no = NULL
+            WHERE doc_id = $1 AND submitted_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM quotations q WHERE q.doc_id = approval_docs.doc_id)`,
+          [docId]
+        );
       }
     }
   });
@@ -838,6 +858,12 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     const doc = rows[0];
     if (String(doc.drafter_user_id) !== actorUserId) throw new Error("본인 기안만 상신할 수 있습니다.");
     if (!["draft", "rejected"].includes(String(doc.status))) throw new Error("작성중/반려 문서만 상신할 수 있습니다.");
+    // 견적·계약서(336) — 결재는 최종안만 올린다. 초안은 결재 없이 [초안 송부]로 보낸다.
+    if (STAGED_FORM_IDS.has(String(doc.form_id))) {
+      const fv = (doc.field_values as Record<string, unknown> | null) ?? {};
+      if (isDraftSent(fv)) throw userError("송부한 초안은 상신할 수 없습니다 — [새 버전]을 만들어 최종안으로 상신하세요.", 409);
+      if (docStageOf(fv) !== "final") throw userError("초안은 결재 없이 송부합니다 — 상신하려면 단계를 '최종안'으로 바꾸세요.");
+    }
     // 고정 결재선(335) — 상신 시점에 다시 해석해 저장된 결재선과 대조한다(보직 변경·API 직접 호출 대비).
     const fixed = await resolveFixedLine({
       formId: String(doc.form_id),
@@ -911,6 +937,47 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
   // AI 요약 생성(상신 시 자동, 비차단) — 결재자가 열기 전 준비. 실패해도 원문 폴백.
   void generateDocSummary(docId).catch(() => {});
   return { docNo };
+}
+
+/**
+ * 초안 송부 준비(336, 2026-11-03) — 견적·계약서 초안은 결재 없이 발주처에 보낸다.
+ * 문서는 draft 그대로 두고 ① 견적이면 견적번호를 이때 채번(지면에 찍힌다) ② 대장을 만든다.
+ * 실제 발송·잠금(draft_sent_at)은 호출부가 processQuoteSend/processAgreementSend 로 이어서 한다 —
+ * 발송이 실패하면 잠그지 않으므로 고쳐서 다시 보낼 수 있다. 이미 송부한 초안의 재송부도 여기를 거친다.
+ */
+export async function prepareDraftSend(docId: string, actorUserId: string): Promise<{ formId: string; docNo: string | null }> {
+  let formId = "";
+  let docNo: string | null = null;
+  await withDbWrite(async (txn) => {
+    const rows = rowsToObjects(
+      await txn.exec(
+        `SELECT form_id, status, drafter_user_id, doc_no, field_values, field_values->>'service_type' AS quote_service_type
+           FROM approval_docs WHERE doc_id = $1 FOR UPDATE`,
+        [docId]
+      )
+    );
+    if (!rows.length) throw userError("문서를 찾을 수 없습니다.", 404);
+    const doc = rows[0];
+    formId = String(doc.form_id);
+    if (!STAGED_FORM_IDS.has(formId)) throw userError("초안 송부는 견적서·계약서만 할 수 있습니다.");
+    if (String(doc.drafter_user_id) !== actorUserId) throw userError("기안자 본인만 초안을 송부할 수 있습니다.", 403);
+    if (String(doc.status) !== "draft") throw userError("작성 중인 초안만 송부할 수 있습니다(결재 중·반려 문서는 제외).", 409);
+    if (docStageOf((doc.field_values as Record<string, unknown> | null) ?? {}) === "final") {
+      throw userError("최종안은 결재를 거쳐야 합니다 — 단계를 '초안'으로 바꾸거나 상신하세요.");
+    }
+    docNo = doc.doc_no != null && String(doc.doc_no) ? String(doc.doc_no) : null;
+    if (formId === QUOTE_FORM_ID) {
+      if (!docNo) {
+        const ruleKey = QUOTE_RULE_PREFIX + (QUOTE_NO_LABELS[String(doc.quote_service_type ?? "")] ?? "기타");
+        docNo = await allocateDocNo(txn, ruleKey, new Date().toISOString().slice(0, 4));
+        await txn.run(`UPDATE approval_docs SET doc_no = $2 WHERE doc_id = $1`, [docId, docNo]);
+      }
+      await markQuotePendingOnApproval(txn, docId);
+    } else {
+      await markAgreementDraftSendable(txn, docId);
+    }
+  });
+  return { formId, docNo };
 }
 
 /** 승인/반려 — 본인 pending 단계에만. 병렬 합의는 전원 승인 시 다음 order 로. */

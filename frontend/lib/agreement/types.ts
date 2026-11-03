@@ -133,6 +133,19 @@ export interface AgreementFieldValues {
   recipients?: AgreementRecipient[];
   /** 동봉 첨부 S3 키 [{key,name,size}] */
   attachments?: { key: string; name: string; size: number }[];
+  // ── 버전 관리(336, 2026-11-03) — 원본(v1)에는 없고 새 버전 문서에만 채워진다 ──
+  /** 원본(v1) 계약서 doc_id */
+  versionRootDocId?: string;
+  /** 복사해 온 직전 버전 doc_id */
+  revisionOfDocId?: string;
+  /** 저장 시 서버가 확정(송부·상신된 버전 max+1) */
+  version?: number;
+  /** 변경 메모 — 발주처 검토 의견 반영 내용 등 */
+  revisionNote?: string;
+  /** 초안/최종안(lib/approval/doc-stage.ts 공통 키) */
+  doc_stage?: "draft" | "final";
+  /** 초안 송부 시각 — 서버만 기록, 있으면 잠김 */
+  draft_sent_at?: string;
 }
 
 // ── 대장(contract_agreements) ──
@@ -171,6 +184,10 @@ export interface AgreementRow {
   sendAttempts: number;
   sentAt: string | null;
   sentTo: unknown;
+  /** 버전 관리(336) — 원본 doc_id·버전·단계 */
+  rootDocId: string;
+  version: number;
+  docStage: "draft" | "final";
   createdAt: string;
   updatedAt: string;
 }

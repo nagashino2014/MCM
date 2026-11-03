@@ -6,6 +6,8 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { lockSentDraft } from "@/lib/approval/draft-lock";
+import { docStageOf, parseSendHistory, type DocStage, type DocVersionItem, type SendHistoryEntry } from "@/lib/approval/doc-stage";
 import type { TemplateProfile } from "@/lib/deliverable/types";
 import { SEED_TEMPLATES, seedForSubtype, seedAsTemplateRow } from "./catalog";
 import {
@@ -215,6 +217,9 @@ function mapAgreement(r: Record<string, unknown>): AgreementRow {
     sendAttempts: Number(r.send_attempts ?? 0),
     sentAt: sn(r.sent_at),
     sentTo: parseJson<unknown>(r.sent_to, null),
+    rootDocId: String(r.root_doc_id ?? r.doc_id ?? ""),
+    version: Number(r.version ?? 1) || 1,
+    docStage: r.doc_stage === "final" ? "final" : "draft",
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
   };
@@ -224,12 +229,81 @@ const AGR_SELECT = `a.*, t.name AS template_name
    FROM contract_agreements a
    LEFT JOIN agreement_templates t ON t.template_id = a.template_id`;
 
+// ── 버전 관리(336) — 견적 269 와 같은 구조. 원본(v1)은 versionRootDocId 가 없다 ──
+
+const AGR_GROUP_WHERE = `d.form_id = $1 AND (d.doc_id = $2 OR d.field_values->>'versionRootDocId' = $2)`;
+/** 번호가 확정된 버전 = 상신했거나 초안을 송부한 버전(작성 중 초안은 번호가 아직 움직인다) */
+const AGR_LOCKED = `(d.status <> 'draft' OR d.field_values ? 'draft_sent_at')`;
+
+/** 아무 버전의 doc_id → 원본 doc_id. 계약서 문서가 아니면 null */
+export async function resolveAgreementRootDocId(docId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT doc_id, field_values->>'versionRootDocId' AS root FROM approval_docs WHERE doc_id = $1 AND form_id = $2`,
+      [docId, AGREEMENT_FORM_ID]
+    )
+  );
+  if (!rows.length) return null;
+  return rows[0].root != null && String(rows[0].root) ? String(rows[0].root) : String(rows[0].doc_id);
+}
+
+/** 저장 시 버전 확정 — 같은 계약서의 확정 버전 max+1(원본은 암묵적으로 1). 저장마다 재계산한다. */
+export async function resolveAgreementVersion(txn: PgDatabase, rootDocId: string, excludeDocId: string): Promise<number> {
+  const rows = rowsToObjects(
+    await txn.exec(
+      `SELECT COALESCE(MAX(COALESCE((d.field_values->>'version')::int, 1)), 1) AS v
+         FROM approval_docs d
+        WHERE ${AGR_GROUP_WHERE} AND d.doc_id <> $3 AND ${AGR_LOCKED}`,
+      [AGREEMENT_FORM_ID, rootDocId, excludeDocId]
+    )
+  );
+  return Number(rows[0]?.v ?? 1) + 1;
+}
+
+/** 계약서 버전 이력 — 작성 중 초안까지 전부(버전 오름차순). 송부 이력은 대장에서 보강.
+ *  withValues = 버전 비교용 본문(field_values)까지 — 다른 사람이 만든 버전도 비교할 수 있게 여기서 준다. */
+export async function listAgreementVersions(
+  rootDocId: string,
+  opts: { withValues?: boolean } = {}
+): Promise<(DocVersionItem & { fieldValues?: AgreementFieldValues })[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.doc_id, d.doc_no, d.title, d.status, d.drafter_name, d.updated_at, d.submitted_at, d.completed_at,
+              d.field_values->>'version' AS version, d.field_values->>'doc_stage' AS doc_stage,
+              d.field_values->>'draft_sent_at' AS draft_sent_at, d.field_values->>'revisionNote' AS revision_note,
+              a.send_history${opts.withValues ? ", d.field_values" : ""}
+         FROM approval_docs d LEFT JOIN contract_agreements a ON a.doc_id = d.doc_id
+        WHERE ${AGR_GROUP_WHERE}`,
+      [AGREEMENT_FORM_ID, rootDocId]
+    )
+  );
+  return rows
+    .map((r) => ({
+      docId: String(r.doc_id),
+      version: Number(r.version ?? 1) || 1,
+      stage: (r.doc_stage === "final" ? "final" : "draft") as DocStage,
+      status: String(r.status ?? "draft"),
+      docNo: sn(r.doc_no),
+      title: String(r.title ?? ""),
+      drafterName: sn(r.drafter_name),
+      updatedAt: String(r.updated_at ?? ""),
+      submittedAt: sn(r.submitted_at),
+      completedAt: sn(r.completed_at),
+      draftSentAt: sn(r.draft_sent_at),
+      revisionNote: sn(r.revision_note),
+      sendHistory: parseSendHistory(r.send_history),
+      ...(opts.withValues ? { fieldValues: parseJson<AgreementFieldValues>(r.field_values, {} as AgreementFieldValues) } : {}),
+    }))
+    .sort((a, b) => a.version - b.version || a.updatedAt.localeCompare(b.updatedAt));
+}
+
 /**
- * 최종 승인 시 대장 등록(actOnDoc 트랜잭션 내 — 가벼운 upsert 만).
- * 계약서 양식 문서가 아니면 no-op. 승인 후에도 자동 발송하지 않는다(수동 발송 — ① 확정).
- * 이미 발송 완료(sent)면 상태를 되돌리지 않는다(재승인 케이스).
+ * 대장 upsert(트랜잭션 내) — 최종 승인(approved) 또는 초안 송부 직전(draft-send) 에 부른다.
+ * 계약서 양식 문서가 아니면 no-op. 이미 발송 완료(sent)면 상태를 되돌리지 않는다(재승인·재송부 케이스).
  */
-export async function markAgreementApproved(txn: PgDatabase, docId: string): Promise<void> {
+async function upsertAgreementLedger(txn: PgDatabase, docId: string): Promise<void> {
   const rows = rowsToObjects(
     await txn.exec(
       `SELECT d.title, d.drafter_name, d.field_values FROM approval_docs d
@@ -249,9 +323,14 @@ export async function markAgreementApproved(txn: PgDatabase, docId: string): Pro
     `INSERT INTO contract_agreements
        (agreement_id, doc_id, template_id, contract_id, quotation_id, counterparty_facility_id,
         title, service_type, service_subtype, amount_supply, amount_vat, amount_total,
-        drafter_name, field_snapshot, send_status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'approved', $15, $15)
+        drafter_name, field_snapshot, send_status, created_at, updated_at,
+        root_doc_id, version, doc_stage)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, 'approved', $15, $15,
+             $16, $17, $18)
      ON CONFLICT (doc_id) DO UPDATE SET
+       root_doc_id = EXCLUDED.root_doc_id,
+       version = EXCLUDED.version,
+       doc_stage = EXCLUDED.doc_stage,
        template_id = EXCLUDED.template_id,
        contract_id = EXCLUDED.contract_id,
        quotation_id = EXCLUDED.quotation_id,
@@ -281,11 +360,27 @@ export async function markAgreementApproved(txn: PgDatabase, docId: string): Pro
       r.drafter_name != null ? String(r.drafter_name) : null,
       JSON.stringify(values),
       now,
+      values.versionRootDocId ? String(values.versionRootDocId) : docId,
+      Number(values.version ?? 1) || 1,
+      docStageOf(values as Record<string, unknown>),
     ]
   );
 }
 
-/** 발송 선점 — approved|failed → sending. 0행이면 이미 진행 중(중복 실행 가드). */
+/** 최종 승인 시 대장 등록(actOnDoc 트랜잭션 내). 승인 후에도 자동 발송하지 않는다(수동 발송 — ① 확정). */
+export async function markAgreementApproved(txn: PgDatabase, docId: string): Promise<void> {
+  await upsertAgreementLedger(txn, docId);
+}
+
+/** 초안 송부 직전 대장 등록 — 결재 없이 보내는 초안도 산출물·송부 이력을 대장에 남긴다(336). */
+export async function markAgreementDraftSendable(txn: PgDatabase, docId: string): Promise<void> {
+  await upsertAgreementLedger(txn, docId);
+}
+
+/**
+ * 발송 선점 — approved|failed|sent → sending. 0행이면 이미 진행 중(중복 실행 가드).
+ * sent 포함 = 재발송(2026-11-03: 종전엔 목록의 [재발송]이 409 로 막혔다).
+ */
 export async function claimAgreementSend(docId: string): Promise<AgreementRow | null> {
   let claimed: AgreementRow | null = null;
   await withDbWrite(async (txn) => {
@@ -293,7 +388,7 @@ export async function claimAgreementSend(docId: string): Promise<AgreementRow | 
       await txn.exec(
         `UPDATE contract_agreements SET send_status = 'sending', send_attempts = send_attempts + 1,
                 send_error = NULL, updated_at = $2
-          WHERE doc_id = $1 AND send_status IN ('approved', 'failed')
+          WHERE doc_id = $1 AND send_status IN ('approved', 'failed', 'sent')
           RETURNING agreement_id`,
         [docId, new Date().toISOString()]
       )
@@ -318,17 +413,22 @@ export async function setAgreementArtifacts(docId: string, pdfKey: string | null
 
 export async function finishAgreementSend(
   docId: string,
-  result: { ok: true; sentTo: unknown; messageId?: string | null } | { ok: false; error: string }
+  result:
+    | { ok: true; sentTo: unknown; messageId?: string | null; history: Omit<SendHistoryEntry, "sentAt"> }
+    | { ok: false; error: string }
 ): Promise<void> {
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {
     if (result.ok) {
       await txn.run(
         `UPDATE contract_agreements SET send_status = 'sent', sent_at = $2, sent_to = $3::jsonb,
-                sent_message_id = $4, send_error = NULL, updated_at = $2
+                sent_message_id = $4, send_error = NULL, updated_at = $2,
+                send_history = send_history || jsonb_build_array($5::jsonb)
           WHERE doc_id = $1`,
-        [docId, now, JSON.stringify(result.sentTo ?? null), result.messageId ?? null]
+        [docId, now, JSON.stringify(result.sentTo ?? null), result.messageId ?? null, JSON.stringify({ sentAt: now, ...result.history })]
       );
+      // 초안 송부 성공 → 그 버전을 잠근다(수정은 새 버전으로). 승인 문서(최종안)는 이미 잠겨 있어 no-op.
+      await lockSentDraft(txn, docId, now);
     } else {
       await txn.run(
         `UPDATE contract_agreements SET send_status = 'failed', send_error = $2, updated_at = $3
@@ -376,6 +476,11 @@ export interface AgreementDocRow {
   hwpxKey: string | null;
   /** 연동 계약 id(없으면 null) — 가시 범위 필터용(2026-10-19 §7.7). */
   contractId: string | null;
+  /** 버전 관리(336) — 원본 doc_id·버전·단계·초안 송부 시각 */
+  rootDocId: string;
+  version: number;
+  stage: DocStage;
+  draftSentAt: string | null;
 }
 
 export async function listAgreementDocs(params: { q?: string | null; limit?: number }): Promise<AgreementDocRow[]> {
@@ -397,7 +502,10 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
               d.field_values->'orderer'->>'name' AS orderer_name,
               (d.field_values->>'amountSupply')::bigint AS amount_supply,
               t.name AS template_name,
-              a.send_status, a.send_error, a.sent_at, a.pdf_key, a.hwpx_key, a.contract_id
+              a.send_status, a.send_error, a.sent_at, a.pdf_key, a.hwpx_key, a.contract_id,
+              COALESCE(d.field_values->>'versionRootDocId', d.doc_id) AS root_doc_id,
+              d.field_values->>'version' AS version, d.field_values->>'doc_stage' AS doc_stage,
+              d.field_values->>'draft_sent_at' AS draft_sent_at
          FROM approval_docs d
          LEFT JOIN contract_agreements a ON a.doc_id = d.doc_id
          LEFT JOIN agreement_templates t ON t.template_id = a.template_id
@@ -429,6 +537,10 @@ export async function listAgreementDocs(params: { q?: string | null; limit?: num
     sentAt: sn(r.sent_at),
     pdfKey: sn(r.pdf_key),
     hwpxKey: sn(r.hwpx_key),
+    rootDocId: String(r.root_doc_id ?? r.doc_id ?? ""),
+    version: Number(r.version ?? 1) || 1,
+    stage: (r.doc_stage === "final" ? "final" : "draft") as DocStage,
+    draftSentAt: sn(r.draft_sent_at),
   }));
 }
 

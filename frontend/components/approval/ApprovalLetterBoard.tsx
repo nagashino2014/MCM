@@ -139,7 +139,10 @@ export function FacilityRecipientPicker({
     <div className="flex flex-col gap-1.5">
       <span className="flex items-center gap-1 text-[11px] cd-text-faint">
         <span>수신처 <span className="cd-text-faint">— 업체/기관명 표기(공문 수신란). 실제 메일 발송은 참조 담당자에게 갑니다</span></span>
-        <CdHelp topic="letter.recipients" />
+        {/* ? 버튼(32px)이 라벨 줄을 키우지 않게 — 옆 참조 담당자 칸과 입력 줄을 맞춘다 */}
+        <span className="-my-2 inline-flex">
+          <CdHelp topic="letter.recipients" />
+        </span>
       </span>
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

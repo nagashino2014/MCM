@@ -5,8 +5,10 @@
 //   direct → 산출물 생성·S3 보관까지만(generated). 사용자가 대장에서 PDF 를 다운로드해
 //            발주처 전자조달시스템 등에 직접 제출한다.
 // 실패해도 문서는 approved 유지, 대장에만 failed 마킹 → 발송견적 탭의 재발송 버튼이 재호출.
+// 초안(336)은 결재 없이 [초안 송부](app/api/quotes/draft-send)로 같은 함수를 부르고, 성공하면 그 버전이 잠긴다.
 
 import { getDoc } from "@/lib/approval/docs";
+import { docStageOf } from "@/lib/approval/doc-stage";
 import { sendMail } from "@/lib/mail/send";
 import { COMPANY_KO } from "@/lib/letter/types";
 import { generateQuoteArtifacts } from "./generate";
@@ -52,13 +54,22 @@ export async function processQuoteSend(docId: string): Promise<{ ok: boolean; sk
   try {
     const doc = await getDoc(docId);
     if (!doc) throw new Error("문서를 찾을 수 없습니다.");
-    if (doc.status !== "approved") throw new Error("승인 완료 문서만 발송할 수 있습니다.");
+    // 최종안은 승인 후에만, 초안은 결재 없이(작성 중 문서 그대로) 보낸다(336, 2026-11-03).
+    const stage = docStageOf(doc.fieldValues);
+    if (stage === "final" ? doc.status !== "approved" : doc.status !== "draft" && doc.status !== "approved") {
+      throw new Error(stage === "final" ? "최종안은 결재 승인 후에 발송할 수 있습니다." : "결재 중인 견적은 초안으로 송부할 수 없습니다.");
+    }
     const values = doc.fieldValues as unknown as QuoteFieldValues;
+    const version = Number(values.quote_version ?? 1) || 1;
 
     const artifacts = await generateQuoteArtifacts(docId, { persist: true });
 
     if (mode === "direct") {
-      await finishQuoteSend(docId, { ok: true, mode });
+      await finishQuoteSend(docId, {
+        ok: true,
+        mode,
+        history: { stage, version, attachments: [`${artifacts.fileBase}.pdf`], mode: "direct" },
+      });
       return { ok: true };
     }
 
@@ -95,7 +106,19 @@ export async function processQuoteSend(docId: string): Promise<{ ok: boolean; sk
     });
     if (!result.ok) throw new Error(result.error ?? "메일 발송 실패");
 
-    await finishQuoteSend(docId, { ok: true, mode, messageId: result.messageId ?? null });
+    await finishQuoteSend(docId, {
+      ok: true,
+      mode,
+      messageId: result.messageId ?? null,
+      history: {
+        messageId: result.messageId ?? null,
+        stage,
+        version,
+        to: to.map((a) => a.address),
+        attachments: attachments.map((a) => a.filename),
+        mode: "mail",
+      },
+    });
     return { ok: true };
   } catch (err) {
     const message = (err as Error).message ?? "발송 실패";

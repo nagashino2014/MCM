@@ -1,5 +1,6 @@
 // 계약서 수동 발송 파이프라인 — 공문(lib/letter/send.ts)과 달리 승인 시 자동 실행되지 않는다.
 // 보드의 [발주처 발송] 다이얼로그에서 수신 담당자·첨부 구성을 확정해 호출한다(① 확정).
+// 초안(336)은 결재 없이 작성 중 문서를 그대로 보내고, 성공하면 그 버전을 잠근다. 최종안은 승인 후에만 보낸다.
 // 기본 첨부 = HWPX(초안 수정 협의용, ④ 확정) — PDF 는 옵션. HWPX 생성 실패 시 PDF 폴백.
 // 실패해도 문서는 approved 유지, 대장만 failed → 재발송 버튼이 같은 함수를 다시 호출한다.
 
@@ -9,6 +10,7 @@ import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import { sendMail } from "@/lib/mail/send";
 import { listSignatures } from "@/lib/mail/signatures";
 import { COMPANY_KO } from "@/lib/letter/types";
+import { docStageOf, type DocStage } from "@/lib/approval/doc-stage";
 import { generateAgreementArtifacts } from "./generate";
 import { claimAgreementSend, finishAgreementSend } from "./store";
 import type { AgreementFieldValues, AgreementRecipient } from "./types";
@@ -53,6 +55,8 @@ async function internalCcAddresses(userIds: string[]): Promise<{ name?: string; 
 }
 
 function buildMailBody(input: {
+  stage: DocStage;
+  version: number;
   title: string;
   ordererName: string;
   senderLabel: string;
@@ -64,7 +68,9 @@ function buildMailBody(input: {
   return [
     `<div style="font-size:14px;line-height:1.7;color:#222">`,
     `<p>안녕하세요, ${esc(COMPANY_KO)} ${esc(input.senderLabel)} 입니다.</p>`,
-    `<p>「${esc(input.title)}」 계약서 초안을 송부드립니다.<br>검토하시고 수정·보완이 필요한 사항이 있으면 회신 부탁드립니다.</p>`,
+    input.stage === "final"
+      ? `<p>「${esc(input.title)}」 계약서 최종안을 송부드립니다.<br>내용 확인 후 날인 절차를 진행해 주시면 감사하겠습니다.</p>`
+      : `<p>「${esc(input.title)}」 계약서 초안(v${input.version})을 송부드립니다.<br>검토하시고 수정·보완이 필요한 사항이 있으면 회신 부탁드립니다.</p>`,
     input.note?.trim() ? `<p>${esc(input.note.trim()).replace(/\n/g, "<br>")}</p>` : "",
     `<table style="border-collapse:collapse;margin:12px 0">`,
     `<tr><td style="border:1px solid #d5d7dd;padding:6px 12px;background:#f4f5f8;font-weight:bold">계약명</td><td style="border:1px solid #d5d7dd;padding:6px 12px">${esc(input.title)}</td></tr>`,
@@ -98,13 +104,18 @@ export async function processAgreementSend(
   opts: AgreementSendOptions
 ): Promise<{ ok: boolean; skipped?: boolean; error?: string }> {
   const claimed = await claimAgreementSend(docId);
-  if (!claimed) return { ok: false, skipped: true, error: "발송 가능한 상태가 아닙니다(승인 완료 후 발송 가능)." };
+  if (!claimed) return { ok: false, skipped: true, error: "발송 처리 중이거나 발송할 수 없는 상태입니다." };
   try {
     const doc = await getDoc(docId);
     if (!doc) throw new Error("문서를 찾을 수 없습니다.");
-    if (doc.status !== "approved") throw new Error("승인 완료 문서만 발송할 수 있습니다.");
+    // 최종안은 승인 후에만, 초안은 결재 없이(작성 중 문서 그대로) 보낸다(336, 2026-11-03).
+    const stage = docStageOf(doc.fieldValues);
+    if (stage === "final" ? doc.status !== "approved" : doc.status !== "draft" && doc.status !== "approved") {
+      throw new Error(stage === "final" ? "최종안은 결재 승인 후에 발송할 수 있습니다." : "결재 중인 문서는 초안으로 송부할 수 없습니다.");
+    }
     if (!doc.drafterUserId) throw new Error("기안자 계정을 확인할 수 없습니다.");
     const fv = doc.fieldValues as unknown as AgreementFieldValues;
+    const version = Number(fv.version ?? 1) || 1;
 
     const to = (opts.recipients ?? [])
       .filter((r) => (r.email ?? "").includes("@"))
@@ -145,8 +156,13 @@ export async function processAgreementSend(
       userId: doc.drafterUserId,
       to,
       cc,
-      subject: `[${COMPANY_SHORT}] 계약서 초안 검토 요청 — ${artifacts.title}`,
+      subject:
+        stage === "final"
+          ? `[${COMPANY_SHORT}] 계약서(최종안) 송부 — ${artifacts.title}`
+          : `[${COMPANY_SHORT}] 계약서 초안 검토 요청(v${version}) — ${artifacts.title}`,
       bodyHtml: buildMailBody({
+        stage,
+        version,
         title: artifacts.title,
         ordererName: fv.orderer?.name ?? "",
         senderLabel,
@@ -163,6 +179,15 @@ export async function processAgreementSend(
       ok: true,
       sentTo: { recipients: opts.recipients, includeHwpx, includePdf },
       messageId: result.messageId ?? null,
+      history: {
+        messageId: result.messageId ?? null,
+        stage,
+        version,
+        to: to.map((a) => a.address),
+        cc: cc.map((a) => a.address),
+        attachments: attachments.map((a) => a.filename),
+        mode: "mail",
+      },
     });
     return { ok: true };
   } catch (err) {

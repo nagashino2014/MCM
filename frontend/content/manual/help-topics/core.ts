@@ -8,6 +8,21 @@ import type { HelpTopic } from "../types";
 export const HELP_TOPIC_LIST: HelpTopic[] = [
   // ── 전자결재 ──
   {
+    id: "doc.stage",
+    label: "초안·최종안 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "계약서·견적서에만 있는 단계입니다.",
+        "**초안**: 결재 없이 발주처에 보내 검토받습니다. 송부한 버전은 잠기고, 고칠 때는 [[새 버전 만들기]]로 다음 버전을 만듭니다.",
+        "**최종안**: 결재선(부서장 → 임원 → 대표이사)으로 상신합니다. 작성자가 부서장이면 임원부터, 임원이면 대표이사만 결재합니다. 승인된 뒤에 발송합니다.",
+        "송부한 초안을 그대로 확정하려면 [[최종안으로 확정]]을 누릅니다.",
+      ] },
+    ],
+    more: { article: "contracts.agreements", section: "flow" },
+    sources: ["components/approval/DocStagePanel.tsx"],
+    reviewedAt: "2026-11-03",
+  },
+  {
     id: "approval.inbox-boxes",
     label: "결재 대기·예정 도움말",
     blocks: [

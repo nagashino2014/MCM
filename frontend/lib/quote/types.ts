@@ -2,6 +2,8 @@
 // 설계: docs/quotation-blueprint.md. 문서 원본 = approval_docs.field_values(아래 규약),
 // 발송 대장 = quotations(infra/aws/136). 산정·역산 순수 함수는 lib/quote/rates.ts.
 
+import type { SendHistoryEntry } from "@/lib/approval/doc-stage";
+
 export const QUOTE_FORM_ID = "frm-quotation";
 
 /** 채번 rule_key 접두 — 실제 키는 `견적:{용역 종류}` (docs.ts 가 {연도}-{종류}-{NNNN} 포맷으로 분기) */
@@ -387,6 +389,9 @@ export interface QuoteFieldValues {
   quote_version?: number; // 저장 시 서버가 확정(상신된 버전 max+1)
   revision_reason?: QuoteRevisionReason; // 재견적 사유(필수)
   prev_total_amount?: number; // 직전 버전 제출 견적가 합계
+  // ── 초안/최종안(336 · 2026-11-03) — lib/approval/doc-stage.ts 공통 키 ──
+  doc_stage?: "draft" | "final"; // 없으면 초안. 최종안만 결재(고정 결재선)를 거친다
+  draft_sent_at?: string; // 초안 송부 시각 — 서버만 기록, 있으면 잠김
 }
 
 /** 재견적 사유 — 금액변동 태그 옆의 부연 태그(사용자 확정 3종 + 2026-10-02 3종 추가) */
@@ -398,11 +403,13 @@ export const QUOTE_REVISION_REASONS = [
   { code: "typo_fix", label: "오기 수정" },
   { code: "amount_up", label: "금액 증가" },
   { code: "amount_down", label: "금액 감소" },
+  // 2026-11-03 — 송부한 초안을 그대로 최종안으로 확정(결재 상신)할 때(336)
+  { code: "finalize", label: "최종안 확정" },
 ] as const;
 export type QuoteRevisionReason = (typeof QUOTE_REVISION_REASONS)[number]["code"];
 export const QUOTE_REVISION_REASON_LABEL: Record<string, string> = Object.fromEntries(QUOTE_REVISION_REASONS.map((r) => [r.code, r.label]));
 
-/** 견적 이력 행(/api/quotes/revisions) — 상신된 버전(draft 제외) */
+/** 견적 이력 행(/api/quotes/revisions) — 상신했거나 초안을 송부한 버전(작성 중 제외) */
 export interface QuoteRevisionItem {
   docId: string;
   version: number;
@@ -415,6 +422,10 @@ export interface QuoteRevisionItem {
   totalAmount: number;
   prevTotalAmount: number | null;
   revisionReason: string | null;
+  // 초안/최종안(336)
+  stage: "draft" | "final";
+  draftSentAt: string | null;
+  sendHistory: SendHistoryEntry[];
 }
 
 /** 총괄 견적서 시트 생성 기준 — 허가 대상 사업장 4개 이상 (사용자 확정) */
@@ -559,5 +570,8 @@ export interface QuotationRow {
   version?: number;
   revisionReason?: string | null;
   prevTotalAmount?: number | null;
+  // 초안/최종안·송부 이력(336)
+  docStage?: "draft" | "final";
+  sendHistory?: SendHistoryEntry[];
   createdAt: string;
 }

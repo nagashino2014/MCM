@@ -5,6 +5,8 @@
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { lockSentDraft } from "@/lib/approval/draft-lock";
+import { docStageOf, parseSendHistory, type SendHistoryEntry } from "@/lib/approval/doc-stage";
 import {
   QUOTE_FORM_ID,
   QUOTE_RULE_PREFIX,
@@ -112,6 +114,8 @@ function mapRow(r: Record<string, unknown>): QuotationRow {
     version: r.version != null ? Number(r.version) : 1,
     revisionReason: r.revision_reason != null ? String(r.revision_reason) : null,
     prevTotalAmount: r.prev_total_amount != null ? Number(r.prev_total_amount) : null,
+    docStage: r.doc_stage === "final" ? "final" : "draft",
+    sendHistory: parseSendHistory(r.send_history),
     createdAt: String(r.created_at ?? ""),
   };
 }
@@ -119,6 +123,8 @@ function mapRow(r: Record<string, unknown>): QuotationRow {
 // ── 버전 관리(재견적, 269) ──
 
 const QUOTE_GROUP_WHERE = `d.form_id = $1 AND (d.doc_id = $2 OR d.field_values->>'quote_root_doc_id' = $2)`;
+/** 번호가 확정된 버전 = 상신했거나 초안을 송부한 버전(336 — 초안은 결재 없이 송부한다) */
+const QUOTE_LOCKED = `(d.status <> 'draft' OR d.field_values ? 'draft_sent_at')`;
 
 /** 아무 버전의 doc_id → 그 용역 건의 원본 doc_id. 견적 문서가 아니면 null */
 export async function resolveQuoteRootDocId(docId: string): Promise<string | null> {
@@ -131,7 +137,7 @@ export async function resolveQuoteRootDocId(docId: string): Promise<string | nul
 }
 
 /**
- * 저장 시 버전 확정 — 같은 용역 건에서 이미 상신된 버전(draft 제외)의 최대값 + 1.
+ * 저장 시 버전 확정 — 같은 용역 건에서 이미 상신했거나 송부한 버전의 최대값 + 1.
  * 원본은 암묵적으로 1. 임시저장마다 재계산하므로 상신 시점의 값이 곧 확정 버전이 된다(기안 = 자동 버전업).
  */
 export async function resolveQuoteVersion(txn: PgDatabase, rootDocId: string, excludeDocId: string): Promise<number> {
@@ -139,22 +145,22 @@ export async function resolveQuoteVersion(txn: PgDatabase, rootDocId: string, ex
     await txn.exec(
       `SELECT COALESCE(MAX(COALESCE((d.field_values->>'quote_version')::int, 1)), 1) AS v
          FROM approval_docs d
-        WHERE ${QUOTE_GROUP_WHERE} AND d.doc_id <> $3 AND d.status <> 'draft'`,
+        WHERE ${QUOTE_GROUP_WHERE} AND d.doc_id <> $3 AND ${QUOTE_LOCKED}`,
       [QUOTE_FORM_ID, rootDocId, excludeDocId]
     )
   );
   return Number(rows[0]?.v ?? 1) + 1;
 }
 
-/** 용역 건의 상신된 전 버전 목록(버전 오름차순). 발송 시각·견적번호는 대장(quotations)에서 보강 */
+/** 용역 건의 상신·송부된 전 버전 목록(버전 오름차순). 발송 시각·견적번호는 대장(quotations)에서 보강 */
 export async function listQuoteRevisions(rootDocId: string): Promise<QuoteRevisionItem[]> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT d.doc_id, d.doc_no, d.status, d.submitted_at, d.drafter_name, d.field_values,
-              q.sent_at, q.issue_date, q.total_amount
+              q.sent_at, q.issue_date, q.total_amount, q.send_history
          FROM approval_docs d LEFT JOIN quotations q ON q.doc_id = d.doc_id
-        WHERE ${QUOTE_GROUP_WHERE} AND d.status <> 'draft'`,
+        WHERE ${QUOTE_GROUP_WHERE} AND ${QUOTE_LOCKED}`,
       [QUOTE_FORM_ID, rootDocId]
     )
   );
@@ -179,6 +185,9 @@ export async function listQuoteRevisions(rootDocId: string): Promise<QuoteRevisi
       totalAmount: Math.round(total),
       prevTotalAmount: v.prev_total_amount != null ? Number(v.prev_total_amount) : null,
       revisionReason: v.revision_reason ?? null,
+      stage: docStageOf(v as Record<string, unknown>),
+      draftSentAt: v.draft_sent_at ?? null,
+      sendHistory: parseSendHistory(r.send_history),
     } satisfies QuoteRevisionItem;
   });
   return items.sort((a, b) => a.version - b.version || (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
@@ -192,7 +201,8 @@ function validUntilOf(issueDate: string): string {
 }
 
 /**
- * 최종 승인 시 발송 대장 등록(actOnDoc 트랜잭션 내 — 가벼운 upsert 만).
+ * 최종 승인 시 발송 대장 등록(actOnDoc 트랜잭션 내 — 가벼운 upsert 만). 초안 송부(336) 직전에도 같은 함수로
+ * 대장을 만든다(결재 없이 보내는 초안도 산출물·송부 이력을 대장에 남긴다).
  * 견적 양식 문서가 아니면 no-op. 이미 발송 완료(sent)면 상태를 되돌리지 않는다.
  * 사업장 라인(quotation_sites) 스냅샷도 여기서 적재한다(재승인 시 갱신).
  */
@@ -223,10 +233,11 @@ export async function markQuotePendingOnApproval(txn: PgDatabase, docId: string)
       `INSERT INTO quotations
          (quote_id, doc_id, quote_no, year, title, service_type, service_subtype, recipients, cc_refs,
           drafter_name, issue_date, valid_until, total_amount, send_mode, situation, send_status, sales_project_id, created_at, updated_at,
-          root_doc_id, version, revision_reason, prev_total_amount)
+          root_doc_id, version, revision_reason, prev_total_amount, doc_stage)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15::jsonb, 'pending', $16, $17, $17,
-               $18, $19, $20, $21)
+               $18, $19, $20, $21, $22)
        ON CONFLICT (doc_id) DO UPDATE SET
+         doc_stage = EXCLUDED.doc_stage,
          root_doc_id = EXCLUDED.root_doc_id,
          version = EXCLUDED.version,
          revision_reason = EXCLUDED.revision_reason,
@@ -268,6 +279,7 @@ export async function markQuotePendingOnApproval(txn: PgDatabase, docId: string)
         Number(values.quote_version ?? 1) || 1,
         values.revision_reason ?? null,
         values.prev_total_amount != null ? Math.round(Number(values.prev_total_amount)) : null,
+        docStageOf(values as Record<string, unknown>),
       ]
     )
   );
@@ -295,7 +307,8 @@ export async function markQuotePendingOnApproval(txn: PgDatabase, docId: string)
   }
 }
 
-/** 생성/발송 선점 — pending|failed → generating. 0행이면 이미 진행 중(중복 실행 가드). */
+/** 생성/발송 선점 — pending|failed|generated|sent → generating. 0행이면 이미 진행 중(중복 실행 가드).
+ *  sent 포함 = 재발송(2026-11-03: 종전엔 발송 완료 건의 [재발송]이 조용히 건너뛰었다). */
 export async function claimQuoteSend(docId: string): Promise<QuotationRow | null> {
   let row: QuotationRow | null = null;
   await withDbWrite(async (txn) => {
@@ -303,7 +316,7 @@ export async function claimQuoteSend(docId: string): Promise<QuotationRow | null
       await txn.exec(
         `UPDATE quotations
             SET send_status = 'generating', send_attempts = send_attempts + 1, send_error = NULL, updated_at = $2
-          WHERE doc_id = $1 AND send_status IN ('pending', 'failed', 'generated')
+          WHERE doc_id = $1 AND send_status IN ('pending', 'failed', 'generated', 'sent')
           RETURNING *`,
         [docId, new Date().toISOString()]
       )
@@ -330,7 +343,14 @@ export async function setQuoteArtifacts(docId: string, xlsxKey: string | null, p
  */
 export async function finishQuoteSend(
   docId: string,
-  result: { ok: boolean; mode: "mail" | "direct"; error?: string | null; messageId?: string | null }
+  result: {
+    ok: boolean;
+    mode: "mail" | "direct";
+    error?: string | null;
+    messageId?: string | null;
+    /** 성공 시 송부 이력 1건(336) — sentAt 은 여기서 찍는다 */
+    history?: Omit<SendHistoryEntry, "sentAt">;
+  }
 ): Promise<void> {
   const now = new Date().toISOString();
   await withDbWrite(async (txn) => {
@@ -347,6 +367,14 @@ export async function finishQuoteSend(
         `UPDATE quotations SET send_status = 'sent', sent_at = $2, sent_message_id = $3, send_error = NULL, updated_at = $2 WHERE doc_id = $1`,
         [docId, now, result.messageId ?? null]
       );
+    }
+    if (result.ok && result.history) {
+      await txn.run(`UPDATE quotations SET send_history = send_history || jsonb_build_array($2::jsonb) WHERE doc_id = $1`, [
+        docId,
+        JSON.stringify({ sentAt: now, ...result.history }),
+      ]);
+      // 초안 송부 성공 → 그 버전을 잠근다(수정은 재견적으로). 승인 문서(최종안)는 no-op.
+      await lockSentDraft(txn, docId, now);
     }
   });
 }

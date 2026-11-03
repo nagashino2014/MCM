@@ -15,7 +15,8 @@ export async function GET() {
   }
 }
 
-// PUT: 발신자 분류 지정/해제 — body: { sender, categoryId } (categoryId=null 이면 해제). 지정 시 받은편지함 기존 메일에 소급.
+// PUT: 발신자 분류 지정/해제 — body: { sender, categoryId } (categoryId=null 이면 해제). 지정 시 받은편지함 기존 메일 전부에 소급,
+//      해제 시 규칙이 옮긴 메일을 원래 분류로 되돌린다(마이그 337). 응답 { applied, reverted }.
 export async function PUT(req: NextRequest) {
   try {
     const ctx = await requireSession();

@@ -11,6 +11,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendPush } from "@/lib/notify/push-expo";
 import { MAIL_DOMAIN, ensureMailbox, getSystemFolderId } from "@/lib/mail/mailbox";
 import { cleanSnippet } from "@/lib/mail/mime";
+import { applySenderRuleToNewMail } from "@/lib/mail/sender-rules";
 import { recordTodoNotifications } from "./inbox";
 import { boardAvgOn } from "./snapshots";
 import { isDeptLeadOrExec } from "./visibility";
@@ -243,6 +244,8 @@ async function deliverInternalMail(userId: string, name: string, subject: string
     );
     stored = true;
   });
+  // 보낸 사람 [메일 분류 지정] 규칙이 있으면 그 분류로(마이그 305·337).
+  if (stored) await applySenderRuleToNewMail(mailbox.mailboxId, msgId, `noreply@${MAIL_DOMAIN}`);
   return stored;
 }
 

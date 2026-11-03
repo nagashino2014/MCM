@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { ensureMailbox, getSystemFolderId } from "@/lib/mail/mailbox";
+import { applySenderRuleToNewMail } from "@/lib/mail/sender-rules";
 import { postDirectSharedRecordInTransaction, type ChatSharedRecord } from "@/lib/chat/queries";
 import { sendPush } from "@/lib/notify/push-expo";
 import { assertBriefingCapability, assertBriefingDocumentOwner } from "./briefing-access";
@@ -164,6 +165,7 @@ async function dispatchBriefingShare(requestId: string, actorId: string, options
         if (mailbox.status !== "active") throw fail("사내 메일함이 비활성 상태입니다.", 409);
         inbox = { mailboxId: mailbox.mailboxId, address: mailbox.address, folderId: await getSystemFolderId(mailbox.mailboxId, "inbox") };
       }
+      let storedFrom: string | null | undefined;
       await withDbWrite(async tx => {
         const lease = rowsToObjects(await tx.exec("SELECT delivery_id FROM intel_briefing_share_deliveries WHERE delivery_id=$1 AND lease_token=$2 FOR UPDATE", [deliveryId, token]));
         if (!lease.length) return;
@@ -181,6 +183,7 @@ async function dispatchBriefingShare(requestId: string, actorId: string, options
             VALUES($1,$2,'in',$3,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$10) ON CONFLICT(mailbox_id,rfc_message_id) DO NOTHING`, [messageId, inbox.mailboxId, `<${deliveryId}@internal.mcm>`, sender?.email ?? null, JSON.stringify([{ address: inbox.address }]), `[AI 브리핑 공유] ${title}`, text.slice(0, 200), text, html, now]);
           await tx.run("INSERT INTO mail_message_state(message_id,folder_id,mailbox_id,is_read,created_at) VALUES($1,$2,$3,0,$4) ON CONFLICT(message_id,folder_id) DO NOTHING", [messageId, inbox.folderId, inbox.mailboxId, now]);
           providerId = messageId;
+          storedFrom = sender?.email != null ? String(sender.email) : null;
         } else if (claimed.channel === "messenger") {
           if (recipientId === actorId) { await finish(tx, deliveryId, token, "skipped", "메신저 공유는 본인 외 수신자에게 보냅니다.", null); return; }
           const message = await postDirectSharedRecordInTransaction(tx, actorId, recipientId, `AI 브리핑 공유: ${title}\n${href}`, record);
@@ -188,6 +191,8 @@ async function dispatchBriefingShare(requestId: string, actorId: string, options
         }
         await finish(tx, deliveryId, token, "sent", null, providerId);
       });
+      // 보낸 사람 [메일 분류 지정] 규칙이 있으면 그 분류로(마이그 305·337).
+      if (inbox && storedFrom) await applySenderRuleToNewMail(inbox.mailboxId, `briefingshare_${deliveryId}`, storedFrom);
     } catch (error) {
       const status = externalAttempted ? "unknown" : [403, 404].includes(Number((error as { status?: number }).status)) ? "skipped" : "failed";
       await withDbWrite(tx => finish(tx, deliveryId, token, status, error instanceof Error ? error.message : String(error), null));

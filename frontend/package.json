@@ -14,6 +14,7 @@
     "test:todo": "node scripts/test-todo.mjs",
     "test:manual": "node scripts/test-manual.mjs",
     "test:mail-gateway": "node scripts/test-mail-gateway.mjs",
+    "test:mail-sender-rules": "node scripts/test-mail-sender-rules.mjs",
     "test:catalog-studio": "node scripts/test-catalog-studio.mjs",
     "test:sales-board": "node scripts/test-sales-board.mjs",
     "test:intel-projects": "node scripts/test-project-intelligence.mjs",

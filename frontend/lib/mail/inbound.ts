@@ -21,7 +21,7 @@ import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-do
 import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
 import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
-import { senderCategoryFor } from "@/lib/mail/sender-rules";
+import { applySenderRuleToNewMail, senderCategoryFor } from "@/lib/mail/sender-rules";
 
 let sqs: InstanceType<typeof SQSClient> | null = null;
 let cachedQueueUrl: string | null = null;
@@ -302,6 +302,8 @@ async function storeForMailbox(
       [msgId, inboxFolderId, target.mailboxId, categoryId, now]
     );
   });
+  // 규칙이 붙인 라벨 기록(337) — [자동 분류 해제] 때 미분류로 되돌린다.
+  if (categoryId) await applySenderRuleToNewMail(target.mailboxId, msgId, from[0]?.address ?? null);
   return true;
 }
 

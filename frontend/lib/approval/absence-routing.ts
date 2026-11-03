@@ -2,6 +2,7 @@
 // 판정 순서: ① 직접 등록한 부재(approval_absences, 겹치면 최근 등록분) → ② 승인된 휴가신청서 + 기본 대결자(approval_delegates).
 // 대결자도 부재(대결)면 최대 MAX_DELEGATE_HOPS 단계까지 따라가고, 순환·대결자 부재(건너뛰기)·자기 결재는 unresolved 로 돌려
 // 원결재자를 유지한다(관리자 알림은 호출부). 최종 결재자 단계 제외(D-2)는 호출부(activateOrder, DA-1) 책임이다.
+// 예외(335): 고정 결재선 단계에 지정 대결자가 있으면 최종 단계라도 부재 시 그 사람에게 넘긴다(findLineProxyAbsence).
 
 import { rowsToObjects, type PgDatabase } from "@/lib/db";
 
@@ -132,6 +133,33 @@ export async function findAbsenceHit(db: PgDatabase, userId: string, date: strin
   const delegateUserId = String(leave[0].delegate_user_id);
   if (!delegateUserId || delegateUserId === userId) return null;
   return { mode: "delegate", delegateUserId, absenceId: null, source: "leave", allowSelfAct: true };
+}
+
+/**
+ * 고정 결재선 지정 대결자(335)용 부재 여부 — 직접 등록 부재(대결·건너뛰기 무관) 또는 승인된 휴가.
+ * 휴가는 기본 대결자(approval_delegates) 지정과 무관하게 인정한다(대결자는 양식 템플릿이 정한다).
+ * 부재가 아니면 null, 부재면 근거 부재 id(휴가 연동은 null).
+ */
+export async function findLineProxyAbsence(db: PgDatabase, userId: string, date: string): Promise<{ absenceId: string | null } | null> {
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT absence_id FROM approval_absences
+        WHERE user_id = $1 AND canceled_at IS NULL AND start_date <= $2 AND end_date >= $2
+        ORDER BY created_at DESC LIMIT 1`,
+      [userId, date]
+    )
+  );
+  if (rows.length) return { absenceId: String(rows[0].absence_id) };
+  const leave = rowsToObjects(
+    await db.exec(
+      `SELECT 1 FROM approval_docs ld
+        WHERE ld.form_id = 'frm-leave-request' AND ld.status = 'approved' AND ld.drafter_user_id = $1
+          AND ld.field_values->'leave_period'->>'from' <= $2 AND ld.field_values->'leave_period'->>'to' >= $2
+        LIMIT 1`,
+      [userId, date]
+    )
+  );
+  return leave.length ? { absenceId: null } : null;
 }
 
 /** 결재자 부재 해석(DB) — 날짜 기본값은 KST 오늘. */

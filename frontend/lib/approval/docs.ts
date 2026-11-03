@@ -17,7 +17,9 @@ import { assignManualNoticeNo } from "@/lib/notice/store";
 import { assignManualQuoteNo, markQuotePendingOnApproval, resolveQuoteVersion } from "@/lib/quote/store";
 import { markAgreementApproved } from "@/lib/agreement/store";
 import { runFormActionsForDoc } from "@/lib/approval/actions";
-import { kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
+import { findLineProxyAbsence, kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
+import { fixedLineReady, resolveFixedLine } from "@/lib/approval/fixed-line";
+import { describeFixedLine, sameLineAssignees } from "@/lib/approval/fixed-line-rules";
 import { userHeadDeptIds, userPostDeptIds } from "@/lib/org/posts";
 
 /*
@@ -36,6 +38,9 @@ export interface ApprovalLineStepInput {
   assigneePosition?: string;
   /** 같은 order 로 묶을 병렬 합의 그룹 — 미지정 시 순차(단계마다 order 증가) */
   parallelGroup?: number;
+  /** 고정 결재선(335) 역할·지정 대결자 — saveDoc 이 규칙 해석 결과로만 채운다(요청 값은 무시). */
+  lineRole?: string;
+  lineProxyUserIds?: string[];
 }
 
 /** 참조/열람 지정(AX-P0) — ref·view 모두 상신 후 열람·참조/열람 문서함 노출이 같고 표기만 다르다(access.ts). */
@@ -325,7 +330,23 @@ export async function saveDoc(params: {
   const docId = params.docId ?? "adoc-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);
   const now = new Date().toISOString();
   const drafter = await loadDrafterSnapshot(params.actorUserId);
-  const snaps = await loadAssigneeSnapshots(params.line.map((s) => s.assigneeUserId));
+  // 고정 결재선(335) — 강제 양식이면 요청 결재선 대신 규칙 해석 결과를 쓴다(웹·모바일·자동 기안 공통 경로).
+  // 해석 실패(부서장 공석 등)면 결재선을 비워 임시저장만 허용하고, 상신에서 이유와 함께 막는다.
+  const fixed = await resolveFixedLine({ formId: params.formId, drafterUserId: params.actorUserId, fieldValues: params.fieldValues ?? {} });
+  const line: ApprovalLineStepInput[] = fixed.enforced
+    ? fixed.ok
+      ? fixed.steps.map((s) => ({
+          stepType: "approve" as const,
+          assigneeUserId: s.userId,
+          assigneeName: s.name,
+          assigneePosition: s.position ?? undefined,
+          lineRole: s.role,
+          lineProxyUserIds: s.proxies.map((p) => p.userId),
+        }))
+      : []
+    : params.line.map(({ lineRole: _role, lineProxyUserIds: _proxies, ...s }) => s);
+  const lineColumns = await fixedLineReady();
+  const snaps = await loadAssigneeSnapshots(line.map((s) => s.assigneeUserId));
   const watchers = (params.watchers ?? []).filter((w) => w.userId && (w.kind === "ref" || w.kind === "view"));
 
   const fieldValues: Record<string, unknown> = { ...(params.fieldValues ?? {}) };
@@ -375,27 +396,38 @@ export async function saveDoc(params: {
     await txn.run(`DELETE FROM approval_steps WHERE doc_id = $1`, [docId]);
     let order = 0;
     let lastGroup: number | null = null;
-    for (const s of params.line) {
+    for (const s of line) {
       const isParallel = s.parallelGroup != null && s.parallelGroup === lastGroup;
       if (!isParallel) order += 1;
       lastGroup = s.parallelGroup ?? null;
       const snap = snaps.get(s.assigneeUserId);
-      await txn.run(
-        `INSERT INTO approval_steps
-           (step_id, doc_id, step_order, step_type, mode, assignee_user_id, assignee_name, assignee_position, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'waiting', $9)`,
-        [
-          "astp-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
-          docId,
-          order,
-          s.stepType,
-          s.parallelGroup != null ? "parallel" : "seq",
-          s.assigneeUserId,
-          s.assigneeName ?? snap?.name ?? null,
-          s.assigneePosition ?? snap?.position ?? null,
-          now,
-        ]
-      );
+      const base = [
+        "astp-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
+        docId,
+        order,
+        s.stepType,
+        s.parallelGroup != null ? "parallel" : "seq",
+        s.assigneeUserId,
+        s.assigneeName ?? snap?.name ?? null,
+        s.assigneePosition ?? snap?.position ?? null,
+        now,
+      ];
+      if (lineColumns) {
+        await txn.run(
+          `INSERT INTO approval_steps
+             (step_id, doc_id, step_order, step_type, mode, assignee_user_id, assignee_name, assignee_position, status, created_at,
+              line_role, line_proxy_user_ids)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'waiting', $9, $10, $11::text[])`,
+          [...base, s.lineRole ?? null, s.lineProxyUserIds?.length ? s.lineProxyUserIds : null]
+        );
+      } else {
+        await txn.run(
+          `INSERT INTO approval_steps
+             (step_id, doc_id, step_order, step_type, mode, assignee_user_id, assignee_name, assignee_position, status, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'waiting', $9)`,
+          base
+        );
+      }
     }
     // 참조/열람자 교체 저장(중복 제거)
     await txn.run(`DELETE FROM approval_watchers WHERE doc_id = $1`, [docId]);
@@ -581,6 +613,41 @@ async function routeStepForAbsence(
   return "none";
 }
 
+/**
+ * 고정 결재선 지정 대결자(335) — 최종 단계라도 담당자가 부재(부재 등록·승인 휴가)면 지정 대결자에게 넘긴다(D-2 예외,
+ * 2026-11-03 확정: 관리자 양식 4종 → 이도희). 대결자도 부재·기안자 본인이면 다음 대결자, 없으면 원결재자 유지.
+ * 이미 대결 중인 단계는 건드리지 않는다. 처리자를 바꿨으면 true.
+ */
+async function routeStepToLineProxy(
+  txn: PgDatabase,
+  step: { stepId: string; assigneeUserId: string; delegatedFrom: string | null; proxyUserIds: string[] },
+  drafterUserId: string,
+  now: string
+): Promise<boolean> {
+  if (!step.proxyUserIds.length || step.delegatedFrom) return false;
+  const today = kstToday();
+  const absence = await findLineProxyAbsence(txn, step.assigneeUserId, today);
+  if (!absence) return false;
+  for (const proxyId of step.proxyUserIds) {
+    if (proxyId === drafterUserId || proxyId === step.assigneeUserId) continue;
+    if (await findLineProxyAbsence(txn, proxyId, today)) continue;
+    const snap = await loadAssigneeSnapshots([proxyId]);
+    await txn.run(
+      `UPDATE approval_steps
+          SET status = 'pending', activated_at = $6, assignee_user_id = $2, assignee_name = $3, assignee_position = $4,
+              delegated_from = $5, absence_id = $7
+        WHERE step_id = $1`,
+      [step.stepId, proxyId, snap.get(proxyId)?.name ?? null, snap.get(proxyId)?.position ?? null, step.assigneeUserId, now, absence.absenceId]
+    );
+    return true;
+  }
+  return false;
+}
+
+function proxyIdsOf(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.map(String).filter(Boolean) : [];
+}
+
 /** 해당 order 에 처리할 단계가 남지 않았으면(전원 건너뛰기) 다음 order — 최종 순번은 건너뛰지 않으므로 반드시 멈춘다. */
 async function nextOrderIfCleared(txn: PgDatabase, docId: string, order: number): Promise<number | null> {
   const rows = rowsToObjects(
@@ -601,16 +668,29 @@ async function nextOrderIfCleared(txn: PgDatabase, docId: string, order: number)
 async function activateOrder(txn: PgDatabase, docId: string, order: number): Promise<void> {
   const now = new Date().toISOString();
   const { drafterUserId, finalOrder } = await loadRoutingMeta(txn, docId);
+  const proxyColumn = (await fixedLineReady(txn)) ? ", line_proxy_user_ids" : "";
   let current: number | null = order;
   while (current != null) {
     const steps = rowsToObjects(
       await txn.exec(
-        `SELECT step_id, assignee_user_id, delegated_from FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status = 'waiting'`,
+        `SELECT step_id, assignee_user_id, delegated_from${proxyColumn} FROM approval_steps WHERE doc_id = $1 AND step_order = $2 AND status = 'waiting'`,
         [docId, current]
       )
     );
     for (const s of steps) {
       if (current >= finalOrder) {
+        const routed = await routeStepToLineProxy(
+          txn,
+          {
+            stepId: String(s.step_id),
+            assigneeUserId: String(s.assignee_user_id),
+            delegatedFrom: s.delegated_from != null ? String(s.delegated_from) : null,
+            proxyUserIds: proxyIdsOf(s.line_proxy_user_ids),
+          },
+          drafterUserId,
+          now
+        );
+        if (routed) continue;
         await txn.run(`UPDATE approval_steps SET status = 'pending', activated_at = $2 WHERE step_id = $1`, [String(s.step_id), now]);
         continue;
       }
@@ -653,16 +733,27 @@ async function restoreDelegatedAssignees(txn: PgDatabase, docId: string): Promis
 export async function rerouteAbsentPendingSteps(opts: { userId?: string } = {}): Promise<{ rerouted: number }> {
   const db = await getDb();
   const today = kstToday();
+  // 고정 결재선 지정 대결자(335)가 있는 최종 단계도 후보 — 휴가는 기본 대결자 없이도 인정(findLineProxyAbsence).
+  const proxyReady = await fixedLineReady(db);
+  const proxyCond = proxyReady
+    ? `OR (s.line_proxy_user_ids IS NOT NULL AND s.delegated_from IS NULL
+           AND (EXISTS (SELECT 1 FROM approval_absences a
+                         WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $1 AND a.end_date >= $1)
+                OR EXISTS (SELECT 1 FROM approval_docs ld
+                            WHERE ld.form_id = 'frm-leave-request' AND ld.status = 'approved' AND ld.drafter_user_id = s.assignee_user_id
+                              AND ld.field_values->'leave_period'->>'from' <= $1 AND ld.field_values->'leave_period'->>'to' >= $1)))`
+    : "";
   const cands = rowsToObjects(
     await db.exec(
       `SELECT s.step_id, s.doc_id
          FROM approval_steps s JOIN approval_docs d ON d.doc_id = s.doc_id
         WHERE s.status = 'pending' AND d.status = 'in_progress'
           AND ($2::text IS NULL OR s.assignee_user_id = $2)
-          AND s.step_order < (SELECT max(x.step_order) FROM approval_steps x WHERE x.doc_id = s.doc_id)
-          AND (EXISTS (SELECT 1 FROM approval_absences a
-                        WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $1 AND a.end_date >= $1)
-               OR EXISTS (SELECT 1 FROM approval_delegates ad WHERE ad.user_id = s.assignee_user_id AND ad.enabled = 1))`,
+          AND ((s.step_order < (SELECT max(x.step_order) FROM approval_steps x WHERE x.doc_id = s.doc_id)
+                AND (EXISTS (SELECT 1 FROM approval_absences a
+                              WHERE a.user_id = s.assignee_user_id AND a.canceled_at IS NULL AND a.start_date <= $1 AND a.end_date >= $1)
+                     OR EXISTS (SELECT 1 FROM approval_delegates ad WHERE ad.user_id = s.assignee_user_id AND ad.enabled = 1)))
+               ${proxyCond})`,
       [today, opts.userId ?? null]
     )
   );
@@ -675,7 +766,8 @@ export async function rerouteAbsentPendingSteps(opts: { userId?: string } = {}):
       // 같은 문서의 결재 처리(actOnDoc)와 직렬화 — 단계 전체 잠금 후 상태 재확인.
       const rows = rowsToObjects(
         await txn.exec(
-          `SELECT step_id, step_order, assignee_user_id, delegated_from, status FROM approval_steps WHERE doc_id = $1 FOR UPDATE`,
+          `SELECT step_id, step_order, assignee_user_id, delegated_from, status${proxyReady ? ", line_proxy_user_ids" : ""}
+             FROM approval_steps WHERE doc_id = $1 FOR UPDATE`,
           [docId]
         )
       );
@@ -683,8 +775,25 @@ export async function rerouteAbsentPendingSteps(opts: { userId?: string } = {}):
       if (!step || String(step.status) !== "pending") return;
       const { drafterUserId, finalOrder } = await loadRoutingMeta(txn, docId);
       const order = Number(step.step_order);
-      if (order >= finalOrder) return;
       const now = new Date().toISOString();
+      if (order >= finalOrder) {
+        // 최종 단계 — 지정 대결자(335)가 있을 때만(D-2 예외)
+        const routed = await routeStepToLineProxy(
+          txn,
+          {
+            stepId,
+            assigneeUserId: String(step.assignee_user_id),
+            delegatedFrom: step.delegated_from != null ? String(step.delegated_from) : null,
+            proxyUserIds: proxyIdsOf(step.line_proxy_user_ids),
+          },
+          drafterUserId,
+          now
+        );
+        if (!routed) return;
+        changed = true;
+        await txn.run(`UPDATE approval_docs SET updated_at = $2 WHERE doc_id = $1`, [docId, now]);
+        return;
+      }
       const result = await routeStepForAbsence(
         txn,
         {
@@ -729,6 +838,26 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     const doc = rows[0];
     if (String(doc.drafter_user_id) !== actorUserId) throw new Error("본인 기안만 상신할 수 있습니다.");
     if (!["draft", "rejected"].includes(String(doc.status))) throw new Error("작성중/반려 문서만 상신할 수 있습니다.");
+    // 고정 결재선(335) — 상신 시점에 다시 해석해 저장된 결재선과 대조한다(보직 변경·API 직접 호출 대비).
+    const fixed = await resolveFixedLine({
+      formId: String(doc.form_id),
+      drafterUserId: actorUserId,
+      fieldValues: (doc.field_values as Record<string, unknown> | null) ?? {},
+      db: txn,
+    });
+    if (fixed.enforced) {
+      if (!fixed.ok) throw userError(`상신할 수 없습니다 — ${fixed.errors.join(" / ")}`);
+      const stored = rowsToObjects(
+        await txn.exec(
+          `SELECT COALESCE(delegated_from, assignee_user_id) AS uid, step_type FROM approval_steps WHERE doc_id = $1 ORDER BY step_order, created_at`,
+          [docId]
+        )
+      );
+      const storedLine = stored.map((r) => ({ assigneeUserId: String(r.uid), stepType: String(r.step_type) }));
+      if (!sameLineAssignees(storedLine, fixed.steps)) {
+        throw userError(`결재선이 양식 규칙과 다릅니다. 다시 저장한 뒤 상신하세요 — 정해진 결재선: ${describeFixedLine(fixed.steps)}`);
+      }
+    }
     const stepCount = rowsToObjects(await txn.exec(`SELECT count(*) AS c FROM approval_steps WHERE doc_id = $1`, [docId]));
     if (Number(stepCount[0]?.c ?? 0) === 0) throw new Error("결재선에 결재자를 1명 이상 지정하세요.");
     // 표 필수 열(지출 내역의 지출 목적 등) — 기안 화면과 같은 규칙으로 서버에서도 막는다.

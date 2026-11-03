@@ -8,7 +8,7 @@
 // 발신(문서 명의, 보통 대표이사)과 기안자(로그인 사용자 = 결재 문서의 기안자)는 별개다. 결재선 패널은 공문 작성 화면 이식
 // (회귀 방지 위해 원본은 수정하지 않음 — 공문 화면이 ApprovalDraftBoard 를 이식한 것과 같은 관행).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BookmarkPlus, Eye, FileDown, FileText, GripVertical, Megaphone, Plus, Save, Send, Stamp, Trash2, Users, X } from "lucide-react";
@@ -17,6 +17,7 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
@@ -28,6 +29,8 @@ import {
   DEFAULT_NOTICE_RECIPIENT, DEFAULT_NOTICE_SENDER, NOTICE_FORM_ID, formatNoticeNo, parseNoticeNo, type NoticeFieldValues,
 } from "@/lib/notice/types";
 import "@/components/cdash/cdash.css";
+
+const FIXED_LINE_VALUES: Record<string, unknown> = {};
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -65,7 +68,11 @@ export function ApprovalNoticeBoard() {
   const [stampOn, setStampOn] = useState(true);
   // 시행일 — 비우면 결재 완료일(미승인 미리보기는 오늘)
   const [issueDate, setIssueDate] = useState("");
-  const [line, setLine] = useState<LineStep[]>([]);
+  const [freeLine, setLine] = useState<LineStep[]>([]);
+  // 고정 결재선(335) — 강제 양식이면 결재선은 규칙 해석 결과로 고정된다(편집 불가, 서버도 같은 규칙으로 강제).
+  const fixedLine = useFixedLine(NOTICE_FORM_ID, FIXED_LINE_VALUES);
+  const fixedSteps = useMemo(() => fixedLineToSteps(fixedLine.result), [fixedLine.result]);
+  const line = fixedLine.locked ? fixedSteps : freeLine;
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
@@ -352,13 +359,15 @@ export function ApprovalNoticeBoard() {
     if (!recipientText.trim()) return "수신을 입력하세요(예: 전 임직원).";
     const html = editorRef.current?.innerHTML ?? "";
     if (!html.replace(/<[^>]+>|&nbsp;/g, "").trim()) return "본문을 작성하세요.";
+    const fixedBlock = fixedLineBlockMessage(fixedLine.result);
+    if (fixedBlock) return fixedBlock;
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     if (manualOn && !noLocked) {
       if (!manualNo || parseNoticeNo(manualNo) == null) return "내부고시 번호를 숫자로 입력하세요(예: 1010).";
       if (manualCheck && !manualCheck.available) return `이미 사용 중인 번호입니다 — ${manualCheck.usedBy}`;
     }
     return null;
-  }, [subject, recipientText, line, manualOn, noLocked, manualNo, manualCheck]);
+  }, [subject, recipientText, line, manualOn, noLocked, manualNo, manualCheck, fixedLine.result]);
 
   /** 첨부 업로드 — DnD/파일 선택 공용. 전자결재 첨부 공통 규약(field_values.file_attachments). */
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
@@ -765,6 +774,10 @@ export function ApprovalNoticeBoard() {
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
 
+            {fixedLine.result?.enforced ? (
+              <FixedLineList result={fixedLine.result} />
+            ) : (
+            <>
             {presets.length > 0 && (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
@@ -813,6 +826,8 @@ export function ApprovalNoticeBoard() {
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
+            </>
+            )}
 
             {/* 참조/열람자 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">

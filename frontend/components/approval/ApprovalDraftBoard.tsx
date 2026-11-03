@@ -14,6 +14,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
@@ -145,7 +146,11 @@ export function ApprovalDraftBoard() {
   const [title, setTitle] = useState("");
   const [urgent, setUrgent] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>({});
-  const [line, setLine] = useState<LineStep[]>([]);
+  const [freeLine, setLine] = useState<LineStep[]>([]);
+  // 고정 결재선(335) — 강제 양식이면 결재선은 규칙 해석 결과로 고정된다(편집 불가, 서버도 같은 규칙으로 강제).
+  const fixedLine = useFixedLine(form?.formId, values);
+  const fixedSteps = useMemo(() => fixedLineToSteps(fixedLine.result), [fixedLine.result]);
+  const line = fixedLine.locked ? fixedSteps : freeLine;
   // 결재자 부재(진행 중·30일 내 예정) — 결재선 행 배지(DA-2). 키 = userId.
   const [lineAbsences, setLineAbsences] = useState<Record<string, LineAbsence>>({});
   const lineUserKey = line.map((s) => s.assigneeUserId).join(",");
@@ -1233,12 +1238,17 @@ export function ApprovalDraftBoard() {
       alert(`필수 항목을 입력하세요: ${missing.map((f) => f.label).join(", ")}`);
       return false;
     }
+    const fixedBlock = fixedLineBlockMessage(fixedLine.result);
+    if (fixedBlock) {
+      alert(fixedBlock);
+      return false;
+    }
     if (line.length === 0) {
       alert("결재선에 결재자를 1명 이상 추가하세요.");
       return false;
     }
     return true;
-  }, [form, values, line]);
+  }, [form, values, line, fixedLine.result]);
 
   const send = useCallback(
     async (action: "save" | "submit") => {
@@ -1674,6 +1684,15 @@ export function ApprovalDraftBoard() {
               <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
             </h3>
 
+            {fixedLine.result?.enforced ? (
+              <FixedLineList
+                result={fixedLine.result}
+                renderBadge={(s, _i, isFinal) =>
+                  lineAbsences[s.userId] && !s.proxies.length ? <LineAbsenceBadge absence={lineAbsences[s.userId]} isFinal={isFinal} /> : null
+                }
+              />
+            ) : (
+            <>
             {/* 나의 결재선 프리셋 */}
             {presets.some((p) => p.steps.length > 0) && (
               <div className="flex flex-wrap items-center gap-1">
@@ -1738,6 +1757,8 @@ export function ApprovalDraftBoard() {
                 <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
               </button>
             </div>
+            </>
+            )}
             <p className="text-[11px] cd-text-faint">
               결재자가 부재 중이면 본인이 정해 둔 대결자에게 넘어가거나 다음 결재자로 건너뜁니다(대결·부재 표기). 최종 결재자는 복귀 후 직접 결재해야 결재가 끝납니다.
             </p>

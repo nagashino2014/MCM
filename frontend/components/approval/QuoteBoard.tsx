@@ -21,6 +21,7 @@ import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
+import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
@@ -69,6 +70,8 @@ import "@/components/cdash/cdash.css";
 
 // 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응 — 사용자 확정). 기준 관리 화면과 공유.
 const SERVICE_OPTIONS = QUOTE_SERVICE_OPTIONS;
+
+const FIXED_LINE_VALUES: Record<string, unknown> = {};
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -223,7 +226,12 @@ export function QuoteBoard() {
   const [situation, setSituation] = useState<SituationEntry[]>([]);
   const [rateData, setRateData] = useState<RateSetData | null>(null);
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({}); // 사업장별 제출 견적가 입력값
-  const [line, setLine] = useState<LineStep[]>([]);
+  const [freeLine, setLine] = useState<LineStep[]>([]);
+  // 고정 결재선(335) — 강제 양식이면 결재선은 규칙 해석 결과로 고정된다(편집 불가, 서버도 같은 규칙으로 강제).
+  // 계약서·견적서의 최종안/초안 구분(doc_stage)은 계약서 버전 관리 작업이 이 값 객체에 싣는다.
+  const fixedLine = useFixedLine(QUOTE_FORM_ID, FIXED_LINE_VALUES);
+  const fixedSteps = useMemo(() => fixedLineToSteps(fixedLine.result), [fixedLine.result]);
+  const line = fixedLine.locked ? fixedSteps : freeLine;
   const [watchers, setWatchers] = useState<Watcher[]>([]);
   const [presets, setPresets] = useState<LinePreset[]>([]);
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
@@ -986,9 +994,11 @@ export function QuoteBoard() {
           return `[${s.siteLabel}] 합계(${won(s.amounts.sum)}원)가 제약을 벗어났습니다 — 견적가보다 크고 초과폭이 ${won(check.cap)}원 미만이어야 합니다.`;
       }
     }
+    const fixedBlock = fixedLineBlockMessage(fixedLine.result);
+    if (fixedBlock) return fixedBlock;
     if (line.length === 0) return "결재선에 결재자를 1명 이상 추가하세요.";
     return null;
-  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line]);
+  }, [subject, issueDate, manualOn, noLocked, manualNo, manualCheck, revision, revisionReason, recipients, ccRefs, sendMode, sites, line, fixedLine.result]);
 
   const openPreview = useCallback(async () => {
     setBusy("preview");
@@ -1926,6 +1936,10 @@ export function QuoteBoard() {
                 <Users className="w-4 h-4 cd-text-primary" /> 결재선
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">기안 → 위에서 아래 순서</span>
               </h3>
+              {fixedLine.result?.enforced ? (
+                <FixedLineList result={fixedLine.result} />
+              ) : (
+              <>
               {presets.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
@@ -1964,6 +1978,8 @@ export function QuoteBoard() {
                   <BookmarkPlus className="w-3.5 h-3.5" /> 프리셋 저장
                 </button>
               </div>
+              </>
+              )}
               <div className="border-t cd-border-c pt-3 flex flex-col gap-1.5">
                 <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                   <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람

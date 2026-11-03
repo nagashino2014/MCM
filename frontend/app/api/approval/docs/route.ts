@@ -8,6 +8,8 @@ import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
 import { syncCardExpenseTags } from "@/lib/finance/expense-card-tags";
 import { assertExpenseRowSources } from "@/lib/approval/expense-sources-check";
+import { resolveFixedLine } from "@/lib/approval/fixed-line";
+import { describeFixedLine, sameLineAssignees } from "@/lib/approval/fixed-line-rules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +71,17 @@ export async function POST(req: NextRequest) {
     // 어긋난 번호를 맞추기 위한 예외 수단이다(일반 사용자는 종전대로 자동 채번).
     if (body.manualDocNo !== undefined && !(await hasPermission(ctx.userId, "approval.manage"))) {
       return NextResponse.json({ error: "문서번호를 직접 지정할 권한이 없습니다." }, { status: 403 });
+    }
+    // 고정 결재선(335) — 상신 요청의 결재선이 양식 규칙과 다르면 거부한다. 빈 결재선은 저장 시 서버가 채운다
+    // (결재선 잠금을 아직 모르는 모바일 앱 호환). 해석 실패(부서장 공석 등)는 저장 후 submitDoc 이 이유와 함께 막는다.
+    if (body.action === "submit" && Array.isArray(body.line) && body.line.length) {
+      const fixed = await resolveFixedLine({ formId: body.formId, drafterUserId: ctx.userId, fieldValues: body.fieldValues ?? {} });
+      if (fixed.enforced && fixed.ok && !sameLineAssignees(body.line, fixed.steps)) {
+        return NextResponse.json(
+          { error: `이 양식의 결재선은 규칙으로 정해집니다. 화면을 새로 고친 뒤 다시 상신하세요 — 정해진 결재선: ${describeFixedLine(fixed.steps)}` },
+          { status: 400 }
+        );
+      }
     }
     // 지출 표 행 출처(G-8) — 직접 입력 행·다른 문서에 쓰인 증빙·원본과 다른 금액을 저장 전에 거부한다.
     await assertExpenseRowSources({

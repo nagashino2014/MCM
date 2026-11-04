@@ -116,16 +116,14 @@ export function TodoRow({
     );
 
   return (
-    <Animated.View style={faded}>
-      {/* 박스화(2026-11-04 사용자 결정) — 구분선 목록 대신 항목마다 흰 박스(반경 10·card-border·1단 그림자), 왼쪽 안쪽 보드 색 띠. */}
+    <Animated.View style={[faded, { marginHorizontal: 16, marginBottom: 8, borderRadius: 10 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}>
+      {/* 박스화(2026-11-04 사용자 결정) — 항목마다 흰 박스(반경 10·card-border·1단 그림자). 왼쪽 가장자리 전체가 보드 색(full 띠) —
+          그림자는 바깥 Animated.View 가, 모서리 잘라내기(overflow hidden)는 안쪽이 맡는다(한 View 에 두면 그림자가 잘린다). */}
       <Pressable
         onPress={onPress}
-        style={[
-          { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 8, borderColor: c.cardBorder, borderWidth: 1 },
-          dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
-        ]}
-        className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
-        <BoardStripe color={item.boardColor} />
+        style={{ minHeight: 72, paddingVertical: 12, paddingLeft: 18, paddingRight: 8, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}
+        className="flex-row items-start gap-3 bg-cd-card active:opacity-80">
+        <BoardStripe color={item.boardColor} full />
         <View style={{ marginTop: 1 }}>
           <CheckCircle done={done} status={item.status} onPress={onToggle} disabled={!item.canEdit} />
         </View>
@@ -225,15 +223,13 @@ export function ApprovalEventRow({
       : event.projectName
     : null;
   return (
+    <View style={[{ marginHorizontal: 16, marginBottom: 8, borderRadius: 10 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}>
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={[
-        { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1 },
-        dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
-      ]}
-      className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
-      <BoardStripe color={color} />
+      style={{ minHeight: 72, paddingVertical: 12, paddingLeft: 18, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}
+      className="flex-row items-start gap-3 bg-cd-card active:opacity-80">
+      <BoardStripe color={color} full />
       <View style={{ marginTop: -1 }}>
         <KindCircle kind={event.kind} color={color} />
       </View>
@@ -263,6 +259,7 @@ export function ApprovalEventRow({
         </Text>
       ) : null}
     </Pressable>
+    </View>
   );
 }
 
@@ -289,15 +286,13 @@ export function PendingApprovalRow({
     .filter(Boolean)
     .join(' · ');
   return (
+    <View style={[{ marginHorizontal: 16, marginBottom: 8, borderRadius: 10 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}>
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={[
-        { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1 },
-        dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
-      ]}
-      className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
-      <BoardStripe color={color} />
+      style={{ minHeight: 72, paddingVertical: 12, paddingLeft: 18, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}
+      className="flex-row items-start gap-3 bg-cd-card active:opacity-80">
+      <BoardStripe color={color} full />
       <View style={{ marginTop: -1 }}>
         <KindCircle kind="pending" color={color} />
       </View>
@@ -332,5 +327,6 @@ export function PendingApprovalRow({
         </Text>
       ) : null}
     </Pressable>
+    </View>
   );
 }

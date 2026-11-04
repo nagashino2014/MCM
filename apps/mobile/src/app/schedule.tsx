@@ -218,6 +218,7 @@ export default function ScheduleScreen() {
                 onPress={() => toggleTag(t)}
                 dot={tint.dot}
                 tint={{ bg: tint.bg, text: tint.text }}
+                tintBorder="always"
                 disabled={t === 'sales' && !!data?.salesDenied}
               />
             );

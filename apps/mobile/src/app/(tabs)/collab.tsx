@@ -32,7 +32,8 @@ export default function CollabScreen() {
   const isBoard = tab === 'company' || tab === 'dept';
 
   return (
-    <Screen scroll={false} padded={false}>
+    // 탭 네비게이터 안이지만 더보기에서 들어오는 화면이라 다른 화면과 같은 헤더(뒤로 = 전체 메뉴)를 직접 그린다(2026-11-04).
+    <Screen title="공지·주소록" back onBack={() => router.replace('/(tabs)/more')} scroll={false} padded={false} inTab>
       <View className="flex-row items-center border-b border-cd-border bg-cd-card">
         <View className="flex-1">
           <SegmentedTabs items={ITEMS} value={tab} onChange={setTab} />

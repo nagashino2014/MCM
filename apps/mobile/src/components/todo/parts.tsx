@@ -187,14 +187,41 @@ export function CheckCircle({
   );
 }
 
-/** 좌측 색 띠(§19-1) — 행·카드 왼쪽 4px, 상세 헤더 5px. 부모는 position relative + overflow hidden. */
-export function BoardStripe({ color, width = 4, inset = 10 }: { color: string; width?: number; inset?: number }) {
+/**
+ * 좌측 색 띠(§19-1) — 행·카드 왼쪽. `full` 이면 박스의 왼쪽 가장자리를 **위아래 라운딩까지 전부** 채운다(2026-11-04 사용자 결정:
+ * 가는 띠는 모바일에서 눈에 안 띈다 — 부모가 overflow hidden + borderRadius 여야 모서리를 따라 잘린다). 아니면 옛 모양(안쪽 띠).
+ */
+export function BoardStripe({ color, width = 4, inset = 10, full }: { color: string; width?: number; inset?: number; full?: boolean }) {
+  const { c, dark } = useTheme();
   return (
     <View
       pointerEvents="none"
-      style={{ position: 'absolute', left: 0, top: inset, bottom: inset, width, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: color }}
+      style={
+        full
+          ? { position: 'absolute', left: 0, top: 0, bottom: 0, width: width === 4 ? 6 : width, backgroundColor: stripeColor(color, c, dark) }
+          : { position: 'absolute', left: 0, top: inset, bottom: inset, width, borderTopRightRadius: 3, borderBottomRightRadius: 3, backgroundColor: color }
+      }
     />
   );
+}
+
+/**
+ * 띠 색 보정 — 개인 보드(프로젝트 없음)의 기본색 gray(#e9ebf0)는 너무 옅어 흰 박스·그라데이션 바탕과 구분되지 않는다
+ * (11-04 사용자 지적). 사용자 결정: **진한 색이 아니라 연한 계통 그대로, 약간만 진하게** → 저채도·고명도 색이면 ink-muted 를
+ * 1/4 섞는다(#e9ebf0 → 약 #c4c8d4). 채도 있는 보드 색·다크 모드는 그대로. 웹 상수는 건드리지 않는다(사본 규칙 — 띠에만 보정).
+ */
+export function stripeColor(hex: string | null | undefined, c: { muted: string }, dark: boolean): string {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return c.muted;
+  if (dark) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const sat = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+  if (sat >= 0.12 || lum <= 0.8) return hex;
+  const m = parseInt(c.muted.replace('#', ''), 16);
+  const mix = (x: number, y: number) => Math.round(x * 0.75 + y * 0.25);
+  const out = (mix(r, (m >> 16) & 255) << 16) | (mix(g, (m >> 8) & 255) << 8) | mix(b, m & 255);
+  return `#${out.toString(16).padStart(6, '0')}`;
 }
 
 /** 맥락 줄 앞 색 점(8px) — 보드 색. */

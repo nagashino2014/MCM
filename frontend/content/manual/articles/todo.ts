@@ -110,6 +110,7 @@ export const TODO_ARTICLES: ManualArticle[] = [
             "하위 작업: 단계별로 나누고, 계약 공정표 단계로 하위 작업을 한 번에 만들 수 있습니다.",
             "의존 관계: 선행 작업을 연결하면 타임라인에 화살표로 보이고, 선행이 늦으면 빨갛게 표시됩니다.",
             "알림·반복: 시각 알림, 미루기, 반복 규칙을 정합니다. 아침 요약·주간 요약 메일은 할 일 설정에서 켭니다.",
+            "할 일 설정의 ‘결재 일정 표시’를 끄면 내 할 일·홈 오늘 할 일·모바일 앱에서 결재 일정(출장·교육·휴가 등 회색 행)과 결재 대기 행이 함께 숨겨집니다.",
             "업무 보고: 계약과 연결된 할 일은 업무추진계획 보고 초안을 바로 만들 수 있고, 보고를 제출하면 하위 작업 진척이 갱신됩니다.",
             "댓글은 Ctrl+Enter로 보냅니다.",
           ] },
@@ -118,6 +119,6 @@ export const TODO_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["할 일", "투두", "todo", "칸반", "보드", "빠른 입력", "공유", "담당", "완료 조건", "반복", "타임라인"],
     sources: ["components/todo/TodoBoardPage.tsx", "components/todo/QuickAddBar.tsx", "components/todo/TodoDetailDrawer.tsx", "components/todo/CompleteConfirmModal.tsx", "lib/todo/types.ts", "components/layout/TopBar.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-03",
   },
 ];

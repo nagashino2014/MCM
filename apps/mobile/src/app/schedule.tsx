@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Badge, Button, Card, CardRow, EmptyState, PullRefresh, ScreenHeader, Sheet, SkeletonList } from '@/components/ui';
+import { Badge, Button, Card, CardRow, EmptyState, FilterPill, PullRefresh, ScreenHeader, Sheet, SkeletonList } from '@/components/ui';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
@@ -30,10 +30,10 @@ import {
 } from '@/lib/calendar/types';
 
 /**
- * 일정 — 데스크탑 `/calendar`(G6-C)의 모바일 이식.
+ * 일정 — 데스크탑 `/calendar`(G6-C)의 모바일 이식. KESI Frosted 규격(2026-11-03).
  *
- * 태그 칩(복수 토글·서버 저장) → 월 캘린더(카테고리 색 바) → 카테고리별 목록.
- * 웹은 캘린더 바를 누르면 하단 카드로 스크롤·강조하지만, 모바일에서는 **상세 시트**를 연다
+ * 태그 칩(가로 스크롤 FilterPill 8개, 복수 토글·서버 저장) → 월 캘린더(카테고리 색의 **연속 일정 바**, 할 일만 휴일에서 끊김)
+ * → 카테고리별 목록 카드. 웹은 캘린더 바를 누르면 하단 카드로 스크롤·강조하지만, 모바일에서는 **상세 시트**를 연다
  * (좁은 화면에서 스크롤 점프는 맥락을 잃는다 — 축소 대신 재배치 원칙).
  *
  * 새 일정 등록은 **기안으로 보낸다** — 출장·교육·휴가는 전부 결재 문서가 원천이고,
@@ -142,6 +142,8 @@ export default function ScheduleScreen() {
         title: e.title,
         color: tagTint(e.tag).pillBg,
         ink: tagTint(e.tag).text,
+        // 할 일은 근무일 단위라 토·일·공휴일에서 바를 끊는다. 출장·휴가 등은 휴일을 포함해 잇는다.
+        breakOnHoliday: e.tag === 'todo',
       })),
     [events]
   );
@@ -173,57 +175,34 @@ export default function ScheduleScreen() {
     }`;
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader
         title="일정"
         subtitle={`${cur.y}년 ${cur.m + 1}월`}
         back
         variant="sub"
-        right={
-          <Pressable
-            onPress={() => setRefsOpen(true)}
-            hitSlop={8}
-            className="flex-row items-center gap-1.5 rounded-full border border-cd-border bg-cd-card px-[13px] py-2 active:opacity-70">
-            <Ionicons name="people-outline" size={14} color={c.muted} />
-            <Text className="text-[12px] font-semibold" style={{ color: c.muted }}>
-              참조 지정
-            </Text>
-          </Pressable>
-        }
+        right={<Button label="참조 지정" variant="ghost" size="sm" icon="people-outline" onPress={() => setRefsOpen(true)} />}
       />
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} tintColor={c.faint} />}>
-        {/* 필터 칩 — 선택은 카테고리 컬러 틴트, 비선택은 흰 배경(핸드오프 3a).
-            회의·면접(219) 추가로 7개가 되어 폰트·패딩을 줄여 375 폭에서도 1행에 맞춘다(사용자 요청).
-            정렬은 오른쪽 + 고정 간격 — 양쪽 정렬(justify-between)은 넓은 화면(데스크탑 위젯)에서
-            칩 사이가 벌어져 보기 나쁘다(사용자 피드백 09-11). */}
-        <View className="flex-row flex-nowrap justify-end gap-[5px]">
+        {/* 필터 칩 — 공용 FilterPill(선택 = 카테고리 틴트 바탕 + 컬러 글자 + 색 점). 8개('할 일' 추가)를 **한 줄, 캘린더 폭에 균등**하게
+            (sm 28px·글자 11, 2026-11-04 사용자 결정 — 스크롤·줄바꿈 없이 원래대로 1행). 영업 권한 없음(salesDenied)은 disabled. */}
+        <View className="flex-row gap-1">
           {TAG_ORDER.map((t) => {
-            const on = tags.includes(t);
-            const off = t === 'sales' && data?.salesDenied;
             const tint = TAG_TINT[t];
             return (
-              <Pressable
+              <FilterPill
                 key={t}
-                onPress={() => !off && toggleTag(t)}
-                // 권한 없음(off)은 반투명 대신 불투명 감쇠색(2026-08-10 규칙).
-                className="flex-row items-center gap-[3px] rounded-full px-[8px] py-[6px] active:opacity-70"
-                style={{
-                  backgroundColor: on ? tint.bg : c.card,
-                  borderWidth: on ? 0 : 1,
-                  borderColor: c.border,
-                }}>
-                <View
-                  style={{ backgroundColor: off ? '#c3c8da' : tint.dot }}
-                  className="h-[6px] w-[6px] rounded-full"
-                />
-                <Text
-                  className={`text-[11px] ${on ? 'font-bold' : 'font-semibold'}`}
-                  style={{ color: off ? '#c3c8da' : on ? tint.text : '#9aa0b8' }}>
-                  {CALENDAR_TAG_LABELS[t]}
-                </Text>
-              </Pressable>
+                size="sm"
+                grow
+                label={CALENDAR_TAG_LABELS[t]}
+                active={tags.includes(t)}
+                onPress={() => toggleTag(t)}
+                dot={tint.dot}
+                tint={{ bg: tint.bg, text: tint.text }}
+                disabled={t === 'sales' && !!data?.salesDenied}
+              />
             );
           })}
         </View>
@@ -248,7 +227,7 @@ export default function ScheduleScreen() {
               title={CALENDAR_TAG_LABELS[tag]}
               badge={
                 <View className="rounded-full px-2 py-[2px]" style={{ backgroundColor: c.surface }}>
-                  <Text className="text-[11px] font-bold" style={{ color: c.muted }}>
+                  <Text className="text-[12px] font-medium" style={{ color: c.muted }}>
                     {list.length}
                   </Text>
                 </View>
@@ -308,7 +287,7 @@ export default function ScheduleScreen() {
       {/* 날짜 탭 → 새 일정(기안으로) */}
       <Sheet visible={!!newFor} onClose={() => setNewFor(null)} title={`${newFor ?? ''} 일정 추가`}>
         <View className="gap-1 pb-2">
-          <Text className="pb-1 text-[12.5px] text-cd-faint">
+          <Text className="pb-1 text-[13px] text-cd-muted">
             출장·교육·휴가 일정은 결재 문서에서 만들어집니다. 양식을 고르면 날짜가 채워집니다.
           </Text>
           {SCHEDULE_FORMS.map((f) => (
@@ -319,7 +298,7 @@ export default function ScheduleScreen() {
                 setNewFor(null);
                 router.push({ pathname: '/approval/draft', params: { formId: f.formId, date: date ?? '' } });
               }}
-              className="flex-row items-center gap-2 rounded-xl px-4 py-3 active:opacity-70">
+              className="flex-row items-center gap-2 rounded-lg px-4 py-3 active:opacity-70">
               <Ionicons name="create-outline" size={17} color={c.primary} />
               <Text className="flex-1 text-[15px] text-cd-text">{f.label}</Text>
               <Ionicons name="chevron-forward" size={15} color={c.faint} />
@@ -327,7 +306,7 @@ export default function ScheduleScreen() {
           ))}
           {/* 직접 등록(219) — 회의는 관리자·임원, 면접은 면접 관리자, 미팅은 누구나 */}
           <View className="my-1 h-px bg-cd-border" />
-          <Text className="pb-1 text-[12.5px] text-cd-faint">회의·면접·미팅은 캘린더에 바로 등록됩니다. 참석자에게 알림이 갑니다.</Text>
+          <Text className="pb-1 text-[13px] text-cd-muted">회의·면접·미팅은 캘린더에 바로 등록됩니다. 참석자에게 알림이 갑니다.</Text>
           {ENTRY_ACTIONS.map((a) => {
             const allowed = a.needs ? access[a.needs] : true;
             return (
@@ -339,12 +318,12 @@ export default function ScheduleScreen() {
                   setNewFor(null);
                   router.push({ pathname: '/calendar-entry', params: { kind: a.kind, date: date ?? '' } });
                 }}
-                className="flex-row items-center gap-2 rounded-xl px-4 py-3 active:opacity-70"
+                className="flex-row items-center gap-2 rounded-lg px-4 py-3 active:opacity-70"
                 style={{ opacity: allowed ? 1 : 0.4 }}>
                 <Ionicons name="calendar-outline" size={17} color={c.primary} />
                 <View className="flex-1">
                   <Text className="text-[15px] text-cd-text">{a.label}</Text>
-                  <Text className="text-[11.5px] text-cd-faint">{a.hint}</Text>
+                  <Text className="text-[12px] text-cd-muted">{a.hint}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={15} color={c.faint} />
               </Pressable>
@@ -380,7 +359,7 @@ export default function ScheduleScreen() {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View className="gap-1">
-      <Text className="text-[12px] font-bold text-cd-faint">{label}</Text>
+      <Text className="text-[12px] font-medium text-cd-muted">{label}</Text>
       {children}
     </View>
   );
@@ -442,9 +421,9 @@ function DetailBody({ ev, entry }: { ev: CalendarEvent; entry: CalendarEntry | n
           <View className="flex-row flex-wrap gap-1.5">
             {people.map((p) => (
               <View key={p.employeeId} className="rounded-full px-2.5 py-1" style={{ backgroundColor: c.primarySoft }}>
-                <Text className="text-[12.5px] font-bold" style={{ color: c.primary }}>
+                <Text className="text-[13px] font-medium" style={{ color: c.primaryStrong }}>
                   {p.name}
-                  {p.positionName ? <Text className="font-medium"> {p.positionName}</Text> : null}
+                  {p.positionName ? <Text className="font-normal"> {p.positionName}</Text> : null}
                 </Text>
               </View>
             ))}
@@ -462,10 +441,10 @@ function DetailBody({ ev, entry }: { ev: CalendarEvent; entry: CalendarEntry | n
                 const r = entry.extra.resume!;
                 void openAttachment(`/api/calendar/entries/${encodeURIComponent(entry.entryId)}/resume?disposition=attachment`, r.fileName).catch(() => {});
               }}
-              className="flex-row items-center gap-2 rounded-xl border border-cd-border bg-cd-card px-3.5 py-2.5 active:opacity-70">
+              className="flex-row items-center gap-2 rounded-lg border border-cd-border bg-cd-card px-3.5 py-2.5 active:opacity-70">
               <Ionicons name="document-attach-outline" size={16} color={c.primary} />
-              <Text className="flex-1 text-[13.5px] font-bold text-cd-text" numberOfLines={1}>{entry.extra.resume.fileName}</Text>
-              <Text className="text-[11.5px] text-cd-faint">열기</Text>
+              <Text className="flex-1 text-[13px] font-medium text-cd-text" numberOfLines={1}>{entry.extra.resume.fileName}</Text>
+              <Text className="text-[12px] text-cd-muted">열기</Text>
             </Pressable>
           ) : (
             <Txt v={entry ? null : '불러오는 중…'} />

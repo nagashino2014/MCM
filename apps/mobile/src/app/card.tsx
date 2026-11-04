@@ -18,6 +18,7 @@ import { File } from 'expo-file-system';
 
 import { CtaGradientFill } from '@/components/ui';
 import { apiFetch, apiJson } from '@/lib/api';
+import { useTheme } from '@/theme/useTheme';
 
 interface CardFields {
   personName: string | null;
@@ -38,12 +39,10 @@ interface FacilityOption {
 }
 type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
-const PRIMARY = '#4A63D8';
-
 // 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   return (
-    <SafeAreaView className="flex-1 items-center justify-center bg-cd-bg px-6">
+    <SafeAreaView className="flex-1 items-center justify-center bg-transparent px-6">
       <Text className="mb-2 text-base font-bold text-cd-error">화면 오류가 발생했습니다</Text>
       <Text className="mb-4 text-center text-xs text-cd-muted">
         {error.name}: {error.message}
@@ -57,6 +56,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 
 export default function CardScreen() {
   const router = useRouter();
+  const { c } = useTheme();
   const [step, setStep] = useState<Step>('pick');
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -304,12 +304,12 @@ export default function CardScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       {/* 자체 헤더 — 화면 내 <Stack.Screen options> 동적 갱신이 iOS에서 헤더 점멸 루프를
           일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다 */}
       <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">
         <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={PRIMARY} />
+          <Ionicons name="chevron-back" size={24} color={c.primary} />
         </Pressable>
         <Text className="text-base font-extrabold text-cd-text">명함 촬영</Text>
       </View>
@@ -349,20 +349,20 @@ export default function CardScreen() {
               <Pressable
                 onPress={() => pick('library')}
                 className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary-light active:opacity-70">
-                <Ionicons name="images" size={20} color={PRIMARY} />
+                <Ionicons name="images" size={20} color={c.primary} />
                 <Text className="text-base font-bold text-primary">앨범에서 선택</Text>
               </Pressable>
             ) : null}
             <Text className="mt-1 text-center text-xs text-cd-faint">
               촬영한 명함은 AI가 자동으로 인식해 담당자 정보로 정리합니다.
             </Text>
-            <Text className="text-center text-[10px] text-cd-faint">v1.1.0</Text>
+            <Text className="text-center text-[11px] text-cd-faint">v1.1.0</Text>
           </View>
         ) : null}
 
         {step === 'parsing' ? (
           <View className="flex-row items-center justify-center gap-2 py-8">
-            <ActivityIndicator color={PRIMARY} />
+            <ActivityIndicator color={c.primary} />
             <Text className="text-sm text-cd-muted">명함을 인식하는 중…</Text>
           </View>
         ) : null}
@@ -374,7 +374,7 @@ export default function CardScreen() {
               <Text className="mb-2 text-xs font-bold text-cd-muted">사업장 선택 *</Text>
               {facility ? (
                 <View className="flex-row items-center gap-2 rounded-xl bg-primary-light px-3 py-2.5">
-                  <Ionicons name="checkmark-circle" size={18} color={PRIMARY} />
+                  <Ionicons name="checkmark-circle" size={18} color={c.primary} />
                   <View className="flex-1">
                     <Text className="text-sm font-bold text-cd-text">
                       {facility.companyName}
@@ -393,7 +393,7 @@ export default function CardScreen() {
                     <TextInput
                       className="flex-1 rounded-xl border border-cd-border px-3 py-2 text-base text-cd-text"
                       placeholder="사업장명 검색"
-                      placeholderTextColor="#9ca3af"
+                      placeholderTextColor={c.faint}
                       value={facilityQuery}
                       onChangeText={setFacilityQuery}
                       onSubmitEditing={() => searchFacilities(facilityQuery)}
@@ -402,7 +402,7 @@ export default function CardScreen() {
                     <Pressable
                       onPress={() => searchFacilities(facilityQuery)}
                       className="items-center justify-center rounded-xl bg-primary-light px-4 active:opacity-70">
-                      <Ionicons name="search" size={18} color={PRIMARY} />
+                      <Ionicons name="search" size={18} color={c.primary} />
                     </Pressable>
                   </View>
                   {facilityOptions.map((f) => (
@@ -451,7 +451,7 @@ export default function CardScreen() {
                     <Pressable
                       onPress={() => setQuickOpen(true)}
                       className="mt-1 flex-row items-center justify-center gap-1 rounded-xl bg-primary-light py-2.5 active:opacity-70">
-                      <Ionicons name="add" size={18} color={PRIMARY} />
+                      <Ionicons name="add" size={18} color={c.primary} />
                       <Text className="font-bold text-primary">신규 사업장 간이 등록</Text>
                     </Pressable>
                   )}
@@ -475,7 +475,7 @@ export default function CardScreen() {
                 onPress={reset}
                 disabled={step === 'saving'}
                 className="items-center justify-center rounded-xl border border-cd-border px-4 py-3 active:opacity-70">
-                <Ionicons name="refresh" size={18} color="#6b7280" />
+                <Ionicons name="refresh" size={18} color={c.muted} />
               </Pressable>
               <Pressable
                 onPress={save}
@@ -497,7 +497,7 @@ export default function CardScreen() {
         {step === 'done' ? (
           <View className="items-center gap-3 rounded-2xl border border-cd-border bg-cd-card p-6">
             <View className="rounded-full bg-cd-success-soft p-3">
-              <Ionicons name="checkmark" size={28} color="#16a34a" />
+              <Ionicons name="checkmark" size={28} color={c.success} />
             </View>
             <Text className="text-center text-sm font-bold text-cd-text">
               {form.personName} 님을 {facility?.companyName}에{' '}

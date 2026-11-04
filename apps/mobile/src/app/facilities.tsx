@@ -159,7 +159,7 @@ export default function FacilitiesScreen() {
   const industryOptions = stats.data?.industries ?? [];
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader title="사업장" subtitle={active ? `${total.toLocaleString()}곳` : undefined} back />
       <View className="px-[18px] pb-2">
         <SearchBar
@@ -246,7 +246,7 @@ export default function FacilitiesScreen() {
                       onPress={() => setFilters({ ...EMPTY, industries: [it.id] })}
                       style={{ width: '31.5%' }}
                       className="gap-0.5 rounded-xl border border-cd-border px-2.5 py-2.5 active:opacity-70">
-                      <Text numberOfLines={2} className="text-[11.5px] font-semibold text-cd-body">
+                      <Text numberOfLines={2} className="text-[12px] font-semibold text-cd-body">
                         {it.label}
                       </Text>
                       <Text className="text-[13px] font-extrabold text-cd-text">{it.count}</Text>
@@ -339,7 +339,7 @@ function FilterChip({ label, on, onPress }: { label: string; on: boolean; onPres
       onPress={onPress}
       className="h-[34px] flex-row items-center gap-1 rounded-full border px-3 active:opacity-70"
       style={{ borderColor: on ? c.primary : c.border, backgroundColor: on ? c.primarySoft : c.card }}>
-      <Text className="text-[12.5px] font-bold" style={{ color: on ? c.primary : c.muted }}>
+      <Text className="text-[13px] font-bold" style={{ color: on ? c.primary : c.muted }}>
         {label}
       </Text>
       <Ionicons name="chevron-down" size={13} color={on ? c.primary : c.faint} />

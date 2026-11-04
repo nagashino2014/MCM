@@ -66,19 +66,19 @@ export default function SurveysScreen() {
               {s.respondedAt ? <Badge label="응답 완료" tone="success" /> : <Badge label="참여 가능" tone="primary" />}
             </View>
             {!!s.description && (
-              <Text className="mt-1.5 text-[12.5px] text-cd-muted" numberOfLines={2}>
+              <Text className="mt-1.5 text-[13px] text-cd-muted" numberOfLines={2}>
                 {s.description}
               </Text>
             )}
             <View className="mt-2.5 flex-row items-center gap-2 border-t border-cd-border pt-2">
               <Ionicons name="calendar-outline" size={13} color={c.faint} />
-              <Text className="text-[11.5px] text-cd-faint">{period(s)}</Text>
-              <Text className="text-[11.5px] text-cd-faint">·</Text>
-              <Text className="text-[11.5px] text-cd-faint">{s.questionCount ?? 0}개 문항</Text>
+              <Text className="text-[12px] text-cd-faint">{period(s)}</Text>
+              <Text className="text-[12px] text-cd-faint">·</Text>
+              <Text className="text-[12px] text-cd-faint">{s.questionCount ?? 0}개 문항</Text>
               {s.isAnonymous && (
                 <>
-                  <Text className="text-[11.5px] text-cd-faint">·</Text>
-                  <Text className="text-[11.5px] text-cd-faint">익명</Text>
+                  <Text className="text-[12px] text-cd-faint">·</Text>
+                  <Text className="text-[12px] text-cd-faint">익명</Text>
                 </>
               )}
             </View>

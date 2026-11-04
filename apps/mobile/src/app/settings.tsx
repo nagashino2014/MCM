@@ -52,20 +52,11 @@ function SettingRow({
       className={`flex-row items-center gap-3 py-2.5 ${first ? '' : 'border-t border-cd-grid-line'} ${
         onPress ? 'active:opacity-70' : ''
       }`}>
-      <View
-        className="h-[38px] w-[38px] items-center justify-center rounded-[13px] border border-cd-border bg-cd-card"
-        style={{
-          shadowColor: '#3C4696',
-          shadowOpacity: 0.1,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 2,
-        }}>
-        <Ionicons name={icon} size={18} color={tone} />
-      </View>
+      {/* 아이콘은 글자색(색 배경·그림자 없음 — Frosted). danger 만 상태색. */}
+      <Ionicons name={icon} size={20} color={danger ? c.error : c.muted} />
       <View className="flex-1">
-        <Text className={`text-[14px] font-bold ${danger ? 'text-cd-error' : 'text-cd-text'}`}>{title}</Text>
-        {subtitle ? <Text className="mt-0.5 text-[11.5px] leading-4 text-cd-faint">{subtitle}</Text> : null}
+        <Text className={`text-[15px] font-medium ${danger ? 'text-cd-error' : 'text-cd-text'}`}>{title}</Text>
+        {subtitle ? <Text className="mt-0.5 text-[12px] leading-[18px] text-cd-muted">{subtitle}</Text> : null}
       </View>
       {value ? <Text className="text-[13px] text-cd-muted">{value}</Text> : null}
       {right}
@@ -109,18 +100,18 @@ export default function SettingsScreen() {
 
   return (
     <Screen scroll padded={false}>
-      <View className="gap-3.5 px-[18px] py-4">
+      <View className="gap-4 px-4 py-4">
         {/* 계정 — 맨 위에 프로필 요약 */}
         <Card>
-          <View className="flex-row items-center gap-3 pb-1">
-            <View className="h-[46px] w-[46px] items-center justify-center rounded-full bg-cd-primary-soft">
-              <Text className="text-[16px] font-extrabold text-cd-primary">
+          <View className="flex-row items-center gap-3">
+            <View className="h-12 w-12 items-center justify-center rounded-full bg-cd-primary-soft">
+              <Text className="text-[16px] font-semibold text-cd-primary-strong">
                 {(user?.name ?? '?').slice(-2)}
               </Text>
             </View>
             <View className="flex-1">
-              <Text className="text-[16px] font-extrabold text-cd-text">{user?.name ?? '사용자'}</Text>
-              <Text className="mt-0.5 text-[12px] text-cd-faint">{user?.email ?? '-'}</Text>
+              <Text className="text-[16px] font-semibold text-cd-text">{user?.name ?? '사용자'}</Text>
+              <Text className="mt-0.5 text-[12px] text-cd-muted">{user?.email ?? '-'}</Text>
             </View>
           </View>
         </Card>

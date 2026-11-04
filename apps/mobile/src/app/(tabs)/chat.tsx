@@ -1,3 +1,4 @@
+import { TAB_BAR_INSET, useTabBarFabBottom } from '@/components/ui/GlassTabBar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -59,6 +60,7 @@ function fmtRoomTime(iso: string | null): string {
 
 // 대화 — 목록(15초 폴링) + 세그먼트(전체/개인/그룹) + 새 대화(조직도). MSG-P0.
 export default function ChatScreen() {
+  const fabBottom = useTabBarFabBottom();
   const { c } = useTheme();
   const toast = useToast();
   const [rooms, setRooms] = useState<ChatRoom[] | null>(null);
@@ -205,7 +207,7 @@ export default function ChatScreen() {
           data={list}
           keyExtractor={(r) => String(r.roomId)}
           refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => load(true)} />}
-          contentContainerStyle={{ paddingBottom: 90 }}
+          contentContainerStyle={{ paddingBottom: 72 + TAB_BAR_INSET }}
           ListEmptyComponent={
             hits.length ? null : (
               <EmptyState
@@ -250,7 +252,7 @@ export default function ChatScreen() {
       )}
 
       {/* 새 대화 FAB */}
-      <View className="absolute bottom-6 right-5">
+      <View className="absolute right-5" style={{ bottom: fabBottom }}>
         <GradientIconButton icon="add" diameter={54} onPress={() => setPickerOpen(true)} />
       </View>
 
@@ -293,7 +295,7 @@ function RoomRow({ r }: { r: ChatRoom }) {
       )}
       <View className="flex-1">
         <View className="flex-row items-center gap-1.5">
-          <Text numberOfLines={1} className="max-w-[70%] text-[14.5px] font-bold text-cd-text">
+          <Text numberOfLines={1} className="max-w-[70%] text-[15px] font-bold text-cd-text">
             {r.name}
           </Text>
           {r.roomType === 'group' ? (
@@ -301,7 +303,7 @@ function RoomRow({ r }: { r: ChatRoom }) {
           ) : null}
           {r.muted ? <Ionicons name="notifications-off-outline" size={13} color={c.faint} /> : null}
         </View>
-        <Text numberOfLines={1} className="mt-0.5 text-[12.5px] text-cd-muted">
+        <Text numberOfLines={1} className="mt-0.5 text-[13px] text-cd-muted">
           {r.lastMessagePreview ?? '메시지가 없습니다'}
         </Text>
       </View>

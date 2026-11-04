@@ -6,15 +6,18 @@ import { useRouter } from "expo-router";
 
 import { useTheme } from "@/theme/useTheme";
 import { PullRefresh } from "./PullRefresh";
+import { TAB_BAR_INSET } from "./GlassTabBar";
 
 /**
- * 모든 화면의 공통 껍데기 — 배경·안전영역·스크롤·당겨서 새로고침(+옵션 자체 헤더).
+ * 모든 화면의 공통 껍데기 — 바탕(canvas)·안전영역·스크롤·당겨서 새로고침(+옵션 자체 헤더).
  *
  * 헤더 규칙(★ 어기면 iOS 에서 헤더 점멸 버그가 재발한다):
  * - 탭/스택 화면의 헤더는 **네비게이터 레이아웃(`_layout.tsx`)에서 정적으로** 정의한다.
  * - 화면 파일 안에서 `<Stack.Screen options={{...}} />` 를 렌더하지 않는다.
  *   과거 명함 화면에서 인라인 options 가 헤더 갱신 루프를 만들어 터치까지 막혔다(실측).
  * - 네비게이터 헤더를 끈 화면(모달성)만 이 컴포넌트의 `title` 로 자체 헤더를 그린다.
+ *
+ * 자체 헤더(Frosted): 카드 면 + 아래 hairline, 제목 17/600 ink, 부제 12 ink-muted, 뒤로가기 44 터치.
  */
 export interface ScreenProps {
   title?: string;
@@ -32,6 +35,8 @@ export interface ScreenProps {
   onRefresh?: () => void;
   /** 본문 좌우 여백(기본 적용). */
   padded?: boolean;
+  /** 하단 탭 화면 — 글라스 플로팅 탭 바 뒤로 콘텐츠가 이어지도록 스크롤 하단 여백을 TAB_BAR_INSET 만큼 더한다. */
+  inTab?: boolean;
 }
 
 export function Screen({
@@ -45,37 +50,38 @@ export function Screen({
   refreshing,
   onRefresh,
   padded = true,
+  inTab,
 }: ScreenProps) {
   const { c } = useTheme();
   const router = useRouter();
 
-  const body = padded ? <View className="gap-3 p-4">{children}</View> : children;
+  // 카드 사이 16(모바일 폭에서의 space-5 대응), 바깥 여백 16.
+  const body = padded ? <View className="gap-4 p-4">{children}</View> : children;
 
   return (
     // 네비게이터 헤더가 있는 화면은 상단 안전영역을 헤더가 이미 처리한다(이중 여백 방지).
-    // style 의 배경색은 보험 — 토큰(CSS 변수) 해석이 어긋나도 화면이 투명해지지 않게 한다.
-    <SafeAreaView
-      edges={title ? ["top"] : []}
-      style={{ backgroundColor: c.bg }}
-      className="flex-1 bg-cd-bg">
+    // 바탕은 **투명** — 셸 그라데이션(ThemeProvider 의 ShellBackground)이 비친다(2026-11-04).
+    <SafeAreaView edges={title ? ["top"] : []} className="flex-1 bg-transparent">
       {title ? (
-        <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2.5">
+        <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2">
           {back ? (
             <Pressable
               onPress={() => (onBack ? onBack() : router.back())}
               hitSlop={10}
-              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60">
+              accessibilityRole="button"
+              accessibilityLabel="뒤로"
+              className="h-11 w-11 items-center justify-center rounded-lg active:bg-cd-surface">
               <Ionicons name="chevron-back" size={24} color={c.text} />
             </Pressable>
           ) : (
             <View className="w-2" />
           )}
           <View className="flex-1">
-            <Text numberOfLines={1} className="text-[17px] font-extrabold text-cd-text">
+            <Text numberOfLines={1} className="text-[17px] font-semibold text-cd-text">
               {title}
             </Text>
             {subtitle ? (
-              <Text numberOfLines={1} className="text-[12px] text-cd-faint">
+              <Text numberOfLines={1} className="text-[12px] text-cd-muted">
                 {subtitle}
               </Text>
             ) : null}
@@ -87,7 +93,7 @@ export function Screen({
       {scroll ? (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 32 }}
+          contentContainerStyle={{ paddingBottom: inTab ? 32 + TAB_BAR_INSET : 32 }}
           keyboardShouldPersistTaps="handled"
           // 2026-10-20: iOS 키보드가 입력란을 가리지 않도록 — 키보드 높이만큼 인셋 + 포커스된 입력란을 키보드 위로 스크롤(RN 0.86)
           automaticallyAdjustKeyboardInsets

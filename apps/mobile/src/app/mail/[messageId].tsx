@@ -150,7 +150,7 @@ export default function MailViewerScreen() {
     && briefing.href === `/sales/rag?briefingId=${briefing.briefingId}` ? routeForLink(briefing.href) : null;
 
   return (
-    <SafeAreaView edges={[]} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={[]} className="flex-1 bg-transparent">
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>
         {/* 제목 + 발신자 */}
         <View className="gap-2 rounded-card border border-cd-border bg-cd-card p-4">

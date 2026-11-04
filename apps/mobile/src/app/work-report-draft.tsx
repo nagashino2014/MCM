@@ -162,7 +162,7 @@ export default function WorkReportDraftScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader
         title={editingId ? '보고 수정' : '보고 작성'}
         subtitle={params.subjectTitle || params.contractTitle || '업무보고'}
@@ -222,7 +222,7 @@ export default function WorkReportDraftScreen() {
             onChangeText={setPlanText}
             placeholder="다음 기간 계획을 작성하세요"
           />
-          <Text className="text-[11.5px] leading-4 text-cd-faint">
+          <Text className="text-[12px] leading-4 text-cd-faint">
             공정 단계(진행률) 갱신은 웹 업무보고 화면에서 입력합니다 — 모바일 수정 시 기존 공정 입력은 그대로
             유지됩니다.
           </Text>

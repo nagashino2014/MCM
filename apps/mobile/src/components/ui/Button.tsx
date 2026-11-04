@@ -3,27 +3,16 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/theme/useTheme";
 
-import { CTA_FROM, CtaGradientFill } from "./GradientButton";
-
 type Variant = "primary" | "ghost" | "danger" | "soft";
 type Size = "md" | "sm";
 
-// primary 는 단색 채움 대신 CTA 그라데이션(핸드오프 3a)을 깐다 — 배경 클래스 없이 overflow 만 자른다.
-const BOX: Record<Variant, string> = {
-  primary: "overflow-hidden",
-  ghost: "border border-cd-border bg-cd-card",
-  danger: "bg-cd-error",
-  soft: "bg-cd-primary-soft",
-};
-
-const LABEL: Record<Variant, string> = {
-  primary: "text-white",
-  ghost: "text-cd-text",
-  danger: "text-cd-on-error",
-  soft: "text-cd-primary",
-};
-
-/** 공통 버튼 — 터치 타깃 44pt 하한(md), 아이콘·로딩·비활성 지원. */
+/**
+ * 공통 버튼 — KESI Frosted(2026-11-03 모바일 이식).
+ *
+ * primary = 남색 단색 채움(primary-fill) + 한 단계 어두운 1px 테두리(primary-fill-edge) + 흰 글자. 그라데이션·그림자 없음, **화면당 하나**.
+ * ghost(기본 보조) = 카드 바탕 + 테두리 + ink 글자. soft = primary-soft 바탕 + primary-strong 글자(긍정적이지만 주 동작은 아닌 것).
+ * danger = 확인 시트 안에서만. 높이 md 44(터치 하한) · sm 36, 반경 10, 글자 md 15/500 · sm 13/500, 아이콘 글자 앞.
+ */
 export function Button({
   label,
   onPress,
@@ -48,45 +37,41 @@ export function Button({
   // 비활성은 반투명 대신 **불투명한 감쇠색**으로 — 시트·겹침 배경 위에서 반쯤 비쳐 보이는
   // 가시성 문제(2026-08-10 사용자 피드백). 로딩 중에는 원래 모양을 유지한다(진행 표시일 뿐).
   const dim = !!disabled && !loading;
-  const iconColor = dim
-    ? c.faint
+  const look = dim
+    ? { bg: c.surface, border: c.border, fg: c.faint }
     : variant === "primary"
-      ? "#fff" // 그라데이션 위는 흰색 유지 — 다크 보정(2026-10-18)
+      ? { bg: c.primaryFill, border: c.primaryFillEdge, fg: "#ffffff" }
       : variant === "danger"
-        ? c.onError
+        ? { bg: c.error, border: c.error, fg: c.onError }
         : variant === "soft"
-        ? c.primary
-        : c.text;
+          ? { bg: c.primarySoft, border: c.primarySoft, fg: c.primaryStrong }
+          : { bg: c.card, border: c.border, fg: c.text };
 
   return (
     <Pressable
       onPress={off ? undefined : onPress}
       disabled={off}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!off }}
+      style={{ backgroundColor: look.bg, borderColor: look.border, borderWidth: 1, height: size === "md" ? 44 : 36 }}
       className={[
-        "flex-row items-center justify-center gap-1.5 rounded-xl active:opacity-75",
-        size === "md" ? "min-h-[44px] px-4 py-3" : "min-h-[36px] px-3 py-2",
-        dim ? (variant === "ghost" ? "border border-cd-border bg-cd-card" : "bg-cd-surface") : BOX[variant],
+        "flex-row items-center justify-center gap-1.5 rounded-lg active:opacity-80",
+        size === "md" ? "px-4" : "px-3",
         full ? "w-full" : "",
       ].join(" ")}>
-      {variant === "primary" && !dim ? <CtaGradientFill /> : null}
       {loading ? (
-        <ActivityIndicator size="small" color={iconColor} />
+        <ActivityIndicator size="small" color={look.fg} />
       ) : icon ? (
-        <Ionicons name={icon} size={size === "md" ? 18 : 16} color={iconColor} />
+        <Ionicons name={icon} size={size === "md" ? 18 : 16} color={look.fg} />
       ) : null}
-      <Text
-        className={[
-          "font-bold",
-          size === "md" ? "text-[15px]" : "text-[13px]",
-          dim ? "text-cd-faint" : LABEL[variant],
-        ].join(" ")}>
+      <Text style={{ color: look.fg }} className={size === "md" ? "text-[15px] font-medium" : "text-[13px] font-medium"}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-/** 아이콘 전용 버튼(헤더 우측 등). */
+/** 아이콘 전용 버튼(헤더 우측 등) — 44 터치 타깃, 배경 없음(ghost). */
 export function IconButton({
   icon,
   onPress,
@@ -103,44 +88,40 @@ export function IconButton({
     <Pressable
       onPress={onPress}
       hitSlop={8}
-      className="h-11 w-11 items-center justify-center rounded-full active:opacity-60">
+      accessibilityRole="button"
+      className="h-11 w-11 items-center justify-center rounded-lg active:bg-cd-surface">
       <Ionicons name={icon} size={size} color={color ?? c.muted} />
     </Pressable>
   );
 }
 
 /**
- * 강조 아이콘 버튼 — 목록 헤더의 주요 행동(기안 작성·글쓰기)에 쓴다.
- * 흐린 아이콘만 두면 눈에 띄지 않아, primary 로 채운 원형에 흰 아이콘을 얹는다.
+ * 강조 아이콘 버튼 — 목록 헤더의 주요 행동(기안 작성·글쓰기·새 할 일). 화면의 주 버튼이므로 하나만.
+ * 주 버튼과 같은 남색 단색 채움 + 테두리, 40×40, 반경 10.
  */
 export function PrimaryIconButton({
   icon,
   onPress,
-  size = 24,
+  size = 22,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
   size?: number;
 }) {
+  const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       hitSlop={8}
-      style={{
-        shadowColor: CTA_FROM,
-        shadowOpacity: 0.35,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 3 },
-        elevation: 3,
-      }}
-      className="h-11 w-11 items-center justify-center overflow-hidden rounded-full active:opacity-70">
-      <CtaGradientFill />
-      <Ionicons name={icon} size={size} color="#FFFFFF" />
+      accessibilityRole="button"
+      style={{ backgroundColor: c.primaryFill, borderColor: c.primaryFillEdge, borderWidth: 1 }}
+      className="h-10 w-10 items-center justify-center rounded-lg active:opacity-80">
+      <Ionicons name={icon} size={size} color="#ffffff" />
     </Pressable>
   );
 }
 
-/** 하단 고정 액션 바(결재 승인/반려 등). */
+/** 하단 고정 액션 바(결재 승인/반려 등) — 카드 면 + 위쪽 hairline. */
 export function ActionBar({ children }: { children: React.ReactNode }) {
   return (
     <View className="flex-row gap-2 border-t border-cd-border bg-cd-card px-4 pb-6 pt-3">

@@ -31,7 +31,7 @@ export default function ReceiptMenuScreen() {
   const count = unused.data?.items?.length ?? 0;
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader title="영수증" subtitle="개인카드 경비 증빙" back variant="sub" />
 
       <View className="gap-3 px-4 pt-2">
@@ -49,7 +49,7 @@ export default function ReceiptMenuScreen() {
           <Ionicons name="file-tray-full-outline" size={22} color={c.primary} />
           <View className="flex-1">
             <Text className="text-base font-bold text-cd-text">영수증 보관함</Text>
-            <Text className="mt-[1px] text-[11.5px] text-cd-faint">
+            <Text className="mt-[1px] text-[12px] text-cd-faint">
               {count > 0 ? `미사용 ${count}건 — 확인·수정` : '찍어 둔 영수증 확인·수정'}
             </Text>
           </View>

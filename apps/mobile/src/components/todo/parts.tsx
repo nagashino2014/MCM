@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useAuthedSource } from '@/components/ui/Avatar';
+import { LIGHT } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoPriority, type TodoStatus } from '@/lib/todo-types';
 import { TODO_UI, initials, labelColors, statusHue, type DueTone, type LabelTone } from '@/lib/todo-utils';
@@ -96,7 +97,7 @@ export function PriorityDot({ priority, size = 8 }: { priority: TodoPriority; si
 
 /** 마감 라벨(12px) — 초과·오늘은 파스텔 라벨, 이후는 글자만. */
 export function DueBadge({ label, tone }: { label: string; tone: DueTone }) {
-  if (tone === 'neutral') return <Text className="text-[12.5px] text-cd-muted">{label}</Text>;
+  if (tone === 'neutral') return <Text className="text-[13px] text-cd-muted">{label}</Text>;
   return <PastelLabel label={label} tone={tone} size={12} />;
 }
 
@@ -268,11 +269,11 @@ export function DateGroupHeader({
       {tone ? (
         <PastelLabel label={label} tone={tone} size={11.5} bold />
       ) : (
-        <Text className="text-[12.5px] font-semibold text-cd-text">{label}</Text>
+        <Text className="text-[13px] font-semibold text-cd-text">{label}</Text>
       )}
-      {sub ? <Text className="text-[12.5px] text-cd-muted">{sub}</Text> : null}
+      {sub ? <Text className="text-[13px] text-cd-muted">{sub}</Text> : null}
       <View className="flex-1" />
-      {count != null ? <Text className="text-[12.5px] text-cd-faint">{String(count)}</Text> : null}
+      {count != null ? <Text className="text-[13px] text-cd-faint">{String(count)}</Text> : null}
     </View>
   );
 }
@@ -314,7 +315,7 @@ export function SectionHeader({
       {countLabel ? (
         <Text className="text-[12px] text-cd-muted">{countLabel}</Text>
       ) : count != null ? (
-        <Text className={`text-[12.5px] ${danger ? 'text-cd-error' : 'text-cd-faint'}`}>{String(count)}</Text>
+        <Text className={`text-[13px] ${danger ? 'text-cd-error' : 'text-cd-faint'}`}>{String(count)}</Text>
       ) : null}
       {extra}
       <View className="flex-1" />
@@ -347,11 +348,11 @@ export const APPROVAL_KIND_ICON: Record<TodoApprovalEvent['kind'], keyof typeof 
   pending: 'ribbon-outline',
 };
 
-/** 결재 일정 종류 아이콘을 파스텔 원(24px) 안에. */
+/** 결재 일정 종류 아이콘을 파스텔 원(24px) 안에. 파스텔 원은 다크에서도 밝은 원색이라 아이콘 잉크는 라이트 ink 로 고정한다. */
 export function KindCircle({ kind, color, size = 24 }: { kind: TodoApprovalEvent['kind']; color: string; size?: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} className="items-center justify-center">
-      <Ionicons name={APPROVAL_KIND_ICON[kind] ?? 'document-text-outline'} size={Math.round(size * 0.54)} color="#3d4350" />
+      <Ionicons name={APPROVAL_KIND_ICON[kind] ?? 'document-text-outline'} size={Math.round(size * 0.54)} color={LIGHT.text} />
     </View>
   );
 }

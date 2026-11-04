@@ -40,20 +40,20 @@ function Row({
   const body = (
     <>
       <View className="flex-1">
-        <Text numberOfLines={1} className="text-[14px] font-bold text-cd-text">
+        <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
           {title}
         </Text>
         {meta ? (
-          <Text numberOfLines={1} className="text-[11px] text-cd-faint">
+          <Text numberOfLines={1} className="mt-0.5 text-[12px] text-cd-muted">
             {meta}
           </Text>
         ) : null}
       </View>
-      {right ? <Text className="text-[12px] font-bold text-cd-muted">{right}</Text> : null}
+      {right ? <Text className="text-[12px] font-medium text-cd-muted">{right}</Text> : null}
       {onPress ? <Ionicons name="chevron-forward" size={14} color={c.faint} /> : null}
     </>
   );
-  const cls = `flex-row items-center gap-2 ${first ? '' : 'border-t border-cd-border pt-2 mt-2'}`;
+  const cls = `flex-row items-center gap-2 ${first ? '' : 'border-t border-cd-border pt-3 mt-3'}`;
   return onPress ? (
     <Pressable onPress={onPress} className={`${cls} active:opacity-70`}>
       {body}
@@ -256,6 +256,7 @@ export function PendingProgressWidget() {
 export function TodoTodayWidget() {
   const router = useRouter();
   const toast = useToast();
+  const { c } = useTheme();
   const { data, loading, reload } = useApi<{
     today: string;
     overdue: TodoItem[];
@@ -298,35 +299,37 @@ export function TodoTodayWidget() {
       badge={count ? <Badge label={`${count}`} tone={data && data.counts.overdue ? 'error' : 'primary'} /> : undefined}
       action={{ label: '전체 보기', onPress: () => router.push('/todo') }}>
       {loading && !data ? (
-        <Text className="py-3 text-[13px] text-cd-faint">불러오는 중…</Text>
+        <Text className="py-2 text-[14px] text-cd-muted">불러오는 중…</Text>
       ) : rows.length === 0 && events.length === 0 && pending.length === 0 ? (
-        <Text className="py-3 text-[13px] text-cd-faint">오늘 할 일이 없습니다.</Text>
+        <Text className="py-2 text-[14px] text-cd-muted">오늘 할 일이 없습니다.</Text>
       ) : (
-        <View className="-mx-2">
-          {pending.map((ev, i) => (
+        // 카드 안에서도 항목마다 박스(2026-11-04 사용자 결정) — 카드 안 카드라 그림자 없이 surface-sunken 면 + 테두리.
+        <View className="gap-2">
+          {pending.map((ev) => (
             <Pressable
               key={ev.id}
               disabled={!ev.docId}
               onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
-              className={`flex-row items-center gap-2.5 py-2.5 pl-3 pr-2 active:opacity-60 ${i === 0 ? '' : 'border-t border-cd-grid-line'}`}>
+              style={{ borderColor: c.cardBorder }}
+              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2 active:opacity-60">
               <BoardStripe color={ev.kindColor} width={3} inset={8} />
               <KindCircle kind="pending" color={ev.kindColor} size={20} />
               <View className="flex-1">
                 <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
                   {TODO_APPROVAL_EVENT_LABELS.pending} · {ev.title}
                 </Text>
-                <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                   {[ev.drafterName, ev.formName, ev.docNo].filter(Boolean).join(' · ')}
                 </Text>
               </View>
-              <Text className="text-[12.5px] font-medium text-cd-primary">결재</Text>
+              <Text className="text-[13px] font-medium text-cd-primary">결재</Text>
             </Pressable>
           ))}
-          {rows.map((it, i) => {
+          {rows.map((it) => {
             const due = dueBadge(it, today);
             const over = (it.doDate ?? it.dueDate ?? '') < today || (it.dueDate != null && it.dueDate < today);
             return (
-              <View key={it.itemId} className={`flex-row items-center gap-2.5 py-2.5 pl-3 pr-2 ${i === 0 && !pending.length ? '' : 'border-t border-cd-grid-line'}`}>
+              <View key={it.itemId} style={{ borderColor: c.cardBorder }} className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2">
                 <BoardStripe color={it.boardColor} width={3} inset={8} />
                 <CheckCircle done={false} disabled={!it.canEdit} onPress={() => void complete(it)} size={20} />
                 <Pressable
@@ -336,7 +339,7 @@ export function TodoTodayWidget() {
                     <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
                       {it.title}
                     </Text>
-                    <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                    <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                       {[it.doTime ?? (it.doDate ? '종일' : null), over ? '지연' : null, it.projectName ?? null, it.subtaskTotal ? `하위 ${it.subtaskDone}/${it.subtaskTotal}` : null]
                         .filter(Boolean)
                         .join(' · ')}
@@ -347,19 +350,20 @@ export function TodoTodayWidget() {
               </View>
             );
           })}
-          {events.map((ev, i) => (
+          {events.map((ev) => (
             <Pressable
               key={ev.id}
               disabled={!ev.docId}
               onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
-              className={`flex-row items-center gap-2.5 py-2.5 pl-3 pr-2 active:opacity-60 ${i === 0 && !rows.length && !pending.length ? '' : 'border-t border-cd-grid-line'}`}>
+              style={{ borderColor: c.cardBorder }}
+              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2 active:opacity-60">
               <BoardStripe color={ev.kindColor} width={3} inset={8} />
               <KindCircle kind={ev.kind} color={ev.kindColor} size={20} />
               <View className="flex-1">
                 <Text numberOfLines={1} className="text-[13px] text-cd-muted">
                   {TODO_APPROVAL_EVENT_LABELS[ev.kind] ?? ev.kind} · {ev.title}
                 </Text>
-                <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                   {[ev.startTime ?? '종일', ev.status === 'approved' ? '결재 승인' : ev.status === 'in_progress' ? '결재 진행' : null, ev.projectName].filter(Boolean).join(' · ')}
                 </Text>
               </View>

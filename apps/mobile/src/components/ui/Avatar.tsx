@@ -101,7 +101,7 @@ export function Avatar({
     <View
       style={{ width: px, height: px, borderRadius: px / 2 }}
       className="items-center justify-center bg-cd-primary-soft">
-      <Text style={{ fontSize: font }} className="font-extrabold text-cd-primary">
+      <Text style={{ fontSize: font }} className="font-semibold text-cd-primary-strong">
         {initials(name)}
       </Text>
     </View>

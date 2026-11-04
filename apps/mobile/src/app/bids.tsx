@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -8,6 +8,7 @@ import {
   Button,
   ConfirmSheet,
   EmptyState,
+  FilterPill,
   Screen,
   Sheet,
   SkeletonList,
@@ -18,6 +19,7 @@ import { apiJson } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { ACTIVITY_TYPES } from '@/lib/sales/types';
+import { SHADOW_CARD } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 
 /** 발송 항목 구성(웹 알림 설정) 그대로 내려오는 상세 항목 — 값이 있는 것만 담겨 온다. */
@@ -53,6 +55,8 @@ interface NotifyProfileTag {
 
 /** 알림 조건 버튼 칸 수 — 소스 태그(3개 + 여백 1칸)와 같은 너비로 맞춘다(사용자 확정 2026-10-19). */
 const PROFILE_SLOTS = 4;
+/** 우측 필터 토글 버튼 한 변(pt) — 알림 조건 행의 우측 여백도 이 폭으로 맞춘다. */
+const FILTER_BTN = 36;
 /** 앱 목록 표시 기간(개월) — 지난 공고는 앱에서만 사라지고 웹 목록은 영구 보존(2026-10-19). */
 const MAX_AGE_MONTHS = 3;
 
@@ -85,6 +89,7 @@ const REGION_GROUPS: Record<string, string[]> = {
  * 분류 목록 순서대로 **영업 스케줄 8종 태그 팔레트**(사용자 지정, ACTIVITY_TYPES)를 순환
  * 할당한다(이름 해시는 비슷한 색이 우연히 겹쳐 "다 똑같아 보이는" 문제가 실제로 났다).
  * 분류를 8개 넘게 만들 일은 사실상 없어 순환이 겹칠 일도 없다.
+ * 카드의 분류 태그와 상단 알림 조건 버튼(이름이 분류와 같으면 같은 색)이 함께 쓴다.
  */
 const CAT_TINTS: { bg: string; text: string }[] = ACTIVITY_TYPES.map((t) => ({ bg: t.color, text: t.ink }));
 
@@ -127,23 +132,24 @@ function monthsAgo(today: string, n: number): string {
 /**
  * 공공입찰 매칭 공고(M6-C → P6 확장) — 푸시 알림의 착지 화면.
  *
- * 알림 조건 버튼(웹 발송 조건, 최대 4개) + 입찰 소스·용역 구분·지역권 필터 + 선택/일괄 하드 삭제.
+ * 알림 조건 버튼(웹 발송 조건, 최대 4개 — 분류색 점 필) + 입찰 소스 3태그 + 지역권 필터 드롭다운
+ * + 선택/일괄 하드 삭제. 용역 분류 칩은 알림 조건 버튼과 이름이 겹쳐 2026-11-03 드롭다운에서 제거했다
+ * (분류는 알림 조건으로 고르고, 카드의 분류 태그 색만 남긴다).
  * 정렬은 최근 매칭순 고정(정렬 3탭은 2026-10-19 제거), 공고일 기준 최근 3개월만 보인다.
- * 필터는 서버(?categories=&regions=)가 원천이고, 구 서버(파라미터 미지원)에서도 화면이
+ * 필터는 서버(?profile=&types=&regions=)가 원천이고, 구 서버(파라미터 미지원)에서도 화면이
  * 맞게 보이도록 클라이언트에서 한 번 더 거른다(서버가 걸렀으면 전부 통과라 무해).
  * 삭제는 되돌릴 수 없고 웹 알림 이력에서도 사라진다(하드 삭제 — 사용자 확정).
  */
 export default function BidsScreen() {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   const toast = useToast();
   const { user } = useAuth();
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
   /** 선택한 알림 조건(단일 선택 — 다시 누르면 해제). */
   const [profile, setProfile] = useState<string | null>(null);
   const [types, setTypes] = useState<string[]>([]);
-  const [cats, setCats] = useState<string[]>([]);
   const [regs, setRegs] = useState<string[]>([]);
-  /** 분류·지역 필터 드롭다운 — 필터 아이콘으로 접고 편다(기본 접힘). */
+  /** 지역권 필터 드롭다운 — 필터 아이콘으로 접고 편다(기본 접힘). */
   const [filterOpen, setFilterOpen] = useState(false);
   /** 펼쳐 둔 카드(noticeId) — 여러 건 동시에 펼칠 수 있다. */
   const [expanded, setExpanded] = useState<string[]>([]);
@@ -164,7 +170,6 @@ export default function BidsScreen() {
     `maxAgeMonths=${MAX_AGE_MONTHS}`,
     profile ? `profile=${encodeURIComponent(profile)}` : '',
     types.length ? `types=${encodeURIComponent(types.join(','))}` : '',
-    cats.length ? `categories=${encodeURIComponent(cats.join(','))}` : '',
     regs.length ? `regions=${encodeURIComponent(regs.join(','))}` : '',
   ]
     .filter(Boolean)
@@ -191,11 +196,10 @@ export default function BidsScreen() {
       raw.filter(
         (b) =>
           (!types.length || types.includes(b.bidType)) &&
-          (!cats.length || (b.categoryName != null && cats.includes(b.categoryName))) &&
           (!regs.length || regs.includes(regionOf(b) ?? '')) &&
           (!since || (b.postedAt || b.matchedAt || '').slice(0, 10) >= since)
       ),
-    [raw, types, cats, regs, since]
+    [raw, types, regs, since]
   );
   const profiles = (list.data?.profiles ?? []).slice(0, PROFILE_SLOTS);
   // 선택한 조건이 웹에서 삭제됐으면 선택을 푼다(없는 조건으로 빈 목록이 고정되지 않게).
@@ -206,7 +210,7 @@ export default function BidsScreen() {
   }, [profile, list.data]);
   const loading = list.loading && !list.data;
 
-  // 필터 옵션 — 서버 facet 우선, 구 서버는 현재 페이지의 분류로 폴백.
+  // 분류 목록(태그 색 순환 기준) — 서버 facet 우선, 구 서버는 현재 페이지의 분류로 폴백.
   const catOptions = useMemo(() => {
     const server = list.data?.categories;
     if (server?.length) return server;
@@ -223,6 +227,8 @@ export default function BidsScreen() {
     return new Map(names.map((n, i) => [n, CAT_TINTS[i % CAT_TINTS.length]]));
   }, [catOptions, raw]);
   const tintOf = (name: string) => catTintMap.get(name) ?? CAT_TINTS[0];
+  /** 알림 조건 버튼 색 — 조건 이름이 분류 이름과 같으면 그 분류색, 아니면 버튼 순서대로 팔레트 순환. */
+  const profileTint = (p: NotifyProfileTag, i: number) => catTintMap.get(p.name) ?? CAT_TINTS[i % CAT_TINTS.length];
 
   const toggleIn = (arr: string[], v: string) =>
     arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
@@ -254,7 +260,6 @@ export default function BidsScreen() {
                 maxAgeMonths: MAX_AGE_MONTHS,
                 profile: profile ?? undefined,
                 types: types.length ? types : undefined,
-                categories: cats.length ? cats : undefined,
                 regions: regs.length ? regs : undefined,
                 // 기간별 삭제 — 공고일 기준(공고일이 없는 건은 매칭일로 판정, 서버 규칙).
                 ...(confirm === 'range' && range ? { postedFrom: range.from, postedTo: range.to } : {}),
@@ -304,7 +309,7 @@ export default function BidsScreen() {
       return (
         <EmptyState
           icon="briefcase-outline"
-          title={profile || types.length || cats.length || regs.length ? '조건에 맞는 공고가 없습니다' : '매칭된 공고가 없습니다'}
+          title={profile || types.length || regs.length ? '조건에 맞는 공고가 없습니다' : '매칭된 공고가 없습니다'}
           description={`최근 ${MAX_AGE_MONTHS}개월 공고만 표시합니다.`}
         />
       );
@@ -326,21 +331,25 @@ export default function BidsScreen() {
         <Pressable
           key={b.noticeId}
           onPress={() => toggle(b.noticeId)}
-          className="rounded-card border bg-cd-card p-4 active:opacity-70"
-          style={{ borderColor: selecting && isPicked ? '#6b7cf6' : c.border, borderWidth: selecting && isPicked ? 1.5 : 1 }}>
+          className="rounded-lg border bg-cd-card p-4 active:opacity-80"
+          style={[
+            { borderColor: selecting && isPicked ? c.primary : c.cardBorder, borderWidth: selecting && isPicked ? 1.5 : 1 },
+            dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
+          ]}>
           <View className="flex-row items-center gap-2">
             {selecting ? (
               <Ionicons
                 name={isPicked ? 'checkmark-circle' : 'ellipse-outline'}
                 size={19}
-                color={isPicked ? '#6b7cf6' : c.faint}
+                color={isPicked ? c.primary : c.faint}
               />
             ) : null}
             <Badge label={TYPE_LABEL[b.bidType] ?? b.bidType} tone="primary" />
             {region ? <Badge label={region} tone="neutral" /> : null}
             {b.categoryName ? (
-              <View className="max-w-[40%] rounded-md px-1.5 py-[3px]" style={{ backgroundColor: tintOf(b.categoryName).bg }}>
-                <Text className="text-[10.5px] font-bold" numberOfLines={1} style={{ color: tintOf(b.categoryName).text }}>
+              // 분류 태그 — 분류색 연한 바탕(알림 조건 버튼과 같은 색). Badge 와 같은 pill 규격.
+              <View className="h-5 max-w-[40%] justify-center rounded-full px-2" style={{ backgroundColor: tintOf(b.categoryName).bg }}>
+                <Text className="text-[12px] font-medium" numberOfLines={1} style={{ color: tintOf(b.categoryName).text }}>
                   {b.categoryName}
                 </Text>
               </View>
@@ -348,14 +357,14 @@ export default function BidsScreen() {
             <View className="flex-1" />
             {d != null ? (
               <Text
-                className="text-[11px] font-extrabold"
-                style={{ color: urgent ? c.error : c.faint }}>
+                className="text-[12px] font-semibold"
+                style={{ color: urgent ? c.error : c.muted }}>
                 {d === 0 ? '오늘 마감' : d < 0 ? '마감' : `D-${d}`}
               </Text>
             ) : null}
           </View>
 
-          <Text className="mt-2 text-[15px] font-bold text-cd-text" numberOfLines={2}>
+          <Text className="mt-2 text-[15px] font-medium text-cd-text" numberOfLines={2}>
             {b.title || '(제목 없음)'}
           </Text>
 
@@ -369,7 +378,7 @@ export default function BidsScreen() {
           </View>
 
           <View className="mt-2 flex-row items-center gap-1 border-t border-cd-border pt-2">
-            <Text className="flex-1 text-[11px] text-cd-faint">
+            <Text className="flex-1 text-[12px] text-cd-muted">
               {[posted ? `공고 ${posted}` : null, b.deadline ? `마감 ${b.deadline.slice(0, 10)}` : '마감 미정']
                 .filter(Boolean)
                 .join(' · ')}
@@ -388,7 +397,7 @@ export default function BidsScreen() {
                     <Ionicons name="trash-outline" size={15} color={c.faint} />
                   </Pressable>
                 ) : null}
-                <Text className="text-[11px] font-bold" style={{ color: c.primary }}>
+                <Text className="text-[13px] font-medium" style={{ color: c.primary }}>
                   {isOpen ? '접기' : '상세 보기'}
                 </Text>
                 <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={13} color={c.primary} />
@@ -396,13 +405,14 @@ export default function BidsScreen() {
             ) : null}
           </View>
 
-          {/* 상세 카드 — 알림 발송 항목 구성 그대로(값이 있는 항목만), 맨 아래에 원문 링크 */}
+          {/* 상세 영역 — 알림 발송 항목 구성 그대로(값이 있는 항목만), 맨 아래에 원문 링크.
+              카드 안 카드가 되지 않도록 surface 바탕만 깔고 테두리·그림자는 두지 않는다. */}
           {isOpen && !selecting ? (
-            <View className="mt-3 rounded-card border border-cd-border bg-cd-bg p-3">
+            <View className="mt-3 rounded-lg bg-cd-surface p-3">
               {rows.length ? (
                 rows.map((f) => (
                   <View key={f.label} className="flex-row gap-2 py-1">
-                    <Text className="w-[104px] text-[11px] text-cd-faint">{f.label}</Text>
+                    <Text className="w-[104px] text-[12px] text-cd-muted">{f.label}</Text>
                     <Text className="flex-1 text-[12px] text-cd-text">{f.value}</Text>
                   </View>
                 ))
@@ -412,8 +422,8 @@ export default function BidsScreen() {
               {linkUrl ? (
                 <Pressable
                   onPress={() => open(linkUrl)}
-                  className="mt-2 flex-row items-center justify-center gap-1 rounded-card border border-cd-border py-2 active:opacity-70">
-                  <Text className="text-[12px] font-bold" style={{ color: c.primary }}>
+                  className="mt-2 flex-row items-center justify-center gap-1 rounded-lg border border-cd-border bg-cd-card py-2 active:opacity-70">
+                  <Text className="text-[13px] font-medium" style={{ color: c.primary }}>
                     원문 열기
                   </Text>
                   <Ionicons name="open-outline" size={14} color={c.primary} />
@@ -425,129 +435,107 @@ export default function BidsScreen() {
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, loading, list.error, profile, types.length, today, c, expanded, selecting, picked, canEdit, cats.length, regs.length, catTintMap]);
+  }, [items, loading, list.error, profile, types.length, today, c, dark, expanded, selecting, picked, canEdit, regs.length, catTintMap]);
 
   return (
     <View className="flex-1">
       <Screen scroll padded={false} refreshing={list.refreshing} onRefresh={list.reload}>
         <View className="gap-1.5 px-4 pt-3">
           {/* 알림 조건 버튼 — 웹 발송 조건(기술진단·통합허가 등) 최대 4칸, 소스 태그와 같은 너비.
-              우측 끝은 필터 버튼 폭만큼 비워 아래 행과 칸을 맞춘다. 꺼진 조건은 종 꺼짐 아이콘. */}
+              분류색 점 + 선택 시 그 색의 연한 바탕(카드의 분류 태그와 같은 색). 우측 끝은 필터 버튼
+              폭만큼 비워 아래 행과 칸을 맞춘다. 꺼진 조건은 종 꺼짐 아이콘. */}
           {profiles.length ? (
             <View className="flex-row items-center gap-1.5">
               {Array.from({ length: PROFILE_SLOTS }, (_, i) => {
                 const p = profiles[i];
                 if (!p) return <View key={`empty-${i}`} className="flex-1" />;
                 const on = profile === p.profileId;
+                const tint = profileTint(p, i);
                 return (
-                  <Pressable
+                  <FilterPill
                     key={p.profileId}
+                    size="sm"
+                    label={p.name}
+                    active={on}
+                    grow
+                    dot={tint.text}
+                    tint={tint}
+                    icon={
+                      !p.enabled ? (
+                        <Ionicons name="notifications-off-outline" size={12} color={on ? tint.text : c.faint} />
+                      ) : undefined
+                    }
                     onPress={() => setProfile(on ? null : p.profileId)}
-                    className="flex-1 flex-row items-center justify-center gap-0.5 rounded-full py-[7px] active:opacity-70"
-                    style={{
-                      backgroundColor: on ? c.primarySoft : 'transparent',
-                      borderWidth: on ? 0 : 1,
-                      borderColor: c.border,
-                    }}>
-                    {!p.enabled ? (
-                      <Ionicons name="notifications-off-outline" size={11} color={on ? c.primary : c.faint} />
-                    ) : null}
-                    <Text
-                      numberOfLines={1}
-                      className={`shrink text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`}
-                      style={{ color: on ? c.primary : c.faint }}>
-                      {p.name}
-                    </Text>
-                  </Pressable>
+                  />
                 );
               })}
-              <View className="w-[30px]" />
+              <View style={{ width: FILTER_BTN }} />
             </View>
           ) : null}
 
-          {/* 입찰 소스 3태그 + 1칸 여백(알림 조건 4칸과 너비 정렬) + 우측 끝 필터 토글(분류·지역 드롭다운) */}
+          {/* 입찰 소스 3태그 + 1칸 여백(알림 조건 4칸과 너비 정렬) + 우측 끝 필터 토글(지역권 드롭다운) */}
           <View className="flex-row items-center gap-1.5">
-            {SOURCE_TAGS.map((t) => {
-              const on = types.includes(t.key);
-              return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => setTypes((p) => toggleIn(p, t.key))}
-                  className="flex-1 items-center rounded-full py-[7px] active:opacity-70"
-                  style={{
-                    backgroundColor: on ? c.primarySoft : 'transparent',
-                    borderWidth: on ? 0 : 1,
-                    borderColor: c.border,
-                  }}>
-                  <Text
-                    className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`}
-                    style={{ color: on ? c.primary : c.faint }}>
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {SOURCE_TAGS.map((t) => (
+              <FilterPill
+                key={t.key}
+                size="sm"
+                label={t.label}
+                active={types.includes(t.key)}
+                grow
+                onPress={() => setTypes((p) => toggleIn(p, t.key))}
+              />
+            ))}
             <View className="flex-1" />
             <Pressable
               onPress={() => setFilterOpen((v) => !v)}
               hitSlop={8}
-              className="h-[30px] w-[30px] items-center justify-center rounded-full border active:opacity-60"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: filterOpen }}
+              className="items-center justify-center rounded-lg border active:opacity-60"
               style={{
-                borderColor: filterOpen || cats.length || regs.length ? c.primary : c.border,
+                width: FILTER_BTN,
+                height: FILTER_BTN,
+                borderColor: c.border,
                 backgroundColor: filterOpen ? c.primarySoft : 'transparent',
               }}>
               <Ionicons
                 name="options-outline"
-                size={16}
-                color={filterOpen || cats.length || regs.length ? c.primary : c.faint}
+                size={18}
+                color={filterOpen || regs.length ? c.primaryStrong : c.muted}
               />
-              {cats.length || regs.length ? (
-                <View className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-cd-primary" />
+              {regs.length ? (
+                <View className="absolute right-1 top-1 h-2 w-2 rounded-full" style={{ backgroundColor: c.primary }} />
               ) : null}
             </Pressable>
           </View>
 
-          {/* 드롭다운 — 용역 분류·지역권 칩(다중 선택, 서버 필터). 지역은 "권"을 뗀 2글자 표기. */}
+          {/* 드롭다운 — 지역권 칩(다중 선택, 서버 필터). 지역은 "권"을 뗀 2글자 표기, 7개를 한 줄(sm). */}
           {filterOpen ? (
-            <>
-              {catOptions.length ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {catOptions.map((x) => (
-                    <FilterChip
-                      key={x}
-                      label={x}
-                      on={cats.includes(x)}
-                      tint={tintOf(x)}
-                      onPress={() => setCats((p) => toggleIn(p, x))}
-                    />
-                  ))}
-                </ScrollView>
-              ) : null}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                {regionOptions.map((x) => (
-                  <FilterChip
-                    key={x}
-                    label={x.replace(/권$/, '')}
-                    on={regs.includes(x)}
-                    onPress={() => setRegs((p) => toggleIn(p, x))}
-                  />
-                ))}
-              </ScrollView>
-            </>
+            <View className="flex-row gap-1">
+              {regionOptions.map((x) => (
+                <FilterPill
+                  key={x}
+                  size="sm"
+                  label={x.replace(/권$/, '')}
+                  active={regs.includes(x)}
+                  onPress={() => setRegs((p) => toggleIn(p, x))}
+                />
+              ))}
+            </View>
           ) : null}
 
           {/* 선택 모드·일괄 삭제 진입(편집 권한) — 필터 버튼과 붙으면 오조작이 나서 여백을 둔다. */}
           {canEdit && items.length ? (
             <View className="mt-2 flex-row items-center justify-end gap-4 pb-0.5">
               <Pressable onPress={() => (selecting ? exitSelect() : setSelecting(true))} hitSlop={8} className="active:opacity-60">
-                <Text className="text-[12px] font-bold" style={{ color: selecting ? c.faint : '#6b7cf6' }}>
+                <Text className="text-[13px] font-medium" style={{ color: selecting ? c.muted : c.primary }}>
                   {selecting ? '취소' : '선택'}
                 </Text>
               </Pressable>
               {!selecting ? (
                 <Pressable onPress={() => setBulkOpen(true)} hitSlop={8} className="flex-row items-center gap-1 active:opacity-60">
                   <Ionicons name="trash-outline" size={13} color={c.error} />
-                  <Text className="text-[12px] font-bold text-cd-error">일괄 삭제</Text>
+                  <Text className="text-[13px] font-medium text-cd-error">일괄 삭제</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -593,7 +581,7 @@ export default function BidsScreen() {
               setConfirm('all');
             }}
           />
-          <Text className="pt-1 text-[11.5px] text-cd-faint">
+          <Text className="pt-1 text-[12px] text-cd-muted">
             삭제하면 되돌릴 수 없으며, 웹의 알림 이력에서도 함께 사라집니다.
           </Text>
         </View>
@@ -630,7 +618,7 @@ export default function BidsScreen() {
           (confirm === 'all'
             ? `알림 조건·필터(소스 태그 포함)에 해당하는 최근 ${MAX_AGE_MONTHS}개월 매칭 알림 전체가 대상입니다(화면에 ${items.length}건 표시 중). `
             : confirm === 'range'
-              ? `지정한 기간의 공고가 대상이며(최근 ${MAX_AGE_MONTHS}개월 이내), 켜 둔 알림 조건·소스·용역 구분·지역권 필터도 함께 적용됩니다. `
+              ? `지정한 기간의 공고가 대상이며(최근 ${MAX_AGE_MONTHS}개월 이내), 켜 둔 알림 조건·소스·지역권 필터도 함께 적용됩니다. `
               : '') + '삭제하면 되돌릴 수 없으며, 웹의 알림 이력에서도 함께 사라집니다.'
         }
         confirmLabel="삭제"
@@ -641,7 +629,7 @@ export default function BidsScreen() {
   );
 }
 
-/** 일괄 삭제 방식 선택 행. */
+/** 일괄 삭제 방식 선택 행 — 시트 안이라 그림자 없는 평면 행(테두리만). */
 function BulkRow({
   icon,
   title,
@@ -653,47 +641,17 @@ function BulkRow({
   desc: string;
   onPress: () => void;
 }) {
+  const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-3 rounded-xl border border-cd-border bg-cd-card p-3.5 active:opacity-70">
-      <Ionicons name={icon} size={18} color="#6b7cf6" />
+      className="flex-row items-center gap-3 rounded-lg border border-cd-border bg-cd-card p-3.5 active:opacity-70">
+      <Ionicons name={icon} size={18} color={c.primary} />
       <View className="flex-1">
-        <Text className="text-[14px] font-bold text-cd-text">{title}</Text>
-        <Text className="mt-0.5 text-[11.5px] leading-4 text-cd-faint">{desc}</Text>
+        <Text className="text-[14px] font-semibold text-cd-text">{title}</Text>
+        <Text className="mt-0.5 text-[12px] leading-4 text-cd-muted">{desc}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={15} color="#9aa0b8" />
-    </Pressable>
-  );
-}
-
-/** 필터 칩 — 선택은 틴트 채움(tint 를 주면 분류색, 없으면 primary), 비선택은 윤곽선. */
-function FilterChip({
-  label,
-  on,
-  tint,
-  onPress,
-}: {
-  label: string;
-  on: boolean;
-  tint?: { bg: string; text: string };
-  onPress: () => void;
-}) {
-  const { c } = useTheme(); // 다크 보정(2026-10-18)
-  const t = tint ?? { bg: c.primarySoft, text: c.primary };
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row items-center gap-[5px] rounded-full px-[11px] py-[6px] active:opacity-70"
-      style={{
-        backgroundColor: on ? t.bg : 'transparent',
-        borderWidth: on ? 0 : 1,
-        borderColor: c.border,
-      }}>
-      {tint ? <View style={{ backgroundColor: t.text }} className="h-[6px] w-[6px] rounded-full opacity-70" /> : null}
-      <Text className={`text-[11.5px] ${on ? 'font-bold' : 'font-semibold'}`} style={{ color: on ? t.text : c.faint }}>
-        {label}
-      </Text>
+      <Ionicons name="chevron-forward" size={15} color={c.faint} />
     </Pressable>
   );
 }

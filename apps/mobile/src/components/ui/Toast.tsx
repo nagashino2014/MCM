@@ -3,6 +3,7 @@ import { Animated, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/theme/useTheme";
+import { SHADOW_POPOVER } from "@/theme/tokens";
 
 type ToastTone = "info" | "success" | "error";
 
@@ -18,23 +19,10 @@ const TONE_ICON: Record<ToastTone, keyof typeof Ionicons.glyphMap> = {
   error: "alert-circle",
 };
 
-const TONE_BG: Record<ToastTone, string> = {
-  info: "bg-cd-primary-soft",
-  success: "bg-cd-success-soft",
-  error: "bg-cd-error-soft",
-};
-
-const TONE_FG: Record<ToastTone, string> = {
-  info: "text-cd-primary",
-  success: "text-cd-success",
-  error: "text-cd-error",
-};
-
-/** 전역 토스트 — 짧은 결과 알림. 웹 CdToastProvider 대응. */
+/** 전역 토스트 — 짧은 결과 알림. 떠 있는 면이므로 카드 면 + 테두리 + popover 그림자, 아이콘만 상태색. */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [msg, setMsg] = useState<{ text: string; tone: ToastTone } | null>(null);
-  const { c } = useTheme();
-  // 아이콘 색 — 글자 토큰(TONE_FG)과 같은 테마값. 다크 보정(2026-10-18)
+  const { c, dark } = useTheme();
   const toneHex: Record<ToastTone, string> = { info: c.primary, success: c.success, error: c.error };
   const opacity = useRef(new Animated.Value(0)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,12 +49,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {msg ? (
         <Animated.View
           pointerEvents="none"
+          accessibilityLiveRegion="polite"
           style={{ opacity }}
           className="absolute inset-x-4 bottom-24 z-50">
           <View
-            className={`flex-row items-center gap-2 rounded-2xl border border-cd-border px-4 py-3 ${TONE_BG[msg.tone]}`}>
+            style={[{ borderColor: c.cardBorder }, dark ? SHADOW_POPOVER.dark : SHADOW_POPOVER.light]}
+            className="flex-row items-center gap-2 rounded-lg border bg-cd-card px-4 py-3">
             <Ionicons name={TONE_ICON[msg.tone]} size={18} color={toneHex[msg.tone]} />
-            <Text className={`flex-1 text-[13px] font-bold ${TONE_FG[msg.tone]}`}>{msg.text}</Text>
+            <Text className="flex-1 text-[14px] font-medium text-cd-text">{msg.text}</Text>
           </View>
         </Animated.View>
       ) : null}

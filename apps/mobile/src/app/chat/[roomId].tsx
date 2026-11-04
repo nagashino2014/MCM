@@ -17,7 +17,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File as FSFile } from 'expo-file-system';
 import { Image } from 'expo-image';
 
-import { Avatar, Button, ConfirmSheet, CTA_FROM, Input, Sheet, useToast } from '@/components/ui';
+import { Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from '@/components/ui';
 import { EmojiPickerSheet } from '@/components/chat/EmojiPickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { apiFetch, apiJson } from '@/lib/api';
@@ -551,7 +551,7 @@ export default function ChatRoomScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-transparent">
       {/* 자체 헤더 */}
       <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2.5">
         <Pressable onPress={() => router.back()} hitSlop={8} className="p-1.5 active:opacity-60">
@@ -598,11 +598,11 @@ export default function ChatRoomScreen() {
           <View className="flex-row items-center gap-2 border-t border-cd-border bg-cd-card px-4 py-2">
             <Ionicons name="return-up-back" size={16} color={c.primary} />
             <View className="flex-1">
-              <Text className="text-[11.5px] font-bold text-cd-primary">
+              <Text className="text-[12px] font-bold text-cd-primary">
                 {replyTarget.senderName}에게 답장
               </Text>
               <Text numberOfLines={1} className="text-[12px] text-cd-muted">
-                {replyTarget.body || (replyTarget.attachment ? `📎 ${replyTarget.attachment.fileName}` : '')}
+                {replyTarget.body || (replyTarget.attachment ? `첨부 ${replyTarget.attachment.fileName}` : '')}
               </Text>
             </View>
             <Pressable onPress={() => setReplyTarget(null)} hitSlop={8} className="active:opacity-60">
@@ -652,13 +652,13 @@ export default function ChatRoomScreen() {
             placeholderTextColor={c.faint}
             multiline
             textAlignVertical="top"
-            className="max-h-[220px] min-h-[80px] flex-1 rounded-2xl border border-cd-border bg-cd-bg px-3.5 py-2.5 text-[15px] text-cd-text"
+            className="max-h-[220px] min-h-[80px] flex-1 rounded-2xl border border-cd-border bg-transparent px-3.5 py-2.5 text-[15px] text-cd-text"
           />
           <Pressable
             onPress={() => void send()}
             disabled={(!input.trim() && !pendingFile) || sending}
             className="h-[40px] w-[40px] items-center justify-center rounded-full active:opacity-70"
-            style={{ backgroundColor: input.trim() || pendingFile ? CTA_FROM : c.border }}>
+            style={{ backgroundColor: input.trim() || pendingFile ? c.primaryFill : c.border }}>
             {sending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
@@ -676,7 +676,7 @@ export default function ChatRoomScreen() {
           <View className="items-center gap-2 rounded-3xl border-2 border-dashed border-cd-primary bg-cd-card px-8 py-7">
             <Ionicons name="cloud-upload-outline" size={34} color={c.primary} />
             <Text className="text-[15px] font-extrabold text-cd-text">여기에 놓아 첨부</Text>
-            <Text className="text-[12px] text-cd-faint">파일 1개 · 📎 선택 최대 2GB · 끌어다 놓기 30MB</Text>
+            <Text className="text-[12px] text-cd-faint">파일 1개 · 선택 최대 2GB · 끌어다 놓기 30MB</Text>
           </View>
         </View>
       ) : null}
@@ -775,7 +775,7 @@ export default function ChatRoomScreen() {
                   }}
                   className="min-h-[44px] flex-row items-center gap-2.5 active:opacity-70">
                   <Ionicons name="person-add-outline" size={18} color={c.primary} />
-                  <Text className="text-[14.5px] font-semibold text-cd-text">멤버 초대</Text>
+                  <Text className="text-[15px] font-semibold text-cd-text">멤버 초대</Text>
                 </Pressable>
               ) : null}
               <Pressable
@@ -786,7 +786,7 @@ export default function ChatRoomScreen() {
                   size={18}
                   color={c.muted}
                 />
-                <Text className="text-[14.5px] font-semibold text-cd-text">
+                <Text className="text-[15px] font-semibold text-cd-text">
                   {detail.muted ? '알림 켜기' : '알림 끄기'}
                 </Text>
               </Pressable>
@@ -798,7 +798,7 @@ export default function ChatRoomScreen() {
                 }}
                 className="min-h-[44px] flex-row items-center gap-2.5 active:opacity-70">
                 <Ionicons name="exit-outline" size={18} color={c.error} />
-                <Text className="text-[14.5px] font-semibold text-cd-error">나가기</Text>
+                <Text className="text-[15px] font-semibold text-cd-error">나가기</Text>
               </Pressable>
             </View>
           </View>
@@ -906,7 +906,7 @@ function AttachmentContent({ m, mine }: { m: ChatMessage; mine: boolean }) {
         )}
       </View>
       <View className="flex-1">
-        <Text numberOfLines={1} className={`text-[13.5px] font-semibold ${mine ? 'text-white' : 'text-cd-text'}`}>
+        <Text numberOfLines={1} className={`text-[14px] font-semibold ${mine ? 'text-white' : 'text-cd-text'}`}>
           {att.fileName}
         </Text>
         <Text className={`text-[11px] ${mine ? 'text-white/70' : 'text-cd-faint'}`}>
@@ -928,6 +928,7 @@ function MessageRow({
   grouped: boolean;
   onReply?: () => void;
 }) {
+  const { c } = useTheme();
   if (m.kind === 'system') {
     return (
       <View className="my-1.5 items-center">
@@ -950,10 +951,10 @@ function MessageRow({
           className={`mb-1.5 rounded-lg border-l-2 px-2 py-1 ${
             mine ? 'border-white/60 bg-white/15' : 'border-cd-primary bg-cd-primary-soft'
           }`}>
-          <Text className={`text-[10.5px] font-bold ${mine ? 'text-white/90' : 'text-cd-primary'}`}>
+          <Text className={`text-[11px] font-bold ${mine ? 'text-white/90' : 'text-cd-primary'}`}>
             {m.replyTo.senderName}
           </Text>
-          <Text numberOfLines={1} className={`text-[11.5px] ${mine ? 'text-white/75' : 'text-cd-muted'}`}>
+          <Text numberOfLines={1} className={`text-[12px] ${mine ? 'text-white/75' : 'text-cd-muted'}`}>
             {m.replyTo.deleted ? '삭제된 메시지' : m.replyTo.preview}
           </Text>
         </View>
@@ -966,7 +967,7 @@ function MessageRow({
       </Pressable> : null}
       {body && !sharedRoute ? (
         <Text
-          className={`text-[14.5px] leading-5 ${
+          className={`text-[15px] leading-5 ${
             mine ? (m.deleted ? 'italic text-white/70' : 'text-white') : m.deleted ? 'italic text-cd-faint' : 'text-cd-text'
           } ${hasAttachment ? 'mt-1.5' : ''}`}>
           {body}
@@ -978,7 +979,7 @@ function MessageRow({
   if (mine) {
     return (
       <View className={`flex-row items-end justify-end gap-1.5 ${grouped ? 'mt-1' : 'mt-2.5'}`}>
-        <Text className="text-[10px] text-cd-faint">{time}</Text>
+        <Text className="text-[11px] text-cd-faint">{time}</Text>
         {bare && !body ? (
           <Pressable onLongPress={onReply} className="max-w-[76%]">
             {content}
@@ -987,7 +988,7 @@ function MessageRow({
           <Pressable
             onLongPress={onReply}
             className={`max-w-[76%] rounded-2xl rounded-br-md ${bare ? 'p-1' : 'px-3.5 py-2.5'}`}
-            style={{ backgroundColor: CTA_FROM }}>
+            style={{ backgroundColor: c.primaryFill }}>
             {content}
           </Pressable>
         )}
@@ -1013,7 +1014,7 @@ function MessageRow({
           </Pressable>
         )}
       </View>
-      <Text className="text-[10px] text-cd-faint">{time}</Text>
+      <Text className="text-[11px] text-cd-faint">{time}</Text>
     </View>
   );
 }

@@ -148,7 +148,7 @@ export function OrgPickerSheet({
             {e.positionName ? <Text className="text-[12px] font-normal text-cd-faint"> {e.positionName}</Text> : null}
           </Text>
           {e.deptId ? (
-            <Text className="text-[11.5px] text-cd-faint">{deptNameOf.get(e.deptId) ?? ''}</Text>
+            <Text className="text-[12px] text-cd-faint">{deptNameOf.get(e.deptId) ?? ''}</Text>
           ) : null}
         </View>
         {picked ? <Ionicons name="checkmark-circle" size={20} color={c.primary} /> : null}

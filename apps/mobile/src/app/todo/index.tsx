@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } fro
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Button, CtaGradientFill, EmptyState, PullRefresh, Screen, SkeletonList, useToast } from '@/components/ui';
+import { Button, EmptyState, FilterPill, PrimaryIconButton, PullRefresh, Screen, SkeletonList, useToast } from '@/components/ui';
 import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSections';
 import { TimelineView } from '@/components/todo/TimelineView';
 import { AutomationSheet } from '@/components/todo/AutomationSheet';
@@ -55,7 +55,7 @@ function DoneHeader({ count, open, onToggle }: { count: number; open: boolean; o
       accessibilityState={{ expanded: open }}
       style={{ height: 42 }}
       className="flex-row items-center gap-2 border-b border-t border-cd-grid-line bg-cd-surface px-4 active:opacity-70">
-      <Text className={`text-[12.5px] font-semibold ${count ? 'text-cd-text' : 'text-cd-faint'}`}>완료 {count}건</Text>
+      <Text className={`text-[13px] font-semibold ${count ? 'text-cd-text' : 'text-cd-faint'}`}>완료 {count}건</Text>
       <View className="flex-1" />
       {count ? (
         <View className="flex-row items-center gap-1">
@@ -82,7 +82,7 @@ interface Group {
   emptyText?: string;
 }
 
-/** 상단 태그 버튼 — 연한 배경 + 같은 계열 진한 테두리, 선택되면 테두리 2px. */
+/** 상단 태그 버튼(필터 필, sm 한 줄) — 공용 FilterPill. 지연은 빨강 틴트(상태색), 나머지는 선택 시 회색 + 굵게. */
 function TagButton({
   label,
   count,
@@ -96,26 +96,10 @@ function TagButton({
   active: boolean;
   onPress: () => void;
 }) {
-  const { c, dark } = useTheme();
+  const { dark } = useTheme();
   const t = TODO_UI.tags[tone];
-  const fg = t.fg ? (dark ? TODO_UI.over.darkFg : t.fg) : c.text;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityState={{ selected: active }}
-      style={{
-        height: 30,
-        paddingHorizontal: active ? 11 : 12,
-        borderRadius: 8,
-        borderWidth: active ? 2 : 1,
-        borderColor: t.border,
-        backgroundColor: dark ? withAlpha(t.border, 0.18) : t.bg,
-      }}
-      className="flex-row items-center gap-1.5 active:opacity-70">
-      <Text style={{ fontSize: 12.5, fontWeight: '500', color: fg }}>{label}</Text>
-      <Text style={{ fontSize: 12.5, fontWeight: '600', color: fg }}>{count}</Text>
-    </Pressable>
-  );
+  const tint = t.fg ? { bg: dark ? withAlpha(t.border, 0.18) : t.bg, text: dark ? TODO_UI.over.darkFg : t.fg } : undefined;
+  return <FilterPill size="sm" label={label} count={count} active={active} onPress={onPress} tint={tint} />;
 }
 
 export default function TodoScreen() {
@@ -471,7 +455,7 @@ export default function TodoScreen() {
       nodes.push(<DateGroupHeader key={`h-${g.key}`} label={g.label} tone={g.tone} sub={g.sub} count={pendingN ? `결재 대기 ${pendingN} · ${n - pendingN}` : n} />);
       if (!n) {
         nodes.push(
-          <Text key={`e-${g.key}`} className="border-b border-cd-grid-line px-4 pb-4 pt-3.5 text-[12.5px] text-cd-faint">
+          <Text key={`e-${g.key}`} className="border-b border-cd-grid-line px-4 pb-4 pt-3.5 text-[13px] text-cd-faint">
             {g.emptyText ?? '없습니다.'}
           </Text>
         );
@@ -498,8 +482,9 @@ export default function TodoScreen() {
         />
       ));
       rows.push(...(evFirst ? [...evs, ...its] : [...its, ...evs]));
+      // 항목은 각자 박스(TodoRow)라 그룹 컨테이너는 투명 — 헤더 아래 8px 띄운다(2026-11-04 박스화).
       nodes.push(
-        <View key={`b-${g.key}`} className="bg-cd-bg">
+        <View key={`b-${g.key}`} className="pt-2">
           {rows}
         </View>
       );
@@ -510,7 +495,7 @@ export default function TodoScreen() {
     sticky.push(nodes.length);
     nodes.push(<DoneHeader key="h-done" count={doneN} open={doneOpen} onToggle={() => setDoneOpen((v) => !v)} />);
     nodes.push(
-      <View key="b-done" className="bg-cd-bg">
+      <View key="b-done" className="pt-2">
         {doneOpen && doneItems.length ? (
           doneItems.map((it) => (
             <TodoRow
@@ -524,7 +509,7 @@ export default function TodoScreen() {
             />
           ))
         ) : (
-          <Text className="border-b border-cd-grid-line px-4 pb-4 pt-3.5 text-[12.5px] text-cd-faint">
+          <Text className="border-b border-cd-grid-line px-4 pb-4 pt-3.5 text-[13px] text-cd-faint">
             {doneN ? `완료 ${doneN}건이 접혀 있습니다. 체크를 다시 누르면 되돌릴 수 있습니다.` : '완료한 할 일이 없습니다.'}
           </Text>
         )}
@@ -612,12 +597,13 @@ export default function TodoScreen() {
         onPress={() => pickScope(key)}
         accessibilityRole="tab"
         accessibilityState={{ selected: on }}
-        className="h-full justify-center px-2.5 active:opacity-70">
-        <View className="flex-row items-center gap-1.5">
-          <Text className={`text-[14px] ${on ? 'font-semibold text-cd-primary' : 'text-cd-muted'}`}>{label}</Text>
-          {count ? <Text className="text-[12px] text-cd-faint">{count}</Text> : null}
+        className="h-full justify-center px-2 active:opacity-70">
+        {/* 13px·패딩 8 — 4개 탭 + 보기 토글이 375 폭에서 한 줄에 들어가도록(2026-11-04). */}
+        <View className="flex-row items-center gap-1">
+          <Text numberOfLines={1} className={`text-[13px] ${on ? 'font-medium text-cd-primary' : 'text-cd-muted'}`}>{label}</Text>
+          {count ? <Text className="text-[11px] text-cd-faint">{count}</Text> : null}
         </View>
-        {on ? <View className="absolute bottom-0 left-2.5 right-2.5 h-[2px] bg-cd-primary" /> : null}
+        {on ? <View className="absolute bottom-0 left-2 right-2 h-[2px] bg-cd-primary" /> : null}
       </Pressable>
     );
   };
@@ -631,9 +617,9 @@ export default function TodoScreen() {
         disabled={disabled}
         accessibilityLabel={label}
         accessibilityState={{ selected: on, disabled }}
-        className={`h-7 w-[34px] items-center justify-center ${key !== 'timeline' ? 'border-r border-cd-border' : ''} ${on ? 'bg-cd-primary-soft' : 'bg-cd-card'}`}
+        className={`h-8 w-9 items-center justify-center ${key !== 'timeline' ? 'border-r border-cd-border' : ''} ${on ? 'bg-cd-tab-selected' : 'bg-cd-card'}`}
         style={{ opacity: disabled ? 0.4 : 1 }}>
-        <Ionicons name={icon} size={15} color={on ? c.primary : c.muted} />
+        <Ionicons name={icon} size={16} color={on ? c.tabSelectedInk : c.muted} />
       </Pressable>
     );
   };
@@ -661,14 +647,14 @@ export default function TodoScreen() {
               />
             ) : null}
           </Pressable>
-          <Pressable
-            onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: 'new', ...(scope === 'project' && selectedProjectId ? { board: selectedProjectId } : {}) } })}
-            accessibilityLabel="새 할 일"
-            hitSlop={8}
-            className="mr-2 h-9 w-9 items-center justify-center overflow-hidden rounded-lg active:opacity-70">
-            <CtaGradientFill />
-            <Ionicons name="add" size={20} color="#fff" />
-          </Pressable>
+          {/* 화면의 주 버튼(하나) — 남색 단색 */}
+          <View className="mr-2" accessibilityLabel="새 할 일">
+            <PrimaryIconButton
+              icon="add"
+              size={22}
+              onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: 'new', ...(scope === 'project' && selectedProjectId ? { board: selectedProjectId } : {}) } })}
+            />
+          </View>
         </View>
       }>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
@@ -693,7 +679,7 @@ export default function TodoScreen() {
             {scopeTab('project', '프로젝트')}
           </View>
           <View className="flex-1" />
-          <View className="mb-2 flex-row overflow-hidden rounded-lg border border-cd-border">
+          <View className="mb-1.5 flex-row overflow-hidden rounded-lg border border-cd-border">
             {viewBtn('list', 'list-outline', '목록')}
             {viewBtn('board', 'grid-outline', '보드')}
             {viewBtn('timeline', 'git-commit-outline', '타임라인')}
@@ -705,9 +691,9 @@ export default function TodoScreen() {
               <BoardChips boards={projectBoards} value={selectedProjectId} onChange={setProjectId} />
             </View>
             {board ? (
-              <Pressable onPress={() => setAutoOpen(true)} hitSlop={6} accessibilityLabel="자동화" className="mr-3 h-7 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
+              <Pressable onPress={() => setAutoOpen(true)} hitSlop={6} accessibilityLabel="자동화" className="mr-3 h-8 flex-row items-center gap-1 rounded-lg border border-cd-border bg-cd-card px-2.5 active:opacity-70">
                 <Ionicons name="flash-outline" size={13} color={c.muted} />
-                <Text className="text-[11.5px] text-cd-muted">자동화</Text>
+                <Text className="text-[12px] text-cd-muted">자동화</Text>
               </Pressable>
             ) : null}
           </View>

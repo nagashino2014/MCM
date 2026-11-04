@@ -239,7 +239,7 @@ export function FormField({
       <View className="gap-1.5">
         {label}
         <View className="rounded-xl border border-cd-border bg-cd-surface px-3 py-3">
-          <Text className="text-[12.5px] text-cd-muted">표 입력은 웹에서 작성합니다.</Text>
+          <Text className="text-[13px] text-cd-muted">표 입력은 웹에서 작성합니다.</Text>
         </View>
       </View>
     );
@@ -258,7 +258,7 @@ export function FormField({
           {lockedText(f, value) || !lockHint ? (
             <Text className="text-[14px] text-cd-body">{lockedText(f, value)}</Text>
           ) : (
-            <Text className="text-[12.5px] text-cd-faint">{lockHint}</Text>
+            <Text className="text-[13px] text-cd-faint">{lockHint}</Text>
           )}
         </View>
       </View>
@@ -276,7 +276,7 @@ export function FormField({
           return (
             <View className="min-h-[46px] justify-center rounded-xl border border-cd-border bg-cd-surface px-3">
               <Text className="text-[14px] text-cd-body">{str((value as { name?: string }).name)}</Text>
-              <Text className="text-[11.5px] text-cd-faint">부서 변경은 웹에서 합니다.</Text>
+              <Text className="text-[12px] text-cd-faint">부서 변경은 웹에서 합니다.</Text>
             </View>
           );
         }
@@ -290,7 +290,7 @@ export function FormField({
               <View className="overflow-hidden rounded-xl border border-cd-border px-3 py-2">
                 <HtmlView html={html} />
               </View>
-              <Text className="text-[11.5px] text-cd-warning">
+              <Text className="text-[12px] text-cd-warning">
                 서식이 있는 내용이라 모바일에서 편집하면 서식이 사라집니다 — 웹에서 수정하세요.
               </Text>
             </View>
@@ -347,12 +347,12 @@ export function FormField({
             <View className="flex-row items-center gap-2">
               <Chip label="익일 야간" active={v.overnight === true} onPress={toggleOvernight} />
               {minutes != null ? (
-                <Text className="text-[11.5px] text-cd-faint">
+                <Text className="text-[12px] text-cd-faint">
                   {v.overnight ? '익일 · ' : ''}
                   {Math.floor(minutes / 60)}시간{minutes % 60 > 0 ? ` ${minutes % 60}분` : ''}
                 </Text>
               ) : invalid ? (
-                <Text className="flex-1 text-[11.5px] text-cd-error">
+                <Text className="flex-1 text-[12px] text-cd-error">
                   종료가 시작보다 빠릅니다 — 다음 날까지 이어지는 근무면 익일 야간을 켜세요.
                 </Text>
               ) : null}
@@ -631,7 +631,7 @@ export function FormField({
       />
       {/* contract_select 가 업체에 연동될 때의 안내(웹은 목록을 바꿔 보여준다) */}
       {f.type === 'contract_select' && linkedFacilityId ? (
-        <Text className="text-[11.5px] text-cd-faint">선택한 업체의 계약에서 찾습니다.</Text>
+        <Text className="text-[12px] text-cd-faint">선택한 업체의 계약에서 찾습니다.</Text>
       ) : null}
     </View>
   );

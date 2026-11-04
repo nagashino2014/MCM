@@ -246,7 +246,7 @@ export default function InvoiceRequestsScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader title="발행 요청" subtitle="세금계산서 발행 요청·수신함" back variant="sub" />
       {inbox.allowed === true ? <SegmentedTabs items={tabs} value={tab} onChange={setUserTab} /> : null}
 
@@ -273,7 +273,7 @@ export default function InvoiceRequestsScreen() {
                 </View>
                 <View className="flex-row items-center gap-2">
                   <Badge label={it.stageLabel ?? '대금 단계'} tone="primary" />
-                  <Text numberOfLines={1} className="flex-1 text-[11.5px] text-cd-faint">
+                  <Text numberOfLines={1} className="flex-1 text-[12px] text-cd-faint">
                     {it.requestedByName ?? '요청자 미상'} · {it.requestedAt?.slice(0, 10) ?? '-'}
                   </Text>
                 </View>
@@ -307,7 +307,7 @@ export default function InvoiceRequestsScreen() {
               <Text numberOfLines={1} className="text-[14px] font-bold text-cd-text">
                 {ct.contractTitle ?? '계약'}
               </Text>
-              <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+              <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                 {[ct.facilityName, ct.serviceType].filter(Boolean).join(' · ') || '발주처 미상'}
               </Text>
               <View className="mt-2.5 gap-1">
@@ -371,14 +371,14 @@ export default function InvoiceRequestsScreen() {
           <ScrollView automaticallyAdjustKeyboardInsets style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled">
             <View className="gap-3 pb-2">
               <View className="gap-1 rounded-xl border border-cd-border p-3">
-                <Text numberOfLines={1} className="text-[13.5px] font-bold text-cd-text">
+                <Text numberOfLines={1} className="text-[14px] font-bold text-cd-text">
                   {requestFor.contract.contractTitle ?? '계약'}
                 </Text>
-                <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                <Text numberOfLines={1} className="text-[12px] text-cd-faint">
                   {requestFor.contract.facilityName ?? '발주처 미상'}
                 </Text>
                 <View className="mt-1 flex-row items-center justify-between">
-                  <Text className="text-[12.5px] text-cd-muted">{requestFor.m.stageLabel ?? '대금 단계'}</Text>
+                  <Text className="text-[13px] text-cd-muted">{requestFor.m.stageLabel ?? '대금 단계'}</Text>
                   <Text className="text-[14px] font-extrabold text-cd-text">{won(requestFor.m.amount)}</Text>
                 </View>
               </View>
@@ -401,7 +401,7 @@ export default function InvoiceRequestsScreen() {
                       <Text className="text-[13px] font-semibold text-cd-text">
                         {[bc.name, bc.title, bc.department].filter(Boolean).join(' · ')}
                       </Text>
-                      <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                      <Text numberOfLines={1} className="text-[12px] text-cd-faint">
                         {[bc.phone, bc.email].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
@@ -413,7 +413,7 @@ export default function InvoiceRequestsScreen() {
                   <Text className="text-[13px] font-extrabold text-cd-text">
                     {needContact ? '세금계산서 담당자 (필수)' : '새 세금계산서 담당자'}
                   </Text>
-                  <Text className="text-[11.5px] leading-4 text-cd-muted">
+                  <Text className="text-[12px] leading-4 text-cd-muted">
                     {needContact
                       ? '이 발주처에 세금계산서 담당자가 등록되어 있지 않습니다. 계산서를 받을 담당자를 입력하면 사업장 담당자로 함께 등록됩니다.'
                       : '입력한 담당자가 이 발주처의 세금계산서 담당자가 됩니다. 기존 담당자는 사업장 담당자로 남고 계산서 담당만 해제됩니다.'}
@@ -444,7 +444,7 @@ export default function InvoiceRequestsScreen() {
                 onChangeText={setNote}
                 placeholder="발행 담당자에게 전달할 내용"
               />
-              <Text className="text-[11.5px] leading-4 text-cd-faint">
+              <Text className="text-[12px] leading-4 text-cd-faint">
                 요청하면 발행 담당자에게 알림이 전달되고, 계산서가 발행되면 요청 상태는 자동으로 해소됩니다.
               </Text>
             </View>
@@ -572,8 +572,8 @@ export default function InvoiceRequestsScreen() {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row gap-3">
-      <Text className="w-16 text-[12.5px] text-cd-faint">{label}</Text>
-      <Text className="flex-1 text-[13.5px] font-semibold text-cd-text">{value}</Text>
+      <Text className="w-16 text-[13px] text-cd-faint">{label}</Text>
+      <Text className="flex-1 text-[14px] font-semibold text-cd-text">{value}</Text>
     </View>
   );
 }

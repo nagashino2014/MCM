@@ -73,7 +73,7 @@ export default function ManualScreen() {
                 onPress={() => goArticle(h.articleId, h.section)}
                 className={`flex-row items-center gap-2 px-4 py-3 active:opacity-60 ${i > 0 ? 'border-t border-cd-border' : ''}`}>
                 <View className="flex-1">
-                  <Text className="text-[14.5px] font-semibold text-cd-text" numberOfLines={1}>
+                  <Text className="text-[15px] font-semibold text-cd-text" numberOfLines={1}>
                     {h.title}
                   </Text>
                   {h.sectionTitle ? (
@@ -102,9 +102,9 @@ export default function ManualScreen() {
                   disabled={!e.articles[0]}
                   onPress={() => e.articles[0] && goArticle(e.articles[0])}
                   className={`flex-row items-center gap-2 py-2 active:opacity-60 ${i > 0 ? 'border-t border-cd-border' : ''}`}>
-                  <Text className="text-[11.5px] text-cd-faint">{e.date.slice(5).replace('-', '.')}</Text>
-                  <Text className="text-[11.5px] font-bold text-cd-primary">{e.kind}</Text>
-                  <Text className="flex-1 text-[13.5px] text-cd-text" numberOfLines={1}>
+                  <Text className="text-[12px] text-cd-faint">{e.date.slice(5).replace('-', '.')}</Text>
+                  <Text className="text-[12px] font-bold text-cd-primary">{e.kind}</Text>
+                  <Text className="flex-1 text-[14px] text-cd-text" numberOfLines={1}>
                     {e.title.replace(/\[|\]/g, '')}
                   </Text>
                 </Pressable>
@@ -123,7 +123,7 @@ export default function ManualScreen() {
                     className="flex-row items-center gap-2 px-4 py-3.5 active:opacity-60">
                     <View className="flex-1">
                       <Text className="text-[15px] font-bold text-cd-text">{ch.title}</Text>
-                      <Text className="mt-0.5 text-[11.5px] text-cd-faint">
+                      <Text className="mt-0.5 text-[12px] text-cd-faint">
                         {ch.group} · {ch.articles.length}개
                       </Text>
                     </View>

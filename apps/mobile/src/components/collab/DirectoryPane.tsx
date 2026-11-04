@@ -1,3 +1,4 @@
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { useMemo, useState } from 'react';
 import { FlatList, Linking, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -97,7 +98,7 @@ export function DirectoryPane() {
         data={people}
         keyExtractor={(p) => p.employeeId}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
         ListEmptyComponent={
           <EmptyState
             icon="people-outline"

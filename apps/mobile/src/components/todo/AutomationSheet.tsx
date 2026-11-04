@@ -67,7 +67,7 @@ function Chips<T extends string>({ options, value, onChange, disabled }: { optio
             disabled={disabled}
             accessibilityState={{ selected: on }}
             className={`h-8 justify-center rounded-lg border px-3 ${on ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'}`}>
-            <Text style={{ fontSize: 12.5, color: on ? c.primary : c.text, fontWeight: on ? '600' : '400' }}>{o.label}</Text>
+            <Text style={{ fontSize: 13, color: on ? c.primary : c.text, fontWeight: on ? '600' : '400' }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -202,10 +202,10 @@ export function AutomationSheet({ board, visible, onClose }: { board: TodoBoard;
               <View key={r.ruleId} className={`flex-row items-center gap-2 rounded-lg border bg-cd-card px-3 py-2 ${editing === r.ruleId ? 'border-cd-primary' : 'border-cd-border'}`} style={{ opacity: r.enabled ? 1 : 0.55 }}>
                 <Ionicons name="flash-outline" size={15} color={c.primary} />
                 <Pressable onPress={() => (canEdit ? edit(r) : undefined)} className="flex-1" style={{ minWidth: 0 }}>
-                  <Text numberOfLines={1} className="text-[13.5px] font-semibold text-cd-text">
+                  <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                     {r.name}
                   </Text>
-                  <Text numberOfLines={2} className="text-[11.5px] text-cd-muted">
+                  <Text numberOfLines={2} className="text-[12px] text-cd-muted">
                     {describeRule(r, names)} · {r.runCount}회
                   </Text>
                 </Pressable>
@@ -224,19 +224,19 @@ export function AutomationSheet({ board, visible, onClose }: { board: TodoBoard;
 
         {canEdit ? (
           <View className="gap-3 rounded-lg border border-cd-border bg-cd-surface p-3">
-            <Text className="text-[12.5px] font-semibold text-cd-text">{editing ? '규칙 편집' : '새 규칙'}</Text>
+            <Text className="text-[13px] font-semibold text-cd-text">{editing ? '규칙 편집' : '새 규칙'}</Text>
             <TextInput value={draft.name} onChangeText={(v) => set({ name: v })} placeholder="규칙 이름(예: 완료되면 검토 요청)" placeholderTextColor={c.faint} maxLength={80} className="h-10 rounded-lg border border-cd-border bg-cd-card px-3 text-[14px] text-cd-text" />
-            <Text className="text-[11.5px] text-cd-muted">트리거</Text>
+            <Text className="text-[12px] text-cd-muted">트리거</Text>
             <Chips options={TODO_RULE_TRIGGERS.map((k) => ({ key: k, label: TODO_RULE_TRIGGER_LABELS[k] }))} value={draft.triggerKind} onChange={(v) => set({ triggerKind: v })} />
             {draft.triggerKind === 'status' ? <Chips options={statusOpts} value={draft.triggerStatus} onChange={(v) => set({ triggerStatus: v })} /> : null}
             {draft.triggerKind === 'due_before' ? (
               <View className="flex-row items-center gap-2">
-                <Text className="text-[12.5px] text-cd-muted">마감</Text>
+                <Text className="text-[13px] text-cd-muted">마감</Text>
                 <TextInput value={draft.days} onChangeText={(v) => set({ days: v.replace(/[^0-9]/g, '').slice(0, 2) })} keyboardType="number-pad" className="h-9 w-14 rounded-lg border border-cd-border bg-cd-card px-2 text-center text-[14px] text-cd-text" />
-                <Text className="text-[12.5px] text-cd-muted">일 전(0=당일)</Text>
+                <Text className="text-[13px] text-cd-muted">일 전(0=당일)</Text>
               </View>
             ) : null}
-            <Text className="text-[11.5px] text-cd-muted">행동</Text>
+            <Text className="text-[12px] text-cd-muted">행동</Text>
             <Chips options={TODO_RULE_ACTIONS.map((k) => ({ key: k, label: TODO_RULE_ACTION_LABELS[k] }))} value={draft.actionKind} onChange={(v) => set({ actionKind: v })} />
             {draft.actionKind === 'set_status' ? <Chips options={statusOpts} value={draft.status} onChange={(v) => set({ status: v })} /> : null}
             {draft.actionKind === 'assign' ? <Chips options={[{ key: 'owner', label: '작성자' }, ...members.map((m) => ({ key: m.userId, label: m.name }))]} value={draft.assignee} onChange={(v) => set({ assignee: v })} /> : null}
@@ -252,12 +252,12 @@ export function AutomationSheet({ board, visible, onClose }: { board: TodoBoard;
                 <Chips options={[{ key: '', label: '메신저 방 없음' }, ...rooms.map((r) => ({ key: String(r.roomId), label: r.name }))]} value={draft.roomId} onChange={(v) => set({ roomId: v })} />
                 <View className="flex-row items-center gap-2">
                   <Switch value={draft.inApp} onValueChange={(v) => set({ inApp: v })} />
-                  <Text className="text-[12.5px] text-cd-text">담당자 인앱 알림</Text>
+                  <Text className="text-[13px] text-cd-text">담당자 인앱 알림</Text>
                 </View>
                 <TextInput value={draft.message} onChangeText={(v) => set({ message: v })} maxLength={300} placeholder="메시지 — {title} {status} {assignee} {board}" placeholderTextColor={c.faint} className="h-10 rounded-lg border border-cd-border bg-cd-card px-3 text-[13px] text-cd-text" />
               </>
             ) : null}
-            <Text className="text-[12.5px] text-cd-text">→ {preview}</Text>
+            <Text className="text-[13px] text-cd-text">→ {preview}</Text>
             <View className="flex-row gap-2">
               {editing ? (
                 <View className="flex-1">

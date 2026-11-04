@@ -39,7 +39,7 @@ export function ManualInline({ text, className = BODY }: { text: string; classNa
       );
     } else {
       parts.push(
-        <Text key={i++} style={{ fontWeight: '700' }}>
+        <Text key={i++} style={{ fontWeight: '600' }}>
           {m[2]}
         </Text>
       );
@@ -103,9 +103,9 @@ function BlockView({ block, onLink }: { block: ManualBlock; onLink: (article: st
             <View key={r} className="gap-1 rounded-xl border border-cd-border bg-cd-card px-3 py-2.5">
               {row.map((cell, ci) => (
                 <View key={ci} className="flex-row gap-2">
-                  <Text className="w-[34%] text-[12.5px] leading-[21px] text-cd-muted">{block.head[ci] ?? ''}</Text>
+                  <Text className="w-[34%] text-[13px] leading-[21px] text-cd-muted">{block.head[ci] ?? ''}</Text>
                   <View className="flex-1">
-                    <ManualInline text={cell} className={ci === 0 ? 'text-[13.5px] font-semibold leading-[21px] text-cd-text' : 'text-[13.5px] leading-[21px] text-cd-text'} />
+                    <ManualInline text={cell} className={ci === 0 ? 'text-[14px] font-semibold leading-[21px] text-cd-text' : 'text-[14px] leading-[21px] text-cd-text'} />
                   </View>
                 </View>
               ))}
@@ -122,7 +122,7 @@ function BlockView({ block, onLink }: { block: ManualBlock; onLink: (article: st
               <View className="flex-row gap-1.5 pl-1">
                 <Ionicons name="arrow-forward" size={14} color={c.muted} style={{ marginTop: 4 }} />
                 <View className="flex-1">
-                  <ManualInline text={item.to} className="text-[13.5px] leading-[22px] text-cd-muted" />
+                  <ManualInline text={item.to} className="text-[14px] leading-[22px] text-cd-muted" />
                 </View>
               </View>
             </View>
@@ -159,7 +159,7 @@ function ManualImage({ src, alt, caption }: { src: string; alt: string; caption?
         style={{ width: '100%', aspectRatio: ratio, borderRadius: 10 }}
         className="border border-cd-border"
       />
-      {caption ? <ManualInline text={caption} className="text-[12.5px] leading-[20px] text-cd-muted" /> : null}
+      {caption ? <ManualInline text={caption} className="text-[13px] leading-[20px] text-cd-muted" /> : null}
     </View>
   );
 }

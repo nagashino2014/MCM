@@ -3,6 +3,7 @@ import { useColorScheme, View } from "react-native";
 import { vars } from "nativewind";
 
 import { DARK, LIGHT, paletteVars, type CdPalette } from "./tokens";
+import { ShellBackground } from "./ShellBackground";
 import { kvGet, kvSet } from "../lib/kv";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -54,6 +55,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
     <ThemeContext.Provider value={value}>
       <View style={vars(paletteVars(palette))} className="flex-1">
+        {/* 셸 바탕(그라데이션 + 빛 점)은 여기서 한 번만 — 화면 루트는 투명이다. */}
+        <ShellBackground />
         {children}
       </View>
     </ThemeContext.Provider>

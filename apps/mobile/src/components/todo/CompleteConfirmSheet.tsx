@@ -73,8 +73,8 @@ export function CompleteRulesChecks({ value, disabled, onChange }: { value: Todo
             style={{ opacity: disabled ? 0.6 : 1 }}>
             <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? c.primary : c.faint} style={{ marginTop: 1 }} />
             <View className="flex-1" style={{ minWidth: 0 }}>
-              <Text className="text-[13.5px] text-cd-text">{TODO_COMPLETE_RULE_LABELS[k]}</Text>
-              <Text className="text-[11.5px] text-cd-faint">{hints[k]}</Text>
+              <Text className="text-[14px] text-cd-text">{TODO_COMPLETE_RULE_LABELS[k]}</Text>
+              <Text className="text-[12px] text-cd-faint">{hints[k]}</Text>
             </View>
           </Pressable>
         );
@@ -150,13 +150,13 @@ export function CompleteConfirmSheet({
           {failure ? (
             <View className="flex-row items-center gap-1.5">
               <Ionicons name="alert-circle-outline" size={14} color={c.warning ?? bad.fg} />
-              <Text className="text-[12.5px] text-cd-muted">서버가 완료를 거절했습니다 — 아래 조건을 확인하세요.</Text>
+              <Text className="text-[13px] text-cd-muted">서버가 완료를 거절했습니다 — 아래 조건을 확인하세요.</Text>
             </View>
           ) : null}
           {!target.completeRules.deps && openDeps > 0 ? (
             <View className="flex-row items-center gap-1.5">
               <Ionicons name="alert-circle-outline" size={14} color={c.warning ?? bad.fg} />
-              <Text className="text-[12.5px] text-cd-muted">선행 작업 {openDeps}건이 아직 끝나지 않았습니다(경고 — 완료는 가능).</Text>
+              <Text className="text-[13px] text-cd-muted">선행 작업 {openDeps}건이 아직 끝나지 않았습니다(경고 — 완료는 가능).</Text>
             </View>
           ) : null}
           <View className="overflow-hidden rounded-lg border border-cd-border bg-cd-card">

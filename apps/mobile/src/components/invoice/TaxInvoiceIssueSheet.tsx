@@ -295,7 +295,7 @@ export function TaxInvoiceIssueSheet({
                               {x.title ? ` · ${x.title}` : ''}
                               {x.billing ? ' · 계산서' : ''}
                             </Text>
-                            <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                            <Text numberOfLines={1} className="text-[12px] text-cd-faint">
                               {x.email}
                             </Text>
                           </View>
@@ -323,7 +323,7 @@ export function TaxInvoiceIssueSheet({
               </Section>
 
               <Section title="공급자 (우리 회사)">
-                <Text className="text-[12.5px] text-cd-muted">
+                <Text className="text-[13px] text-cd-muted">
                   {prefill.invoicer.corpName} · {fmtCorpNum(prefill.invoicer.corpNum) || '—'}
                 </Text>
                 <Input
@@ -377,13 +377,13 @@ export function TaxInvoiceIssueSheet({
                 />
                 <Input label="비고 (지급 단계 · 비중)" value={remark} onChangeText={setRemark} />
                 <View className="flex-row justify-between rounded-xl bg-cd-surface px-3 py-2.5">
-                  <Text className="text-[12.5px] text-cd-muted">공급가액 {fmt(amounts.supply)}</Text>
-                  <Text className="text-[12.5px] text-cd-muted">세액 {fmt(amounts.tax)}</Text>
+                  <Text className="text-[13px] text-cd-muted">공급가액 {fmt(amounts.supply)}</Text>
+                  <Text className="text-[13px] text-cd-muted">세액 {fmt(amounts.tax)}</Text>
                   <Text className="text-[13px] font-extrabold text-cd-text">합계 {fmt(amounts.total)}원</Text>
                 </View>
               </Section>
 
-              <Text className="text-[11.5px] leading-4 text-cd-faint">
+              <Text className="text-[12px] leading-4 text-cd-faint">
                 발행하면 바로빌이 대표 수신처로 계산서 메일을 보내고, 이 단계는 발행 완료로 기록됩니다. 여러 품목·단계 묶음 발행은 웹에서 진행하세요.
               </Text>
             </View>

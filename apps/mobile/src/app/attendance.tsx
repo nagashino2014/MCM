@@ -216,7 +216,7 @@ export default function AttendanceScreen() {
       {/* 일별 */}
       <Card title="일별 기록">
         {data.daily.length === 0 ? (
-          <Text className="py-3 text-[13px] text-cd-faint">이 주의 일별 기록이 없습니다.</Text>
+          <Text className="py-2 text-[14px] text-cd-muted">이 주의 일별 기록이 없습니다.</Text>
         ) : (
           <View className="gap-1">
             {data.daily.map((d, i) => {
@@ -244,7 +244,7 @@ export default function AttendanceScreen() {
                       </Text>
                       <View className="items-end">
                         <Text className="text-[12px] font-semibold text-cd-text">{hm(d.workedMinutes)}</Text>
-                        <Text className="text-[10.5px] text-cd-faint">
+                        <Text className="text-[11px] text-cd-faint">
                           (정규 {hmm(reg)} / 초과 {hmm(over)})
                         </Text>
                       </View>

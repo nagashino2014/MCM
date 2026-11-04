@@ -56,7 +56,7 @@ function RootNavigator() {
 
   if (status === 'loading') {
     return (
-      <View className="flex-1 items-center justify-center bg-cd-bg">
+      <View className="flex-1 items-center justify-center bg-transparent">
         <ActivityIndicator />
       </View>
     );
@@ -65,7 +65,7 @@ function RootNavigator() {
   const header = {
     headerShown: true,
     headerStyle: { backgroundColor: c.card },
-    headerTitleStyle: { color: c.text, fontWeight: '800' as const },
+    headerTitleStyle: { color: c.text, fontWeight: '600' as const, fontSize: 17 },
     headerTintColor: c.text,
     headerShadowVisible: false,
     // 뒤로가기에 이전 라우트명("(tabs)", "leave")이 붙는 iOS 기본 동작 제거 — 셰브론만.
@@ -75,7 +75,7 @@ function RootNavigator() {
   return (
     <>
       <StatusBar style={dark ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
         {/* 명함 화면은 자체 헤더를 그린다(iOS 헤더 갱신 루프 회피 이력). */}

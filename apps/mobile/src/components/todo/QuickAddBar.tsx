@@ -228,7 +228,7 @@ export function QuickAddBar({
       </View>
       {chips.length ? (
         <View className="mt-2 flex-row flex-wrap items-center gap-x-2 gap-y-1.5">
-          <Text className="text-[12.5px] text-cd-faint">인식</Text>
+          <Text className="text-[13px] text-cd-faint">인식</Text>
           {chips.map((ch) => {
             const col = labelColors(ch.tone, dark);
             return (
@@ -236,7 +236,7 @@ export function QuickAddBar({
                 key={ch.key}
                 style={{ backgroundColor: col.bg, height: 24, borderRadius: 6, paddingLeft: 8, paddingRight: 2 }}
                 className="flex-row items-center gap-1">
-                <Text style={{ fontSize: 12.5, color: col.fg }}>{ch.label}</Text>
+                <Text style={{ fontSize: 13, color: col.fg }}>{ch.label}</Text>
                 <Pressable
                   hitSlop={6}
                   onPress={() => setIgnored((p) => new Set([...p, ...ch.kinds]))}
@@ -249,7 +249,7 @@ export function QuickAddBar({
           })}
           <View className="flex-1" />
           <Pressable onPress={() => inputRef?.current?.focus()} hitSlop={6} className="active:opacity-60">
-            <Text className="text-[12.5px] font-medium text-cd-primary">수정</Text>
+            <Text className="text-[13px] font-medium text-cd-primary">수정</Text>
           </Pressable>
         </View>
       ) : null}

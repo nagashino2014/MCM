@@ -1,3 +1,4 @@
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -103,7 +104,7 @@ export default function ApprovalScreen() {
         <FlatList
           data={docs}
           keyExtractor={(d) => d.docId}
-          contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 32 + TAB_BAR_INSET, gap: 12 }}
           refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
           ListHeaderComponent={
             staleAt ? (
@@ -173,7 +174,7 @@ function DocCard({ doc, onPress }: { doc: DocSummary; onPress: () => void }) {
 
       {lines.length > 0 ? (
         <View className="mt-1 gap-0.5 rounded-xl bg-cd-primary-soft px-3 py-2">
-          <Text className="text-[10px] font-extrabold tracking-wide text-cd-primary">AI 요약</Text>
+          <Text className="text-[11px] font-extrabold tracking-wide text-cd-primary">AI 요약</Text>
           {lines.slice(0, 3).map((l, i) => (
             <Text key={i} className="text-[12px] leading-4 text-cd-text">
               · {l}

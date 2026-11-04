@@ -1,11 +1,10 @@
 import { type ReactNode } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 
 import { useTheme } from "@/theme/useTheme";
 import { ShellBackground } from "@/theme/ShellBackground";
+import { AppHeader } from "./AppHeader";
 import { PullRefresh } from "./PullRefresh";
 import { TAB_BAR_INSET } from "./GlassTabBar";
 
@@ -18,7 +17,7 @@ import { TAB_BAR_INSET } from "./GlassTabBar";
  *   과거 명함 화면에서 인라인 options 가 헤더 갱신 루프를 만들어 터치까지 막혔다(실측).
  * - 네비게이터 헤더를 끈 화면(모달성)만 이 컴포넌트의 `title` 로 자체 헤더를 그린다.
  *
- * 자체 헤더(Frosted): 카드 면 + 아래 hairline, 제목 17/600 ink, 부제 12 ink-muted, 뒤로가기 44 터치.
+ * 자체 헤더는 공용 AppHeader(홈·전체 메뉴를 뺀 모든 화면이 같은 모양, 2026-11-04).
  */
 export interface ScreenProps {
   title?: string;
@@ -54,7 +53,6 @@ export function Screen({
   inTab,
 }: ScreenProps) {
   const { c } = useTheme();
-  const router = useRouter();
 
   // 카드 사이 16(모바일 폭에서의 space-5 대응), 바깥 여백 16.
   const body = padded ? <View className="gap-4 p-4">{children}</View> : children;
@@ -65,33 +63,7 @@ export function Screen({
     <SafeAreaView edges={title ? ["top"] : []} className="flex-1 bg-transparent">
       {/* 셸 바탕은 화면 안에서 그린다 — 네이티브 스택 화면이 루트의 배경을 가린다(11-04 실기기). */}
       <ShellBackground />
-      {title ? (
-        <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2">
-          {back ? (
-            <Pressable
-              onPress={() => (onBack ? onBack() : router.back())}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="뒤로"
-              className="h-11 w-11 items-center justify-center rounded-lg active:bg-cd-surface">
-              <Ionicons name="chevron-back" size={24} color={c.text} />
-            </Pressable>
-          ) : (
-            <View className="w-2" />
-          )}
-          <View className="flex-1">
-            <Text numberOfLines={1} className="text-[17px] font-semibold text-cd-text">
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text numberOfLines={1} className="text-[12px] text-cd-muted">
-                {subtitle}
-              </Text>
-            ) : null}
-          </View>
-          {right}
-        </View>
-      ) : null}
+      {title ? <AppHeader title={title} subtitle={subtitle} back={back} onBack={onBack} right={right} /> : null}
 
       {scroll ? (
         <ScrollView

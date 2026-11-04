@@ -1,15 +1,16 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 
 import { useTheme } from "@/theme/useTheme";
+import { AppHeader } from "./AppHeader";
 
 /**
- * 화면 자체 헤더(PageHeader) — 네비게이터 헤더를 끈 화면이 쓴다. 바탕(canvas) 위에 바로 놓이는 유일한 글자다.
+ * 화면 자체 헤더 — 네비게이터 헤더를 끈 화면이 쓴다.
  *
- * 제목 22/600 ink(자간 -0.01em) + 부제 12 ink-muted. 배경 카드·그림자·아이콘 없음. 우측은 36px 아이콘 버튼 슬롯.
- * `home`(인사말) / `sub`(하위 화면, 뒤로가기) 두 변형은 같은 크기 — 화면 성격만 다르다.
+ * `home`(뒤로가기 없음, 홈 인사말): 바탕 위에 제목 22/600 + 부제 12 — 홈만 이 모양이다.
+ * 그 밖(뒤로가기가 있거나 `sub`): 공용 AppHeader(카드 면 + hairline, 남색 셰브론, 제목 16/600) — 2026-11-04 사용자 결정으로
+ * 홈·전체 메뉴를 뺀 모든 화면의 상단이 같은 모양이다.
  * ⚠ 네비게이터 헤더 옵션은 반드시 `_layout.tsx` 에서 정적으로 정의한다 —
  *   화면 안에서 `<Stack.Screen options>` 를 인라인 렌더하면 iOS 에서 헤더 갱신 루프가 생긴다.
  */
@@ -27,20 +28,11 @@ export function ScreenHeader({
   right?: ReactNode;
   variant?: 'home' | 'sub';
 }) {
-  const { c } = useTheme();
-  const router = useRouter();
+  if (back || variant === 'sub') {
+    return <AppHeader title={title} subtitle={subtitle} back={back} right={right} />;
+  }
   return (
-    <View className={`flex-row items-center justify-between px-4 ${variant === 'sub' ? 'pb-3 pt-3' : 'pb-4 pt-3'}`}>
-      {back ? (
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="뒤로"
-          className="-ml-2 mr-1 h-10 w-10 items-center justify-center rounded-lg active:bg-cd-surface">
-          <Ionicons name="chevron-back" size={22} color={c.text} />
-        </Pressable>
-      ) : null}
+    <View className="flex-row items-center justify-between px-4 pb-4 pt-3">
       <View className="flex-1">
         <Text numberOfLines={1} className="text-[22px] font-semibold tracking-tight text-cd-text">
           {title}

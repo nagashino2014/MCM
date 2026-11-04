@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { File } from 'expo-file-system';
 
-import { CtaGradientFill } from '@/components/ui';
+import { AppHeader, CtaGradientFill } from '@/components/ui';
 import { apiFetch, apiJson } from '@/lib/api';
 import { useTheme } from '@/theme/useTheme';
 
@@ -308,13 +308,8 @@ export default function CardScreen() {
     <SafeAreaView className="flex-1 bg-transparent">
       <ShellBackground />
       {/* 자체 헤더 — 화면 내 <Stack.Screen options> 동적 갱신이 iOS에서 헤더 점멸 루프를
-          일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다 */}
-      <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">
-        <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={c.primary} />
-        </Pressable>
-        <Text className="text-base font-extrabold text-cd-text">명함 촬영</Text>
-      </View>
+          일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다. 모양은 공용 AppHeader(이 화면 형식이 전체 기준, 2026-11-04). */}
+      <AppHeader title="명함 촬영" back />
       <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, gap: 12 }}>
         {error ? (
           <View className="rounded-xl bg-cd-error-soft px-4 py-3">

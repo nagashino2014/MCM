@@ -18,7 +18,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File as FSFile } from 'expo-file-system';
 import { Image } from 'expo-image';
 
-import { Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from '@/components/ui';
+import { AppHeader, Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from '@/components/ui';
 import { EmojiPickerSheet } from '@/components/chat/EmojiPickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { apiFetch, apiJson } from '@/lib/api';
@@ -554,24 +554,24 @@ export default function ChatRoomScreen() {
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-transparent">
       <ShellBackground />
-      {/* 자체 헤더 */}
-      <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2.5">
-        <Pressable onPress={() => router.back()} hitSlop={8} className="p-1.5 active:opacity-60">
-          <Ionicons name="chevron-back" size={22} color={c.text} />
-        </Pressable>
-        <Text numberOfLines={1} className="flex-1 text-[16px] font-extrabold text-cd-text">
-          {title}
-        </Text>
-        <Pressable
-          onPress={() => {
-            setMenuOpen(true);
-            void loadDetail();
-          }}
-          hitSlop={8}
-          className="p-1.5 active:opacity-60">
-          <Ionicons name="ellipsis-horizontal" size={20} color={c.text} />
-        </Pressable>
-      </View>
+      {/* 자체 헤더 — 공용 AppHeader(홈·전체 메뉴 외 모든 화면 공통 모양, 2026-11-04) */}
+      <AppHeader
+        title={title}
+        back
+        right={
+          <Pressable
+            onPress={() => {
+              setMenuOpen(true);
+              void loadDetail();
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="대화방 메뉴"
+            className="h-10 w-10 items-center justify-center rounded-lg active:bg-cd-surface">
+            <Ionicons name="ellipsis-horizontal" size={20} color={c.text} />
+          </Pressable>
+        }
+      />
 
       <KeyboardAvoidingView
         className="flex-1"

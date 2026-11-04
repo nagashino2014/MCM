@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { apiJson } from './api';
+import { IS_STANDALONE_PWA } from './platform';
 
 interface BridgeRoom {
   roomId: number;
@@ -36,27 +37,37 @@ function todayLocal(): string {
  * 웹앱은 원격 오리진이라 Tauri API 를 직접 못 쓴다. 그래서 postMessage 로만 대화하고,
  * **셸이 먼저 hello 로 자기 오리진을 밝힌 뒤에만** 전송한다(대상 오리진을 '*' 로 흘리지 않기 위함).
  * 위젯이 아닌 브라우저·데모 페이지에서는 hello 가 오지 않으므로 아무 것도 하지 않는다.
+ *
+ * PWA(브라우저 "앱으로 설치" 창, 2026-11-04)에는 셸이 없으므로 같은 폴링으로 **작업표시줄 뱃지(Badging API)** 를 직접 그린다
+ * (미읽음 + 오늘 할 일). OS 알림(Web Push)은 서버 VAPID 가 필요해 후속.
  */
 export function useWidgetBridge(authed: boolean) {
   useEffect(() => {
     if (Platform.OS !== 'web' || !authed) return;
-    if (typeof window === 'undefined' || window.parent === window) return;
+    if (typeof window === 'undefined') return;
+    const inFrame = window.parent !== window;
+    const badgeApi = !inFrame && IS_STANDALONE_PWA && typeof navigator.setAppBadge === 'function';
+    if (!inFrame && !badgeApi) return;
 
     let shellOrigin: string | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
     let alive = true;
 
     const tick = async () => {
-      if (!shellOrigin) return;
+      if (!shellOrigin && !badgeApi) return;
+      let unread = 0;
+      let due = 0;
       try {
         const r = await apiJson<{ rooms: BridgeRoom[] }>('/api/chat/rooms');
-        if (!alive || !shellOrigin) return;
+        if (!alive) return;
         const rooms = r.rooms ?? [];
         const count = rooms.reduce((s, x) => s + (Number(x.unreadCount) || 0), 0);
+        unread = count;
         const latest = rooms
           .filter((x) => x.unreadCount > 0 && !x.muted && x.lastMessageAt)
           .sort((a, b) => String(b.lastMessageAt).localeCompare(String(a.lastMessageAt)))[0];
-        window.parent.postMessage(
+        if (shellOrigin)
+          window.parent.postMessage(
           {
             type: 'mcm:unread',
             count,
@@ -76,10 +87,12 @@ export function useWidgetBridge(authed: boolean) {
       try {
         // 할 일(274) — 다음 24시간의 예정·마감·지연 중 오늘까지인 것만 센다(내일 것은 뱃지에 넣지 않는다).
         const t = await apiJson<{ count: number; items: DueItem[] }>('/api/todo/due-soon?hours=24');
-        if (!alive || !shellOrigin) return;
+        if (!alive) return;
         const today = todayLocal();
         const dueToday = (t.items ?? []).filter((x) => (x.doDate && x.doDate <= today) || (x.dueDate && x.dueDate <= today));
-        window.parent.postMessage(
+        due = dueToday.length;
+        if (shellOrigin)
+          window.parent.postMessage(
           {
             type: 'mcm:todo-due',
             count: dueToday.length,
@@ -100,6 +113,14 @@ export function useWidgetBridge(authed: boolean) {
       } catch {
         // 277 미적용·권한 없음 등 — 메신저 뱃지에는 영향 없음.
       }
+      if (badgeApi) {
+        try {
+          if (unread + due > 0) await navigator.setAppBadge(unread + due);
+          else await navigator.clearAppBadge();
+        } catch {
+          // 뱃지 미지원 브라우저 — 무시
+        }
+      }
     };
 
     const onMessage = (e: MessageEvent) => {
@@ -110,9 +131,15 @@ export function useWidgetBridge(authed: boolean) {
       timer = setInterval(() => void tick(), POLL_MS);
     };
 
-    window.addEventListener('message', onMessage);
-    // 셸이 iframe 로드 시점을 놓쳐도 되도록 이쪽에서 먼저 알린다(내용 없는 신호).
-    window.parent.postMessage({ type: 'mcm:widget-ready' }, '*');
+    if (inFrame) {
+      window.addEventListener('message', onMessage);
+      // 셸이 iframe 로드 시점을 놓쳐도 되도록 이쪽에서 먼저 알린다(내용 없는 신호).
+      window.parent.postMessage({ type: 'mcm:widget-ready' }, '*');
+    } else {
+      // PWA 창 — 셸 핸드셰이크 없이 바로 폴링
+      void tick();
+      timer = setInterval(() => void tick(), POLL_MS);
+    }
 
     return () => {
       alive = false;

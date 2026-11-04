@@ -26,6 +26,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { GlassTabBar } from '@/components/ui/GlassTabBar';
+import { SideRail } from '@/components/ui/SideRail';
 import { ShellBackground } from '@/theme/ShellBackground';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
 import { TAG_TINT, type CalendarTagKey } from '@/lib/calendar/types';
@@ -109,6 +110,20 @@ export default function DevPreviewScreen() {
           </>
         ) : tab === 'ui' ? (
           <>
+            <Label>좌측 레일 (SideRail — 데스크탑 위젯·PWA 의 탭 바)</Label>
+            <View style={{ height: 340, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: c.cardBorder }}>
+              <ShellBackground />
+              <SideRail
+                state={{ index: 0, routes: TAB_DEMO.map((t) => ({ key: t.key, name: t.key })) }}
+                descriptors={Object.fromEntries(
+                  TAB_DEMO.map((t) => [
+                    t.key,
+                    { options: { title: t.title, tabBarIcon: ({ color, size }: { color: string; size: number }) => <Ionicons name={t.icon} color={color} size={size} /> } },
+                  ])
+                )}
+                navigation={{ emit: () => ({ defaultPrevented: false }), navigate: () => {} }}
+              />
+            </View>
             <Label>요약 스트립 (KpiStrip, 3+3)</Label>
             <View className="gap-2">
               <KpiStrip

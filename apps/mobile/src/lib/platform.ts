@@ -1,0 +1,24 @@
+import { Platform } from 'react-native';
+
+/**
+ * 실행 환경 판정(웹 전용) — 데스크탑 위젯·PWA·폰 목업 데모를 한 곳에서 가른다(2026-11-04).
+ * 모듈 평가 시점에 한 번 정한다. window.name 은 SPA 네비게이션·리로드에도 유지되므로 첫 렌더에 동기 판정할 수 있다.
+ * 정적 렌더(export) 시점에는 window 가 없어 전부 "일반 웹" 으로 그려지고, 브라우저에서 하이드레이션 뒤 실제 값으로 바뀐다.
+ */
+const win = Platform.OS === 'web' && typeof window !== 'undefined' ? window : null;
+
+/** 폰 목업 데모(m-demo.html) — 부모 iframe 이 name="mcm-phone-demo" 로 자신을 밝힌다. 390px 좁은 화면이라 네이티브와 같은 하단 탭으로 그린다. */
+export const IS_PHONE_DEMO = !!win && win.name === 'mcm-phone-demo';
+
+/** 데스크탑 위젯·브라우저·PWA — 하단 글라스 탭 바 대신 **좌측 세로 레일**(SideRail)로 그리는 기준. */
+export const IS_WEB_RAIL = Platform.OS === 'web' && !IS_PHONE_DEMO;
+
+/** 데스크탑 위젯(Tauri 셸)의 iframe 안 — 셸이 뱃지·알림을 맡으므로 PWA 설치 안내·배지 API 를 쓰지 않는다. */
+export const IS_IN_WIDGET = !!win && win.parent !== win && !IS_PHONE_DEMO;
+
+/** 브라우저 "앱으로 설치" 로 열린 창(PWA standalone) — 작업표시줄 뱃지(Badging API)를 직접 그린다. */
+export const IS_STANDALONE_PWA =
+  !!win && typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches;
+
+/** 레일 레이아웃의 콘텐츠 최대 폭(레일 88 포함) — 창을 최대화해도 모바일 화면 구성이 늘어지지 않게 가운데 섬으로 둔다. */
+export const WEB_SHELL_MAX_WIDTH = 88 + 640;

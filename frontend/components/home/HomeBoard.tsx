@@ -61,6 +61,9 @@ export function HomeBoard({ perms = [] }: { perms?: string[] }) {
   const [wxScene, setWxScene] = useState<SceneKind | null>(null);
   const [wxNight, setWxNight] = useState<boolean | null>(null);
   const wxBoxRef = useRef<HTMLSpanElement>(null);
+  // PC 앱 설치 박스(2026-11-04) — 브라우저 설치(PWA, 권장)와 데스크탑 위젯(exe) 두 길.
+  const [appOpen, setAppOpen] = useState(false);
+  const appBoxRef = useRef<HTMLSpanElement>(null);
 
   // 옵션 박스 바깥 클릭 시 닫기.
   useEffect(() => {
@@ -71,6 +74,14 @@ export function HomeBoard({ perms = [] }: { perms?: string[] }) {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [wxOpen]);
+  useEffect(() => {
+    if (!appOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (appBoxRef.current && !appBoxRef.current.contains(e.target as Node)) setAppOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [appOpen]);
 
   useEffect(() => {
     let alive = true;
@@ -264,16 +275,45 @@ export function HomeBoard({ perms = [] }: { perms?: string[] }) {
                 )}
               </span>
             )}
-            {/* 데스크탑 위젯(메신저 상주) 설치 파일 — Windows NSIS 인스톨러 */}
-            <a
-              href="/downloads/MCM-widget-setup.exe"
-              download
-              className="cd-chip"
-              title="메신저를 상주형으로 쓰는 데스크탑 위젯을 설치합니다 (Windows). 설치 후 시작 메뉴에서 'MCM' 으로 실행하세요."
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              데스크탑 위젯 설치
-            </a>
+            {/* PC 앱 설치(2026-11-04) — ① 브라우저 설치(PWA): 설치 파일이 없어 SmartScreen 경고가 없다(권장)
+                ② 데스크탑 위젯(exe, 서명 없음): 트레이 상주·항상 위 고정이 필요할 때. 직원이 경고에 겁먹고 포기하던 문제의 해법. */}
+            <span ref={appBoxRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setAppOpen((v) => !v)}
+                data-active={appOpen || undefined}
+                className="cd-chip"
+                title="PC 에 MCM 앱을 설치합니다 (Windows)"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                PC 앱 설치
+              </button>
+              {appOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 z-50 cd-card px-3.5 py-3 gap-3 w-[316px]"
+                  style={{ background: "var(--cd-card-solid)" }}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <a href="/m-app" target="_blank" rel="noreferrer" className="cd-chip justify-center" data-active>
+                      <Download className="w-3.5 h-3.5" />
+                      브라우저 앱으로 설치 (권장)
+                    </a>
+                    <p className="text-[11.5px] leading-[17px] cd-text-muted">
+                      열린 화면의 전체 메뉴 → ‘PC 앱으로 설치’를 누르면 Edge·Chrome 이 설치 파일 없이 바로 설치합니다. 보안 경고가 없고, 작업표시줄 뱃지로 새 메시지·오늘 할 일 수를 보여 줍니다.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5 pt-2.5 border-t cd-hairline-c">
+                    <a href="/downloads/MCM-widget-setup.exe" download className="cd-chip justify-center">
+                      <Monitor className="w-3.5 h-3.5" />
+                      데스크탑 위젯(exe) 내려받기
+                    </a>
+                    <p className="text-[11.5px] leading-[17px] cd-text-muted">
+                      트레이 상주·항상 위 고정이 필요할 때. 서명이 없어 ‘PC 보호’ 경고가 뜨면 추가 정보 → 실행을 누르세요. 설치 후 시작 메뉴 ‘MCM’.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </span>
             {/* 저장된 배치 프리셋 빠른 전환 — 편집 모드에 들어가지 않고 바로 갈아입는다. */}
             {(["1", "2", "3"] as const).map(
               (slot) =>

@@ -45,6 +45,18 @@ export const HOME_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "pc-app",
+        title: "PC 앱 설치",
+        blocks: [
+          { kind: "p", text: "홈 오른쪽 위 [[PC 앱 설치]]를 누르면 두 가지 길이 보입니다." },
+          { kind: "list", items: [
+            "브라우저 앱으로 설치(권장): 새 탭에 열리는 모바일 화면의 전체 메뉴 → ‘PC 앱으로 설치’를 누릅니다. Edge·Chrome 이 설치 파일 없이 바로 설치하므로 보안 경고가 없습니다. 설치된 앱은 시작 메뉴와 작업표시줄에 등록되고, 새 메시지·오늘 할 일 수가 작업표시줄 뱃지로 보입니다.",
+            "데스크탑 위젯(exe): 트레이 상주·항상 위 고정이 필요할 때 내려받습니다. 서명이 없어 Windows 가 ‘PC 보호’ 경고를 띄우면 추가 정보 → 실행을 누르면 됩니다.",
+          ] },
+          { kind: "tip", text: "브라우저 앱이 설치 프롬프트를 띄우지 않으면 주소창 오른쪽 설치 아이콘(⊕)이나 Edge ··· 메뉴 → 앱 → 이 사이트를 앱으로 설치에서 할 수 있습니다." },
+        ],
+      },
+      {
         id: "edit",
         title: "내 홈 꾸미기",
         blocks: [
@@ -60,7 +72,7 @@ export const HOME_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["홈", "대시보드", "위젯", "카드", "배치", "프리셋", "발행 요청", "수신함", "세금계산서 담당자", "바로빌"],
+    keywords: ["홈", "대시보드", "위젯", "카드", "배치", "프리셋", "발행 요청", "수신함", "세금계산서 담당자", "바로빌", "PC 앱", "데스크탑 위젯", "설치"],
     sources: [
       "components/home/HomeBoard.tsx",
       "components/home/HomeEditGrid.tsx",
@@ -69,6 +81,6 @@ export const HOME_ARTICLES: ManualArticle[] = [
       "components/home/widgets/InvoiceInboxCard.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-02",
+    reviewedAt: "2026-11-04",
   },
 ];

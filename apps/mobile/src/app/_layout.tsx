@@ -11,6 +11,7 @@ import { ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { usePushSetup } from '@/lib/use-push';
 import { useWidgetBridge } from '@/lib/use-widget-bridge';
+import { IS_WEB_RAIL, WEB_SHELL_MAX_WIDTH } from '@/lib/platform';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useTheme } from '@/theme/useTheme';
 
@@ -69,9 +70,7 @@ function RootNavigator() {
     header: (p: unknown) => <NavHeader {...(p as NavHeaderProps)} />,
   };
 
-  return (
-    <>
-      <StatusBar style={dark ? 'light' : 'dark'} />
+  const stack = (
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
@@ -121,6 +120,14 @@ function RootNavigator() {
         <Stack.Screen name="manual/index" />
         <Stack.Screen name="manual/[articleId]" />
       </Stack>
+  );
+
+  return (
+    <>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      {/* 데스크탑 위젯·PWA(좌측 레일): 창을 최대화해도 모바일 화면 구성이 늘어지지 않게 최대 폭의 가운데 섬 —
+          바탕 그라데이션(ThemeProvider 루트)은 창 전체에 깔리고 섬은 그 위에 떠 있다(2026-11-04). */}
+      {IS_WEB_RAIL ? <View style={{ flex: 1, width: '100%', maxWidth: WEB_SHELL_MAX_WIDTH, alignSelf: 'center' }}>{stack}</View> : stack}
     </>
   );
 }

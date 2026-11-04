@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { GlassTabBar, type GlassTabBarProps } from '@/components/ui/GlassTabBar';
+import { SideRail } from '@/components/ui/SideRail';
+import { IS_WEB_RAIL } from '@/lib/platform';
 import { NavHeader, type NavHeaderProps } from '@/components/ui/AppHeader';
 import { useTheme } from '@/theme/useTheme';
 import { useNavBadges } from '@/lib/use-nav-badges';
@@ -24,23 +26,20 @@ function TabBadge({ count }: { count?: number | null }) {
   );
 }
 
-/** 폰 목업 데모(m-demo.html) 여부 — 부모 iframe 이 name="mcm-phone-demo" 로 자신을 밝힌다.
- *  window.name 은 SPA 네비게이션·리로드에도 유지되므로 첫 렌더에 동기 판정할 수 있다. */
-const IS_PHONE_DEMO =
-  Platform.OS === 'web' && typeof window !== 'undefined' && window.name === 'mcm-phone-demo';
-
-/** 데스크탑 위젯·브라우저 미리보기 여부 — 탭 바를 좌측 세로 바로 바꾸는 기준.
- *  폰 목업 데모는 390px 좁은 화면이라 네이티브와 같은 하단 탭으로 렌더한다(88px 좌측 바가 콘텐츠를 짜부라뜨림). */
-const IS_WEB = Platform.OS === 'web' && !IS_PHONE_DEMO;
-
 export default function TabsLayout() {
   const { c } = useTheme();
   const badges = useNavBadges();
 
   return (
     <Tabs
-      // 네이티브(폰)·폰 목업은 글라스 플로팅 탭 바(2026-11-04). 데스크탑 위젯은 아래 좌측 세로 바 그대로.
-      tabBar={IS_WEB ? undefined : (props) => <GlassTabBar {...(props as unknown as GlassTabBarProps)} />}
+      // 네이티브(폰)·폰 목업은 글라스 플로팅 탭 바, 데스크탑 위젯·PWA(IS_WEB_RAIL, lib/platform)는 그 세로판 SideRail(2026-11-04).
+      tabBar={(props) =>
+        IS_WEB_RAIL ? (
+          <SideRail {...(props as unknown as GlassTabBarProps)} />
+        ) : (
+          <GlassTabBar {...(props as unknown as GlassTabBarProps)} />
+        )
+      }
       screenOptions={{
         // 셸 바탕(그라데이션)이 비치도록 scene 은 투명 — 탭 바 뒤까지 콘텐츠가 이어진다.
         sceneStyle: { backgroundColor: 'transparent' },
@@ -48,22 +47,12 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: c.faint,
         // 데스크탑 위젯은 하단 탭 대신 **좌측 세로 바**(다우 메신저류 관례) — 폰 느낌을 덜고
         // 넓은 창에서 세로 공간을 콘텐츠에 넘긴다. 네이티브(폰)는 하단 탭 그대로.
-        tabBarPosition: IS_WEB ? 'left' : 'bottom',
-        // ⚠ 좌측 배치에서 'below-icon' 라벨은 uikit 변형이 거부한다(런타임 throw → 화면 백지,
-        //   2026-08-10 실측). 좌측일 때만 material 변형으로 바꿔야 아이콘 아래 라벨이 허용된다.
-        tabBarVariant: IS_WEB ? 'material' : 'uikit',
+        // left 면 react-navigation 이 바와 scene 을 가로로 나란히 놓는다. 커스텀 바(SideRail)라 기본 바의 variant 함정
+        // (uikit 이 좌측 below-icon 라벨을 거부해 화면 백지, 2026-08-10 실측)과는 무관하다.
+        tabBarPosition: IS_WEB_RAIL ? 'left' : 'bottom',
         tabBarLabelPosition: 'below-icon',
-        tabBarStyle: IS_WEB
-          ? {
-              backgroundColor: c.card,
-              borderRightColor: c.border,
-              borderRightWidth: 1,
-              borderTopWidth: 0,
-              width: 88,
-              paddingTop: 10,
-            }
-          // position absolute 여야 react-navigation 이 scene 을 바닥까지 늘린다(커스텀 바가 그 위에 뜬다).
-          : { position: 'absolute', backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0 },
+        // position absolute 여야 react-navigation 이 scene 을 바닥까지 늘린다(커스텀 바가 그 위에 뜬다). 레일에서는 쓰이지 않는다.
+        tabBarStyle: { position: 'absolute', backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0 },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
         headerStyle: { backgroundColor: c.card },
         headerTitleStyle: { color: c.text, fontWeight: '600', fontSize: 17 },

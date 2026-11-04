@@ -204,12 +204,14 @@ export default function MailScreen() {
       </View>
 
       {list.loading && !list.items.length ? (
-        <View className="p-4">
+        <View className="flex-1 bg-cd-card p-4">
           <SkeletonList count={4} />
         </View>
       ) : (
         <FlatList
           data={list.items}
+          // 메일 목록은 흰 바탕(2026-11-04 사용자 요청 — 그라데이션 바탕 위에서는 가독성이 떨어진다)
+          className="flex-1 bg-cd-card"
           contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
           keyExtractor={(m) => m.messageId}
           refreshControl={<PullRefresh refreshing={list.refreshing} onRefresh={list.reload} />}

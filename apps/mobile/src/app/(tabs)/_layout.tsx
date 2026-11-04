@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, Text, View } from 'react-native';
 
 import { GlassTabBar, type GlassTabBarProps } from '@/components/ui/GlassTabBar';
+import { NavHeader, type NavHeaderProps } from '@/components/ui/AppHeader';
 import { useTheme } from '@/theme/useTheme';
 import { useNavBadges } from '@/lib/use-nav-badges';
 
@@ -83,6 +84,7 @@ export default function TabsLayout() {
         name="approval"
         options={{
           title: '결재',
+          header: (p: unknown) => <NavHeader {...(p as NavHeaderProps)} />,
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="clipboard-outline" color={color} size={size} />
@@ -95,6 +97,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: '대화',
+          header: (p: unknown) => <NavHeader {...(p as NavHeaderProps)} />,
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="chatbubble-outline" color={color} size={size} />
@@ -107,6 +110,7 @@ export default function TabsLayout() {
         name="mail"
         options={{
           title: '메일',
+          header: (p: unknown) => <NavHeader {...(p as NavHeaderProps)} />,
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="mail-outline" color={color} size={size} />

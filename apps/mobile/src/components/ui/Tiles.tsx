@@ -107,38 +107,17 @@ export function StatTile({
 }
 
 /**
- * 아이콘 상자(IconWell) — 빠른 실행·전체 메뉴 타일의 아이콘 바탕. **뉴모피즘** 버튼(2026-11-04 사용자 요청, 단순 그라데이션은 폐기):
- * 바탕과 비슷한 연한 면 위에 우하단 어두운 그림자 + 좌상단 흰 하이라이트 그림자를 함께 깔아 살짝 떠 보인다.
- * RN 0.76+ 의 `boxShadow`(다중 그림자, iOS·Android·웹) 를 쓴다. 반경 12.
+ * 액션 타일 — 빠른 실행의 스퀘클 버튼. **UI 개편 전 디자인 그대로 복원**(2026-11-04 사용자 결정 — 그라데이션·뉴모피즘 모두 폐기):
+ * 54px · radius 19 · 카드 면 + 옅은 테두리 + 옅은 그림자(#3C4696 12%), 아이콘 색만 기능별로 다르다(`tone`). 라벨 11/500.
  */
-export function IconWell({ size, children }: { size: number; children: React.ReactNode }) {
-  const { dark } = useTheme();
-  const d = Math.round(size * 0.12);
-  const blur = Math.round(size * 0.25);
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: dark ? "#23262f" : "#eef1f6",
-        borderWidth: 1,
-        borderColor: dark ? "#2d313c" : "rgba(255,255,255,0.9)",
-        boxShadow: dark
-          ? `${d}px ${d}px ${blur}px rgba(0,0,0,0.45), -${d}px -${d}px ${blur}px rgba(255,255,255,0.04)`
-          : `${d}px ${d}px ${blur}px rgba(29,36,53,0.16), -${d}px -${d}px ${blur}px rgba(255,255,255,1)`,
-      }}>
-      {children}
-    </View>
-  );
-}
+export const SQUIRCLE_SHADOW = {
+  shadowColor: "#3C4696",
+  shadowOpacity: 0.12,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 3,
+} as const;
 
-/**
- * 액션 타일 — 빠른 실행의 아이콘 버튼. 48px IconWell(옅은 그라데이션 입체 상자) + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원),
- * 아래 라벨 12/500.
- */
 export function ActionTile({
   icon,
   label,
@@ -152,10 +131,12 @@ export function ActionTile({
 }) {
   const { c } = useTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} className="items-center gap-1.5 active:opacity-70">
-      <IconWell size={48}>
-        <Ionicons name={icon} size={22} color={tone ?? c.primary} />
-      </IconWell>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} className="items-center gap-[7px] active:opacity-70">
+      <View
+        style={[{ width: 54, height: 54, borderRadius: 19, borderWidth: 1, borderColor: c.border }, SQUIRCLE_SHADOW]}
+        className="items-center justify-center bg-cd-card">
+        <Ionicons name={icon} size={23} color={tone ?? c.primary} />
+      </View>
       <Text className="text-[12px] font-medium text-cd-text">{label}</Text>
     </Pressable>
   );

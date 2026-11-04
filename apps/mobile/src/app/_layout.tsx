@@ -6,6 +6,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { LockGate } from '@/components/LockGate';
+import { NavHeader, type NavHeaderProps } from '@/components/ui/AppHeader';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { usePushSetup } from '@/lib/use-push';
@@ -33,7 +34,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { status } = useAuth();
-  const { c, dark } = useTheme();
+  const { dark } = useTheme();
   const segments = useSegments();
   const router = useRouter();
 
@@ -62,14 +63,10 @@ function RootNavigator() {
     );
   }
 
+  // 네비게이터가 그리는 헤더도 공용 AppHeader(NavHeader) — 홈·전체 메뉴를 뺀 모든 화면의 상단이 같은 모양(2026-11-04).
   const header = {
     headerShown: true,
-    headerStyle: { backgroundColor: c.card },
-    headerTitleStyle: { color: c.text, fontWeight: '600' as const, fontSize: 17 },
-    headerTintColor: c.text,
-    headerShadowVisible: false,
-    // 뒤로가기에 이전 라우트명("(tabs)", "leave")이 붙는 iOS 기본 동작 제거 — 셰브론만.
-    headerBackButtonDisplayMode: 'minimal' as const,
+    header: (p: unknown) => <NavHeader {...(p as NavHeaderProps)} />,
   };
 
   return (

@@ -2,7 +2,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Avatar, IconWell, Screen } from '@/components/ui';
+import { Avatar, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
@@ -165,7 +165,7 @@ export default function MoreScreen() {
 
 /**
  * 2열 메뉴 타일 — KESI Frosted(2026-11-03): 카드 규격(흰 면 + card-border + 반경 10 + 1단 그림자) 안에
- * 40px 중립 아이콘 상자(surface-sunken) + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원) + 제목 14/500 + 부제 12 ink-muted. 스퀘클 그림자는 폐기.
+ * 개편 전과 같은 42px 그림자 스퀘클 + **기능별 색 아이콘**(`tone`) + 제목 14/500 + 부제 12 ink-muted(2026-11-04 사용자 결정 — 아이콘은 개편 전 디자인).
  */
 function MenuTile({
   icon,
@@ -186,12 +186,15 @@ function MenuTile({
       onPress={onPress}
       accessibilityRole="button"
       // 2열: 부모 폭 - gap(8) 의 절반. 홀수 개 섹션도 반칸 유지(풀폭 아님).
-      // 옛 타일과 같은 높이(아이콘 44 + 안쪽 14 = 72) — 11-04 "빡빡하다" 피드백으로 40/12 에서 되돌림.
+      // 옛 타일과 같은 높이(아이콘 42 + 안쪽 14 = 70) — 11-04 "빡빡하다" 피드백으로 40/12 에서 되돌림.
       style={[{ width: '48.8%', borderColor: c.cardBorder, padding: 14 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
       className="flex-row items-center gap-3 rounded-lg border bg-cd-card active:opacity-80">
-      <IconWell size={44}>
-        <Ionicons name={icon} size={21} color={tone} />
-      </IconWell>
+      {/* 아이콘 스퀘클 — UI 개편 전 디자인 복원(42px · radius 15 · 카드 면 + 테두리 + 옅은 그림자, 기능별 색 아이콘) */}
+      <View
+        style={[{ width: 42, height: 42, borderRadius: 15, borderWidth: 1, borderColor: c.border, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } }, { shadowColor: '#3C4696', shadowOpacity: 0.12, elevation: 3 }]}
+        className="items-center justify-center bg-cd-card">
+        <Ionicons name={icon} size={19} color={tone} />
+      </View>
       <View className="flex-1">
         <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
           {title}

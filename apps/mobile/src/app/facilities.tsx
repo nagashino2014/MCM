@@ -163,7 +163,8 @@ export default function FacilitiesScreen() {
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ShellBackground />
       <ScreenHeader title="사업장" subtitle={active ? `${total.toLocaleString()}곳` : undefined} back />
-      <View className="px-[18px] pb-2">
+      {/* 헤더 아래 12 — 검색란이 헤더에 붙어 보였다(2026-11-04 사용자 지적). */}
+      <View className="px-[18px] pb-2 pt-3">
         <SearchBar
           value={q}
           onChangeText={setQ}

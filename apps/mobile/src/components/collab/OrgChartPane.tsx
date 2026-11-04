@@ -84,9 +84,11 @@ export function OrgChartPane() {
         {expanded ? (
           <>
             {members.map((p) => (
+              // 구성원마다 흰 박스(2026-11-04 사용자 결정) — 부서 행 아래 들여쓰기(왼쪽 32)·반경 10·card-border.
               <View
                 key={p.employeeId}
-                className="flex-row items-center gap-2.5 border-b border-cd-border py-2 pl-8 pr-4">
+                style={{ borderColor: c.cardBorder, marginLeft: 32, marginRight: 16 }}
+                className="mb-1.5 flex-row items-center gap-2.5 rounded-lg border bg-cd-card px-3 py-2">
                 <Avatar name={p.name} photoPath={p.photoPath} size="sm" />
                 <Text className="flex-1 text-[14px] text-cd-text">
                   {p.name}
@@ -96,6 +98,7 @@ export function OrgChartPane() {
                 </Text>
               </View>
             ))}
+            {members.length ? <View className="h-1" /> : null}
             {kids.map((k) => renderDept(k, depth + 1))}
           </>
         ) : null}

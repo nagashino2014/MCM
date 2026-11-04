@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import { Badge, Card, EmptyState, Screen, SkeletonList } from '@/components/ui';
+import { Badge, Card, EmptyState, Screen, Sheet, SkeletonList } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
@@ -66,13 +67,18 @@ export default function AttendanceScreen() {
 
   const months = data?.months ?? [];
   const years = useMemo(() => [...new Set(months.map((m) => m.slice(0, 4)))], [months]);
-  /** 표시 기준 월 — 미선택이면 최신 월. */
-  const selMonth = month ?? months[0] ?? null;
-  const selYear = selMonth?.slice(0, 4) ?? null;
-  const monthsOfYear = useMemo(
-    () => months.filter((m) => m.slice(0, 4) === selYear),
-    [months, selYear]
-  );
+  /** 표시 기준 월 — 미선택이면 최신 기록 월, 기록이 없으면 이번 달. */
+  const selMonth = month ?? months[0] ?? thisMonth();
+  /** 연도 목록박스 선택 — 그 연도의 최신 기록 월, 없으면 올해는 이번 달·과거는 12월. */
+  const pickYear = (y: string) => {
+    const found = months.find((m) => m.slice(0, 4) === y);
+    setMonth(found ?? (y === thisMonth().slice(0, 4) ? thisMonth() : `${y}-12`));
+    setWeek(null);
+  };
+  const pickMonth = (m: string) => {
+    setMonth(m);
+    setWeek(null);
+  };
 
   if (loading && !data) {
     return (
@@ -85,23 +91,7 @@ export default function AttendanceScreen() {
     // 월을 골랐는데 그 달 기록이 없을 수도 있다 — 선택 UI 는 남겨 되돌아갈 수 있게 한다.
     return (
       <Screen scroll refreshing={refreshing} onRefresh={reload}>
-        {months.length > 0 ? (
-          <MonthPicker
-            years={years}
-            monthsOfYear={monthsOfYear}
-            selYear={selYear}
-            selMonth={selMonth}
-            onYear={(y) => {
-              const first = months.find((m) => m.slice(0, 4) === y);
-              setMonth(first ?? null);
-              setWeek(null);
-            }}
-            onMonth={(m) => {
-              setMonth(m);
-              setWeek(null);
-            }}
-          />
-        ) : null}
+        <MonthNav years={years} selMonth={selMonth} onMonth={pickMonth} onYear={pickYear} />
         <EmptyState
           icon="time-outline"
           title={error ? '불러오지 못했습니다' : '근태 기록이 없습니다'}
@@ -129,22 +119,8 @@ export default function AttendanceScreen() {
 
   return (
     <Screen scroll refreshing={refreshing} onRefresh={reload}>
-      {/* 연/월 선택 → 해당 월의 주 태그 */}
-      <MonthPicker
-        years={years}
-        monthsOfYear={monthsOfYear}
-        selYear={selYear}
-        selMonth={selMonth}
-        onYear={(y) => {
-          const first = months.find((m) => m.slice(0, 4) === y);
-          setMonth(first ?? null);
-          setWeek(null);
-        }}
-        onMonth={(m) => {
-          setMonth(m);
-          setWeek(null);
-        }}
-      />
+      {/* ‹ 월 › 이동 + 연도 목록박스 → 해당 월의 주 태그 */}
+      <MonthNav years={years} selMonth={selMonth} onMonth={pickMonth} onYear={pickYear} />
       <View className="flex-row flex-wrap gap-2">
         {(weekTags.length ? weekTags : data.weeks).map((w) => (
           <Pressable
@@ -260,36 +236,88 @@ export default function AttendanceScreen() {
   );
 }
 
-/** 연도·월 선택 — 기록이 있는 연/월만 칩으로(가로 스크롤, 축소 금지 원칙). */
-function MonthPicker({
+const thisMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/**
+ * 연·월 탐색(2026-11-04 사용자 결정 — 연도 태그 행 폐지) — 한 행에 왼쪽 ‹ N월 ›(전월·익월 이동), 오른쪽 "YYYY년 ▾" 연도 목록박스(시트).
+ * 기록이 없는 달로도 이동할 수 있다(그 달은 빈 상태 안내가 뜨고 여기서 되돌아온다). 연도 목록은 기록이 있는 연도 + 올해.
+ */
+function MonthNav({
   years,
-  monthsOfYear,
-  selYear,
   selMonth,
-  onYear,
   onMonth,
+  onYear,
 }: {
   years: string[];
-  monthsOfYear: string[];
-  selYear: string | null;
-  selMonth: string | null;
-  onYear: (y: string) => void;
+  selMonth: string;
   onMonth: (m: string) => void;
+  onYear: (y: string) => void;
 }) {
-  if (!years.length) return null;
+  const { c } = useTheme();
+  const [open, setOpen] = useState(false);
+  const y = Number(selMonth.slice(0, 4));
+  const m = Number(selMonth.slice(5, 7));
+  const shift = (d: number) => {
+    const t = new Date(y, m - 1 + d, 1);
+    onMonth(`${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`);
+  };
+  const list = [...new Set([thisMonth().slice(0, 4), ...years])].sort((a, b) => b.localeCompare(a));
   return (
-    <View className="gap-2">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
-        {years.map((y) => (
-          <PickPill key={y} label={`${y}년`} on={y === selYear} onPress={() => onYear(y)} />
-        ))}
-      </ScrollView>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
-        {monthsOfYear.map((m) => (
-          <PickPill key={m} label={`${Number(m.slice(5, 7))}월`} on={m === selMonth} onPress={() => onMonth(m)} />
-        ))}
-      </ScrollView>
+    <View className="flex-row items-center justify-between">
+      <View className="flex-row items-center gap-1">
+        <NavArrow icon="chevron-back" label="전월" onPress={() => shift(-1)} />
+        <Text className="min-w-[52px] text-center text-[16px] font-semibold text-cd-text">{m}월</Text>
+        <NavArrow icon="chevron-forward" label="익월" onPress={() => shift(1)} />
+      </View>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="연도 선택"
+        style={{ borderColor: c.border }}
+        className="h-9 flex-row items-center gap-1 rounded-lg border bg-cd-card pl-3 pr-2 active:opacity-70">
+        <Text className="text-[14px] font-medium text-cd-text">{y}년</Text>
+        <Ionicons name="chevron-down" size={14} color={c.muted} />
+      </Pressable>
+      <Sheet visible={open} onClose={() => setOpen(false)} title="연도 선택">
+        <View className="gap-1.5">
+          {list.map((yy) => {
+            const on = yy === String(y);
+            return (
+              <Pressable
+                key={yy}
+                onPress={() => {
+                  setOpen(false);
+                  if (!on) onYear(yy);
+                }}
+                className={`h-11 flex-row items-center rounded-lg border px-3 active:opacity-70 ${
+                  on ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
+                }`}>
+                <Text className={`flex-1 text-[14px] ${on ? 'font-semibold text-cd-primary' : 'text-cd-text'}`}>{yy}년</Text>
+                {years.includes(yy) ? null : <Text className="text-[12px] text-cd-faint">기록 없음</Text>}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
     </View>
+  );
+}
+
+function NavArrow({ icon, label, onPress }: { icon: 'chevron-back' | 'chevron-forward'; label: string; onPress: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{ borderColor: c.border }}
+      className="h-9 w-9 items-center justify-center rounded-lg border bg-cd-card active:opacity-70">
+      <Ionicons name={icon} size={18} color={c.primary} />
+    </Pressable>
   );
 }
 

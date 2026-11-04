@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MCM 데스크탑 위젯 — Microsoft Store 제출용 MSIX 매니페스트(Desktop Bridge, 2026-11-04).
+  scripts/make-msix.ps1 이 __IDENTITY_NAME__ / __PUBLISHER__ / __PUBLISHER_DISPLAY__ / __VERSION__ 을 채워 target/msix/pkg 에 넣고 makeappx 로 묶는다.
+  Identity 의 Name·Publisher 는 Partner Center > 제품 ID 페이지의 값과 **정확히** 같아야 Store 가 받는다(Store 가 서명하므로 로컬 서명은 불필요).
+  runFullTrust: Win32(Tauri) 앱을 그대로 담는 전체 신뢰 패키지. 자동 시작은 레지스트리 Run 키가 아니라 StartupTask 확장(설정 > 앱 > 시작 프로그램에서 켬).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop rescap">
+
+  <Identity Name="__IDENTITY_NAME__" Publisher="__PUBLISHER__" Version="__VERSION__" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>MCM</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="ko-KR" />
+  </Resources>
+
+  <Applications>
+    <Application Id="MCM" Executable="mcm-desktop.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="MCM"
+        Description="KESI 사내 메신저·결재·메일·할 일 — 데스크탑 위젯"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\Square71x71Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask" Executable="mcm-desktop.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="MCMStartup" Enabled="false" DisplayName="MCM" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

@@ -167,7 +167,7 @@ export function CheckCircle({
         width: size,
         height: size,
         borderRadius: size / 2,
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: done ? c.primary : tone ? tone.border : c.faint,
         borderStyle: tone?.dashed ? 'dashed' : 'solid',
         backgroundColor: tone ? tone.bg : undefined,

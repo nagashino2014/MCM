@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -532,6 +533,7 @@ export default function DraftScreen() {
 
     return (
       <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
         <ScreenHeader title="기안 작성" subtitle="양식을 선택하세요" back />
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}>
           {forms.loading && !all.length ? (

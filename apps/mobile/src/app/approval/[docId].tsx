@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -110,6 +111,7 @@ export default function ApprovalDocScreen() {
   return (
     // 상단은 네비게이터 헤더가 처리하고, 하단 액션 바는 자체 padding 으로 안전영역을 확보한다.
     <SafeAreaView edges={[]} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScrollView automaticallyAdjustKeyboardInsets
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>

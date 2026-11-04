@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -552,6 +553,7 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-transparent">
+      <ShellBackground />
       {/* 자체 헤더 */}
       <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2.5">
         <Pressable onPress={() => router.back()} hitSlop={8} className="p-1.5 active:opacity-60">

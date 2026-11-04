@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -305,6 +306,7 @@ export default function CardScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       {/* 자체 헤더 — 화면 내 <Stack.Screen options> 동적 갱신이 iOS에서 헤더 점멸 루프를
           일으켜(cam1~3 실측) expo-router 헤더 대신 직접 렌더한다 */}
       <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">

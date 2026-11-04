@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -247,6 +248,7 @@ export default function InvoiceRequestsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="발행 요청" subtitle="세금계산서 발행 요청·수신함" back variant="sub" />
       {inbox.allowed === true ? <SegmentedTabs items={tabs} value={tab} onChange={setUserTab} /> : null}
 

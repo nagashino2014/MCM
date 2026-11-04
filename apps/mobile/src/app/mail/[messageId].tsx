@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -151,6 +152,7 @@ export default function MailViewerScreen() {
 
   return (
     <SafeAreaView edges={[]} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 12 }}>
         {/* 제목 + 발신자 */}
         <View className="gap-2 rounded-card border border-cd-border bg-cd-card p-4">

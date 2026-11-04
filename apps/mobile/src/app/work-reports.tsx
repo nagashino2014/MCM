@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -255,6 +256,7 @@ export default function WorkReportsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="업무보고" subtitle="용역·Task 추진 보고" back variant="sub" />
       <SegmentedTabs items={tabs} value={tab} onChange={setTab} />
 

@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -160,6 +161,7 @@ export default function FacilitiesScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="사업장" subtitle={active ? `${total.toLocaleString()}곳` : undefined} back />
       <View className="px-[18px] pb-2">
         <SearchBar

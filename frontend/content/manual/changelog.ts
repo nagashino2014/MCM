@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-04", kind: "개선", title: "PC 앱 설치 — 보안 경고 끄기(.reg) 1단계 추가",
+    body: "웹 홈 ‘PC 앱 설치’의 데스크탑 위젯 항목에 ‘1단계 · 보안 경고 끄기(.reg)’가 생겼습니다. PC 당 한 번 실행하면 이 사이트에서 받는 설치 파일에 Windows ‘PC 보호’ 경고가 뜨지 않습니다. 관리자 권한이 필요 없고 다른 사이트에는 영향이 없습니다.",
+    articles: ["home.dashboard"],
+  },
+  {
     date: "2026-11-04", kind: "개선", title: "PC 앱 — 대화 목록·대화방 2분할 · 넓은 창 배치 · 위젯 상단 바",
     body: "PC 앱(데스크탑 위젯·브라우저 앱)에서 창 폭이 900 이상이면 대화 탭이 왼쪽 대화 목록과 오른쪽 대화방으로 나뉘어 한 화면에 보입니다. 콘텐츠 영역 최대 폭이 넓어졌고 위젯 창 기본 크기가 1000×860 으로 커졌습니다. 위젯 상단 바가 앱과 같은 디자인·테마를 따릅니다(위젯 1.4.0 재설치 필요).",
     articles: ["start.mobile"],

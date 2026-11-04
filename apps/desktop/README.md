@@ -68,6 +68,22 @@ next 배포(=`/m-app` 갱신)만으로 위젯에 반영된다.
 버전을 올릴 때는 `src-tauri/tauri.conf.json` 과 `Cargo.toml` 의 `version` 을 함께 올린다
 (NSIS 가 같은 제품을 덮어쓰며 업그레이드한다).
 
+### 설치 경고 없애기 — 인트라넷 영역 등록 (2026-11-04)
+서명이 없어도 **받는 쪽 PC** 에서 koensain.app 을 로컬 인트라넷 영역으로 두면 그 사이트에서 받은 파일에 Mark-of-the-Web 이
+붙지 않아 SmartScreen "PC 보호" 경고가 뜨지 않는다. `frontend/public/downloads/mcm-trust-koensain.reg`(HKCU, 관리자 불필요):
+ZoneMap `koensain.app` https=1 + Edge `SmartScreenAllowListDomains` + Chrome `SafeBrowsingAllowlistDomains`. 웹 홈 "PC 앱 설치" 의 1단계.
+도메인 환경이면 같은 값을 GPO 로 뿌리면 된다.
+
+### Microsoft Store 제출 준비 — MSIX (2026-11-04)
+Store 배포는 Microsoft 가 서명·배포하므로 경고가 없고 설정 > 앱 등록·자동 업데이트가 된다. `msix/AppxManifest.xml`(Desktop Bridge,
+runFullTrust, StartupTask) + `scripts/make-msix.ps1`:
+```
+npm run build
+powershell -ExecutionPolicy Bypass -File scripts/make-msix.ps1 -IdentityName "<Partner Center 패키지 ID>" -Publisher "CN=<게시자 ID>" -PublisherDisplay "<회사명>"
+```
+→ `src-tauri/target/msix/MCM_<ver>.0.msix`(서명 없음, Store 업로드용). Identity 는 Partner Center > 제품 관리 > 제품 ID 의 값과 같아야 한다.
+절차·주의는 `docs/desktop-widget-frosted-plan-2026-11-04.md` §7. 로컬 사이드로딩 시험은 `-SignThumbprint` 로 자체 서명 후 인증서를 "신뢰할 수 있는 사람"에 설치.
+
 ### 코드 서명 (1.4.0)
 `tauri.conf.json` 의 `bundle.windows.signCommand` 가 exe·인스톨러마다 `src-tauri/scripts/sign.ps1` 을 부른다.
 환경변수가 없으면 서명을 건너뛰고 빌드는 계속된다(서명 없는 exe 는 SmartScreen "PC 보호" 경고 — 설치 파일 없는 PWA 설치가 권장 경로).

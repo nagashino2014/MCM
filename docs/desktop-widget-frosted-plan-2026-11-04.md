@@ -156,6 +156,15 @@ D4 의 웹 전용 화면 검증은 로그인이 필요한 화면이 대부분이
 
 구현 순서 제안: ① 창 기본 폭 1000·반응형 기준(`useWindowDimensions`, 폭 ≥ 900 = "wide") + 섬 최대 폭 1040 → ② 대화 2분할(화면 부품 분리) → ③ 메일·결재 2분할 → ④ 홈 2열·전체 메뉴 3열. ①②를 먼저 배포해 확인받고 ③④로 간다. 네이티브 앱에는 영향이 없다(wide 는 웹 레일 환경에서만 참).
 
+### 6-5. 설치 경고 — 사용자 결정 "인트라넷 등록 + Store 준비" (2026-11-04)
+위젯 1.4.0 은 서명 없이 빌드돼 경고가 그대로였고, 사용자는 브라우저 안에서 도는 PWA 가 아니라 **독립 실행 메신저**를 원한다.
+- **즉시 적용 — 인트라넷 영역 등록**: `frontend/public/downloads/mcm-trust-koensain.reg`(HKCU). koensain.app 을 로컬 인트라넷 영역(ZoneMap https=1)에 두면
+  그 사이트에서 받은 파일에 Mark-of-the-Web 이 붙지 않아 Windows SmartScreen 이 검사하지 않는다. Edge `SmartScreenAllowListDomains`·Chrome
+  `SafeBrowsingAllowlistDomains` 도 같이 넣어 브라우저 다운로드 차단도 없앤다. 관리자 권한 불필요, PC 당 1회. 웹 홈 "PC 앱 설치" 의 1단계로 노출.
+  ⚠ 로컬 인트라넷 영역은 Windows 통합 인증 자동 전송 등 IE 시대 동작이 따라오지만 우리 도메인 한 곳이라 영향 없음.
+  검증은 사용자 PC 에서: .reg 적용 → 웹 홈에서 exe 다시 내려받기(기존 파일은 이미 MOTW 가 붙어 있음) → 실행 시 경고 없음 확인.
+- **최종 경로 — Microsoft Store 비공개 배포**: `apps/desktop/msix/AppxManifest.xml` + `scripts/make-msix.ps1` 로 Store 업로드용 MSIX 를 만든다(§7).
+
 ### 6-4. ①② 구현 결과 (2026-11-04, 사용자 결정 "설계안대로 진행")
 - `lib/platform.ts`: `WIDE_MIN_WIDTH = 900`, `WEB_SHELL_MAX_WIDTH = 88 + 952`. `lib/use-wide-layout.ts`: `useWideLayout()` = 레일 환경 && 창 폭 ≥ 900.
 - `app/chat/[roomId].tsx`: 본문을 `ChatRoomView({ roomId, name, embedded, onLeft })` 로 부품화. 라우트 default export 는 넓은 배치면 `/(tabs)/chat?roomId=` 로 replace(알림·검색 딥링크 대응), 아니면 전체 화면 방. embedded 면 안전영역 없음·뒤로가기 없음·나가기는 onLeft.
@@ -164,3 +173,19 @@ D4 의 웹 전용 화면 검증은 로그인이 필요한 화면이 대부분이
 - 미구현(③④): 메일·결재 2분할, 홈 2열·전체 메뉴 3열 — ①② 확인 뒤.
 - 위젯 1.4.0 빌드 완료(`MCM_1.4.0_x64-setup.exe` 1.27MB) → `frontend/public/downloads/MCM-widget-setup.exe` 교체. 서명은 환경변수가 없어 생략(스크립트가 "서명 생략" 을 찍고 통과).
   ⚠ 첫 빌드는 `failed to run powershell` 로 실패 — `sign.ps1` 에 한글 주석이 있는데 **UTF-8 BOM 이 없어 PowerShell 5.1 이 ANSI 로 읽다 파싱 오류**(exit 1). BOM(utf-8-sig)+CRLF 로 저장해 해결. 한글이 든 .ps1 은 BOM 필수.
+
+## 7. Microsoft Store 비공개 배포 절차 (준비 완료, 사용자 작업 필요)
+
+| 단계 | 내용 | 비고 |
+|---|---|---|
+| 1 | **Partner Center 개발자 계정**(회사 계정) 등록 — 사업자 정보·결제, 일회 등록비 | 승인 수일 |
+| 2 | 앱 이름 예약("MCM" 또는 "KESI MCM") → **제품 ID 페이지**의 패키지 ID(`Identity Name`)·게시자 ID(`CN=…`)·게시자 표시 이름 확보 | 매니페스트 Identity 는 이 값과 정확히 일치 |
+| 3 | 빌드 PC: `npm run build` → `scripts/make-msix.ps1 -IdentityName … -Publisher … -PublisherDisplay …` → `MCM_<ver>.0.msix` | 서명 없이 업로드(Store 가 서명) |
+| 4 | 제출: 패키지 업로드, **표시 여부 = 비공개(특정 대상)** 또는 숨김 + 직접 링크, 연령 등급 설문, 개인정보처리방침 URL(koensain.app 안 페이지), 스크린샷 1장 이상, 설명 | 심사 1~3일 |
+| 5 | 직원 PC: Store 링크(`ms-windows-store://pdp/?productid=…`) 또는 웹 홈 버튼 → 설치. 이후 업데이트는 Store 가 자동 | 경고 0, 설정 > 앱 등록 |
+
+**주의·위험**
+- Store 정책 10.2.1(웹 콘텐츠 앱): 단순 사이트 래퍼는 거절될 수 있다. 트레이·뱃지·알림·항상 위 등 네이티브 기능이 있어 통과 가능성은 높지만 심사 결과에 따라 설명 보강이 필요할 수 있다.
+- MSIX 안에서 레지스트리·AppData 는 가상화된다. 자동 시작은 Run 키 대신 매니페스트의 StartupTask(기본 꺼짐, 설정 > 앱 > 시작 프로그램)로 바뀌며, Tauri autostart 플러그인 토글은 Store 판에서는 동작하지 않을 수 있다(확인 항목).
+- 버전은 `tauri.conf.json` 의 x.y.z 에 `.0` 을 붙인 네 자리. Store 에 올릴 때마다 올려야 한다.
+- 로컬 사이드로딩 시험(선택): `-SignThumbprint` 로 자체 서명 → 그 인증서를 시험 PC 의 "신뢰할 수 있는 사람"에 설치 → .msix 더블클릭(App Installer). 이것이 §2-5 의 ④ 경로이며 Store 없이도 경고 없이 설치된다.

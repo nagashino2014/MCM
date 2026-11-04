@@ -303,12 +303,21 @@ export function HomeBoard({ perms = [] }: { perms?: string[] }) {
                     </p>
                   </div>
                   <div className="flex flex-col gap-1.5 pt-2.5 border-t cd-hairline-c">
-                    <a href="/downloads/MCM-widget-setup.exe" download className="cd-chip justify-center">
-                      <Monitor className="w-3.5 h-3.5" />
-                      데스크탑 위젯(exe) 내려받기
+                    {/* 보안 경고 없이 받기(2026-11-04 사용자 결정): koensain.app 을 로컬 인트라넷 영역 + Edge/Chrome 허용 목록에 넣는
+                        사용자별 레지스트리 파일 — 한 PC 에 한 번. 이후 받은 exe 는 SmartScreen 검사 대상에서 빠진다. */}
+                    <a href="/downloads/mcm-trust-koensain.reg" download className="cd-chip justify-center">
+                      <Download className="w-3.5 h-3.5" />
+                      1단계 · 보안 경고 끄기(.reg, PC 당 한 번)
                     </a>
                     <p className="text-[11.5px] leading-[17px] cd-text-muted">
-                      트레이 상주·항상 위 고정이 필요할 때. 서명이 없어 ‘PC 보호’ 경고가 뜨면 추가 정보 → 실행을 누르세요. 설치 후 시작 메뉴 ‘MCM’.
+                      내려받은 파일을 두 번 눌러 ‘예’ → ‘확인’. 이 사이트에서 받는 파일에만 적용되며 관리자 권한이 필요 없습니다.
+                    </p>
+                    <a href="/downloads/MCM-widget-setup.exe" download className="cd-chip justify-center">
+                      <Monitor className="w-3.5 h-3.5" />
+                      2단계 · 데스크탑 위젯(exe) 내려받기
+                    </a>
+                    <p className="text-[11.5px] leading-[17px] cd-text-muted">
+                      트레이 상주·항상 위 고정이 되는 독립 메신저. 1단계를 건너뛰어 ‘PC 보호’ 경고가 뜨면 추가 정보 → 실행. 설치 후 시작 메뉴 ‘MCM’.
                     </p>
                   </div>
                 </div>

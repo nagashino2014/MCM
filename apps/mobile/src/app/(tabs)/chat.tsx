@@ -1,7 +1,7 @@
 import { TAB_BAR_INSET, useTabBarFabBottom } from '@/components/ui/GlassTabBar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
@@ -19,7 +19,12 @@ import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPicker
 import { apiJson } from '@/lib/api';
 import { fmtDate, fmtTime } from '@/lib/format';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
+import { useWideLayout } from '@/lib/use-wide-layout';
 import { useTheme } from '@/theme/useTheme';
+import { ChatRoomView } from '@/app/chat/[roomId]';
+
+/** 넓은 배치의 왼쪽 목록 폭(설계안 §6-3). */
+const LIST_PANE_WIDTH = 360;
 
 interface ChatRoom {
   roomId: number;
@@ -59,10 +64,31 @@ function fmtRoomTime(iso: string | null): string {
 }
 
 // 대화 — 목록(15초 폴링) + 세그먼트(전체/개인/그룹) + 새 대화(조직도). MSG-P0.
+// 넓은 배치(데스크탑 위젯·PWA, 폭 ≥ 900, 2026-11-04 설계안 §6-3): 왼쪽 목록 360 + 오른쪽 선택한 대화방(ChatRoomView embedded).
+// 방을 누르면 라우트 이동 없이 오른쪽만 바뀐다. 좁은 창·네이티브는 지금처럼 /chat/[roomId] 로 이동.
 export default function ChatScreen() {
   const fabBottom = useTabBarFabBottom();
   const { c } = useTheme();
   const toast = useToast();
+  const wide = useWideLayout();
+  // 딥링크(알림·검색)로 /chat/[roomId] 에 들어왔다가 넓은 배치라 여기로 넘어온 경우 — 그 방을 선택한 상태로 연다.
+  const params = useLocalSearchParams<{ roomId?: string; name?: string }>();
+  const paramRoomId = Number(params.roomId);
+  const paramRoom = Number.isSafeInteger(paramRoomId) && paramRoomId > 0 ? { roomId: paramRoomId, name: typeof params.name === 'string' ? params.name : undefined } : null;
+  const [selected, setSelected] = useState<{ roomId: number; name?: string } | null>(paramRoom);
+  // 파생 상태 갱신(React 권장 패턴, effect 아님) — 파라미터의 방이 바뀔 때만 선택을 따라간다(사용자가 닫은 뒤에는 다시 열지 않음).
+  const [seenParam, setSeenParam] = useState(paramRoom?.roomId);
+  if (paramRoom?.roomId !== seenParam) {
+    setSeenParam(paramRoom?.roomId);
+    if (paramRoom) setSelected(paramRoom);
+  }
+  const openRoom = useCallback(
+    (roomId: number, name?: string) => {
+      if (wide) setSelected({ roomId, name });
+      else router.push({ pathname: '/chat/[roomId]', params: name ? { roomId: String(roomId), name } : { roomId: String(roomId) } });
+    },
+    [wide]
+  );
   const [rooms, setRooms] = useState<ChatRoom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -175,17 +201,19 @@ export default function ChatScreen() {
       // Modal 닫힘 애니메이션이 끝난 뒤 라우팅 — 열린 Modal 위로 push 하면
       // 뒤 화면이 freeze 되어 시트가 화면을 덮은 채 남는다(2026-08-09 실측).
       await new Promise((r) => setTimeout(r, 350));
-      router.push({ pathname: '/chat/[roomId]', params: { roomId: String(res.roomId) } });
+      openRoom(res.roomId);
     } catch (e) {
       toast.show((e as Error).message, 'error');
     } finally {
       setCreating(false);
     }
-  }, [picked, creating, load, toast]);
+  }, [picked, creating, load, toast, openRoom]);
 
   return (
     // 대화방 목록은 그라데이션 없이 흰 바탕(2026-11-04 사용자 요청) — 대화창([roomId]) 안은 그라데이션 유지.
     <Screen scroll={false} padded={false} plain>
+      <View className="flex-1 flex-row">
+      <View style={wide ? { width: LIST_PANE_WIDTH, borderRightWidth: 1, borderRightColor: c.border } : { flex: 1 }}>
       <View className="px-4 pt-2">
         <SearchBar value={q} onChangeText={setQ} placeholder="대화방·메시지 검색" />
       </View>
@@ -227,12 +255,7 @@ export default function ChatScreen() {
                 {hits.map((h) => (
                   <Pressable
                     key={h.messageId}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/chat/[roomId]',
-                        params: { roomId: String(h.roomId), name: h.roomName },
-                      })
-                    }
+                    onPress={() => openRoom(h.roomId, h.roomName)}
                     className="border-b border-cd-grid-line px-4 py-2.5 active:opacity-70">
                     <View className="flex-row items-center gap-1.5">
                       <Text className="text-[12px] font-bold text-cd-primary">{h.roomName}</Text>
@@ -248,13 +271,27 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item }) => <RoomRow r={item} />}
+          renderItem={({ item }) => <RoomRow r={item} active={wide && selected?.roomId === item.roomId} onPress={() => openRoom(item.roomId, item.name)} />}
         />
       )}
 
-      {/* 새 대화 FAB */}
+      {/* 새 대화 FAB — 넓은 배치에서는 목록 칸 안 오른쪽 아래 */}
       <View className="absolute right-5" style={{ bottom: fabBottom }}>
         <GradientIconButton icon="add" diameter={54} onPress={() => setPickerOpen(true)} />
+      </View>
+      </View>
+
+      {wide ? (
+        <View className="flex-1">
+          {selected ? (
+            <ChatRoomView key={selected.roomId} roomId={selected.roomId} name={selected.name} embedded onLeft={() => setSelected(null)} />
+          ) : (
+            <View className="flex-1 items-center justify-center">
+              <EmptyState icon="chatbubble-ellipses-outline" title="대화방을 선택하세요" description="왼쪽 목록에서 대화방을 누르면 여기에 열립니다" />
+            </View>
+          )}
+        </View>
+      ) : null}
       </View>
 
       <OrgPickerSheet
@@ -279,13 +316,14 @@ export default function ChatScreen() {
   );
 }
 
-function RoomRow({ r }: { r: ChatRoom }) {
+function RoomRow({ r, active, onPress }: { r: ChatRoom; active?: boolean; onPress: () => void }) {
   const { c } = useTheme();
   return (
     <Pressable
-      onPress={() =>
-        router.push({ pathname: '/chat/[roomId]', params: { roomId: String(r.roomId), name: r.name } })
-      }
+      onPress={onPress}
+      accessibilityState={{ selected: !!active }}
+      // 넓은 배치에서 오른쪽에 열린 방은 pillSelected 바탕으로 표시
+      style={active ? { backgroundColor: c.pillSelected } : undefined}
       className="flex-row items-center gap-3 border-b border-cd-grid-line px-4 py-3 active:opacity-70">
       {r.roomType === 'dm' ? (
         <Avatar name={r.name} photoPath={r.peerPhotoPath} size="md" />

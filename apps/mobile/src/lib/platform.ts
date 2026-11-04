@@ -20,5 +20,8 @@ export const IS_IN_WIDGET = !!win && win.parent !== win && !IS_PHONE_DEMO;
 export const IS_STANDALONE_PWA =
   !!win && typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches;
 
-/** 레일 레이아웃의 콘텐츠 최대 폭(레일 88 포함) — 창을 최대화해도 모바일 화면 구성이 늘어지지 않게 가운데 섬으로 둔다. */
-export const WEB_SHELL_MAX_WIDTH = 88 + 640;
+/** 넓은 배치(목록+상세 2분할·홈 2열)를 켜는 창 폭 — 설계안 §6-3(2026-11-04). 이보다 좁으면 모바일 흐름(한 화면씩). */
+export const WIDE_MIN_WIDTH = 900;
+
+/** 레일 레이아웃의 콘텐츠 최대 폭(레일 88 포함) — 창을 최대화해도 늘어지지 않게 가운데 섬으로 둔다. 넓은 배치 기준 952 + 레일 88. */
+export const WEB_SHELL_MAX_WIDTH = 88 + 952;

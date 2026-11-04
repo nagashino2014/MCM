@@ -31,6 +31,7 @@ import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
+import { useWideLayout } from '@/lib/use-wide-layout';
 import { useTheme } from '@/theme/useTheme';
 
 interface ChatAttachment {
@@ -115,11 +116,23 @@ function dayLabel(iso: string): string {
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
 }
 
-// 대화방 — inverted 목록(3초 증분 폴링) + 텍스트 전송 + 읽음 커서. MSG-P0.
-// ⚠ 헤더는 자체 렌더(화면 내 Stack.Screen options 금지 — iOS 헤더 갱신 루프 이력).
+// 대화방 라우트(/chat/[roomId]) — 전체 화면 대화방. 넓은 배치(데스크탑 위젯·PWA, 폭 ≥ 900)에서는 대화 탭이 목록+방 2분할로
+// 그리므로 알림·검색 딥링크로 들어온 전체 화면 방은 탭으로 넘긴다(2026-11-04 설계안 §6-3).
 export default function ChatRoomScreen() {
   const { roomId: roomIdParam, name } = useLocalSearchParams<{ roomId: string; name?: string }>();
-  const roomId = Number(roomIdParam);
+  const wide = useWideLayout();
+  const nameStr = typeof name === 'string' && name ? name : undefined;
+  useEffect(() => {
+    if (wide) router.replace({ pathname: '/(tabs)/chat', params: nameStr ? { roomId: roomIdParam, name: nameStr } : { roomId: roomIdParam } });
+  }, [wide, roomIdParam, nameStr]);
+  if (wide) return null;
+  return <ChatRoomView roomId={Number(roomIdParam)} name={nameStr} />;
+}
+
+// 대화방 — inverted 목록(3초 증분 폴링) + 텍스트 전송 + 읽음 커서. MSG-P0.
+// ⚠ 헤더는 자체 렌더(화면 내 Stack.Screen options 금지 — iOS 헤더 갱신 루프 이력).
+// embedded: 대화 탭의 오른쪽 칸에 들어갈 때 — 안전영역·뒤로가기 없이, 나가기는 onLeft 로 부모에 알린다.
+export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: number; name?: string; embedded?: boolean; onLeft?: () => void }) {
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && Number.isSafeInteger(roomId) && roomId > 0) window.name = `mcm-chat-${roomId}`;
   }, [roomId]);
@@ -511,11 +524,12 @@ export default function ChatRoomScreen() {
       // ConfirmSheet(Modal) 닫힘이 끝난 뒤 라우팅 — 열린 Modal 과 화면 전환이 겹치면
       // 뒤 화면 freeze 로 시트가 남는다(새 대화 완료 버튼과 동일 이슈).
       await new Promise((r) => setTimeout(r, 350));
-      router.back();
+      if (onLeft) onLeft();
+      else router.back();
     } catch (e) {
       toast.show((e as Error).message, 'error');
     }
-  }, [roomId, toast]);
+  }, [roomId, toast, onLeft]);
 
   const title = (detail?.roomType === 'group' && detail.name) || (typeof name === 'string' && name ? name : '대화');
 
@@ -552,12 +566,13 @@ export default function ChatRoomScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-transparent">
+    <SafeAreaView edges={embedded ? [] : ['top', 'bottom']} className="flex-1 bg-transparent">
       <ShellBackground />
-      {/* 자체 헤더 — 공용 AppHeader(홈·전체 메뉴 외 모든 화면 공통 모양, 2026-11-04) */}
+      {/* 자체 헤더 — 공용 AppHeader(홈·전체 메뉴 외 모든 화면 공통 모양, 2026-11-04). 2분할 오른쪽 칸에서는 뒤로가기 없음 */}
       <AppHeader
         title={title}
-        back
+        back={!embedded}
+        safe={embedded ? 'none' : 'extend'}
         right={
           <Pressable
             onPress={() => {

@@ -125,3 +125,42 @@ D4 의 웹 전용 화면 검증은 로그인이 필요한 화면이 대부분이
 - 시험 export(스크래치 디렉터리): 폰트 경로 `/m-app/assets/node_modules/@expo/vector-icons/...`, 번들 내 호스트 `https://koensain.app` 1건, `192.168` 0건.
 - `git log -- frontend/public/m-app`: 85cc35bb(10-20), 2c5f7678(10-20), 6fb9a50b(11-01). 6fb9a50b 는 `assets/node_modules` 변경 0건.
 - 웹 분기 파일: `(tabs)/_layout.tsx`(IS_WEB 탭바), `(tabs)/index.tsx`(카메라 타일 숨김), `GlassTabBar.tsx`(backdropFilter 웹만), `lib/tokens.ts`·`lib/kv.ts`(localStorage), `global.css`(스크롤바), `lib/use-widget-bridge.ts`.
+
+## 6. 2차 — 셸 상단 바·코드 서명(구현)과 넓은 창 배치·대화 2분할(설계, 2026-11-04 사용자 요청)
+
+### 6-1. 구현한 것
+- **셸 상단 바 Frosted 화**(`apps/desktop/src/index.html`): 색을 모바일 토큰 값(card·cardBorder·ink·ink-muted·surface·primary-fill·pillSelected)의 CSS 변수로, 제목 14/600, 반경 10, 높이 38. 테마는 OS 기본 + 앱이 보내는 `mcm:theme`(dark 여부)가 우선(`data-theme`). 앱 쪽은 `use-widget-bridge.ts` 가 hello 뒤·테마 변경 때마다 보낸다(로그인 전에도).
+- **코드 서명 연동**: `tauri.conf.json` `bundle.windows.signCommand` → `src-tauri/scripts/sign.ps1`. 환경변수가 없으면 서명을 건너뛰고 빌드는 계속된다.
+  Trusted Signing 은 `MCM_SIGN_METADATA`(metadata.json) + `MCM_SIGN_DLIB`(Azure.CodeSigning.Dlib.dll) + `az login`, 로컬 인증서는 `MCM_SIGN_THUMBPRINT`. signtool 은 Windows SDK 에서 자동 탐색(`MCM_SIGNTOOL` 로 지정 가능).
+- 버전 1.4.0(`tauri.conf.json`·`Cargo.toml` 동시). **빌드·인스톨러 교체는 아직** — 실행 중인 위젯(`mcm-desktop.exe`)을 종료해야 cargo 가 exe 를 덮어쓸 수 있다.
+
+### 6-2. Trusted Signing 가입 절차(사용자 작업)
+1. Azure 구독에서 **Trusted Signing(Artifact Signing) 계정** 생성(지원 리전 중 선택 — 포털 목록 확인, Basic 요금제).
+2. **Identity validation → Organization**: 사업자등록 정보·도메인(koensain.app)·담당자 신원 확인. 한국 법인 가능 여부는 여기서 판가름 난다(3년 이력 요건·AU10TIX 실패 사례 있음). 거절되면 Azure 지원 티켓으로 자격 확인.
+3. **Certificate profile(Public Trust)** 생성 → 계정명·프로필명·엔드포인트를 `metadata.json` 에 적는다.
+4. 빌드 PC: Windows SDK(signtool), NuGet `Microsoft.Trusted.Signing.Client`(dlib), Azure CLI `az login`(또는 서비스 주체 환경변수). `MCM_SIGN_METADATA`·`MCM_SIGN_DLIB` 를 설정하고 `npm run build`.
+5. 서명된 인스톨러를 `frontend/public/downloads/MCM-widget-setup.exe` 로 복사 → next 배포. SmartScreen 평판은 파일 해시 단위라 **처음 몇 번은 경고가 남을 수 있다**.
+
+### 6-3. 설계안 — 대화 2분할과 넓은 창 배치 (결정 필요)
+사용자 요청: 대화 목록(왼쪽)·선택한 대화방(오른쪽)을 한 화면에(다우오피스 메신저 방식). 가로 폭이 필요하므로 다른 메뉴 배치도 함께 검토.
+
+| 항목 | 안 | 비고 |
+|---|---|---|
+| 창 기본 크기 | **560×860 → 1000×860**(최소 폭 560). 폭이 900 미만이면 지금처럼 한 화면씩(모바일 흐름) | 사용자가 좁혀도 깨지지 않게 폭 기준 반응형 |
+| 대화 | 폭 ≥ 900: 왼쪽 목록 360(검색·전체/개인/그룹 탭·+ 버튼 유지) + 오른쪽 대화방(`chat/[roomId]` 화면을 roomId prop 으로 받는 부품으로 분리, 헤더에 방 이름·검색·알림·즐겨찾기). 방을 누르면 라우트 이동 없이 오른쪽만 바뀜. 미선택 상태는 빈 안내 | 모바일·좁은 창은 현행 유지 |
+| 메일 | 같은 구조: 왼쪽 목록 380 + 오른쪽 본문(`mail/[messageId]`) | 대화와 같은 부품으로 |
+| 결재 | 왼쪽 문서 목록 + 오른쪽 문서 상세(`approval/[docId]`) | 승인·반려 버튼이 오른쪽에 |
+| 홈 | 콘텐츠 최대 폭 728 → **1040**: 요약 스트립 6칸 1줄, 아래 카드(결재 대기·안읽은 메일·오늘 일정·경과 미입력·최근 공지·오늘 할 일) **2열 그리드**, 날씨 위젯은 한 칸 폭 | 카드 안 구성은 모바일 그대로 |
+| 전체 메뉴·설정·일정·사업장 등 | 최대 폭 1040 가운데 섬, 타일 2열 → 3열(폭 ≥ 900) | 구조 변경 없이 열 수만 |
+| 가운데 섬 vs 꽉 채우기 | 레일 + 콘텐츠 최대 폭 1040 을 **가운데 섬**으로 유지(그 이상은 바탕) | 초광폭 모니터에서 줄 길이 제한 |
+
+구현 순서 제안: ① 창 기본 폭 1000·반응형 기준(`useWindowDimensions`, 폭 ≥ 900 = "wide") + 섬 최대 폭 1040 → ② 대화 2분할(화면 부품 분리) → ③ 메일·결재 2분할 → ④ 홈 2열·전체 메뉴 3열. ①②를 먼저 배포해 확인받고 ③④로 간다. 네이티브 앱에는 영향이 없다(wide 는 웹 레일 환경에서만 참).
+
+### 6-4. ①② 구현 결과 (2026-11-04, 사용자 결정 "설계안대로 진행")
+- `lib/platform.ts`: `WIDE_MIN_WIDTH = 900`, `WEB_SHELL_MAX_WIDTH = 88 + 952`. `lib/use-wide-layout.ts`: `useWideLayout()` = 레일 환경 && 창 폭 ≥ 900.
+- `app/chat/[roomId].tsx`: 본문을 `ChatRoomView({ roomId, name, embedded, onLeft })` 로 부품화. 라우트 default export 는 넓은 배치면 `/(tabs)/chat?roomId=` 로 replace(알림·검색 딥링크 대응), 아니면 전체 화면 방. embedded 면 안전영역 없음·뒤로가기 없음·나가기는 onLeft.
+- `app/(tabs)/chat.tsx`: 넓은 배치면 왼쪽 목록 360(검색·세그먼트·FAB 그대로, 선택 행 pillSelected) + 오른쪽 `ChatRoomView embedded`(미선택 시 빈 안내). 방 선택·검색 결과·새 대화 생성 모두 `openRoom()` 한 곳 — 넓으면 선택만, 아니면 라우트 이동. 파라미터 선택 동기화는 effect 가 아닌 파생 상태 패턴.
+- 위젯 창 기본 1000×860(최소 560×520).
+- 미구현(③④): 메일·결재 2분할, 홈 2열·전체 메뉴 3열 — ①② 확인 뒤.
+- 위젯 1.4.0 빌드 완료(`MCM_1.4.0_x64-setup.exe` 1.27MB) → `frontend/public/downloads/MCM-widget-setup.exe` 교체. 서명은 환경변수가 없어 생략(스크립트가 "서명 생략" 을 찍고 통과).
+  ⚠ 첫 빌드는 `failed to run powershell` 로 실패 — `sign.ps1` 에 한글 주석이 있는데 **UTF-8 BOM 이 없어 PowerShell 5.1 이 ANSI 로 읽다 파싱 오류**(exit 1). BOM(utf-8-sig)+CRLF 로 저장해 해결. 한글이 든 .ps1 은 BOM 필수.

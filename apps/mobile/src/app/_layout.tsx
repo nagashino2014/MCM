@@ -40,8 +40,8 @@ function RootNavigator() {
   const router = useRouter();
 
   usePushSetup();
-  // 데스크탑 위젯 셸에 미읽음·새 메시지를 알린다(웹 + 위젯 안에서만 동작).
-  useWidgetBridge(status === 'authed');
+  // 데스크탑 위젯 셸에 미읽음·새 메시지·테마를 알린다(웹 + 위젯 안에서만 동작).
+  useWidgetBridge(status === 'authed', dark);
 
   useEffect(() => {
     if (status === 'loading') return;

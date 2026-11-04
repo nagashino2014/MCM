@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { apiJson } from './api';
@@ -40,8 +40,28 @@ function todayLocal(): string {
  *
  * PWA(브라우저 "앱으로 설치" 창, 2026-11-04)에는 셸이 없으므로 같은 폴링으로 **작업표시줄 뱃지(Badging API)** 를 직접 그린다
  * (미읽음 + 오늘 할 일). OS 알림(Web Push)은 서버 VAPID 가 필요해 후속.
+ *
+ *   mcm:theme    — 앱 테마(dark 여부)를 셸 상단 바에 맞춘다(로그인 전에도, 11-04). 셸의 hello 뒤에만 보낸다.
  */
-export function useWidgetBridge(authed: boolean) {
+export function useWidgetBridge(authed: boolean, dark = false) {
+  const themeOriginRef = useRef<string | null>(null);
+
+  // 테마 동기화 — 인증과 무관. hello 로 셸 오리진을 알게 되면 즉시, 이후 테마가 바뀔 때마다(effect 재실행) 보낸다.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || window.parent === window) return;
+    const send = () => {
+      if (themeOriginRef.current) window.parent.postMessage({ type: 'mcm:theme', dark }, themeOriginRef.current);
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (!e.data || (e.data as { type?: string }).type !== 'mcm:widget-hello') return;
+      themeOriginRef.current = e.origin;
+      send();
+    };
+    window.addEventListener('message', onMessage);
+    send();
+    return () => window.removeEventListener('message', onMessage);
+  }, [dark]);
+
   useEffect(() => {
     if (Platform.OS !== 'web' || !authed) return;
     if (typeof window === 'undefined') return;

@@ -221,14 +221,15 @@ export default function LeaveScreen() {
         <Card
           title="휴가 사용 내역"
           badge={usedEntries.length ? <TintBadge label={`${year}년 ${usedEntries.length}건`} fg={c.primary} bg={c.primarySoft} /> : undefined}
-          action={usedEntries.length > 6 ? { label: showAllUsed ? '접기' : '전체보기', onPress: () => setShowAllUsed((v) => !v) } : undefined}>
+          // 최근 사용 순 5건만, 나머지는 전체보기(2026-11-04 사용자 결정 — 종전 6건).
+          action={usedEntries.length > 5 ? { label: showAllUsed ? '접기' : '전체보기', onPress: () => setShowAllUsed((v) => !v) } : undefined}>
           {usage.loading && !usage.data ? (
             <SkeletonList count={1} />
           ) : usedEntries.length === 0 ? (
             <Text className="py-2 text-[13px] text-cd-faint">{year}년 휴가 사용 내역이 없습니다.</Text>
           ) : (
             <View className="mt-2">
-              {(showAllUsed ? usedEntries : usedEntries.slice(0, 6)).map((e) => {
+              {(showAllUsed ? usedEntries : usedEntries.slice(0, 5)).map((e) => {
                 const d = new Date(`${e.usedOn}T12:00:00`);
                 const isAnnual = e.deduct === 'full' || e.deduct === 'half' || e.leaveLabel == null;
                 const period = e.note?.match(/\d{4}-\d{2}-\d{2}~(\d{4}-\d{2}-\d{2})/)?.[1];
@@ -366,7 +367,8 @@ export default function LeaveScreen() {
                     className="flex-row items-center gap-3 rounded-xl border p-3 active:opacity-70"
                     style={{ backgroundColor: c.card, borderColor: c.border }}>
                     <View className="flex-1">
-                      <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: CHART.ink }}>
+                      {/* 다크 모드에서 고정 잉크색(CHART.ink)이라 제목이 안 보였다(2026-11-04) → 테마 잉크. 휴가·초과근무 탭 공용. */}
+                      <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: ink }}>
                         {d.title}
                       </Text>
                       <Text className="mt-0.5 text-[12px]" style={{ color: CHART.weekday }}>

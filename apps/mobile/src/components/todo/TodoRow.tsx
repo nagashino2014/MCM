@@ -125,7 +125,7 @@ export function TodoRow({
         className="flex-row items-start gap-3 bg-cd-card active:opacity-80">
         <BoardStripe color={item.boardColor} full />
         <View style={{ marginTop: 1 }}>
-          <CheckCircle done={done} status={item.status} onPress={onToggle} disabled={!item.canEdit} />
+          <CheckCircle done={done} status={item.status} onPress={onToggle} disabled={!item.canEdit} size={14} />
         </View>
         <View className="flex-1" style={{ minWidth: 0 }}>
           <View className="flex-row items-center gap-1.5">

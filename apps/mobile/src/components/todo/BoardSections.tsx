@@ -79,7 +79,7 @@ function BoardCard({
   today,
   onPress,
   onLongPress,
-  last,
+  last: _last,
 }: {
   item: TodoItem;
   today: string;
@@ -92,13 +92,15 @@ function BoardCard({
   const done = item.status === 'done';
   const context = itemContext(item);
   return (
+    // 목록 행과 같은 박스(2026-11-04 사용자 지적: 보드 보기에만 옛 구분선 행·가는 띠가 남아 있었다) — 열 카드 안이라 그림자 없음,
+    // 왼쪽 가장자리 전체가 보드 색(full 띠 5px, overflow hidden 으로 모서리를 따라 잘림).
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={350}
-      style={{ paddingLeft: 16, paddingRight: 12, paddingTop: 11, paddingBottom: 10 }}
-      className={`gap-1 active:bg-cd-surface ${last ? '' : 'border-b border-cd-grid-line'}`}>
-      <BoardStripe color={item.boardColor} />
+      style={{ paddingLeft: 16, paddingRight: 12, paddingTop: 11, paddingBottom: 10, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}
+      className="gap-1 bg-cd-card active:opacity-80">
+      <BoardStripe color={item.boardColor} full width={5} />
       <View className="flex-row items-start gap-1.5">
         {!done ? <StatusDot status={item.status} /> : null}
         {!done ? (
@@ -268,17 +270,20 @@ export function BoardSections({
     return <EmptyState icon="grid-outline" title="열이 없습니다" description="웹에서 보드 열을 추가하면 여기에 표시됩니다." />;
   }
 
-  const renderCards = (list: TodoItem[]) =>
-    list.map((it, i) => (
-      <BoardCard
-        key={it.itemId}
-        item={it}
-        today={today}
-        last={i === list.length - 1}
-        onPress={() => onOpen(it)}
-        onLongPress={() => (it.canEdit ? setTarget(it) : undefined)}
-      />
-    ));
+  const renderCards = (list: TodoItem[]) => (
+    <View className="gap-2 px-2 pb-2">
+      {list.map((it, i) => (
+        <BoardCard
+          key={it.itemId}
+          item={it}
+          today={today}
+          last={i === list.length - 1}
+          onPress={() => onOpen(it)}
+          onLongPress={() => (it.canEdit ? setTarget(it) : undefined)}
+        />
+      ))}
+    </View>
+  );
 
   const overLabel = labelColors('over', dark);
 

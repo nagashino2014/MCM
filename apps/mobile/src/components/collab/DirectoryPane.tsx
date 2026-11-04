@@ -98,7 +98,7 @@ export function DirectoryPane() {
         data={people}
         keyExtractor={(p) => p.employeeId}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: TAB_BAR_INSET }}
         ListEmptyComponent={
           <EmptyState
             icon="people-outline"
@@ -107,7 +107,8 @@ export function DirectoryPane() {
           />
         }
         renderItem={({ item }) => (
-          <View className="gap-2 border-b border-cd-border px-4 py-3">
+          // 사람마다 흰 박스(2026-11-04 사용자 결정) — 반경 10·card-border, 그림자 없음(홈 위젯 박스와 같은 규격).
+          <View style={{ borderColor: c.cardBorder }} className="mx-4 mb-2 gap-2 rounded-lg border bg-cd-card px-3 py-3">
             <View className="flex-row items-center gap-3">
               <Avatar name={item.name} photoPath={item.photoPath} size="md" />
               <View className="flex-1">

@@ -130,7 +130,8 @@ export default function SalesScreen() {
       <ShellBackground />
       <ScreenHeader title="영업" subtitle={`${cur.y}년 ${cur.m + 1}월`} back variant="sub" />
       <ScrollView automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
+        // 헤더 아래 12 — 신규 영업건·일정 등록 버튼이 헤더에 붙어 보였다(2026-11-04 사용자 지적).
+        contentContainerStyle={{ padding: 18, paddingTop: 12, gap: 14, paddingBottom: 40 }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         {canEdit ? (
           <View className="flex-row gap-2">

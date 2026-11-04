@@ -42,9 +42,11 @@ export function BoardList({ scope }: { scope: 'company' | 'dept' }) {
   }
 
   return (
+    // 목록 전체가 흰 바탕(2026-11-04 사용자 결정 — 그라데이션 바탕 위 구분선 목록은 읽기 어렵다).
     <FlatList
       data={posts}
-      contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
+      style={{ backgroundColor: c.card }}
+      contentContainerStyle={{ paddingBottom: TAB_BAR_INSET, flexGrow: 1 }}
       keyExtractor={(p) => p.postId}
       refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
       ListEmptyComponent={

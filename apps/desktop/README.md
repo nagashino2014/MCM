@@ -27,7 +27,8 @@ npm run build        # NSIS 인스톨러 생성 → src-tauri/target/release/bun
 ```
 
 ## 동작
-- 창 560×860(최소 360×520), 자유 리사이즈, 위치·크기 기억(window-state 플러그인)
+- 창 1000×860(최소 560×520, 1.4.0 — 폭 900 이상이면 웹앱이 대화 목록+대화방 2분할), 자유 리사이즈, 위치·크기 기억(window-state 플러그인)
+- 상단 바는 KESI Frosted 토큰 색(1.4.0) — 웹앱이 `mcm:theme` 로 알려 주는 라이트/다크를 따른다(없으면 OS 설정).
 - 닫기(X) = 트레이로 숨김(종료 아님). 트레이 아이콘 클릭 = 창 토글,
   우클릭 = 메뉴(**MCM 열기 · 종료**). "항상 위 고정"은 창 상단 바의 토글이 단일 소스다.
 - **중복 실행 차단**(single-instance) — 시작 메뉴·바탕화면에서 다시 눌러도 새 창이 뜨지 않고
@@ -66,3 +67,10 @@ next 배포(=`/m-app` 갱신)만으로 위젯에 반영된다.
 
 버전을 올릴 때는 `src-tauri/tauri.conf.json` 과 `Cargo.toml` 의 `version` 을 함께 올린다
 (NSIS 가 같은 제품을 덮어쓰며 업그레이드한다).
+
+### 코드 서명 (1.4.0)
+`tauri.conf.json` 의 `bundle.windows.signCommand` 가 exe·인스톨러마다 `src-tauri/scripts/sign.ps1` 을 부른다.
+환경변수가 없으면 서명을 건너뛰고 빌드는 계속된다(서명 없는 exe 는 SmartScreen "PC 보호" 경고 — 설치 파일 없는 PWA 설치가 권장 경로).
+- Azure Trusted Signing: `MCM_SIGN_METADATA`(metadata.json) + `MCM_SIGN_DLIB`(Azure.CodeSigning.Dlib.dll) + `az login`
+- 로컬 인증서: `MCM_SIGN_THUMBPRINT`(SHA1 지문)
+- signtool 은 Windows SDK 에서 자동 탐색, `MCM_SIGNTOOL` 로 지정 가능. 가입 절차는 `docs/desktop-widget-frosted-plan-2026-11-04.md` §6-2.

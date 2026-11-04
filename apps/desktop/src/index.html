@@ -8,56 +8,91 @@
         위젯 셸 — OS 창 장식(decorations:false) 대신 자체 상단 바를 그린다.
         앱 화면은 iframe 으로 원격(koensain.app/m-app)을 그대로 싣는다.
         상단 바가 하는 일: 드래그 이동 · 항상 위 고정 토글 · 최소화/최대화/닫기(트레이로).
+
+        색·굵기·반경은 KESI Frosted(2026-11-04) — 값은 apps/mobile/src/theme/tokens.ts 의 LIGHT/DARK 와 같다
+        (card·cardBorder·text·muted·surface·primaryFill·pillSelected). 글꼴 굵기 ≤600, 반경 10.
+        테마: 기본은 OS(prefers-color-scheme), 앱이 mcm:theme 로 알려 주면 그 값(data-theme)이 우선 — 앱을 라이트로
+        고정했는데 상단 바만 다크로 남던 문제(11-04)의 해법.
       */
+      :root {
+        --bar-bg: #ffffff;
+        --bar-border: #e8e9ee;
+        --ink: #21232c;
+        --ink-muted: #646a78;
+        --surface: #f6f7f9;
+        --pill: #e6e8ee;
+        --primary: #4a63d8;
+        --primary-fill: #4a63d8;
+        --track: #d1d4dc;
+        --danger: #b92727;
+        --frame-bg: #eef1f8;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bar-bg: #1a1d23;
+          --bar-border: #343742;
+          --ink: #e7e9ee;
+          --ink-muted: #a1a8b5;
+          --surface: #24262e;
+          --pill: #2b2e38;
+          --primary: #a9b8ff;
+          --primary-fill: #5269dc;
+          --track: #484d5b;
+          --frame-bg: #141520;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bar-bg: #1a1d23;
+        --bar-border: #343742;
+        --ink: #e7e9ee;
+        --ink-muted: #a1a8b5;
+        --surface: #24262e;
+        --pill: #2b2e38;
+        --primary: #a9b8ff;
+        --primary-fill: #5269dc;
+        --track: #484d5b;
+        --frame-bg: #141520;
+      }
+
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; overflow: hidden; background: #fff; }
+      html, body { height: 100%; overflow: hidden; background: var(--frame-bg); }
       body {
-        font-family: Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
-        display: flex; flex-direction: column;
+        font-family: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+        display: flex; flex-direction: column; color: var(--ink);
       }
       #bar {
-        height: 36px; flex: 0 0 36px; display: flex; align-items: center; gap: 6px;
-        padding: 0 4px 0 12px; background: #fff; border-bottom: 1px solid #e5e8f2;
+        height: 38px; flex: 0 0 38px; display: flex; align-items: center; gap: 6px;
+        padding: 0 6px 0 14px; background: var(--bar-bg); border-bottom: 1px solid var(--bar-border);
         user-select: none; -webkit-user-select: none;
       }
-      #title { font-size: 12.5px; font-weight: 800; color: #1b2144; letter-spacing: .2px; }
+      #title { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.1px; }
       #spacer { flex: 1; height: 100%; }
       /* 항상 위 고정 토글 */
       #pin {
-        display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin-right: 2px;
-        font-size: 11.5px; color: #6a7190; cursor: pointer; border-radius: 8px;
+        display: flex; align-items: center; gap: 7px; padding: 5px 9px; margin-right: 2px;
+        font-size: 12px; font-weight: 500; color: var(--ink-muted); cursor: pointer; border-radius: 10px;
       }
-      #pin:hover { background: #f2f4fa; }
+      #pin:hover { background: var(--surface); }
       #pin .sw {
-        width: 30px; height: 17px; border-radius: 99px; background: #d7dcea;
+        width: 32px; height: 18px; border-radius: 99px; background: var(--track);
         position: relative; transition: background .15s;
       }
       #pin .sw::after {
-        content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+        content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
         border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25);
         transition: transform .15s;
       }
-      #pin.on { color: #4353e4; font-weight: 700; }
-      #pin.on .sw { background: #6b7cf6; }
-      #pin.on .sw::after { transform: translateX(13px); }
+      #pin.on { color: var(--primary); font-weight: 600; }
+      #pin.on .sw { background: var(--primary-fill); }
+      #pin.on .sw::after { transform: translateX(14px); }
       /* 창 버튼 */
       .btn {
-        width: 34px; height: 28px; display: grid; place-items: center; border: 0;
-        background: transparent; cursor: pointer; border-radius: 7px; color: #565e82;
+        width: 36px; height: 30px; display: grid; place-items: center; border: 0;
+        background: transparent; cursor: pointer; border-radius: 10px; color: var(--ink-muted);
       }
-      .btn:hover { background: #f0f2f8; }
-      .btn.close:hover { background: #e2574c; color: #fff; }
-      iframe { flex: 1; width: 100%; border: 0; display: block; }
-      @media (prefers-color-scheme: dark) {
-        html, body { background: #12162a; }
-        #bar { background: #171b2c; border-bottom-color: #2b3147; }
-        #title { color: #e8ebf7; }
-        #pin { color: #9aa1b8; }
-        #pin:hover { background: #232840; }
-        #pin.on { color: #a9b8ff; }
-        .btn { color: #9aa1b8; }
-        .btn:hover { background: #232840; }
-      }
+      .btn:hover { background: var(--surface); color: var(--ink); }
+      .btn.close:hover { background: var(--danger); color: #fff; }
+      iframe { flex: 1; width: 100%; border: 0; display: block; background: transparent; }
     </style>
   </head>
   <body>
@@ -174,6 +209,11 @@
         }
         if (!d) return;
 
+        // 앱 테마(설정의 system/light/dark 결과)를 상단 바에 맞춘다(2026-11-04).
+        if (d.type === "mcm:theme") {
+          document.documentElement.dataset.theme = d.dark ? "dark" : "light";
+          return;
+        }
         if (d.type === "mcm:unread") {
           unreadCount = Number(d.count) || 0;
           pushBadge();

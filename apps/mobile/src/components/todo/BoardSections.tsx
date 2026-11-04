@@ -64,7 +64,7 @@ export function BoardInfo({ board }: { board: TodoBoard }) {
           {board.projectName ?? board.name}
         </Text>
       </View>
-      <Text numberOfLines={1} className="text-[12.5px] text-cd-muted">
+      <Text numberOfLines={1} className="text-[13px] text-cd-muted">
         {subs.join(' · ')}
       </Text>
     </View>
@@ -87,6 +87,7 @@ function BoardCard({
   onLongPress: () => void;
   last?: boolean;
 }) {
+  const { c } = useTheme();
   const due = dueBadge(item, today);
   const done = item.status === 'done';
   const context = itemContext(item);
@@ -110,7 +111,7 @@ function BoardCard({
         </Text>
       </View>
       {context ? (
-        <Text numberOfLines={1} className="text-[12.5px] text-cd-muted">
+        <Text numberOfLines={1} className="text-[13px] text-cd-muted">
           {context}
         </Text>
       ) : null}
@@ -119,22 +120,22 @@ function BoardCard({
         {item.subtaskTotal > 0 ? (
           <View className="flex-row items-center gap-1">
             <SegBar done={item.subtaskDone} total={item.subtaskTotal} />
-            <Text className="text-[12.5px] text-cd-muted">
+            <Text className="text-[13px] text-cd-muted">
               {item.subtaskDone}/{item.subtaskTotal}
             </Text>
           </View>
         ) : null}
         {item.commentCount > 0 ? (
           <View className="flex-row items-center gap-0.5">
-            <Ionicons name="chatbubble-outline" size={11} color="#9aa0ab" />
-            <Text className="text-[12.5px] text-cd-muted">{item.commentCount}</Text>
+            <Ionicons name="chatbubble-outline" size={11} color={c.faint} />
+            <Text className="text-[13px] text-cd-muted">{item.commentCount}</Text>
           </View>
         ) : null}
         <View className="flex-1" />
         {item.assigneeName ? (
-          <Text className="text-[12.5px] text-cd-text">{item.assigneeName}</Text>
+          <Text className="text-[13px] text-cd-text">{item.assigneeName}</Text>
         ) : (
-          <Text className="text-[12.5px] text-cd-faint">담당 없음</Text>
+          <Text className="text-[13px] text-cd-faint">담당 없음</Text>
         )}
       </View>
     </Pressable>
@@ -300,7 +301,7 @@ export function BoardSections({
               extra={
                 over ? (
                   <View style={{ backgroundColor: overLabel.bg, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 1 }}>
-                    <Text style={{ fontSize: 11.5, color: overLabel.fg, fontWeight: '500' }}>권장 {col.wipLimit}건 초과</Text>
+                    <Text style={{ fontSize: 12, color: overLabel.fg, fontWeight: '500' }}>권장 {col.wipLimit}건 초과</Text>
                   </View>
                 ) : null
               }
@@ -310,7 +311,7 @@ export function BoardSections({
                 renderCards(list)
               ) : (
                 <View className="items-center py-4">
-                  <Text className="text-[12.5px] text-cd-faint">카드를 길게 눌러 여기로 옮기세요</Text>
+                  <Text className="text-[13px] text-cd-faint">카드를 길게 눌러 여기로 옮기세요</Text>
                 </View>
               )
             ) : null}

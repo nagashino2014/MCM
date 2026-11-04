@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, Text, View } from 'react-native';
 
+import { GlassTabBar, type GlassTabBarProps } from '@/components/ui/GlassTabBar';
 import { useTheme } from '@/theme/useTheme';
 import { useNavBadges } from '@/lib/use-nav-badges';
 
@@ -17,7 +18,7 @@ function TabBadge({ count }: { count?: number | null }) {
   if (!count) return null;
   return (
     <View className="absolute -right-2.5 -top-1 min-w-[16px] items-center rounded-full bg-cd-error px-1">
-      <Text className="text-[10px] font-extrabold text-cd-on-error">{count > 99 ? '99+' : count}</Text>
+      <Text className="text-[11px] font-extrabold text-cd-on-error">{count > 99 ? '99+' : count}</Text>
     </View>
   );
 }
@@ -37,7 +38,11 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      // 네이티브(폰)·폰 목업은 글라스 플로팅 탭 바(2026-11-04). 데스크탑 위젯은 아래 좌측 세로 바 그대로.
+      tabBar={IS_WEB ? undefined : (props) => <GlassTabBar {...(props as unknown as GlassTabBarProps)} />}
       screenOptions={{
+        // 셸 바탕(그라데이션)이 비치도록 scene 은 투명 — 탭 바 뒤까지 콘텐츠가 이어진다.
+        sceneStyle: { backgroundColor: 'transparent' },
         tabBarActiveTintColor: c.primary,
         tabBarInactiveTintColor: c.faint,
         // 데스크탑 위젯은 하단 탭 대신 **좌측 세로 바**(다우 메신저류 관례) — 폰 느낌을 덜고
@@ -56,10 +61,11 @@ export default function TabsLayout() {
               width: 88,
               paddingTop: 10,
             }
-          : { backgroundColor: c.card, borderTopColor: c.border },
-        tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600' },
+          // position absolute 여야 react-navigation 이 scene 을 바닥까지 늘린다(커스텀 바가 그 위에 뜬다).
+          : { position: 'absolute', backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
         headerStyle: { backgroundColor: c.card },
-        headerTitleStyle: { color: c.text, fontWeight: '800' },
+        headerTitleStyle: { color: c.text, fontWeight: '600', fontSize: 17 },
         // 본문 캔버스도 흰색이라 헤더를 그림자 없이 두면 경계가 사라진다 → hairline 유지.
         headerShadowVisible: true,
         headerTintColor: c.text,

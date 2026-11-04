@@ -178,7 +178,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
               const tone = wd === 0 ? over.fg : wd === 6 ? c.primary : c.faint;
               return (
                 <View key={d} style={{ width: DAY_W, alignItems: 'center', justifyContent: 'center', backgroundColor: weekendBg(d) }}>
-                  <Text style={{ fontSize: 10.5, color: isToday ? c.primary : tone, fontWeight: isToday ? '700' : '400' }}>{Number(d.slice(8, 10))}</Text>
+                  <Text style={{ fontSize: 11, color: isToday ? c.primary : tone, fontWeight: isToday ? '700' : '400' }}>{Number(d.slice(8, 10))}</Text>
                 </View>
               );
             })}
@@ -193,7 +193,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
             )}
             {todayX >= 0 && todayX <= trackW ? <View pointerEvents="none" style={{ position: 'absolute', left: todayX, top: 0, bottom: 0, width: 2, backgroundColor: c.primary, opacity: 0.7 }} /> : null}
             {rows.length === 0 ? (
-              <Text className="px-3 py-3 text-[12.5px] text-cd-faint">이 기간에 날짜가 있는 할 일이 없습니다.</Text>
+              <Text className="px-3 py-2 text-[14px] text-cd-muted">이 기간에 날짜가 있는 할 일이 없습니다.</Text>
             ) : (
               rows.map((r, i) => {
                 const x0 = clamp(diffDays(windowStart, r.start));
@@ -235,7 +235,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
                     {r.depth === 1 && !r.undated && r.item.progressPct != null && !done ? (
                       <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${r.item.progressPct}%`, backgroundColor: withAlpha('#8fb0e0', 0.45) }} />
                     ) : null}
-                    <Text numberOfLines={1} style={{ fontSize: r.depth === 0 ? 11 : 10, fontWeight: '700', color: c.text }}>
+                    <Text numberOfLines={1} style={{ fontSize: r.depth === 0 ? 11 : 10, fontWeight: '600', color: c.text }}>
                       {r.no}
                     </Text>
                   </Pressable>
@@ -253,7 +253,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
           <Text className="text-[12px] font-semibold text-cd-muted">
             일정 {rows.filter((r) => r.depth === 0).length}건 · {fmtMd(windowStart)} ~ {fmtMd(addDays(windowStart, DAYS - 1))}
           </Text>
-          {undatedCount ? <Text className="text-[11.5px] text-cd-faint">날짜 없음 {undatedCount}건</Text> : null}
+          {undatedCount ? <Text className="text-[12px] text-cd-faint">날짜 없음 {undatedCount}건</Text> : null}
         </View>
         {rows.map((r) => {
           const late = lateOf(r);
@@ -263,12 +263,12 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
             return (
               <Pressable key={`l${r.key}`} onPress={() => onOpen(r.item)} className="flex-row items-center gap-2 py-1.5 pl-10 pr-4 active:bg-cd-surface">
                 <Text className="w-8 text-[11px] text-cd-faint">{r.no}</Text>
-                <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-text">
+                <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-text">
                   {r.item.title}
                 </Text>
                 <Text className="text-[11px] text-cd-faint">{period}</Text>
                 <View style={{ backgroundColor: tone.bg, borderColor: tone.border, borderWidth: 1, borderStyle: tone.dashed ? 'dashed' : 'solid', borderRadius: 5, paddingHorizontal: 5 }}>
-                  <Text className="text-[10.5px] font-semibold text-cd-text">
+                  <Text className="text-[11px] font-semibold text-cd-text">
                     {TODO_STATUS_LABELS[r.item.status]}
                     {r.item.status !== 'done' && r.item.progressPct != null ? ` ${r.item.progressPct}%` : ''}
                   </Text>
@@ -297,11 +297,11 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
                 <Ionicons name={r.due ? 'flag-outline' : 'calendar-outline'} size={12} color={c.faint} />
                 <Text className="text-[12px] text-cd-muted">{period}</Text>
                 {r.item.subtaskTotal > 0 ? (
-                  <Text className="text-[11.5px] text-cd-faint">
+                  <Text className="text-[12px] text-cd-faint">
                     · 하위 {r.item.subtaskDone}/{r.item.subtaskTotal}
                   </Text>
                 ) : null}
-                {r.item.assigneeName ? <Text className="ml-auto text-[11.5px] text-cd-faint">{r.item.assigneeName}</Text> : null}
+                {r.item.assigneeName ? <Text className="ml-auto text-[12px] text-cd-faint">{r.item.assigneeName}</Text> : null}
               </View>
             </Pressable>
           );

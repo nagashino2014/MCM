@@ -39,16 +39,16 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 justify-center px-6">
         <View className="mb-10 items-center">
-          <View className="mb-3 h-14 w-14 items-center justify-center rounded-2xl bg-cd-primary">
-            <Text className="text-xl font-extrabold text-cd-on-primary">M</Text>
+          <View style={{ backgroundColor: c.primaryFill, borderColor: c.primaryFillEdge, borderWidth: 1 }} className="mb-3 h-14 w-14 items-center justify-center rounded-lg">
+            <Text className="text-[22px] font-semibold text-white">M</Text>
           </View>
-          <Text className="text-2xl font-extrabold text-cd-text">MCM</Text>
-          <Text className="mt-1 text-sm text-cd-muted">한국환경안전연구원 그룹웨어</Text>
+          <Text className="text-[24px] font-semibold tracking-tight text-cd-text">MCM</Text>
+          <Text className="mt-1 text-[14px] text-cd-muted">한국환경안전연구원 그룹웨어</Text>
         </View>
 
         <View className="gap-3">
@@ -68,7 +68,7 @@ export default function LoginScreen() {
             onSubmitEditing={onSubmit}
             editable={!loading}
           />
-          {error ? <Text className="text-sm text-cd-error">{error}</Text> : null}
+          {error ? <Text className="text-[13px] text-cd-error">{error}</Text> : null}
 
           <View className="flex-row items-center justify-between pt-0.5">
             <Pressable
@@ -80,10 +80,10 @@ export default function LoginScreen() {
                 size={20}
                 color={autoLogin ? c.primary : c.faint}
               />
-              <Text className="text-[13.5px] text-cd-body">자동 로그인</Text>
+              <Text className="text-[14px] text-cd-text">자동 로그인</Text>
             </Pressable>
-            <Pressable onPress={() => setPwOpen(true)} hitSlop={6} className="active:opacity-70">
-              <Text className="text-[13px] font-bold text-cd-primary">비밀번호 변경</Text>
+            <Pressable onPress={() => setPwOpen(true)} hitSlop={6} accessibilityRole="button" className="active:opacity-70">
+              <Text className="text-[13px] font-medium text-cd-primary">비밀번호 변경</Text>
             </Pressable>
           </View>
 

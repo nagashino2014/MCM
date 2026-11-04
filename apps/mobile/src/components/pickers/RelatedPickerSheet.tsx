@@ -96,7 +96,7 @@ export function RelatedPickerSheet({
           <EmptyState icon="search-outline" title="결과가 없습니다" />
         ) : (
           <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" keyboardShouldPersistTaps="handled">
-            <Text className="pb-1 pt-2 text-[11.5px] font-semibold text-cd-muted">
+            <Text className="pb-1 pt-2 text-[12px] font-semibold text-cd-muted">
               {q.trim() ? '용역' : '최근 진행 중 용역'}
             </Text>
             {contracts.map((c) => (
@@ -109,7 +109,7 @@ export function RelatedPickerSheet({
                   <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                     {c.title}
                   </Text>
-                  <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                  <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                     {[c.facilityName ?? c.counterpartyName, c.contractDate].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
@@ -117,7 +117,7 @@ export function RelatedPickerSheet({
             ))}
             {q.trim() && facilities.length > 0 ? (
               <>
-                <Text className="pb-1 pt-4 text-[11.5px] font-semibold text-cd-muted">사업장 — 용역이 없을 때(계약 전 영업 출장 등)</Text>
+                <Text className="pb-1 pt-4 text-[12px] font-semibold text-cd-muted">사업장 — 용역이 없을 때(계약 전 영업 출장 등)</Text>
                 {facilities.map((f) => (
                   <Pressable
                     key={f.facilityId}
@@ -129,7 +129,7 @@ export function RelatedPickerSheet({
                         {f.name}
                       </Text>
                       {f.region ? (
-                        <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                        <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                           {f.region}
                         </Text>
                       ) : null}

@@ -118,7 +118,7 @@ export function TodoPrefsModal({ prefs, onPatch, onClose }: { prefs: TodoPrefs; 
           <label className="todo-pf-row">
             <input type="checkbox" checked={prefs.showApprovalEvents} onChange={(e) => void onPatch({ showApprovalEvents: e.target.checked })} />
             <span className="todo-pf-lb">
-              내 할 일에 결재 일정 표시 <small>출장·교육·휴가 등 회색 행</small>
+              내 할 일·홈 오늘 할 일·모바일 앱에 결재 일정 표시 <small>출장·교육·휴가 등 회색 행. 끄면 결재 대기 행도 함께 숨깁니다</small>
             </span>
           </label>
         </section>

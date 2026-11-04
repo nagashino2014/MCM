@@ -1,3 +1,4 @@
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -209,6 +210,7 @@ export default function MailScreen() {
       ) : (
         <FlatList
           data={list.items}
+          contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
           keyExtractor={(m) => m.messageId}
           refreshControl={<PullRefresh refreshing={list.refreshing} onRefresh={list.reload} />}
           onEndReachedThreshold={0.4}

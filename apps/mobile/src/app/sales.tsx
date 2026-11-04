@@ -125,7 +125,7 @@ export default function SalesScreen() {
   const sms = (phone: string) => Linking.openURL(`sms:${phone.replace(/[^0-9+]/g, '')}`).catch(() => {});
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader title="영업" subtitle={`${cur.y}년 ${cur.m + 1}월`} back variant="sub" />
       <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
@@ -146,7 +146,7 @@ export default function SalesScreen() {
           {ACTIVITY_TYPES.map((t) => (
             <View key={t.code} className="flex-row items-center gap-[4px]">
               <View style={{ backgroundColor: t.color }} className="h-[7px] w-[7px] rounded-full" />
-              <Text className="text-[10.5px] font-semibold" style={{ color: '#9aa0b8' }}>
+              <Text className="text-[11px] font-semibold" style={{ color: c.faint }}>
                 {t.short}
               </Text>
             </View>
@@ -184,7 +184,7 @@ export default function SalesScreen() {
                         <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: c.text }}>
                           {r.title}
                         </Text>
-                        <Text numberOfLines={1} className="mt-0.5 text-[11.5px]" style={{ color: c.muted }}>
+                        <Text numberOfLines={1} className="mt-0.5 text-[12px]" style={{ color: c.muted }}>
                           {[r.facilityName, (a.endedAt ?? a.scheduledAt)?.slice(0, 10)].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
@@ -213,7 +213,7 @@ export default function SalesScreen() {
                 <View key={day}>
                   <View className="mt-2.5 flex-row items-center gap-2">
                     <Text
-                      className={`text-[11.5px] ${day === today ? 'font-extrabold' : 'font-bold'}`}
+                      className={`text-[12px] ${day === today ? 'font-extrabold' : 'font-bold'}`}
                       style={{ color: day === today ? c.primary : c.faint }}>
                       {day === today ? `오늘 · ${dayLabel(day)}` : dayLabel(day)}
                     </Text>
@@ -234,7 +234,7 @@ export default function SalesScreen() {
                           <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-text">
                             {a.facilityName ?? a.projectTitle}
                           </Text>
-                          <Text numberOfLines={1} className="mt-0.5 text-[11.5px] text-cd-faint">
+                          <Text numberOfLines={1} className="mt-0.5 text-[12px] text-cd-faint">
                             {a.summary ?? a.projectTitle}
                           </Text>
                         </View>
@@ -305,12 +305,12 @@ export default function SalesScreen() {
                       className="flex-row items-center gap-2 rounded-xl border p-3"
                       style={{ backgroundColor: c.card, borderColor: c.border }}>
                       <View className="flex-1">
-                        <Text className="text-[13.5px] font-semibold text-cd-text">
+                        <Text className="text-[14px] font-semibold text-cd-text">
                           {p.personName ?? '담당자'}
                           {p.title ? ` ${p.title}` : ''}
                         </Text>
                         {p.departmentName || phone ? (
-                          <Text className="mt-0.5 text-[11.5px] text-cd-faint">
+                          <Text className="mt-0.5 text-[12px] text-cd-faint">
                             {[p.departmentName, phone].filter(Boolean).join(' · ')}
                           </Text>
                         ) : null}
@@ -411,7 +411,7 @@ function ProgressSheet({
 function TypeTag({ short, color, ink, wide }: { short: string; color: string; ink: string; wide?: boolean }) {
   return (
     <View className={`rounded-md ${wide ? 'px-2.5' : 'px-1.5'} py-[3px]`} style={{ backgroundColor: color }}>
-      <Text className="text-[10.5px] font-bold" style={{ color: ink }}>
+      <Text className="text-[11px] font-bold" style={{ color: ink }}>
         {short}
       </Text>
     </View>

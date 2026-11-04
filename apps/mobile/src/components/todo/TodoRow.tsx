@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme/useTheme';
+import { SHADOW_CARD } from '@/theme/tokens';
 import { TODO_APPROVAL_EVENT_LABELS, type TodoApprovalEvent, type TodoItem } from '@/lib/todo-types';
 import { approvalEventColor, dueBadge, fmtIsoShort, fmtMd, fmtRange, isPeriodItem, itemContext, pendingAgeDays, pendingContextParts, periodBadge, withAlpha } from '@/lib/todo-utils';
 
@@ -25,7 +26,7 @@ export function TodoRow({
   onMore,
   showAssignee,
   showDate,
-  last,
+  last: _last,
 }: {
   item: TodoItem;
   today: string;
@@ -42,7 +43,7 @@ export function TodoRow({
   showDate?: boolean;
   last?: boolean;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   const done = item.status === 'done' || !!justDone;
   const fade = useSharedValue(1);
   useEffect(() => {
@@ -62,7 +63,7 @@ export function TodoRow({
   const meta: React.ReactNode[] = [];
   if (when)
     meta.push(
-      <Text key="do" className="text-[12.5px] text-cd-muted">
+      <Text key="do" className="text-[13px] text-cd-muted">
         <Text className="text-cd-faint">예정 </Text>
         {when}
       </Text>
@@ -70,25 +71,25 @@ export function TodoRow({
   if (due)
     meta.push(
       <View key="due" className="flex-row items-center gap-1">
-        <Text className="text-[12.5px] text-cd-faint">마감</Text>
+        <Text className="text-[13px] text-cd-faint">마감</Text>
         <DueBadge label={due.label} tone={due.tone} />
       </View>
     );
   if (showAssignee)
     meta.push(
       item.assigneeName ? (
-        <Text key="who" className="text-[12.5px] text-cd-muted">
+        <Text key="who" className="text-[13px] text-cd-muted">
           {item.assigneeName}
         </Text>
       ) : (
-        <Text key="who" className="text-[12.5px] text-cd-faint">
+        <Text key="who" className="text-[13px] text-cd-faint">
           담당 없음
         </Text>
       )
     );
   if (isPeriodItem(item) && today)
     meta.push(
-      <Text key="period" className="rounded-md bg-cd-primary-soft px-1.5 text-[11.5px] font-semibold text-cd-primary">
+      <Text key="period" className="rounded-md bg-cd-primary-soft px-1.5 text-[12px] font-semibold text-cd-primary">
         {periodBadge(item.doDate!, item.endDate!, today)}
       </Text>
     );
@@ -96,30 +97,34 @@ export function TodoRow({
     meta.push(
       <View key="sub" className="flex-row items-center gap-1">
         <SegBar done={item.subtaskDone} total={item.subtaskTotal} />
-        <Text className="text-[12.5px] text-cd-muted">
+        <Text className="text-[13px] text-cd-muted">
           {item.subtaskDone}/{item.subtaskTotal}
         </Text>
       </View>
     );
   if (item.openDeps > 0 && item.status !== 'done')
     meta.push(
-      <Text key="dep" className="rounded-md border border-cd-border bg-cd-surface px-1.5 text-[11.5px] font-semibold text-cd-muted">
-        ⛓ 선행 {item.openDeps}건 대기
+      <Text key="dep" className="rounded-md border border-cd-border bg-cd-surface px-1.5 text-[12px] font-semibold text-cd-muted">
+        선행 {item.openDeps}건 대기
       </Text>
     );
   if (item.commentCount > 0)
     meta.push(
-      <Text key="cm" className="text-[12.5px] text-cd-muted">
+      <Text key="cm" className="text-[13px] text-cd-muted">
         댓글 {item.commentCount}
       </Text>
     );
 
   return (
     <Animated.View style={faded}>
+      {/* 박스화(2026-11-04 사용자 결정) — 구분선 목록 대신 항목마다 흰 박스(반경 10·card-border·1단 그림자), 왼쪽 안쪽 보드 색 띠. */}
       <Pressable
         onPress={onPress}
-        style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 8 }}
-        className={`flex-row items-start gap-3 active:bg-cd-surface ${last ? '' : 'border-b border-cd-grid-line'}`}>
+        style={[
+          { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 8, borderColor: c.cardBorder, borderWidth: 1 },
+          dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
+        ]}
+        className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
         <BoardStripe color={item.boardColor} />
         <View style={{ marginTop: 1 }}>
           <CheckCircle done={done} status={item.status} onPress={onToggle} disabled={!item.canEdit} />
@@ -135,14 +140,14 @@ export function TodoRow({
           </View>
           {justDone ? (
             <View className="mt-[5px] flex-row items-center gap-1.5">
-              <Text className="text-[12.5px] text-cd-muted">완료됨 ·</Text>
+              <Text className="text-[13px] text-cd-muted">완료됨 ·</Text>
               <Pressable onPress={onUndo} hitSlop={8} className="active:opacity-60">
-                <Text className="text-[12.5px] font-semibold text-cd-primary">되돌리기</Text>
+                <Text className="text-[13px] font-semibold text-cd-primary">되돌리기</Text>
               </Pressable>
             </View>
           ) : item.status === 'done' ? (
             // 완료 섹션 행 — 완료 시각 · 완료 메모 1줄(체크를 다시 누르면 되돌리기)
-            <Text numberOfLines={1} className="mt-[5px] text-[12.5px] text-cd-faint">
+            <Text numberOfLines={1} className="mt-[5px] text-[13px] text-cd-faint">
               완료{item.completedAt ? ` · ${fmtIsoShort(item.completedAt)}` : ''}
               {item.completionNote ? ` · ${item.completionNote}` : ''}
             </Text>
@@ -151,7 +156,7 @@ export function TodoRow({
               {context ? (
                 <View className="mt-[5px] flex-row items-center gap-1.5">
                   <ContextDot color={item.boardColor} />
-                  <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
+                  <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-muted">
                     {context}
                   </Text>
                 </View>
@@ -195,7 +200,7 @@ export function ApprovalEventRow({
   event,
   onPress,
   showDate,
-  last,
+  last: _last,
   today,
 }: {
   event: TodoApprovalEvent;
@@ -206,8 +211,8 @@ export function ApprovalEventRow({
   /** 결재 대기 행의 상신 경과일 계산 기준(없으면 event.startDate). */
   today?: string;
 }) {
-  const { dark } = useTheme();
-  if (event.kind === 'pending') return <PendingApprovalRow event={event} onPress={onPress} last={last} today={today ?? event.startDate} />;
+  const { c, dark } = useTheme();
+  if (event.kind === 'pending') return <PendingApprovalRow event={event} onPress={onPress} today={today ?? event.startDate} />;
   const kind = TODO_APPROVAL_EVENT_LABELS[event.kind] ?? event.kind;
   const color = approvalEventColor(event);
   const tag = event.status === 'approved' ? '결재 승인' : event.status === 'in_progress' ? '결재 진행' : null;
@@ -223,15 +228,18 @@ export function ApprovalEventRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
-      className={`flex-row items-start gap-3 active:opacity-70 ${last ? '' : 'border-b border-cd-grid-line'}`}>
+      style={[
+        { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1 },
+        dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
+      ]}
+      className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
       <BoardStripe color={color} />
       <View style={{ marginTop: -1 }}>
         <KindCircle kind={event.kind} color={color} />
       </View>
       <View className="flex-1" style={{ minWidth: 0 }}>
         <View className="flex-row items-center gap-1.5">
-          <PastelLabel label={kind} tone="gray" bg={withAlpha(color, dark ? 0.35 : 0.6)} fg={dark ? '#e7eaf4' : '#4d5260'} />
+          <PastelLabel label={kind} tone="gray" bg={withAlpha(color, dark ? 0.35 : 0.6)} fg={c.text} />
           <Text numberOfLines={1} className="flex-1 text-[14px] leading-[21px] text-cd-body">
             {event.title}
           </Text>
@@ -239,18 +247,18 @@ export function ApprovalEventRow({
         {context ? (
           <View className="mt-[5px] flex-row items-center gap-1.5">
             <ContextDot color={color} />
-            <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
+            <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-muted">
               {context}
             </Text>
           </View>
         ) : null}
-        <Text className="mt-[7px] text-[12.5px] text-cd-muted">
+        <Text className="mt-[7px] text-[13px] text-cd-muted">
           {meta}
           {event.drafterName ? <Text className="text-cd-faint"> · {event.drafterName}</Text> : null}
         </Text>
       </View>
       {onPress ? (
-        <Text className="text-[12.5px] font-medium text-cd-primary" style={{ marginTop: 3 }}>
+        <Text className="text-[13px] font-medium text-cd-primary" style={{ marginTop: 3 }}>
           문서
         </Text>
       ) : null}
@@ -266,7 +274,7 @@ export function ApprovalEventRow({
 export function PendingApprovalRow({
   event,
   onPress,
-  last,
+  last: _last,
   today,
 }: {
   event: TodoApprovalEvent;
@@ -274,7 +282,7 @@ export function PendingApprovalRow({
   last?: boolean;
   today: string;
 }) {
-  const { dark } = useTheme();
+  const { c, dark } = useTheme();
   const color = approvalEventColor(event);
   const age = pendingAgeDays(event.submittedAt, today);
   const context = [event.projectName, event.clientName && event.clientName !== event.projectName ? event.clientName : null, ...pendingContextParts(event)]
@@ -284,15 +292,18 @@ export function PendingApprovalRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={{ minHeight: 76, paddingVertical: 14, paddingLeft: 16, paddingRight: 12, backgroundColor: withAlpha(color, 0.12) }}
-      className={`flex-row items-start gap-3 active:opacity-70 ${last ? '' : 'border-b border-cd-grid-line'}`}>
+      style={[
+        { minHeight: 72, marginHorizontal: 16, marginBottom: 8, paddingVertical: 12, paddingLeft: 16, paddingRight: 12, borderColor: c.cardBorder, borderWidth: 1 },
+        dark ? SHADOW_CARD.dark : SHADOW_CARD.light,
+      ]}
+      className="flex-row items-start gap-3 rounded-lg bg-cd-card active:opacity-80">
       <BoardStripe color={color} />
       <View style={{ marginTop: -1 }}>
         <KindCircle kind="pending" color={color} />
       </View>
       <View className="flex-1" style={{ minWidth: 0 }}>
         <View className="flex-row items-center gap-1.5">
-          <PastelLabel label={TODO_APPROVAL_EVENT_LABELS.pending} tone="sky" bg={withAlpha(color, dark ? 0.35 : 0.6)} fg={dark ? '#e7eaf4' : '#1a47a8'} />
+          <PastelLabel label={TODO_APPROVAL_EVENT_LABELS.pending} tone="sky" bg={withAlpha(color, dark ? 0.35 : 0.6)} fg={dark ? c.text : c.primaryStrong} />
           <Text numberOfLines={1} className="flex-1 text-[14px] leading-[21px] text-cd-text">
             {event.title}
           </Text>
@@ -300,7 +311,7 @@ export function PendingApprovalRow({
         {context ? (
           <View className="mt-[5px] flex-row items-center gap-1.5">
             <ContextDot color={color} />
-            <Text numberOfLines={1} className="flex-1 text-[12.5px] text-cd-muted">
+            <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-muted">
               {context}
             </Text>
           </View>
@@ -309,14 +320,14 @@ export function PendingApprovalRow({
           {event.drafterName ? (
             <View className="flex-row items-center gap-1">
               <MiniAvatar name={event.drafterName} photoUrl={event.drafterPhotoUrl} size={18} />
-              <Text className="text-[12.5px] text-cd-muted">{event.drafterName}</Text>
+              <Text className="text-[13px] text-cd-muted">{event.drafterName}</Text>
             </View>
           ) : null}
           {age != null && age >= 2 ? <DueBadge label={`D+${age}`} tone="today" /> : null}
         </View>
       </View>
       {onPress ? (
-        <Text className="text-[12.5px] font-medium text-cd-primary" style={{ marginTop: 3 }}>
+        <Text className="text-[13px] font-medium text-cd-primary" style={{ marginTop: 3 }}>
           결재
         </Text>
       ) : null}

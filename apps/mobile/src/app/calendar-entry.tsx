@@ -248,7 +248,7 @@ export default function CalendarEntryScreen() {
   const label = (k: string) => <Text className="text-[13px] font-bold text-cd-muted">{k}</Text>;
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader title={heading} back variant="sub" />
       <KeyboardAvoidingView enabled={false} className="flex-1">
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
@@ -258,7 +258,7 @@ export default function CalendarEntryScreen() {
             <>
               {entry?.ruleId ? (
                 <View className="rounded-xl border border-cd-border bg-cd-card px-3.5 py-3 gap-2">
-                  <Text className="text-[12.5px] text-cd-muted">
+                  <Text className="text-[13px] text-cd-muted">
                     정기 회의 회차입니다{entry.isModified ? ' (조정됨)' : ''}. 날짜·시간을 바꾸면 이 회차만 조정됩니다.
                   </Text>
                   {editable ? (
@@ -337,8 +337,8 @@ export default function CalendarEntryScreen() {
                             key={o.contractId}
                             onPress={() => { setContractId(o.contractId); setContractTitle(o.contractTitle); setContractQ(''); setContractOpts([]); }}
                             className="rounded-xl border border-cd-border bg-cd-card px-3.5 py-2.5 active:opacity-70">
-                            <Text className="text-[13.5px] font-bold text-cd-text" numberOfLines={1}>{o.contractTitle}</Text>
-                            {o.counterpartyName ? <Text className="text-[11.5px] text-cd-faint">{o.counterpartyName}</Text> : null}
+                            <Text className="text-[14px] font-bold text-cd-text" numberOfLines={1}>{o.contractTitle}</Text>
+                            {o.counterpartyName ? <Text className="text-[12px] text-cd-faint">{o.counterpartyName}</Text> : null}
                           </Pressable>
                         ))}
                         <Input value={topic} onChangeText={setTopic} placeholder="관련 용역이 없으면 업무 내용을 직접 입력" />
@@ -371,7 +371,7 @@ export default function CalendarEntryScreen() {
                         onPress={() => setAttendees((prev) => prev.filter((x) => x.employeeId !== p.employeeId))}
                         className="flex-row items-center gap-1 rounded-full px-2.5 py-1"
                         style={{ backgroundColor: c.primarySoft }}>
-                        <Text className="text-[12.5px] font-bold" style={{ color: c.primary }}>
+                        <Text className="text-[13px] font-bold" style={{ color: c.primary }}>
                           {p.name}
                           {p.positionName ? <Text className="font-medium"> {p.positionName}</Text> : null}
                         </Text>
@@ -379,7 +379,7 @@ export default function CalendarEntryScreen() {
                       </Pressable>
                     ))
                   ) : (
-                    <Text className="self-center px-1 text-[12.5px] text-cd-faint">{ro ? '참석자 없음' : '참석자를 지정하세요.'}</Text>
+                    <Text className="self-center px-1 text-[13px] text-cd-faint">{ro ? '참석자 없음' : '참석자를 지정하세요.'}</Text>
                   )}
                 </View>
                 {!ro ? <Button label="조직도에서 참석자 선택" variant="soft" onPress={() => setPicker(true)} /> : null}
@@ -393,16 +393,16 @@ export default function CalendarEntryScreen() {
                     <Pressable onPress={openResume} className="flex-row items-center gap-2 rounded-xl border border-cd-border bg-cd-card px-3.5 py-3 active:opacity-70">
                       <Ionicons name="document-attach-outline" size={17} color={c.primary} />
                       <Text className="flex-1 text-[14px] font-bold text-cd-text" numberOfLines={1}>{entry.extra.resume.fileName}</Text>
-                      <Text className="text-[11.5px] text-cd-faint">{(entry.extra.resume.size / 1024 / 1024).toFixed(1)}MB · 열기</Text>
+                      <Text className="text-[12px] text-cd-faint">{(entry.extra.resume.size / 1024 / 1024).toFixed(1)}MB · 열기</Text>
                     </Pressable>
                   ) : (
-                    <Text className="text-[12.5px] text-cd-faint">{editable ? '첨부된 이력서가 없습니다.' : '이력서가 없습니다.'}</Text>
+                    <Text className="text-[13px] text-cd-faint">{editable ? '첨부된 이력서가 없습니다.' : '이력서가 없습니다.'}</Text>
                   )}
                   {editable ? (
                     <View className="flex-row items-center gap-2">
                       <Button label={entry?.extra.resume ? '이력서 교체' : '이력서 첨부'} variant="soft" onPress={pickResume} />
                       {resumeFile ? (
-                        <Text className="flex-1 text-[12.5px] text-cd-muted" numberOfLines={1}>{resumeFile.name} (저장 시 업로드)</Text>
+                        <Text className="flex-1 text-[13px] text-cd-muted" numberOfLines={1}>{resumeFile.name} (저장 시 업로드)</Text>
                       ) : null}
                     </View>
                   ) : null}

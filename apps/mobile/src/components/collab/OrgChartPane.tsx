@@ -1,3 +1,4 @@
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,7 +107,7 @@ export function OrgChartPane() {
     <ScrollView
       className="flex-1"
       refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
-      contentContainerStyle={{ paddingBottom: 24 }}>
+      contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}>
       {roots.map((d) => renderDept(d, 0))}
     </ScrollView>
   );

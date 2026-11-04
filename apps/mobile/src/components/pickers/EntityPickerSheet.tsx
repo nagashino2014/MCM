@@ -221,7 +221,7 @@ export function EntityPickerSheet({
                     {o.label}
                   </Text>
                   {o.sub ? (
-                    <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                    <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                       {o.sub}
                     </Text>
                   ) : null}

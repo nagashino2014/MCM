@@ -35,7 +35,7 @@ export function PurposeChips({
         className={`rounded-full border px-3 py-1.5 ${disabled ? 'opacity-60' : 'active:opacity-70'} ${
           on ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border'
         }`}>
-        <Text className={`text-[12.5px] ${on ? 'font-semibold text-cd-primary' : 'text-cd-text'}`}>{p}</Text>
+        <Text className={`text-[13px] ${on ? 'font-semibold text-cd-primary' : 'text-cd-text'}`}>{p}</Text>
       </Pressable>
     );
   };
@@ -47,12 +47,12 @@ export function PurposeChips({
       <Text className="mt-1 text-[11px] text-cd-faint">그 밖의 경비 — 지출결의서에 실립니다</Text>
       <View className="flex-row flex-wrap gap-1.5">{GENERAL_PURPOSES.map(chip)}</View>
       {value && !(TRIP_PURPOSES as readonly string[]).includes(value) && !(GENERAL_PURPOSES as readonly string[]).includes(value) ? (
-        <Text className="text-[11.5px] text-cd-faint">기존 입력: {value} — 목록에서 다시 고르세요</Text>
+        <Text className="text-[12px] text-cd-faint">기존 입력: {value} — 목록에서 다시 고르세요</Text>
       ) : null}
       {PURPOSE_HINTS[value] ? (
         <View className="mt-1 flex-row items-start gap-1">
           <Ionicons name="help-circle-outline" size={14} color={c.muted} />
-          <Text className="flex-1 text-[11.5px] text-cd-muted">{PURPOSE_HINTS[value]}</Text>
+          <Text className="flex-1 text-[12px] text-cd-muted">{PURPOSE_HINTS[value]}</Text>
         </View>
       ) : null}
     </View>

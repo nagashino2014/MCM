@@ -516,7 +516,7 @@ export default function DraftScreen() {
               {f.name}
             </Text>
             {f.description ? (
-              <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+              <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                 {f.description}
               </Text>
             ) : null}
@@ -531,7 +531,7 @@ export default function DraftScreen() {
     };
 
     return (
-      <SafeAreaView edges={['top']} className="flex-1 bg-cd-bg">
+      <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
         <ScreenHeader title="기안 작성" subtitle="양식을 선택하세요" back />
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}>
           {forms.loading && !all.length ? (
@@ -565,7 +565,7 @@ export default function DraftScreen() {
 
   // ── 2단계: 작성 ──────────────────────────────────────────
   return (
-    <SafeAreaView edges={['top']} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader
         title={def?.name ?? '기안 작성'}
         subtitle={params.formId ? undefined : '양식 변경하려면 뒤로'}
@@ -602,7 +602,7 @@ export default function DraftScreen() {
               {/* 양식별 안내 — 휴가 잔여 / 초과근무 주 사용량 */}
               {isLeave && leaveMine.data?.remaining != null ? (
                 <View className="rounded-xl bg-cd-primary-soft px-3 py-2.5">
-                  <Text className="text-[12.5px] font-bold text-cd-primary">
+                  <Text className="text-[13px] font-bold text-cd-primary">
                     올해 잔여 연차 {leaveMine.data.remaining}일 (총 {leaveMine.data.granted ?? '-'}일 · 사용{' '}
                     {leaveMine.data.used ?? '-'}일)
                   </Text>
@@ -610,7 +610,7 @@ export default function DraftScreen() {
               ) : null}
               {isLeave && leaveHint ? (
                 <View className={`rounded-xl px-3 py-2.5 ${leaveHint.over ? 'bg-cd-error-soft' : 'bg-cd-surface'}`}>
-                  <Text className={`text-[12.5px] font-bold ${leaveHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
+                  <Text className={`text-[13px] font-bold ${leaveHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
                     {leaveHint.text}
                   </Text>
                 </View>
@@ -618,23 +618,23 @@ export default function DraftScreen() {
               {/* 익일 야간 경고(웹과 같은 문구, 2026-10-31) */}
               {isOvertime && otRangeKey && parseTimeRange(values[otRangeKey]).overnight ? (
                 <View className="rounded-xl bg-cd-error-soft px-3 py-2.5">
-                  <Text className="text-[12.5px] font-bold text-cd-error">
+                  <Text className="text-[13px] font-bold text-cd-error">
                     ⚠ 익일까지 이어지는 야간 근무는 반드시 부서장의 사전 동의 및 승인 결재를 받아야 합니다. 승인 결재 전 임의로 수행한 야간 근무는 인정되지 않으니 유의하시기 바랍니다.
                   </Text>
                 </View>
               ) : null}
               {isOvertime && otHint ? (
                 <View className={`rounded-xl px-3 py-2.5 ${otHint.over ? 'bg-cd-error-soft' : 'bg-cd-surface'}`}>
-                  <Text className={`text-[12.5px] font-bold ${otHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
+                  <Text className={`text-[13px] font-bold ${otHint.over ? 'text-cd-error' : 'text-cd-muted'}`}>
                     {otHint.text}
                   </Text>
                   {otHint.over ? (
-                    <Text className="mt-1 text-[11.5px] text-cd-error">
+                    <Text className="mt-1 text-[12px] text-cd-error">
                       주 12시간을 초과합니다 — 상신 시 특별휴가 전환 동의(전자서명)가 필요합니다.
                     </Text>
                   ) : null}
                   {usage?.schedule ? (
-                    <Text className="mt-1 text-[11.5px] text-cd-faint">
+                    <Text className="mt-1 text-[12px] text-cd-faint">
                       평일 초과근무 인정 {usage.schedule.endHhmm}부터 (근무 {usage.schedule.startHhmm}~{usage.schedule.endHhmm})
                     </Text>
                   ) : null}

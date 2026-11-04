@@ -2,12 +2,70 @@ import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/theme/useTheme";
+import { SHADOW_CARD } from "@/theme/tokens";
 
 /**
- * 지표 타일 — 홈 KPI 그리드의 한 칸(핸드오프 2a §3).
+ * 요약 스트립(KpiStrip) — KPI 타일의 대체물(KESI Frosted 2026-11-03).
  *
- * 라벨 11 muted → 수치 22/800 → 상태 10/700. 값이 0 이면 상태는 연회색 "없음"으로,
- * 1 이상이면 항목별 강조색(`tone`)으로 쓴다. 3열 그리드에서 `flex-1` 로 나란히 놓는다.
+ * 한 카드 안에 묶음(레이블 12/500 ink-muted 위, 숫자 24/600 tabular 아래)을 가로로 두고, 묶음 사이는 세로 hairline 만.
+ * 묶음은 최대 4개, 높이 72 이내. 숫자 색은 그 숫자가 **지금 문제**(`tone` warning/danger)일 때만 바뀌고 0 이면 tone 을 주지 않는다.
+ * 아이콘·색 보더·그라데이션 없음. 누를 수 있는 묶음은 전체가 터치 영역이다(화살표 없음).
+ */
+export interface KpiItem {
+  key?: string;
+  label: string;
+  value: number | string;
+  /** 숫자 옆 보조(단위·"내 차례"). */
+  hint?: string;
+  tone?: "warning" | "danger";
+  onPress?: () => void;
+}
+
+export function KpiStrip({ items, flat }: { items: KpiItem[]; flat?: boolean }) {
+  const { c, dark } = useTheme();
+  const list = items.slice(0, 4);
+  return (
+    <View
+      style={[{ borderColor: c.cardBorder, borderWidth: 1 }, flat ? null : dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
+      className="flex-row rounded-lg bg-cd-card">
+      {list.map((it, i) => {
+        const problem = it.tone && Number(it.value) !== 0;
+        const color = problem ? (it.tone === "danger" ? c.error : c.warning) : c.text;
+        const body = (
+          <>
+            <Text numberOfLines={1} className="text-[12px] font-medium text-cd-muted">
+              {it.label}
+            </Text>
+            <View className="mt-1 flex-row items-baseline gap-1">
+              <Text style={{ color, fontVariant: ["tabular-nums"] }} className="text-[24px] font-semibold leading-[28px] tracking-tight">
+                {it.value}
+              </Text>
+              {it.hint ? (
+                <Text numberOfLines={1} className="shrink text-[12px] text-cd-muted">
+                  {it.hint}
+                </Text>
+              ) : null}
+            </View>
+          </>
+        );
+        const cls = `flex-1 px-3 py-3 ${i > 0 ? "border-l border-cd-border" : ""}`;
+        return it.onPress ? (
+          <Pressable key={it.key ?? it.label} onPress={it.onPress} accessibilityRole="button" className={`${cls} active:bg-cd-surface`}>
+            {body}
+          </Pressable>
+        ) : (
+          <View key={it.key ?? it.label} className={cls}>
+            {body}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * 지표 타일(호환) — 새 화면은 `KpiStrip` 을 쓴다. 남아 있는 호출처(담당자 화면 등)를 위해 Frosted 규격으로만 손봤다:
+ * 카드 면 + card-border + 반경 10, 레이블 12 ink-muted → 수치 24/600 → 상태 11. 상태색은 값이 1 이상일 때만.
  */
 export function StatTile({
   label,
@@ -23,21 +81,22 @@ export function StatTile({
   tone: string;
   onPress?: () => void;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   const on = value > 0;
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      className="flex-1 rounded-card border border-cd-border bg-cd-card py-3 pl-[13px] pr-2 active:opacity-70">
-      <Text numberOfLines={1} className="text-[11px] text-cd-muted">
+      accessibilityRole={onPress ? "button" : undefined}
+      style={[{ borderColor: c.cardBorder, borderWidth: 1 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
+      className="flex-1 rounded-lg bg-cd-card px-3 py-3 active:opacity-80">
+      <Text numberOfLines={1} className="text-[12px] font-medium text-cd-muted">
         {label}
       </Text>
-      <Text className="mt-[5px] text-[22px] font-extrabold leading-none text-cd-text">{value}</Text>
-      <Text
-        numberOfLines={1}
-        className={`mt-1 text-[10px] ${on ? "font-bold" : ""}`}
-        style={{ color: on ? tone : c.faint }}>
+      <Text style={{ fontVariant: ["tabular-nums"] }} className="mt-1 text-[24px] font-semibold leading-[28px] tracking-tight text-cd-text">
+        {value}
+      </Text>
+      <Text numberOfLines={1} className="mt-0.5 text-[11px]" style={{ color: on ? tone : c.muted }}>
         {on ? delta : "없음"}
       </Text>
     </Pressable>
@@ -45,8 +104,8 @@ export function StatTile({
 }
 
 /**
- * 액션 타일 — 빠른 실행의 스퀘클 버튼(핸드오프 2a §4, 1b 스타일).
- * 54px · radius 19 · 옅은 그림자. 아이콘 색만 기능별로 다르다.
+ * 액션 타일 — 빠른 실행의 아이콘 버튼. 48px 중립 면(surface-sunken) + 반경 10 + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원),
+ * 아래 라벨 12/500. 그림자·색 배경은 없다.
  */
 export function ActionTile({
   icon,
@@ -56,23 +115,16 @@ export function ActionTile({
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  tone: string;
+  tone?: string;
   onPress: () => void;
 }) {
+  const { c } = useTheme();
   return (
-    <Pressable onPress={onPress} className="items-center gap-[7px] active:opacity-70">
-      <View
-        className="h-[54px] w-[54px] items-center justify-center rounded-[19px] border border-cd-border bg-cd-card"
-        style={{
-          shadowColor: "#3C4696",
-          shadowOpacity: 0.12,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 3,
-        }}>
-        <Ionicons name={icon} size={23} color={tone} />
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} className="items-center gap-1.5 active:opacity-70">
+      <View className="h-12 w-12 items-center justify-center rounded-lg bg-cd-surface">
+        <Ionicons name={icon} size={22} color={tone ?? c.primary} />
       </View>
-      <Text className="text-[11px] font-semibold text-cd-body">{label}</Text>
+      <Text className="text-[12px] font-medium text-cd-text">{label}</Text>
     </Pressable>
   );
 }

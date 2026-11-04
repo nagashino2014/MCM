@@ -16,8 +16,8 @@
 
 :root {
   --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
+    'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', Inter, ui-sans-serif, system-ui, sans-serif,
+    Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
@@ -25,66 +25,76 @@
 }
 
 /* ---------------------------------------------------------------------------
- * cdash 디자인 토큰 — 웹 frontend/components/cdash/cdash.css 의 --cd-* 와 동일 값.
- * 웹은 `.cdash[data-theme]` 스코프, 앱은 루트 + OS 색상 스킴(prefers-color-scheme).
- * 값 형식이 "R G B" 인 이유 = tailwind 의 `rgb(var(--x) / <alpha-value>)` 문법.
- * ⚠ 웹 값이 바뀌면 여기도 같이 바꾼다(두 곳이 갈라지면 화면 톤이 어긋난다).
+ * KESI Frosted 토큰(2026-11-03 모바일 이식) — 값은 src/theme/tokens.ts 와 같다(런타임 vars() 주입이 정본,
+ * 여기는 주입이 닿지 않는 경계의 폴백). 값 형식이 "R G B" 인 이유 = tailwind 의 `rgb(var(--x) / <alpha-value>)` 문법.
+ * ⚠ 웹 precision-tokens.css 값이 바뀌면 tokens.ts 와 함께 바꾼다.
  * ------------------------------------------------------------------------- */
-/* ★ 라이트는 캔버스도 흰색(bg = card) — 면 대신 선으로 나눈다. 근거는 theme/tokens.ts 주석. */
 :root {
-  --cd-bg: 255 255 255;
+  --cd-bg: 244 246 251;
   --cd-card: 255 255 255;
-  --cd-surface: 242 244 250;
-  --cd-border: 208 215 232;
-  --cd-text: 42 48 64;
-  --cd-body: 58 64 85;
-  --cd-muted: 123 131 156;
-  --cd-faint: 154 161 184;
+  --cd-surface: 246 247 249;
+  --cd-border: 226 228 233;
+  --cd-border-strong: 209 212 220;
+  --cd-card-border: 232 233 238;
+  --cd-text: 33 35 44;
+  --cd-body: 33 35 44;
+  --cd-muted: 100 106 120;
+  --cd-faint: 122 128 144;
   --cd-on-primary: 255 255 255;
   --cd-on-error: 255 255 255;
   --cd-primary: 74 99 216;
-  --cd-primary-soft: 236 239 253;
-  --cd-primary-strong: 61 83 194;
+  --cd-primary-soft: 238 241 251;
+  --cd-primary-strong: 26 71 168;
+  --cd-primary-fill: 74 99 216;
+  --cd-primary-fill-edge: 61 85 200;
+  --cd-tab-selected: 238 241 251;
+  --cd-tab-selected-ink: 47 65 168;
   --cd-secondary: 61 143 196;
   --cd-secondary-soft: 233 245 252;
-  --cd-accent: 208 87 67;
-  --cd-accent-soft: 252 235 232;
-  --cd-accent-strong: 208 87 67;
-  --cd-success: 46 140 113;
-  --cd-success-soft: 228 244 240;
-  --cd-warning: 181 127 29;
-  --cd-warning-soft: 251 241 224;
-  --cd-error: 208 87 67;
-  --cd-error-soft: 252 235 232;
-  --cd-grid-line: 228 232 242;
+  --cd-accent: 185 39 39;
+  --cd-accent-soft: 250 240 240;
+  --cd-accent-strong: 185 39 39;
+  --cd-success: 28 120 79;
+  --cd-success-soft: 237 244 241;
+  --cd-warning: 154 86 9;
+  --cd-warning-soft: 246 240 233;
+  --cd-error: 185 39 39;
+  --cd-error-soft: 250 240 240;
+  --cd-grid-line: 236 238 242;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --cd-bg: 20 24 36;
-    --cd-card: 27 33 54;
-    --cd-surface: 38 44 64;
-    --cd-border: 58 64 88;
-    --cd-text: 231 234 244;
-    --cd-body: 198 205 224;
-    --cd-muted: 154 163 188;
-    --cd-faint: 133 144 171;
-    --cd-on-primary: 20 24 36;
-    --cd-on-error: 20 24 36;
+    --cd-bg: 20 21 32;
+    --cd-card: 26 29 35;
+    --cd-surface: 36 38 46;
+    --cd-border: 52 55 66;
+    --cd-border-strong: 72 77 91;
+    --cd-card-border: 52 55 66;
+    --cd-text: 231 233 238;
+    --cd-body: 231 233 238;
+    --cd-muted: 161 168 181;
+    --cd-faint: 138 145 160;
+    --cd-on-primary: 17 21 34;
+    --cd-on-error: 17 21 34;
     --cd-primary: 169 184 255;
-    --cd-primary-soft: 44 58 102;
-    --cd-primary-strong: 143 165 255;
+    --cd-primary-soft: 31 43 71;
+    --cd-primary-strong: 151 188 252;
+    --cd-primary-fill: 82 105 220;
+    --cd-primary-fill-edge: 74 95 208;
+    --cd-tab-selected: 31 43 71;
+    --cd-tab-selected-ink: 151 188 252;
     --cd-secondary: 126 200 240;
     --cd-secondary-soft: 36 64 90;
-    --cd-accent: 240 154 139;
-    --cd-accent-soft: 61 52 68;
-    --cd-accent-strong: 240 154 139;
-    --cd-success: 95 199 165;
-    --cd-success-soft: 31 68 56;
-    --cd-warning: 235 192 106;
-    --cd-warning-soft: 74 61 34;
-    --cd-error: 240 154 139;
-    --cd-error-soft: 74 47 51;
-    --cd-grid-line: 48 53 72;
+    --cd-accent: 246 132 132;
+    --cd-accent-soft: 41 36 42;
+    --cd-accent-strong: 246 132 132;
+    --cd-success: 113 214 168;
+    --cd-success-soft: 33 44 46;
+    --cd-warning: 243 190 98;
+    --cd-warning-soft: 45 43 41;
+    --cd-error: 246 132 132;
+    --cd-error-soft: 41 36 42;
+    --cd-grid-line: 43 46 56;
   }
 }

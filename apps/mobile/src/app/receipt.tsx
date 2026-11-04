@@ -19,6 +19,7 @@ import { File } from 'expo-file-system';
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { CtaGradientFill } from '@/components/ui';
 import { apiFetch } from '@/lib/api';
+import { useTheme } from '@/theme/useTheme';
 import { PurposeChips, RelatedField } from '@/components/pickers/ExpensePurposeFields';
 import { RelatedPickerSheet } from '@/components/pickers/RelatedPickerSheet';
 import { purposeNeedsRelated, type RelatedRef } from '@/lib/expense-purpose';
@@ -47,8 +48,6 @@ interface DuplicateInfo {
 }
 type Step = 'pick' | 'parsing' | 'form' | 'saving' | 'done';
 
-const PRIMARY = '#4A63D8';
-
 /** 표시용 000-00-00000 (10자리가 아니면 입력값 그대로 둔다 — 타이핑 중 되돌림 금지). */
 /** 천단위 구분자 표시(입력 버퍼에는 숫자만 담긴다). */
 const fmtAmount = (v: string) => {
@@ -64,7 +63,7 @@ const fmtCorpNum = (v: string) => {
 // 라우트 크래시 캐처 — 화면 오류 시 흰 화면 대신 안내+재시도 제공
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   return (
-    <SafeAreaView className="flex-1 items-center justify-center bg-cd-bg px-6">
+    <SafeAreaView className="flex-1 items-center justify-center bg-transparent px-6">
       <Text className="mb-2 text-base font-bold text-cd-error">화면 오류가 발생했습니다</Text>
       <Text className="mb-4 text-center text-xs text-cd-muted">
         {error.name}: {error.message}
@@ -78,6 +77,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 
 export default function ReceiptScreen() {
   const router = useRouter();
+  const { c } = useTheme();
   const [step, setStep] = useState<Step>('pick');
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -332,18 +332,18 @@ export default function ReceiptScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       {/* 자체 헤더 — 명함 화면과 동일(expo-router 헤더 점멸 회피) */}
       <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">
         <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">
-          <Ionicons name="chevron-back" size={24} color={PRIMARY} />
+          <Ionicons name="chevron-back" size={24} color={c.primary} />
         </Pressable>
         <Text className="flex-1 text-base font-extrabold text-cd-text">영수증 촬영</Text>
         <Pressable
           onPress={() => router.push('/receipts')}
           hitSlop={8}
           className="h-10 w-10 items-center justify-center active:opacity-60">
-          <Ionicons name="file-tray-full-outline" size={21} color={PRIMARY} />
+          <Ionicons name="file-tray-full-outline" size={21} color={c.primary} />
         </Pressable>
       </View>
       <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -392,7 +392,7 @@ export default function ReceiptScreen() {
               <Pressable
                 onPress={() => pick('library')}
                 className="h-14 flex-row items-center justify-center gap-2 rounded-2xl bg-primary-light active:opacity-70">
-                <Ionicons name="images" size={20} color={PRIMARY} />
+                <Ionicons name="images" size={20} color={c.primary} />
                 <Text className="text-base font-bold text-primary">앨범에서 선택</Text>
               </Pressable>
             ) : null}
@@ -404,7 +404,7 @@ export default function ReceiptScreen() {
 
         {step === 'parsing' ? (
           <View className="flex-row items-center justify-center gap-2 py-8">
-            <ActivityIndicator color={PRIMARY} />
+            <ActivityIndicator color={c.primary} />
             <Text className="text-sm text-cd-muted">영수증을 인식하는 중…</Text>
           </View>
         ) : null}
@@ -438,14 +438,14 @@ export default function ReceiptScreen() {
                   onChangeText={(v) => setForm((s) => ({ ...s, corpNum: v }))}
                   keyboardType="numbers-and-punctuation"
                   placeholder="000-00-00000"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={c.faint}
                 />
                 <Pressable
                   onPress={() => void lookupStore()}
                   disabled={looking}
                   className="rounded-lg border border-cd-border px-3 py-2.5 active:opacity-70">
                   {looking ? (
-                    <ActivityIndicator size="small" color={PRIMARY} />
+                    <ActivityIndicator size="small" color={c.primary} />
                   ) : (
                     <Text className="text-xs font-bold text-primary">상호 찾기</Text>
                   )}
@@ -483,7 +483,7 @@ export default function ReceiptScreen() {
                   <Text className={`text-base ${form.paidDate ? 'text-cd-text' : 'text-cd-faint'}`}>
                     {form.paidDate || '날짜 선택'}
                   </Text>
-                  <Ionicons name="calendar-outline" size={16} color="#6b7280" />
+                  <Ionicons name="calendar-outline" size={16} color={c.muted} />
                 </Pressable>
               </View>
               <Field
@@ -513,7 +513,7 @@ export default function ReceiptScreen() {
                 onPress={reset}
                 disabled={step === 'saving'}
                 className="items-center justify-center rounded-xl border border-cd-border px-4 py-3 active:opacity-70">
-                <Ionicons name="refresh" size={18} color="#6b7280" />
+                <Ionicons name="refresh" size={18} color={c.muted} />
               </Pressable>
               <Pressable
                 onPress={() => void save(false)}
@@ -535,7 +535,7 @@ export default function ReceiptScreen() {
         {step === 'done' ? (
           <View className="items-center gap-3 rounded-2xl border border-cd-border bg-cd-card p-6">
             <View className="rounded-full bg-cd-success-soft p-3">
-              <Ionicons name="checkmark" size={28} color="#16a34a" />
+              <Ionicons name="checkmark" size={28} color={c.success} />
             </View>
             <Text className="text-center text-sm font-bold text-cd-text">
               {savedStore} 영수증을 저장했습니다.{'\n'}보관함에서 확인하고, 지출결의서 작성 때 불러올 수 있어요.
@@ -628,6 +628,7 @@ function Field({
   keyboardType?: 'number-pad';
   placeholder?: string;
 }) {
+  const { c } = useTheme();
   return (
     <View className="flex-row items-center gap-2">
       <Text className="w-16 text-xs text-cd-faint">{label}</Text>
@@ -637,7 +638,7 @@ function Field({
         onChangeText={onChange}
         keyboardType={keyboardType}
         placeholder={placeholder}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={c.faint}
         autoCapitalize="none"
       />
     </View>

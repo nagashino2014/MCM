@@ -10,12 +10,13 @@ import {
   Card,
   CardRow,
   HeaderIconButton,
+  KpiStrip,
   PullRefresh,
   ScreenHeader,
   SkeletonList,
-  StatTile,
-  TileGrid,
+  type KpiItem,
 } from '@/components/ui';
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { HOME_WIDGET_NODES, MOBILE_WIDGET_ORDER, TodoTodayWidget } from '@/components/home/widgets';
 import { WeatherWidget } from '@/components/home/weather/WeatherWidget';
 import { useApi } from '@/lib/use-api';
@@ -92,9 +93,9 @@ function todayOnly(list: Activity[]): Activity[] {
 }
 
 /**
- * 홈 — 모바일 홈 개편 핸드오프(확정안 2a "소프트 플랫").
+ * 홈 — KESI Frosted(2026-11-03): 베이지 바탕 위 흰 카드, 요약 스트립, 중립 아이콘.
  *
- * 구성: 헤더(인사말) → 날씨 위젯 → KPI 6종(데스크탑 HomeStats 와 같은 소스) → 빠른 실행
+ * 구성: 헤더(인사말) → 날씨 위젯 → 요약 스트립 2줄(데스크탑 HomeStats 와 같은 소스, KPI 타일 대신) → 빠른 실행
  *       → 경과 미입력 → 사용자 위젯 → 최근 공지.
  * 화면 부품은 전부 `components/ui` 의 공용 컴포넌트다 — 이 화면의 스타일이 앱 전체의 기본이라
  * 여기서 로컬로 정의하면 다른 화면이 따라올 수 없다.
@@ -188,81 +189,46 @@ export default function HomeScreen() {
   const now = new Date();
   const dateStr = `${now.getMonth() + 1}월 ${now.getDate()}일 ${WD[now.getDay()]}요일`;
 
+  // 요약 스트립 — 숫자 색은 지금 문제인 것(결재 대기·경과 미입력·재작성)에만. 권한이 없어 못 받은 항목은 빠진다.
+  const kpiFirst: KpiItem[] = [
+    { key: 'approval', label: '결재 대기', value: badges.approvalPending ?? 0, hint: badges.approvalPending ? '내 차례' : undefined, tone: 'danger', onPress: () => router.push('/(tabs)/approval') },
+    { key: 'mail', label: '안읽은 메일', value: badges.mailUnread ?? 0, onPress: () => router.push('/(tabs)/mail') },
+    { key: 'schedule', label: '오늘 일정', value: today.length, hint: firstAt ? `${firstAt} 시작` : undefined, onPress: () => router.push('/schedule') },
+  ];
+  const kpiSecond: KpiItem[] = [
+    { key: 'progress', label: '경과 미입력', value: pendingCount, tone: 'warning', onPress: () => router.push('/sales') },
+    ...(inboxCount == null ? [] : [{ key: 'invoice', label: '발행 요청', value: inboxCount, onPress: () => router.push('/invoice-requests') } satisfies KpiItem]),
+    ...(workTodo == null
+      ? []
+      : [{ key: 'workPlan', label: '업무보고', value: workTodo, hint: rebound > 0 ? `재작성 ${rebound}` : undefined, tone: 'danger', onPress: () => router.push('/work-reports') } satisfies KpiItem]),
+  ];
+
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        // 글라스 탭 바 뒤로 콘텐츠가 이어지도록 바 높이만큼 더 띄운다.
+        contentContainerStyle={{ paddingBottom: 32 + TAB_BAR_INSET }}
         refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reloadAll} tintColor={c.faint} />}>
         <ScreenHeader
           title={`${user?.name ?? '사용자'}님, 안녕하세요`}
           subtitle={dateStr}
           right={
             <>
-              <HeaderIconButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
+              <HeaderIconButton icon="notifications-outline" label="알림 설정" onPress={() => router.push('/notifications')} />
               <Avatar name={user?.name} size="md" />
             </>
           }
         />
 
-        <View className="gap-3.5 px-[18px]">
+        <View className="gap-4 px-4">
           <WeatherWidget />
 
-          {/* KPI 6종 — 데스크탑 HomeStats 와 같은 항목·소스. 권한이 없어 못 받은 항목은 빠진다. */}
-          <TileGrid columns={3}>
-            <StatTile
-              key="approval"
-              label="결재 대기"
-              value={badges.approvalPending}
-              delta="내 차례"
-              tone={c.error}
-              onPress={() => router.push('/(tabs)/approval')}
-            />
-            <StatTile
-              key="mail"
-              label="안읽은 메일"
-              value={badges.mailUnread}
-              delta="확인 필요"
-              tone={c.primary}
-              onPress={() => router.push('/(tabs)/mail')}
-            />
-            <StatTile
-              key="schedule"
-              label="오늘 일정"
-              value={today.length}
-              delta={firstAt ? `${firstAt} 시작` : '확인 필요'}
-              tone={c.success}
-              onPress={() => router.push('/schedule')}
-            />
-            <StatTile
-              key="progress"
-              label="경과 미입력"
-              value={pendingCount}
-              delta="확인 필요"
-              tone={c.warning}
-              onPress={() => router.push('/sales')}
-            />
-            {inboxCount == null ? null : (
-              <StatTile
-                key="invoice"
-                label="발행 요청"
-                value={inboxCount}
-                delta="확인 필요"
-                tone={c.secondary}
-                onPress={() => router.push('/invoice-requests')}
-              />
-            )}
-            {workTodo == null ? null : (
-              <StatTile
-                key="workPlan"
-                label="업무보고"
-                value={workTodo}
-                delta={rebound > 0 ? `재작성 ${rebound}건` : '확인 필요'}
-                tone={c.error}
-                onPress={() => router.push('/work-reports')}
-              />
-            )}
-          </TileGrid>
+          {/* 요약 스트립 2줄 — KPI 타일 금지(Frosted). 한 카드 안 묶음 3개, 세로 hairline 으로만 나눈다. */}
+          <View className="gap-2">
+            <KpiStrip items={kpiFirst} />
+            <KpiStrip items={kpiSecond} />
+          </View>
 
           {/* 빠른 실행 — 탭에 없는 기능으로 1탭 진입 */}
           <Card title="빠른 실행">
@@ -311,7 +277,7 @@ export default function HomeScreen() {
             {approvals.loading && !approvals.data ? (
               <SkeletonList count={2} />
             ) : approvalDocs.length === 0 ? (
-              <Text className="py-3 text-[13px] text-cd-faint">결재할 문서가 없습니다.</Text>
+              <Text className="py-2 text-[14px] text-cd-muted">결재할 문서가 없습니다.</Text>
             ) : (
               <View>
                 {approvalDocs.slice(0, 3).map((d, i) => (
@@ -338,7 +304,7 @@ export default function HomeScreen() {
             {mails.loading && !mails.data ? (
               <SkeletonList count={2} />
             ) : unreadMails.length === 0 ? (
-              <Text className="py-3 text-[13px] text-cd-faint">안읽은 메일이 없습니다.</Text>
+              <Text className="py-2 text-[14px] text-cd-muted">안읽은 메일이 없습니다.</Text>
             ) : (
               <View>
                 {unreadMails.slice(0, 3).map((m, i) => (
@@ -363,7 +329,7 @@ export default function HomeScreen() {
             badge={today.length ? <Badge label={`${today.length}`} tone="success" /> : undefined}
             action={{ label: '일정', onPress: () => router.push('/schedule') }}>
             {today.length === 0 ? (
-              <Text className="py-3 text-[13px] text-cd-faint">오늘 예정된 일정이 없습니다.</Text>
+              <Text className="py-2 text-[14px] text-cd-muted">오늘 예정된 일정이 없습니다.</Text>
             ) : (
               <View>
                 {today.slice(0, 3).map((a, i) => (
@@ -386,18 +352,17 @@ export default function HomeScreen() {
               title="경과 미입력"
               badge={<Badge label={`${pendingCount}`} tone="warning" />}
               action={{ label: '경과 입력', onPress: () => router.push('/sales') }}>
-              <View className="mt-1 gap-2">
-                {reports.slice(0, 3).map((r) => (
-                  <View key={r.projectId} className="rounded-xl border border-cd-border bg-cd-surface px-3">
-                    <CardRow
-                      first
-                      title={r.title}
-                      meta={r.facilityName ?? undefined}
-                      accent={c.warning}
-                      right={<Badge label={`${r.activities?.length ?? 0}건`} tone="warning" />}
-                      onPress={() => router.push('/sales')}
-                    />
-                  </View>
+              {/* 카드 안 카드 금지 — 행(hairline)으로 나눈다 */}
+              <View>
+                {reports.slice(0, 3).map((r, i) => (
+                  <CardRow
+                    key={r.projectId}
+                    first={i === 0}
+                    title={r.title}
+                    meta={r.facilityName ?? undefined}
+                    right={<Badge label={`${r.activities?.length ?? 0}건`} tone="warning" />}
+                    onPress={() => router.push('/sales')}
+                  />
                 ))}
               </View>
             </Card>
@@ -414,7 +379,7 @@ export default function HomeScreen() {
             {board.loading && !posts.length ? (
               <SkeletonList count={2} />
             ) : posts.length === 0 ? (
-              <Text className="py-3 text-[13px] text-cd-faint">등록된 공지가 없습니다.</Text>
+              <Text className="py-2 text-[14px] text-cd-muted">등록된 공지가 없습니다.</Text>
             ) : (
               <View>
                 {posts.slice(0, 3).map((p, i) => (

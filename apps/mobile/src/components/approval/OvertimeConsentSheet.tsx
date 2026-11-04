@@ -71,10 +71,10 @@ export function OvertimeConsentSheet({
             {sections.map((s) => (
               <View key={s.heading} className="gap-1">
                 <Text className="text-[13px] font-bold text-cd-text">{s.heading}</Text>
-                <Text className="text-[12.5px] leading-5 text-cd-body">{s.body}</Text>
+                <Text className="text-[13px] leading-5 text-cd-body">{s.body}</Text>
               </View>
             ))}
-            <Text className="text-[11.5px] leading-4 text-cd-faint">{CONSENT_FOOTER}</Text>
+            <Text className="text-[12px] leading-4 text-cd-faint">{CONSENT_FOOTER}</Text>
 
             <View className="gap-1.5 pt-1">
               <Text className="text-[13px] font-bold text-cd-muted">서명자</Text>

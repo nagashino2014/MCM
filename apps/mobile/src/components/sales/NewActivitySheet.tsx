@@ -126,7 +126,7 @@ export function NewActivitySheet({
                   {project?.title ?? '진행 중 영업건에서 선택'}
                 </Text>
                 {project?.facility ? (
-                  <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                  <Text numberOfLines={1} className="text-[12px] text-cd-faint">
                     {project.facility}
                   </Text>
                 ) : null}

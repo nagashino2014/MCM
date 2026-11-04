@@ -133,7 +133,7 @@ export default function TodoInboxScreen() {
                     {n.title}
                   </Text>
                   {n.body ? (
-                    <Text numberOfLines={2} className="mt-0.5 text-[12.5px] text-cd-muted">
+                    <Text numberOfLines={2} className="mt-0.5 text-[13px] text-cd-muted">
                       {n.body}
                     </Text>
                   ) : null}

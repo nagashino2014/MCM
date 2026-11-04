@@ -6,6 +6,7 @@ import { Avatar, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
+import { SHADOW_CARD } from '@/theme/tokens';
 
 const ROLE_LABEL: Record<string, string> = {
   admin: '관리자',
@@ -134,22 +135,22 @@ export default function MoreScreen() {
   ];
 
   return (
-    <Screen scroll padded={false}>
+    <Screen scroll padded={false} inTab>
       <View className="flex-row items-center gap-3 border-b border-cd-border bg-cd-card px-4 py-4">
         <Avatar name={user?.name} size="lg" />
         <View className="flex-1">
-          <Text className="text-[17px] font-extrabold text-cd-text">{user?.name ?? '사용자'}</Text>
-          <Text className="text-[12px] text-cd-faint">
+          <Text className="text-[16px] font-semibold text-cd-text">{user?.name ?? '사용자'}</Text>
+          <Text className="mt-0.5 text-[12px] text-cd-muted">
             {user?.email ?? ''}
             {user?.role ? ` · ${ROLE_LABEL[user.role] ?? user.role}` : ''}
           </Text>
         </View>
       </View>
 
-      <View className="px-[18px] pb-6">
+      <View className="px-4 pb-6">
         {sections.map((s) => (
           <View key={s.label}>
-            <Text className="pb-2 pt-4 text-[11.5px] font-bold text-cd-muted">{s.label}</Text>
+            <Text className="pb-2 pt-5 text-[12px] font-medium text-cd-muted">{s.label}</Text>
             <View className="flex-row flex-wrap gap-2">
               {s.items.map((it) => (
                 <MenuTile key={it.title} {...it} />
@@ -162,7 +163,10 @@ export default function MoreScreen() {
   );
 }
 
-/** 2열 메뉴 타일(핸드오프 4b) — 카드 + 42px 그림자 스퀘클 + 제목/부제. */
+/**
+ * 2열 메뉴 타일 — KESI Frosted(2026-11-03): 카드 규격(흰 면 + card-border + 반경 10 + 1단 그림자) 안에
+ * 40px 중립 아이콘 상자(surface-sunken) + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원) + 제목 14/500 + 부제 12 ink-muted. 스퀘클 그림자는 폐기.
+ */
 function MenuTile({
   icon,
   tone,
@@ -176,28 +180,22 @@ function MenuTile({
   subtitle: string;
   onPress: () => void;
 }) {
+  const { c, dark } = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      // 2열: 부모 폭 - gap(8) 의 절반. 홀수 개 섹션도 반칸 유지(핸드오프 — 풀폭 아님).
-      style={{ width: '48.8%' }}
-      className="flex-row items-center gap-2.5 rounded-card border border-cd-border bg-cd-card p-[13px] active:opacity-70">
-      <View
-        className="h-[42px] w-[42px] items-center justify-center rounded-[15px] border border-cd-border bg-cd-card"
-        style={{
-          shadowColor: '#3C4696',
-          shadowOpacity: 0.12,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 5 },
-          elevation: 3,
-        }}>
-        <Ionicons name={icon} size={19} color={tone} />
+      accessibilityRole="button"
+      // 2열: 부모 폭 - gap(8) 의 절반. 홀수 개 섹션도 반칸 유지(풀폭 아님).
+      style={[{ width: '48.8%', borderColor: c.cardBorder }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
+      className="flex-row items-center gap-3 rounded-lg border bg-cd-card p-3 active:opacity-80">
+      <View className="h-10 w-10 items-center justify-center rounded-lg bg-cd-surface">
+        <Ionicons name={icon} size={20} color={tone} />
       </View>
       <View className="flex-1">
-        <Text numberOfLines={1} className="text-[13px] font-bold text-cd-text">
+        <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
           {title}
         </Text>
-        <Text numberOfLines={1} className="mt-0.5 text-[10.5px] text-cd-faint">
+        <Text numberOfLines={1} className="mt-0.5 text-[12px] text-cd-muted">
           {subtitle}
         </Text>
       </View>

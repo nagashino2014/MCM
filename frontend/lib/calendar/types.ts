@@ -30,14 +30,14 @@ export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
  * 파스텔 원색을 배경으로 쓰고 글자는 진한 잉크(#1f2937)로 — color-mix 감쇄 금지(흐려짐).
  */
 export const TAG_COLOR: Record<CalendarTagKey, string> = {
-  self: "#BDD7EE", // 하늘
+  self: "#CFE6FF", // 밝은 파랑(2026-11-03, 하늘 #BDD7EE 보다 밝게)
   dept: "#C5E0B4", // 연두
   sales: "#F8CBAD", // 살구
-  refs: "#CDACE6", // 라일락
+  refs: "#C9D2F4", // 남색 계열(2026-11-03, 라일락 #CDACE6 에서 교체)
   vehicle: "#FFE699", // 노랑
   meeting: "#B9E4DC", // 민트
   interview: "#F9C9D9", // 핑크
-  todo: "#D9D4F0", // 연보라(선택 라일락보다 옅게)
+  todo: "#D9D4F0", // 연보라
 };
 
 /** 파스텔 태그 배경 위 글자색(영업 캘린더와 동일한 진한 잉크). */
@@ -48,10 +48,10 @@ export const TAG_INK = "#1f2937";
  * 배경과 같은 색이라 묻힌다는 피드백 → 같은 색상 계열의 채도 높은 버전으로 구분한다.
  */
 export const TAG_COLOR_STRONG: Record<CalendarTagKey, string> = {
-  self: "#5B9BD5",
+  self: "#3B9CF5", // 밝은 파랑(2026-11-03)
   dept: "#70AD47",
   sales: "#ED7D31",
-  refs: "#9966CC",
+  refs: "#3B4FB8", // 남색(2026-11-03)
   vehicle: "#D4A017",
   meeting: "#2E9E8C",
   interview: "#D6548A",

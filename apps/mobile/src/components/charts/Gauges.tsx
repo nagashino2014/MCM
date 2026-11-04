@@ -83,7 +83,7 @@ export function DonutGauge({
       <Text className="text-[18px] font-extrabold leading-none" style={{ color: inkColor ?? CHART.ink }}>
         {label ?? value}
       </Text>
-      <Text className="mt-0.5 text-[10px]" style={{ color: CHART.weekday }}>
+      <Text className="mt-0.5 text-[11px]" style={{ color: CHART.weekday }}>
         {caption}
       </Text>
     </View>
@@ -187,7 +187,7 @@ export function DayBars({
         {days.map((d, i) => (
           <Text
             key={i}
-            className="flex-1 text-center text-[10px]"
+            className="flex-1 text-center text-[11px]"
             style={{ color: d.dow === 0 ? CHART.sun : d.dow === 6 ? CHART.sat : CHART.weekday }}>
             {d.label}
           </Text>
@@ -205,7 +205,7 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <View className="flex-row items-center gap-1.5">
       <View style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: color }} />
-      <Text className="text-[10px]" style={{ color: CHART.muted }}>
+      <Text className="text-[11px]" style={{ color: CHART.muted }}>
         {label}
       </Text>
     </View>

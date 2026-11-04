@@ -23,6 +23,8 @@ export const CALENDAR_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "‘선택’은 내가 지정한 사람·부서의 일정입니다. 부서 단위로 지정하면 인사이동이 자동 반영되고, [[전사 전체]]를 켜면 개별 선택은 무시됩니다.",
             "‘영업’은 영업 권한이 있을 때만, ‘면접’은 참석자·면접 관리자에게만 보입니다.",
+            "태그마다 색이 다릅니다 — ‘본인’은 밝은 파랑, ‘선택’은 남색, ‘할 일’은 연보라.",
+            "‘할 일’은 날짜가 있는 하위 작업(마일스톤)이 있으면 상위 막대 대신 ‘상위 제목 - 하위 제목’ 하위 작업만 표시됩니다.",
             "한 칸에 다 보이지 않으면 ‘+N’을 눌러 펼칩니다.",
           ] },
         ],
@@ -58,6 +60,6 @@ export const CALENDAR_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["일정", "캘린더", "달력", "회의", "면접", "미팅", "정기 회의", "출장 신청", "휴가 신청"],
     sources: ["components/calendar/CalendarBoard.tsx", "components/calendar/DayActionModal.tsx", "components/calendar/MeetingRulesModal.tsx", "components/calendar/CalendarEntryModal.tsx", "components/calendar/CalendarRefsModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-03",
   },
 ];

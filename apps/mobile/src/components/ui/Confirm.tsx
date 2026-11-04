@@ -50,7 +50,7 @@ export function ConfirmSheet({
           </View>
         </>
       }>
-      <Text className="text-[14px] leading-6 text-cd-muted">{message ?? ""}</Text>
+      <Text className="text-[14px] leading-[22px] text-cd-muted">{message ?? ""}</Text>
     </Sheet>
   );
 }

@@ -1,4 +1,6 @@
 import { FlatList, Pressable, Text, View } from 'react-native';
+
+import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -42,6 +44,7 @@ export function BoardList({ scope }: { scope: 'company' | 'dept' }) {
   return (
     <FlatList
       data={posts}
+      contentContainerStyle={{ paddingBottom: TAB_BAR_INSET }}
       keyExtractor={(p) => p.postId}
       refreshControl={<PullRefresh refreshing={refreshing} onRefresh={reload} />}
       ListEmptyComponent={

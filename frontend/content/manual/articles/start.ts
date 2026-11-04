@@ -272,6 +272,6 @@ export const START_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼"],
     sources: ["components/mobile/MobileHome.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-03",
   },
 ];

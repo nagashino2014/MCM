@@ -21,10 +21,10 @@ export const CALENDAR_TAG_LABELS: Record<CalendarTagKey, string> = {
 
 /** 태그별 파스텔 배경 — 홈 위젯·일정·자산 캘린더 공용(단일 소스). */
 export const TAG_COLOR: Record<CalendarTagKey, string> = {
-  self: '#BDD7EE',
+  self: '#CFE6FF', // 밝은 파랑(2026-11-03, 하늘 #BDD7EE 보다 밝게 — 웹과 동일)
   dept: '#C5E0B4',
   sales: '#F8CBAD',
-  refs: '#CDACE6',
+  refs: '#C9D2F4', // 남색 계열(2026-11-03, 라일락 #CDACE6 에서 교체 — 할 일 연보라와 구분)
   vehicle: '#FFE699',
   meeting: '#B9E4DC',
   interview: '#F9C9D9',
@@ -38,13 +38,14 @@ export const TAG_INK = '#1f2937';
  * 모바일 카테고리 틴트 — 핸드오프 3a.
  * 필터 칩(선택 상태)과 캘린더 이벤트 필이 같은 틴트를 쓴다(파스텔 배경 + 컬러 텍스트 + 도트).
  * ⚠ 위의 TAG_COLOR(데스크탑 공용 파스텔)와는 다른 값이다 — 3a 가 모바일 전용으로 지정한 팔레트.
- * '선택(refs)'은 핸드오프에 비선택 상태만 있어, 도트색(#b9a1e8) 계열로 선택 상태를 맞췄다.
+ * 2026-11-03: '선택(refs)' 라일락이 '할 일(todo)' 연보라와 구분되지 않아 refs 를 **남색** 계열로,
+ * '본인(self)'을 그보다 **밝은 파란색** 계열로 옮겼다(웹 TAG_COLOR_STRONG self #3B9CF5 · refs #3B4FB8 과 같은 축).
  */
 export const TAG_TINT: Record<CalendarTagKey, { bg: string; text: string; dot: string; pillBg: string }> = {
-  self: { bg: '#e3edfc', text: '#2f6fd8', dot: '#4c86f5', pillBg: '#e3edfc' },
+  self: { bg: '#dcecff', text: '#1e6fd9', dot: '#3b9cf5', pillBg: '#dcecff' },
   sales: { bg: '#fdefdd', text: '#c1761a', dot: '#f59e42', pillBg: '#fdefdd' },
   dept: { bg: '#e3f3e8', text: '#2e8f4c', dot: '#3fae5a', pillBg: '#e3f3e8' },
-  refs: { bg: '#f0e9fb', text: '#7a5fd0', dot: '#b9a1e8', pillBg: '#f0e9fb' },
+  refs: { bg: '#e3e8f8', text: '#2f41a8', dot: '#3b4fb8', pillBg: '#dfe5f6' },
   vehicle: { bg: '#faf0d2', text: '#94721c', dot: '#e5c04b', pillBg: '#f6e8bb' },
   // 회의·면접(219) — 웹 TAG_COLOR 민트/핑크 계열을 모바일 틴트 규칙(파스텔 배경 + 컬러 텍스트)으로.
   meeting: { bg: '#dff3ef', text: '#1f8a78', dot: '#2e9e8c', pillBg: '#dff3ef' },
@@ -56,10 +57,13 @@ export const TAG_TINT: Record<CalendarTagKey, { bg: string; text: string; dot: s
 export const TAG_TINT_FALLBACK = { bg: '#eef0f3', text: '#565e82', dot: '#a6acc4', pillBg: '#eef0f3' };
 export const tagTint = (t: string) => (TAG_TINT as Record<string, typeof TAG_TINT_FALLBACK>)[t] ?? TAG_TINT_FALLBACK;
 
-/** 칩·목록 표시 순서 — 핸드오프 3a(본인·영업·부서·선택·차량). */
-export const TAG_ORDER: CalendarTagKey[] = ['self', 'sales', 'dept', 'refs', 'vehicle', 'meeting', 'interview'];
-/** 목록 묶음 순서 — 필터 칩(TAG_ORDER, 375 폭 1행 7개)에는 없지만 웹에서 켠 '할 일'도 목록에 보인다. */
-export const TAG_LIST_ORDER: CalendarTagKey[] = [...TAG_ORDER, 'todo'];
+/**
+ * 칩·목록 표시 순서 — 핸드오프 3a(본인·영업·부서·선택·차량) + 회의·면접(219) + 할 일(2026-11-03).
+ * 칩 줄이 가로 스크롤이 되면서 '할 일'도 칩에 들어갔다(그전에는 375 폭 1행 7개 제한으로 목록에만 보였다).
+ */
+export const TAG_ORDER: CalendarTagKey[] = ['self', 'sales', 'dept', 'refs', 'vehicle', 'meeting', 'interview', 'todo'];
+/** 목록 묶음 순서 — 칩 순서와 같다(호환 이름, 2026-11-03 부터 '할 일'이 TAG_ORDER 에 포함). */
+export const TAG_LIST_ORDER: CalendarTagKey[] = [...TAG_ORDER];
 
 /** 캘린더 muted 색(핸드오프 3a) — 전/익월·요일 라벨·주말. */
 export const CAL_MUTED = {
@@ -73,10 +77,10 @@ export const CAL_MUTED = {
 
 /** 칩 테두리·도트용 진한 대응색(파스텔은 배경에 쓰면 테두리가 묻힌다). */
 export const TAG_COLOR_STRONG: Record<CalendarTagKey, string> = {
-  self: '#5B9BD5',
+  self: '#3B9CF5', // 밝은 파랑(2026-11-03, 웹과 동일)
   dept: '#70AD47',
   sales: '#ED7D31',
-  refs: '#9966CC',
+  refs: '#3B4FB8', // 남색(2026-11-03, 웹과 동일)
   vehicle: '#D4A017',
   meeting: '#2E9E8C',
   interview: '#D6548A',

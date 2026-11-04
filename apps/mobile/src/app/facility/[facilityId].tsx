@@ -84,7 +84,7 @@ export default function FacilityDetailScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader title={d?.companyName ?? '사업장'} subtitle={region || undefined} back />
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}
@@ -206,7 +206,7 @@ function Field({
   return (
     <View className="flex-row items-center gap-2 border-b border-cd-grid-line py-2.5">
       <Text className="w-[92px] text-[12px] text-cd-faint">{label}</Text>
-      <Text className="flex-1 text-[13.5px] text-cd-text">{value || '-'}</Text>
+      <Text className="flex-1 text-[14px] text-cd-text">{value || '-'}</Text>
       {action ? (
         <Pressable onPress={action.onPress} hitSlop={8} className="active:opacity-60">
           <Ionicons name={action.icon} size={17} color={c.primary} />

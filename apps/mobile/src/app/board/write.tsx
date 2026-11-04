@@ -82,7 +82,7 @@ export default function BoardWriteScreen() {
   };
 
   return (
-    <SafeAreaView edges={[]} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={[]} className="flex-1 bg-transparent">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"

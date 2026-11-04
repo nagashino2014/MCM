@@ -88,7 +88,7 @@ export default function ContactsScreen() {
   ];
 
   return (
-    <SafeAreaView edges={['bottom']} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['bottom']} className="flex-1 bg-transparent">
       <View className="gap-3 border-b border-cd-border bg-cd-card px-4 pb-3 pt-3">
         <SearchBar value={q} onChangeText={setQ} placeholder="담당자·사업장·부서 검색" />
         <TileGrid columns={4}>
@@ -150,22 +150,15 @@ function CategoryTile({
     <Pressable onPress={onPress} className="flex-1 items-center gap-[6px] active:opacity-70">
       <View>
         <View
-          className={`h-[50px] w-[50px] items-center justify-center overflow-hidden rounded-[18px] ${
+          className={`h-[50px] w-[50px] items-center justify-center overflow-hidden rounded-lg ${
             active ? '' : 'border border-cd-border bg-cd-card'
-          }`}
-          style={{
-            shadowColor: '#3C4696',
-            shadowOpacity: active ? 0.2 : 0.12,
-            shadowRadius: 14,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 3,
-          }}>
+          }`}>
           {active ? <CtaGradientFill soft /> : null}
           <Ionicons name={icon} size={22} color={active ? '#FFFFFF' : tone} />
         </View>
         {count > 0 ? (
           <View className="absolute -right-1.5 -top-1 min-w-[18px] items-center justify-center rounded-full bg-cd-primary px-1 py-[1px]">
-            <Text className="text-[9.5px] font-extrabold text-cd-on-primary">
+            <Text className="text-[11px] font-extrabold text-cd-on-primary">
               {count > 999 ? '999+' : count}
             </Text>
           </View>
@@ -173,7 +166,7 @@ function CategoryTile({
       </View>
       <Text
         numberOfLines={1}
-        className={`text-[10.5px] ${active ? 'font-extrabold text-cd-primary' : 'font-semibold text-cd-body'}`}>
+        className={`text-[11px] ${active ? 'font-extrabold text-cd-primary' : 'font-semibold text-cd-body'}`}>
         {label}
       </Text>
     </Pressable>

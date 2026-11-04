@@ -22,6 +22,8 @@ function addMinutes(hhmm: string, min: number): string {
 /**
  * 월 단위 내 할 일 이벤트. 내 담당(또는 담당 없는 내 작업)만 — 캘린더는 "내 일정" 성격.
  * do_date 가 있으면 그 날(시간 있으면 시간 블록), 없고 due_date 만 있으면 마감일에 종일로 놓는다.
+ * 2026-11-03: 날짜 있는 마일스톤 하위 작업을 하나라도 가진 상위는 main 에서 뺀다 — 복수일 상위 바와 하위 작업 바가
+ *   이중으로 보이던 문제. 그 상위는 하위 작업 이벤트("상위 제목 - 하위 제목")로만 표시된다.
  */
 export async function listTodoCalendarEvents(userId: string, month: string): Promise<CalendarEvent[]> {
   if (!/^\d{4}-\d{2}$/.test(month)) return [];
@@ -35,13 +37,18 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
         WHERE ${visibleItemsWhere("$1")}
           AND (i.assignee_user_id = $1 OR (i.assignee_user_id IS NULL AND i.owner_user_id = $1))
           AND i.archived_at IS NULL AND i.parent_item_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM todo_items s
+             WHERE s.parent_item_id = i.item_id AND s.archived_at IS NULL
+               AND s.milestone_kind IS NOT NULL AND COALESCE(s.actual_date, s.do_date) IS NOT NULL)
           AND (COALESCE(i.do_date, i.due_date) BETWEEN $2 AND $3
                OR (i.do_date IS NOT NULL AND i.end_date IS NOT NULL AND i.do_date <= $3 AND i.end_date >= $2))
         ORDER BY COALESCE(i.do_date, i.due_date), i.do_time NULLS LAST`,
       [userId, first, last]
     )
   );
-  // 287 하위 작업 마일스톤(종류가 있는 것) — "상위 제목 · 종류" 로 그 날(실제 일자 우선, 없으면 예정일)에 표시
+  // 287 하위 작업 마일스톤(종류가 있는 것) — 그 날(실제 일자 우선, 없으면 예정일)에 표시.
+  //   제목은 "상위 제목 - 하위 제목"(2026-11-03, 하위 제목이 비면 종류 라벨. ◆/◇ 기호·"·" 구분은 폐기). 예: "현장진단 - 1차 현장진단"
   const msRows = rowsToObjects(
     await db.exec(
       `SELECT s.item_id, s.title, s.milestone_kind, s.actual_date, s.do_date, s.end_date, s.status, p.item_id AS parent_id, p.title AS parent_title, p.link_kind, p.link_id,
@@ -60,13 +67,12 @@ export async function listTodoCalendarEvents(userId: string, month: string): Pro
     const kind = String(r.milestone_kind) as TodoMilestoneKind;
     const kindLabel = (r.kind_label != null ? String(r.kind_label) : null) ?? TODO_MILESTONE_LABELS[kind] ?? kind;
     const subTitle = String(r.title ?? "").trim();
-    // 하위 제목이 종류 라벨과 같으면 한 번만
-    const label = kind === "other" ? subTitle : subTitle && subTitle !== kindLabel ? `${kindLabel} · ${subTitle}` : kindLabel;
+    const label = subTitle || kindLabel;
     return {
       id: `todo:${String(r.item_id)}`,
       tag: "todo",
       kind: "todo",
-      title: `${r.actual_date != null ? "◆ " : "◇ "}${String(r.parent_title)} · ${label}`,
+      title: `${String(r.parent_title)} - ${label}`,
       startDate: date,
       // 302: 시작일~종료일(실제 일자가 있으면 그 하루)
       endDate: r.actual_date == null && r.end_date != null && String(r.end_date) > date ? String(r.end_date) : date,

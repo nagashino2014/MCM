@@ -185,7 +185,7 @@ export default function LeaveScreen() {
   const docs = tab === 'leave' ? leaveDocs : otDocs;
 
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: c.bg }} className="flex-1 bg-cd-bg">
+    <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
       <ScreenHeader title="근태·휴가" subtitle={`${year}년`} back variant="sub" />
       <ScrollView
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}
@@ -200,7 +200,7 @@ export default function LeaveScreen() {
                 <DonutGauge value={s.remaining} total={s.granted || 1} label={d1(s.remaining)} inkColor={ink} />
                 <View className="flex-1 gap-[9px]">
                   <StatRow label="총 연차" value={`${d1(s.granted)}일`} ink={ink} />
-                  <StatRow label="사용" value={`${d1(s.used)}일`} tone="#7b7ef4" ink={ink} />
+                  <StatRow label="사용" value={`${d1(s.used)}일`} tone={c.primary} ink={ink} />
                   <StatRow label="잔여" value={`${d1(s.remaining)}일`} strong divider ink={ink} />
                 </View>
               </View>
@@ -233,19 +233,19 @@ export default function LeaveScreen() {
                 // 복수일 휴가는 실제 쉬는 날짜를 모두 보여 준다(10/5 3일 → 10.05, 10.06, 10.07).
                 const dateList = e.dates && e.dates.length > 1 ? e.dates.map((x) => x.slice(5).replace('-', '.')).join(', ') : null;
                 return (
-                  <View key={e.entryId} className="flex-row items-center gap-3 border-t py-2" style={{ borderColor: dark ? '#2a2d3a' : '#eef0f7' }}>
-                    <Text className="w-[92px] text-[12.5px] font-semibold" style={{ color: ink }}>
+                  <View key={e.entryId} className="flex-row items-center gap-3 border-t py-2" style={{ borderColor: c.gridLine }}>
+                    <Text className="w-[92px] text-[13px] font-semibold" style={{ color: ink }}>
                       {e.usedOn!.slice(5).replace('-', '.')} ({DOW[d.getDay()]})
                     </Text>
                     <View className="flex-1 flex-row items-center gap-1.5">
-                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: isAnnual ? '#4353e4' : '#1f9d76' }} />
+                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: isAnnual ? c.primary : c.success }} />
                       <View className="flex-1">
-                        <Text numberOfLines={1} className="text-[12.5px]" style={{ color: ink }}>
+                        <Text numberOfLines={1} className="text-[13px]" style={{ color: ink }}>
                           {e.leaveLabel ?? '연차'}
                           {!dateList && period ? ` ~${period.slice(5).replace('-', '.')}` : ''}
                         </Text>
                         {dateList ? (
-                          <Text className="text-[11.5px]" style={{ color: CHART.weekday }}>
+                          <Text className="text-[12px]" style={{ color: CHART.weekday }}>
                             {dateList}
                           </Text>
                         ) : null}
@@ -303,7 +303,7 @@ export default function LeaveScreen() {
                     / {hOnly(otLimit)}시간
                   </Text>
                 </View>
-                <Text className="text-[11.5px]" style={{ color: CHART.weekday }}>
+                <Text className="text-[12px]" style={{ color: CHART.weekday }}>
                   {week.weekStart} 주
                 </Text>
               </View>
@@ -312,11 +312,11 @@ export default function LeaveScreen() {
                 <OvertimeGauge value={otUsed} limit={otLimit} />
               </View>
               <View className="mt-1.5 flex-row justify-between">
-                <Text className="text-[10.5px]" style={{ color: CHART.muted }}>
+                <Text className="text-[11px]" style={{ color: CHART.muted }}>
                   근무 {hm(week.workedMinutes)} · {week.daysWorked}일 근무
                 </Text>
                 {week.excessMinutes > 0 ? (
-                  <Text className="text-[10.5px] font-bold" style={{ color: CHART.gaugeOver }}>
+                  <Text className="text-[11px] font-bold" style={{ color: CHART.gaugeOver }}>
                     한도 초과 {hOnly(week.excessMinutes)}h
                   </Text>
                 ) : null}
@@ -352,7 +352,7 @@ export default function LeaveScreen() {
             <SegChip label="초과근무" on={tab === 'work'} onPress={() => setTab('work')} />
           </View>
           {docs.length === 0 ? (
-            <Text className="py-3 text-[13px] text-cd-faint">최근 신청 내역이 없습니다.</Text>
+            <Text className="py-2 text-[14px] text-cd-muted">최근 신청 내역이 없습니다.</Text>
           ) : (
             <View className="mt-3 gap-2">
               {docs.map((d) => {
@@ -367,7 +367,7 @@ export default function LeaveScreen() {
                       <Text numberOfLines={1} className="text-[13px] font-semibold" style={{ color: CHART.ink }}>
                         {d.title}
                       </Text>
-                      <Text className="mt-0.5 text-[11.5px]" style={{ color: CHART.weekday }}>
+                      <Text className="mt-0.5 text-[12px]" style={{ color: CHART.weekday }}>
                         {(d.submittedAt ?? d.updatedAt).slice(0, 10)}
                       </Text>
                     </View>
@@ -418,7 +418,7 @@ function StatRow({
 function TintBadge({ label, fg, bg }: { label: string; fg: string; bg: string }) {
   return (
     <View className="rounded-full px-2.5 py-[3px]" style={{ backgroundColor: bg }}>
-      <Text className="text-[10.5px] font-bold" style={{ color: fg }}>
+      <Text className="text-[11px] font-bold" style={{ color: fg }}>
         {label}
       </Text>
     </View>

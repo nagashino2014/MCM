@@ -226,7 +226,7 @@ export default function ReceiptsScreen() {
   const items = list.data?.items ?? [];
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader
         title="영수증 보관함"
         subtitle="찍어 둔 개인카드 영수증"
@@ -286,12 +286,12 @@ export default function ReceiptsScreen() {
                 <Text numberOfLines={1} className="text-[14px] font-bold text-cd-text">
                   {r.storeName ?? '상호 미상'}
                 </Text>
-                <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-faint">
+                <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
                   {dateLabel(r)}
                   {r.storeCorpNum ? ` · ${fmtCorpNum(r.storeCorpNum)}` : ''}
                 </Text>
                 {r.purpose || r.related ? (
-                  <Text numberOfLines={1} className="mt-[2px] text-[11.5px] text-cd-muted">
+                  <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-muted">
                     {[r.purpose, r.related?.label].filter(Boolean).join(' · ')}
                   </Text>
                 ) : null}

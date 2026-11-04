@@ -64,7 +64,7 @@ function BriefingReader({ briefingId, runId }: { briefingId: string; runId?: str
     catch { toast.show('출처를 열지 못했습니다.', 'error'); }
   }
   return <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-    {loading ? <SkeletonList count={2} /> : !briefing ? <EmptyState icon="document-outline" title="브리핑을 열 수 없습니다" description={error || (valid ? '공유 대상과 보고서 상태를 확인하세요.' : '공유 링크를 확인하세요.')} /> : <View className="gap-5 rounded-[10px] border border-cd-border bg-cd-card p-5">
+    {loading ? <SkeletonList count={2} /> : !briefing ? <EmptyState icon="document-outline" title="브리핑을 열 수 없습니다" description={error || (valid ? '공유 대상과 보고서 상태를 확인하세요.' : '공유 링크를 확인하세요.')} /> : <View className="gap-5 rounded-lg border border-cd-border bg-cd-card p-5">
       <View className="gap-2"><Text className="text-[22px] font-semibold text-cd-text">{briefing.question}</Text><Text className="text-[12px] text-cd-muted">{new Date(briefing.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</Text></View>
       {report ? <>
         <View className="flex-row flex-wrap gap-4 border-b border-cd-border pb-4">{report.kpis.slice(0, 4).map((kpi, index) => <View key={index} className="min-w-0 gap-1"><Text className="text-[12px] text-cd-muted">{kpi.label}</Text><Text className="text-[22px] font-medium text-cd-text">{kpi.value}</Text></View>)}</View>

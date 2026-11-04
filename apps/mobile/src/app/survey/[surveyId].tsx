@@ -122,7 +122,7 @@ export default function SurveyRespondScreen() {
         <View className="items-center rounded-card border border-cd-border bg-cd-card p-6">
           <Ionicons name="checkmark-circle" size={40} color={c.success} />
           <Text className="mt-2 text-[15px] font-bold text-cd-text">응답이 제출되었습니다</Text>
-          <Text className="mt-1 text-center text-[12.5px] text-cd-muted">
+          <Text className="mt-1 text-center text-[13px] text-cd-muted">
             참여해 주셔서 감사합니다. 제출한 응답은 수정할 수 없습니다.
           </Text>
           <View className="mt-4 w-full">
@@ -140,7 +140,7 @@ export default function SurveyRespondScreen() {
               return (
                 <View key={q.questionId} className="pt-2">
                   <Text className="text-[15px] font-extrabold text-cd-text">{q.title}</Text>
-                  {!!q.helpText && <Text className="mt-1 text-[12.5px] text-cd-muted">{q.helpText}</Text>}
+                  {!!q.helpText && <Text className="mt-1 text-[13px] text-cd-muted">{q.helpText}</Text>}
                 </View>
               );
             }
@@ -168,7 +168,7 @@ export default function SurveyRespondScreen() {
                           className="flex-row items-center gap-2 active:opacity-70"
                           onPress={() => set(q.questionId, o.value)}>
                           <Ionicons name={on ? 'radio-button-on' : 'radio-button-off'} size={20} color={on ? c.primary : c.faint} />
-                          <Text className="flex-1 text-[13.5px] text-cd-text">{o.label}</Text>
+                          <Text className="flex-1 text-[14px] text-cd-text">{o.label}</Text>
                         </Pressable>
                       );
                     })}
@@ -183,10 +183,10 @@ export default function SurveyRespondScreen() {
                           size={20}
                           color={String(answers[q.questionId] ?? '').startsWith(OTHER) ? c.primary : c.faint}
                         />
-                        <Text className="text-[13.5px] text-cd-text">기타</Text>
+                        <Text className="text-[14px] text-cd-text">기타</Text>
                       </Pressable>
                       <TextInput
-                        className="flex-1 rounded-lg border border-cd-border bg-cd-bg px-3 py-2 text-[13.5px] text-cd-text"
+                        className="flex-1 rounded-lg border border-cd-border bg-transparent px-3 py-2 text-[14px] text-cd-text"
                         placeholder="직접 입력"
                         placeholderTextColor={c.faint}
                         value={String(answers[q.questionId] ?? '').startsWith(`${OTHER}:`) ? String(answers[q.questionId]).slice(OTHER.length + 1) : ''}
@@ -205,12 +205,12 @@ export default function SurveyRespondScreen() {
                           className="flex-row items-center gap-2 active:opacity-70"
                           onPress={() => set(q.questionId, on ? picked.filter((v) => v !== o.value) : [...picked, o.value])}>
                           <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? c.primary : c.faint} />
-                          <Text className="flex-1 text-[13.5px] text-cd-text">{o.label}</Text>
+                          <Text className="flex-1 text-[14px] text-cd-text">{o.label}</Text>
                         </Pressable>
                       );
                     })}
                   {q.qtype === 'multi' && !!q.config.maxSelect && (
-                    <Text className="text-[11.5px] text-cd-faint">최대 {q.config.maxSelect}개 선택</Text>
+                    <Text className="text-[12px] text-cd-faint">최대 {q.config.maxSelect}개 선택</Text>
                   )}
 
                   {q.qtype === 'scale' && (
@@ -236,8 +236,8 @@ export default function SurveyRespondScreen() {
                       </View>
                       {(!!q.config.minLabel || !!q.config.maxLabel) && (
                         <View className="mt-1.5 flex-row justify-between">
-                          <Text className="text-[11.5px] text-cd-faint">{q.config.minLabel ?? ''}</Text>
-                          <Text className="text-[11.5px] text-cd-faint">{q.config.maxLabel ?? ''}</Text>
+                          <Text className="text-[12px] text-cd-faint">{q.config.minLabel ?? ''}</Text>
+                          <Text className="text-[12px] text-cd-faint">{q.config.maxLabel ?? ''}</Text>
                         </View>
                       )}
                     </View>
@@ -245,7 +245,7 @@ export default function SurveyRespondScreen() {
 
                   {(q.qtype === 'text' || q.qtype === 'longtext') && (
                     <TextInput
-                      className="rounded-lg border border-cd-border bg-cd-bg px-3 py-2 text-[13.5px] text-cd-text"
+                      className="rounded-lg border border-cd-border bg-transparent px-3 py-2 text-[14px] text-cd-text"
                       multiline={q.qtype === 'longtext'}
                       style={q.qtype === 'longtext' ? { minHeight: 96, textAlignVertical: 'top' } : undefined}
                       maxLength={q.qtype === 'longtext' ? 5000 : 500}
@@ -267,7 +267,7 @@ export default function SurveyRespondScreen() {
               disabled={submitting}
               onPress={() => void submit()}
             />
-            <Text className="mt-2 text-center text-[11.5px] text-cd-faint">제출 후에는 수정할 수 없습니다.</Text>
+            <Text className="mt-2 text-center text-[12px] text-cd-faint">제출 후에는 수정할 수 없습니다.</Text>
           </View>
         </>
       )}

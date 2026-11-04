@@ -192,7 +192,7 @@ function DepRow({ d, today, onRemove }: { d: TodoDepRef; today: string; onRemove
     <View className="flex-row items-center gap-2 py-1">
       <StatusDot status={d.status} />
       <Pressable onPress={() => (d.visible ? router.push(`/todo/${d.itemId}` as never) : undefined)} className="flex-1 active:opacity-70" style={{ minWidth: 0 }}>
-        <Text numberOfLines={1} className={`text-[13.5px] ${done ? 'text-cd-faint line-through' : d.visible ? 'text-cd-text' : 'italic text-cd-faint'}`}>
+        <Text numberOfLines={1} className={`text-[14px] ${done ? 'text-cd-faint line-through' : d.visible ? 'text-cd-text' : 'italic text-cd-faint'}`}>
           {d.title}
         </Text>
         <Text className="text-[11px] text-cd-faint">
@@ -283,7 +283,7 @@ function KeyCell({
   );
   return (
     <View style={{ width: '48%' }} className="gap-[3px]">
-      <Text className="text-[11.5px] text-cd-faint">{label}</Text>
+      <Text className="text-[12px] text-cd-faint">{label}</Text>
       <View className="flex-row items-center gap-1.5">
         {onPress ? (
           <Pressable onPress={onPress} disabled={disabled} className="flex-1 active:opacity-60">
@@ -302,7 +302,7 @@ function KeyCell({
 function MentionText({ body }: { body: string }) {
   const parts = body.split(/(@[^\s@#!,.:;'"()]+)/g);
   return (
-    <Text className="text-[13.5px] leading-5 text-cd-text">
+    <Text className="text-[14px] leading-5 text-cd-text">
       {parts.map((p, i) =>
         p.startsWith('@') ? (
           <Text key={i} className="font-semibold text-cd-primary">
@@ -1215,7 +1215,7 @@ export default function TodoDetailScreen() {
                   </>
                 ) : null}
               </View>
-              {item.completionNote ? <Text className="text-[12.5px] leading-[18px] text-cd-text">{item.completionNote}</Text> : null}
+              {item.completionNote ? <Text className="text-[13px] leading-[18px] text-cd-text">{item.completionNote}</Text> : null}
             </View>
           ) : null}
 
@@ -1241,13 +1241,13 @@ export default function TodoDetailScreen() {
               </KeyCell>
               {/* 수행 예정(2026-10-20): 한 칸에 시작~종료가 좁아 위=시작일·아래=종료일, 오른쪽 위=시각·아래=[지우기](시각 칸과 같은 폭) */}
               <View style={{ width: '48%' }} className="gap-[3px]">
-                <Text className="text-[11.5px] text-cd-faint">수행 예정</Text>
+                <Text className="text-[12px] text-cd-faint">수행 예정</Text>
                 <View className="gap-1.5">
                   <View className="flex-row items-center gap-1.5">
                     <Pressable onPress={() => setDoDateOpen(true)} disabled={!canEdit} className="flex-1 active:opacity-60">
                       <View style={{ height: 36, borderRadius: 8, borderWidth: 1, borderColor: doDateOpen ? c.primary : c.border, paddingHorizontal: 8 }} className="flex-row items-center bg-cd-card">
                         {/* 칸이 좁아(약 77px) 요일 괄호 앞 공백을 없앤 짧은 표기 */}
-                        <Text numberOfLines={1} className={`shrink text-[13.5px] ${item.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>
+                        <Text numberOfLines={1} className={`shrink text-[14px] ${item.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>
                           {item.doDate ? fmtMdWd(item.doDate).replace(' ', '') : '시작일'}
                         </Text>
                       </View>
@@ -1269,7 +1269,7 @@ export default function TodoDetailScreen() {
                         className="flex-row items-center gap-1 bg-cd-card">
                         {item.endDate && item.doDate && item.endDate > item.doDate ? (
                           <>
-                            <Text numberOfLines={1} className="shrink text-[13.5px] font-semibold text-cd-primary">
+                            <Text numberOfLines={1} className="shrink text-[14px] font-semibold text-cd-primary">
                               ~{fmtMd(item.endDate)}
                             </Text>
                             {canEdit ? (
@@ -1279,7 +1279,7 @@ export default function TodoDetailScreen() {
                             ) : null}
                           </>
                         ) : (
-                          <Text numberOfLines={1} className="text-[13.5px] text-cd-muted">
+                          <Text numberOfLines={1} className="text-[14px] text-cd-muted">
                             종료일
                           </Text>
                         )}
@@ -1332,8 +1332,8 @@ export default function TodoDetailScreen() {
                       <Ionicons name="document-text-outline" size={15} color={c.muted} />
                     </View>
                     <View className="flex-1" style={{ minWidth: 0 }}>
-                      <Text className="text-[11.5px] text-cd-faint">용역{item.contractId ? ' · 계약' : ''}</Text>
-                      <Text numberOfLines={1} className="text-[13.5px] font-medium text-cd-text">
+                      <Text className="text-[12px] text-cd-faint">용역{item.contractId ? ' · 계약' : ''}</Text>
+                      <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
                         {item.projectName ?? item.linkLabel ?? '계약'}
                       </Text>
                     </View>
@@ -1349,12 +1349,12 @@ export default function TodoDetailScreen() {
                       <Ionicons name="business-outline" size={15} color={c.muted} />
                     </View>
                     <View className="flex-1" style={{ minWidth: 0 }}>
-                      <Text className="text-[11.5px] text-cd-faint">사업장 · 용역 대상</Text>
-                      <Text numberOfLines={1} className="text-[13.5px] font-medium text-cd-text">
+                      <Text className="text-[12px] text-cd-faint">사업장 · 용역 대상</Text>
+                      <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
                         {item.siteName ?? '대상 사업장'}
                       </Text>
                     </View>
-                    <Text className="text-[12.5px] text-cd-primary">사업장 열기</Text>
+                    <Text className="text-[13px] text-cd-primary">사업장 열기</Text>
                   </Pressable>
                 ) : null}
                 {item.linkKind ? (
@@ -1363,13 +1363,13 @@ export default function TodoDetailScreen() {
                       <Ionicons name={item.linkKind === 'facility' ? 'business-outline' : 'link-outline'} size={15} color={c.muted} />
                     </View>
                     <View className="flex-1" style={{ minWidth: 0 }}>
-                      <Text className="text-[11.5px] text-cd-faint">{TODO_LINK_KIND_LABELS[item.linkKind]}</Text>
-                      <Text numberOfLines={1} className="text-[13.5px] font-medium text-cd-text">
+                      <Text className="text-[12px] text-cd-faint">{TODO_LINK_KIND_LABELS[item.linkKind]}</Text>
+                      <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
                         {item.linkLabel ?? item.linkId ?? ''}
                       </Text>
                     </View>
                     {linkOpenable ? (
-                      <Text className="text-[12.5px] text-cd-primary">{item.linkKind === 'facility' ? '사업장 열기' : '열기'}</Text>
+                      <Text className="text-[13px] text-cd-primary">{item.linkKind === 'facility' ? '사업장 열기' : '열기'}</Text>
                     ) : (
                       <Text className="text-[11px] text-cd-faint">웹에서 열기</Text>
                     )}
@@ -1414,7 +1414,7 @@ export default function TodoDetailScreen() {
           {item.reportSubject ? (
             <Frame title="업무 보고">
               <View className="gap-2">
-                <Text className="text-[12.5px] text-cd-muted">
+                <Text className="text-[13px] text-cd-muted">
                   메모·하위 작업 진척으로 {item.reportSubject === 'task' ? '업무추진계획' : '용역'} 보고 초안을 만듭니다. 생성 후 보고 화면에서 검토·제출합니다.
                 </Text>
                 {canEdit ? (
@@ -1450,7 +1450,7 @@ export default function TodoDetailScreen() {
                 {canEdit ? (
                   <Pressable onPress={openTemplates} hitSlop={6} accessibilityLabel="체크리스트 템플릿" className="ml-1 h-6 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
                     <Ionicons name="list-outline" size={12} color={c.muted} />
-                    <Text className="text-[11.5px] text-cd-muted">템플릿</Text>
+                    <Text className="text-[12px] text-cd-muted">템플릿</Text>
                   </Pressable>
                 ) : null}
               </>
@@ -1460,14 +1460,14 @@ export default function TodoDetailScreen() {
                 <View key={s.itemId}>
                 <View className="min-h-[34px] flex-row items-center gap-2.5">
                   <CheckCircle done={s.status === 'done'} disabled={!s.canEdit} onPress={() => void toggleSub(s)} size={18} />
-                  <Text numberOfLines={1} className={`flex-1 text-[13.5px] ${s.status === 'done' ? 'text-cd-faint line-through' : 'text-cd-text'}`}>
+                  <Text numberOfLines={1} className={`flex-1 text-[14px] ${s.status === 'done' ? 'text-cd-faint line-through' : 'text-cd-text'}`}>
                     {s.title}
                   </Text>
                   {subChip(s.status)}
                   {s.dueDate ? (
-                    <Text className="text-[11.5px] text-cd-faint">{s.dueDate === today ? '오늘' : fmtMd(s.dueDate)}</Text>
+                    <Text className="text-[12px] text-cd-faint">{s.dueDate === today ? '오늘' : fmtMd(s.dueDate)}</Text>
                   ) : s.assigneeName ? (
-                    <Text className="text-[11.5px] text-cd-faint">{s.assigneeName}</Text>
+                    <Text className="text-[12px] text-cd-faint">{s.assigneeName}</Text>
                   ) : null}
                   {canEdit ? (
                     <Pressable onPress={() => setSubDel(s)} hitSlop={8} accessibilityLabel={`${s.title} 삭제`} className="active:opacity-60">
@@ -1484,7 +1484,7 @@ export default function TodoDetailScreen() {
                         style={{ minWidth: 0, opacity: item.workTypeAuto ? 0.75 : 1 }}
                         className="h-8 flex-1 flex-row items-center justify-center gap-1 rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
                         <Ionicons name={item.workTypeAuto ? 'lock-closed-outline' : 'pricetag-outline'} size={12} color={c.muted} />
-                        <Text className={`text-[11.5px] ${item.workTypeAuto ?? s.workType ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
+                        <Text className={`text-[12px] ${item.workTypeAuto ?? s.workType ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
                           {typeLabel(item.workTypeAuto ?? s.workType) ?? '유형'}
                         </Text>
                       </Pressable>
@@ -1493,7 +1493,7 @@ export default function TodoDetailScreen() {
                         style={{ minWidth: 0 }}
                         className="h-8 flex-1 flex-row items-center justify-center gap-1 rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
                         <Ionicons name="flag-outline" size={12} color={s.milestoneKind ? c.primary : c.muted} />
-                        <Text className={`text-[11.5px] ${s.milestoneKind ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
+                        <Text className={`text-[12px] ${s.milestoneKind ? 'text-cd-text' : 'text-cd-muted'}`} numberOfLines={1}>
                           {s.milestoneKind ? kindLabel(s.milestoneKind) : '종류'}
                         </Text>
                       </Pressable>
@@ -1501,7 +1501,7 @@ export default function TodoDetailScreen() {
                         <Pressable onPress={() => stepSub(s, -1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 내리기" className="h-8 w-7 items-center justify-center active:opacity-60">
                           <Ionicons name="remove" size={14} color={c.muted} />
                         </Pressable>
-                        <Text className="min-w-[40px] text-center text-[12.5px] font-semibold text-cd-text">{s.progressPct ?? 0}%</Text>
+                        <Text className="min-w-[40px] text-center text-[13px] font-semibold text-cd-text">{s.progressPct ?? 0}%</Text>
                         <Pressable onPress={() => stepSub(s, 1)} disabled={!canEdit} hitSlop={6} accessibilityLabel="진행율 올리기" className="h-8 w-7 items-center justify-center active:opacity-60">
                           <Ionicons name="add" size={14} color={c.muted} />
                         </Pressable>
@@ -1513,7 +1513,7 @@ export default function TodoDetailScreen() {
                         onPress={() => (canEdit ? setSubDateFor({ sub: s, field: 'doDate' }) : undefined)}
                         style={{ minWidth: 0 }}
                         className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
-                        <Text numberOfLines={1} className={`text-[11.5px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `시작 ${fmtMd(s.doDate)}` : '시작일'}</Text>
+                        <Text numberOfLines={1} className={`text-[12px] ${s.doDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.doDate ? `시작 ${fmtMd(s.doDate)}` : '시작일'}</Text>
                       </Pressable>
                       <Text className="text-[12px] text-cd-faint">~</Text>
                       <Pressable
@@ -1528,7 +1528,7 @@ export default function TodoDetailScreen() {
                         onLongPress={() => (canEdit && s.endDate ? void patchSub(s, { endDate: null }) : undefined)}
                         style={{ minWidth: 0 }}
                         className="h-8 flex-1 flex-row items-center justify-center rounded-md border border-cd-border bg-cd-card px-1.5 active:opacity-70">
-                        <Text numberOfLines={1} className={`text-[11.5px] ${s.endDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.endDate ? `종료 ${fmtMd(s.endDate)}` : '종료일'}</Text>
+                        <Text numberOfLines={1} className={`text-[12px] ${s.endDate ? 'text-cd-text' : 'text-cd-muted'}`}>{s.endDate ? `종료 ${fmtMd(s.endDate)}` : '종료일'}</Text>
                       </Pressable>
                     </View>
                     <View className="flex-row items-center gap-1.5">
@@ -1538,7 +1538,7 @@ export default function TodoDetailScreen() {
                           style={{ maxWidth: '42%' }}
                           className="h-8 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
                           <Ionicons name="git-branch-outline" size={12} color={c.muted} />
-                          <Text className="text-[11.5px] text-cd-muted" numberOfLines={1}>
+                          <Text className="text-[12px] text-cd-muted" numberOfLines={1}>
                             {s.stageOrder != null ? `${s.stageOrder}. ${item.stages.find((st) => st.stageOrder === s.stageOrder)?.stageName ?? ''}` : '단계 없음'}
                           </Text>
                         </Pressable>
@@ -1559,7 +1559,7 @@ export default function TodoDetailScreen() {
                         placeholder="진척 내용"
                         placeholderTextColor={c.faint}
                         style={{ height: 32, paddingVertical: 0 }}
-                        className="flex-1 rounded-md border border-cd-border bg-cd-card px-2 text-[12.5px] text-cd-text"
+                        className="flex-1 rounded-md border border-cd-border bg-cd-card px-2 text-[13px] text-cd-text"
                       />
                     </View>
                   </View>
@@ -1577,7 +1577,7 @@ export default function TodoDetailScreen() {
                     placeholderTextColor={c.faint}
                     returnKeyType="done"
                     blurOnSubmit={false}
-                    className="h-8 flex-1 text-[13.5px] text-cd-text"
+                    className="h-8 flex-1 text-[14px] text-cd-text"
                   />
                   {subTitle.trim() ? (
                     <Pressable onPress={() => void addSub()} hitSlop={8} className="active:opacity-60">
@@ -1613,21 +1613,21 @@ export default function TodoDetailScreen() {
                     accessibilityLabel="선행 추가"
                     className="ml-1 h-6 flex-row items-center gap-1 rounded-md border border-cd-border bg-cd-card px-2 active:opacity-70">
                     <Ionicons name="add" size={12} color={c.muted} />
-                    <Text className="text-[11.5px] text-cd-muted">선행 추가</Text>
+                    <Text className="text-[12px] text-cd-muted">선행 추가</Text>
                   </Pressable>
                 ) : null}
               </>
             }>
             {!deps ? (
-              <Text className="text-[12.5px] text-cd-faint">불러오는 중…</Text>
+              <Text className="text-[13px] text-cd-faint">불러오는 중…</Text>
             ) : !deps.blockedBy.length && !deps.blocks.length ? (
-              <Text className="text-[12.5px] text-cd-faint">선행·후행이 없습니다. 먼저 끝나야 하는 할 일이 있으면 [선행 추가]로 연결하세요.</Text>
+              <Text className="text-[13px] text-cd-faint">선행·후행이 없습니다. 먼저 끝나야 하는 할 일이 있으면 [선행 추가]로 연결하세요.</Text>
             ) : (
               <View className="gap-3">
                 {deps.blockedBy.length ? (
                   <View className="gap-0.5">
-                    <Text className="text-[11.5px] text-cd-faint">
-                      이 할 일이 기다리는 선행{deps.openBlockers ? ` · ⛓ ${deps.openBlockers}건 대기` : ''}
+                    <Text className="text-[12px] text-cd-faint">
+                      이 할 일이 기다리는 선행{deps.openBlockers ? ` · ${deps.openBlockers}건 대기` : ''}
                     </Text>
                     {deps.blockedBy.map((d) => (
                       <DepRow key={d.itemId} d={d} today={today} onRemove={canEdit ? () => void removeDep(d.itemId) : undefined} />
@@ -1636,7 +1636,7 @@ export default function TodoDetailScreen() {
                 ) : null}
                 {deps.blocks.length ? (
                   <View className="gap-0.5">
-                    <Text className="text-[11.5px] text-cd-faint">이 할 일을 기다리는 후행</Text>
+                    <Text className="text-[12px] text-cd-faint">이 할 일을 기다리는 후행</Text>
                     {deps.blocks.map((d) => (
                       <DepRow key={d.itemId} d={d} today={today} />
                     ))}
@@ -1677,7 +1677,7 @@ export default function TodoDetailScreen() {
                 placeholder="댓글 쓰기"
                 placeholderTextColor={c.faint}
                 multiline
-                className="max-h-[120px] min-h-[36px] flex-1 rounded-lg border border-cd-border bg-cd-bg px-3 py-2 text-[13px] text-cd-text"
+                className="max-h-[120px] min-h-[36px] flex-1 rounded-lg border border-cd-border bg-transparent px-3 py-2 text-[13px] text-cd-text"
               />
               <Pressable
                 onPress={() => void sendComment()}
@@ -1698,7 +1698,7 @@ export default function TodoDetailScreen() {
               <View className="flex-row flex-wrap" style={{ rowGap: 10, columnGap: 20 }}>
                 {extraSummary.map(([lb, v, none]) => (
                   <View key={lb} style={{ flexBasis: '28%', flexGrow: 1, minWidth: 0 }} className="gap-0.5">
-                    <Text className="text-[11.5px] text-cd-muted">{lb}</Text>
+                    <Text className="text-[12px] text-cd-muted">{lb}</Text>
                     <Text numberOfLines={1} className={`text-[13px] ${none ? 'text-cd-faint' : 'text-cd-text'}`}>
                       {v}
                     </Text>
@@ -1774,7 +1774,7 @@ export default function TodoDetailScreen() {
                       <View key={s.userId} className="h-8 flex-row items-center gap-1.5 rounded-lg border border-cd-border bg-cd-card pl-1 pr-1.5">
                         <MiniAvatar name={s.name} photoUrl={s.photoUrl} size={20} />
                         <Text className="text-[12px] text-cd-text">{s.name}</Text>
-                        <Text className="text-[10px] text-cd-faint">{TODO_SHARE_ROLE_LABELS[s.role].replace(/\(.*\)/, '')}</Text>
+                        <Text className="text-[11px] text-cd-faint">{TODO_SHARE_ROLE_LABELS[s.role].replace(/\(.*\)/, '')}</Text>
                         {isOwner || s.userId === me ? (
                           <Pressable hitSlop={6} onPress={() => void unshare(s.userId)} className="active:opacity-60">
                             <Ionicons name="close" size={14} color={c.faint} />
@@ -1805,7 +1805,7 @@ export default function TodoDetailScreen() {
               <View>
                 {item.activity.slice(0, 30).map((a) => (
                   <View key={a.activityId} className="flex-row items-center gap-2 py-1.5">
-                    <Text className="flex-1 text-[12.5px] text-cd-body" numberOfLines={1}>
+                    <Text className="flex-1 text-[13px] text-cd-body" numberOfLines={1}>
                       <Text className="font-semibold">{a.userName ?? '시스템'}</Text> · {ACTIVITY_LABEL[a.action] ?? a.action}
                       {activityLine(a) ? <Text className="text-cd-muted"> · {activityLine(a)}</Text> : null}
                     </Text>
@@ -1828,7 +1828,7 @@ export default function TodoDetailScreen() {
                 ))}
               </View>
             ) : (
-              <Text className="text-[12.5px] text-cd-faint">기록 없음</Text>
+              <Text className="text-[13px] text-cd-faint">기록 없음</Text>
             )}
           </Frame>
           )}
@@ -1940,7 +1940,7 @@ export default function TodoDetailScreen() {
             autoFocus
             className="h-10 rounded-lg border border-cd-border bg-cd-card px-3 text-[14px] text-cd-text"
           />
-          <Text className="text-[11.5px] text-cd-faint">내가 볼 수 있는 미완료 할 일 중에서 고릅니다(자기 자신·이미 선행인 것 제외). 순환이 되는 연결은 거절됩니다.</Text>
+          <Text className="text-[12px] text-cd-faint">내가 볼 수 있는 미완료 할 일 중에서 고릅니다(자기 자신·이미 선행인 것 제외). 순환이 되는 연결은 거절됩니다.</Text>
         </View>
         <ScrollView automaticallyAdjustKeyboardInsets className="mt-2 flex-1" contentContainerStyle={{ gap: 6, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
           {depLoading ? (
@@ -1957,7 +1957,7 @@ export default function TodoDetailScreen() {
                     <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                       {d.title}
                     </Text>
-                    <Text className="text-[11.5px] text-cd-faint">
+                    <Text className="text-[12px] text-cd-faint">
                       {[d.boardName, d.assigneeName ?? '담당 없음', when ? fmtMd(when) : null, d.parentItemId ? '하위' : null].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
@@ -1977,7 +1977,7 @@ export default function TodoDetailScreen() {
               <Ionicons name="list-outline" size={16} color={c.primary} />
               <View className="flex-1">
                 <Text className="text-[14px] font-semibold text-cd-text">공정표 단계로 하위 작업 만들기</Text>
-                <Text className="text-[11.5px] text-cd-faint">{item.stages.length}단계 · 이미 매핑된 단계는 건너뜁니다</Text>
+                <Text className="text-[12px] text-cd-faint">{item.stages.length}단계 · 이미 매핑된 단계는 건너뜁니다</Text>
               </View>
             </Pressable>
           ) : null}
@@ -1992,7 +1992,7 @@ export default function TodoDetailScreen() {
                   <Text className="text-[14px] font-semibold text-cd-text" numberOfLines={1}>
                     {t.name}
                   </Text>
-                  <Text className="text-[11.5px] text-cd-faint">
+                  <Text className="text-[12px] text-cd-faint">
                     {t.boardId ? '보드' : '개인'} · {t.items.length}항목 · {t.items.slice(0, 3).map((x) => x.title).join(', ')}
                     {t.items.length > 3 ? ' …' : ''}
                   </Text>
@@ -2006,7 +2006,7 @@ export default function TodoDetailScreen() {
             ))
           )}
           <View className="mt-2 gap-2 rounded-lg border border-cd-border bg-cd-surface p-3">
-            <Text className="text-[12.5px] font-semibold text-cd-text">현재 하위 작업을 템플릿으로 저장</Text>
+            <Text className="text-[13px] font-semibold text-cd-text">현재 하위 작업을 템플릿으로 저장</Text>
             <TextInput
               value={tplName}
               onChangeText={setTplName}
@@ -2312,7 +2312,7 @@ export default function TodoDetailScreen() {
                   <Text className="text-[14px] font-semibold text-cd-text" numberOfLines={1}>
                     {r.name}
                   </Text>
-                  <Text className="text-[11.5px] text-cd-faint">{r.roomType === 'group' ? `그룹 · ${r.memberCount}명` : '개인'}</Text>
+                  <Text className="text-[12px] text-cd-faint">{r.roomType === 'group' ? `그룹 · ${r.memberCount}명` : '개인'}</Text>
                 </View>
                 {sendingChat === r.roomId ? <ActivityIndicator size="small" /> : <Ionicons name="send-outline" size={16} color={c.primary} />}
               </Pressable>

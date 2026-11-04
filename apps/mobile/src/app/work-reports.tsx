@@ -233,7 +233,7 @@ export default function WorkReportsScreen() {
         {card.completed ? <Badge label="완료" tone="success" /> : null}
       </View>
       {card.subtitle ? (
-        <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+        <Text numberOfLines={1} className="text-[12px] text-cd-faint">
           {card.subtitle}
         </Text>
       ) : null}
@@ -254,7 +254,7 @@ export default function WorkReportsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader title="업무보고" subtitle="용역·Task 추진 보고" back variant="sub" />
       <SegmentedTabs items={tabs} value={tab} onChange={setTab} />
 
@@ -348,7 +348,7 @@ export default function WorkReportsScreen() {
                   className={`rounded-full border px-3.5 py-2 active:opacity-70 ${
                     execFilter === f.key ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
                   }`}>
-                  <Text className={`text-[12.5px] font-bold ${execFilter === f.key ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                  <Text className={`text-[13px] font-bold ${execFilter === f.key ? 'text-cd-primary' : 'text-cd-muted'}`}>
                     {f.label}
                   </Text>
                 </Pressable>
@@ -385,7 +385,7 @@ export default function WorkReportsScreen() {
                     {card.execStatus === 'directed' ? <Badge label="지시됨" tone="warning" /> : null}
                     {card.execStatus === 're_reported' ? <Badge label="재보고" tone="success" /> : null}
                   </View>
-                  <Text numberOfLines={1} className="text-[11.5px] text-cd-faint">
+                  <Text numberOfLines={1} className="text-[12px] text-cd-faint">
                     {[card.subtitle, card.meetingLabel, card.meetingSeq ? `${card.meetingSeq}차` : null, card.subjectDate?.slice(0, 10)]
                       .filter(Boolean)
                       .join(' · ')}
@@ -456,7 +456,7 @@ export default function WorkReportsScreen() {
                   }}
                   className="flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:opacity-60">
                   <View className="flex-1">
-                    <Text numberOfLines={1} className="text-[13.5px] font-semibold text-cd-text">
+                    <Text numberOfLines={1} className="text-[14px] font-semibold text-cd-text">
                       {r.title || `${r.periodStart.slice(5)} ~ ${r.periodEnd.slice(5)} 보고`}
                     </Text>
                     <Text className="mt-[1px] text-[11px] text-cd-faint">

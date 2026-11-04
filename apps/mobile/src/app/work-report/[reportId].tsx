@@ -252,7 +252,7 @@ export default function WorkReportDetailScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-cd-bg">
+    <SafeAreaView className="flex-1 bg-transparent">
       <ScreenHeader title="업무보고" subtitle={r?.title || `${r?.periodStart ?? ''} ~ ${r?.periodEnd ?? ''}`} back variant="sub" />
       <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}
@@ -266,7 +266,7 @@ export default function WorkReportDetailScreen() {
             {/* 머리 정보 */}
             <View className="gap-1.5 rounded-2xl border border-cd-border bg-cd-card p-3.5">
               <View className="flex-row items-center gap-2">
-                <Text className="flex-1 text-[12.5px] text-cd-muted">
+                <Text className="flex-1 text-[13px] text-cd-muted">
                   {[r.meetingLabel, r.meetingSeq ? `${r.meetingSeq}차` : null, r.deptName].filter(Boolean).join(' · ')}
                 </Text>
                 <Badge
@@ -275,7 +275,7 @@ export default function WorkReportDetailScreen() {
                 />
                 {r.reviewStatus === 'rejected' ? <Badge label="보완 요청" tone="warning" /> : null}
               </View>
-              <Text className="text-[12.5px] text-cd-muted">
+              <Text className="text-[13px] text-cd-muted">
                 기간 {r.periodStart} ~ {r.periodEnd}
                 {r.authorName ? ` · 작성 ${r.authorName}` : ''}
               </Text>
@@ -329,7 +329,7 @@ export default function WorkReportDetailScreen() {
                                   {s.stageName}
                                 </Text>
                                 <Text
-                                  className={`text-[10.5px] ${done ? 'text-cd-success' : on ? 'text-cd-primary' : 'text-cd-faint'}`}>
+                                  className={`text-[11px] ${done ? 'text-cd-success' : on ? 'text-cd-primary' : 'text-cd-faint'}`}>
                                   {done ? '완료' : on ? `${s.progressPct}%` : '예정'}
                                 </Text>
                               </View>
@@ -348,7 +348,7 @@ export default function WorkReportDetailScreen() {
               <View className="gap-1 rounded-2xl border p-3.5" style={{ backgroundColor: c.warningSoft, borderColor: c.border }}>
                 <View className="flex-row items-center gap-1.5">
                   <Ionicons name="chatbubble-ellipses" size={14} color={c.warning} />
-                  <Text className="text-[12.5px] font-bold" style={{ color: c.text }}>
+                  <Text className="text-[13px] font-bold" style={{ color: c.text }}>
                     부서장 의견{r.reviewerCommentKind ? ` — ${COMMENT_KIND_LABEL[r.reviewerCommentKind] ?? r.reviewerCommentKind}` : ''}
                   </Text>
                 </View>
@@ -361,27 +361,27 @@ export default function WorkReportDetailScreen() {
               <View className="gap-1 rounded-2xl bg-cd-primary-soft p-3.5">
                 <View className="flex-row items-center gap-1.5">
                   <Ionicons name="megaphone" size={14} color={c.primary} />
-                  <Text className="text-[12.5px] font-bold text-cd-primary">
+                  <Text className="text-[13px] font-bold text-cd-primary">
                     임원 지시{EXEC_KIND_LABEL[r.execDirective.kind] ? ` — ${EXEC_KIND_LABEL[r.execDirective.kind]}` : ''}
                   </Text>
                 </View>
                 <Text className="text-[13px] leading-5 text-cd-text">{r.execDirective.message}</Text>
                 {r.directorResponse ? (
                   <View className="mt-1 gap-0.5 rounded-xl bg-cd-card px-3 py-2">
-                    <Text className="text-[11.5px] font-bold text-cd-muted">부서장 답변 (재보고)</Text>
-                    <Text className="text-[12.5px] leading-4 text-cd-body">{r.directorResponse}</Text>
+                    <Text className="text-[12px] font-bold text-cd-muted">부서장 답변 (재보고)</Text>
+                    <Text className="text-[13px] leading-4 text-cd-body">{r.directorResponse}</Text>
                   </View>
                 ) : null}
               </View>
             ) : null}
 
             <Card title="추진 내역 (이번 기간)">
-              <Text className="mt-1 text-[13.5px] leading-5 text-cd-body">
+              <Text className="mt-1 text-[14px] leading-5 text-cd-body">
                 {r.progressText || '작성된 내용이 없습니다.'}
               </Text>
             </Card>
             <Card title="추진 계획 (다음 기간)">
-              <Text className="mt-1 text-[13.5px] leading-5 text-cd-body">
+              <Text className="mt-1 text-[14px] leading-5 text-cd-body">
                 {r.planText || '작성된 내용이 없습니다.'}
               </Text>
             </Card>
@@ -439,7 +439,7 @@ export default function WorkReportDetailScreen() {
                         className={`rounded-full border px-3.5 py-2 active:opacity-70 ${
                           kind === k.value ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
                         }`}>
-                        <Text className={`text-[12.5px] font-bold ${kind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                        <Text className={`text-[13px] font-bold ${kind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
                           {k.label}
                         </Text>
                       </Pressable>
@@ -485,7 +485,7 @@ export default function WorkReportDetailScreen() {
             {/* 부서장 재보고(WR-M3) — 임원 지시가 내려온 보고에 답변(1회 제한) */}
             {reviewMode && r.execStatus === 'directed' ? (
               r.reReportCount >= 1 ? (
-                <Text className="px-1 text-center text-[11.5px] text-cd-faint">재보고(1회)를 이미 제출했습니다.</Text>
+                <Text className="px-1 text-center text-[12px] text-cd-faint">재보고(1회)를 이미 제출했습니다.</Text>
               ) : (
                 <Card title="임원 지시 답변 (재보고)">
                   <View className="mt-2 gap-3">
@@ -520,7 +520,7 @@ export default function WorkReportDetailScreen() {
                           execKind === k.value ? 'border-cd-primary bg-cd-primary-soft' : 'border-cd-border bg-cd-card'
                         }`}>
                         <Text
-                          className={`text-[12.5px] font-bold ${execKind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
+                          className={`text-[13px] font-bold ${execKind === k.value ? 'text-cd-primary' : 'text-cd-muted'}`}>
                           {k.label}
                         </Text>
                       </Pressable>

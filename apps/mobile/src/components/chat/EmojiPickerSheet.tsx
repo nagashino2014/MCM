@@ -89,7 +89,7 @@ export function EmojiPickerSheet({
           </Pressable>
         ))}
       </View>
-      <Text className="pb-1.5 text-[11.5px] font-bold text-cd-faint">{current.label}</Text>
+      <Text className="pb-1.5 text-[12px] font-bold text-cd-faint">{current.label}</Text>
       <ScrollView className="max-h-[230px]" keyboardShouldPersistTaps="handled">
         <View className="flex-row flex-wrap">
           {current.items.map((e, i) => (

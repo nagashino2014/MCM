@@ -19,6 +19,7 @@ import { apiJson } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { ACTIVITY_TYPES } from '@/lib/sales/types';
+import { softenHex } from '@/components/ui/Chip';
 import { SHADOW_CARD } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 
@@ -91,7 +92,8 @@ const REGION_GROUPS: Record<string, string[]> = {
  * 분류를 8개 넘게 만들 일은 사실상 없어 순환이 겹칠 일도 없다.
  * 카드의 분류 태그와 상단 알림 조건 버튼(이름이 분류와 같으면 같은 색)이 함께 쓴다.
  */
-const CAT_TINTS: { bg: string; text: string }[] = ACTIVITY_TYPES.map((t) => ({ bg: t.color, text: t.ink }));
+// 바탕은 영업 팔레트 원색을 흰색과 섞어 **조금 더 연하게**(원색 65%, 2026-11-04 사용자 결정 — 칩 바탕·카드 분류 태그 바탕 둘 다).
+const CAT_TINTS: { bg: string; text: string }[] = ACTIVITY_TYPES.map((t) => ({ bg: softenHex(t.color, 0.65), text: t.ink }));
 
 const money = (n?: number | null) =>
   n && n > 0 ? `${Math.round(n / 10000).toLocaleString('ko-KR')}만원` : '';

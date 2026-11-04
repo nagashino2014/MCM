@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } fro
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Button, EmptyState, FilterPill, PrimaryIconButton, PullRefresh, Screen, SkeletonList, useToast } from '@/components/ui';
+import { Button, EmptyState, PrimaryIconButton, PullRefresh, Screen, SegmentedTabs, SkeletonList, useToast } from '@/components/ui';
 import { BoardChips, BoardSections, MoveSheet } from '@/components/todo/BoardSections';
 import { TimelineView } from '@/components/todo/TimelineView';
 import { AutomationSheet } from '@/components/todo/AutomationSheet';
@@ -14,7 +14,7 @@ import { apiJson } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { hasAnyCompleteRule } from '@/lib/todo-completion';
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoBoard, type TodoColumn, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
-import { TODO_UI, addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, isPeriodItem, keyDate, periodCovers, statusTone, todayLocal, weekEnd, withAlpha } from '@/lib/todo-utils';
+import { addDays, eventCovers, fmtLongDate, fmtMd, isOverdue, isPeriodItem, keyDate, periodCovers, statusTone, todayLocal, weekEnd } from '@/lib/todo-utils';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 
@@ -82,25 +82,8 @@ interface Group {
   emptyText?: string;
 }
 
-/** 상단 태그 버튼(필터 필, sm 한 줄) — 공용 FilterPill. 지연은 빨강 틴트(상태색), 나머지는 선택 시 회색 + 굵게. */
-function TagButton({
-  label,
-  count,
-  tone,
-  active,
-  onPress,
-}: {
-  label: string;
-  count: number;
-  tone: keyof typeof TODO_UI.tags;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { dark } = useTheme();
-  const t = TODO_UI.tags[tone];
-  const tint = t.fg ? { bg: dark ? withAlpha(t.border, 0.18) : t.bg, text: dark ? TODO_UI.over.darkFg : t.fg } : undefined;
-  return <FilterPill size="sm" label={label} count={count} active={active} onPress={onPress} tint={tint} />;
-}
+/** 상단 필터 탭의 키 — 빈 문자열은 "아무 필터도 아닌" 상태(내 할 일 전체). */
+type TagKey = 'today' | 'overdue' | 'week' | 'shared' | 'done' | '';
 
 export default function TodoScreen() {
   const router = useRouter();
@@ -658,18 +641,22 @@ export default function TodoScreen() {
         </View>
       }>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
-        {/* 태그 버튼(필터) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, flexShrink: 0 }}
-          contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 }}>
-          <TagButton label="오늘" count={todayCount} tone="today" active={scope === 'my' && filter === 'today'} onPress={() => pickFilter('today')} />
-          <TagButton label="지연" count={overdueCount} tone="over" active={scope === 'my' && filter === 'overdue'} onPress={() => pickFilter('overdue')} />
-          <TagButton label="이번 주" count={weekCount} tone="week" active={scope === 'my' && filter === 'week'} onPress={() => pickFilter('week')} />
-          <TagButton label="공유받음" count={sharedCount} tone="shared" active={scope === 'shared'} onPress={() => pickScope(scope === 'shared' ? 'my' : 'shared')} />
-          <TagButton label="완료" count={myApi.data?.doneCount ?? 0} tone="done" active={false} onPress={showDoneList} />
-        </ScrollView>
+        {/* 필터 탭 — 발행 요청/업무보고 와 같은 세그먼트형(2026-11-04 사용자 결정, 색 필 폐지). '완료'는 탭이 아니라 완료 목록 시트를 연다. */}
+        <SegmentedTabs<TagKey>
+          items={[
+            { key: 'today', label: '오늘', count: todayCount },
+            { key: 'overdue', label: '지연', count: overdueCount },
+            { key: 'week', label: '이번 주', count: weekCount },
+            { key: 'shared', label: '공유받음', count: sharedCount },
+            { key: 'done', label: '완료', count: myApi.data?.doneCount ?? 0 },
+          ]}
+          value={scope === 'shared' ? 'shared' : scope === 'my' && filter ? filter : ''}
+          onChange={(k) => {
+            if (k === 'done') showDoneList();
+            else if (k === 'shared') pickScope(scope === 'shared' ? 'my' : 'shared');
+            else if (k) pickFilter(k);
+          }}
+        />
         {/* 범위 탭 + 보기 토글 */}
         <View style={{ height: 46 }} className="flex-row items-end border-b border-cd-border px-4">
           <View className="h-full flex-row">

@@ -68,6 +68,7 @@ export function FilterPill({
   grow,
   icon,
   size = "md",
+  tintBorder = "selected",
 }: {
   label: string;
   active?: boolean;
@@ -83,12 +84,27 @@ export function FilterPill({
   /** 글자 앞 작은 아이콘 슬롯(꺼진 알림 조건의 종 등). */
   icon?: React.ReactNode;
   size?: "md" | "sm";
+  /**
+   * 분류색(tint) 필의 테두리 규칙 — "selected"(기본, 11-04 입찰 화면 결정): 비선택은 다른 필과 같은 hairline, 선택되면
+   * 글자색보다 약간 밝은 색(글자색 60%). "always": 선택 여부와 무관하게 늘 글자색 얇은 테두리(일정 태그 칩, 11-04 앞선 요청).
+   */
+  tintBorder?: "selected" | "always";
 }) {
   const { c } = useTheme();
   const on = !!active && !disabled;
   const sm = size === "sm";
   const bg = on ? (tint?.bg ?? c.pillSelected) : c.card;
   const fg = disabled ? c.faint : on ? (tint?.text ?? c.text) : c.muted;
+  const borderColor =
+    tint && !disabled
+      ? tintBorder === "always"
+        ? tint.text
+        : on
+          ? softenHex(tint.text, 0.6)
+          : c.border
+      : on
+        ? bg
+        : c.border;
   const weight = on ? (tint ? "font-medium" : "font-semibold") : "font-normal";
   const px = grow ? (sm ? 2 : 8) : sm ? 7 : 12;
   return (
@@ -99,8 +115,8 @@ export function FilterPill({
       accessibilityState={{ selected: on, disabled: !!disabled }}
       style={{
         backgroundColor: bg,
-        // 분류색 필(tint)은 늘 그 글자색의 얇은 테두리(11-04 사용자 요청); 회색 선택은 바탕과 같은 색, 비선택은 hairline.
-        borderColor: tint && !disabled ? tint.text : on ? bg : c.border,
+        // 분류색 필의 테두리는 tintBorder 규칙(위 주석); 회색 선택은 바탕과 같은 색, 비선택은 hairline.
+        borderColor,
         borderWidth: 1,
         height: sm ? 28 : 32,
         paddingHorizontal: px,
@@ -119,6 +135,15 @@ export function FilterPill({
       ) : null}
     </Pressable>
   );
+}
+
+/** #rrggbb 를 흰색과 섞어 밝힌다 — `keep` 만큼 원색을 남긴다(0.6 = 원색 60% + 흰색 40%). 형식이 다르면 그대로. */
+export function softenHex(hex: string, keep: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (x: number) => Math.round(x * keep + 255 * (1 - keep));
+  const out = (ch((n >> 16) & 255) << 16) | (ch((n >> 8) & 255) << 8) | ch(n & 255);
+  return `#${out.toString(16).padStart(6, "0")}`;
 }
 
 /** 선택 가능한 칩 — FilterPill 의 호환 이름(옛 호출처). */

@@ -60,10 +60,11 @@ export function Screen({
   return (
     // 네비게이터 헤더가 있는 화면은 상단 안전영역을 헤더가 이미 처리한다(이중 여백 방지).
     // 바탕은 **투명** — 셸 그라데이션(ThemeProvider 의 ShellBackground)이 비친다(2026-11-04).
-    <SafeAreaView edges={title ? ["top"] : []} className="flex-1 bg-transparent">
+    // 자체 헤더가 있으면 안전영역은 헤더가 흰색으로 채운다(edges 없음 + safe="pad"); 없으면 네비게이터 헤더가 처리한다.
+    <SafeAreaView edges={[]} className="flex-1 bg-transparent">
       {/* 셸 바탕은 화면 안에서 그린다 — 네이티브 스택 화면이 루트의 배경을 가린다(11-04 실기기). */}
       <ShellBackground />
-      {title ? <AppHeader title={title} subtitle={subtitle} back={back} onBack={onBack} right={right} /> : null}
+      {title ? <AppHeader safe="pad" title={title} subtitle={subtitle} back={back} onBack={onBack} right={right} /> : null}
 
       {scroll ? (
         <ScrollView

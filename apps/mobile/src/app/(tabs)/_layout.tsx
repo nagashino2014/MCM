@@ -130,7 +130,7 @@ export default function TabsLayout() {
         }}
       />
       {/* 소통 — 탭에서는 감추고 더보기에서 연다(라우트·화면은 그대로). */}
-      <Tabs.Screen name="collab" options={{ title: '소통', href: null }} />
+      <Tabs.Screen name="collab" options={{ title: '소통', href: null, headerShown: false }} />
     </Tabs>
   );
 }

@@ -1,5 +1,6 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { useTheme } from "@/theme/useTheme";
 import { SHADOW_CARD } from "@/theme/tokens";
@@ -48,13 +49,16 @@ export function KpiStrip({ items, flat }: { items: KpiItem[]; flat?: boolean }) 
             </View>
           </>
         );
-        const cls = `flex-1 px-3 py-3 ${i > 0 ? "border-l border-cd-border" : ""}`;
+        // 칸은 균등 폭 — flexBasis 0 + minWidth 0 이어야 긴 글자(힌트)가 있는 칸이 넓어지지 않는다(11-04 실기기).
+        // 높이는 옛 지표 타일과 같은 76(py 14).
+        const cls = `px-3 ${i > 0 ? "border-l border-cd-border" : ""}`;
+        const cell = { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, paddingVertical: 14 };
         return it.onPress ? (
-          <Pressable key={it.key ?? it.label} onPress={it.onPress} accessibilityRole="button" className={`${cls} active:bg-cd-surface`}>
+          <Pressable key={it.key ?? it.label} onPress={it.onPress} accessibilityRole="button" style={cell} className={`${cls} active:bg-cd-surface`}>
             {body}
           </Pressable>
         ) : (
-          <View key={it.key ?? it.label} className={cls}>
+          <View key={it.key ?? it.label} style={cell} className={cls}>
             {body}
           </View>
         );
@@ -104,8 +108,47 @@ export function StatTile({
 }
 
 /**
- * 액션 타일 — 빠른 실행의 아이콘 버튼. 48px 중립 면(surface-sunken) + 반경 10 + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원),
- * 아래 라벨 12/500. 그림자·색 배경은 없다.
+ * 아이콘 상자(IconWell) — 빠른 실행·전체 메뉴 타일의 아이콘 바탕. 아주 옅은 세로 그라데이션(흰 → surface-sunken) +
+ * 옅은 테두리 + 1px 그림자로 **살짝 입체적인 버튼**처럼 보인다(2026-11-04 사용자 요청). 반경 10.
+ */
+export function IconWell({ size, children }: { size: number; children: React.ReactNode }) {
+  const { c, dark } = useTheme();
+  const id = `well-${size}-${dark ? "d" : "l"}`;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: dark ? c.border : "#e4e6ec",
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: c.surface,
+        shadowColor: "#1d2435",
+        shadowOpacity: dark ? 0 : 0.06,
+        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 1,
+      }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={dark ? "#2b2e38" : "#ffffff"} />
+            <Stop offset="1" stopColor={dark ? "#1f2229" : "#eaecf2"} />
+          </LinearGradient>
+        </Defs>
+        <Rect x={0} y={0} width={size} height={size} fill={`url(#${id})`} />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+/**
+ * 액션 타일 — 빠른 실행의 아이콘 버튼. 48px IconWell(옅은 그라데이션 입체 상자) + **기능별 색 아이콘**(`tone`, 2026-11-04 사용자 결정으로 복원),
+ * 아래 라벨 12/500.
  */
 export function ActionTile({
   icon,
@@ -121,9 +164,9 @@ export function ActionTile({
   const { c } = useTheme();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} className="items-center gap-1.5 active:opacity-70">
-      <View className="h-12 w-12 items-center justify-center rounded-lg bg-cd-surface">
+      <IconWell size={48}>
         <Ionicons name={icon} size={22} color={tone ?? c.primary} />
-      </View>
+      </IconWell>
       <Text className="text-[12px] font-medium text-cd-text">{label}</Text>
     </Pressable>
   );

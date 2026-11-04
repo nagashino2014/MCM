@@ -303,7 +303,7 @@ export function TodoTodayWidget() {
       ) : rows.length === 0 && events.length === 0 && pending.length === 0 ? (
         <Text className="py-2 text-[14px] text-cd-muted">오늘 할 일이 없습니다.</Text>
       ) : (
-        // 카드 안에서도 항목마다 박스(2026-11-04 사용자 결정) — 카드 안 카드라 그림자 없이 surface-sunken 면 + 테두리.
+        // 카드 안에서도 항목마다 박스(2026-11-04 사용자 결정) — 흰 바탕 + 옅은 테두리(그림자 없음), 체크 원은 14px(11-04 30% 축소).
         <View className="gap-2">
           {pending.map((ev) => (
             <Pressable
@@ -311,9 +311,9 @@ export function TodoTodayWidget() {
               disabled={!ev.docId}
               onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
               style={{ borderColor: c.cardBorder }}
-              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2 active:opacity-60">
+              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-card py-2.5 pl-3 pr-2 active:opacity-60">
               <BoardStripe color={ev.kindColor} width={3} inset={8} />
-              <KindCircle kind="pending" color={ev.kindColor} size={20} />
+              <KindCircle kind="pending" color={ev.kindColor} size={18} />
               <View className="flex-1">
                 <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
                   {TODO_APPROVAL_EVENT_LABELS.pending} · {ev.title}
@@ -329,9 +329,9 @@ export function TodoTodayWidget() {
             const due = dueBadge(it, today);
             const over = (it.doDate ?? it.dueDate ?? '') < today || (it.dueDate != null && it.dueDate < today);
             return (
-              <View key={it.itemId} style={{ borderColor: c.cardBorder }} className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2">
+              <View key={it.itemId} style={{ borderColor: c.cardBorder }} className="flex-row items-center gap-2.5 rounded-lg border bg-cd-card py-2.5 pl-3 pr-2">
                 <BoardStripe color={it.boardColor} width={3} inset={8} />
-                <CheckCircle done={false} disabled={!it.canEdit} onPress={() => void complete(it)} size={20} />
+                <CheckCircle done={false} disabled={!it.canEdit} onPress={() => void complete(it)} size={14} />
                 <Pressable
                   className="flex-1 flex-row items-center gap-2 active:opacity-60"
                   onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: it.itemId } })}>
@@ -356,9 +356,9 @@ export function TodoTodayWidget() {
               disabled={!ev.docId}
               onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
               style={{ borderColor: c.cardBorder }}
-              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-surface py-2.5 pl-3 pr-2 active:opacity-60">
+              className="flex-row items-center gap-2.5 rounded-lg border bg-cd-card py-2.5 pl-3 pr-2 active:opacity-60">
               <BoardStripe color={ev.kindColor} width={3} inset={8} />
-              <KindCircle kind={ev.kind} color={ev.kindColor} size={20} />
+              <KindCircle kind={ev.kind} color={ev.kindColor} size={18} />
               <View className="flex-1">
                 <Text numberOfLines={1} className="text-[13px] text-cd-muted">
                   {TODO_APPROVAL_EVENT_LABELS[ev.kind] ?? ev.kind} · {ev.title}

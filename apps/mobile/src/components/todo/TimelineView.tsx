@@ -3,12 +3,14 @@
  *   위: 가로 스크롤 시간축 그래프(막대에는 번호만 — 폭이 좁아 이름은 아래 목록으로), 주말 열은 요일 글자 대신 색(일=옅은 붉은색·토=옅은 파란색).
  *   아래: 그래프와 충분히 띄운 일정 목록 — 번호·이름·기간·중요도·지연 여부. 복수 일자 일정(할 날~종료일)은 웹과 같이 하위 작업 보조 행을
  *   그래프·목록 모두에 펼친다(상태 색·진행율, 날짜 없는 하위는 상위 기간 위 점선 '날짜 미정'). 막대·행 탭 = 상세로.
+ *   2026-11-04(사용자 요청): 그래프는 **흰 카드** 안에, 목록은 일정마다 **흰 박스**(상위 + 그 하위 행 한 묶음)로 — 그라데이션 바탕 위에서 가독성.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme/useTheme';
+import { SHADOW_CARD } from '@/theme/tokens';
 import { apiJson } from '@/lib/api';
 import { TODO_STATUS_LABELS, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
 // ⚠ 모바일 diffDays(a, b) = b − a (웹 todo-utils 와 반대) — 창 기준 위치는 diffDays(windowStart, 날짜)
@@ -156,158 +158,171 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
   }
   const graphH = Math.max(acc, ROW_H);
   const lateOf = (r: Row) => !r.undated && r.depth === 0 && isOverdue(r.item, today);
+  const boxStyle = [{ borderColor: c.cardBorder }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light];
+
+  // 목록 묶음 — 상위 행 + 그 뒤에 이어지는 하위 행을 한 박스에.
+  const groups: Row[][] = [];
+  for (const r of rows) {
+    if (r.depth === 0 || !groups.length) groups.push([r]);
+    else groups[groups.length - 1].push(r);
+  }
 
   return (
     <View className="flex-1">
-      {/* ── 그래프 ── */}
-      <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: trackW }}>
-        <View style={{ width: trackW }}>
-          <View style={{ height: 20, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border }}>
-            {months.map((m) => (
-              <View key={m.key} style={{ width: m.len * DAY_W, borderLeftWidth: 1, borderLeftColor: c.border, paddingLeft: 6, justifyContent: 'center' }}>
-                <Text className="text-[11px] font-semibold text-cd-text" numberOfLines={1}>
-                  {Number(m.key.slice(5, 7))}월
-                </Text>
-              </View>
-            ))}
-          </View>
-          <View style={{ height: 24, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border }}>
-            {days.map((d) => {
-              const isToday = d === today;
-              const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
-              const tone = wd === 0 ? over.fg : wd === 6 ? c.primary : c.faint;
-              return (
-                <View key={d} style={{ width: DAY_W, alignItems: 'center', justifyContent: 'center', backgroundColor: weekendBg(d) }}>
-                  <Text style={{ fontSize: 11, color: isToday ? c.primary : tone, fontWeight: isToday ? '700' : '400' }}>{Number(d.slice(8, 10))}</Text>
+      {/* ── 그래프(흰 카드) ── */}
+      <View style={boxStyle} className="mx-4 mt-3 overflow-hidden rounded-lg border bg-cd-card">
+        <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: trackW }}>
+          <View style={{ width: trackW }}>
+            <View style={{ height: 24, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border }}>
+              {months.map((m) => (
+                <View key={m.key} style={{ width: m.len * DAY_W, borderLeftWidth: 1, borderLeftColor: c.border, paddingLeft: 6, justifyContent: 'center' }}>
+                  <Text className="text-[11px] font-semibold text-cd-text" numberOfLines={1}>
+                    {Number(m.key.slice(5, 7))}월
+                  </Text>
                 </View>
+              ))}
+            </View>
+            <View style={{ height: 24, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border }}>
+              {days.map((d) => {
+                const isToday = d === today;
+                const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
+                const tone = wd === 0 ? over.fg : wd === 6 ? c.primary : c.faint;
+                return (
+                  <View key={d} style={{ width: DAY_W, alignItems: 'center', justifyContent: 'center', backgroundColor: weekendBg(d) }}>
+                    <Text style={{ fontSize: 11, color: isToday ? c.primary : tone, fontWeight: isToday ? '600' : '400' }}>{Number(d.slice(8, 10))}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={{ height: graphH, position: 'relative' }}>
+              {days.map((d, i) => {
+                const bg = weekendBg(d);
+                return bg ? <View key={d} pointerEvents="none" style={{ position: 'absolute', left: i * DAY_W, top: 0, bottom: 0, width: DAY_W, backgroundColor: bg }} /> : null;
+              })}
+              {rows.map((r, i) =>
+                r.depth === 1 ? <View key={`sb${r.key}`} pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: rowTop[i], height: SUB_H, backgroundColor: withAlpha(c.muted, 0.05) }} /> : null
+              )}
+              {todayX >= 0 && todayX <= trackW ? <View pointerEvents="none" style={{ position: 'absolute', left: todayX, top: 0, bottom: 0, width: 2, backgroundColor: c.primary, opacity: 0.7 }} /> : null}
+              {rows.length === 0 ? (
+                <Text className="px-3 py-2 text-[14px] text-cd-muted">이 기간에 날짜가 있는 할 일이 없습니다.</Text>
+              ) : (
+                rows.map((r, i) => {
+                  const x0 = clamp(diffDays(windowStart, r.start));
+                  const x1 = clamp(diffDays(windowStart, r.end));
+                  const h = r.depth === 0 ? ROW_H : SUB_H;
+                  if (r.milestone) {
+                    return (
+                      <Pressable key={r.key} onPress={() => onOpen(r.item)} style={{ position: 'absolute', left: x0 * DAY_W + DAY_W / 2 - 8, top: rowTop[i] + h / 2 - 9, width: 16, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 14, color: r.item.status === 'done' ? c.faint : r.item.boardColor || c.primary }}>◆</Text>
+                      </Pressable>
+                    );
+                  }
+                  const done = r.item.status === 'done';
+                  const late = lateOf(r);
+                  const tint = r.item.boardColor || c.primary;
+                  const tone = r.depth === 1 ? statusTone(r.item.status, c, dark) : null;
+                  return (
+                    <Pressable
+                      key={r.key}
+                      onPress={() => onOpen(r.item)}
+                      accessibilityLabel={`${r.no}. ${r.item.title}`}
+                      style={{
+                        position: 'absolute',
+                        left: x0 * DAY_W + 1,
+                        width: Math.max(DAY_W - 2, (x1 - x0 + 1) * DAY_W - 2),
+                        top: rowTop[i] + (r.depth === 0 ? 5 : 4),
+                        height: h - (r.depth === 0 ? 10 : 8),
+                        borderRadius: 5,
+                        paddingHorizontal: 5,
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        // 개인 보드처럼 옅은 회색 보드도 막대가 보이도록 메인 막대는 진하게 + 회색 계열 테두리
+                        backgroundColor: r.undated ? 'transparent' : tone ? tone.bg : withAlpha(tint, done ? 0.3 : 0.75),
+                        borderWidth: 1,
+                        borderStyle: r.undated || r.due || tone?.dashed ? 'dashed' : 'solid',
+                        borderColor: late ? over.fg : tone ? (r.undated ? c.muted : tone.border) : withAlpha(c.muted, 0.55),
+                        opacity: done ? 0.6 : 1,
+                      }}>
+                      {r.depth === 1 && !r.undated && r.item.progressPct != null && !done ? (
+                        <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${r.item.progressPct}%`, backgroundColor: withAlpha('#8fb0e0', 0.45) }} />
+                      ) : null}
+                      <Text numberOfLines={1} style={{ fontSize: r.depth === 0 ? 11 : 10, fontWeight: '600', color: c.text }}>
+                        {r.no}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* ── 일정 목록(일정마다 흰 박스) ── */}
+      <View className="flex-row items-center justify-between px-4 pb-2 pt-5">
+        <Text className="text-[12px] font-medium text-cd-muted">
+          일정 {rows.filter((r) => r.depth === 0).length}건 · {fmtMd(windowStart)} ~ {fmtMd(addDays(windowStart, DAYS - 1))}
+        </Text>
+        {undatedCount ? <Text className="text-[12px] text-cd-faint">날짜 없음 {undatedCount}건</Text> : null}
+      </View>
+      <View className="gap-2 px-4">
+        {groups.map((g) => (
+          <View key={`g${g[0].key}`} style={boxStyle} className="rounded-lg border bg-cd-card py-1">
+            {g.map((r) => {
+              const late = lateOf(r);
+              const period = r.undated ? '날짜 미정' : r.milestone ? `◆ ${r.item.actualDate ? `실제 ${fmtMd(r.start)}` : `예정 ${fmtMd(r.start)}`}` : r.due ? `마감 ${fmtMd(r.start)}` : r.start === r.end ? fmtMd(r.start) : `${fmtMd(r.start)} ~ ${fmtMd(r.end)} · ${diffDays(r.start, r.end) + 1}일`;
+              if (r.depth === 1) {
+                const tone = statusTone(r.item.status, c, dark);
+                return (
+                  <Pressable key={`l${r.key}`} onPress={() => onOpen(r.item)} className="flex-row items-center gap-2 border-t border-cd-grid-line py-2 pl-10 pr-3 active:bg-cd-surface">
+                    <Text className="w-8 text-[11px] text-cd-faint">{r.no}</Text>
+                    <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-text">
+                      {r.item.title}
+                    </Text>
+                    <Text className="text-[11px] text-cd-faint">{period}</Text>
+                    <View style={{ backgroundColor: tone.bg, borderColor: tone.border, borderWidth: 1, borderStyle: tone.dashed ? 'dashed' : 'solid', borderRadius: 5, paddingHorizontal: 5 }}>
+                      <Text className="text-[11px] font-semibold text-cd-text">
+                        {TODO_STATUS_LABELS[r.item.status]}
+                        {r.item.status !== 'done' && r.item.progressPct != null ? ` ${r.item.progressPct}%` : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              }
+              return (
+                <Pressable key={`l${r.key}`} onPress={() => onOpen(r.item)} className="gap-0.5 px-3 py-2 active:bg-cd-surface">
+                  <View className="flex-row items-center gap-2">
+                    <View style={{ minWidth: 20, height: 20, borderRadius: 10, backgroundColor: withAlpha(r.item.boardColor || c.primary, 0.35), alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                      <Text className="text-[11px] font-semibold text-cd-text">{r.no}</Text>
+                    </View>
+                    <StatusDot status={r.item.status} />
+                    <Text numberOfLines={1} className={`flex-1 text-[14px] font-medium ${r.item.status === 'done' ? 'text-cd-faint line-through' : 'text-cd-text'}`}>
+                      {r.item.title}
+                    </Text>
+                    <PriorityLabel priority={r.item.priority} />
+                    {late ? (
+                      <Text className="rounded-md px-1.5 text-[11px] font-semibold" style={{ color: over.fg, backgroundColor: over.bg }}>
+                        지연
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View className="flex-row items-center gap-1.5 pl-7">
+                    <Ionicons name={r.due ? 'flag-outline' : 'calendar-outline'} size={12} color={c.faint} />
+                    <Text className="text-[12px] text-cd-muted">{period}</Text>
+                    {r.item.subtaskTotal > 0 ? (
+                      <Text className="text-[12px] text-cd-faint">
+                        · 하위 {r.item.subtaskDone}/{r.item.subtaskTotal}
+                      </Text>
+                    ) : null}
+                    {r.item.assigneeName ? <Text className="ml-auto text-[12px] text-cd-faint">{r.item.assigneeName}</Text> : null}
+                  </View>
+                </Pressable>
               );
             })}
           </View>
-          <View style={{ height: graphH, position: 'relative' }}>
-            {days.map((d, i) => {
-              const bg = weekendBg(d);
-              return bg ? <View key={d} pointerEvents="none" style={{ position: 'absolute', left: i * DAY_W, top: 0, bottom: 0, width: DAY_W, backgroundColor: bg }} /> : null;
-            })}
-            {rows.map((r, i) =>
-              r.depth === 1 ? <View key={`sb${r.key}`} pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: rowTop[i], height: SUB_H, backgroundColor: withAlpha(c.muted, 0.05) }} /> : null
-            )}
-            {todayX >= 0 && todayX <= trackW ? <View pointerEvents="none" style={{ position: 'absolute', left: todayX, top: 0, bottom: 0, width: 2, backgroundColor: c.primary, opacity: 0.7 }} /> : null}
-            {rows.length === 0 ? (
-              <Text className="px-3 py-2 text-[14px] text-cd-muted">이 기간에 날짜가 있는 할 일이 없습니다.</Text>
-            ) : (
-              rows.map((r, i) => {
-                const x0 = clamp(diffDays(windowStart, r.start));
-                const x1 = clamp(diffDays(windowStart, r.end));
-                const h = r.depth === 0 ? ROW_H : SUB_H;
-                if (r.milestone) {
-                  return (
-                    <Pressable key={r.key} onPress={() => onOpen(r.item)} style={{ position: 'absolute', left: x0 * DAY_W + DAY_W / 2 - 8, top: rowTop[i] + h / 2 - 9, width: 16, height: 18, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 14, color: r.item.status === 'done' ? c.faint : r.item.boardColor || c.primary }}>◆</Text>
-                    </Pressable>
-                  );
-                }
-                const done = r.item.status === 'done';
-                const late = lateOf(r);
-                const tint = r.item.boardColor || c.primary;
-                const tone = r.depth === 1 ? statusTone(r.item.status, c, dark) : null;
-                return (
-                  <Pressable
-                    key={r.key}
-                    onPress={() => onOpen(r.item)}
-                    accessibilityLabel={`${r.no}. ${r.item.title}`}
-                    style={{
-                      position: 'absolute',
-                      left: x0 * DAY_W + 1,
-                      width: Math.max(DAY_W - 2, (x1 - x0 + 1) * DAY_W - 2),
-                      top: rowTop[i] + (r.depth === 0 ? 5 : 4),
-                      height: h - (r.depth === 0 ? 10 : 8),
-                      borderRadius: 5,
-                      paddingHorizontal: 5,
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      // 개인 보드처럼 옅은 회색 보드도 막대가 보이도록 메인 막대는 진하게 + 회색 계열 테두리
-                      backgroundColor: r.undated ? 'transparent' : tone ? tone.bg : withAlpha(tint, done ? 0.3 : 0.75),
-                      borderWidth: 1,
-                      borderStyle: r.undated || r.due || tone?.dashed ? 'dashed' : 'solid',
-                      borderColor: late ? over.fg : tone ? (r.undated ? c.muted : tone.border) : withAlpha(c.muted, 0.55),
-                      opacity: done ? 0.6 : 1,
-                    }}>
-                    {r.depth === 1 && !r.undated && r.item.progressPct != null && !done ? (
-                      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${r.item.progressPct}%`, backgroundColor: withAlpha('#8fb0e0', 0.45) }} />
-                    ) : null}
-                    <Text numberOfLines={1} style={{ fontSize: r.depth === 0 ? 11 : 10, fontWeight: '600', color: c.text }}>
-                      {r.no}
-                    </Text>
-                  </Pressable>
-                );
-              })
-            )}
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* ── 일정 목록(그래프 아래, 충분한 간격) ── */}
-      <View style={{ height: 20 }} />
-      <View className="border-t border-cd-border">
-        <View className="flex-row items-center justify-between px-4 pb-1 pt-3">
-          <Text className="text-[12px] font-semibold text-cd-muted">
-            일정 {rows.filter((r) => r.depth === 0).length}건 · {fmtMd(windowStart)} ~ {fmtMd(addDays(windowStart, DAYS - 1))}
-          </Text>
-          {undatedCount ? <Text className="text-[12px] text-cd-faint">날짜 없음 {undatedCount}건</Text> : null}
-        </View>
-        {rows.map((r) => {
-          const late = lateOf(r);
-          const period = r.undated ? '날짜 미정' : r.milestone ? `◆ ${r.item.actualDate ? `실제 ${fmtMd(r.start)}` : `예정 ${fmtMd(r.start)}`}` : r.due ? `마감 ${fmtMd(r.start)}` : r.start === r.end ? fmtMd(r.start) : `${fmtMd(r.start)} ~ ${fmtMd(r.end)} · ${diffDays(r.start, r.end) + 1}일`;
-          if (r.depth === 1) {
-            const tone = statusTone(r.item.status, c, dark);
-            return (
-              <Pressable key={`l${r.key}`} onPress={() => onOpen(r.item)} className="flex-row items-center gap-2 py-1.5 pl-10 pr-4 active:bg-cd-surface">
-                <Text className="w-8 text-[11px] text-cd-faint">{r.no}</Text>
-                <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-text">
-                  {r.item.title}
-                </Text>
-                <Text className="text-[11px] text-cd-faint">{period}</Text>
-                <View style={{ backgroundColor: tone.bg, borderColor: tone.border, borderWidth: 1, borderStyle: tone.dashed ? 'dashed' : 'solid', borderRadius: 5, paddingHorizontal: 5 }}>
-                  <Text className="text-[11px] font-semibold text-cd-text">
-                    {TODO_STATUS_LABELS[r.item.status]}
-                    {r.item.status !== 'done' && r.item.progressPct != null ? ` ${r.item.progressPct}%` : ''}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          }
-          return (
-            <Pressable key={`l${r.key}`} onPress={() => onOpen(r.item)} className="gap-0.5 border-b border-cd-grid-line px-4 py-2.5 active:bg-cd-surface">
-              <View className="flex-row items-center gap-2">
-                <View style={{ minWidth: 20, height: 20, borderRadius: 10, backgroundColor: withAlpha(r.item.boardColor || c.primary, 0.35), alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
-                  <Text className="text-[11px] font-bold text-cd-text">{r.no}</Text>
-                </View>
-                <StatusDot status={r.item.status} />
-                <Text numberOfLines={1} className={`flex-1 text-[14px] font-semibold ${r.item.status === 'done' ? 'text-cd-faint line-through' : 'text-cd-text'}`}>
-                  {r.item.title}
-                </Text>
-                <PriorityLabel priority={r.item.priority} />
-                {late ? (
-                  <Text className="rounded-md px-1.5 text-[11px] font-semibold" style={{ color: over.fg, backgroundColor: over.bg }}>
-                    지연
-                  </Text>
-                ) : null}
-              </View>
-              <View className="flex-row items-center gap-1.5 pl-7">
-                <Ionicons name={r.due ? 'flag-outline' : 'calendar-outline'} size={12} color={c.faint} />
-                <Text className="text-[12px] text-cd-muted">{period}</Text>
-                {r.item.subtaskTotal > 0 ? (
-                  <Text className="text-[12px] text-cd-faint">
-                    · 하위 {r.item.subtaskDone}/{r.item.subtaskTotal}
-                  </Text>
-                ) : null}
-                {r.item.assigneeName ? <Text className="ml-auto text-[12px] text-cd-faint">{r.item.assigneeName}</Text> : null}
-              </View>
-            </Pressable>
-          );
-        })}
-        <Text className="px-4 py-3 text-[11px] text-cd-faint">막대·행을 누르면 상세. 여러 날에 걸친 일정은 하위 작업을 함께 보여 줍니다.</Text>
+        ))}
       </View>
+      <Text className="px-4 py-3 text-[11px] text-cd-faint">막대·행을 누르면 상세. 여러 날에 걸친 일정은 하위 작업을 함께 보여 줍니다.</Text>
     </View>
   );
 }

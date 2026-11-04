@@ -71,16 +71,17 @@ export interface CdPalette {
  * ThemeProvider 루트의 ShellBackground 가 한 번만 그리고, 화면 루트는 투명이다. 다크는 단색 bg.
  */
 export const SHELL = {
-  from: "#f8f9fc",
-  mid: "#f4f6fb",
-  to: "#f9f7f3",
+  // 11-04 실기기에서 첫 값(#f8f9fc→#f4f6fb→#f9f7f3)은 균일 회색으로만 보여 웹 원본(#f4f6fb→#eef1f8→#f6f2ec)에 가깝게 올렸다.
+  from: "#f3f6ff",
+  mid: "#eef1f8",
+  to: "#f8f1e7",
   glowCool: "#c9d4ff",
   glowWarm: "#f3d9c4",
 } as const;
 
 export const LIGHT: CdPalette = {
   // 셸 그라데이션(SHELL)의 중간색 — 그라데이션 위에 놓이는 sticky 헤더 등 불투명 바탕이 필요한 곳만 쓴다.
-  bg: "#f4f6fb",
+  bg: "#f1f3f9",
   card: "#ffffff",
   surface: "#f6f7f9",
   border: "#e2e4e9",

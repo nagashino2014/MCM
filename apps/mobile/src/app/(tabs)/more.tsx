@@ -2,7 +2,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Avatar, Screen } from '@/components/ui';
+import { Avatar, IconWell, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
@@ -186,11 +186,12 @@ function MenuTile({
       onPress={onPress}
       accessibilityRole="button"
       // 2열: 부모 폭 - gap(8) 의 절반. 홀수 개 섹션도 반칸 유지(풀폭 아님).
-      style={[{ width: '48.8%', borderColor: c.cardBorder }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
-      className="flex-row items-center gap-3 rounded-lg border bg-cd-card p-3 active:opacity-80">
-      <View className="h-10 w-10 items-center justify-center rounded-lg bg-cd-surface">
-        <Ionicons name={icon} size={20} color={tone} />
-      </View>
+      // 옛 타일과 같은 높이(아이콘 44 + 안쪽 14 = 72) — 11-04 "빡빡하다" 피드백으로 40/12 에서 되돌림.
+      style={[{ width: '48.8%', borderColor: c.cardBorder, padding: 14 }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}
+      className="flex-row items-center gap-3 rounded-lg border bg-cd-card active:opacity-80">
+      <IconWell size={44}>
+        <Ionicons name={icon} size={21} color={tone} />
+      </IconWell>
       <View className="flex-1">
         <Text numberOfLines={1} className="text-[14px] font-medium text-cd-text">
           {title}

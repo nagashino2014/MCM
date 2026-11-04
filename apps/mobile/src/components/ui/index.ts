@@ -7,7 +7,7 @@ export { Badge, Count, Chip, FilterPill } from "./Chip";
 export { Avatar } from "./Avatar";
 export { Input, Textarea, SearchBar } from "./Field";
 export { ListRow, CardRow, EmptyState, SkeletonList, ListFooter, StaleBanner } from "./List";
-export { StatTile, ActionTile, TileGrid, KpiStrip, type KpiItem } from "./Tiles";
+export { StatTile, ActionTile, TileGrid, KpiStrip, IconWell, type KpiItem } from "./Tiles";
 export { ScreenHeader, HeaderIconButton } from "./ScreenHeader";
 export { SegmentedTabs, SectionTitle, type SegmentItem } from "./SegmentedTabs";
 export { Sheet } from "./Sheet";

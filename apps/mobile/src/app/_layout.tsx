@@ -98,7 +98,9 @@ function RootNavigator() {
         <Stack.Screen name="settings" options={{ ...header, title: '설정' }} />
         <Stack.Screen name="board/[postId]" options={{ ...header, title: '공지' }} />
         <Stack.Screen name="board/write" options={{ ...header, title: '글쓰기' }} />
-        <Stack.Screen name="notifications" options={{ ...header, title: '알림 설정' }} />
+        {/* 알림 — 내역(자체 헤더, 우측 톱니로 설정) / 설정(네비게이터 헤더). 2026-11-04 분리 */}
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="notification-settings" options={{ ...header, title: '알림 설정' }} />
         <Stack.Screen name="approval/[docId]" options={{ ...header, title: '결재 문서' }} />
         {/* 기안은 자체 헤더(양식명)를 그린다 */}
         <Stack.Screen name="approval/draft" />

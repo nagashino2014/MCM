@@ -176,7 +176,7 @@ export default function SettingsScreen() {
             tone={purple}
             title="푸시 알림"
             subtitle="받을 알림 종류·방해금지 시간"
-            onPress={() => router.push('/notifications')}
+            onPress={() => router.push('/notification-settings')}
           />
         </Card>
 

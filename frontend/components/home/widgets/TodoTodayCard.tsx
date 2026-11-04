@@ -242,13 +242,13 @@ export function TodoTodayCard() {
                     disabled={busy}
                     aria-label={`완료: ${item.title}`}
                     title="완료"
-                    className="w-4 h-4 rounded-full border-[1.5px] shrink-0 inline-flex items-center justify-center transition-colors disabled:cursor-wait"
+                    className="w-3 h-3 rounded-full border-[1.5px] shrink-0 inline-flex items-center justify-center transition-colors disabled:cursor-wait"
                     style={{
                       borderColor: busy ? "var(--cd-primary)" : "var(--cd-faint)",
                       background: busy ? "var(--cd-primary)" : "transparent",
                     }}
                   >
-                    {busy && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                    {busy && <Check className="w-2 h-2 text-white" strokeWidth={3} />}
                   </button>
                   <span
                     className="w-10 shrink-0 text-[12px] tabular-nums"

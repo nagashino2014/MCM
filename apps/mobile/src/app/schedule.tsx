@@ -10,6 +10,7 @@ import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
 import { openAttachment } from '@/lib/open-attachment';
 import { useApi } from '@/lib/use-api';
+import { addDays } from '@/lib/todo-utils';
 import { useTheme } from '@/theme/useTheme';
 import {
   CALENDAR_TAG_LABELS,
@@ -133,9 +134,20 @@ export default function ScheduleScreen() {
     }, [])
   );
 
-  const bars: CalendarBar[] = useMemo(
-    () =>
-      events.filter((e) => !e.canceled).map((e) => ({
+  // 연속 일정 병합(2026-11-04 사용자 요청) — 서버는 연차·출장을 **날짜별 이벤트**로 내려주므로(3일 연차 = 3건),
+  // 같은 태그·같은 제목이 하루 간격 없이 이어지면 하나의 바로 합친다. 바의 id 는 첫 날 이벤트라 탭하면 그 상세가 열린다.
+  const bars: CalendarBar[] = useMemo(() => {
+    const sorted = events.filter((e) => !e.canceled).slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const out: CalendarBar[] = [];
+    const lastByKey = new Map<string, CalendarBar>();
+    for (const e of sorted) {
+      const key = `${e.tag}|${e.title}`;
+      const last = lastByKey.get(key);
+      if (last && e.startDate <= addDays(last.endDate ?? last.startDate, 1)) {
+        if (e.endDate > (last.endDate ?? last.startDate)) last.endDate = e.endDate;
+        continue;
+      }
+      const bar: CalendarBar = {
         id: e.id,
         startDate: e.startDate,
         endDate: e.endDate,
@@ -144,9 +156,12 @@ export default function ScheduleScreen() {
         ink: tagTint(e.tag).text,
         // 할 일은 근무일 단위라 토·일·공휴일에서 바를 끊는다. 출장·휴가 등은 휴일을 포함해 잇는다.
         breakOnHoliday: e.tag === 'todo',
-      })),
-    [events]
-  );
+      };
+      out.push(bar);
+      lastByKey.set(key, bar);
+    }
+    return out;
+  }, [events]);
 
   /** 카테고리별 묶음 — 켜둔 태그 순서대로. */
   const grouped = useMemo(() => {

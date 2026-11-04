@@ -215,7 +215,7 @@ export default function HomeScreen() {
           subtitle={dateStr}
           right={
             <>
-              <HeaderIconButton icon="notifications-outline" label="알림 설정" onPress={() => router.push('/notifications')} />
+              <HeaderIconButton icon="notifications-outline" label="알림" onPress={() => router.push('/notifications')} />
               <Avatar name={user?.name} size="md" />
             </>
           }

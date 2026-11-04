@@ -99,7 +99,8 @@ export function FilterPill({
       accessibilityState={{ selected: on, disabled: !!disabled }}
       style={{
         backgroundColor: bg,
-        borderColor: on ? bg : c.border,
+        // 분류색 필(tint)은 늘 그 글자색의 얇은 테두리(11-04 사용자 요청); 회색 선택은 바탕과 같은 색, 비선택은 hairline.
+        borderColor: tint && !disabled ? tint.text : on ? bg : c.border,
         borderWidth: 1,
         height: sm ? 28 : 32,
         paddingHorizontal: px,

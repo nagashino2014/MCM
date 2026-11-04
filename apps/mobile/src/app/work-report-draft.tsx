@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -163,6 +164,7 @@ export default function WorkReportDraftScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader
         title={editingId ? '보고 수정' : '보고 작성'}
         subtitle={params.subjectTitle || params.contractTitle || '업무보고'}

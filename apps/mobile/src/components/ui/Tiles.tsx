@@ -1,6 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { useTheme } from "@/theme/useTheme";
 import { SHADOW_CARD } from "@/theme/tokens";
@@ -49,10 +48,10 @@ export function KpiStrip({ items, flat }: { items: KpiItem[]; flat?: boolean }) 
             </View>
           </>
         );
-        // 칸은 균등 폭 — flexBasis 0 + minWidth 0 이어야 긴 글자(힌트)가 있는 칸이 넓어지지 않는다(11-04 실기기).
+        // 칸은 **퍼센트 폭**으로 균등 — flex 기반(flexBasis 0)은 실기기에서 첫 칸이 넓어졌다(11-04 두 번째 피드백).
         // 높이는 옛 지표 타일과 같은 76(py 14).
         const cls = `px-3 ${i > 0 ? "border-l border-cd-border" : ""}`;
-        const cell = { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, paddingVertical: 14 };
+        const cell = { width: `${100 / list.length}%` as `${number}%`, minWidth: 0, paddingVertical: 14 };
         return it.onPress ? (
           <Pressable key={it.key ?? it.label} onPress={it.onPress} accessibilityRole="button" style={cell} className={`${cls} active:bg-cd-surface`}>
             {body}
@@ -108,39 +107,29 @@ export function StatTile({
 }
 
 /**
- * 아이콘 상자(IconWell) — 빠른 실행·전체 메뉴 타일의 아이콘 바탕. 아주 옅은 세로 그라데이션(흰 → surface-sunken) +
- * 옅은 테두리 + 1px 그림자로 **살짝 입체적인 버튼**처럼 보인다(2026-11-04 사용자 요청). 반경 10.
+ * 아이콘 상자(IconWell) — 빠른 실행·전체 메뉴 타일의 아이콘 바탕. **뉴모피즘** 버튼(2026-11-04 사용자 요청, 단순 그라데이션은 폐기):
+ * 바탕과 비슷한 연한 면 위에 우하단 어두운 그림자 + 좌상단 흰 하이라이트 그림자를 함께 깔아 살짝 떠 보인다.
+ * RN 0.76+ 의 `boxShadow`(다중 그림자, iOS·Android·웹) 를 쓴다. 반경 12.
  */
 export function IconWell({ size, children }: { size: number; children: React.ReactNode }) {
-  const { c, dark } = useTheme();
-  const id = `well-${size}-${dark ? "d" : "l"}`;
+  const { dark } = useTheme();
+  const d = Math.round(size * 0.12);
+  const blur = Math.round(size * 0.25);
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: dark ? c.border : "#e4e6ec",
-        overflow: "hidden",
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: c.surface,
-        shadowColor: "#1d2435",
-        shadowOpacity: dark ? 0 : 0.06,
-        shadowRadius: 2,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 1,
+        backgroundColor: dark ? "#23262f" : "#eef1f6",
+        borderWidth: 1,
+        borderColor: dark ? "#2d313c" : "rgba(255,255,255,0.9)",
+        boxShadow: dark
+          ? `${d}px ${d}px ${blur}px rgba(0,0,0,0.45), -${d}px -${d}px ${blur}px rgba(255,255,255,0.04)`
+          : `${d}px ${d}px ${blur}px rgba(29,36,53,0.16), -${d}px -${d}px ${blur}px rgba(255,255,255,1)`,
       }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={dark ? "#2b2e38" : "#ffffff"} />
-            <Stop offset="1" stopColor={dark ? "#1f2229" : "#eaecf2"} />
-          </LinearGradient>
-        </Defs>
-        <Rect x={0} y={0} width={size} height={size} fill={`url(#${id})`} />
-      </Svg>
       {children}
     </View>
   );

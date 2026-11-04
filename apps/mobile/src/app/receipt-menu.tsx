@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +33,7 @@ export default function ReceiptMenuScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="영수증" subtitle="개인카드 경비 증빙" back variant="sub" />
 
       <View className="gap-3 px-4 pt-2">

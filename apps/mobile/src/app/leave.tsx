@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -186,6 +187,7 @@ export default function LeaveScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="근태·휴가" subtitle={`${year}년`} back variant="sub" />
       <ScrollView
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}

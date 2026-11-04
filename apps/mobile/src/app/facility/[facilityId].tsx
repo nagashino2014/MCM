@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +86,7 @@ export default function FacilityDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title={d?.companyName ?? '사업장'} subtitle={region || undefined} back />
       <ScrollView
         contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 40 }}

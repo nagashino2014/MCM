@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -253,6 +254,7 @@ export default function WorkReportDetailScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="업무보고" subtitle={r?.title || `${r?.periodStart ?? ''} ~ ${r?.periodEnd ?? ''}`} back variant="sub" />
       <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 12, paddingBottom: 32 }}

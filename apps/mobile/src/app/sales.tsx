@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -126,6 +127,7 @@ export default function SalesScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title="영업" subtitle={`${cur.y}년 ${cur.m + 1}월`} back variant="sub" />
       <ScrollView automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ padding: 18, paddingTop: 0, gap: 14, paddingBottom: 40 }}

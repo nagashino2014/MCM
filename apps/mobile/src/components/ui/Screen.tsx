@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { useTheme } from "@/theme/useTheme";
+import { ShellBackground } from "@/theme/ShellBackground";
 import { PullRefresh } from "./PullRefresh";
 import { TAB_BAR_INSET } from "./GlassTabBar";
 
@@ -62,6 +63,8 @@ export function Screen({
     // 네비게이터 헤더가 있는 화면은 상단 안전영역을 헤더가 이미 처리한다(이중 여백 방지).
     // 바탕은 **투명** — 셸 그라데이션(ThemeProvider 의 ShellBackground)이 비친다(2026-11-04).
     <SafeAreaView edges={title ? ["top"] : []} className="flex-1 bg-transparent">
+      {/* 셸 바탕은 화면 안에서 그린다 — 네이티브 스택 화면이 루트의 배경을 가린다(11-04 실기기). */}
+      <ShellBackground />
       {title ? (
         <View className="flex-row items-center gap-1 border-b border-cd-border bg-cd-card px-2 py-2">
           {back ? (

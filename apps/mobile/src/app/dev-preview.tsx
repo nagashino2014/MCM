@@ -26,6 +26,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { GlassTabBar } from '@/components/ui/GlassTabBar';
+import { ShellBackground } from '@/theme/ShellBackground';
 import { MonthCalendar, type CalendarBar } from '@/components/calendar/MonthCalendar';
 import { TAG_TINT, type CalendarTagKey } from '@/lib/calendar/types';
 import { WeatherWidget } from '@/components/home/weather/WeatherWidget';
@@ -82,6 +83,7 @@ export default function DevPreviewScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent" edges={['top']}>
+      <ShellBackground />
       <SegmentedTabs items={ITEMS} value={tab} onChange={setTab} />
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
         {tab === 'calendar' ? (

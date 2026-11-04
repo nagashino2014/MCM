@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -249,6 +250,7 @@ export default function CalendarEntryScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScreenHeader title={heading} back variant="sub" />
       <KeyboardAvoidingView enabled={false} className="flex-1">
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 18, gap: 14, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">

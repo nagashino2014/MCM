@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -333,6 +334,7 @@ export default function ReceiptScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-transparent">
+      <ShellBackground />
       {/* 자체 헤더 — 명함 화면과 동일(expo-router 헤더 점멸 회피) */}
       <View className="flex-row items-center gap-2 border-b border-cd-border bg-cd-card px-2 py-2">
         <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center active:opacity-60">

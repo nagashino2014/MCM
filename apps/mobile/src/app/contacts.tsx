@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -89,6 +90,7 @@ export default function ContactsScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <View className="gap-3 border-b border-cd-border bg-cd-card px-4 pb-3 pt-3">
         <SearchBar value={q} onChangeText={setQ} placeholder="담당자·사업장·부서 검색" />
         <TileGrid columns={4}>

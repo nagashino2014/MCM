@@ -1,3 +1,4 @@
+import { ShellBackground } from '@/theme/ShellBackground';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -205,6 +206,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-transparent">
+      <ShellBackground />
       <ScrollView
         className="flex-1"
         // 글라스 탭 바 뒤로 콘텐츠가 이어지도록 바 높이만큼 더 띄운다.

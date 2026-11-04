@@ -2,6 +2,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 import { sendPush } from "@/lib/notify/push-expo";
 import { ensureMailbox, getSystemFolderId } from "@/lib/mail/mailbox";
+import { applySenderRuleToNewMail } from "@/lib/mail/sender-rules";
 import { assertBriefingAccess, briefingAudit, briefingId, getBriefingProfile, getBriefingRun, json } from "./briefing-store";
 import type { BriefingDelivery } from "./briefing-types";
 import { applyImportantDeliveryPolicy, assertImportantRecipient, prepareImportantDigest, type NotificationPayload } from "./briefing-notification-policy";
@@ -57,6 +58,7 @@ export async function dispatchBriefingDeliveries(limit = 50, now = new Date()): 
           if (status === "failed" && error && /throttl|429|503|temporar/i.test(error) && attempt < Number(row.retry_limit)) retryAt = new Date(Date.now() + attempt * 60000).toISOString();
         }
     } catch (e) { error = e instanceof Error ? e.message : String(e); status = (e as { status?: number }).status === 403 || (e as { status?: number }).status === 404 ? "skipped" : "failed"; }
+    let stored = false as boolean;
     await withDbWrite(async tx => {
       const changed = rowsToObjects(await tx.exec("UPDATE intel_notification_outbox SET status=$3,error=$4,provider_id=$5,next_attempt_at=$6,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE delivery_id=$1 AND lease_token=$2 RETURNING delivery_id", [did, token, status, error, providerId, retryAt]));
       if (changed.length && inbox && status === "sent") {
@@ -64,10 +66,13 @@ export async function dispatchBriefingDeliveries(limit = 50, now = new Date()): 
         const body = `${payload.text}\n\n보고서 확인: ${payload.link}`;
         await tx.run(`INSERT INTO mail_messages(message_id,mailbox_id,direction,rfc_message_id,thread_id,from_addr,to_addrs,subject,snippet,body_text,received_at,created_at) VALUES($1,$2,'in',$3,$3,$4,$5::jsonb,$6,$7,$8,$9,$9) ON CONFLICT(mailbox_id,rfc_message_id) DO NOTHING`, [mid,inbox.mailboxId,`<${did}@internal.mcm>`,process.env.BID_NOTIFY_EMAIL_FROM ?? null,JSON.stringify([{address:inbox.address}]),`[영업 브리핑] ${payload.title}`,payload.text.slice(0,200),body,now]);
         await tx.run("INSERT INTO mail_message_state(message_id,folder_id,mailbox_id,is_read,created_at) VALUES($1,$2,$3,0,$4) ON CONFLICT(message_id,folder_id) DO NOTHING", [mid,inbox.folderId,inbox.mailboxId,now]);
+        stored = true;
       }
       if (changed.length && payload.digest && ["sent","unknown","skipped"].includes(status)) await tx.run("UPDATE intel_notification_outbox SET status=$2,error=$3,provider_id=$4,updated_at=now() WHERE digest_delivery_id=$1 AND status='pending'",[did,status,error,providerId]);
       if (changed.length) await tx.run("INSERT INTO intel_notification_attempts(attempt_id,delivery_id,attempt,status,result) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(delivery_id,attempt) DO NOTHING", [briefingId("iba"), did, attempt, status, JSON.stringify({ error, providerId })]);
     });
+    // 보낸 사람 [메일 분류 지정] 규칙이 있으면 그 분류로(마이그 305·337).
+    if (stored && inbox) await applySenderRuleToNewMail(inbox.mailboxId, `intelmail_${did}`, process.env.BID_NOTIFY_EMAIL_FROM ?? null);
     if (status === "sent") result.sent++; else if (status === "skipped") result.skipped++; else result.failed++;
   }
   return result;

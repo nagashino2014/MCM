@@ -373,7 +373,7 @@ export function MailBoard() {
     toast(
       categoryId
         ? `'${name ?? "분류"}'로 지정했습니다. 받은편지함 메일 ${Number(d.applied ?? 0)}건을 분류했고, 앞으로 받는 메일도 자동 분류됩니다.`
-        : "자동 분류를 해제했습니다. 이미 분류된 메일은 그대로 둡니다.",
+        : `자동 분류를 해제했습니다. 이 규칙으로 옮겨진 메일 ${Number(d.reverted ?? 0)}건을 원래 분류로 되돌렸습니다.`,
       "success"
     );
     loadSenderRules();

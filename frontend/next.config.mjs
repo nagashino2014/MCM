@@ -26,6 +26,23 @@ const nextConfig = {
   // 클라이언트는 같은 경로로 <img src> 를 호출한다.
   // 운영 환경에서는 컨테이너 로컬 fs 에 정적 파일이 없으므로
   // 동일 경로를 인증 프록시 라우트(`/api/uploads/logos/<key>`) 로 넘겨 S3 에서 받게 한다.
+  // 모바일 웹앱 PWA(2026-11-04) — 서비스 워커(/m-app/sw.js)가 자기 디렉터리보다 넓은 scope(/m-app, 끝 슬래시 없음)를 쓰도록 허용.
+  // (next 가 /m-app/ 를 /m-app 으로 308 돌리므로 manifest 의 start_url·scope 도 슬래시 없이 맞췄다.)
+  async headers() {
+    return [
+      {
+        source: "/m-app/sw.js",
+        headers: [
+          { key: "Service-Worker-Allowed", value: "/m-app" },
+          { key: "Cache-Control", value: "no-cache" },
+        ],
+      },
+      {
+        source: "/m-app/manifest.webmanifest",
+        headers: [{ key: "Content-Type", value: "application/manifest+json; charset=utf-8" }],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

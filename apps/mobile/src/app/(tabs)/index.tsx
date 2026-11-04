@@ -18,6 +18,7 @@ import {
   type KpiItem,
 } from '@/components/ui';
 import { TAB_BAR_INSET } from '@/components/ui/GlassTabBar';
+import { IS_WEB_RAIL } from '@/lib/platform';
 import { HOME_WIDGET_NODES, MOBILE_WIDGET_ORDER, TodoTodayWidget } from '@/components/home/widgets';
 import { WeatherWidget } from '@/components/home/weather/WeatherWidget';
 import { useApi } from '@/lib/use-api';
@@ -234,8 +235,9 @@ export default function HomeScreen() {
 
           {/* 빠른 실행 — 탭에 없는 기능으로 1탭 진입 */}
           <Card title="빠른 실행">
-            {/* 네이티브는 타일 6개 — 좁은 기기(375px)에서 넘치지 않게 줄바꿈 허용 */}
-            <View className="mt-1.5 flex-row flex-wrap justify-between gap-y-3">
+            {/* 네이티브는 타일 6개 — 좁은 기기(375px)에서 넘치지 않게 줄바꿈 허용.
+                데스크탑 위젯·PWA 는 카메라 타일을 뺀 4개라 justify-between 이면 폭 472 에서 과하게 벌어진다 → 간격 고정(2026-11-04). */}
+            <View className={`mt-1.5 flex-row flex-wrap gap-y-3 ${IS_WEB_RAIL ? 'justify-start gap-x-7' : 'justify-between'}`}>
               {/* 명함·영수증 촬영은 카메라가 필요해 데스크탑 위젯·웹 데모에서는 숨긴다(WID-P0). */}
               {Platform.OS !== 'web' ? (
                 <ActionTile icon="camera-outline" label="명함" tone={c.primary} onPress={() => router.push('/card')} />

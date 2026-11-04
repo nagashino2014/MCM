@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Avatar, Screen } from '@/components/ui';
+import { Avatar, Screen, Sheet } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/lib/use-api';
+import { useInstallPrompt } from '@/lib/use-install-prompt';
 import { useTheme } from '@/theme/useTheme';
 import { SHADOW_CARD } from '@/theme/tokens';
 
@@ -24,6 +26,13 @@ export default function MoreScreen() {
   // 할 일 부제 "오늘 N건 · 지연 N" — 홈 위젯과 같은 /api/home/todo-today(캐시).
   const todo = useApi<{ counts: { overdue: number; today: number } }>('/api/home/todo-today', { cache: true });
   const todoSub = todo.data ? `오늘 ${todo.data.counts.today}건 · 지연 ${todo.data.counts.overdue}` : '오늘 · 예정 · 보드';
+  // PC 앱으로 설치(PWA, 2026-11-04) — 브라우저 탭에서만 보인다(위젯 iframe·이미 설치된 앱 창에서는 숨김).
+  // 브라우저가 설치 프롬프트를 주지 않는 경우(이미 설치·조건 미충족)는 주소창 설치 아이콘 안내 시트를 띄운다.
+  const install = useInstallPrompt();
+  const [installGuide, setInstallGuide] = useState(false);
+  const onInstall = async () => {
+    if (!(await install.install())) setInstallGuide(true);
+  };
 
   const sections: {
     label: string;
@@ -130,6 +139,9 @@ export default function MoreScreen() {
       items: [
         { icon: 'book-outline', tone: c.primary, title: '사용 매뉴얼', subtitle: '기능 설명·검색', onPress: () => router.push('/manual') },
         { icon: 'settings-outline', tone: c.muted, title: '설정', subtitle: '앱 잠금·알림·계정', onPress: () => router.push('/settings') },
+        ...(install.available
+          ? [{ icon: 'download-outline' as const, tone: c.secondary, title: 'PC 앱으로 설치', subtitle: '설치 파일 없이 브라우저가 설치', onPress: () => void onInstall() }]
+          : []),
       ],
     },
   ];
@@ -159,6 +171,13 @@ export default function MoreScreen() {
           </View>
         ))}
       </View>
+      <Sheet visible={installGuide} onClose={() => setInstallGuide(false)} title="PC 앱으로 설치">
+        <Text className="text-[14px] leading-[21px] text-cd-text">
+          브라우저 주소창 오른쪽의 설치 아이콘(⊕ 또는 ‘앱 설치’)을 누르면 설치 파일 없이 바로 설치됩니다. Edge 는 오른쪽 위 ··· 메뉴 → 앱 → 이 사이트를
+          앱으로 설치, Chrome 은 ⋮ 메뉴 → 전송, 저장 및 공유 → 앱 설치에서도 할 수 있습니다.
+        </Text>
+        <Text className="mt-2 text-[12px] text-cd-muted">설치된 앱 창에서는 이 항목이 보이지 않습니다. 트레이 상주·항상 위 고정이 필요하면 웹 홈의 데스크탑 위젯(exe)을 쓰세요.</Text>
+      </Sheet>
     </Screen>
   );
 }

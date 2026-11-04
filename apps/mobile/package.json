@@ -58,6 +58,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "export:web": "node scripts/export-web.mjs",
     "lint": "expo lint"
   },
   "private": true

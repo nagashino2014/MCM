@@ -1,0 +1,18 @@
+{
+  "name": "MCM",
+  "short_name": "MCM",
+  "description": "KESI 사내 업무 앱 — 결재·메일·메신저·할 일",
+  "id": "/m-app",
+  "start_url": "/m-app",
+  "scope": "/m-app",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "ko",
+  "background_color": "#f9f6f0",
+  "theme_color": "#4a63d8",
+  "icons": [
+    { "src": "/m-app/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/m-app/pwa/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/m-app/pwa/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

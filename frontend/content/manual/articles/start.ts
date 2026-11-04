@@ -258,6 +258,18 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "pc-app",
+        title: "PC 에서 앱으로 쓰기",
+        blocks: [
+          { kind: "p", text: "같은 앱 화면을 PC 에서도 쓸 수 있습니다. 웹 홈 오른쪽 위 [[PC 앱 설치]] → 브라우저 앱으로 설치를 누르면 모바일 화면이 새 탭에 열리고, 전체 메뉴의 ‘PC 앱으로 설치’로 설치 파일 없이 설치됩니다(보안 경고 없음)." },
+          { kind: "list", items: [
+            "PC 에서는 탭이 아래가 아니라 왼쪽 세로 레일에 놓이고, 명함·영수증 촬영처럼 카메라가 필요한 기능은 보이지 않습니다.",
+            "설치된 앱은 새 메시지·오늘 할 일 수를 작업표시줄 뱃지로 보여 줍니다.",
+            "트레이 상주·항상 위 고정이 필요하면 같은 자리의 데스크탑 위젯(exe)을 쓰세요.",
+          ] },
+        ],
+      },
+      {
         id: "app-manual",
         title: "앱에서 매뉴얼 보기",
         blocks: [
@@ -270,8 +282,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼"],
-    sources: ["components/mobile/MobileHome.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx"],
-    reviewedAt: "2026-11-03",
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯"],
+    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx"],
+    reviewedAt: "2026-11-04",
   },
 ];

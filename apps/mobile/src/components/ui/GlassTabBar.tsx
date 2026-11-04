@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/theme/useTheme";
 import { SHADOW_POPOVER } from "@/theme/tokens";
+import { IS_WEB_RAIL } from "@/lib/platform";
 
 /**
  * 글라스 플로팅 탭 바(2026-11-04 사용자 결정) — 화면 바닥에 붙은 흰 바 대신 좌우 16, 홈 인디케이터 위로 띄운
@@ -14,12 +15,14 @@ import { SHADOW_POPOVER } from "@/theme/tokens";
 export const GLASS_TAB_BAR_HEIGHT = 64;
 /** 바와 홈 인디케이터(안전영역) 사이 간격. */
 export const GLASS_TAB_BAR_GAP = 8;
-/** 탭 화면 스크롤 콘텐츠의 하단 여백(안전영역 제외) — 바 높이 + 간격 + 바 위 여백. */
-export const TAB_BAR_INSET = GLASS_TAB_BAR_HEIGHT + GLASS_TAB_BAR_GAP + 24;
+/** 탭 화면 스크롤 콘텐츠의 하단 여백(안전영역 제외) — 바 높이 + 간격 + 바 위 여백.
+ *  데스크탑 위젯·PWA(좌측 레일)에는 하단 바가 없으므로 0 — 그대로 두면 96px 빈 공간이 남는다(2026-11-04). */
+export const TAB_BAR_INSET = IS_WEB_RAIL ? 0 : GLASS_TAB_BAR_HEIGHT + GLASS_TAB_BAR_GAP + 24;
 
 /** 탭 화면의 떠 있는 버튼(FAB)이 바 위에 놓이도록 하는 bottom 값 — 안전영역 + 바 + 간격 + 16. */
 export function useTabBarFabBottom(): number {
   const insets = useSafeAreaInsets();
+  if (IS_WEB_RAIL) return 24;
   return insets.bottom + GLASS_TAB_BAR_GAP + GLASS_TAB_BAR_HEIGHT + 16;
 }
 

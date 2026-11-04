@@ -184,7 +184,8 @@ export default function ChatScreen() {
   }, [picked, creating, load, toast]);
 
   return (
-    <Screen scroll={false} padded={false}>
+    // 대화방 목록은 그라데이션 없이 흰 바탕(2026-11-04 사용자 요청) — 대화창([roomId]) 안은 그라데이션 유지.
+    <Screen scroll={false} padded={false} plain>
       <View className="px-4 pt-2">
         <SearchBar value={q} onChangeText={setQ} placeholder="대화방·메시지 검색" />
       </View>

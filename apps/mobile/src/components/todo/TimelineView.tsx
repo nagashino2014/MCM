@@ -280,7 +280,8 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
                       {r.item.title}
                     </Text>
                     <Text className="text-[11px] text-cd-faint">{period}</Text>
-                    <View style={{ backgroundColor: tone.bg, borderColor: tone.border, borderWidth: 1, borderStyle: tone.dashed ? 'dashed' : 'solid', borderRadius: 5, paddingHorizontal: 5 }}>
+                    {/* 너비는 "할 일 100%" 기준으로 고정(minWidth) — 진행율 자릿수에 따라 태그 폭이 들쭉날쭉하지 않게(2026-11-04). */}
+                    <View style={{ minWidth: 64, alignItems: 'center', backgroundColor: tone.bg, borderColor: tone.border, borderWidth: 1, borderStyle: tone.dashed ? 'dashed' : 'solid', borderRadius: 5, paddingHorizontal: 5 }}>
                       <Text className="text-[11px] font-semibold text-cd-text">
                         {TODO_STATUS_LABELS[r.item.status]}
                         {r.item.status !== 'done' && r.item.progressPct != null ? ` ${r.item.progressPct}%` : ''}

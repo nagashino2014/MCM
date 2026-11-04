@@ -37,6 +37,8 @@ export interface ScreenProps {
   padded?: boolean;
   /** 하단 탭 화면 — 글라스 플로팅 탭 바 뒤로 콘텐츠가 이어지도록 스크롤 하단 여백을 TAB_BAR_INSET 만큼 더한다. */
   inTab?: boolean;
+  /** 셸 그라데이션 없이 흰(card) 바탕 — 목록이 화면을 가득 채우는 화면(대화방 목록, 2026-11-04 사용자 요청). */
+  plain?: boolean;
 }
 
 export function Screen({
@@ -51,6 +53,7 @@ export function Screen({
   onRefresh,
   padded = true,
   inTab,
+  plain,
 }: ScreenProps) {
   const { c } = useTheme();
 
@@ -61,9 +64,9 @@ export function Screen({
     // 네비게이터 헤더가 있는 화면은 상단 안전영역을 헤더가 이미 처리한다(이중 여백 방지).
     // 바탕은 **투명** — 셸 그라데이션(ThemeProvider 의 ShellBackground)이 비친다(2026-11-04).
     // 자체 헤더가 있으면 안전영역은 헤더가 흰색으로 채운다(edges 없음 + safe="pad"); 없으면 네비게이터 헤더가 처리한다.
-    <SafeAreaView edges={[]} className="flex-1 bg-transparent">
-      {/* 셸 바탕은 화면 안에서 그린다 — 네이티브 스택 화면이 루트의 배경을 가린다(11-04 실기기). */}
-      <ShellBackground />
+    <SafeAreaView edges={[]} className={plain ? 'flex-1 bg-cd-card' : 'flex-1 bg-transparent'}>
+      {/* 셸 바탕은 화면 안에서 그린다 — 네이티브 스택 화면이 루트의 배경을 가린다(11-04 실기기). plain 이면 흰 바탕만. */}
+      {plain ? null : <ShellBackground />}
       {title ? <AppHeader safe="pad" title={title} subtitle={subtitle} back={back} onBack={onBack} right={right} /> : null}
 
       {scroll ? (

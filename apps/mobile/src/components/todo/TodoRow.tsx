@@ -124,7 +124,8 @@ export function TodoRow({
         style={{ minHeight: 72, paddingVertical: 12, paddingLeft: 18, paddingRight: 8, borderColor: c.cardBorder, borderWidth: 1, borderRadius: 10, overflow: 'hidden' }}
         className="flex-row items-start gap-3 bg-cd-card active:opacity-80">
         <BoardStripe color={item.boardColor} full />
-        <View style={{ marginTop: 1 }}>
+        {/* 원 14 를 제목 글줄(15/21) 세로 중심에 맞춘다(2026-11-04 사용자 지적: 원이 글자보다 위에 떠 보였다). */}
+        <View style={{ marginTop: 4 }}>
           <CheckCircle done={done} status={item.status} onPress={onToggle} disabled={!item.canEdit} size={14} />
         </View>
         <View className="flex-1" style={{ minWidth: 0 }}>

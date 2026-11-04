@@ -253,7 +253,8 @@ function Frame({
 /** 핵심 속성 셀 — 11.5px 라벨 + 값(탭 가능). */
 /**
  * 핵심 셀 — 클릭 전에도 옅은 입력란(36px · 1px 경계 · 8px)으로 보인다(웹 .todo-kv-v 와 같은 톤). 시트가 열린 동안(active) 경계가 primary.
- * chevron=false 면 ▾ 를 붙이지 않는다(날짜 셀은 빈 상태에서 달력 아이콘을 children 으로 넣는다). trailing 은 박스 오른쪽 바깥(시각 입력).
+ * chevron=false 면 ▾ 를 붙이지 않는다(날짜 셀은 빈 상태에서 달력 아이콘을 children 으로 넣는다). trailing 은 박스 오른쪽 바깥(시각 입력),
+ * below 는 박스 아래 같은 셀 폭 안(마감 지우기).
  */
 function KeyCell({
   label,
@@ -262,6 +263,7 @@ function KeyCell({
   active,
   chevron = true,
   trailing,
+  below,
   children,
 }: {
   label: string;
@@ -270,6 +272,7 @@ function KeyCell({
   active?: boolean;
   chevron?: boolean;
   trailing?: React.ReactNode;
+  below?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { c } = useTheme();
@@ -294,6 +297,7 @@ function KeyCell({
         )}
         {trailing}
       </View>
+      {below}
     </View>
   );
 }
@@ -1299,7 +1303,20 @@ export default function TodoDetailScreen() {
                   </View>
                 </View>
               </View>
-              <KeyCell label="마감" onPress={() => setDueOpen(true)} disabled={!canEdit} active={dueOpen} chevron={false}>
+              <KeyCell
+                label="마감"
+                onPress={() => setDueOpen(true)}
+                disabled={!canEdit}
+                active={dueOpen}
+                chevron={false}
+                // 마감 지우기는 마감 입력란 바로 아래(2026-11-04 사용자 지적: 종료일 아래 전체 폭에 떠 있었다)
+                below={
+                  canEdit && item.dueDate ? (
+                    <View className="flex-row pt-1.5">
+                      <Button label="마감 지우기" size="sm" variant="ghost" onPress={() => void patch({ dueDate: null })} />
+                    </View>
+                  ) : null
+                }>
                 {item.dueDate ? (
                   <>
                     <Text numberOfLines={1} className="shrink text-[14px] text-cd-text">
@@ -1315,11 +1332,6 @@ export default function TodoDetailScreen() {
                 )}
               </KeyCell>
             </View>
-            {canEdit && item.dueDate ? (
-              <View className="flex-row gap-1.5">
-                <Button label="마감 지우기" size="sm" variant="ghost" onPress={() => void patch({ dueDate: null })} />
-              </View>
-            ) : null}
           </Frame>
 
           {/* 관련 — 용역·발주처 / 사업장 / 연결 (편집 가능하면 연결이 없어도 추가 버튼을 둔다) */}

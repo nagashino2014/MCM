@@ -1,4 +1,17 @@
-<!DOCTYPE html><html  lang="en"><head><title data-rh="true"></title><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><style id="expo-reset">#root,body,html{height:100%}body{overflow:hidden}#root{display:flex}</style><style id="react-native-stylesheet">[stylesheet-group="0"]{}
+<!DOCTYPE html><html  lang="ko"><head><title data-rh="true"></title><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/><meta name="application-name" content="MCM"/><meta name="apple-mobile-web-app-title" content="MCM"/><meta name="mobile-web-app-capable" content="yes"/><meta name="theme-color" content="#4a63d8"/><style id="expo-reset">#root,body,html{height:100%}body{overflow:hidden}#root{display:flex}</style><script>
+(function () {
+  if (window.parent !== window) return;
+  var base = location.pathname.indexOf('/m-app') === 0 ? '/m-app' : '';
+  var link = document.createElement('link'); link.rel = 'manifest'; link.href = base + '/manifest.webmanifest'; document.head.appendChild(link);
+  var icon = document.createElement('link'); icon.rel = 'apple-touch-icon'; icon.href = base + '/pwa/icon-192.png'; document.head.appendChild(icon);
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__mcmInstallPrompt = e; });
+  // scope 는 '/m-app'(끝 슬래시 없음) — next 가 '/m-app/' 를 '/m-app' 으로 308 돌리므로 start_url·scope 를 슬래시 없이 맞춘다.
+  // 워커 파일 위치(/m-app/sw.js)보다 넓은 scope 라 next.config 가 Service-Worker-Allowed: /m-app 헤더를 준다.
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register(base + '/sw.js', { scope: base || '/' }).catch(function () {});
+  }
+})();
+</script><style id="react-native-stylesheet">[stylesheet-group="0"]{}
 body{margin:0;}
 button::-moz-focus-inner,input::-moz-focus-inner{border:0;padding:0;}
 html{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:rgba(0,0,0,0);}
@@ -321,6 +334,6 @@ input::-webkit-search-cancel-button,input::-webkit-search-decoration,input::-web
 @keyframes r-1pzkwqh{0%{transform:translateY(100%);}100%{transform:translateY(0%);}}
 @keyframes r-imtty0{0%{opacity:0;}100%{opacity:1;}}
 @keyframes r-q67da2{0%{transform:translateX(-100%);}100%{transform:translateX(400%);}}
-@keyframes r-t2lo5v{0%{opacity:1;}100%{opacity:0;}}</style><link rel="icon" href="/m-app/favicon.ico"/><script type="module">globalThis.__EXPO_ROUTER_HYDRATE__=true;</script><link rel="preload" href="/m-app/_expo/static/css/web-8c413158e10d2045eabbab34da5493ae.css" as="style">
-<link rel="stylesheet" href="/m-app/_expo/static/css/web-8c413158e10d2045eabbab34da5493ae.css"></head><body><div id="root"><div class="css-g5y9jx r-13awgt0"></div></div><script src="/m-app/_expo/static/js/web/entry-a27dd3534a22c01feb3e357d845bf10b.js" defer></script>
+@keyframes r-t2lo5v{0%{opacity:1;}100%{opacity:0;}}</style><link rel="icon" href="/m-app/favicon.ico"/><script type="module">globalThis.__EXPO_ROUTER_HYDRATE__=true;</script><link rel="preload" href="/m-app/_expo/static/css/web-61055e804630f4873c22f9f860571454.css" as="style">
+<link rel="stylesheet" href="/m-app/_expo/static/css/web-61055e804630f4873c22f9f860571454.css"></head><body><div id="root"><div class="css-g5y9jx r-13awgt0"></div></div><script src="/m-app/_expo/static/js/web/entry-c25e979568ddbcb5ce041d4bd28e9fd9.js" defer></script>
 </body></html>

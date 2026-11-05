@@ -1,6 +1,6 @@
 "use client";
 
-// 주소록·조직도(G6-A, /directory) — 임직원 / 외부 연락처 / 조직도 3탭.
+// 주소록·조직도(G6-A, /directory) — 임직원 / 외부 연락처 / 조직도 / 비상 연락망 4탭.
 // 임직원·외부 연락처는 좌측 분류 pane + 우측 목록의 동일한 양식을 쓴다(부서 / 연락처 구분).
 // 연락처 구분(기관 유형)은 담당자 개인이 아니라 소속 사업장 속성이라, 한 번 지정하면
 // 같은 사업장의 담당자 전원에게 함께 적용된다.
@@ -27,9 +27,11 @@ import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
 import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
+import { EmergencyContactsTab } from "@/components/directory/EmergencyContactsTab";
+import { mailToken } from "@/components/directory/mail-token";
 import "@/components/cdash/cdash.css";
 
-type Tab = "staff" | "external" | "orgchart";
+type Tab = "staff" | "external" | "orgchart" | "emergency";
 
 interface ExternalContact {
   id: number;
@@ -48,12 +50,6 @@ interface ExternalContact {
 
 const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
 const UNCATEGORIZED = "__none__";
-
-/** 메일 쓰기 딥링크용 수신자 토큰 — "이름 직함 <주소>, " 형태로 넘겨야 작성 화면에서 칩으로 잡힌다. */
-function mailToken(name: string, title: string | null | undefined, address: string): string {
-  const label = [name, title].filter(Boolean).join(" ");
-  return `${label} <${address}>, `;
-}
 
 export function DirectoryBoard() {
   const { theme } = useCdashTheme();
@@ -204,6 +200,7 @@ export function DirectoryBoard() {
           { key: "staff", label: "임직원", count: people.length || undefined },
           { key: "external", label: "외부 연락처", count: activeContacts.length || undefined },
           { key: "orgchart", label: "조직도" },
+          { key: "emergency", label: "비상 연락망" },
         ]}
         active={tab}
         onChange={(k) => setTab(k as Tab)}
@@ -448,6 +445,8 @@ export function DirectoryBoard() {
             </div>
           </div>
         )
+      ) : tab === "emergency" ? (
+        <EmergencyContactsTab />
       ) : (
         <OrgChart departments={departments} people={people} loading={loading} />
       )}

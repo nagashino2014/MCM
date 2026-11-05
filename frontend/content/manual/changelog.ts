@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-05", kind: "개선", title: "사용자 등록 — 자격증 종목·증빙 유형 추가",
+    body: "자격증 행에서 토목기사·위험물산업기사 등 10개 종목을 더 고를 수 있고, 목록에 없는 자격명도 저장된 이름 그대로 보입니다. 기타 증빙에 경력증명서·이력서·수료증 등 유형이 추가됐습니다. 입찰 패키지는 자격이 여럿 담긴 취득사항 확인서를 한 번만 첨부합니다.",
+    articles: ["admin.registry"],
+  },
+  {
     date: "2026-11-04", kind: "개선", title: "PC 앱 설치 — 보안 경고 끄기(.reg) 1단계 추가",
     body: "웹 홈 ‘PC 앱 설치’의 데스크탑 위젯 항목에 ‘1단계 · 보안 경고 끄기(.reg)’가 생겼습니다. PC 당 한 번 실행하면 이 사이트에서 받는 설치 파일에 Windows ‘PC 보호’ 경고가 뜨지 않습니다. 관리자 권한이 필요 없고 다른 사이트에는 영향이 없습니다.",
     articles: ["home.dashboard"],

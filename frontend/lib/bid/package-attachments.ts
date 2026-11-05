@@ -47,6 +47,8 @@ function collectPersonDocs(detail: EmployeeDetail, warnings: string[]): DocRef[]
       warnings.push(`${detail.name}: ${label} 문서 없음`);
       return;
     }
+    // 취득사항 확인서 한 장에 자격이 여럿이면 행마다 같은 파일이 연결되므로 한 번만 넣는다.
+    if (docs.some((d) => d.storageKey === row.storageKey)) return;
     docs.push({ label, storageKey: row.storageKey, contentType: row.contentType, fileName: row.originalFilename || row.displayName });
   };
 

@@ -196,7 +196,7 @@ export const ADMIN_ARTICLES: ManualArticle[] = [
             rows: [
               ["[[기본 정보]]", "증명사진, 성명·직급·부서·입사일·주민번호·연락처, 엔지니어링 기술등급·전문분야·환경부 등급(대행업)"],
               ["[[학력/자격]]", "학력·자격증 행과 졸업증명서·자격증 사본 첨부"],
-              ["[[기타 증빙]]", "전 근무지 경력, 주거비 지원 임대차 계약, 4대보험 증명 등 증빙 업로드"],
+              ["[[기타 증빙]]", "전 근무지 경력, 주거비 지원 임대차 계약, 4대보험 증명, 경력증명서·이력서·수료증 등 증빙 업로드. 입찰 패키지에는 ‘기술자 경력확인서’(협회 발급본)만 첨부됩니다"],
               ["[[인사관리]]", "승진·부서 이동 이력, 겸직·부서장 보직, 휴직·복직, 퇴사, 경비/급여 입금 계좌"],
             ],
           },
@@ -251,7 +251,7 @@ export const ADMIN_ARTICLES: ManualArticle[] = [
       "components/admin/users/EmployeeRegistryPanel.tsx",
       "components/admin/users/OrganizationTree.tsx",
     ],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-05",
   },
   {
     id: "admin.access-log",

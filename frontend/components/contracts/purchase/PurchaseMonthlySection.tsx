@@ -28,6 +28,7 @@ export function PurchaseMonthlySection({
   theme,
   onOpenPdf,
   title,
+  onStatementApplied,
 }: {
   purchaseContractId: string;
   kind: PurchaseMonthlyKind;
@@ -37,6 +38,8 @@ export function PurchaseMonthlySection({
   onOpenPdf: (state: { title: string; url: string; docs?: PdfViewerDoc[]; initialIndex?: number }) => void;
   /** 섹션 제목을 바꿀 때(기본 = 탭 이름). */
   title?: string;
+  /** 명세서 반영 뒤 — 부모의 문서 목록·연도 목록이 바뀐다. */
+  onStatementApplied?: () => void;
 }) {
   const toast = useToast();
   const [year, setYear] = useState(() => years[0] ?? new Date().getFullYear());
@@ -145,6 +148,7 @@ export function PurchaseMonthlySection({
     } else {
       setYear(value.year);
     }
+    onStatementApplied?.();
   };
 
   const openDocument = (entry: PurchaseMonthlyEntry) => {

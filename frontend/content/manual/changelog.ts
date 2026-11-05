@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-05", kind: "수정", title: "계약 관리·매입 계약 — 알림이 떠도 입력 중인 값이 사라지지 않음",
+    body: "낙찰률 형식 오류처럼 알림만 떠도 계약 상세를 다시 불러와 저장하지 않은 허가 정보·낙찰률 입력이 지워지던 문제를 고쳤습니다. 매입 계약에서 이미 올린 관리비 명세서를 다시 올리면 안내대로 내용 확인 창이 열립니다. 조회에 실패해도 다시 불러오기를 끝없이 반복하지 않고 알림은 한 번만 뜹니다.",
+    articles: ["contracts.manage", "contracts.purchase"],
+  },
+  {
     date: "2026-11-05", kind: "수정", title: "사용자 등록 — 알림이 떠도 입력 중인 인사카드가 사라지지 않음",
     body: "증빙 업로드·인사 이력 기록·계정 발급·입금 계좌 저장 뒤 저장하지 않은 인사카드 입력이 지워지던 문제를 고쳤습니다. 행·증빙을 삭제하면 삭제 알림이 뜹니다. 저장하는 동안에는 입력 칸이 잠깐 잠깁니다.",
     articles: ["admin.registry"],

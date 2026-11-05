@@ -98,8 +98,9 @@ export function PurchaseContractsBoard() {
   }, [year]);
 
   const loadDetail = useCallback(
-    async (id: string) => {
-      setDetailLoading(true);
+    async (id: string, opts?: { quiet?: boolean }) => {
+      // quiet: 상세 패널을 내리지 않고 값만 바꾼다(월별 금액 입력·선택 연도가 패널 안에 있다).
+      if (!opts?.quiet) setDetailLoading(true);
       try {
         setDetail(await purchaseApi<PurchaseContractDetail>("/api/purchase-contracts/" + encodeURIComponent(id)));
       } catch (err) {
@@ -123,6 +124,10 @@ export function PurchaseContractsBoard() {
     reloadTree();
     if (selectedId) loadDetail(selectedId);
   }, [reloadTree, loadDetail, selectedId]);
+
+  const refreshAfterStatement = useCallback(() => {
+    if (selectedId) loadDetail(selectedId, { quiet: true });
+  }, [loadDetail, selectedId]);
 
   const selectContract = useCallback((id: string) => setSelectedId(id), []);
   const toggleGroup = useCallback((key: string) => {
@@ -305,6 +310,7 @@ export function PurchaseContractsBoard() {
                 onOpenEditStage={(milestone) => setStageModal({ milestone })}
                 onOpenCandidates={(milestone) => setCandidateTarget(milestone)}
                 onOpenPdf={setPdfViewer}
+                onStatementApplied={refreshAfterStatement}
                 onDeleteContract={() => setDeleteModalOpen(true)}
                 onDeleteStage={async (milestoneId) => {
                   if (!confirm("해당 청구·수금 단계를 삭제할까요? 연결한 계산서 기록도 함께 지워집니다.")) return;
@@ -354,6 +360,7 @@ export function PurchaseContractsBoard() {
         <PurchaseChangeModal
           detail={detail}
           onOpenPdf={setPdfViewer}
+          onStatementApplied={refreshAfterStatement}
           onClose={() => setEditModalOpen(false)}
           onSaved={() => {
             setEditModalOpen(false);

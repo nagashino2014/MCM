@@ -43,6 +43,7 @@ export function PurchaseContractDetailPanel({
   onOpenPdf,
   onDeleteDocument,
   onDeleteContract,
+  onStatementApplied,
 }: {
   detail: PurchaseContractDetail;
   canEdit: boolean;
@@ -56,6 +57,7 @@ export function PurchaseContractDetailPanel({
   onOpenPdf: (state: { title: string; url: string; docs?: PdfViewerDoc[]; initialIndex?: number }) => void;
   onDeleteDocument: (documentId: string, title: string) => void;
   onDeleteContract: () => void;
+  onStatementApplied: () => void;
 }) {
   const contract = detail.contract;
   const { theme } = useCdashTheme();
@@ -279,7 +281,7 @@ export function PurchaseContractDetailPanel({
       )}
 
       {showMonthly && monthlyKind && (
-        <PurchaseMonthlySection purchaseContractId={purchaseContractId} kind={monthlyKind} years={detail.monthlyYears ?? []} canEdit={canEdit} theme={theme} onOpenPdf={onOpenPdf} />
+        <PurchaseMonthlySection purchaseContractId={purchaseContractId} kind={monthlyKind} years={detail.monthlyYears ?? []} canEdit={canEdit} theme={theme} onOpenPdf={onOpenPdf} onStatementApplied={onStatementApplied} />
       )}
 
       {isOutsourcing && (

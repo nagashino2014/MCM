@@ -3,6 +3,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { encryptPii } from "@/lib/security/pii-crypto";
 import { recordGradeChangeFiling } from "@/lib/filings/store";
+import { deleteEmployeeDocument } from "@/lib/storage/employee-document-storage";
 
 export const POSITION_OPTIONS = [
   "대표이사",
@@ -625,6 +626,90 @@ async function replaceChildren(
       );
     }
   }
+}
+
+/** 인사카드의 반복 행 — 삭제 API 가 받는 종류와 표·키 열. */
+const EMPLOYEE_RECORD_TABLES = {
+  education: { table: "employee_educations", idColumn: "education_id" },
+  certification: { table: "employee_certifications", idColumn: "certification_id" },
+  career: { table: "employee_careers", idColumn: "career_id" },
+  housing: { table: "employee_housing_supports", idColumn: "housing_id" },
+} as const;
+
+export type EmployeeRecordKind = keyof typeof EMPLOYEE_RECORD_TABLES;
+
+export function isEmployeeRecordKind(value: string | null): value is EmployeeRecordKind {
+  return value != null && Object.prototype.hasOwnProperty.call(EMPLOYEE_RECORD_TABLES, value);
+}
+
+/** 같은 파일을 여러 행이 함께 쓸 수 있어(자격 여럿이 담긴 확인서 등) 남은 연결이 없을 때만 파일을 지운다. */
+async function deleteUnreferencedEmployeeFiles(storageKeys: string[]): Promise<void> {
+  const db = await getDb();
+  for (const storageKey of new Set(storageKeys)) {
+    const left = rowsToObjects(
+      await db.exec("SELECT 1 FROM employee_documents WHERE storage_key = $1 LIMIT 1", [storageKey])
+    );
+    if (!left.length) await deleteEmployeeDocument(storageKey);
+  }
+}
+
+/** 학력·자격·경력·주거비 행 삭제 — 그 행에 연결된 증빙도 함께 지운다. */
+export async function deleteEmployeeRecordRow(
+  actorUserId: string,
+  employeeId: string,
+  kind: EmployeeRecordKind,
+  rowId: string
+): Promise<void> {
+  const { table, idColumn } = EMPLOYEE_RECORD_TABLES[kind];
+  let storageKeys: string[] = [];
+  await withDbWrite(async (db) => {
+    const before = rowsToObjects(
+      await db.exec(`SELECT * FROM ${table} WHERE ${idColumn} = $1 AND employee_id = $2 LIMIT 1`, [rowId, employeeId])
+    )[0];
+    if (!before) throw Object.assign(new Error("항목을 찾을 수 없습니다."), { status: 404 });
+    const documents = rowsToObjects(
+      await db.exec(
+        "SELECT * FROM employee_documents WHERE employee_id = $1 AND target_table = $2 AND target_id = $3",
+        [employeeId, table, rowId]
+      )
+    );
+    await db.run("DELETE FROM employee_documents WHERE employee_id = $1 AND target_table = $2 AND target_id = $3", [
+      employeeId,
+      table,
+      rowId,
+    ]);
+    await db.run(`DELETE FROM ${table} WHERE ${idColumn} = $1 AND employee_id = $2`, [rowId, employeeId]);
+    await recordAuditLogInline(db, {
+      actorUserId,
+      action: "employee_record_delete",
+      targetTable: table,
+      targetId: rowId,
+      before: { ...before, documents: documents.map((d) => d.original_filename ?? d.display_name) },
+    });
+    storageKeys = documents.map((d) => String(d.storage_key ?? ""));
+  });
+  await deleteUnreferencedEmployeeFiles(storageKeys);
+}
+
+/** 증빙 서류 한 건 삭제. */
+export async function removeEmployeeDocument(actorUserId: string, documentId: string): Promise<void> {
+  let storageKey = "";
+  await withDbWrite(async (db) => {
+    const before = rowsToObjects(
+      await db.exec("SELECT * FROM employee_documents WHERE document_id = $1 LIMIT 1", [documentId])
+    )[0];
+    if (!before) throw Object.assign(new Error("문서를 찾을 수 없습니다."), { status: 404 });
+    await db.run("DELETE FROM employee_documents WHERE document_id = $1", [documentId]);
+    await recordAuditLogInline(db, {
+      actorUserId,
+      action: "employee_document_delete",
+      targetTable: "employee_documents",
+      targetId: documentId,
+      before,
+    });
+    storageKey = String(before.storage_key ?? "");
+  });
+  await deleteUnreferencedEmployeeFiles([storageKey]);
 }
 
 export async function findEmployeeDocumentByKey(storageKey: string): Promise<EmployeeDocumentRow | null> {

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { getEmployeeDetail, recordEmployeeDocument } from "@/lib/admin/employee-records";
+import { getEmployeeDetail, recordEmployeeDocument, removeEmployeeDocument } from "@/lib/admin/employee-records";
 import {
   buildEmployeeDocumentStorageKey,
   putEmployeeDocument,
@@ -76,6 +76,18 @@ export async function POST(req: NextRequest) {
       ...stored,
     });
     return NextResponse.json({ document });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const actor = await requirePermission("staffing.documents.manage", { fallbackRoles: ["admin"] });
+    const documentId = new URL(req.url).searchParams.get("documentId");
+    if (!documentId) return NextResponse.json({ error: "documentId가 필요합니다." }, { status: 400 });
+    await removeEmployeeDocument(actor.userId, documentId);
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);
   }

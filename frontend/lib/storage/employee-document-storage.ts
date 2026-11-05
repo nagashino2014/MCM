@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { GetObjectCommand, PutObjectCommand, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { sanitizeFilename, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
 
@@ -98,4 +98,26 @@ export async function getEmployeeDocument(storageKey: string): Promise<EmployeeD
     etag: out.ETag ?? null,
     lastModified: out.LastModified ?? null,
   };
+}
+
+/** 증빙 파일 삭제 — 행 삭제가 이미 끝난 뒤의 정리라 실패해도 요청을 되돌리지 않고 기록만 남긴다. */
+export async function deleteEmployeeDocument(storageKey: string): Promise<void> {
+  if (!storageKey || storageKey.includes("..") || storageKey.startsWith("/") || storageKey.startsWith("\\")) {
+    return;
+  }
+  try {
+    const localRoot = process.env.EMPLOYEE_DOCUMENT_STORAGE_ROOT?.trim();
+    if (localRoot) {
+      const root = path.resolve(localRoot);
+      const target = path.resolve(root, storageKey);
+      if (!target.startsWith(root + path.sep)) return;
+      await unlink(target);
+      return;
+    }
+    const bucket = process.env.MCM_STORAGE_BUCKET?.trim();
+    if (!bucket) return;
+    await getS3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: storageKey }));
+  } catch (err) {
+    console.warn("[employee-documents] file delete failed", storageKey, err);
+  }
 }

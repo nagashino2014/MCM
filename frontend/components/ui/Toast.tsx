@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, AlertCircle, Info } from "lucide-react";
 
 type ToastVariant = "success" | "error" | "info";
@@ -25,8 +25,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }, 2400);
   }, []);
 
+  // 값을 고정한다 — 렌더마다 새 객체면 useToast() 결과를 hook 의존성에 넣은 화면이 알림이 뜨고 질 때마다 재조회한다(조회 실패 알림이면 끝없이 반복).
+  const value = useMemo(() => ({ show }), [show]);
+
   return (
-    <ToastContext.Provider value={{ show }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="fixed right-6 bottom-6 z-[200] flex flex-col gap-2 items-end pointer-events-none">
         {items.map((item) => (

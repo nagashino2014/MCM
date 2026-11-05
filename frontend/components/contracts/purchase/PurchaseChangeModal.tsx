@@ -26,11 +26,13 @@ export function PurchaseChangeModal({
   onClose,
   onSaved,
   onOpenPdf,
+  onStatementApplied,
 }: {
   detail: PurchaseContractDetail;
   onClose: () => void;
   onSaved: () => void;
   onOpenPdf: (state: { title: string; url: string; docs?: PdfViewerDoc[]; initialIndex?: number }) => void;
+  onStatementApplied: () => void;
 }) {
   const toast = useToast();
   const { theme } = useCdashTheme();
@@ -160,7 +162,7 @@ export function PurchaseChangeModal({
 
         {(tab === "extra" || tab === "metered" || tab === "feeStatus") && monthlyKind && (
           monthlyKind === savedKind ? (
-            <PurchaseMonthlySection purchaseContractId={id} kind={monthlyKind} years={detail.monthlyYears ?? []} canEdit theme={theme} onOpenPdf={onOpenPdf} />
+            <PurchaseMonthlySection purchaseContractId={id} kind={monthlyKind} years={detail.monthlyYears ?? []} canEdit theme={theme} onOpenPdf={onOpenPdf} onStatementApplied={onStatementApplied} />
           ) : (
             <p className="rounded-lg border cd-border-c p-4 text-xs cd-text-muted">계약 유형을 바꾼 뒤 먼저 저장하면 월별 금액을 입력할 수 있습니다.</p>
           )

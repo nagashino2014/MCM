@@ -35,7 +35,8 @@ function Inner() {
   const [selectedEmployee, setSelectedEmployee] = useState<OrganizationEmployeeRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [provisioning, setProvisioning] = useState(false);
-  const toast = useToast();
+  // useToast() 의 객체는 알림이 뜨고 질 때마다 새로 만들어진다 — 안정된 show 만 쓴다(의존성에 넣으면 알림마다 재조회).
+  const { show: showToast } = useToast();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -46,11 +47,11 @@ function Inner() {
       setOrganization(snapshot);
       if (!selectedDept && snapshot.departments.length) setSelectedDept(snapshot.departments[0]);
     } catch (err) {
-      toast.show("조회 실패: " + (err as Error).message, "error");
+      showToast("조회 실패: " + (err as Error).message, "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedDept, toast]);
+  }, [selectedDept, showToast]);
 
   const provisionAccount = useCallback(
     async (employee: OrganizationEmployeeRow) => {
@@ -62,7 +63,7 @@ function Inner() {
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "계정 발급 실패");
-        toast.show(
+        showToast(
           `계정 발급 완료 · 사번/초기 비밀번호: ${data.loginId} (최초 로그인 시 변경 필요)`,
           "success"
         );
@@ -74,12 +75,12 @@ function Inner() {
         );
         await reload();
       } catch (err) {
-        toast.show("실패: " + (err as Error).message, "error");
+        showToast("실패: " + (err as Error).message, "error");
       } finally {
         setProvisioning(false);
       }
     },
-    [reload, toast]
+    [reload, showToast]
   );
 
   const resetPassword = useCallback(
@@ -92,15 +93,15 @@ function Inner() {
         );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "비밀번호 초기화 실패");
-        toast.show(
+        showToast(
           `비밀번호 초기화 완료 · 임시 비밀번호 = 사번(${data.loginId}), 최초 로그인 시 변경됩니다.`,
           "success"
         );
       } catch (err) {
-        toast.show("실패: " + (err as Error).message, "error");
+        showToast("실패: " + (err as Error).message, "error");
       }
     },
-    [toast]
+    [showToast]
   );
 
   // 신규 부서 생성 — 이름만 받아 기본값(division·순서 100)으로 만들고, 상위 부서·직급은
@@ -109,7 +110,7 @@ function Inner() {
     const name = prompt("새 부서 이름을 입력하세요.")?.trim();
     if (!name) return;
     if (organization?.departments.some((dept) => dept.deptName === name)) {
-      toast.show("같은 이름의 부서가 이미 있습니다.", "error");
+      showToast("같은 이름의 부서가 이미 있습니다.", "error");
       return;
     }
     try {
@@ -120,14 +121,14 @@ function Inner() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "부서 생성 실패");
-      toast.show(`'${name}' 부서가 추가되었습니다. 상위 부서·직급은 부서 편집에서 조정하세요.`, "success");
+      showToast(`'${name}' 부서가 추가되었습니다. 상위 부서·직급은 부서 편집에서 조정하세요.`, "success");
       setSelectedEmployee(null);
       setSelectedDept(data.department as DepartmentRow);
       await reload();
     } catch (err) {
-      toast.show("실패: " + (err as Error).message, "error");
+      showToast("실패: " + (err as Error).message, "error");
     }
-  }, [organization, reload, toast]);
+  }, [organization, reload, showToast]);
 
   useEffect(() => {
     if (sessionStatus === "authenticated") void reload();
@@ -135,7 +136,7 @@ function Inner() {
 
   // 계정 영역은 조직도 스냅샷의 최신 행으로 그린다(F-37) — 선택 시점에 복사한 행을 쓰면
   // 인사카드 저장·[새로고침] 뒤에도 입사일·성별·생년월일 부족 표시가 남았다.
-  // selectedEmployee 자체는 바꾸지 않는다(인사카드 패널이 그 값으로 상세를 다시 불러 편집 중 내용을 덮지 않도록).
+  // selectedEmployee 자체는 조직도를 새로 읽어도 바꾸지 않는다(패널이 서버 값을 다시 읽는 계기는 선택·계정 발급뿐이다).
   const accountEmployee = selectedEmployee
     ? organization?.employees.find((item) => item.employeeId === selectedEmployee.employeeId) ?? selectedEmployee
     : null;
@@ -183,7 +184,8 @@ function Inner() {
             setSelectedEmployee(null);
           }}
           onSelectEmployee={(employee) => {
-            setSelectedEmployee(employee);
+            // 같은 직원을 다시 눌러도 패널이 알도록 새 객체로 넘긴다(신규 등록 화면에서 돌아올 때).
+            setSelectedEmployee({ ...employee });
             const dept = organization?.departments.find((item) => item.deptId === employee.deptId);
             if (dept) setSelectedDept(dept);
           }}
@@ -202,7 +204,7 @@ function Inner() {
             selectedDept={selectedDept}
             selectedEmployee={selectedEmployee}
             onReload={reload}
-            toast={(message, type) => toast.show(message, type)}
+            toast={showToast}
           />
         </div>
       </div>

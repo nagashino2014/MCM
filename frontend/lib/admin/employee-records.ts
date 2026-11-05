@@ -406,6 +406,7 @@ export async function saveEmployeeDetail(
         employeeId,
       ])
     )[0];
+    // 계정 연결·사번·재직 상태는 계정 발급·퇴사 기록만 바꾼다 — 열어 둔 화면의 낡은 값으로 저장해도 되돌아가지 않게 수정 시 덮지 않는다.
     await db.run(
       `INSERT INTO employee_profiles
         (employee_id, user_id, employee_no, name, dept_id, position_id, hired_at, job_duties,
@@ -416,8 +417,6 @@ export async function saveEmployeeDetail(
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25,
          $26)
        ON CONFLICT (employee_id) DO UPDATE SET
-         user_id = EXCLUDED.user_id,
-         employee_no = EXCLUDED.employee_no,
          name = EXCLUDED.name,
          dept_id = EXCLUDED.dept_id,
          position_id = EXCLUDED.position_id,
@@ -436,7 +435,6 @@ export async function saveEmployeeDetail(
          mobile_phone = EXCLUDED.mobile_phone,
          email = EXCLUDED.email,
          company_phone = EXCLUDED.company_phone,
-         status = EXCLUDED.status,
          memo = EXCLUDED.memo,
          updated_at = EXCLUDED.updated_at,
          etis_member_no = EXCLUDED.etis_member_no`,
@@ -492,7 +490,8 @@ export async function saveEmployeeDetail(
       }
     }
 
-    if (input.userId) {
+    const linkedUserId = before?.user_id != null ? String(before.user_id) : input.userId;
+    if (linkedUserId) {
       await db.run(
         `UPDATE users
             SET name = $1,
@@ -513,7 +512,7 @@ export async function saveEmployeeDetail(
           nullable(input.hiredAt),
           nullable(input.companyPhone),
           now,
-          input.userId,
+          linkedUserId,
         ]
       );
     }

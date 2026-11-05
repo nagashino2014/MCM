@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, PenTool, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, Minus, PenTool, Plus, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -22,16 +22,19 @@ import { spanWidth } from "@/lib/catalog/studio/design-system";
 import { pageState } from "@/lib/catalog/studio/doc";
 import {
   addElement,
+  DUPLICATE_OFFSET,
   duplicateNode,
   hideNode,
   listItemOp,
   patchNodeStyle,
+  pasteNodes,
   resetNode,
   setImage,
   setInfo,
   setNodeContent,
   setNodeType,
   setVariant,
+  snapshotNode,
   unhideNode,
   type InfoOverride,
   type PageEdits,
@@ -63,7 +66,7 @@ import { PanelFonts } from "./PanelFonts";
 import { StudioCanvas, type BindTarget, type CanvasHandle } from "./StudioCanvas";
 import { StudioThumbs } from "./StudioThumbs";
 import type { StudioOps } from "./types";
-import { ensureIllustrations, useStudio } from "./useStudio";
+import { ensureIllustrations, previewUrl, useStudio } from "./useStudio";
 import "@/components/cdash/cdash.css";
 
 type PanelTab = "content" | "design" | "fonts" | "data";
@@ -108,13 +111,74 @@ function newIllustration(assetId: string, pageKey?: string): CNode | null {
   };
 }
 
-function newAdded(kind: "text" | "shape" | "image", asset?: string): CNode {
+/** 이미지의 원래 크기 — 새 이미지 상자를 그림 비율로 만든다(읽지 못하면 null) */
+function imageSize(url: string): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img.naturalWidth && img.naturalHeight ? { w: img.naturalWidth, h: img.naturalHeight } : null);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+const FONT_STEPS = [6, 7, 8, 9, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72, 96, 120];
+
+/** 글자 크기 — 줄이기·늘리기 또는 숫자 직접 입력(5~200pt). 글 고치는 중에도 커서를 잃지 않는다 */
+function FontSizeControl({ value, disabled, onChange }: { value: number | null; disabled: boolean; onChange: (pt: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const cur = value ?? 0;
+  const commit = () => {
+    const v = Number(draft);
+    setDraft(null);
+    if (draft && Number.isFinite(v) && v >= 5 && v <= 200) onChange(Math.round(v * 2) / 2);
+  };
+  return (
+    <span className="flex items-center gap-0.5 whitespace-nowrap cd-text-muted" title="글자를 고른 뒤 크기를 바꿉니다 — 자유 배치(L3) 쪽에서만">
+      글자 크기
+      <button type="button" className="cd-icon-button cd-icon-button-sm" aria-label="글자 크기 줄이기" disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={() => {
+        const next = [...FONT_STEPS].reverse().find((s) => s < cur - 0.01);
+        if (next) onChange(next);
+      }}>
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <input
+        className="cd-input text-center tabular-nums"
+        style={{ width: 52 }}
+        aria-label="글자 크기(pt)"
+        inputMode="decimal"
+        disabled={disabled}
+        value={draft ?? (value ? String(Math.round(value * 10) / 10) : "")}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          else if (e.key === "Escape") setDraft(null);
+        }}
+      />
+      <button type="button" className="cd-icon-button cd-icon-button-sm" aria-label="글자 크기 늘리기" disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={() => {
+        const next = FONT_STEPS.find((s) => s > cur + 0.01);
+        if (next) onChange(next);
+      }}>
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </span>
+  );
+}
+
+function newAdded(kind: "text" | "shape" | "image", asset?: string, size?: { w: number; h: number } | null): CNode {
   const base = { id: newUserId(), tag: "div" };
   const at = { position: "absolute", left: "48px", top: "120px" };
   if (kind === "text")
     return { ...base, className: "kc-x-text", style: { ...at, width: `${spanWidth(4).toFixed(2)}px` }, typeStep: "body", children: [{ id: newUserId(), tag: "#text", text: "새 글상자 — 눌러서 고칩니다" }] };
   if (kind === "shape") return { ...base, className: "kc-x-shape kc-x-shape--round", style: { ...at, width: `${spanWidth(3).toFixed(2)}px`, height: "80px" } };
-  return { ...base, className: "kc-x-image", style: { ...at, width: `${spanWidth(4).toFixed(2)}px`, height: "160px" }, asset: { key: asset ?? "k/assets/hq-cover-wide.webp" } };
+  // 그림 비율대로 — 세로로 길면 높이 400 안으로
+  let w = spanWidth(4);
+  let h = size ? (w * size.h) / size.w : 160;
+  if (h > 400 && size) {
+    h = 400;
+    w = (h * size.w) / size.h;
+  }
+  return { ...base, className: "kc-x-image", style: { ...at, width: `${w.toFixed(2)}px`, height: `${h.toFixed(2)}px` }, asset: { key: asset ?? "k/assets/hq-cover-wide.webp" } };
 }
 
 export function CatalogStudio({ docId = "master" }: { docId?: string }) {
@@ -161,6 +225,8 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const [aiInitial, setAiInitial] = useState<ClientProposal | null>(null);
   const [shrinking, setShrinking] = useState(false);
   const canvasHandle = useRef<CanvasHandle | null>(null);
+  // 복사해 둔 요소(Ctrl+C) — 다른 쪽에도 붙여 넣는다. pastes = 붙여 넣은 횟수(겹치지 않게 조금씩 비킨다)
+  const clipboard = useRef<{ nodes: CNode[]; pastes: number }>({ nodes: [], pastes: 0 });
   const mainRef = useRef<HTMLDivElement>(null);
   const [mainW, setMainW] = useState(800);
   const [layoutW, setLayoutW] = useState(1400);
@@ -231,6 +297,28 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const pe = useCallback((fn: (e: PageEdits) => PageEdits, merge?: string) => itemKey && setPageEdits(itemKey, fn, merge), [itemKey, setPageEdits]);
   const ops: StudioOps = useMemo(() => {
     const derived = tree as CNode;
+    // 숨기기는 사진이면 틀째로
+    const layoutTarget = (id: string) => resolveSelection(derived, id)?.frame?.id ?? id;
+    const hideTargets = (ids: string[]) =>
+      outermost(derived, ids)
+        .filter((id) => {
+          const s = resolveSelection(derived, id);
+          return s && itemLevel ? capabilities(s, itemLevel).hide : false;
+        })
+        .map(layoutTarget);
+    // 복사 — 사본을 지금 모습으로 찍어 둔다(그대로 붙여 넣는다). 찍은 수를 돌려준다
+    const copyToClipboard = (ids: string[]) => {
+      const edits = composed?.state?.edits ?? { v: 1 as const };
+      const nodes = outermost(derived, ids).flatMap((id) => {
+        const s = resolveSelection(derived, id);
+        const at = canvasHandle.current?.copyInfo(id);
+        const node = s && at && itemLevel && capabilities(s, itemLevel).duplicate ? snapshotNode(edits, derived, id, at) : null;
+        return node ? [node] : [];
+      });
+      if (nodes.length) clipboard.current = { nodes, pastes: 0 };
+      else toast("복사할 수 없는 요소입니다(데이터 영역·도식, 또는 자유 배치가 아닌 쪽).", "error");
+      return nodes.length;
+    };
     return {
       select: setSelectedId,
       toggleSelect,
@@ -238,14 +326,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       patchStyle: (id, patch) => pe((e) => patchNodeStyle(e, derived, id, patch)),
       setType: (id, step) => pe((e) => setNodeType(e, derived, id, step)),
       hide: (id) => {
-        pe((e) => hideNode(e, derived, id));
+        pe((e) => hideNode(e, derived, layoutTarget(id)));
         setSelectedId(null);
       },
       hideMany: (ids) => {
-        const hideable = outermost(derived, ids).filter((id) => {
-          const s = resolveSelection(derived, id);
-          return s && itemLevel ? capabilities(s, itemLevel).hide : false;
-        });
+        const hideable = hideTargets(ids);
         if (!hideable.length) return;
         pe((e) => hideable.reduce((acc, id) => hideNode(acc, derived, id), e));
         setSelection([]);
@@ -256,7 +341,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         pe((e) =>
           outermost(derived, ids).reduce((acc, id) => {
             const s = resolveSelection(derived, id);
-            const g = canvasHandle.current?.geometry(id);
+            const g = canvasHandle.current?.copyInfo(id);
             const r = s && g && itemLevel && capabilities(s, itemLevel).duplicate ? duplicateNode(acc, derived, id, g) : null;
             if (!r) {
               skipped += 1;
@@ -269,6 +354,33 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         if (made.length) setSelection(made);
         if (skipped) toast(made.length ? `${skipped}개는 복제할 수 없어 건너뛰었습니다(데이터 영역·도식, 또는 추가 요소 40개 한도).` : "복제할 수 없는 요소입니다(데이터 영역·도식, 또는 추가 요소 40개 한도).", "error");
       },
+      copy: (ids) => {
+        const n = copyToClipboard(ids);
+        if (n) toast(`${n}개를 복사했습니다. Ctrl+V 로 붙여 넣습니다(다른 쪽에도 됩니다).`, "success");
+      },
+      cut: (ids) => {
+        if (!copyToClipboard(ids)) return;
+        const hideable = hideTargets(ids);
+        pe((e) => hideable.reduce((acc, id) => hideNode(acc, derived, id), e));
+        setSelection([]);
+      },
+      paste: () => {
+        const clip = clipboard.current;
+        if (!clip.nodes.length) return;
+        if (itemLevel !== 3) {
+          toast("이 쪽에는 붙여 넣을 수 없습니다(자유 배치 쪽만).", "error");
+          return;
+        }
+        clip.pastes += 1;
+        let ids: string[] = [];
+        pe((e) => {
+          const r = pasteNodes(e, clip.nodes, clip.pastes * DUPLICATE_OFFSET);
+          ids = r.ids;
+          return r.edits;
+        });
+        if (ids.length) setSelection(ids);
+        if (ids.length < clip.nodes.length) toast("이 쪽에 추가할 수 있는 요소 수(40개)를 넘었습니다.", "error");
+      },
       unhide: (id) => pe((e) => unhideNode(e, id)),
       reset: (id, parts) => pe((e) => resetNode(e, id, parts ?? "all")),
       setInfo: (id, patch, slot) => {
@@ -276,9 +388,19 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         if (patch?.type && slot) void catalogFetch("/api/catalog/studio/prefs", { method: "POST", body: JSON.stringify({ slot, type: patch.type, variant: patch.variant ?? null }) }).catch(() => undefined);
       },
       setImage: (id, ref) => pe((e) => setImage(e, derived, id, ref), `image:${id}`),
+      swapImage: async (id, key) => {
+        // 직접 넣은 이미지 상자는 새 그림 비율에 맞춘다(폭은 그대로). 원래 자리의 사진은 틀 모양을 지킨다
+        const g = findNode(derived, id)?.origin === "add" ? canvasHandle.current?.geometry(id) : null;
+        const size = g ? await imageSize(previewUrl(key)) : null;
+        pe((e) => {
+          const next = setImage(e, derived, id, { key, fx: 50, fy: 50 });
+          return g && size ? patchNodeStyle(next, derived, id, { height: `${((g.w * size.h) / size.w).toFixed(2)}px` }) : next;
+        });
+      },
       listOp: (itemId, op) => pe((e) => listItemOp(e, derived, itemId, op)),
-      addElement: (kind, asset) => {
-        const node = newAdded(kind, asset);
+      addElement: async (kind, asset) => {
+        const size = kind === "image" && asset ? await imageSize(previewUrl(asset)) : null;
+        const node = newAdded(kind, asset, size);
         pe((e) => addElement(e, node));
         setSelectedId(node.id);
       },
@@ -341,6 +463,8 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
   const onKeyCommand = useCallback(
     (key: string, e: KeyboardEvent): boolean => {
       const mod = e.ctrlKey || e.metaKey;
+      // 글쇠 자리(code)로 보면 한글 입력 중에도 듣고, 글자(key)도 같이 본다
+      const isLetter = (l: string) => e.code === `Key${l}` || key.toUpperCase() === l;
       if (mod && key.toLowerCase() === "z") {
         if (e.shiftKey) redo();
         else undo();
@@ -350,9 +474,21 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         redo();
         return true;
       }
+      if (mod && isLetter("V") && clipboard.current.nodes.length) {
+        ops.paste();
+        return true;
+      }
       if (!selectedId) return false;
-      if (mod && e.code === "KeyD") {
+      if (mod && isLetter("D")) {
         ops.duplicate(selection);
+        return true;
+      }
+      if (mod && isLetter("C")) {
+        ops.copy(selection);
+        return true;
+      }
+      if (mod && isLetter("X")) {
+        ops.cut(selection);
         return true;
       }
       if (selection.length > 1) {
@@ -397,6 +533,8 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       const inStudio = t?.closest?.("[data-studio-area]");
       const mod = e.ctrlKey || e.metaKey;
       if (!inStudio && !mod) return;
+      // 화면 글을 긁어 둔 경우의 복사는 브라우저 기본으로
+      if (mod && (e.code === "KeyC" || e.code === "KeyX" || ["c", "x"].includes(e.key.toLowerCase())) && !window.getSelection()?.isCollapsed) return;
       if (onKeyCommand(e.key, e)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
@@ -477,6 +615,16 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
     const t = setTimeout(() => void runCheck(), 300);
     return () => clearTimeout(t);
   }, [fontSet, kit, runCheck]);
+
+  // 고른 글의 지금 글자 크기 — 도구 줄 표시용(그려진 값을 읽는다)
+  const fontEditable = Boolean(caps?.editText && caps?.typeStep && selection.length === 1);
+  const fontTargetId = fontEditable ? (sel?.id ?? null) : null;
+  const [fontInfo, setFontInfo] = useState<{ px: number; ratio: number } | null>(null);
+  useEffect(() => {
+    const g = fontTargetId ? canvasHandle.current?.geometry(fontTargetId) : null;
+    // tree 는 렌더마다 새 객체라 값이 같으면 상태를 바꾸지 않는다(다시 그리기 고리 방지)
+    setFontInfo((prev) => (!g ? null : prev && prev.px === g.fontPx && prev.ratio === g.lineRatio ? prev : { px: g.fontPx, ratio: g.lineRatio }));
+  }, [fontTargetId, tree]);
 
   const warnByKey = useMemo(() => {
     const out: Record<string, number> = {};
@@ -606,6 +754,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
               >
                 <Hash className="w-3.5 h-3.5" /> 지표 넣기
               </button>
+              <FontSizeControl
+                value={fontInfo?.px ?? null}
+                disabled={!fontTargetId}
+                onChange={(pt) => fontTargetId && ops.patchStyle(fontTargetId, { fontSize: `${pt}px`, lineHeight: String(fontInfo?.ratio ?? 1.4) })}
+              />
               <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                 <label className="flex items-center gap-1 cd-text-muted whitespace-nowrap">
                   판
@@ -650,7 +803,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 </select>
               </span>
             </div>
-            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고릅니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기, Delete 숨기기, Ctrl+D 복제, Esc 선택 해제">
+            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고르고, 고른 글을 다시 누르면 글을 고칩니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기, Delete 숨기기, Ctrl+C·V 복사·붙여넣기, Ctrl+D 복제, Esc 선택 해제">
               <StudioCanvas
                 kit={kit}
                 fontSet={studio.fontSet}

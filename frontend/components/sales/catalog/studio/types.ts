@@ -24,12 +24,20 @@ export interface StudioOps {
   hideMany: (ids: string[]) => void;
   /** 복제(Ctrl+D) — 사본을 오른쪽 아래에 놓고 사본들을 고른다 */
   duplicate: (ids: string[]) => void;
+  /** 복사(Ctrl+C) — 고른 요소의 지금 모습을 찍어 둔다 */
+  copy: (ids: string[]) => void;
+  /** 잘라내기(Ctrl+X) — 복사하고 숨기기·지우기 */
+  cut: (ids: string[]) => void;
+  /** 붙여넣기(Ctrl+V) — 지금 쪽에 복사본을 놓고 고른다 */
+  paste: () => void;
   unhide: (id: string) => void;
   reset: (id: string, parts?: Array<"content" | "style" | "type" | "hidden" | "info" | "image">) => void;
   setInfo: (id: string, info: InfoOverride | null, slot?: string) => void;
   setImage: (id: string, image: ImageRef | null) => void;
+  /** 사진 바꾸기 — 직접 넣은 이미지 상자는 새 그림 비율에 맞춘다 */
+  swapImage: (id: string, key: string) => Promise<void>;
   listOp: (itemId: string, op: ListOp) => void;
-  addElement: (kind: "text" | "shape" | "image", asset?: string) => void;
+  addElement: (kind: "text" | "shape" | "image", asset?: string) => Promise<void>;
   /** 일러스트 넣기(313) — SVG 를 받아 등록한 뒤 쪽 위에 놓는다 */
   addIllustration: (assetId: string) => Promise<void>;
   /** 캔버스에서 고친 일러스트 글자 자리 → 그 인포그래픽 내용 */

@@ -79,7 +79,7 @@ const EDIT_STYLE_RULES: Record<string, (v: string) => boolean> = {
   backgroundColor: (v) => isTokenVar(v, "color") || COLOR_WORDS.has(v),
   borderColor: (v) => isTokenVar(v, "color") || COLOR_WORDS.has(v),
   border: (v) => v === "none" || (/^(0\.5|[1-4])px solid var\(--[a-z0-9-]+\)$/.test(v) && isTokenVar(v.replace(/^.*solid /, ""), "color")),
-  borderRadius: (v) => isTokenVar(v) || px(v, 0, 300) || v === "50%" || /^0 var\(--radius-leaf\) var\(--radius-leaf\) var\(--radius-leaf\)$/.test(v),
+  borderRadius: (v) => isTokenVar(v) || px(v, 0, 300) || v === "50%" || /^0 var\(--radius-leaf\) var\(--radius-leaf\) var\(--radius-leaf\)$/.test(v) || (v.split(" ").length <= 4 && v.split(" ").every((p) => p === "0" || px(p, 0, 300))),
   opacity: (v) => /^(0(\.\d{1,2})?|1)$/.test(v),
   zIndex: (v) => /^(-1|[0-9]|1[0-9]|20)$/.test(v),
   textAlign: (v) => ["left", "center", "right"].includes(v),
@@ -88,6 +88,11 @@ const EDIT_STYLE_RULES: Record<string, (v: string) => boolean> = {
   overflow: (v) => v === "hidden" || v === "visible",
   objectFit: (v) => v === "cover" || v === "contain",
   fontFamily: (v) => /^var\(--kc-font-(display|body|figure)\)$/.test(v),
+  // 글자 크기 직접 지정(사용자 지시 2026-11-05) — 행간은 비율로 저장해 크기를 따라가게 한다
+  fontSize: (v) => px(v, 5, 200),
+  lineHeight: (v) => /^\d(\.\d{1,2})?$/.test(v),
+  fontWeight: (v) => /^[1-9]00$/.test(v),
+  letterSpacing: (v) => px(v, -5, 40),
   display: (v) => v === "block" || v === "flex" || v === "grid",
   flexDirection: (v) => v === "column" || v === "row",
   justifyContent: (v) => ["flex-start", "center", "flex-end", "space-between"].includes(v),
@@ -387,7 +392,8 @@ function mergeStyle(base: CNode["style"], patch: Record<string, string> | undefi
 /** 고정·추가 노드에 소유 표식을 단다(재귀) */
 function markOwned(n: CNode, origin: "pin" | "add", owner: string): CNode {
   const out: CNode = { ...n, origin, owner };
-  if (n.typeStep) out.style = mergeStyle(n.style, undefined, n.typeStep);
+  // 단계 위에 직접 지정한 값(글자 크기 등)이 얹힌다
+  if (n.typeStep) out.style = { ...typeStepStyle(n.typeStep), ...(n.style ?? {}) };
   if (n.children) out.children = n.children.map((c) => markOwned(c, origin, owner));
   return out;
 }
@@ -559,7 +565,9 @@ export function patchNodeStyle(edits: PageEdits, derived: CNode, id: string, pat
   );
 }
 
-/** 타입 스케일 단계(L3) — null = 원래 크기로 */
+const TYPE_STYLE_KEYS = ["fontSize", "lineHeight", "fontWeight", "letterSpacing"];
+
+/** 타입 스케일 단계(L3) — null = 원래 크기로. 직접 지정한 글자 크기는 지운다(단계가 보이도록) */
 export function setNodeType(edits: PageEdits, derived: CNode, id: string, step: string | null): PageEdits {
   if (step != null && !isTypeStep(step)) return edits;
   return mutateOwned(
@@ -570,11 +578,19 @@ export function setNodeType(edits: PageEdits, derived: CNode, id: string, step: 
       const out = { ...n };
       if (step) out.typeStep = step;
       else delete out.typeStep;
+      if (out.style) {
+        out.style = { ...out.style };
+        for (const k of TYPE_STYLE_KEYS) delete out.style[k];
+      }
       return out;
     },
     (ne) => {
       if (step) ne.type = step;
       else delete ne.type;
+      if (ne.style) {
+        for (const k of TYPE_STYLE_KEYS) delete ne.style[k];
+        if (Object.keys(ne.style).length === 0) delete ne.style;
+      }
     }
   );
 }
@@ -719,49 +735,104 @@ export function addElement(edits: PageEdits, node: CNode): PageEdits {
   return next;
 }
 
-/** 복제 자리 — 원본이 지금 쪽에 그려진 상자(쪽 기준 px)와 글자 크기 */
+/** 복제·복사 자리 — 원본이 지금 쪽에 그려진 상자(쪽 기준 px)와 글자 크기 */
 export interface DuplicateAt {
   x: number;
   y: number;
   w: number;
   h: number;
   fontPx?: number;
+  /** 글 원본의 지금 모양(글자 크기·색 등 — 원본 클래스는 사본에 따라오지 않으므로) */
+  textStyle?: Record<string, string>;
+  /** 글 안 요소(칩 제외)의 지금 모양 — 순서대로. 부모 클래스에 기대던 안쪽 글이 사본에서 커지지 않게 */
+  childStyles?: Array<Record<string, string>>;
+  /** 사진 틀 모서리 */
+  radius?: string;
+  /** 원래 사진의 지금 초점(%) */
+  focus?: { fx: number; fy: number };
 }
 
 /** 복제한 사본이 원본에서 비켜 놓이는 거리(4pt 기준선 4칸) */
 export const DUPLICATE_OFFSET = 16;
 
+/** 추가할 수 있는 요소 수 */
+const ADDED_MAX = 40;
+
 const pxv = (v: number) => `${Math.round(v * 100) / 100}px`;
 
+/** 그려진 사진 주소 → 이미지 키(previewUrl 의 역) — 사진을 고친 적 없는 기본 사진을 복사할 때 */
+function imageRefFromSrc(src: unknown): ImageRef | null {
+  const s = typeof src === "string" ? src : "";
+  if (s.startsWith("/catalog-kit/")) return sanitizeImageRef({ key: `k/${s.slice("/catalog-kit/".length)}` }) ?? null;
+  const m = /[?&]key=([^&]+)/.exec(s);
+  return m ? (sanitizeImageRef({ key: decodeURIComponent(m[1]) }) ?? null) : null;
+}
+
 /**
- * 요소 복제(L3) — 사본은 추가한 요소가 되어 원본 오른쪽 아래(16px)에 놓인다. 추가 요소는 그대로, 기본 글은 글상자로,
- * 기본 사진은 이미지 상자로 찍는다(데이터 영역·도식은 복제하지 않음). 추가한 요소 수 상한(40)이면 그대로 돌려준다.
+ * 요소의 사본(새 id) — 원본과 같은 자리의 추가 요소 모양. 추가 요소는 그대로, 기본 글은 글상자로,
+ * 기본 사진은 이미지 상자로 찍는다(데이터 영역·도식은 복제하지 않음).
  */
-export function duplicateNode(edits: PageEdits, derived: CNode, id: string, at: DuplicateAt): { edits: PageEdits; id: string } | null {
+export function snapshotNode(edits: PageEdits, derived: CNode, id: string, at: DuplicateAt): CNode | null {
   const path = findPath(derived, id);
   const node = path?.[path.length - 1];
-  if (!node || (edits.added?.length ?? 0) >= 40) return null;
-  let copy: CNode | null = null;
+  if (!node) return null;
   if (node.origin === "add") {
     const stored = edits.added?.find((a) => a.id === id);
     if (!stored) return null;
     const style = { ...(stored.style ?? {}) } as Record<string, string | number>;
-    style.left = pxv((parseFloat(String(style.left)) || at.x) + DUPLICATE_OFFSET);
-    style.top = pxv((parseFloat(String(style.top)) || at.y) + DUPLICATE_OFFSET);
-    copy = { ...freshCopy(stored), style };
-  } else {
-    const place = { position: "absolute", left: pxv(at.x + DUPLICATE_OFFSET), top: pxv(at.y + DUPLICATE_OFFSET), width: pxv(Math.max(8, at.w)) };
-    if (node.tag === "img" && node.asset) {
-      copy = { id: newUserId(), tag: "div", className: "kc-x-image", style: { ...place, height: pxv(Math.max(8, at.h)) }, asset: node.asset };
-    } else if (node.children?.length) {
-      const typeStep = isTypeStep(node.typeStep) ? node.typeStep : nearestTypeStep(at.fontPx ?? 0);
-      copy = { id: newUserId(), tag: "div", className: "kc-x-text", style: place, typeStep, children: node.children.map(freshCopy) };
-    }
+    style.left = pxv(parseFloat(String(style.left)) || at.x);
+    style.top = pxv(parseFloat(String(style.top)) || at.y);
+    return { ...freshCopy(stored), style };
   }
-  if (!copy) return null;
-  const next = addElement(edits, copy);
+  const place = { position: "absolute", left: pxv(at.x), top: pxv(at.y), width: pxv(Math.max(8, at.w)) };
+  if (node.tag === "img") {
+    const fromSrc = node.asset ? null : imageRefFromSrc(node.attrs?.src);
+    const asset = node.asset ?? (fromSrc ? { ...fromSrc, ...(at.focus ?? {}) } : null);
+    return asset ? { id: newUserId(), tag: "div", className: "kc-x-image", style: { ...place, height: pxv(Math.max(8, at.h)), ...(at.radius ? { borderRadius: at.radius } : {}) }, asset } : null;
+  }
+  if (node.children?.length) {
+    const typeStep = isTypeStep(node.typeStep) ? node.typeStep : nearestTypeStep(at.fontPx ?? 0);
+    let inner = 0;
+    const children = node.children.map(freshCopy).map((c) => {
+      if (c.tag === "#text" || c.tag === "br") return c;
+      const look = at.childStyles?.[inner++];
+      return look ? { ...c, style: { ...(c.style ?? {}), ...look } } : c;
+    });
+    return { id: newUserId(), tag: "div", className: "kc-x-text", style: { ...(at.textStyle ?? {}), ...place }, typeStep, children };
+  }
+  return null;
+}
+
+/** 사본을 새 id 로, 자리를 비켜 쪽에 더한다. 한도(40개)면 더하지 않는다 */
+function addCopy(edits: PageEdits, copy: CNode, offset: number): { edits: PageEdits; id: string } | null {
+  if ((edits.added?.length ?? 0) >= ADDED_MAX) return null;
+  const style = { ...(copy.style ?? {}) } as Record<string, string | number>;
+  style.left = pxv((parseFloat(String(style.left)) || 0) + offset);
+  style.top = pxv((parseFloat(String(style.top)) || 0) + offset);
+  const next = addElement(edits, { ...freshCopy(copy), style });
   const added = next.added?.[next.added.length - 1];
   return added && next !== edits ? { edits: next, id: added.id } : null;
+}
+
+/**
+ * 요소 복제(L3) — 사본은 추가한 요소가 되어 원본 오른쪽 아래(16px)에 놓인다. 추가한 요소 수 상한(40)이면 null.
+ */
+export function duplicateNode(edits: PageEdits, derived: CNode, id: string, at: DuplicateAt): { edits: PageEdits; id: string } | null {
+  const copy = snapshotNode(edits, derived, id, at);
+  return copy ? addCopy(edits, copy, DUPLICATE_OFFSET) : null;
+}
+
+/** 복사해 둔 사본 붙여넣기(Ctrl+V) — 쪽을 옮겨도 된다. 넣은 요소 id 를 돌려준다(한도를 넘은 것은 빠진다) */
+export function pasteNodes(edits: PageEdits, clips: CNode[], offset: number): { edits: PageEdits; ids: string[] } {
+  let next = edits;
+  const ids: string[] = [];
+  for (const clip of clips) {
+    const r = addCopy(next, clip, offset);
+    if (!r) break;
+    next = r.edits;
+    ids.push(r.id);
+  }
+  return { edits: next, ids };
 }
 
 /** 쪽 변형(L2) — value null = 지우기 */

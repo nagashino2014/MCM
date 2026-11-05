@@ -507,7 +507,7 @@ export function HistoryPage({
       <Head ctx={ctx} num="01" name="회사 소개" sub={parts > 1 ? `연혁 ${part + 1}/${parts}` : "연혁"} />
       <TitleBlock
         eyebrow="연혁"
-        title={part === 0 ? `${first ?? ""}년 설립 이후 등록·인증과 함께 사업 영역을 넓혀 왔습니다` : `${years[0]?.year}–${years[years.length - 1]?.year} 연혁`}
+        title={part === 0 ? `${data.company.foundedYear || first || ""}년 설립 이후 등록·인증과 함께 사업 영역을 넓혀 왔습니다` : `${years[0]?.year}–${years[years.length - 1]?.year} 연혁`}
       />
       <Timeline years={years} axis={variant?.axis} style={{ flex: 1, minHeight: 0, marginTop: 6 }} />
       {part === parts - 1 ? <HistoryFigures data={data} /> : null}

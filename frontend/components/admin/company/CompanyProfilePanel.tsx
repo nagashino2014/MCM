@@ -580,7 +580,7 @@ export function CompanyProfilePanel() {
             <section className="cd-card rounded-3xl p-5 cd-reveal delay-1 flex flex-col">
               <h3 className="font-bold cd-text flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 cd-text-primary" /> 주요 연혁
-                <span className="ml-auto text-[11px] font-normal cd-text-faint">{history.length}건</span>
+                <span className="ml-auto text-[11px] font-normal cd-text-faint">회사소개서 표시 {history.filter((h) => h.isPublic).length} / 전체 {history.length}건</span>
               </h3>
               {/* 연월·주요내용 분리 입력 */}
               <div className="rounded-xl border cd-border-c p-3 mb-3 grid gap-2 text-xs">
@@ -633,12 +633,12 @@ export function CompanyProfilePanel() {
                             {h.category || "인증"} 자동
                           </span>
                         )}
-                        {!h.isPublic && <span className="ml-1.5 text-[10px] cd-text-faint whitespace-nowrap">비공개</span>}
                       </span>
+                      {/* 표시·숨김은 늘 보인다 — 연혁이 많아지면 중요도가 낮은 줄을 회사소개서에서 뺀다 */}
+                      <button type="button" className="cd-chip cd-chip-sm shrink-0 whitespace-nowrap" data-active={h.isPublic ? "true" : undefined} aria-pressed={h.isPublic} title={h.isPublic ? "회사소개서 연혁에서 숨기기" : "회사소개서 연혁에 표시하기"} aria-label={`${h.content} 회사소개서 ${h.isPublic ? "표시 중, 숨기기" : "숨김, 표시하기"}`} onClick={() => patchHistory(h.historyId, { isPublic: !h.isPublic })}>
+                        {h.isPublic ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />} {h.isPublic ? "표시" : "숨김"}
+                      </button>
                       <span className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex gap-1 shrink-0">
-                        <button type="button" className="cd-btn cd-btn-ghost rounded p-1" title={h.isPublic ? "회사소개서 연혁에서 빼기" : "회사소개서 연혁에 싣기"} aria-label={h.isPublic ? "비공개로" : "공개로"} onClick={() => patchHistory(h.historyId, { isPublic: !h.isPublic })}>
-                          {h.isPublic ? <Eye className="w-3 h-3 cd-text-faint" /> : <EyeOff className="w-3 h-3 cd-text-faint" />}
-                        </button>
                         <button type="button" className="cd-btn cd-btn-ghost rounded p-1" title={h.highlight ? "강조 해제" : "주요 연혁으로 강조"} aria-label={h.highlight ? "강조 해제" : "강조"} onClick={() => patchHistory(h.historyId, { highlight: !h.highlight })}>
                           <Star className="w-3 h-3 cd-text-faint" />
                         </button>

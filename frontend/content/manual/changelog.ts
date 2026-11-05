@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-05", kind: "개선", title: "비상 연락망 — 표 너비·행 간격 축소, 출력본에 제목·날짜 표시",
+    body: "표가 화면 전체로 늘어나지 않고 내용에 맞는 너비로 나오며, 행 간격도 줄었습니다. 내려받은 엑셀·PDF 맨 위에 회사 이름이 들어간 제목이, 표 오른쪽 위에 내려받은 날짜가 적힙니다.",
+    articles: ["directory.main"],
+  },
+  {
     date: "2026-11-05", kind: "개선", title: "회사소개서 스튜디오 — 복사·삭제·글자 크기·사진 틀·연혁 표시",
     body: "글을 한 번 누르면 요소가 선택되어 Ctrl+C·Ctrl+V·Delete 가 듣고, 다시 누르면 글을 고칩니다. 도구 줄에서 글자 크기를 숫자로 바꾸고, 사진과 틀은 한 요소로 옮기고 키웁니다. 이미지 모서리를 끌면 비율이 유지되고 배경 없는 PNG 는 회색 없이 들어갑니다. 연혁 타임라인 선이 점 가운데를 지나고, 사업 분야 쪽 라벨 아래 간격이 넓어졌습니다. 회사 프로필 주요 연혁에서 회사소개서에 표시할 줄을 바로 고릅니다.",
     articles: ["sales.catalog-studio", "admin.company-profile"],

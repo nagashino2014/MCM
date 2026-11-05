@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const ctx = await requireSession();
     const format = new URL(req.url).searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
+    const now = new Date();
     const rows = (await listEmergencyContacts()).filter((r) => !r.hidden);
     await recordAccessLog({
       actorUserId: ctx.userId,
@@ -23,12 +24,12 @@ export async function GET(req: NextRequest) {
       targetKind: "emergency_contacts",
       detail: { format, count: rows.length },
     });
-    const file = format === "pdf" ? await createEmergencyContactsPdf(rows) : await createEmergencyContactsWorkbook(rows);
+    const file = format === "pdf" ? await createEmergencyContactsPdf(rows, now) : await createEmergencyContactsWorkbook(rows, now);
     return new NextResponse(new Uint8Array(file), {
       headers: {
         "Content-Type":
           format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(emergencyContactsFileName(format))}`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(emergencyContactsFileName(format, now))}`,
         "Cache-Control": "no-store",
       },
     });

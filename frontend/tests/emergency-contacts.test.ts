@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import ExcelJS from "exceljs";
 import {
   buildEmergencyRows,
   emergencyHeadcount,
@@ -9,6 +10,7 @@ import {
   type EmergencyEmployeeFact,
   type EmergencyEntryFact,
 } from "../lib/emergency-contacts-rules";
+import { createEmergencyContactsWorkbook, emergencyContactsAsOf } from "../lib/emergency-contacts-export";
 
 // 비상 연락망(340) — 행 구성·정렬·소속 묶음.
 
@@ -116,6 +118,26 @@ test("겸직 줄은 인사카드 번호를 따르고 총 인원에는 1명으로
   assert.equal(emergencyHeadcount(rows), 2);
   // 퇴사(재직 목록에서 빠짐)하면 겸직 줄도 함께 빠진다.
   assert.deepEqual(names(buildEmergencyRows([emp("B")], [line])), ["B"]);
+});
+
+test("출력일자는 내려받은 날의 한국 시간", () => {
+  assert.equal(emergencyContactsAsOf(new Date("2026-11-05T14:59:00Z")), "2026.11.05. 현재");
+  assert.equal(emergencyContactsAsOf(new Date("2026-11-05T15:00:00Z")), "2026.11.06. 현재");
+});
+
+test("엑셀 출력본은 제목·출력일자 아래에 표를 둔다", async () => {
+  const rows = buildEmergencyRows([emp("A"), emp("B"), emp("C", { deptName: "2본부", deptOrder: 40 })], []);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load((await createEmergencyContactsWorkbook(rows, new Date("2026-11-05T01:00:00Z"))) as never);
+  const ws = wb.worksheets[0];
+  assert.equal(ws.getCell("A1").value, "㈜한국환경안전연구원 비상연락망");
+  assert.equal(ws.getCell("A2").value, "2026.11.05. 현재");
+  assert.equal(ws.getCell("A2").alignment?.horizontal, "right");
+  assert.equal(ws.getCell("A3").value, "소속");
+  assert.equal(ws.getCell("A4").value, "개발팀");
+  assert.equal(ws.getCell("A7").value, "총 인원");
+  assert.equal(ws.getCell("B7").value, "3명");
+  assert.equal(ws.pageSetup.printArea, "A1:G7");
 });
 
 test("소속 묶음은 이어진 행끼리 만든다", () => {

@@ -26,6 +26,16 @@ import {
 import { cn } from "@/lib/utils";
 
 const GROUP_LIST_ID = "emergency-group-labels";
+// 표는 내용에 맞춘 폭으로 두고 화면 전체로 늘리지 않는다. 이 값보다 긴 내용은 줄바꿈 없이 열이 늘어난다.
+const COLUMNS = [
+  { label: "소속", width: 128 },
+  { label: "이름", width: 76 },
+  { label: "직책", width: 100 },
+  { label: "직급", width: 100 },
+  { label: "연락처", width: 124 },
+  { label: "직통번호", width: 124 },
+  { label: "이메일", width: 200 },
+];
 
 export function EmergencyContactsTab() {
   const { toast } = useCdToast();
@@ -155,7 +165,7 @@ export function EmergencyContactsTab() {
   const colCount = canEdit ? 8 : 7;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-3">
+    <div className="flex-1 min-h-0 flex flex-col gap-3 w-fit max-w-full">
       <div className="flex items-center gap-2 flex-wrap">
         <Search className="w-4 h-4 cd-text-faint" />
         <input
@@ -216,17 +226,15 @@ export function EmergencyContactsTab() {
       )}
 
       <div className="flex-1 min-h-0 overflow-auto cd-card">
-        <table className="cd-table text-[12.5px]">
+        <table className="cd-table text-[12.5px] [&_tbody_td]:!h-[38px] [&_tbody_td]:!py-1" style={{ width: "auto" }}>
           <thead>
             <tr>
-              <th>소속</th>
-              <th>이름</th>
-              <th>직책</th>
-              <th>직급</th>
-              <th>연락처</th>
-              <th>직통번호</th>
-              <th>이메일</th>
-              {canEdit && <th className="w-24">관리</th>}
+              {COLUMNS.map((c) => (
+                <th key={c.label} style={{ width: c.width }}>
+                  {c.label}
+                </th>
+              ))}
+              {canEdit && <th style={{ width: 72 }}>관리</th>}
             </tr>
           </thead>
           <tbody>
@@ -256,7 +264,7 @@ export function EmergencyContactsTab() {
                   <td className="cd-text-muted whitespace-nowrap">{row.positionName || "-"}</td>
                   <td className="cd-text-muted tabular-nums whitespace-nowrap">{row.mobilePhone || "-"}</td>
                   <td className="cd-text-muted tabular-nums whitespace-nowrap">{row.directPhone || "-"}</td>
-                  <td>
+                  <td className="whitespace-nowrap">
                     {row.email ? (
                       <Link
                         href={`/mail/compose?to=${encodeURIComponent(mailToken(row.name, row.positionName, row.email))}`}

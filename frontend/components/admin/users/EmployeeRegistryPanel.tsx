@@ -127,6 +127,18 @@ type UploadDocumentFn = (
   opts?: { targetTable?: string; targetId?: string | null }
 ) => Promise<void>;
 
+type DeleteDocumentFn = (doc: DocumentRow) => Promise<void>;
+
+/** 반복 행 — 삭제 API 종류·증빙 연결 표·확인 문구 이름. */
+const RECORD_ROWS = {
+  educations: { kind: "education", targetTable: "employee_educations", label: "학력" },
+  certifications: { kind: "certification", targetTable: "employee_certifications", label: "자격증" },
+  careers: { kind: "career", targetTable: "employee_careers", label: "근무 이력" },
+  housingSupports: { kind: "housing", targetTable: "employee_housing_supports", label: "임대차 계약" },
+} as const;
+
+type RemoveRecordRowFn = (key: keyof typeof RECORD_ROWS, index: number, rowId?: string) => Promise<void>;
+
 const CERTIFICATION_OPTIONS = [
   "대기관리기술사",
   "수질관리기술사",
@@ -384,6 +396,42 @@ export default function EmployeeRegistryPanel({
     toast("증빙 파일이 업로드되었습니다.");
   };
 
+  // 삭제 성공은 항목이 사라지는 것으로 알린다 — 알림을 띄우면 부모가 다시 그려지며 상세를 새로 불러 저장 전 입력이 사라진다.
+  const deleteDocument: DeleteDocumentFn = async (doc) => {
+    if (!confirm(`증빙 파일 '${doc.originalFilename || doc.displayName}'을(를) 삭제할까요?`)) return;
+    try {
+      const res = await fetch("/api/admin/employee-documents?documentId=" + encodeURIComponent(doc.documentId), { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "삭제 실패");
+      setEmployee((prev) => ({ ...prev, documents: prev.documents.filter((d) => d.documentId !== doc.documentId) }));
+    } catch (err) {
+      toast("실패: " + (err as Error).message, "error");
+    }
+  };
+
+  // 저장된 행은 바로 지우고(다른 입력 중인 내용은 유지), 아직 저장하지 않은 행은 화면에서만 뺀다.
+  const removeRecordRow: RemoveRecordRowFn = async (key, index, rowId) => {
+    const { kind, targetTable, label } = RECORD_ROWS[key];
+    if (rowId && employee.employeeId) {
+      const attached = employee.documents.filter((d) => d.targetTable === targetTable && d.targetId === rowId).length;
+      if (!confirm(`이 ${label} 행을 삭제할까요?${attached ? ` 연결된 증빙 ${attached}건도 함께 삭제됩니다.` : ""}`)) return;
+      try {
+        const res = await fetch(
+          `/api/admin/employees/${encodeURIComponent(employee.employeeId)}/records?kind=${kind}&rowId=${encodeURIComponent(rowId)}`,
+          { method: "DELETE" }
+        );
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "삭제 실패");
+      } catch (err) {
+        toast("실패: " + (err as Error).message, "error");
+        return;
+      }
+    }
+    setEmployee((prev) => ({
+      ...prev,
+      [key]: prev[key].filter((_, itemIndex) => itemIndex !== index),
+      documents: rowId ? prev.documents.filter((d) => !(d.targetTable === targetTable && d.targetId === rowId)) : prev.documents,
+    }));
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <section className="cd-card p-6">
@@ -480,10 +528,10 @@ export default function EmployeeRegistryPanel({
           <BasicTab employee={employee} setEmployee={setEmployee} departments={departments} positions={allowedPositions} />
         )}
         {activeTab === "education" && (
-          <EducationTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} />
+          <EducationTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} deleteDocument={deleteDocument} removeRecordRow={removeRecordRow} />
         )}
         {activeTab === "evidence" && (
-          <EvidenceTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} />
+          <EvidenceTab employee={employee} setEmployee={setEmployee} uploadDocument={uploadDocument} deleteDocument={deleteDocument} removeRecordRow={removeRecordRow} />
         )}
         {activeTab === "hr" && (
           <HrTab
@@ -491,6 +539,7 @@ export default function EmployeeRegistryPanel({
             departments={departments}
             positions={positions}
             uploadDocument={uploadDocument}
+            deleteDocument={deleteDocument}
             toast={toast}
           />
         )}
@@ -640,10 +689,14 @@ function EducationTab({
   employee,
   setEmployee,
   uploadDocument,
+  deleteDocument,
+  removeRecordRow,
 }: {
   employee: EmployeeDetail;
   setEmployee: React.Dispatch<React.SetStateAction<EmployeeDetail>>;
   uploadDocument: UploadDocumentFn;
+  deleteDocument: DeleteDocumentFn;
+  removeRecordRow: RemoveRecordRowFn;
 }) {
   return (
     <div className="space-y-5">
@@ -670,6 +723,8 @@ function EducationTab({
               displayName={`졸업증명서(${item.schoolName || "학력"})`}
               documents={employee.documents}
               uploadDocument={uploadDocument}
+              deleteDocument={deleteDocument}
+              onDeleteRow={() => void removeRecordRow("educations", index, item.educationId)}
             />
           </div>
         ))}
@@ -698,13 +753,15 @@ function EducationTab({
               displayName={`자격증 사본(${item.certificationName || "자격증"})`}
               documents={employee.documents}
               uploadDocument={uploadDocument}
+              deleteDocument={deleteDocument}
+              onDeleteRow={() => void removeRecordRow("certifications", index, item.certificationId)}
             />
           </div>
         ))}
       </RepeatingSection>
 
       {/* 졸업증명서·자격증 사본은 각 행의 증빙 버튼으로 업로드(건별 매칭 — 입찰 패키지 첨부 병합용) */}
-      <UploadRow uploadDocument={uploadDocument} types={["성적증명서"]} documents={employee.documents} />
+      <UploadRow uploadDocument={uploadDocument} deleteDocument={deleteDocument} types={["성적증명서"]} documents={employee.documents} />
     </div>
   );
 }
@@ -717,6 +774,8 @@ function RowAttach({
   displayName,
   documents,
   uploadDocument,
+  deleteDocument,
+  onDeleteRow,
 }: {
   targetTable: string;
   targetId: string | null;
@@ -724,18 +783,29 @@ function RowAttach({
   displayName: string;
   documents: DocumentRow[];
   uploadDocument: UploadDocumentFn;
+  deleteDocument: DeleteDocumentFn;
+  onDeleteRow: () => void;
 }) {
   if (!targetId) {
-    return <span className="text-[10px] cd-text-faint whitespace-nowrap self-center">저장 후 증빙 첨부</span>;
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] cd-text-faint whitespace-nowrap self-center">저장 후 증빙 첨부</span>
+        <RowDeleteButton onClick={onDeleteRow} />
+      </div>
+    );
   }
-  const attached = documents.find((d) => d.targetTable === targetTable && d.targetId === targetId);
+  const attached = documents.filter((d) => d.targetTable === targetTable && d.targetId === targetId);
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      {attached && (
-        <EmployeeDocLink doc={attached} className="cd-pill cd-pill-info truncate max-w-[140px]" />
+      {attached.length > 0 && (
+        <div className="flex flex-col gap-1 min-w-0">
+          {attached.map((doc) => (
+            <EmployeeDocChip key={doc.documentId} doc={doc} className="cd-pill cd-pill-info truncate max-w-[140px]" onDelete={deleteDocument} />
+          ))}
+        </div>
       )}
       <label className="cd-btn cd-btn-soft cursor-pointer !px-2.5 !py-1.5 text-[11px] shrink-0" title={`${documentType} 파일을 이 행에 연결해 업로드합니다.`}>
-        <FileUp className="w-3.5 h-3.5" /> {attached ? "교체" : "증빙"}
+        <FileUp className="w-3.5 h-3.5" /> {attached.length > 0 ? "추가" : "증빙"}
         <input
           type="file"
           className="hidden"
@@ -746,7 +816,16 @@ function RowAttach({
           }}
         />
       </label>
+      <RowDeleteButton onClick={onDeleteRow} />
     </div>
+  );
+}
+
+function RowDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="cd-btn cd-btn-danger cd-btn-sm shrink-0 !px-2" title="행 삭제" aria-label="행 삭제">
+      <Trash2 className="w-3.5 h-3.5" />
+    </button>
   );
 }
 
@@ -754,10 +833,14 @@ function EvidenceTab({
   employee,
   setEmployee,
   uploadDocument,
+  deleteDocument,
+  removeRecordRow,
 }: {
   employee: EmployeeDetail;
   setEmployee: React.Dispatch<React.SetStateAction<EmployeeDetail>>;
   uploadDocument: UploadDocumentFn;
+  deleteDocument: DeleteDocumentFn;
+  removeRecordRow: RemoveRecordRowFn;
 }) {
   return (
     <div className="space-y-5">
@@ -766,12 +849,13 @@ function EvidenceTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, careers: [...prev.careers, {}] }))}
       >
         {employee.careers.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+          <div key={index} className="grid md:grid-cols-[repeat(5,1fr)_auto] gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3 items-center">
             <input className="cd-input" inputMode="numeric" placeholder="입사시기" value={item.workedFrom ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedFrom: formatMonthInput(e.target.value) })} />
             <input className="cd-input" inputMode="numeric" placeholder="퇴사시기" value={item.workedTo ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { workedTo: formatMonthInput(e.target.value) })} />
             <input className="cd-input" placeholder="근무처" value={item.companyName ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { companyName: e.target.value })} />
             <input className="cd-input" placeholder="최종직위" value={item.finalPosition ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { finalPosition: e.target.value })} />
             <input className="cd-input" placeholder="담당업무" value={item.responsibilities ?? ""} onChange={(e) => updateArray(setEmployee, "careers", index, { responsibilities: e.target.value })} />
+            <RowDeleteButton onClick={() => void removeRecordRow("careers", index, item.careerId)} />
           </div>
         ))}
       </RepeatingSection>
@@ -781,17 +865,18 @@ function EvidenceTab({
         onAdd={() => setEmployee((prev) => ({ ...prev, housingSupports: [...prev.housingSupports, {}] }))}
       >
         {employee.housingSupports.map((item, index) => (
-          <div key={index} className="grid md:grid-cols-5 gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3">
+          <div key={index} className="grid md:grid-cols-[repeat(5,1fr)_auto] gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3 items-center">
             <CdDateInput value={item.leaseStartedAt ?? ""} onChange={(v) => updateArray(setEmployee, "housingSupports", index, { leaseStartedAt: v })} aria-label="임차 시작일" />
             <CdDateInput value={item.leaseEndedAt ?? ""} onChange={(v) => updateArray(setEmployee, "housingSupports", index, { leaseEndedAt: v })} aria-label="임차 종료일" />
             <input className="cd-input" type="number" placeholder="월세액" value={item.monthlyRent ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { monthlyRent: Number(e.target.value || 0) })} />
             <input className="cd-input" type="number" placeholder="보증금" value={item.depositAmount ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { depositAmount: Number(e.target.value || 0) })} />
             <input className="cd-input" placeholder="임대차 주소" value={item.address ?? ""} onChange={(e) => updateArray(setEmployee, "housingSupports", index, { address: e.target.value })} />
+            <RowDeleteButton onClick={() => void removeRecordRow("housingSupports", index, item.housingId)} />
           </div>
         ))}
       </RepeatingSection>
 
-      <UploadRow uploadDocument={uploadDocument} types={["국민연금가입자가입증명", "건강보험자격득실확인서", "기술자 경력확인서", "경력증명서", "이력서·경력기술서", "수료·이수증", "기타 자격·어학", "월세 임대차 계약서"]} documents={employee.documents} />
+      <UploadRow uploadDocument={uploadDocument} deleteDocument={deleteDocument} types={["국민연금가입자가입증명", "건강보험자격득실확인서", "기술자 경력확인서", "경력증명서", "이력서·경력기술서", "수료·이수증", "기타 자격·어학", "월세 임대차 계약서"]} documents={employee.documents} />
     </div>
   );
 }
@@ -825,12 +910,32 @@ function EmployeeDocLink({ doc, className }: { doc: DocumentRow; className: stri
   );
 }
 
+/** 증빙 파일 이름(보기)과 삭제 버튼. */
+function EmployeeDocChip({ doc, className, onDelete }: { doc: DocumentRow; className: string; onDelete: DeleteDocumentFn }) {
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <EmployeeDocLink doc={doc} className={className} />
+      <button
+        type="button"
+        className="shrink-0 cd-text-faint hover:text-[color:var(--cd-error)]"
+        title="증빙 파일 삭제"
+        aria-label={`증빙 파일 삭제: ${doc.originalFilename || doc.displayName}`}
+        onClick={() => void onDelete(doc)}
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </span>
+  );
+}
+
 function UploadRow({
   uploadDocument,
+  deleteDocument,
   types,
   documents,
 }: {
   uploadDocument: UploadDocumentFn;
+  deleteDocument: DeleteDocumentFn;
   types: string[];
   documents: DocumentRow[];
 }) {
@@ -863,7 +968,7 @@ function UploadRow({
         {documents
           .filter((doc) => types.includes(doc.documentType))
           .map((doc) => (
-            <EmployeeDocLink key={doc.documentId} doc={doc} className="cd-pill cd-pill-info" />
+            <EmployeeDocChip key={doc.documentId} doc={doc} className="cd-pill cd-pill-info" onDelete={deleteDocument} />
           ))}
       </div>
     </div>
@@ -1045,11 +1150,13 @@ function HrTab({
   departments,
   positions,
   uploadDocument,
+  deleteDocument,
   toast,
 }: {
   employee: EmployeeDetail;
   departments: DepartmentRow[];
   positions: PositionRow[];
+  deleteDocument: DeleteDocumentFn;
   uploadDocument: (
     file: File,
     documentType: string,
@@ -1177,7 +1284,7 @@ function HrTab({
           />
         </label>
         {docs.map((d) => (
-          <EmployeeDocLink key={d.documentId} doc={d} className="cd-pill cd-pill-info" />
+          <EmployeeDocChip key={d.documentId} doc={d} className="cd-pill cd-pill-info" onDelete={deleteDocument} />
         ))}
       </div>
     );

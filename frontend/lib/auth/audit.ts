@@ -82,6 +82,8 @@ export type AuditAction =
   | "employee_update"
   | "company_profile_update"
   | "employee_document_upload"
+  | "employee_document_delete"
+  | "employee_record_delete"
   | "employee_hr_event_create"
   | "employee_hr_event_delete"
   | "work_plan_save"

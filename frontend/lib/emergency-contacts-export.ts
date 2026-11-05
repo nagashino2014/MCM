@@ -1,5 +1,6 @@
 /**
  * 비상 연락망 내보내기 — 회사에서 쓰던 '사내 비상연락망' 엑셀 양식(소속 칸 병합·회색 머리글·총 인원 행, A4 세로 한 장 폭)에 맞춘다.
+ * 표 위에 제목과 내려받은 날의 'YYYY.MM.DD. 현재'를 적는다(2026-11-05 사용자 요청).
  * 소속 칸 병합과 전체 격자가 필요해 범용 표 내보내기(lib/export/table-document)를 쓰지 않는다.
  */
 import { promises as fs } from "fs";
@@ -13,6 +14,7 @@ const HEADERS = ["소속", "이름", "직책", "직급", "연락처", "직통번
 const COL_CHARS = [19.5, 13.66, 15, 15, 18.66, 18.66, 25.5];
 const FILL_HEADER = "FFD0CECE"; // 원본 머리글(테마 밝은 회색 -10%)
 const BLANK = "-";
+const TITLE = "㈜한국환경안전연구원 비상연락망";
 
 const cellValues = (r: EmergencyContactRow) => [
   r.name,
@@ -24,13 +26,21 @@ const cellValues = (r: EmergencyContactRow) => [
 ];
 const totalText = (n: number) => `${n}명`;
 
+const kstIso = (now: Date) => new Date(now.getTime() + 9 * 3600 * 1000).toISOString();
+
+/** 출력일자 — 내려받은 날(한국 시간)의 `YYYY.MM.DD. 현재`. */
+export function emergencyContactsAsOf(now = new Date()): string {
+  const kst = kstIso(now);
+  return `${kst.slice(0, 4)}.${kst.slice(5, 7)}.${kst.slice(8, 10)}. 현재`;
+}
+
 /** 파일 이름 — 원본 파일 관례 그대로 `사내 비상연락망(YY.MM.DD).확장자` (한국 시간). */
 export function emergencyContactsFileName(format: "xlsx" | "pdf", now = new Date()): string {
-  const kst = new Date(now.getTime() + 9 * 3600 * 1000).toISOString();
+  const kst = kstIso(now);
   return `사내 비상연락망(${kst.slice(2, 4)}.${kst.slice(5, 7)}.${kst.slice(8, 10)}).${format}`;
 }
 
-export async function createEmergencyContactsWorkbook(rows: EmergencyContactRow[]): Promise<Buffer> {
+export async function createEmergencyContactsWorkbook(rows: EmergencyContactRow[], now = new Date()): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "MCM";
   const ws = wb.addWorksheet("비상연락망", {
@@ -56,8 +66,21 @@ export async function createEmergencyContactsWorkbook(rows: EmergencyContactRow[
     cell.border = border;
   };
 
-  // 원본처럼 1행을 비우고 2행부터 표를 시작한다.
-  const headerRow = ws.getRow(2);
+  // 1행 제목, 2행 출력일자(표 오른쪽 위), 3행부터 표.
+  ws.mergeCells(1, 1, 1, HEADERS.length);
+  ws.getRow(1).height = 32;
+  const titleCell = ws.getCell(1, 1);
+  titleCell.value = TITLE;
+  titleCell.font = { name: "맑은 고딕", size: 16, bold: true };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  ws.mergeCells(2, 1, 2, HEADERS.length);
+  ws.getRow(2).height = 16;
+  const asOfCell = ws.getCell(2, 1);
+  asOfCell.value = emergencyContactsAsOf(now);
+  asOfCell.font = { name: "맑은 고딕", size: 9 };
+  asOfCell.alignment = { horizontal: "right", vertical: "middle" };
+
+  const headerRow = ws.getRow(3);
   headerRow.height = 21.65;
   HEADERS.forEach((label, i) => {
     const cell = headerRow.getCell(i + 1);
@@ -68,7 +91,7 @@ export async function createEmergencyContactsWorkbook(rows: EmergencyContactRow[
     cell.border = border;
   });
 
-  let at = 3;
+  let at = 4;
   for (const group of groupEmergencyRows(rows)) {
     const start = at;
     for (const r of group.rows) {
@@ -94,7 +117,7 @@ export async function createEmergencyContactsWorkbook(rows: EmergencyContactRow[
   totalRow.getCell(2).value = totalText(emergencyHeadcount(rows));
   ws.mergeCells(at, 2, at, HEADERS.length);
 
-  ws.pageSetup.printArea = `A2:G${at}`;
+  ws.pageSetup.printArea = `A1:G${at}`;
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -109,10 +132,14 @@ const ROW_H = 17;
 const FONT_BODY = 9.5;
 const FONT_HEAD = 10.5;
 const FONT_MIN = 6;
+const FONT_TITLE = 16;
+const FONT_AS_OF = 9;
+const TITLE_H = 30;
+const AS_OF_H = 14;
 const PAD_X = 3;
 const LINE = 0.5;
 
-export async function createEmergencyContactsPdf(rows: EmergencyContactRow[]): Promise<Uint8Array> {
+export async function createEmergencyContactsPdf(rows: EmergencyContactRow[], now = new Date()): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const fontsDir = path.join(process.cwd(), "public", "fonts");
@@ -180,6 +207,13 @@ export async function createEmergencyContactsPdf(rows: EmergencyContactRow[]): P
     y -= HEADER_H;
   };
   const roomFor = () => Math.floor((y - MARGIN_Y) / ROW_H);
+  // 제목과 출력일자는 첫 페이지에만 적는다.
+  const titleW = bold.widthOfTextAtSize(TITLE, FONT_TITLE);
+  page.drawText(TITLE, { x: (PAGE_W - titleW) / 2, y: y - FONT_TITLE, size: FONT_TITLE, font: bold, color: black });
+  y -= TITLE_H;
+  const asOf = emergencyContactsAsOf(now);
+  page.drawText(asOf, { x: MARGIN_X + tableW - regular.widthOfTextAtSize(asOf, FONT_AS_OF), y: y - FONT_AS_OF, size: FONT_AS_OF, font: regular, color: black });
+  y -= AS_OF_H;
   drawHeader();
 
   for (const group of groupEmergencyRows(rows)) {

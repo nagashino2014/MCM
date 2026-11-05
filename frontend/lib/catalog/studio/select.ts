@@ -29,12 +29,27 @@ const LIST_TAGS = new Set(["ul", "ol"]);
  */
 export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|front__full|divider__full|rs-biz__wheel|rs-clover|rs-effects__arc|rs-foot)\b/;
 
+/**
+ * 사진 틀 — 사진(img)과 그 모양을 잡는 틀은 한 요소로 고른다(사용자 지시 2026-11-05: 둘을 따로 옮기고 키우는 이중 작업 제거).
+ * 사진 교체·초점은 사진에, 옮기기·크기·숨기기는 틀에 적용하고, 사진은 CSS(폭·높이 100%)로 틀을 따라온다.
+ */
+export const PHOTO_FRAME_RE = /\bkc-(photo|front__window|front__band|person__photo)\b/;
+
+/** 사진 틀이면 그 안의 사진 하나. 틀이 아니거나 사진이 없으면(또는 둘 이상이면) null */
+export function photoFrameImage(n: CNode): CNode | null {
+  if (!PHOTO_FRAME_RE.test(n.className ?? "")) return null;
+  const imgs = (n.children ?? []).filter((c) => c.tag === "img");
+  return imgs.length === 1 ? imgs[0] : null;
+}
+
 export interface Selection {
   id: string;
   node: CNode;
   path: CNode[];
   parent: CNode | null;
   kind: "text" | "image" | "widget" | "infographic" | "list" | "item" | "box" | "added";
+  /** 사진이면 함께 움직이는 틀 — 위치·크기·숨기기는 이 노드에 적용한다 */
+  frame?: CNode;
 }
 
 /** 누른 노드 id → 고를 대상(위젯 안이면 위젯, 인라인 조각이면 그 글 블록). 쪽 루트·없음이면 null */
@@ -60,7 +75,9 @@ export function resolveSelection(root: CNode, hitId: string): Selection | null {
   let end = path.length;
   while (end > 1 && path[end - 1].tag === "#text") end--;
   if (end <= 1) return null;
-  return describe(path.slice(0, end));
+  // 틀을 눌러도 사진을 고른 것과 같다
+  const framed = photoFrameImage(path[end - 1]);
+  return describe(framed ? [...path.slice(0, end), framed] : path.slice(0, end));
 }
 
 export function describe(path: CNode[]): Selection {
@@ -75,7 +92,8 @@ export function describe(path: CNode[]): Selection {
   else if (LIST_TAGS.has(node.tag)) kind = "list";
   else if (node.tag === "li" && parent && LIST_TAGS.has(parent.tag) && !parent.widget) kind = "item";
   else if (isTextBlock(node, parent)) kind = "text";
-  return { id: node.id, node, path, parent, kind };
+  const frame = node.tag === "img" && parent && photoFrameImage(parent)?.id === node.id ? parent : undefined;
+  return { id: node.id, node, path, parent, kind, ...(frame ? { frame } : {}) };
 }
 
 /** 여러 개 고른 것 중 다른 고른 요소 안에 든 것은 뺀다(함께 옮기기·숨기기에서 두 번 적용되지 않게) */
@@ -86,7 +104,7 @@ export function outermost(root: CNode, ids: string[]): string[] {
 
 /** 위쪽으로 고를 수 있는 다음 조상(쪽 루트 전까지) */
 export function parentSelection(root: CNode, sel: Selection): Selection | null {
-  for (let i = sel.path.length - 2; i >= 1; i--) {
+  for (let i = sel.path.length - (sel.frame ? 3 : 2); i >= 1; i--) {
     const n = sel.path[i];
     if (n.tag === "#text") continue;
     return describe(sel.path.slice(0, i + 1));
@@ -139,7 +157,7 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     // 넣은 일러스트는 글자 크기·색을 일러스트 패널(그림 비율·색 모드)로 고친다
     typeStep: maxLevel >= 3 && (sel.kind === "text" || added) && !n.widget,
     color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added) && !n.widget,
-    duplicate: maxLevel >= 3 && !isRoot && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset))),
+    duplicate: maxLevel >= 3 && !isRoot && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset || n.attrs?.src))),
   };
   if (sel.kind === "widget") caps.locked = "데이터에서 자동으로 채우는 영역입니다. 행·항목은 데이터 화면에서 고칩니다.";
   else if (maxLevel === 1) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";

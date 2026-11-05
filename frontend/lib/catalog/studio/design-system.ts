@@ -78,6 +78,45 @@ export function snapWidth(w: number): { width: number; span: number } {
 
 export const snapY = (y: number): number => Math.round(y / BASELINE) * BASELINE;
 
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 크기 손잡이 — 끄는 쪽(n·s·e·w 와 모서리) */
+export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+const MIN_BOX = 8;
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * 손잡이를 끈 뒤의 상자 — 맞은편 변·모서리는 그 자리에 둔다.
+ *   lockRatio(모서리만): 가로/세로 비율을 유지한다. 그리드에 맞추면 비율이 깨지므로 맞추지 않는다.
+ *   그 밖: 폭은 12열 묶음, 높이는 4pt 기준선에 맞춘다.
+ */
+export function resizeBox(r: Box, handle: ResizeHandle, dx: number, dy: number, lockRatio: boolean): Box {
+  const east = handle.includes("e");
+  const west = handle.includes("w");
+  const south = handle.includes("s");
+  const north = handle.includes("n");
+  let w = r.w;
+  let h = r.h;
+  if (lockRatio && (east || west) && (south || north)) {
+    // 대각선 중 더 많이 끈 쪽을 따른다
+    const sx = (east ? dx : -dx) / (r.w || 1);
+    const sy = (south ? dy : -dy) / (r.h || 1);
+    const scale = Math.max(1 + (Math.abs(sx) >= Math.abs(sy) ? sx : sy), MIN_BOX / Math.min(r.w || 1, r.h || 1));
+    w = r2(r.w * scale);
+    h = r2(r.h * scale);
+  } else {
+    if (east || west) w = snapWidth(Math.max(MIN_BOX, r.w + (east ? dx : -dx))).width;
+    if (south || north) h = Math.max(MIN_BOX, snapY(r.h + (south ? dy : -dy)));
+  }
+  return { x: west ? r2(r.x + r.w - w) : r.x, y: north ? r2(r.y + r.h - h) : r.y, w, h };
+}
+
 // ── 타입 스케일 ──
 export interface TypeStep {
   name: string;

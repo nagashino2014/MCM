@@ -11,6 +11,11 @@ export const MANUAL_CHANGELOG: ChangelogEntry[] = [
     articles: ["directory.main"],
   },
   {
+    date: "2026-11-05", kind: "개선", title: "회사소개서 스튜디오 — 복사·삭제·글자 크기·사진 틀·연혁 표시",
+    body: "글을 한 번 누르면 요소가 선택되어 Ctrl+C·Ctrl+V·Delete 가 듣고, 다시 누르면 글을 고칩니다. 도구 줄에서 글자 크기를 숫자로 바꾸고, 사진과 틀은 한 요소로 옮기고 키웁니다. 이미지 모서리를 끌면 비율이 유지되고 배경 없는 PNG 는 회색 없이 들어갑니다. 연혁 타임라인 선이 점 가운데를 지나고, 사업 분야 쪽 라벨 아래 간격이 넓어졌습니다. 회사 프로필 주요 연혁에서 회사소개서에 표시할 줄을 바로 고릅니다.",
+    articles: ["sales.catalog-studio", "admin.company-profile"],
+  },
+  {
     date: "2026-11-05", kind: "수정", title: "계약 관리·매입 계약 — 알림이 떠도 입력 중인 값이 사라지지 않음",
     body: "낙찰률 형식 오류처럼 알림만 떠도 계약 상세를 다시 불러와 저장하지 않은 허가 정보·낙찰률 입력이 지워지던 문제를 고쳤습니다. 매입 계약에서 이미 올린 관리비 명세서를 다시 올리면 안내대로 내용 확인 창이 열립니다. 조회에 실패해도 다시 불러오기를 끝없이 반복하지 않고 알림은 한 번만 뜹니다.",
     articles: ["contracts.manage", "contracts.purchase"],

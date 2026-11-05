@@ -8,7 +8,8 @@ import { buildPagePlan } from "@/lib/catalog/render/components/plan";
 import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
 import type { CatalogRenderData, RenderCtx, RenderOptions } from "@/lib/catalog/render/types";
 import { matchInfographic } from "@/lib/catalog/render/infographic/match";
-import { composeDocument } from "@/lib/catalog/studio/compose";
+import { STUDIO_PRINT_CSS, composeDocument } from "@/lib/catalog/studio/compose";
+import { resizeBox } from "@/lib/catalog/studio/design-system";
 import { elementToTree } from "@/lib/catalog/studio/convert";
 import { orderPlan, type StudioPageState } from "@/lib/catalog/studio/doc";
 import {
@@ -17,17 +18,19 @@ import {
   duplicateNode,
   hideNode,
   listItemOp,
+  pasteNodes,
   patchNodeStyle,
   sanitizePageEdits,
   setInfo,
   setNodeContent,
   setNodeType,
+  snapshotNode,
   type PageEdits,
 } from "@/lib/catalog/studio/edits";
 import { BIND_GROUP_ORDER, DATA_BINDS, bindOptions, makeBindChip, resolveBind } from "@/lib/catalog/studio/binds";
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, placeChip } from "@/lib/catalog/studio/inline";
 import { findNode, textOf, type CNode } from "@/lib/catalog/studio/nodes";
-import { capabilities, outermost, resolveSelection } from "@/lib/catalog/studio/select";
+import { capabilities, outermost, parentSelection, resolveSelection } from "@/lib/catalog/studio/select";
 import { findOverlaps, intersectRect, isMovedNode, movedNodes, textBoxNodes, type OverlapBox } from "@/lib/catalog/studio/overlap";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import { makeFixture } from "./catalog-studio-fixture";
@@ -368,6 +371,118 @@ test("스튜디오 — 복제: 추가 요소는 그대로·기본 글은 글상�
   // 40개 한도
   const full: PageEdits = { v: 1, added: Array.from({ length: 40 }, (_, i) => ({ ...copy, id: `u${String(i).padStart(8, "0")}` })) };
   assert.equal(duplicateNode(full, applyEdits(base, full), "u00000000", { x: 0, y: 0, w: 10, h: 10 }), null);
+});
+
+test("스튜디오 — 복사·붙여넣기: 글은 지금 모양으로 찍고, 쪽을 옮겨도 붙으며 40개 한도를 지킨다", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  const derived = applyEdits(base, { v: 1 });
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  const clip = snapshotNode({ v: 1 }, derived, lead.id, { x: 48, y: 200, w: 500, h: 40, fontPx: 13, textStyle: { fontSize: "13px", lineHeight: "1.5", fontWeight: "700", color: "var(--brand)" } })!;
+  // 글 안 요소의 모양도 찍는다(부모 클래스에 기대던 안쪽 글) — 저장 왕복에도 남는다
+  const inner: CNode = { id: "nouter", tag: "p", children: [{ id: "ninnert", tag: "#text", text: "제목" }, { id: "ninnerb", tag: "br" }, { id: "ninners", tag: "span", className: "kc-sub", children: [{ id: "ninnert2", tag: "#text", text: "부제" }] }] };
+  const innerRoot: CNode = { id: "nroot", tag: "section", children: [inner] };
+  const innerCopy = snapshotNode({ v: 1 }, innerRoot, "nouter", { x: 0, y: 0, w: 100, h: 20, fontPx: 20, childStyles: [{ fontSize: "9px", display: "block" }] })!;
+  const innerRound = sanitizePageEdits({ v: 1, added: [innerCopy] }).added![0];
+  const sub = innerRound.children!.find((c) => c.tag === "span")!;
+  assert.equal(sub.style?.fontSize, "9px");
+  assert.equal(sub.style?.display, "block");
+  // 다른 쪽(빈 편집층)에 두 번 붙인다 — 붙일 때마다 비켜 놓이고 id 가 다르다
+  const once = pasteNodes({ v: 1 }, [clip], 16);
+  const twice = pasteNodes(once.edits, [clip], 32);
+  assert.equal(once.ids.length, 1);
+  const [a, b] = twice.edits.added!;
+  assert.notEqual(a.id, b.id);
+  assert.equal(a.style?.left, "64px");
+  assert.equal(b.style?.top, "232px");
+  assert.equal(textOf(a), textOf(lead));
+  // 저장 왕복·그리기에서 글자 크기·색이 살아남고, 타입 단계보다 직접 지정이 우선한다
+  const round = sanitizePageEdits(JSON.parse(JSON.stringify(twice.edits)));
+  assert.equal(round.added?.[0].style?.fontSize, "13px");
+  assert.equal(round.added?.[0].style?.color, "var(--brand)");
+  const drawn = findNode(applyEdits(base, round), a.id)!;
+  assert.equal(drawn.style?.fontSize, "13px");
+  assert.equal(drawn.style?.lineHeight, "1.5");
+  // 한도
+  const full: PageEdits = { v: 1, added: Array.from({ length: 39 }, (_, i) => ({ ...a, id: `u${String(i).padStart(8, "0")}` })) };
+  const r = pasteNodes(full, [clip, clip], 16);
+  assert.equal(r.ids.length, 1, "40개까지만");
+  assert.equal(r.edits.added?.length, 40);
+});
+
+test("스튜디오 — 글자 크기 직접 지정: 저장되고, 단계를 고르면 직접 지정을 지운다", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  let derived = applyEdits(base, { v: 1 });
+  const lead = findBy(derived, hasClass("kc-lead"))!;
+  let edits = patchNodeStyle({ v: 1 }, derived, lead.id, { fontSize: "18px", lineHeight: "1.6" });
+  assert.equal(findNode(applyEdits(base, edits), lead.id)?.style?.fontSize, "18px");
+  assert.equal(sanitizePageEdits(JSON.parse(JSON.stringify(edits))).nodes?.[lead.id]?.style?.fontSize, "18px");
+  // 범위 밖·단위 없는 값은 버린다
+  assert.equal(patchNodeStyle({ v: 1 }, derived, lead.id, { fontSize: "999px" }).nodes?.[lead.id]?.style?.fontSize, undefined);
+  assert.equal(patchNodeStyle({ v: 1 }, derived, lead.id, { fontSize: "url(x)" }).nodes?.[lead.id]?.style?.fontSize, undefined);
+  derived = applyEdits(base, edits);
+  edits = setNodeType(edits, derived, lead.id, "caption");
+  assert.equal(edits.nodes?.[lead.id]?.style, undefined);
+  assert.equal(edits.nodes?.[lead.id]?.type, "caption");
+  // 추가한 글상자도 같다
+  const box: CNode = { id: "ubbbbbbbb", tag: "div", className: "kc-x-text", style: { position: "absolute", left: "48px", top: "300px", width: "200px" }, typeStep: "body", children: [{ id: "ucccccccc", tag: "#text", text: "글" }] };
+  let e2 = addElement({ v: 1 }, box);
+  e2 = patchNodeStyle(e2, applyEdits(base, e2), box.id, { fontSize: "21px" });
+  assert.equal(findNode(applyEdits(base, e2), box.id)?.style?.fontSize, "21px");
+  e2 = setNodeType(e2, applyEdits(base, e2), box.id, "caption");
+  assert.notEqual(findNode(applyEdits(base, e2), box.id)?.style?.fontSize, "21px");
+});
+
+test("스튜디오 — 크기 손잡이: 모서리는 비율 유지·맞은편 고정, 그 밖은 그리드 맞춤", () => {
+  const r = { x: 100, y: 100, w: 200, h: 100 };
+  // 오른쪽 아래를 끌면 비율 유지, 왼쪽 위 고정
+  const se = resizeBox(r, "se", 100, 10, true);
+  assert.deepEqual(se, { x: 100, y: 100, w: 300, h: 150 });
+  // 왼쪽 위를 끌면 오른쪽 아래가 고정
+  const nw = resizeBox(r, "nw", -100, 0, true);
+  assert.equal(nw.w / nw.h, 2);
+  assert.equal(nw.x + nw.w, 300);
+  assert.equal(nw.y + nw.h, 200);
+  // 줄이기 — 최소 크기 아래로 가지 않고 비율 유지
+  const small = resizeBox(r, "se", -500, -500, true);
+  assert.equal(small.h, 8);
+  assert.equal(small.w, 16);
+  // 변 손잡이·비율 풀기는 그리드 맞춤
+  const e = resizeBox(r, "e", 40, 90, true);
+  assert.equal(e.h, 100, "오른쪽 변은 높이를 바꾸지 않는다");
+  assert.equal(resizeBox(r, "s", 90, 41, false).h, 140, "4pt 기준선");
+  assert.equal(resizeBox(r, "s", 90, 41, false).w, 200);
+  const w = resizeBox(r, "w", -40, 0, false);
+  assert.equal(w.x + w.w, 300);
+});
+
+test("스튜디오 — 사진과 틀은 한 요소: 어디를 눌러도 사진을 고르고 위치·크기는 틀에 적용", () => {
+  const img: CNode = { id: "nimg", tag: "img", attrs: { src: "/catalog-kit/assets/hq-cover-tall.webp", alt: "사옥" } };
+  const frame: CNode = { id: "nframe", tag: "div", className: "kc-front__window", children: [img] };
+  const plain: CNode = { id: "nplain", tag: "div", className: "kc-x", children: [{ id: "nimg2", tag: "img", attrs: { src: "/a.png" } }] };
+  const root: CNode = { id: "nroot", tag: "section", className: "pk-sheet", children: [frame, plain] };
+  const onImg = resolveSelection(root, "nimg")!;
+  assert.equal(onImg.kind, "image");
+  assert.equal(onImg.frame?.id, "nframe");
+  assert.equal(capabilities(onImg, 3).image, true);
+  assert.equal(capabilities(onImg, 3).resize, true);
+  const onFrame = resolveSelection(root, "nframe")!;
+  assert.equal(onFrame.id, "nimg", "틀을 눌러도 사진");
+  assert.equal(parentSelection(root, onImg), null, "상위 요소로 틀만 따로 고르지 않는다");
+  // 틀이 아닌 상자의 사진은 따로
+  assert.equal(resolveSelection(root, "nimg2")!.frame, undefined);
+  // 원래 사진도 복사된다 — 주소에서 이미지 키를 되찾고 틀 모서리를 잇는다
+  const copy = snapshotNode({ v: 1 }, root, "nimg", { x: 430, y: 40, w: 368, h: 515, radius: "0px 184px 184px", focus: { fx: 50, fy: 22 } })!;
+  assert.equal(copy.asset?.key, "k/assets/hq-cover-tall.webp");
+  assert.equal(copy.asset?.fy, 22);
+  const round = sanitizePageEdits({ v: 1, added: [copy] }).added![0];
+  assert.equal(round.style?.borderRadius, "0px 184px 184px");
+  assert.equal(round.asset?.key, "k/assets/hq-cover-tall.webp");
+});
+
+test("스튜디오 — 추가한 이미지 상자에 바탕색이 없다(배경 없는 PNG 가 회색으로 보이지 않게)", () => {
+  const rule = /\.kc-x-image \{[^}]*\}/.exec(STUDIO_PRINT_CSS)?.[0] ?? "";
+  assert.ok(rule, "규칙이 있다");
+  assert.doesNotMatch(rule, /background/);
 });
 
 test("스튜디오 — 여러 개 고르기: 다른 고른 요소 안에 든 것은 빼고 함께 숨기기", () => {

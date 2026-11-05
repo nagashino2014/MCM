@@ -31,11 +31,21 @@ export const PRINT_OVERRIDES = `
 ${BODY} .kc-head__mark { width: 3px; height: 11px; border-radius: 1px; }
 ${BODY} .kc-iconbox { border-radius: 8px; }
 ${BODY} .kc-process__num, ${BODY} .kc-map__dot--num { border-radius: 50%; }
-${BODY} .kc-timeline > li.is-highlight .kc-timeline__tick { border-radius: 50%; width: 11px; height: 11px; margin: 1px 0 5px; }
 ${BODY} .kc-photo--frame, ${BODY} .kc-nophoto.kc-photo--frame { border-radius: 12px; }
 ${BODY} .kc-kpi, ${BODY} .kc-card, ${BODY} .kc-strengths__method, ${BODY} .kc-fx > div { border-radius: 10px; }
 ${BODY} .kc-strengths__hero { border-radius: 14px; }
 ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
+
+/* 사업 분야 쪽 라벨(주요 서비스·수행 업종·수행 절차·대표 실적)과 그 아래 요소 사이(사용자 지시 2026-11-05) — 0 → 6px.
+   늘어난 높이는 오른쪽 단 블록 사이(14 → 10px, pages-business.tsx)에서 받아 쪽 넘침을 막는다 */
+.kc-areapage .kc-blockhead { margin-bottom: 6px; }
+
+/* 연혁 축(사용자 지시 2026-11-05) — 선은 조금 두껍게 점 가운데를 지나고, 점은 두꺼운 흰 테두리로 선과 띄운다.
+   점 칸 15px 가운데 = 연도 줄 16 + 간격 4 + 7.5 = 27.5px → 선 2.5px 는 26.25px 에서 시작. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-timeline::before { top: 26.25px; height: 2.5px; border-top: 0; background: var(--area); }
+.kc-timeline--horizontal::before { top: calc(50% - 1.25px); }
+.kc-timeline__tick { box-sizing: border-box; width: 15px; height: 15px; margin: 0 0 2px -3px; background: var(--area); border: 3px solid var(--paper); }
+.pk-sheet .kc-timeline > li.is-highlight .kc-timeline__tick { box-sizing: border-box; width: 15px; height: 15px; margin: 0 0 2px -3px; background: var(--area); border: 2px solid var(--paper); border-radius: 50%; }
 
 /* 연구소형 주요연혁(사용자 지시 2026-10-30) — 세로선이 점 중심에서 4px 어긋남 → 점을 22px 칸 가운데(27px)에 두고 선도 27px 중심으로,
    점 13 → 9px(30% 축소), 위(최근)는 진하게·아래로 갈수록 연하게(is-t0~9). ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */

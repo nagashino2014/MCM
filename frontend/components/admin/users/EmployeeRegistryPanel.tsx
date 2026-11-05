@@ -194,6 +194,12 @@ const emptyEmployee = (deptId?: string | null): EmployeeDetail => ({
   documents: [],
 });
 
+async function fetchEmployeeDetail(employeeId: string): Promise<EmployeeDetail> {
+  const res = await fetch("/api/admin/employees/" + encodeURIComponent(employeeId), { cache: "no-store" });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "직원 조회 실패");
+  return ((await res.json()) as { employee: EmployeeDetail }).employee;
+}
+
 export default function EmployeeRegistryPanel({
   snapshot,
   selectedDept,
@@ -211,6 +217,8 @@ export default function EmployeeRegistryPanel({
     positionIds: [],
   });
   const [saving, setSaving] = useState(false);
+  // 마지막으로 서버에서 읽은 값 — 직급·부서를 사용자가 고치는 중인지 가리는 기준.
+  const loadedEmployee = useRef<EmployeeDetail | null>(null);
 
   const positions = snapshot?.positions ?? [];
   const departments = snapshot?.departments ?? [];
@@ -240,22 +248,53 @@ export default function EmployeeRegistryPanel({
     setEmployee((prev) => (prev.employeeId ? prev : { ...prev, deptId: selectedDept.deptId }));
   }, [selectedDept, snapshot?.departmentPositions]);
 
+  // 계정 발급·인사 이력처럼 서버가 바꾼 칸만 다시 읽어 반영한다 — 저장 전 입력은 그대로 둔다.
+  // 화면에서 못 고치는 칸은 항상 서버 값을, 직급·부서는 고치는 중이 아닐 때만 서버 값을 쓴다.
+  const refreshServerFields = async (employeeId: string) => {
+    try {
+      const detail = await fetchEmployeeDetail(employeeId);
+      const loaded = loadedEmployee.current?.employeeId === employeeId ? loadedEmployee.current : null;
+      setEmployee((prev) =>
+        prev.employeeId === employeeId
+          ? {
+              ...prev,
+              userId: detail.userId,
+              employeeNo: detail.employeeNo,
+              status: detail.status,
+              documents: detail.documents,
+              positionId: loaded && prev.positionId !== loaded.positionId ? prev.positionId : detail.positionId,
+              deptId: loaded && prev.deptId !== loaded.deptId ? prev.deptId : detail.deptId,
+            }
+          : prev
+      );
+      if (loaded) loadedEmployee.current = { ...loaded, positionId: detail.positionId, deptId: detail.deptId };
+    } catch (err) {
+      toast("직원 조회 실패: " + (err as Error).message, "error");
+    }
+  };
+
   useEffect(() => {
     if (!selectedEmployee) return;
+    const employeeId = selectedEmployee.employeeId;
+    // 이미 편집 중인 직원(다시 선택·계정 발급)은 전체를 덮지 않는다.
+    if (employee.employeeId === employeeId) {
+      void refreshServerFields(employeeId);
+      return;
+    }
     let cancelled = false;
-    fetch("/api/admin/employees/" + encodeURIComponent(selectedEmployee.employeeId), { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "직원 조회 실패");
-        return res.json() as Promise<{ employee: EmployeeDetail }>;
-      })
-      .then((body) => {
-        if (!cancelled) setEmployee({ ...body.employee, residentRegistrationNo: "" });
+    fetchEmployeeDetail(employeeId)
+      .then((detail) => {
+        if (cancelled) return;
+        loadedEmployee.current = detail;
+        setEmployee({ ...detail, residentRegistrationNo: "" });
       })
       .catch((err) => toast("직원 조회 실패: " + (err as Error).message, "error"));
     return () => {
       cancelled = true;
     };
-  }, [selectedEmployee, toast]);
+    // 선택이 바뀔 때만 실행한다 — employee·toast 를 넣으면 입력·알림마다 다시 불러온다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmployee]);
 
   const allowedPositions = useMemo(() => {
     const deptId = employee.deptId || selectedDept?.deptId;
@@ -380,6 +419,7 @@ export default function EmployeeRegistryPanel({
       toast(dateError, "error");
       return;
     }
+    const sentEmployeeId = employee.employeeId;
     setSaving(true);
     try {
       const endpoint = employee.employeeId
@@ -392,8 +432,18 @@ export default function EmployeeRegistryPanel({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "직원 저장 실패");
       const body = (await res.json()) as { employeeId: string };
-      setEmployee((prev) => ({ ...prev, employeeId: body.employeeId, residentRegistrationNo: "" }));
-      toast("직원 정보가 저장되었습니다.");
+      // 새 행 id·주민번호 마스킹은 서버가 만든다 — 다시 읽지 않으면 새 행에 증빙을 붙이거나 행을 지울 수 없다. 저장 중에는 입력을 막아 덮일 내용이 없다.
+      const detail = await fetchEmployeeDetail(body.employeeId).catch(() => null);
+      if (detail) loadedEmployee.current = detail;
+      setEmployee((prev) =>
+        prev.employeeId !== sentEmployeeId
+          ? prev
+          : detail
+            ? { ...detail, residentRegistrationNo: "" }
+            : { ...prev, employeeId: body.employeeId, residentRegistrationNo: "" }
+      );
+      if (detail) toast("직원 정보가 저장되었습니다.");
+      else toast("저장했지만 화면을 새로 고치지 못했습니다. 직원을 다시 선택하세요.", "error");
       onReload();
     } catch (err) {
       toast("실패: " + (err as Error).message, "error");
@@ -426,13 +476,13 @@ export default function EmployeeRegistryPanel({
     toast("증빙 파일이 업로드되었습니다.");
   };
 
-  // 삭제 성공은 항목이 사라지는 것으로 알린다 — 알림을 띄우면 부모가 다시 그려지며 상세를 새로 불러 저장 전 입력이 사라진다.
   const deleteDocument: DeleteDocumentFn = async (doc) => {
     if (!confirm(`증빙 파일 '${doc.originalFilename || doc.displayName}'을(를) 삭제할까요?`)) return;
     try {
       const res = await fetch("/api/admin/employee-documents?documentId=" + encodeURIComponent(doc.documentId), { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "삭제 실패");
       setEmployee((prev) => ({ ...prev, documents: prev.documents.filter((d) => d.documentId !== doc.documentId) }));
+      toast("증빙 파일을 삭제했습니다.");
     } catch (err) {
       toast("실패: " + (err as Error).message, "error");
     }
@@ -460,6 +510,7 @@ export default function EmployeeRegistryPanel({
       [key]: prev[key].filter((_, itemIndex) => itemIndex !== index),
       documents: rowId ? prev.documents.filter((d) => !(d.targetTable === targetTable && d.targetId === rowId)) : prev.documents,
     }));
+    if (rowId && employee.employeeId) toast(`${label} 행을 삭제했습니다.`);
   };
 
   return (
@@ -537,7 +588,7 @@ export default function EmployeeRegistryPanel({
               {employee.status === "inactive" && <span className="cd-pill cd-pill-idle">퇴사자</span>}
             </h2>
           </div>
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setEmployee(emptyEmployee(selectedDept?.deptId))}>
+          <button type="button" disabled={saving} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setEmployee(emptyEmployee(selectedDept?.deptId))}>
             신규 등록
           </button>
         </div>
@@ -554,6 +605,7 @@ export default function EmployeeRegistryPanel({
           ]}
         />
 
+        <fieldset disabled={saving} className="contents">
         {activeTab === "basic" && (
           <BasicTab employee={employee} setEmployee={setEmployee} departments={departments} positions={allowedPositions} />
         )}
@@ -571,8 +623,13 @@ export default function EmployeeRegistryPanel({
             uploadDocument={uploadDocument}
             deleteDocument={deleteDocument}
             toast={toast}
+            onChanged={() => {
+              if (employee.employeeId) void refreshServerFields(employee.employeeId);
+              onReload();
+            }}
           />
         )}
+        </fieldset>
 
         <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t cd-border-c">
           <div className="text-xs cd-text-muted">
@@ -1182,6 +1239,7 @@ function HrTab({
   uploadDocument,
   deleteDocument,
   toast,
+  onChanged,
 }: {
   employee: EmployeeDetail;
   departments: DepartmentRow[];
@@ -1194,6 +1252,8 @@ function HrTab({
     opts?: { targetTable?: string; targetId?: string | null }
   ) => Promise<void>;
   toast: (message: string, type?: "success" | "error") => void;
+  /** 이력 기록·삭제 뒤 — 퇴사는 재직 상태를 바꾸고 이력 삭제는 첨부 문서를 지운다. */
+  onChanged: () => void;
 }) {
   const employeeId = employee.employeeId;
   const [events, setEvents] = useState<HrEventRow[]>([]);
@@ -1255,6 +1315,7 @@ function HrTab({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "기록 실패");
       await reloadEvents();
+      onChanged();
       toast("인사 이력이 기록되었습니다.");
       return (data.event?.eventId as string) ?? null;
     } catch (e) {
@@ -1276,6 +1337,7 @@ function HrTab({
       );
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "삭제 실패");
       await reloadEvents();
+      onChanged();
       toast("인사 이력을 삭제했습니다.");
     } catch (e) {
       toast("실패: " + (e as Error).message, "error");

@@ -137,6 +137,16 @@ const CERTIFICATION_OPTIONS = [
   "소음진동기사",
   "화공기사",
   "산업안전기사",
+  "토목기사",
+  "자연생태복원기사",
+  "조경기사",
+  "식품기사",
+  "산업위생관리기사",
+  "신재생에너지발전설비기사",
+  "위험물산업기사",
+  "수질환경산업기사",
+  "폐기물처리산업기사",
+  "환경기능사",
 ];
 
 const emptyEmployee = (deptId?: string | null): EmployeeDetail => ({
@@ -671,7 +681,7 @@ function EducationTab({
         {employee.certifications.map((item, index) => (
           <div key={index} className="grid md:grid-cols-[repeat(4,1fr)_auto] gap-2 rounded-2xl cd-surface-bg border cd-border-c p-3 items-center">
             <select className="cd-select" value={item.certificationName} onChange={(e) => updateArray(setEmployee, "certifications", index, { certificationName: e.target.value })}>
-              {CERTIFICATION_OPTIONS.map((name) => (
+              {(CERTIFICATION_OPTIONS.includes(item.certificationName) ? CERTIFICATION_OPTIONS : [...CERTIFICATION_OPTIONS, item.certificationName]).map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>
@@ -788,7 +798,7 @@ function EvidenceTab({
         ))}
       </RepeatingSection>
 
-      <UploadRow uploadDocument={uploadDocument} types={["국민연금가입자가입증명", "건강보험자격득실확인서", "기술자 경력확인서", "월세 임대차 계약서"]} documents={employee.documents} />
+      <UploadRow uploadDocument={uploadDocument} types={["국민연금가입자가입증명", "건강보험자격득실확인서", "기술자 경력확인서", "경력증명서", "이력서·경력기술서", "수료·이수증", "기타 자격·어학", "월세 임대차 계약서"]} documents={employee.documents} />
     </div>
   );
 }

@@ -58,6 +58,7 @@ export const STUDIO_PRINT_CSS = `
 .kc-x-shape--round { border-radius: var(--radius-sm); }
 .kc-x-shape--circle { border-radius: 50%; }
 .kc-x-shape--line { background: var(--rule-strong); }
-.kc-x-image { box-sizing: border-box; overflow: hidden; background: var(--photo-fill); }
+.kc-x-image { box-sizing: border-box; overflow: hidden; }
 .kc-x-image > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.kc-photo:has(> img), .kc-front__window:has(> img), .kc-front__band:has(> img) { background: transparent; }
 `;

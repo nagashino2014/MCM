@@ -276,9 +276,13 @@ function VariantChips({
 function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel: Selection }) {
   const n = sel.node;
   const theme = studio.state!.theme;
-  const edit = composed.state?.edits.nodes?.[sel.id];
+  // 위치·크기는 사진이면 틀에 적용된다
+  const layoutId = sel.frame?.id ?? sel.id;
+  const edit = composed.state?.edits.nodes?.[layoutId];
   const cols = gridColumnsOf(n);
   const currentStep = n.origin === "add" ? n.typeStep : edit?.type;
+  // 도구 줄에서 직접 지정한 글자 크기(추가 요소는 저장된 스타일에서 — 파생 스타일에는 단계 값이 섞여 있다)
+  const customPx = n.origin === "add" ? composed.state?.edits.added?.find((a) => a.id === sel.id)?.style?.fontSize : edit?.style?.fontSize;
   const frameOf = (): CNode | null => {
     const p = sel.parent;
     if (p && /\b(kc-photo|kc-ratio-|kc-front__window|kc-x-image)/.test(p.className ?? "")) return p;
@@ -343,7 +347,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
             className="cd-select"
             style={{ width: 110 }}
             value=""
-            onChange={(e) => e.target.value && ops.patchStyle(sel.id, { width: `${Math.round(spanWidth(Number(e.target.value)) * 100) / 100}px`, flex: "none" })}
+            onChange={(e) => e.target.value && ops.patchStyle(layoutId, { width: `${Math.round(spanWidth(Number(e.target.value)) * 100) / 100}px`, flex: "none" })}
           >
             <option value="">열 고르기</option>
             {Array.from({ length: 12 }, (_, i) => i + 1).map((c) => (
@@ -357,8 +361,9 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       {caps.typeStep ? (
         <label className="text-xs cd-text-muted flex items-center gap-2">
           글자 크기
-          <select className="cd-select flex-1" value={currentStep ?? ""} onChange={(e) => ops.setType(sel.id, e.target.value || null)}>
+          <select className="cd-select flex-1" value={customPx ? "custom" : (currentStep ?? "")} onChange={(e) => e.target.value !== "custom" && ops.setType(sel.id, e.target.value || null)}>
             <option value="">원래 크기</option>
+            {customPx ? <option value="custom">직접 지정 · {String(customPx).replace("px", "pt")}</option> : null}
             {PICKABLE_TYPE_STEPS.map((s) => (
               <option key={s.name} value={s.name}>
                 {s.label} · {s.fontSize.replace("px", "pt")}
@@ -390,11 +395,11 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
         </div>
       ) : null}
       {caps.move && n.origin !== "add" && (edit?.style || edit?.type) ? (
-        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm self-start" onClick={() => ops.reset(sel.id, ["style", "type"])}>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm self-start" onClick={() => ops.reset(layoutId, ["style", "type"])}>
           <RotateCcw className="w-3.5 h-3.5" /> 위치·크기·글자 원래대로
         </button>
       ) : null}
-      {caps.move ? <p className="text-[11px] cd-text-faint">캔버스의 [옮기기] 손잡이를 끌거나 방향키로 옮깁니다(가로 1열, 세로 4pt, Shift 16pt).</p> : null}
+      {caps.move ? <p className="text-[11px] cd-text-faint">캔버스의 [옮기기] 손잡이를 끌거나 방향키로 옮깁니다(가로 1열, 세로 4pt, Shift 16pt). 이미지는 모서리를 끌면 비율이 유지됩니다(Shift 로 풀기).</p> : null}
     </section>
   );
 }

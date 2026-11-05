@@ -172,7 +172,7 @@ export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; d
   const kpis = areaKpis(data, area);
   const regions = !isPermit && !isEsg ? regionBars(data, area.category) : [];
   return (
-    <Sheet ctx={ctx} area={area.index} anchors={[`area-${area.index}`]} outline={area.name} note={note} style={{ gap: 16 }}>
+    <Sheet ctx={ctx} cls="kc-areapage" area={area.index} anchors={[`area-${area.index}`]} outline={area.name} note={note} style={{ gap: 16 }}>
       <Head ctx={ctx} num="02" name="사업 분야" sub={area.name} />
       <section className={heroCls}>
         <div className="kc-bizhero__text">
@@ -265,7 +265,7 @@ export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; d
             </div>
           ) : null}
         </div>
-        <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
             <p className="kc-blockhead">{c.processTitle}</p>
             <InfoSlot slot={`area-${area.index}.process`} spec={stepsSpec(c.process)} box={{ w: 490, h: hero === "none" ? 120 : 90 }} area={area.index} />
@@ -312,7 +312,7 @@ export function CustomAreaPage({ ctx, data, area }: { ctx: RenderCtx; data: Cata
   const kpiIds = c.kpis.filter((id) => data.metrics[id as MetricId]) as MetricId[];
   const hero = kpiIds[0];
   return (
-    <Sheet ctx={ctx} area={area.slot} anchors={[area.key]} outline={area.name} style={{ gap: 16 }}>
+    <Sheet ctx={ctx} cls="kc-areapage" area={area.slot} anchors={[area.key]} outline={area.name} style={{ gap: 16 }}>
       <Head ctx={ctx} num="02" name="사업 분야" sub={area.name} />
       <section className="kc-bizhero">
         <div className="kc-bizhero__text">
@@ -359,7 +359,7 @@ export function CustomAreaPage({ ctx, data, area }: { ctx: RenderCtx; data: Cata
             </ul>
           </div>
         </div>
-        <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
             <p className="kc-blockhead">{c.processTitle}</p>
             <InfoSlot slot={`${area.key}.process`} spec={{ ...stepsSpec(c.process), type: c.infoType }} box={{ w: 490, h: 90 }} area={area.slot} />

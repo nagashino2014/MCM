@@ -66,7 +66,7 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
 
           {caps?.editText ? (
             <div className="text-xs cd-text-muted flex flex-col gap-1">
-              <p>캔버스에서 글을 눌러 바로 고칩니다. Enter 는 줄바꿈, Esc 는 끝내기입니다. 파란 바탕 칩은 자동 값(지표)이라 고칠 수 없고 지울 수는 있습니다.</p>
+              <p>고른 글을 다시 누르면(또는 두 번 누르면) 글을 고칩니다. Enter 는 줄바꿈, Esc 는 끝내기입니다. 파란 바탕 칩은 자동 값(지표)이라 고칠 수 없고 지울 수는 있습니다.</p>
               {sel.node.pinned && sel.node.origin !== "add" ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="cd-pill cd-pill-warn">고친 글 · 자동 갱신 제외</span>
@@ -97,8 +97,8 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
                 {sel.node.origin === "base" || !sel.node.origin ? "이 요소 숨기기" : "이 요소 지우기"}
               </button>
               ) : null}
-              {sel.node.edited && sel.node.origin === "base" ? (
-                <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.reset(sel.id)}>
+              {(sel.node.edited || sel.frame?.edited) && sel.node.origin === "base" ? (
+                <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => (ops.reset(sel.id), sel.frame && ops.reset(sel.frame.id))}>
                   <RotateCcw className="w-3.5 h-3.5" /> 이 요소 편집 모두 되돌리기
                 </button>
               ) : null}
@@ -129,7 +129,7 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
               const n = findNode(composed.base, id);
               return (
                 <li key={id} className="flex items-center gap-1 text-xs">
-                  <span className="cd-text-muted truncate">{n ? snippet(n) : "(데이터에서 사라진 요소)"}</span>
+                  <span className="cd-text-muted truncate">{n ? (n.tag === "img" || n.children?.some((c) => c.tag === "img") ? String(n.attrs?.alt ?? "") || "사진" : snippet(n)) : "(데이터에서 사라진 요소)"}</span>
                   <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm ml-auto" onClick={() => ops.unhide(id)}>
                     보이기
                   </button>
@@ -245,7 +245,7 @@ function ImageControls({ sel, ops }: { sel: Selection; ops: PanelProps["ops"] })
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
-        <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => ops.pickImage((key) => ops.setImage(sel.id, { key, fx: 50, fy: 50 }))}>
+        <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => ops.pickImage((key) => void ops.swapImage(sel.id, key))}>
           <ImagePlus className="w-3.5 h-3.5" /> 사진 바꾸기
         </button>
         {a && sel.node.origin !== "add" ? (

@@ -9,6 +9,7 @@ import { BriefcaseBusiness, FileUp, GraduationCap, History, Home, Plus, Save, Tr
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
+import { DraggablePdfViewer } from "@/components/contracts/DraggablePdfViewer";
 import type {
   DepartmentRow,
   OrganizationEmployeeRow,
@@ -731,15 +732,7 @@ function RowAttach({
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {attached && (
-        <a
-          href={attached.publicPath ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-          className="cd-pill cd-pill-info truncate max-w-[140px]"
-          title={attached.originalFilename || attached.displayName}
-        >
-          {attached.originalFilename || attached.displayName}
-        </a>
+        <EmployeeDocLink doc={attached} className="cd-pill cd-pill-info truncate max-w-[140px]" />
       )}
       <label className="cd-btn cd-btn-soft cursor-pointer !px-2.5 !py-1.5 text-[11px] shrink-0" title={`${documentType} 파일을 이 행에 연결해 업로드합니다.`}>
         <FileUp className="w-3.5 h-3.5" /> {attached ? "교체" : "증빙"}
@@ -803,6 +796,35 @@ function EvidenceTab({
   );
 }
 
+/** 증빙 파일 이름 — PDF·이미지는 계약서 보기와 같은 뷰어로 열고, 그 밖의 형식은 내려받는다. */
+function EmployeeDocLink({ doc, className }: { doc: DocumentRow; className: string }) {
+  const [viewing, setViewing] = useState(false);
+  const label = doc.originalFilename || doc.displayName;
+  if (!doc.publicPath || !/\.(pdf|png|jpe?g|webp)$/i.test(label)) {
+    return (
+      <a href={doc.publicPath ?? "#"} target="_blank" rel="noreferrer" className={className} title={label}>
+        {label}
+      </a>
+    );
+  }
+  const url = `${doc.publicPath}&inline=1`;
+  return (
+    <>
+      <button type="button" className={className} title={label} onClick={() => setViewing(true)}>
+        {label}
+      </button>
+      {viewing && (
+        <DraggablePdfViewer
+          title={label}
+          url={url}
+          docs={[{ label, url, fileName: label, downloadUrl: doc.publicPath }]}
+          onClose={() => setViewing(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function UploadRow({
   uploadDocument,
   types,
@@ -841,9 +863,7 @@ function UploadRow({
         {documents
           .filter((doc) => types.includes(doc.documentType))
           .map((doc) => (
-            <a key={doc.documentId} href={doc.publicPath ?? "#"} className="cd-pill cd-pill-info" target="_blank" rel="noreferrer">
-              {doc.originalFilename || doc.displayName}
-            </a>
+            <EmployeeDocLink key={doc.documentId} doc={doc} className="cd-pill cd-pill-info" />
           ))}
       </div>
     </div>
@@ -960,7 +980,7 @@ function DeptPostsSection({
         </CdHelp>
       </h3>
       <p className="text-xs cd-text-muted mb-3">주 소속 부서를 고르면 부서장 지정, 다른 부서를 고르면 겸직으로 기록됩니다.</p>
-      <div className="grid md:grid-cols-[1fr_120px_1fr_150px_150px_auto] gap-2 items-end mb-3">
+      <div className="grid md:grid-cols-[1fr_120px_1fr] gap-2 mb-2">
         <Field label="부서">
           <select className="cd-select" value={form.deptId} onChange={(e) => setForm((f) => ({ ...f, deptId: e.target.value }))}>
             <option value="">선택</option>
@@ -985,6 +1005,8 @@ function DeptPostsSection({
         <Field label="직책">
           <input className="cd-input" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="예: 본부장(선택)" />
         </Field>
+      </div>
+      <div className="grid md:grid-cols-[1fr_1fr_auto] gap-2 items-end mb-3">
         <Field label="발령일">
           <CdDateInput value={form.effectiveFrom} onChange={(v) => setForm((f) => ({ ...f, effectiveFrom: v }))} aria-label="발령일" />
         </Field>
@@ -1014,6 +1036,9 @@ function DeptPostsSection({
     </section>
   );
 }
+
+/** 인사관리 탭 카드 — 최대 2열, 카드 폭이 430px 아래로 줄면 1열(2026-11-05 사용자 요청). */
+const HR_CARD_COLUMNS = "repeat(auto-fit, minmax(max(min(100%, 430px), calc(50% - 10px)), 1fr))";
 
 function HrTab({
   employee,
@@ -1152,9 +1177,7 @@ function HrTab({
           />
         </label>
         {docs.map((d) => (
-          <a key={d.documentId} href={d.publicPath ?? "#"} target="_blank" rel="noreferrer" className="cd-pill cd-pill-info">
-            {d.originalFilename || d.displayName}
-          </a>
+          <EmployeeDocLink key={d.documentId} doc={d} className="cd-pill cd-pill-info" />
         ))}
       </div>
     );
@@ -1172,11 +1195,11 @@ function HrTab({
   const onLeave = leaves.length > 0 && leaves[0].eventType === "leave_start";
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="grid gap-5" style={{ gridTemplateColumns: HR_CARD_COLUMNS }}>
       {/* 승진 이력 */}
       <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-3">승진 이력</h3>
-        <div className="grid md:grid-cols-[1fr_160px_1fr_auto] gap-2 items-end mb-3">
+        <div className="grid md:grid-cols-[1fr_160px] gap-2 mb-2">
           <Field label="승진 직급">
             <select className="cd-select" value={promo.positionId} onChange={(e) => setPromo((p) => ({ ...p, positionId: e.target.value }))}>
               <option value="">직급 선택</option>
@@ -1188,6 +1211,8 @@ function HrTab({
           <Field label="승진일자">
             <CdDateInput value={promo.eventDate} onChange={(v) => setPromo((p) => ({ ...p, eventDate: v }))} aria-label="승진일자" />
           </Field>
+        </div>
+        <div className="grid md:grid-cols-[1fr_auto] gap-2 items-end mb-3">
           <Field label="비고">
             <input className="cd-input" value={promo.note} onChange={(e) => setPromo((p) => ({ ...p, note: e.target.value }))} placeholder="비고(선택)" />
           </Field>
@@ -1223,7 +1248,7 @@ function HrTab({
       {/* 부서 이동 이력 */}
       <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
         <h3 className="font-bold cd-text mb-3">부서 이동 이력</h3>
-        <div className="grid md:grid-cols-[1fr_1fr_160px_1fr_auto] gap-2 items-end mb-3">
+        <div className="grid md:grid-cols-2 gap-2 mb-2">
           <Field label="전 소속">
             <select className="cd-select" value={transfer.fromDeptId} onChange={(e) => setTransfer((t) => ({ ...t, fromDeptId: e.target.value }))}>
               <option value="">선택</option>
@@ -1240,6 +1265,8 @@ function HrTab({
               ))}
             </select>
           </Field>
+        </div>
+        <div className="grid md:grid-cols-[160px_1fr_auto] gap-2 items-end mb-3">
           <Field label="이동일자">
             <CdDateInput value={transfer.eventDate} onChange={(v) => setTransfer((t) => ({ ...t, eventDate: v }))} aria-label="이동일자" />
           </Field>
@@ -1284,13 +1311,15 @@ function HrTab({
           휴직 {onLeave && <span className="cd-pill cd-pill-info ml-1 align-middle">휴직 중</span>}
         </h3>
         <p className="text-xs cd-text-muted mb-3">휴직원 승인 시 휴직 시작이 자동 기록됩니다. 복직하면 [복직 기록]으로 종료 처리하세요(계정 상태는 바뀌지 않습니다).</p>
-        <div className="grid md:grid-cols-[160px_1fr_auto_auto] gap-2 items-end mb-3">
+        <div className="grid md:grid-cols-[160px_1fr] gap-2 mb-2">
           <Field label="일자">
             <CdDateInput value={leave.eventDate} onChange={(v) => setLeave((l) => ({ ...l, eventDate: v }))} aria-label="일자" />
           </Field>
           <Field label="비고">
             <input className="cd-input" value={leave.note} onChange={(e) => setLeave((l) => ({ ...l, note: e.target.value }))} placeholder="예: 육아 휴직 / 복직" />
           </Field>
+        </div>
+        <div className="flex justify-end gap-2 mb-3">
           <button
             type="button"
             disabled={busy || !leave.eventDate || onLeave}
@@ -1420,13 +1449,15 @@ function BankAccountSection({ employeeId, toast }: { employeeId: string; toast: 
     <section className="rounded-2xl cd-surface-bg border cd-border-c p-4">
       <h3 className="font-bold cd-text mb-1">경비/급여 입금 계좌</h3>
       <p className="text-xs cd-text-faint mb-3">개인카드 경비 정산의 CMS 이체 파일에 자동 기입됩니다. 은행코드는 금융결제원 표준 3자리 코드(예: 국민 004, 기업 003, 농협 011, 우리 020, 신한 088).</p>
-      <div className="grid md:grid-cols-[150px_120px_1fr_160px_auto] gap-2 items-end">
+      <div className="grid md:grid-cols-[1fr_120px] gap-2 mb-2">
         <Field label="은행명">
           <input className="cd-input" placeholder="예: 국민" value={form.bankName} onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))} />
         </Field>
         <Field label="은행코드">
           <input className="cd-input" inputMode="numeric" placeholder="예: 004" value={form.bankCode} onChange={(e) => setForm((f) => ({ ...f, bankCode: e.target.value.replace(/\D/g, "") }))} />
         </Field>
+      </div>
+      <div className="grid md:grid-cols-[1fr_1fr_auto] gap-2 items-end">
         <Field label="계좌번호">
           <input className="cd-input" inputMode="numeric" placeholder="숫자만 입력" value={form.bankAccount} onChange={(e) => setForm((f) => ({ ...f, bankAccount: e.target.value.replace(/[^\d-]/g, "") }))} />
         </Field>

@@ -13,6 +13,8 @@ export interface PdfViewerDoc {
   url: string;
   fileName: string;
   documentId?: string;
+  /** 다운로드 버튼이 쓸 주소 — 보기와 내려받기를 접속기록에서 나눌 때만 지정한다. */
+  downloadUrl?: string;
 }
 
 export function withPdfViewerDefaults(url: string): string {
@@ -91,7 +93,7 @@ export function DraggablePdfViewer({
         <div className="flex shrink-0 items-center gap-1">
           {/* 지금 보고 있는 문서 내려받기 — 같은 출처 프록시라 download 속성으로 저장된다 */}
           <a
-            href={url}
+            href={activeDoc?.downloadUrl ?? url}
             download={activeDoc?.fileName ?? true}
             onPointerDown={(event) => event.stopPropagation()}
             className="cd-action cd-btn cd-btn-ghost px-2 py-1 text-xs cd-text-muted flex items-center gap-1 whitespace-nowrap"

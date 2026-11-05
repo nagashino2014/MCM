@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-05", kind: "개선", title: "사용자 등록 — 증빙 서류 바로 보기 · 인사관리 탭 2열 배치",
+    body: "인사카드에 첨부한 증빙의 파일 이름을 누르면 내려받지 않고 계약서 보기와 같은 창에서 바로 열립니다(PDF·이미지). 내려받기는 창 위 다운로드 버튼으로 합니다. HWP·Word·Excel 은 지금처럼 내려받습니다. 인사관리 탭의 항목 카드는 2열로 배치돼 한 화면에 더 많이 보입니다.",
+    articles: ["admin.registry"],
+  },
+  {
     date: "2026-11-05", kind: "개선", title: "사용자 등록 — 자격증 종목·증빙 유형 추가",
     body: "자격증 행에서 토목기사·위험물산업기사 등 10개 종목을 더 고를 수 있고, 목록에 없는 자격명도 저장된 이름 그대로 보입니다. 기타 증빙에 경력증명서·이력서·수료증 등 유형이 추가됐습니다. 입찰 패키지는 자격이 여럿 담긴 취득사항 확인서를 한 번만 첨부합니다.",
     articles: ["admin.registry"],

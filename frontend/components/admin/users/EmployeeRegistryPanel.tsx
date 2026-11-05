@@ -27,6 +27,26 @@ interface EmployeeRegistryPanelProps {
 
 type TabKey = "basic" | "education" | "evidence" | "hr";
 
+type DepartmentDraft = {
+  deptName: string;
+  deptKind: string;
+  parentDeptId: string;
+  accentColor: string;
+  positionIds: string[];
+};
+
+// 조직도를 다시 읽었을 때 사용자가 고치지 않은 칸만 서버 값으로 바꾼다.
+function mergeDepartmentDraft(prev: DepartmentDraft, loaded: DepartmentDraft, server: DepartmentDraft): DepartmentDraft {
+  const pick = <K extends keyof DepartmentDraft>(key: K) => (String(prev[key]) === String(loaded[key]) ? server[key] : prev[key]);
+  return {
+    deptName: pick("deptName"),
+    deptKind: pick("deptKind"),
+    parentDeptId: pick("parentDeptId"),
+    accentColor: pick("accentColor"),
+    positionIds: pick("positionIds"),
+  };
+}
+
 // 수행인력 명단 연동 등급/분야 옵션 (서버 lib와 값 동일 — 서버 전용 모듈 임포트 회피를 위해 로컬 정의)
 const ENG_GRADE_OPTIONS = ["기술사", "특급", "고급", "중급", "초급"] as const;
 const ENV_GRADE_OPTIONS = ["고급인력", "일반인력", "미구분"] as const;
@@ -183,30 +203,40 @@ export default function EmployeeRegistryPanel({
 }: EmployeeRegistryPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
   const [employee, setEmployee] = useState<EmployeeDetail>(() => emptyEmployee(selectedDept?.deptId));
-  const [departmentDraft, setDepartmentDraft] = useState({
+  const [departmentDraft, setDepartmentDraft] = useState<DepartmentDraft>({
     deptName: "",
     deptKind: "division",
     parentDeptId: "",
     accentColor: "#16A34A",
-    positionIds: [] as string[],
+    positionIds: [],
   });
   const [saving, setSaving] = useState(false);
 
   const positions = snapshot?.positions ?? [];
   const departments = snapshot?.departments ?? [];
+  // 마지막으로 서버에서 읽은 부서 값 — 부서 편집 칸을 사용자가 고쳤는지 가리는 기준.
+  const loadedDepartment = useRef<{ deptId: string; draft: DepartmentDraft } | null>(null);
 
   useEffect(() => {
     if (!selectedDept) return;
     const allowed = snapshot?.departmentPositions
       .filter((item) => item.deptId === selectedDept.deptId)
       .map((item) => item.positionId) ?? [];
-    setDepartmentDraft({
+    const server: DepartmentDraft = {
       deptName: selectedDept.deptName,
       deptKind: selectedDept.deptKind,
       parentDeptId: selectedDept.parentDeptId ?? "",
       accentColor: selectedDept.accentColor ?? "#16A34A",
       positionIds: allowed,
-    });
+    };
+    const loaded = loadedDepartment.current;
+    loadedDepartment.current = { deptId: selectedDept.deptId, draft: server };
+    // 같은 부서의 재조회(저장·직원 저장·새로고침)는 저장 전 입력을 덮지 않는다. 다른 부서를 고를 때만 새로 채운다.
+    if (loaded?.deptId === selectedDept.deptId) {
+      setDepartmentDraft((prev) => mergeDepartmentDraft(prev, loaded.draft, server));
+      return;
+    }
+    setDepartmentDraft(server);
     setEmployee((prev) => (prev.employeeId ? prev : { ...prev, deptId: selectedDept.deptId }));
   }, [selectedDept, snapshot?.departmentPositions]);
 

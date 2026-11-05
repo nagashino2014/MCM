@@ -11,6 +11,11 @@ export const MANUAL_CHANGELOG: ChangelogEntry[] = [
     articles: ["admin.registry"],
   },
   {
+    date: "2026-11-05", kind: "수정", title: "사용자 등록 — 부서 저장 뒤 부서명이 옛 이름으로 돌아가던 문제",
+    body: "부서 저장 뒤에도 부서 편집 칸에 새 이름이 남고, 그 상태로 다시 저장해도 옛 이름으로 되돌아가지 않습니다. 직원 저장·새로고침 같은 다른 동작이 저장 전 부서 편집 내용을 지우지 않습니다.",
+    articles: ["admin.registry"],
+  },
+  {
     date: "2026-11-05", kind: "개선", title: "사용자 등록 — 증빙 서류 바로 보기 · 인사관리 탭 2열 배치",
     body: "인사카드에 첨부한 증빙의 파일 이름을 누르면 내려받지 않고 계약서 보기와 같은 창에서 바로 열립니다(PDF·이미지). 내려받기는 창 위 다운로드 버튼으로 합니다. HWP·Word·Excel 은 지금처럼 내려받습니다. 인사관리 탭의 항목 카드는 2열로 배치돼 한 화면에 더 많이 보입니다.",
     articles: ["admin.registry"],

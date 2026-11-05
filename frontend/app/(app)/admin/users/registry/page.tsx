@@ -139,6 +139,10 @@ function Inner() {
   const accountEmployee = selectedEmployee
     ? organization?.employees.find((item) => item.employeeId === selectedEmployee.employeeId) ?? selectedEmployee
     : null;
+  // 부서 편집도 최신 행으로 그린다 — 선택 시점에 복사한 행을 쓰면 저장 뒤에도 옛 이름으로 돌아간다.
+  const currentDept = selectedDept
+    ? organization?.departments.find((item) => item.deptId === selectedDept.deptId) ?? selectedDept
+    : null;
 
   if (sessionStatus === "loading") {
     return <div className="p-8 cd-text-faint text-sm">세션 확인 중…</div>;
@@ -199,7 +203,7 @@ function Inner() {
           )}
           <EmployeeRegistryPanel
             snapshot={organization}
-            selectedDept={selectedDept}
+            selectedDept={currentDept}
             selectedEmployee={selectedEmployee}
             onReload={reload}
             toast={(message, type) => toast.show(message, type)}

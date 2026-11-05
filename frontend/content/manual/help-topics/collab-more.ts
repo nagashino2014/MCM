@@ -4,6 +4,20 @@ import type { HelpTopic } from "../types";
 export const COLLAB_MORE_HELP: HelpTopic[] = [
   // ── 주소록 ──
   {
+    id: "directory.emergency",
+    label: "비상 연락망 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "재직 중인 직원이 자동으로 들어오고, 번호·메일은 인사카드 값을 보여 줍니다.",
+        "엑셀·PDF 아이콘으로 회사 비상연락망 양식 파일을 내려받습니다. 다운로드 기록이 남습니다.",
+        "개인 연락처이므로 회사 업무와 비상 연락에만 쓰세요.",
+      ] },
+    ],
+    more: { article: "directory.main", section: "emergency" },
+    sources: ["components/directory/EmergencyContactsTab.tsx"],
+    reviewedAt: "2026-11-05",
+  },
+  {
     id: "directory.org-category",
     label: "연락처 구분 도움말",
     blocks: [

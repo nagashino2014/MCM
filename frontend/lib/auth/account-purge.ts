@@ -95,6 +95,7 @@ const CASCADE_BY_EMPLOYEE: Spec[] = [
   ["employee_hr_events", "인사 이력", `SELECT COUNT(*)::int AS n FROM employee_hr_events WHERE employee_id = $1`, false],
   ["employee_educations", "학력·경력·자격", `SELECT (SELECT COUNT(*) FROM employee_educations WHERE employee_id = $1) + (SELECT COUNT(*) FROM employee_careers WHERE employee_id = $1) + (SELECT COUNT(*) FROM employee_certifications WHERE employee_id = $1) AS n`, false],
   ["work_task_participants", "업무추진계획 참여", `SELECT COUNT(*)::int AS n FROM work_task_participants WHERE employee_id = $1`, false],
+  ["emergency_contact_entries", "비상 연락망 표시 설정", `SELECT COUNT(*)::int AS n FROM emergency_contact_entries WHERE employee_id = $1 OR same_as_employee_id = $1`, false],
 ];
 // ── 남지만 참조가 비는 것(users 키 — FK SET NULL 또는 FK 없는 느슨한 참조) ──
 const ORPHAN_BY_USER: Spec[] = [

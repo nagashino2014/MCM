@@ -174,6 +174,17 @@ export function judgeProfiles(company: CompanyEvidence, profiles: Profile[]): Se
   };
 }
 
+/**
+ * 사업자등록번호 가운데 두 자리 중 기업이 아닌 곳의 구분코드(국세청 부여 기준).
+ * 80 아파트관리사무소 등 · 82 비영리법인 · 83 국가·지방자치단체 · 89 법인 아닌 종교단체.
+ * 81·85~88 영리법인, 84 외국법인, 01~79·90~99 개인사업자는 기업으로 본다.
+ */
+export const NON_CORPORATE_BRN_CODES = ["80", "82", "83", "89"] as const;
+export function isNonCorporateBrn(brn: string | null | undefined): boolean {
+  const digits = String(brn ?? "").replace(/\D/g, "");
+  return digits.length === 10 && (NON_CORPORATE_BRN_CODES as readonly string[]).includes(digits.slice(3, 5));
+}
+
 /** 담당자 중복 판별 키 — 회사 안에서 이름 + (휴대폰 또는 이메일). */
 export function contactDedupeKey(company: string, name: string, mobile: string | null, email: string | null): string {
   const digits = String(mobile ?? "").replace(/\D/g, "");

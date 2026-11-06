@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "변경", title: "PC 앱 설치 — 브라우저 앱 항목 삭제, 데스크탑 위젯 두 단계 설치로 안내",
+    body: "홈의 PC 앱 설치 메뉴에서 ‘브라우저 앱으로 설치’ 항목을 뺐습니다. 브라우저 앱은 트레이 상주와 알림이 없어 메신저로 쓰기 어렵기 때문입니다. 이제 1단계(보안 경고 끄기)와 2단계(데스크탑 위젯 설치 파일)만 보입니다.",
+    articles: ["home.dashboard", "start.mobile"],
+  },
+  {
     date: "2026-11-06", kind: "개선", title: "PC 앱 — 할 일 타임라인을 마우스로 끌어 좌우 이동",
     body: "데스크탑 위젯과 PC 앱의 할 일 타임라인에서 그래프를 마우스로 잡고 끌면 좌우로 넘어갑니다. 방향키나 아래 스크롤 막대를 쓰지 않아도 됩니다. 막대 위에서 끌어도 일정은 바뀌지 않고, 누르기만 하면 전처럼 상세가 열립니다.",
     articles: ["start.mobile"],

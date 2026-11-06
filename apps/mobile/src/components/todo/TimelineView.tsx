@@ -6,14 +6,16 @@
  *   2026-11-04(사용자 요청): 그래프는 **흰 카드** 안에, 목록은 일정마다 **흰 박스**(상위 + 그 하위 행 한 묶음)로 — 그라데이션 바탕 위에서 가독성.
  *   2026-11-06(사용자 요청, 웹과 맞춤): 종류가 있는 하위 작업도 기간(종료일 > 시작일)이 있으면 ◆ 대신 막대로, ◆ 는 하루짜리만.
  *   상위 막대 = 옅은 바탕 + 같은 색 진한 채움(하위 평균 진행), 막대 폭이 되면 오른쪽에 %(완료 ✓). 목록 상위 행에도 '진행 N%'.
+ *   2026-11-06(사용자 요청): 웹(데스크탑 위젯·PC 브라우저)은 그래프를 마우스로 끌어 좌우로 넘긴다 — 읽기 전용이라 막대 위에서 끌어도 된다(useMousePan).
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme/useTheme';
 import { SHADOW_CARD } from '@/theme/tokens';
 import { apiJson } from '@/lib/api';
+import { IS_DESKTOP_WEB } from '@/lib/platform';
 import { TODO_STATUS_LABELS, type TodoItem, type TodoItemDetail, type TodoStatus } from '@/lib/todo-types';
 // ⚠ 모바일 diffDays(a, b) = b − a (웹 todo-utils 와 반대) — 창 기준 위치는 diffDays(windowStart, 날짜)
 import { addDays, diffDays, fmtMd, isOverdue, labelColors, withAlpha } from '@/lib/todo-utils';
@@ -59,11 +61,80 @@ function statusTone(st: TodoStatus, c: ReturnType<typeof useTheme>['c'], dark: b
   }
 }
 
+/**
+ * 웹 전용 — 가로 ScrollView 를 마우스로 끌어 넘긴다(터치·펜은 브라우저 기본 스크롤, 네이티브는 아무것도 하지 않음).
+ * 4px 미만은 클릭으로 봐서 막대 탭(상세 열기)을 살리고, 넘어가면 끌기로 보고 놓을 때의 클릭을 삼킨다.
+ * 누르자마자 포인터를 잡으면 클릭이 막대에 닿지 않으므로 끌기가 확정된 뒤에 잡고, 그 전까지는 window 에서 움직임을 받는다.
+ */
+function useMousePan(scrollRef: RefObject<ScrollView | null>) {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = scrollRef.current?.getScrollableNode() as unknown as HTMLElement | null;
+    if (!el) return;
+    let pan: { x: number; left: number; moved: boolean; id: number } | null = null;
+    let swallowClick = false;
+
+    const end = () => {
+      pan = null;
+      el.style.cursor = 'grab';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      if (e.buttons === 0) return end(); // 창 밖에서 버튼을 뗀 경우
+      const dx = e.clientX - pan.x;
+      if (!pan.moved) {
+        if (Math.abs(dx) < 4) return;
+        pan.moved = true;
+        el.style.cursor = 'grabbing';
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {}
+      }
+      el.scrollLeft = pan.left - dx;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      swallowClick = pan.moved && e.type === 'pointerup';
+      end();
+    };
+    const onDown = (e: PointerEvent) => {
+      swallowClick = false;
+      if (e.button !== 0 || e.pointerType !== 'mouse') return;
+      // 아래 가로 스크롤 막대를 잡은 경우는 브라우저에 맡긴다
+      if (e.clientY >= el.getBoundingClientRect().top + el.clientHeight) return;
+      pan = { x: e.clientX, left: el.scrollLeft, moved: false, id: e.pointerId };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+
+    el.style.cursor = 'grab';
+    el.style.userSelect = 'none';
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('click', onClick, true);
+    return () => {
+      end();
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('click', onClick, true);
+    };
+  }, [scrollRef]);
+}
+
 export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; today: string; onOpen: (item: TodoItem) => void }) {
   const { c, dark } = useTheme();
   const over = labelColors('over', dark);
   const windowStart = useMemo(() => addDays(mondayOf(today), -7), [today]);
   const scrollRef = useRef<ScrollView>(null);
+  useMousePan(scrollRef);
   const [subs, setSubs] = useState<Record<string, TodoItem[]>>({});
   const requested = useRef(new Map<string, string>());
   const mounted = useRef(true);
@@ -352,7 +423,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
           </View>
         ))}
       </View>
-      <Text className="px-4 py-3 text-[11px] text-cd-faint">막대·행을 누르면 상세. 여러 날에 걸친 일정은 하위 작업을 함께 보여 줍니다.</Text>
+      <Text className="px-4 py-3 text-[11px] text-cd-faint">막대·행을 누르면 상세. 여러 날에 걸친 일정은 하위 작업을 함께 보여 줍니다.{IS_DESKTOP_WEB ? ' 그래프를 마우스로 끌면 좌우로 넘어갑니다.' : ''}</Text>
     </View>
   );
 }

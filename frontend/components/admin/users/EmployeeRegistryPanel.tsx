@@ -10,6 +10,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { DraggablePdfViewer } from "@/components/contracts/DraggablePdfViewer";
+import { DepartmentDeleteModal } from "./DepartmentDeleteModal";
 import type {
   DepartmentRow,
   OrganizationEmployeeRow,
@@ -22,6 +23,8 @@ interface EmployeeRegistryPanelProps {
   selectedDept: DepartmentRow | null;
   selectedEmployee: OrganizationEmployeeRow | null;
   onReload: () => void;
+  /** 선택한 부서를 삭제한 뒤 — 부모가 선택을 풀고 조직도를 다시 읽는다 */
+  onDepartmentDeleted: () => void;
   toast: (message: string, type?: "success" | "error") => void;
 }
 
@@ -200,22 +203,26 @@ async function fetchEmployeeDetail(employeeId: string): Promise<EmployeeDetail> 
   return ((await res.json()) as { employee: EmployeeDetail }).employee;
 }
 
+const EMPTY_DEPARTMENT_DRAFT: DepartmentDraft = {
+  deptName: "",
+  deptKind: "division",
+  parentDeptId: "",
+  accentColor: "#16A34A",
+  positionIds: [],
+};
+
 export default function EmployeeRegistryPanel({
   snapshot,
   selectedDept,
   selectedEmployee,
   onReload,
+  onDepartmentDeleted,
   toast,
 }: EmployeeRegistryPanelProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
   const [employee, setEmployee] = useState<EmployeeDetail>(() => emptyEmployee(selectedDept?.deptId));
-  const [departmentDraft, setDepartmentDraft] = useState<DepartmentDraft>({
-    deptName: "",
-    deptKind: "division",
-    parentDeptId: "",
-    accentColor: "#16A34A",
-    positionIds: [],
-  });
+  const [departmentDraft, setDepartmentDraft] = useState<DepartmentDraft>(EMPTY_DEPARTMENT_DRAFT);
+  const [deletingDept, setDeletingDept] = useState<DepartmentRow | null>(null);
   const [saving, setSaving] = useState(false);
   // 마지막으로 서버에서 읽은 값 — 직급·부서를 사용자가 고치는 중인지 가리는 기준.
   const loadedEmployee = useRef<EmployeeDetail | null>(null);
@@ -572,12 +579,30 @@ export default function EmployeeRegistryPanel({
               onAdd={addPosition}
               onDelete={deletePosition}
             />
-            <button type="button" disabled={saving || !departmentDraft.deptName} onClick={saveDepartment} className="cd-btn cd-btn-primary mt-4">
-              부서 저장
-            </button>
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              <button type="button" disabled={saving || !departmentDraft.deptName} onClick={saveDepartment} className="cd-btn cd-btn-primary">
+                부서 저장
+              </button>
+              <button type="button" disabled={saving || !selectedDept} onClick={() => setDeletingDept(selectedDept)} className="cd-btn cd-btn-danger">
+                <Trash2 className="w-4 h-4" /> 부서 삭제
+              </button>
+            </div>
           </div>
         </div>
       </section>
+
+      <DepartmentDeleteModal
+        dept={deletingDept}
+        onClose={() => setDeletingDept(null)}
+        onDeleted={(dept) => {
+          setDeletingDept(null);
+          // 지운 부서의 입력값으로 [부서 저장]을 누르면 같은 부서가 새로 생긴다 — 다음 부서가 선택될 때까지 비워 둔다.
+          loadedDepartment.current = null;
+          setDepartmentDraft(EMPTY_DEPARTMENT_DRAFT);
+          toast(`'${dept.deptName}' 부서를 삭제했습니다.`);
+          onDepartmentDeleted();
+        }}
+      />
 
       <section className="cd-card p-6">
         <div className="flex items-start justify-between gap-4 mb-4">

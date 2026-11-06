@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
-import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { listDeptPosts } from "@/lib/org/posts";
+import {
+  DEPARTMENT_DELETE_BLOCKERS,
+  DEPARTMENT_DELETE_CASCADES,
+  departmentRefWhere,
+  type DepartmentRefSpec,
+} from "./department-references";
 
 export interface DepartmentRow {
   deptId: string;
@@ -145,6 +151,95 @@ export async function listOrganizationDirectory(): Promise<OrganizationSnapshot>
       hasBirthDate: false,
     })),
   };
+}
+
+export interface DepartmentRefCount {
+  key: string;
+  label: string;
+  unit: string;
+  count: number;
+  /** 앞쪽 몇 건의 이름(직원·하위 부서 등) */
+  names: string[];
+  hint: string;
+}
+
+export interface DepartmentDeletePreview {
+  deptId: string;
+  deptName: string;
+  /** 삭제를 막는 사유 */
+  blockers: DepartmentRefCount[];
+  /** 함께 지워지는 부속 설정·이력 */
+  cascades: DepartmentRefCount[];
+  canDelete: boolean;
+}
+
+const DEPT_REF_NAME_LIMIT = 5;
+
+async function countDepartmentRefs(db: PgDatabase, deptId: string, specs: DepartmentRefSpec[]): Promise<DepartmentRefCount[]> {
+  // 아직 적용되지 않은 마이그레이션의 표는 참조가 없는 것으로 본다(트랜잭션 안이라 실패를 catch 할 수 없어 미리 거른다).
+  const existing = new Set(
+    rowsToObjects(
+      await db.exec("SELECT t FROM unnest($1::text[]) AS t WHERE to_regclass(t) IS NOT NULL", [[...new Set(specs.map((s) => s.table))]])
+    ).map((row) => String(row.t))
+  );
+  const out: DepartmentRefCount[] = [];
+  for (const spec of specs) {
+    if (!existing.has(spec.table)) continue;
+    const where = departmentRefWhere(spec);
+    const count = Number(
+      rowsToObjects(await db.exec(`SELECT COUNT(*)::int AS n FROM ${spec.table} t WHERE ${where}`, [deptId]))[0]?.n ?? 0
+    );
+    if (count === 0) continue;
+    const names = spec.nameSql
+      ? rowsToObjects(
+          await db.exec(`SELECT ${spec.nameSql} AS name FROM ${spec.table} t WHERE ${where} ORDER BY 1 LIMIT ${DEPT_REF_NAME_LIMIT}`, [deptId])
+        )
+          .map((row) => (row.name != null ? String(row.name) : ""))
+          .filter(Boolean)
+      : [];
+    out.push({ key: spec.key, label: spec.label, unit: spec.unit, count, names, hint: spec.hint });
+  }
+  return out;
+}
+
+async function buildDepartmentDeletePreview(db: PgDatabase, deptId: string, deptName: string): Promise<DepartmentDeletePreview> {
+  const blockers = await countDepartmentRefs(db, deptId, DEPARTMENT_DELETE_BLOCKERS);
+  const cascades = await countDepartmentRefs(db, deptId, DEPARTMENT_DELETE_CASCADES);
+  return { deptId, deptName, blockers, cascades, canDelete: blockers.length === 0 };
+}
+
+function departmentNotFound(): Error {
+  return Object.assign(new Error("이미 삭제되었거나 없는 부서입니다."), { status: 404 });
+}
+
+/** 부서 삭제 미리보기 — 막는 사유와 함께 지워지는 것. 실행은 deleteDepartment 가 같은 규칙으로 다시 확인한다. */
+export async function previewDepartmentDelete(deptId: string): Promise<DepartmentDeletePreview> {
+  const db = await getDb();
+  const row = rowsToObjects(await db.exec("SELECT dept_name FROM departments WHERE dept_id = $1", [deptId]))[0];
+  if (!row) throw departmentNotFound();
+  return buildDepartmentDeletePreview(db, deptId, String(row.dept_name ?? ""));
+}
+
+/**
+ * 비어 있는 부서만 삭제한다. 부서 행을 먼저 잠근다 — 부서를 FK 로 가리키는 쓰기는 이 행의 공유 잠금을 잡으므로,
+ * 진행 중인 쓰기는 끝난 뒤 건수에 잡히고 확인과 삭제 사이에 새 참조가 끼어들지 못한다.
+ */
+export async function deleteDepartment(deptId: string): Promise<DepartmentDeletePreview> {
+  return withDbWrite(async (db) => {
+    const row = rowsToObjects(await db.exec("SELECT dept_name FROM departments WHERE dept_id = $1 FOR UPDATE", [deptId]))[0];
+    if (!row) throw departmentNotFound();
+    const deptName = String(row.dept_name ?? "");
+    const preview = await buildDepartmentDeletePreview(db, deptId, deptName);
+    if (!preview.canDelete) {
+      const summary = preview.blockers.map((item) => `${item.label} ${item.count}${item.unit}`).join(", ");
+      throw Object.assign(new Error(`삭제할 수 없습니다 — ${summary}`), { status: 409 });
+    }
+    // 인사 이력은 FK 가 비어도 부서 이름이 글자로 남아야 한다 — 이름 없이 저장된 옛 행을 채운다.
+    await db.run("UPDATE employee_hr_events SET from_dept_name = $2 WHERE from_dept_id = $1 AND from_dept_name IS NULL", [deptId, deptName]);
+    await db.run("UPDATE employee_hr_events SET to_dept_name = $2 WHERE to_dept_id = $1 AND to_dept_name IS NULL", [deptId, deptName]);
+    await db.run("DELETE FROM departments WHERE dept_id = $1", [deptId]);
+    return preview;
+  });
 }
 
 export async function saveDepartment(input: DepartmentInput): Promise<DepartmentRow> {

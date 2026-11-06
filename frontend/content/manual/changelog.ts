@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "신규", title: "사용자 등록 — 부서 삭제",
+    body: "부서 편집의 ‘부서 삭제’로 비어 있는 부서를 지울 수 있습니다. 직원·하위 부서·계약·결재 문서처럼 그 부서를 쓰는 데이터가 남아 있으면 이유와 정리 방법을 보여 주고 삭제하지 않습니다.",
+    articles: ["admin.registry"],
+  },
+  {
     date: "2026-11-06", kind: "변경", title: "PC 앱 설치 — 브라우저 앱 항목 삭제, 데스크탑 위젯 두 단계 설치로 안내",
     body: "홈의 PC 앱 설치 메뉴에서 ‘브라우저 앱으로 설치’ 항목을 뺐습니다. 브라우저 앱은 트레이 상주와 알림이 없어 메신저로 쓰기 어렵기 때문입니다. 이제 1단계(보안 경고 끄기)와 2단계(데스크탑 위젯 설치 파일)만 보입니다.",
     articles: ["home.dashboard", "start.mobile"],

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuthError, authErrorToResponse, requirePermission, requireSession } from "@/lib/auth/guards";
 import { checkPermission, loadUserAccess } from "@/lib/auth/rbac";
-import { listOrganizationSnapshot, saveDepartment } from "@/lib/admin/organization";
+import { deleteDepartment, listOrganizationSnapshot, saveDepartment } from "@/lib/admin/organization";
 import { recordAuditLog } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -45,6 +45,29 @@ export async function POST(req: NextRequest) {
       after: department,
     });
     return NextResponse.json({ department });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
+}
+
+// 비어 있는 부서만 삭제된다. 막는 사유는 GET /api/admin/organization/delete-preview 로 미리 본다.
+export async function DELETE(req: NextRequest) {
+  try {
+    const actor = await requirePermission("org.edit", { fallbackRoles: ["admin"] });
+    const deptId = new URL(req.url).searchParams.get("deptId");
+    if (!deptId) {
+      return NextResponse.json({ error: "deptId가 필요합니다." }, { status: 400 });
+    }
+    const preview = await deleteDepartment(deptId);
+    await recordAuditLog({
+      actorUserId: actor.userId,
+      action: "employee_update",
+      targetTable: "departments",
+      targetId: deptId,
+      before: { deptName: preview.deptName },
+      after: { deleted: true, cascades: preview.cascades },
+    });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);
   }

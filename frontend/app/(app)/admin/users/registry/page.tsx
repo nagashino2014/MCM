@@ -208,6 +208,11 @@ function Inner() {
             selectedDept={currentDept}
             selectedEmployee={selectedEmployee}
             onReload={reload}
+            onDepartmentDeleted={() => {
+              // 선택을 풀면 reload 가 바뀌어 효과가 조직도를 다시 읽고 첫 부서를 선택한다.
+              setSelectedEmployee(null);
+              setSelectedDept(null);
+            }}
             toast={showToast}
           />
         </div>

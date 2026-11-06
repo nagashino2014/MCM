@@ -5,6 +5,7 @@
  *   행 = 날짜(할 날/마감/기간)가 있는 상위 할 일, ▸ 로 하위 작업(공정 단계 라벨·마일스톤 ◆)을 펼친다. 날짜 없는 할 일은 하단 묶음.
  *   막대 = do_date ~ end_date(없으면 하루). 드래그 이동 = do/end 동시 이동(마감만 있으면 due_date), 오른쪽 끝 리사이즈 = end_date.
  *   상위 막대(2026-11-06) = 하위와 같은 문법 — 옅은 바탕 + 같은 색 진한 채움(하위 평균 진행) + 오른쪽 %. 상위↔하위는 옅은 회색 가지선으로 잇는다.
+ *   빈 곳 끌기(2026-11-06) = 마우스로 트랙·날짜 축을 잡고 끌면 가로 스크롤(막대 끌기와 구분, 터치는 기본 스크롤).
  *   의존 화살표 = 선행 막대 끝 → 후행 막대 시작(GET /api/todo/deps?itemIds=). 선행 미완=회색, 선행 지연=빨강, 완료=흐림.
  *   시각 규칙은 todo.css 의 todo-tl-* 에만 둔다.
  */
@@ -334,6 +335,47 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     await patchRow(r, { doDate, endDate }, { doDate, endDate });
   };
 
+  // ── 빈 곳 끌어 좌우 이동(2026-11-06 사용자 요청) — 마우스로 트랙·날짜 축을 잡고 끌면 가로 스크롤.
+  //   막대가 자체 끌기(이동·리사이즈)를 시작했으면(preventDefault) 건드리지 않는다. 터치·펜은 기본 스크롤 그대로.
+  const pan = useRef<{ x: number; left: number; moved: boolean } | null>(null);
+  const endPan = () => {
+    pan.current = null;
+    if (scrollRef.current) delete scrollRef.current.dataset.pan;
+  };
+  const onPanDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || e.pointerType !== "mouse" || e.isDefaultPrevented() || !scrollRef.current) return;
+    pan.current = { x: e.clientX, left: scrollRef.current.scrollLeft, moved: false };
+    // 누른 즉시 캡처 — 빠르게 끌어 첫 이동이 이름 열·트랙 밖에 떨어져도 놓치지 않는다
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* 합성 이벤트·일부 브라우저 — 캡처 없이도 동작 */
+    }
+  };
+  const onPanMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const p = pan.current;
+    const el = scrollRef.current;
+    if (!p || !el) return;
+    if (e.buttons === 0) return endPan(); // 밖에서 버튼을 뗀 경우
+    const dx = e.clientX - p.x;
+    if (!p.moved) {
+      if (Math.abs(dx) < 4) return; // 단순 클릭과 구분
+      p.moved = true;
+      el.dataset.pan = "1";
+    }
+    el.scrollLeft = p.left - dx;
+  };
+  const onPanUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!pan.current) return;
+    endPan();
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* 캡처가 없었던 경우 */
+    }
+  };
+  const panHandlers = { onPointerDown: onPanDown, onPointerMove: onPanMove, onPointerUp: onPanUp, onPointerCancel: onPanUp };
+
   const shift = (weeks: number) => setWindowStart((s) => addDays(s, weeks * 7));
   const goToday = useCallback(() => {
     setWindowStart(addDays(mondayOf(today), -14));
@@ -462,7 +504,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
               <span className="todo-tl-lg-st" data-ghost="1" /> 날짜 미정
             </span>
           </span>
-          <span className="todo-tl-legend-row todo-tl-legend-hint">막대를 끌면 일정 이동 · 오른쪽 끝을 끌면 종료일 변경</span>
+          <span className="todo-tl-legend-row todo-tl-legend-hint">막대를 끌면 일정 이동 · 오른쪽 끝을 끌면 종료일 변경 · 빈 곳을 끌면 좌우 이동</span>
         </div>
       </div>
 
@@ -471,7 +513,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
           {/* 헤더 */}
           <div className="todo-tl-head" style={{ gridTemplateColumns: `${LABEL_W}px ${trackW}px` }}>
             <div className="todo-tl-corner">할 일 {rows.length ? <span className="todo-sec-n">{rows.filter((r) => r.depth === 0).length}</span> : null}</div>
-            <div className="todo-tl-axis">
+            <div className="todo-tl-axis" {...panHandlers}>
               <div className="todo-tl-months">
                 {monthSpans.map((m) => (
                   <span key={m.key} className="todo-tl-month" style={{ left: m.from * dayW, width: m.len * dayW }}>
@@ -563,6 +605,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
               <div
                 className="todo-tl-track"
                 style={{ width: trackW, ["--tl-day" as string]: `${dayW}px`, ["--tl-row" as string]: `${ROW_H}px` } as CSSProperties}
+                {...panHandlers}
               >
                 {weekendCols.map((w) => (
                   <span key={`we${w.i}`} className="todo-tl-we" data-we={w.wd === 0 ? "sun" : "sat"} style={{ left: w.i * dayW, width: dayW }} aria-hidden="true" />

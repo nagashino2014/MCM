@@ -4,6 +4,8 @@
  *   아래: 그래프와 충분히 띄운 일정 목록 — 번호·이름·기간·중요도·지연 여부. 복수 일자 일정(할 날~종료일)은 웹과 같이 하위 작업 보조 행을
  *   그래프·목록 모두에 펼친다(상태 색·진행율, 날짜 없는 하위는 상위 기간 위 점선 '날짜 미정'). 막대·행 탭 = 상세로.
  *   2026-11-04(사용자 요청): 그래프는 **흰 카드** 안에, 목록은 일정마다 **흰 박스**(상위 + 그 하위 행 한 묶음)로 — 그라데이션 바탕 위에서 가독성.
+ *   2026-11-06(사용자 요청, 웹과 맞춤): 종류가 있는 하위 작업도 기간(종료일 > 시작일)이 있으면 ◆ 대신 막대로, ◆ 는 하루짜리만.
+ *   상위 막대 = 옅은 바탕 + 같은 색 진한 채움(하위 평균 진행), 막대 폭이 되면 오른쪽에 %(완료 ✓). 목록 상위 행에도 '진행 N%'.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -115,7 +117,9 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
       if (!isMultiDay(r.item)) return;
       (subs[r.item.itemId] ?? []).forEach((st, j) => {
         const no = `${i + 1}-${j + 1}`;
-        if (st.milestoneKind && (st.actualDate ?? st.doDate ?? st.dueDate)) {
+        // 웹 rowOf 와 같은 규칙(302): 종류가 있어도 기간(종료일 > 시작일)이 있으면 막대. ◆ 는 하루짜리 종류 하위만.
+        const period = !!st.doDate && !!st.endDate && st.endDate > st.doDate;
+        if (st.milestoneKind && !period && (st.actualDate ?? st.doDate ?? st.dueDate)) {
           const d = (st.actualDate ?? st.doDate ?? st.dueDate)!;
           rows.push({ key: st.itemId, item: st, depth: 1, no, start: d, end: d, due: false, milestone: true });
         } else if (st.doDate) rows.push({ key: st.itemId, item: st, depth: 1, no, start: st.doDate, end: st.endDate && st.endDate >= st.doDate ? st.endDate : st.doDate, due: false });
@@ -125,6 +129,16 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
     });
     return { rows, undatedCount };
   }, [items, subs, windowStart]);
+
+  // 상위별 하위 평균 진행율(완료 = 100) — 상위 막대 채움·%와 목록의 '진행 N%'
+  const aggOf = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [pid, list] of Object.entries(subs)) {
+      if (!list.length) continue;
+      out[pid] = Math.round(list.reduce((a, x) => a + (x.status === 'done' ? 100 : (x.progressPct ?? 0)), 0) / list.length);
+    }
+    return out;
+  }, [subs]);
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollTo({ x: Math.max(0, diffDays(windowStart, today) * DAY_W - 60), animated: false }), 50);
@@ -221,34 +235,48 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
                   const late = lateOf(r);
                   const tint = r.item.boardColor || c.primary;
                   const tone = r.depth === 1 ? statusTone(r.item.status, c, dark) : null;
+                  const w = Math.max(DAY_W - 2, (x1 - x0 + 1) * DAY_W - 2);
+                  // 진행 표시 — 상위 = 하위 평균(하위를 받아 온 뒤), 하위 = 자체 진행율. 완료는 ✓.
+                  const agg = r.depth === 0 ? aggOf[r.item.itemId] : undefined;
+                  const fill = r.undated ? null : r.depth === 0 ? (agg != null ? (done ? 100 : agg) : null) : r.item.progressPct != null && !done ? r.item.progressPct : null;
+                  const pctText = r.undated ? null : r.depth === 0 ? (agg != null ? (done ? '✓' : `${agg}%`) : null) : done ? '✓' : r.item.progressPct != null ? `${r.item.progressPct}%` : null;
+                  // 막대 폭이 번호 + % 글자를 담을 때만 % 를 보인다(하루짜리 막대는 번호만)
+                  const showPct = pctText != null && w >= (r.no.length + pctText.length) * 5.5 + 16;
                   return (
                     <Pressable
                       key={r.key}
                       onPress={() => onOpen(r.item)}
-                      accessibilityLabel={`${r.no}. ${r.item.title}`}
+                      accessibilityLabel={`${r.no}. ${r.item.title}${pctText && pctText !== '✓' ? ` 진행 ${pctText}` : ''}`}
                       style={{
                         position: 'absolute',
                         left: x0 * DAY_W + 1,
-                        width: Math.max(DAY_W - 2, (x1 - x0 + 1) * DAY_W - 2),
+                        width: w,
                         top: rowTop[i] + (r.depth === 0 ? 5 : 4),
                         height: h - (r.depth === 0 ? 10 : 8),
                         borderRadius: 5,
                         paddingHorizontal: 5,
-                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        alignItems: 'center',
                         overflow: 'hidden',
-                        // 개인 보드처럼 옅은 회색 보드도 막대가 보이도록 메인 막대는 진하게 + 회색 계열 테두리
-                        backgroundColor: r.undated ? 'transparent' : tone ? tone.bg : withAlpha(tint, done ? 0.3 : 0.75),
+                        // 개인 보드처럼 옅은 회색 보드도 막대가 보이도록 메인 막대는 진하게 + 회색 계열 테두리.
+                        // 하위 평균 진행이 있는 상위 막대는 바탕을 옅게 깔고 같은 색 진한 채움으로 진행을 보인다(웹과 같은 문법).
+                        backgroundColor: r.undated ? 'transparent' : tone ? tone.bg : agg != null ? withAlpha(tint, dark ? 0.22 : 0.3) : withAlpha(tint, done ? 0.3 : 0.75),
                         borderWidth: 1,
                         borderStyle: r.undated || r.due || tone?.dashed ? 'dashed' : 'solid',
                         borderColor: late ? over.fg : tone ? (r.undated ? c.muted : tone.border) : withAlpha(c.muted, 0.55),
                         opacity: done ? 0.6 : 1,
                       }}>
-                      {r.depth === 1 && !r.undated && r.item.progressPct != null && !done ? (
-                        <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${r.item.progressPct}%`, backgroundColor: withAlpha('#8fb0e0', 0.45) }} />
+                      {fill != null ? (
+                        <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fill}%`, backgroundColor: r.depth === 0 ? withAlpha(tint, dark ? 0.55 : 0.8) : withAlpha('#8fb0e0', 0.45) }} />
                       ) : null}
                       <Text numberOfLines={1} style={{ fontSize: r.depth === 0 ? 11 : 10, fontWeight: '600', color: c.text }}>
                         {r.no}
                       </Text>
+                      {showPct ? (
+                        <Text numberOfLines={1} style={{ marginLeft: 'auto', fontSize: r.depth === 0 ? 10 : 9, fontWeight: '600', color: c.muted }}>
+                          {pctText}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   );
                 })
@@ -313,6 +341,7 @@ export function TimelineView({ items, today, onOpen }: { items: TodoItem[]; toda
                     {r.item.subtaskTotal > 0 ? (
                       <Text className="text-[12px] text-cd-faint">
                         · 하위 {r.item.subtaskDone}/{r.item.subtaskTotal}
+                        {aggOf[r.item.itemId] != null ? ` · 진행 ${aggOf[r.item.itemId]}%` : ''}
                       </Text>
                     ) : null}
                     {r.item.assigneeName ? <Text className="ml-auto text-[12px] text-cd-faint">{r.item.assigneeName}</Text> : null}

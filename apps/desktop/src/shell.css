@@ -1,0 +1,92 @@
+/*
+  위젯 셸 공용 스타일 — 주 창(index.html)과 대화 팝업 창(chat.html)이 함께 쓴다(2026-11-06 분리).
+  OS 창 장식(decorations:false) 대신 자체 상단 바를 그린다. 앱 화면은 iframe 으로 원격(koensain.app/m-app)을 그대로 싣는다.
+  상단 바가 하는 일: 드래그 이동 · 항상 위 고정 토글 · 최소화/최대화/닫기.
+
+  색·굵기·반경은 KESI Frosted(2026-11-04) — 값은 apps/mobile/src/theme/tokens.ts 의 LIGHT/DARK 와 같다
+  (card·cardBorder·text·muted·surface·primaryFill·pillSelected). 글꼴 굵기 ≤600, 반경 10.
+  테마: 기본은 OS(prefers-color-scheme), 앱이 mcm:theme 로 알려 주면 그 값(data-theme)이 우선 — 앱을 라이트로
+  고정했는데 상단 바만 다크로 남던 문제(11-04)의 해법.
+*/
+:root {
+  --bar-bg: #ffffff;
+  --bar-border: #e8e9ee;
+  --ink: #21232c;
+  --ink-muted: #646a78;
+  --surface: #f6f7f9;
+  --pill: #f2f3f7;
+  --primary: #4a63d8;
+  --primary-fill: #4a63d8;
+  --track: #d1d4dc;
+  --danger: #b92727;
+  --frame-bg: #eef1f8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bar-bg: #1a1d23;
+    --bar-border: #343742;
+    --ink: #e7e9ee;
+    --ink-muted: #a1a8b5;
+    --surface: #24262e;
+    --pill: #272a33;
+    --primary: #a9b8ff;
+    --primary-fill: #5269dc;
+    --track: #484d5b;
+    --frame-bg: #141520;
+  }
+}
+:root[data-theme="dark"] {
+  --bar-bg: #1a1d23;
+  --bar-border: #343742;
+  --ink: #e7e9ee;
+  --ink-muted: #a1a8b5;
+  --surface: #24262e;
+  --pill: #272a33;
+  --primary: #a9b8ff;
+  --primary-fill: #5269dc;
+  --track: #484d5b;
+  --frame-bg: #141520;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--frame-bg); }
+body {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  display: flex; flex-direction: column; color: var(--ink);
+}
+#bar {
+  height: 38px; flex: 0 0 38px; display: flex; align-items: center; gap: 6px;
+  padding: 0 6px 0 14px; background: var(--bar-bg); border-bottom: 1px solid var(--bar-border);
+  user-select: none; -webkit-user-select: none;
+}
+#title {
+  font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+#spacer { flex: 1; height: 100%; min-width: 8px; }
+/* 항상 위 고정 토글 */
+#pin {
+  display: flex; align-items: center; gap: 7px; padding: 5px 9px; margin-right: 2px; flex: none;
+  font-size: 12px; font-weight: 500; color: var(--ink-muted); cursor: pointer; border-radius: 10px;
+}
+#pin:hover { background: var(--surface); }
+#pin .sw {
+  width: 32px; height: 18px; border-radius: 99px; background: var(--track);
+  position: relative; transition: background .15s;
+}
+#pin .sw::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: transform .15s;
+}
+#pin.on { color: var(--primary); font-weight: 600; }
+#pin.on .sw { background: var(--primary-fill); }
+#pin.on .sw::after { transform: translateX(14px); }
+/* 창 버튼 */
+.btn {
+  width: 36px; height: 30px; display: grid; place-items: center; border: 0; flex: none;
+  background: transparent; cursor: pointer; border-radius: 10px; color: var(--ink-muted);
+}
+.btn:hover { background: var(--surface); color: var(--ink); }
+.btn.close:hover { background: var(--danger); color: #fff; }
+iframe { flex: 1; width: 100%; border: 0; display: block; background: transparent; }

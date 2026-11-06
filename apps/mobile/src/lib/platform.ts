@@ -20,8 +20,24 @@ export const IS_IN_WIDGET = !!win && win.parent !== win && !IS_PHONE_DEMO;
 export const IS_STANDALONE_PWA =
   !!win && typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches;
 
+/**
+ * 대화 팝업 창(2026-11-06) — 넓은 배치에서 이미 방이 열려 있을 때 새 대화는 별도 창으로 띄운다(lib/chat-popup.ts).
+ * 그 창은 URL 에 ?popup=1 을 달고 열린다(window.name 은 대화방 화면이 덮어쓰므로 쓰지 않는다). 팝업 안에서는
+ * 2분할로 넘기지 않고 대화방 하나만 그리며, 뒤로가기 대신 창 닫기를 쓴다.
+ */
+export const IS_CHAT_POPUP = !!win && new URLSearchParams(win.location.search).get('popup') === '1';
+
 /** 넓은 배치(목록+상세 2분할·홈 2열)를 켜는 창 폭 — 설계안 §6-3(2026-11-04). 이보다 좁으면 모바일 흐름(한 화면씩). */
 export const WIDE_MIN_WIDTH = 900;
 
 /** 레일 레이아웃의 콘텐츠 최대 폭(레일 88 포함) — 창을 최대화해도 늘어지지 않게 가운데 섬으로 둔다. 넓은 배치 기준 952 + 레일 88. */
 export const WEB_SHELL_MAX_WIDTH = 88 + 952;
+
+/** 대화 2분할의 왼쪽 목록 폭(고정). */
+export const CHAT_LIST_PANE_WIDTH = 360;
+
+/**
+ * 대화 탭에서만 쓰는 섬 최대 폭(2026-11-06 사용자 요청) — 오른쪽 대화방 칸을 지금 최대(952 − 360 = 592)보다 30% 넓은 770 까지
+ * 넓힐 수 있게 한다. 레일 88·목록 360 은 그대로다. 다른 탭은 WEB_SHELL_MAX_WIDTH 그대로.
+ */
+export const WEB_SHELL_CHAT_MAX_WIDTH = 88 + CHAT_LIST_PANE_WIDTH + 770;

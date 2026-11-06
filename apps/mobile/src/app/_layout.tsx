@@ -1,7 +1,7 @@
 import '@/global.css';
 
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View, useWindowDimensions } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
@@ -11,7 +11,7 @@ import { ToastProvider } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { usePushSetup } from '@/lib/use-push';
 import { useWidgetBridge } from '@/lib/use-widget-bridge';
-import { IS_WEB_RAIL, WEB_SHELL_MAX_WIDTH } from '@/lib/platform';
+import { IS_WEB_RAIL, WEB_SHELL_CHAT_MAX_WIDTH, WEB_SHELL_MAX_WIDTH } from '@/lib/platform';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { useTheme } from '@/theme/useTheme';
 
@@ -33,6 +33,26 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * 좌측 레일 환경(데스크탑 위젯·PWA)의 가운데 섬. 기본은 WEB_SHELL_MAX_WIDTH 로 가운데 정렬.
+ * 대화 탭(chat)에서는 대화방 칸만 더 넓힐 수 있게 최대 폭을 WEB_SHELL_CHAT_MAX_WIDTH 로 올린다(2026-11-06 사용자 요청).
+ * 이때 섬의 **왼쪽 끝은 다른 탭과 같은 자리**에 두고 오른쪽으로만 늘린다 — 탭을 오갈 때 레일과 목록이 좌우로 튀지 않는다.
+ */
+function WebIsland({ chat, children }: { chat: boolean; children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const left = Math.max(0, Math.round((width - WEB_SHELL_MAX_WIDTH) / 2));
+  return (
+    <View
+      style={
+        chat
+          ? { flex: 1, width: Math.min(WEB_SHELL_CHAT_MAX_WIDTH, width - left), marginLeft: left, alignSelf: 'flex-start' }
+          : { flex: 1, width: '100%', maxWidth: WEB_SHELL_MAX_WIDTH, alignSelf: 'center' }
+      }>
+      {children}
+    </View>
+  );
+}
+
 function RootNavigator() {
   const { status } = useAuth();
   const { dark } = useTheme();
@@ -42,6 +62,13 @@ function RootNavigator() {
   usePushSetup();
   // 데스크탑 위젯 셸에 미읽음·새 메시지·테마를 알린다(웹 + 위젯 안에서만 동작).
   useWidgetBridge(status === 'authed', dark);
+
+  // 웹 문서 바탕색을 앱 테마에 맞춘다(+html.tsx DOC_BACKGROUND 의 실행 중 보정) — 불투명 바탕이어야 위젯 iframe 안에서
+  // 글자가 ClearType 으로 그려진다. 앱에서 라이트/다크를 고정하면 OS 설정과 달라질 수 있어 여기서 덮어쓴다.
+  const { c: palette } = useTheme();
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.documentElement.style.backgroundColor = palette.bg;
+  }, [palette.bg]);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -127,7 +154,7 @@ function RootNavigator() {
       <StatusBar style={dark ? 'light' : 'dark'} />
       {/* 데스크탑 위젯·PWA(좌측 레일): 창을 최대화해도 모바일 화면 구성이 늘어지지 않게 최대 폭의 가운데 섬 —
           바탕 그라데이션(ThemeProvider 루트)은 창 전체에 깔리고 섬은 그 위에 떠 있다(2026-11-04). */}
-      {IS_WEB_RAIL ? <View style={{ flex: 1, width: '100%', maxWidth: WEB_SHELL_MAX_WIDTH, alignSelf: 'center' }}>{stack}</View> : stack}
+      {IS_WEB_RAIL ? <WebIsland chat={(segments as string[])[0] === '(tabs)' && (segments as string[])[1] === 'chat'}>{stack}</WebIsland> : stack}
     </>
   );
 }

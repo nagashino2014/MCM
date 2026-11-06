@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "MCM 위젯 기본 권한 — 셸(창·트레이·자동시작·알림)만 사용한다.",
-  "windows": ["main"],
+  "description": "MCM 위젯 기본 권한 — 셸(창·트레이·자동시작·알림)만 사용한다. chat-* 는 대화 팝업 창(2026-11-06).",
+  "windows": ["main", "chat-*"],
   "permissions": [
     "core:default",
     "autostart:default",
@@ -14,6 +14,11 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-hide",
     "core:window:allow-is-visible",
-    "core:window:allow-is-focused"
+    "core:window:allow-is-focused",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "core:webview:allow-create-webview-window"
   ]
 }

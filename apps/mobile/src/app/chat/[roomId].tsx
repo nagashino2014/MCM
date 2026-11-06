@@ -22,11 +22,13 @@ import { AppHeader, Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from 
 import { EmojiPickerSheet } from '@/components/chat/EmojiPickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { apiFetch, apiJson } from '@/lib/api';
+import { closeChatPopup } from '@/lib/chat-popup';
 import { useAuth } from '@/lib/auth-context';
 import { API_BASE_URL } from '@/lib/config';
 import { fmtTime } from '@/lib/format';
 import { routeForLink } from '@/lib/deeplink';
 import { openAttachment } from '@/lib/open-attachment';
+import { IS_CHAT_POPUP } from '@/lib/platform';
 import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
 import { useApi } from '@/lib/use-api';
@@ -126,17 +128,25 @@ export default function ChatRoomScreen() {
     if (wide) router.replace({ pathname: '/(tabs)/chat', params: nameStr ? { roomId: roomIdParam, name: nameStr } : { roomId: roomIdParam } });
   }, [wide, roomIdParam, nameStr]);
   if (wide) return null;
+  // 대화 팝업 창(?popup=1) — 창 하나에 방 하나. 뒤로가기가 없고, 방을 나가면 창을 닫는다.
+  if (IS_CHAT_POPUP) return <ChatRoomView roomId={Number(roomIdParam)} name={nameStr} popup onLeft={closeChatPopup} />;
   return <ChatRoomView roomId={Number(roomIdParam)} name={nameStr} />;
 }
 
 // 대화방 — inverted 목록(3초 증분 폴링) + 텍스트 전송 + 읽음 커서. MSG-P0.
 // ⚠ 헤더는 자체 렌더(화면 내 Stack.Screen options 금지 — iOS 헤더 갱신 루프 이력).
 // embedded: 대화 탭의 오른쪽 칸에 들어갈 때 — 안전영역·뒤로가기 없이, 나가기는 onLeft 로 부모에 알린다.
-export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: number; name?: string; embedded?: boolean; onLeft?: () => void }) {
+// popup: 대화 팝업 창(2026-11-06) — embedded 와 같은 모양으로 창 전체를 채운다.
+// 둘 다 "틀 배치(framed)": 흰 바탕 위에 **대화 영역(그라데이션)과 입력 상자를 각각 둥근 사각형(반경 10)** 으로 띄운다
+// (2026-11-06 사용자 요청). 네이티브·좁은 창의 전체 화면 대화방은 지금처럼 가장자리까지 채운다.
+export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId: number; name?: string; embedded?: boolean; popup?: boolean; onLeft?: () => void }) {
+  const framed = !!embedded || !!popup;
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && Number.isSafeInteger(roomId) && roomId > 0) window.name = `mcm-chat-${roomId}`;
-  }, [roomId]);
+    // 팝업 창은 window.open 이 준 이름(mcm-chat-popup-<id>)을 유지해야 같은 방을 다시 열 때 그 창이 재사용된다.
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && !popup && Number.isSafeInteger(roomId) && roomId > 0) window.name = `mcm-chat-${roomId}`;
+  }, [roomId, popup]);
   const { c } = useTheme();
+  const [inputFocused, setInputFocused] = useState(false);
   const { user } = useAuth();
   const toast = useToast();
   const myId = user?.id ?? '';
@@ -566,13 +576,14 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
   );
 
   return (
-    <SafeAreaView edges={embedded ? [] : ['top', 'bottom']} className="flex-1 bg-transparent">
-      <ShellBackground />
+    <SafeAreaView edges={framed ? [] : ['top', 'bottom']} className={framed ? 'flex-1 bg-cd-card' : 'flex-1 bg-transparent'}>
+      {/* 틀 배치에서는 셸 그라데이션을 대화 영역 틀 안에만 깐다(아래). */}
+      {framed ? null : <ShellBackground />}
       {/* 자체 헤더 — 공용 AppHeader(홈·전체 메뉴 외 모든 화면 공통 모양, 2026-11-04). 2분할 오른쪽 칸에서는 뒤로가기 없음 */}
       <AppHeader
         title={title}
-        back={!embedded}
-        safe={embedded ? 'none' : 'extend'}
+        back={!framed}
+        safe={framed ? 'none' : 'extend'}
         right={
           <Pressable
             onPress={() => {
@@ -592,27 +603,40 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
-        {msgs == null && !error ? (
-          <ActivityIndicator className="mt-10" />
-        ) : msgs == null && error ? (
-          <Text className="mt-10 px-6 text-center text-cd-error">{error}</Text>
-        ) : (
-          <FlatList
-            inverted
-            data={msgs}
-            keyExtractor={(m) => String(m.messageId)}
-            renderItem={renderItem}
-            contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10 }}
-            onEndReached={() => void loadOlder()}
-            onEndReachedThreshold={0.3}
-            ListFooterComponent={loadingOlder ? <ActivityIndicator className="py-3" /> : null}
-            keyboardShouldPersistTaps="handled"
-          />
-        )}
+        {/* 대화 영역 — 틀 배치에서는 좌우·위 12 를 띄운 둥근 틀(반경 10) 안에 그라데이션과 메시지를 담는다. */}
+        <View className="flex-1" style={framed ? { marginHorizontal: 12, marginTop: 12, borderRadius: 10, overflow: 'hidden' } : undefined}>
+          {framed ? <ShellBackground /> : null}
+          {msgs == null && !error ? (
+            <ActivityIndicator className="mt-10" />
+          ) : msgs == null && error ? (
+            <Text className="mt-10 px-6 text-center text-cd-error">{error}</Text>
+          ) : (
+            <FlatList
+              inverted
+              data={msgs}
+              keyExtractor={(m) => String(m.messageId)}
+              renderItem={renderItem}
+              contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10 }}
+              onEndReached={() => void loadOlder()}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={loadingOlder ? <ActivityIndicator className="py-3" /> : null}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
+        </View>
+
+        {/* 입력 영역(답장 인용·첨부 미리보기·입력바) — 틀 배치에서는 세 줄을 한 둥근 상자(반경 10, 테두리 1)로 묶는다.
+            상자가 입력창 테두리를 대신하므로 안쪽 TextInput 은 테두리 없이, 포커스는 상자 테두리 색으로 보인다. */}
+        <View
+          style={
+            framed
+              ? { marginHorizontal: 12, marginTop: 8, marginBottom: 12, borderRadius: 10, borderWidth: 1, borderColor: inputFocused ? c.primary : c.border, backgroundColor: c.card, overflow: 'hidden' }
+              : undefined
+          }>
 
         {/* 답장 인용 바(MSG-P2) */}
         {replyTarget ? (
-          <View className="flex-row items-center gap-2 border-t border-cd-border bg-cd-card px-4 py-2">
+          <View className={`flex-row items-center gap-2 bg-cd-card px-4 py-2 ${framed ? 'border-b border-cd-border' : 'border-t border-cd-border'}`}>
             <Ionicons name="return-up-back" size={16} color={c.primary} />
             <View className="flex-1">
               <Text className="text-[12px] font-bold text-cd-primary">
@@ -630,7 +654,7 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
 
         {/* 전송 대기 첨부 미리보기 */}
         {pendingFile ? (
-          <View className="flex-row items-center gap-2 border-t border-cd-border bg-cd-card px-4 py-2">
+          <View className={`flex-row items-center gap-2 bg-cd-card px-4 py-2 ${framed ? 'border-b border-cd-border' : 'border-t border-cd-border'}`}>
             <Ionicons
               name={(pendingFile.mimeType ?? '').startsWith('image/') ? 'image-outline' : 'document-outline'}
               size={17}
@@ -647,7 +671,7 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
         ) : null}
 
         {/* 입력바 — 📎 첨부(대용량) · 이모지 · 텍스트. 일반 파일은 드래그앤드롭/붙여넣기. */}
-        <View className="flex-row items-end gap-1.5 border-t border-cd-border bg-cd-card px-3 py-2">
+        <View className={`flex-row items-end gap-1.5 bg-cd-card py-2 ${framed ? 'px-2' : 'border-t border-cd-border px-3'}`}>
           <Pressable
             onPress={() => void pickFile()}
             disabled={sending}
@@ -669,7 +693,14 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
             placeholderTextColor={c.faint}
             multiline
             textAlignVertical="top"
-            className="max-h-[220px] min-h-[80px] flex-1 rounded-2xl border border-cd-border bg-transparent px-3.5 py-2.5 text-[15px] text-cd-text"
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            style={framed && Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : undefined}
+            className={
+              framed
+                ? 'max-h-[220px] min-h-[80px] flex-1 bg-transparent px-2 py-2.5 text-[15px] text-cd-text'
+                : 'max-h-[220px] min-h-[80px] flex-1 rounded-2xl border border-cd-border bg-transparent px-3.5 py-2.5 text-[15px] text-cd-text'
+            }
           />
           <Pressable
             onPress={() => void send()}
@@ -682,6 +713,7 @@ export function ChatRoomView({ roomId, name, embedded, onLeft }: { roomId: numbe
               <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
             )}
           </Pressable>
+        </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -1014,8 +1046,9 @@ function MessageRow({
   }
   return (
     <View className={`flex-row items-end gap-1.5 ${grouped ? 'mt-1' : 'mt-2.5'}`}>
-      <View className="w-8">
-        {!grouped ? <Avatar name={m.senderName} photoPath={m.senderPhotoPath} size="sm" /> : null}
+      {/* 상대 프로필 — 28 에서 20% 키운 34(2026-11-06 사용자 요청). 자리 폭도 32 → 38 로 맞춘다. */}
+      <View style={{ width: 38 }}>
+        {!grouped ? <Avatar name={m.senderName} photoPath={m.senderPhotoPath} px={34} /> : null}
       </View>
       <View className="max-w-[76%]">
         {!grouped ? (

@@ -62,7 +62,12 @@ export interface CdPalette {
   onError: string;
   /** 시트·모달 뒤 어둡게 하는 막(blur 없음). */
   overlay: string;
-  /** 색 점 없는 필터 필의 선택 바탕 — 옅은 회색(남색 틴트는 그라데이션 바탕과 구분되지 않아 2026-11-04 사용자 결정). 글자는 text 600. */
+  /**
+   * 선택 바탕 — 옅은 회색(남색 틴트는 그라데이션 바탕과 구분되지 않아 2026-11-04 사용자 결정). 글자는 text 600.
+   * 쓰는 곳(전수, 2026-11-06): 색 점 없는 필터 필(Chip.tsx FilterPill) · 좌측 레일 선택 항목(SideRail) · 대화 목록의 열린 방(chat.tsx RoomRow).
+   * 11-06 사용자 요청으로 두 번 옅게(#e6e8ee → #eef0f4 → #f2f3f7, 다크 #30333e → #2a2d37 → #272a33). 위젯 셸의 --pill 도 같은 값.
+   * surface(#f6f7f9)보다는 한 단계 진하다 — 이보다 옅으면 흰 바탕 위에서 선택이 보이지 않는다.
+   */
   pillSelected: string;
 }
 
@@ -114,7 +119,7 @@ export const LIGHT: CdPalette = {
   onError: "#ffffff",
   // 시스템 overlay(24%)보다 진하게 — 뒤 화면이 비쳐 불편하다는 사용자 피드백(2026-08-09) 유지.
   overlay: "#131720b3",
-  pillSelected: "#e6e8ee",
+  pillSelected: "#f2f3f7",
 };
 
 export const DARK: CdPalette = {
@@ -151,7 +156,7 @@ export const DARK: CdPalette = {
   onPrimary: "#111522",
   onError: "#111522",
   overlay: "#000000b3",
-  pillSelected: "#30333e",
+  pillSelected: "#272a33",
 };
 
 /**

@@ -253,7 +253,8 @@ export function PendingProgressWidget() {
  * 데이터 /api/home/todo-today(lib/todo/store.ts TodoTodaySummary + approvalEvents).
  * 체크는 낙관적으로 숨기고 완료 API 를 보낸 뒤 다시 받는다 — 되돌리기는 할 일 화면에서.
  */
-export function TodoTodayWidget() {
+/** bodyMinHeight — 홈 2열에서 다른 목록 카드와 높이를 맞출 때(3건 높이). 건수가 더 많으면 그만큼 늘어난다. */
+export function TodoTodayWidget({ bodyMinHeight }: { bodyMinHeight?: number } = {}) {
   const router = useRouter();
   const toast = useToast();
   const { c } = useTheme();
@@ -298,80 +299,82 @@ export function TodoTodayWidget() {
       title="오늘 할 일"
       badge={count ? <Badge label={`${count}`} tone={data && data.counts.overdue ? 'error' : 'primary'} /> : undefined}
       action={{ label: '전체 보기', onPress: () => router.push('/todo') }}>
-      {loading && !data ? (
-        <Text className="py-2 text-[14px] text-cd-muted">불러오는 중…</Text>
-      ) : rows.length === 0 && events.length === 0 && pending.length === 0 ? (
-        <Text className="py-2 text-[14px] text-cd-muted">오늘 할 일이 없습니다.</Text>
-      ) : (
-        // 카드 안에서도 항목마다 박스(2026-11-04 사용자 결정) — 흰 바탕 + 옅은 테두리(그림자 없음), 체크 원은 14px(11-04 30% 축소).
-        // 왼쪽 가장자리 전체가 보드 색(full 띠 5px, overflow hidden 으로 모서리를 따라 잘림) — 할 일 화면 행과 같은 규칙.
-        <View className="gap-2">
-          {pending.map((ev) => (
-            <Pressable
-              key={ev.id}
-              disabled={!ev.docId}
-              onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
-              style={{ borderColor: c.cardBorder }}
-              className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2 active:opacity-60">
-              <BoardStripe color={ev.kindColor} full width={5} />
-              <KindCircle kind="pending" color={ev.kindColor} size={18} />
-              <View className="flex-1">
-                <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
-                  {TODO_APPROVAL_EVENT_LABELS.pending} · {ev.title}
-                </Text>
-                <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
-                  {[ev.drafterName, ev.formName, ev.docNo].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-              <Text className="text-[13px] font-medium text-cd-primary">결재</Text>
-            </Pressable>
-          ))}
-          {rows.map((it) => {
-            const due = dueBadge(it, today);
-            const over = (it.doDate ?? it.dueDate ?? '') < today || (it.dueDate != null && it.dueDate < today);
-            return (
-              <View key={it.itemId} style={{ borderColor: c.cardBorder }} className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2">
-                <BoardStripe color={it.boardColor} full width={5} />
-                <CheckCircle done={false} disabled={!it.canEdit} onPress={() => void complete(it)} size={14} />
-                <Pressable
-                  className="flex-1 flex-row items-center gap-2 active:opacity-60"
-                  onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: it.itemId } })}>
-                  <View className="flex-1">
-                    <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
-                      {it.title}
-                    </Text>
-                    <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
-                      {[it.doTime ?? (it.doDate ? '종일' : null), over ? '지연' : null, it.projectName ?? null, it.subtaskTotal ? `하위 ${it.subtaskDone}/${it.subtaskTotal}` : null]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Text>
-                  </View>
-                  {due ? <DueBadge label={due.label} tone={due.tone} /> : null}
-                </Pressable>
-              </View>
-            );
-          })}
-          {events.map((ev) => (
-            <Pressable
-              key={ev.id}
-              disabled={!ev.docId}
-              onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
-              style={{ borderColor: c.cardBorder }}
-              className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2 active:opacity-60">
-              <BoardStripe color={ev.kindColor} full width={5} />
-              <KindCircle kind={ev.kind} color={ev.kindColor} size={18} />
-              <View className="flex-1">
-                <Text numberOfLines={1} className="text-[13px] text-cd-muted">
-                  {TODO_APPROVAL_EVENT_LABELS[ev.kind] ?? ev.kind} · {ev.title}
-                </Text>
-                <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
-                  {[ev.startTime ?? '종일', ev.status === 'approved' ? '결재 승인' : ev.status === 'in_progress' ? '결재 진행' : null, ev.projectName].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <View style={bodyMinHeight ? { minHeight: bodyMinHeight } : undefined}>
+        {loading && !data ? (
+          <Text className="py-2 text-[14px] text-cd-muted">불러오는 중…</Text>
+        ) : rows.length === 0 && events.length === 0 && pending.length === 0 ? (
+          <Text className="py-2 text-[14px] text-cd-muted">오늘 할 일이 없습니다.</Text>
+        ) : (
+          // 카드 안에서도 항목마다 박스(2026-11-04 사용자 결정) — 흰 바탕 + 옅은 테두리(그림자 없음), 체크 원은 14px(11-04 30% 축소).
+          // 왼쪽 가장자리 전체가 보드 색(full 띠 5px, overflow hidden 으로 모서리를 따라 잘림) — 할 일 화면 행과 같은 규칙.
+          <View className="gap-2">
+            {pending.map((ev) => (
+              <Pressable
+                key={ev.id}
+                disabled={!ev.docId}
+                onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
+                style={{ borderColor: c.cardBorder }}
+                className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2 active:opacity-60">
+                <BoardStripe color={ev.kindColor} full width={5} />
+                <KindCircle kind="pending" color={ev.kindColor} size={18} />
+                <View className="flex-1">
+                  <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
+                    {TODO_APPROVAL_EVENT_LABELS.pending} · {ev.title}
+                  </Text>
+                  <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
+                    {[ev.drafterName, ev.formName, ev.docNo].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                <Text className="text-[13px] font-medium text-cd-primary">결재</Text>
+              </Pressable>
+            ))}
+            {rows.map((it) => {
+              const due = dueBadge(it, today);
+              const over = (it.doDate ?? it.dueDate ?? '') < today || (it.dueDate != null && it.dueDate < today);
+              return (
+                <View key={it.itemId} style={{ borderColor: c.cardBorder }} className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2">
+                  <BoardStripe color={it.boardColor} full width={5} />
+                  <CheckCircle done={false} disabled={!it.canEdit} onPress={() => void complete(it)} size={14} />
+                  <Pressable
+                    className="flex-1 flex-row items-center gap-2 active:opacity-60"
+                    onPress={() => router.push({ pathname: '/todo/[itemId]', params: { itemId: it.itemId } })}>
+                    <View className="flex-1">
+                      <Text numberOfLines={1} className="text-[13px] font-semibold text-cd-body">
+                        {it.title}
+                      </Text>
+                      <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
+                        {[it.doTime ?? (it.doDate ? '종일' : null), over ? '지연' : null, it.projectName ?? null, it.subtaskTotal ? `하위 ${it.subtaskDone}/${it.subtaskTotal}` : null]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
+                    </View>
+                    {due ? <DueBadge label={due.label} tone={due.tone} /> : null}
+                  </Pressable>
+                </View>
+              );
+            })}
+            {events.map((ev) => (
+              <Pressable
+                key={ev.id}
+                disabled={!ev.docId}
+                onPress={() => (ev.docId ? router.push({ pathname: '/approval/[docId]', params: { docId: ev.docId } }) : undefined)}
+                style={{ borderColor: c.cardBorder }}
+                className="flex-row items-center gap-2.5 overflow-hidden rounded-lg border bg-cd-card py-2.5 pl-3.5 pr-2 active:opacity-60">
+                <BoardStripe color={ev.kindColor} full width={5} />
+                <KindCircle kind={ev.kind} color={ev.kindColor} size={18} />
+                <View className="flex-1">
+                  <Text numberOfLines={1} className="text-[13px] text-cd-muted">
+                    {TODO_APPROVAL_EVENT_LABELS[ev.kind] ?? ev.kind} · {ev.title}
+                  </Text>
+                  <Text numberOfLines={1} className="mt-[2px] text-[12px] text-cd-faint">
+                    {[ev.startTime ?? '종일', ev.status === 'approved' ? '결재 승인' : ev.status === 'in_progress' ? '결재 진행' : null, ev.projectName].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
     </Card>
   );
 }

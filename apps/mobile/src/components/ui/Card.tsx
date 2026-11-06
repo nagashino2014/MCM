@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { useTheme } from "@/theme/useTheme";
 import { SHADOW_CARD } from "@/theme/tokens";
@@ -23,6 +23,7 @@ export function Card({
   onPress,
   flat,
   flush,
+  style: outerStyle,
   children,
 }: {
   title?: string;
@@ -39,6 +40,8 @@ export function Card({
   flat?: boolean;
   /** 행 목록처럼 가장자리까지 쓰는 카드 — 안쪽 여백 없음(제목 줄에만 여백). */
   flush?: boolean;
+  /** 바깥 상자에 더하는 스타일 — 높이를 옆 열에 맞춰 고정할 때만 쓴다(홈 2열의 캘린더 카드). 색·테두리·반경은 여기서 바꾸지 않는다. */
+  style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }) {
   const { c, dark } = useTheme();
@@ -65,7 +68,7 @@ export function Card({
   );
 
   const cls = `rounded-lg border bg-cd-card ${flush ? "" : "p-4"}`;
-  const style = [{ borderColor: c.cardBorder }, flat ? null : dark ? SHADOW_CARD.dark : SHADOW_CARD.light];
+  const style = [{ borderColor: c.cardBorder }, flat ? null : dark ? SHADOW_CARD.dark : SHADOW_CARD.light, outerStyle];
 
   if (onPress) {
     return (

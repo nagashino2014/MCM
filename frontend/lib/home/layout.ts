@@ -26,6 +26,12 @@ export interface HomeSettings {
   calendarRefs: string[];
   /** 켜둔 캘린더 태그. */
   calendarTags: CalendarTagKey[];
+  /**
+   * 모바일 앱·데스크탑 위젯 홈의 "빠른 실행" 타일 구성(2026-11-06) — 사용자가 고른 기능 키를 순서대로. null = 기본 구성.
+   * 키 목록(어떤 기능이 있는지)은 앱이 가진다(apps/mobile/src/lib/quick-actions.ts) — 서버는 모양만 검사해 보관한다.
+   * 저장 위치: home_layouts.layout(jsonb) 안의 mobileQuick 키. 웹 홈의 배치 저장(layout)과 따로 움직인다.
+   */
+  quickActions: string[] | null;
 }
 
 export interface HomeSettingsWithCatalog extends HomeSettings {
@@ -38,7 +44,23 @@ const DEFAULTS: HomeSettings = {
   presets: {},
   calendarRefs: [],
   calendarTags: ["self", "sales"],
+  quickActions: null,
 };
+
+const MAX_QUICK_ACTIONS = 12;
+const QUICK_KEY_RE = /^[a-z][a-zA-Z0-9-]{0,31}$/;
+
+/** 빠른 실행 키 목록 정규화 — 문자열 키만, 중복 제거, 최대 12개. 배열이 아니면 null(기본 구성). */
+function normalizeQuickActions(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const k of raw) {
+    if (typeof k !== "string" || !QUICK_KEY_RE.test(k) || out.includes(k)) continue;
+    out.push(k);
+    if (out.length >= MAX_QUICK_ACTIONS) break;
+  }
+  return out;
+}
 
 const PRESET_SLOTS = ["1", "2", "3"] as const;
 
@@ -84,8 +106,10 @@ export async function loadHomeSettings(userId: string): Promise<HomeSettingsWith
   const row = rows[0];
   const tags = parseJson<string[]>(row.calendar_tags, DEFAULTS.calendarTags);
   const refs = parseJson<string[]>(row.calendar_refs, []);
+  const rawLayout = parseJson<Record<string, unknown>>(row.layout, {});
   return {
-    layout: normalizeLayout(parseJson(row.layout, {})),
+    layout: normalizeLayout(rawLayout),
+    quickActions: normalizeQuickActions(rawLayout?.mobileQuick),
     presets: normalizePresets(parseJson(row.presets, {})),
     calendarRefs: refs.filter((r) => typeof r === "string").slice(0, MAX_REFS),
     calendarTags: tags.filter((t): t is CalendarTagKey => TAG_KEYS.includes(t)),
@@ -104,7 +128,11 @@ export async function saveHomeSettings(userId: string, input: Partial<HomeSettin
     calendarTags: input.calendarTags
       ? input.calendarTags.filter((t): t is CalendarTagKey => TAG_KEYS.includes(t))
       : current.calendarTags,
+    // undefined = 이번 저장에서 건드리지 않음(웹의 배치 저장이 빠른 실행 구성을 지우지 않게), null = 기본 구성으로 되돌림.
+    quickActions: input.quickActions === undefined ? current.quickActions : normalizeQuickActions(input.quickActions),
   };
+  // 빠른 실행 구성은 layout(jsonb) 안에 함께 보관한다 — normalizeLayout 은 이 키를 모르므로 여기서 다시 얹는다.
+  const layoutToStore = next.quickActions ? { ...next.layout, mobileQuick: next.quickActions } : next.layout;
 
   await withDbWrite(async (db) => {
     await db.run(
@@ -118,7 +146,7 @@ export async function saveHomeSettings(userId: string, input: Partial<HomeSettin
              updated_at = EXCLUDED.updated_at`,
       [
         userId,
-        JSON.stringify(next.layout),
+        JSON.stringify(layoutToStore),
         JSON.stringify(next.presets),
         JSON.stringify(next.calendarRefs),
         JSON.stringify(next.calendarTags),

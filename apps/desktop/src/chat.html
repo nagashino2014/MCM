@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>MCM 대화</title>
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body>
+    <!--
+      대화 팝업 창(2026-11-06) — 주 창의 대화 2분할에서 이미 방이 열려 있을 때 새 대화를 별도 창으로 띄운다.
+      주 창(index.html)이 웹앱의 mcm:open-chat 을 받아 chat-<roomId> 라벨로 이 문서를 연다(chat.html?roomId=…&name=…).
+      화면은 주 창과 같은 원격 웹앱의 대화방 하나(/m-app/chat/<roomId>?popup=1)이고, 로그인은 같은 WebView 프로필이라 공유된다.
+      주 창과 다른 점: 닫기는 트레이로 숨기지 않고 **창을 실제로 닫는다**. 뱃지·알림은 주 창만 맡는다.
+    -->
+    <div id="bar" data-tauri-drag-region>
+      <span id="title" data-tauri-drag-region>MCM 대화</span>
+      <div id="spacer" data-tauri-drag-region></div>
+
+      <div id="pin" title="다른 창 위에 항상 표시합니다">
+        <span>항상 위</span><span class="sw"></span>
+      </div>
+
+      <button class="btn" id="min" title="최소화" aria-label="최소화">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+      <button class="btn" id="max" title="최대화 / 이전 크기" aria-label="최대화">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+      </button>
+      <button class="btn close" id="close" title="닫기" aria-label="닫기">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <iframe id="app" title="MCM 대화"></iframe>
+
+    <script>
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const win = getCurrentWindow();
+      const APP_ORIGIN = "https://koensain.app";
+
+      // 방 번호는 양의 정수만 — 주 창이 넘긴 값이지만 주소에 그대로 쓰므로 한 번 더 거른다.
+      const params = new URLSearchParams(location.search);
+      const roomId = Number(params.get("roomId"));
+      const roomName = (params.get("name") || "").slice(0, 80);
+      const appFrame = document.getElementById("app");
+      if (Number.isSafeInteger(roomId) && roomId > 0) {
+        const qs = new URLSearchParams({ popup: "1" });
+        if (roomName) qs.set("name", roomName);
+        appFrame.src = APP_ORIGIN + "/m-app/chat/" + roomId + "?" + qs.toString();
+        if (roomName) document.getElementById("title").textContent = roomName;
+      } else {
+        win.close();
+      }
+
+      const pin = document.getElementById("pin");
+      let pinned = false;
+      pin.addEventListener("click", async () => {
+        pinned = !pinned;
+        pin.classList.toggle("on", pinned);
+        await win.setAlwaysOnTop(pinned);
+      });
+      document.getElementById("min").addEventListener("click", () => win.minimize());
+      document.getElementById("max").addEventListener("click", () => win.toggleMaximize());
+      document.getElementById("close").addEventListener("click", () => win.close());
+
+      // 웹앱은 셸의 오리진을 모르면 아무 것도 보내지 않는다 → 먼저 hello 로 밝힌다(주 창과 같은 규약).
+      const sayHello = () => {
+        try {
+          appFrame.contentWindow.postMessage({ type: "mcm:widget-hello", caps: [] }, APP_ORIGIN);
+        } catch (_) {
+          /* 아직 로드 전 — 아래 재시도가 처리한다 */
+        }
+      };
+      appFrame.addEventListener("load", () => {
+        sayHello();
+        [500, 1500, 4000].forEach((ms) => setTimeout(sayHello, ms));
+      });
+
+      window.addEventListener("message", (e) => {
+        if (e.origin !== APP_ORIGIN) return;
+        const d = e.data;
+        if (!d) return;
+        if (d.type === "mcm:widget-ready") {
+          sayHello();
+          return;
+        }
+        if (d.type === "mcm:theme") {
+          document.documentElement.dataset.theme = d.dark ? "dark" : "light";
+          return;
+        }
+        // 방을 나갔을 때 — 웹앱이 창을 닫아 달라고 한다.
+        if (d.type === "mcm:close-window") win.close();
+      });
+    </script>
+  </body>
+</html>

@@ -74,6 +74,7 @@ export function Avatar({
   uri,
   photoPath,
   size = "md",
+  px: pxOverride,
 }: {
   name?: string | null;
   /** 완전한 이미지 URL(외부). */
@@ -81,9 +82,11 @@ export function Avatar({
   /** 앱 API 의 사진 경로 — 인증 헤더를 붙여 불러온다. */
   photoPath?: string | null;
   size?: keyof typeof SIZES;
+  /** 지름을 직접 지정(정해진 세 크기 사이가 필요한 곳 — 대화방 말풍선 옆 34). 글자 크기는 지름에 비례. */
+  px?: number;
 }) {
-  const px = SIZES[size];
-  const font = size === "lg" ? 18 : size === "md" ? 14 : 11;
+  const px = pxOverride ?? SIZES[size];
+  const font = pxOverride ? Math.round(pxOverride * 0.38) : size === "lg" ? 18 : size === "md" ? 14 : 11;
   const authed = useAuthedSource(photoPath);
   const source = uri ? { uri } : authed;
 

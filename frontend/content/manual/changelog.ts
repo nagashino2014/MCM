@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "개선", title: "PC 앱 — 할 일 타임라인을 마우스로 끌어 좌우 이동",
+    body: "데스크탑 위젯과 PC 앱의 할 일 타임라인에서 그래프를 마우스로 잡고 끌면 좌우로 넘어갑니다. 방향키나 아래 스크롤 막대를 쓰지 않아도 됩니다. 막대 위에서 끌어도 일정은 바뀌지 않고, 누르기만 하면 전처럼 상세가 열립니다.",
+    articles: ["start.mobile"],
+  },
+  {
     date: "2026-11-06", kind: "변경", title: "프로필 아이콘 — 원형에서 둥근 사각형으로",
     body: "직원 사진·이름 글자·기본 사람 그림으로 표시되는 프로필 아이콘이 원에서 모서리가 둥근 사각형으로 바뀌었습니다. 웹 화면(상단 내 프로필, 주소록, 메일, 게시판, 할 일, 근태·휴가, 결재선 등)과 휴대폰 앱·PC 앱의 대화·메일·주소록·할 일에 모두 적용됩니다.",
     articles: ["home.dashboard", "start.mobile"],

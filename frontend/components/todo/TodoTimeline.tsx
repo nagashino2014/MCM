@@ -4,6 +4,7 @@
  * 타임라인(§29-1, 2026-10-19) — 기간 할 일·마일스톤·의존 화살표를 가로 시간축에. 라이브러리 없이 CSS 그리드 + SVG 오버레이.
  *   행 = 날짜(할 날/마감/기간)가 있는 상위 할 일, ▸ 로 하위 작업(공정 단계 라벨·마일스톤 ◆)을 펼친다. 날짜 없는 할 일은 하단 묶음.
  *   막대 = do_date ~ end_date(없으면 하루). 드래그 이동 = do/end 동시 이동(마감만 있으면 due_date), 오른쪽 끝 리사이즈 = end_date.
+ *   상위 막대(2026-11-06) = 하위와 같은 문법 — 옅은 바탕 + 같은 색 진한 채움(하위 평균 진행) + 오른쪽 %. 상위↔하위는 옅은 회색 가지선으로 잇는다.
  *   의존 화살표 = 선행 막대 끝 → 후행 막대 시작(GET /api/todo/deps?itemIds=). 선행 미완=회색, 선행 지연=빨강, 완료=흐림.
  *   시각 규칙은 todo.css 의 todo-tl-* 에만 둔다.
  */
@@ -203,7 +204,7 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
     return { rows, undated };
   }, [items, subCache, isOpen]);
 
-  // 상위별 하위 집계(완료 수·평균 진행율) — 상위 막대 하단 진척선·라벨 칩
+  // 상위별 하위 집계(완료 수·평균 진행율) — 상위 막대 진행 채움·% · 라벨 칩
   const subAgg = useMemo(() => {
     const out = new Map<string, { done: number; total: number; avg: number }>();
     for (const [pid, ex] of Object.entries(subCache)) {
@@ -389,12 +390,22 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
 
   const bodyH = Math.max(rows.length, 1) * ROW_H;
   const subGroups = useMemo(() => {
-    const out: { pi: number; last: number; x: number; tint: string }[] = [];
+    const out: { pi: number; last: number; x: number; stubs: { i: number; w: number }[] }[] = [];
     rows.forEach((r, i) => {
       if (r.depth !== 0) return;
       let last = i;
       while (last + 1 < rows.length && rows[last + 1].depth === 1 && rows[last + 1].parentId === r.item.itemId) last += 1;
-      if (last > i) out.push({ pi: i, last, x: clampDay(diffDays(r.start, windowStart)) * dayW + 5, tint: r.item.boardColor });
+      if (last <= i) return;
+      const x = clampDay(diffDays(r.start, windowStart)) * dayW + 5;
+      // 하위 막대·마일스톤이 세로선보다 오른쪽에서 시작하면 그 앞까지 가로 가지를 잇는다(창 밖 하위는 생략)
+      const stubs: { i: number; w: number }[] = [];
+      for (let k = i + 1; k <= last; k++) {
+        const s = rows[k];
+        if (!s.start || diffDays(s.end, windowStart) < 0 || diffDays(s.start, windowStart) >= DAYS) continue;
+        const sx = clampDay(diffDays(s.start, windowStart)) * dayW + (s.milestone ? dayW / 2 - 8 : 1);
+        if (sx - x >= 6) stubs.push({ i: k, w: sx - x - 1 });
+      }
+      out.push({ pi: i, last, x, stubs });
     });
     return out;
   }, [rows, windowStart, dayW]);
@@ -558,8 +569,9 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                 ))}
                 {rows.map((r, i) => (r.depth === 1 ? <span key={`sb${r.item.itemId}`} className="todo-tl-subband" style={{ top: i * ROW_H, height: ROW_H }} aria-hidden="true" /> : null))}
                 {subGroups.map((g) => (
-                  <span key={`lk${g.pi}`} className="todo-tl-link" style={{ left: g.x, top: g.pi * ROW_H + ROW_H - 6, height: (g.last - g.pi) * ROW_H - ROW_H / 2 + 6, ...tintStyle(g.tint) }} aria-hidden="true" />
+                  <span key={`lk${g.pi}`} className="todo-tl-link" style={{ left: g.x, top: g.pi * ROW_H + ROW_H - 6, height: (g.last - g.pi) * ROW_H - ROW_H / 2 + 7 }} aria-hidden="true" />
                 ))}
+                {subGroups.flatMap((g) => g.stubs.map((s) => <span key={`lh${s.i}`} className="todo-tl-link-h" style={{ left: g.x, top: s.i * ROW_H + ROW_H / 2, width: s.w }} aria-hidden="true" />))}
                 {todayX >= 0 && todayX < trackW && <div className="todo-tl-today" style={{ left: todayX + Math.floor(dayW / 2) }} title={`오늘 ${md(today)}`} />}
                 {rows.map((r, i) =>
                   !visible(r) ? null : r.milestone ? (
@@ -587,18 +599,20 @@ export function TodoTimeline({ items, today, selectedId, loading, onOpen, onPatc
                       data-done={r.item.status === "done" ? "1" : undefined}
                       data-late={late(r) ? "1" : undefined}
                       data-field={r.field}
+                      data-prog={r.depth === 0 && subAgg.has(r.item.itemId) ? "1" : undefined}
                       data-drag={drag?.id === r.item.itemId ? drag.mode : undefined}
                       data-editable={!r.undated && r.item.canEdit && r.item.status !== "done" ? "1" : undefined}
                       style={{ top: i * ROW_H + 6, height: ROW_H - 12, ...barStyle(r) }}
-                      title={`${r.item.title} · ${r.undated ? "날짜 미정(상위 기간에 표시)" : r.field === "due" ? `마감 ${md(r.start)}` : r.start === r.end ? md(r.start) : `${md(r.start)} ~ ${md(r.end)}`} · ${TODO_STATUS_LABELS[r.item.status]}${r.item.progressPct != null ? ` ${r.item.progressPct}%` : ""}`}
+                      title={`${r.item.title} · ${r.undated ? "날짜 미정(상위 기간에 표시)" : r.field === "due" ? `마감 ${md(r.start)}` : r.start === r.end ? md(r.start) : `${md(r.start)} ~ ${md(r.end)}`} · ${TODO_STATUS_LABELS[r.item.status]}${r.item.progressPct != null ? ` ${r.item.progressPct}%` : ""}${r.depth === 0 && subAgg.has(r.item.itemId) ? ` · 하위 평균 진행 ${subAgg.get(r.item.itemId)!.avg}%` : ""}`}
                       onPointerDown={(e) => onBarPointerDown(e, r)}
                       onPointerMove={onBarPointerMove}
                       onPointerUp={(e) => void onBarPointerUp(e, r)}
                     >
                       {r.depth === 1 && r.item.progressPct != null && r.item.status !== "done" && <span className="todo-tl-prog" style={{ width: `${r.item.progressPct}%` }} />}
-                      {r.depth === 0 && subAgg.has(r.item.itemId) && <span className="todo-tl-agg" style={{ width: `${subAgg.get(r.item.itemId)!.avg}%` }} title={`하위 평균 진행 ${subAgg.get(r.item.itemId)!.avg}%`} />}
+                      {r.depth === 0 && subAgg.has(r.item.itemId) && <span className="todo-tl-prog" style={{ width: `${r.item.status === "done" ? 100 : subAgg.get(r.item.itemId)!.avg}%` }} />}
                       <span className="todo-tl-item-ttl">{r.undated ? `날짜 미정 · ${r.item.title}` : r.item.title}</span>
                       {r.depth === 1 && <span className="todo-tl-pct">{r.item.status === "done" ? "✓" : r.item.progressPct != null ? `${r.item.progressPct}%` : TODO_STATUS_LABELS[r.item.status]}</span>}
+                      {r.depth === 0 && subAgg.has(r.item.itemId) && <span className="todo-tl-pct">{r.item.status === "done" ? "✓" : `${subAgg.get(r.item.itemId)!.avg}%`}</span>}
                       {r.field === "do" && !r.milestone && !r.undated && r.item.canEdit && r.item.status !== "done" && <span className="todo-tl-grip" aria-hidden="true" />}
                     </div>
                   )

@@ -6,12 +6,12 @@
  */
 
 import { getDb, withDbWrite, rowsToObjects } from "../db";
-
-const WINDOW_MINUTES = 15;
-// 이메일 단위 잠금(정밀): 동일 계정 연속 실패.
-const MAX_FAILS_PER_EMAIL = 5;
-// IP 단위 백스톱(여러 계정 스프레이): 사무실 공용 NAT 오탐 방지 위해 높게.
-const MAX_FAILS_PER_IP = 50;
+import {
+  LOGIN_LOCK_MAX_FAILS,
+  LOGIN_LOCK_MAX_FAILS_PER_IP,
+  LOGIN_LOCK_WINDOW_MINUTES,
+  type LoginLockReason,
+} from "./login-lock";
 
 /** ALB 가 세팅하는 X-Forwarded-For 의 첫 IP. 없으면 "unknown". */
 export function clientIpFrom(request?: Request): string {
@@ -22,8 +22,8 @@ export function clientIpFrom(request?: Request): string {
   return real?.trim() || "unknown";
 }
 
-/** 윈도 내 실패 횟수가 임계를 넘었는지. DB 오류 시 false(통과). */
-export async function isLoginBlocked(email: string, ip: string): Promise<boolean> {
+/** 윈도 내 실패 횟수가 임계를 넘었으면 그 사유, 아니면 null. DB 오류 시 null(통과). */
+export async function getLoginBlock(email: string, ip: string): Promise<LoginLockReason | null> {
   try {
     const db = await getDb();
     const res = await db.exec(
@@ -33,16 +33,23 @@ export async function isLoginBlocked(email: string, ip: string): Promise<boolean
        FROM login_attempts
        WHERE success = false
          AND attempted_at > now() - make_interval(mins => $3)`,
-      [email, ip, WINDOW_MINUTES]
+      [email, ip, LOGIN_LOCK_WINDOW_MINUTES]
     );
     const row = rowsToObjects(res)[0] ?? {};
     const emailFails = Number(row.email_fails ?? 0);
     const ipFails = Number(row.ip_fails ?? 0);
-    return emailFails >= MAX_FAILS_PER_EMAIL || ipFails >= MAX_FAILS_PER_IP;
+    if (emailFails >= LOGIN_LOCK_MAX_FAILS) return "account";
+    if (ipFails >= LOGIN_LOCK_MAX_FAILS_PER_IP) return "ip";
+    return null;
   } catch (err) {
     console.warn("[login-throttle] block 검사 실패(통과 처리): " + (err as Error).message);
-    return false;
+    return null;
   }
+}
+
+/** 차단 여부만 필요한 호출부(본인 찾기·메일 게이트웨이)용. */
+export async function isLoginBlocked(email: string, ip: string): Promise<boolean> {
+  return (await getLoginBlock(email, ip)) !== null;
 }
 
 /** 실패 시도 1건 기록 + 1일 지난 오래된 기록 정리. */
@@ -60,6 +67,29 @@ export async function recordLoginFailure(email: string, ip: string): Promise<voi
     });
   } catch (err) {
     console.warn("[login-throttle] 실패 기록 오류: " + (err as Error).message);
+  }
+}
+
+/**
+ * 비밀번호 재설정 완료 시 그 계정의 잠금 해제. 로그인 식별자(사번·이메일 로컬파트·이메일)별 실패 기록을 모두 지운다.
+ * 실패해도 재설정 자체는 유효하므로 경고만 남긴다. IP 단위 기록은 다른 계정과 공유하므로 그대로 둔다.
+ */
+export async function clearLoginFailuresForUser(userId: string): Promise<void> {
+  try {
+    await withDbWrite(async (db) => {
+      await db.run(
+        `DELETE FROM login_attempts
+          WHERE success = false
+            AND email IN (
+              SELECT lower(k)
+                FROM users u, unnest(ARRAY[u.login_id, u.email_local, u.email]) AS k
+               WHERE u.user_id = $1 AND k IS NOT NULL
+            )`,
+        [userId]
+      );
+    });
+  } catch (err) {
+    console.warn("[login-throttle] 계정 잠금 해제 오류: " + (err as Error).message);
   }
 }
 

@@ -8,7 +8,7 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
-import { isLoginBlocked, recordLoginFailure } from "@/lib/auth/login-throttle";
+import { clearLoginFailuresForUser, isLoginBlocked, recordLoginFailure } from "@/lib/auth/login-throttle";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { sendNotifyEmail } from "@/lib/notify/email-ses";
 
@@ -127,6 +127,8 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
     ]);
     await wdb.run(`UPDATE password_reset_tokens SET used_at = $2 WHERE token_id = $1`, [String(r.token_id), now]);
   });
+  // 메일 소유를 확인한 재설정이므로 잠금도 푼다 — 안 풀면 새 비밀번호로도 15분간 로그인되지 않는다(2026-11-06 실측).
+  await clearLoginFailuresForUser(userId);
   await recordAuditLog({ actorUserId: userId, action: "auth_password_reset", targetTable: "users", targetId: userId, after: { stage: "completed" } });
   return { ok: true };
 }

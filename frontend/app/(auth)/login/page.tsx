@@ -7,6 +7,7 @@ import { Suspense, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { loginLockMessageFor } from "@/lib/auth/login-lock";
 import { LogIn, ShieldAlert } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdCheckbox, CdInput } from "@/components/cdash/CdField";
@@ -58,7 +59,7 @@ function LoginForm() {
         redirect: false,
       });
       if (!res || res.error) {
-        setError("사번 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
+        setError(loginLockMessageFor(res?.code) ?? "사번 또는 비밀번호가 올바르지 않거나, 비활성화된 계정입니다.");
         return;
       }
       router.replace(toSameOriginPath(callbackUrl));

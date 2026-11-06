@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyCredentials } from "@/lib/auth/verify-credentials";
+import { LoginLockedError, verifyCredentials, type VerifiedUser } from "@/lib/auth/verify-credentials";
+import { LOGIN_LOCK_MESSAGES } from "@/lib/auth/login-lock";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/mobile-token";
 
 export const runtime = "nodejs";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
  * body: { identifier: string, password: string }
  * 200: { accessToken, refreshToken, user }
  * 401: 자격 불일치(사유 노출 안 함)
+ * 429: 반복 실패로 잠김(앱은 error 문구를 그대로 표시)
  */
 export async function POST(req: NextRequest) {
   let body: { identifier?: string; password?: string };
@@ -25,7 +27,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "identifier/password가 필요합니다." }, { status: 400 });
   }
 
-  const user = await verifyCredentials(identifier, password, req);
+  let user: VerifiedUser | null;
+  try {
+    user = await verifyCredentials(identifier, password, req);
+  } catch (err) {
+    if (err instanceof LoginLockedError) {
+      return NextResponse.json({ error: LOGIN_LOCK_MESSAGES[err.reason] }, { status: 429 });
+    }
+    throw err;
+  }
   if (!user) {
     return NextResponse.json(
       { error: "아이디 또는 비밀번호가 올바르지 않습니다." },

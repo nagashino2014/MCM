@@ -28,6 +28,7 @@ export const START_ARTICLES: ManualArticle[] = [
             ],
           },
           { kind: "warn", text: "여러 사람이 쓰는 PC에서는 [[로그인 유지 (30일)]]을 켜지 마세요." },
+          { kind: "warn", text: "아이디나 비밀번호를 5회 이상 잘못 입력하면 로그인이 잠기고 화면에 잠금 안내가 나옵니다. 잠긴 동안에는 맞는 비밀번호를 넣어도 로그인되지 않으니, 최대 15분 기다린 뒤 다시 시도하세요. 메일 링크로 비밀번호를 재설정하면 잠금이 바로 풀립니다." },
         ],
       },
       {
@@ -66,7 +67,7 @@ export const START_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["로그인", "비밀번호", "사번", "초기 비밀번호", "재설정", "로그아웃", "아이디 찾기"],
     sources: ["app/(auth)/login/page.tsx", "app/(auth)/login/find/page.tsx", "app/(auth)/account/change-password/page.tsx", "components/layout/TopBar.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-06",
   },
   {
     id: "start.screen",

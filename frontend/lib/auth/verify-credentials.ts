@@ -5,16 +5,18 @@
  * - throttle(brute-force 방어) + status active 검사 + bcrypt 검증을 모두 수행한다.
  */
 
+import { CredentialsSignin } from "next-auth";
 import { findUserByLoginIdentifier } from "./users";
 import { verifyPassword } from "./password";
 import { ensureAdminSeeded } from "./seed";
 import { recordAccessLog } from "./access-log";
 import {
   clientIpFrom,
-  isLoginBlocked,
+  getLoginBlock,
   recordLoginFailure,
   clearLoginFailures,
 } from "./login-throttle";
+import { LOGIN_LOCK_CODES, type LoginLockReason } from "./login-lock";
 import type { Role, UserStatus } from "./users";
 
 export interface VerifiedUser {
@@ -27,7 +29,20 @@ export interface VerifiedUser {
 }
 
 /**
- * 성공 시 사용자 정보, 실패 시 null(사유 노출 안 함).
+ * 로그인 잠금 — 웹은 next-auth 가 code 를 응답에 실어 화면이 안내하고, 모바일은 라우트가 429 로 바꾼다.
+ * 없는 아이디도 같은 기준으로 잠기므로(recordLoginFailure) 계정 존재 여부는 드러나지 않는다.
+ */
+export class LoginLockedError extends CredentialsSignin {
+  reason: LoginLockReason;
+  constructor(reason: LoginLockReason) {
+    super();
+    this.reason = reason;
+    this.code = LOGIN_LOCK_CODES[reason];
+  }
+}
+
+/**
+ * 성공 시 사용자 정보, 자격 불일치 시 null(사유 노출 안 함). 잠금 중이면 LoginLockedError 를 던진다.
  * @param request throttle 의 클라이언트 IP 추출용(선택).
  */
 export async function verifyCredentials(
@@ -48,9 +63,10 @@ export async function verifyCredentials(
 
   // 무차별 대입 방어: 윈도 내 실패 임계 초과 시 자격 검증 없이 거부.
   const ip = clientIpFrom(request);
-  if (await isLoginBlocked(identifier, ip)) {
-    console.warn(`[auth] 로그인 차단(과도한 실패): id=${identifier} ip=${ip}`);
-    return null;
+  const block = await getLoginBlock(identifier, ip);
+  if (block) {
+    console.warn(`[auth] 로그인 차단(과도한 실패): id=${identifier} ip=${ip} reason=${block}`);
+    throw new LoginLockedError(block);
   }
 
   const user = await findUserByLoginIdentifier(identifier);

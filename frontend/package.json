@@ -6,6 +6,7 @@
   "scripts": {
     "test:menu-route": "node scripts/test-menu-route.mjs",
     "test:dept-scope": "node scripts/test-dept-scope.mjs",
+    "test:dept-delete": "node scripts/test-dept-delete.mjs",
     "test:approval-absence": "node scripts/test-approval-absence.mjs",
     "test:approval-fixed-line": "node scripts/test-approval-fixed-line.mjs",
     "test:approval-linkage": "node scripts/test-approval-linkage.mjs",

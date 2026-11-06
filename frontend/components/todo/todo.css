@@ -30,6 +30,8 @@
   --todo-tint: var(--todo-col-todo);
   /* 타임라인 주말 열(2026-10-20): 일 = 옅은 붉은색, 토 = 옅은 파란색 */
   --todo-tl-sun: #fdeeee; --todo-tl-sat: #ebf2fd;
+  /* 타임라인 상위 막대(2026-11-06): 옅은 바탕 + 같은 색 진한 채움(하위 평균 진행) — 보드 색을 카드면과 섞는 비율 */
+  --todo-tl-top-bg: 30%; --todo-tl-top-fill: 80%;
 }
 /* 다크 — 띠·점(--todo-tint)은 그대로, 라벨·칩 배경만 카드면과 섞는다. */
 [data-theme="dark"] .todo-vars, .todo-vars[data-theme="dark"] {
@@ -48,6 +50,7 @@
   --todo-col-c4: color-mix(in srgb, #fbe4d6 25%, var(--cd-card)); --todo-col-c5: color-mix(in srgb, #b9e4dc 25%, var(--cd-card)); --todo-col-c6: color-mix(in srgb, #f8f0cf 25%, var(--cd-card));
   --todo-sub-done: color-mix(in srgb, #e3f4ea 25%, var(--cd-card)); --todo-sub-done-fg: #9fd9ba; --todo-sub-doing: color-mix(in srgb, #eef4fc 25%, var(--cd-card));
   --todo-tl-sun: color-mix(in srgb, #f3b8b8 14%, var(--cd-card)); --todo-tl-sat: color-mix(in srgb, #b9cfee 14%, var(--cd-card));
+  --todo-tl-top-bg: 22%; --todo-tl-top-fill: 55%;
 }
 /* 열 칩·상태 칩 색 — data-tone 으로 변수 선택 */
 [data-tone="todo"] { --todo-col: var(--todo-col-todo); }
@@ -866,7 +869,9 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-tl-subs input { width: 14px; height: 14px; }
 .todo-tl-label[data-depth="1"] { background: color-mix(in srgb, var(--cd-surface) 70%, var(--cd-card)); }
 .todo-tl-subband { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--cd-surface) 55%, transparent); pointer-events: none; }
-.todo-tl-link { position: absolute; width: 0; border-left: 2px solid color-mix(in srgb, var(--todo-tint) 80%, var(--cd-border)); border-radius: 1px; pointer-events: none; z-index: 1; }
+/* 상위↔하위 가지선(2026-11-06): 보드 색 2px 세로선이 착수일 표시로 읽혀, 옅은 회색 1px 세로선 + 하위 막대 앞까지 가로 가지로 바꿨다 */
+.todo-tl-link { position: absolute; width: 0; border-left: 1px solid color-mix(in srgb, var(--cd-faint) 55%, var(--cd-border)); pointer-events: none; z-index: 1; }
+.todo-tl-link-h { position: absolute; height: 0; border-top: 1px solid color-mix(in srgb, var(--cd-faint) 55%, var(--cd-border)); pointer-events: none; z-index: 1; }
 .todo-tl-subn { font-size: 10.5px; font-weight: 600; color: var(--cd-muted); background: var(--cd-surface); border: 1px solid var(--cd-border); border-radius: 5px; padding: 0 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .todo-tl-st { font-size: 10.5px; font-weight: 600; border-radius: 5px; padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--cd-text); background: var(--todo-col-todo); }
 .todo-tl-st[data-status="doing"] { background: var(--todo-sub-doing); color: var(--todo-sub-doing-fg); }
@@ -882,7 +887,9 @@ a.todo-deps-ttl:hover { text-decoration: underline; }
 .todo-tl-item[data-ghost="1"] { border-style: dashed; opacity: 0.75; cursor: default; background: transparent !important; }
 .todo-tl-item[data-ghost="1"] .todo-tl-item-ttl { color: var(--cd-muted); }
 .todo-tl-pct { position: relative; z-index: 1; margin-left: auto; padding-left: 6px; font-size: 10.5px; font-weight: 600; color: var(--cd-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.todo-tl-agg { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--todo-seg-done); border-radius: 0 2px 2px 0; pointer-events: none; }
+/* 상위 막대 진행(2026-11-06): 하단 초록 진척선 대신 하위 막대와 같은 채움 — 보드 색 한 가지의 농담으로만 표시 */
+.todo-tl-item[data-depth="0"][data-prog="1"] { background: color-mix(in srgb, var(--todo-tint) var(--todo-tl-top-bg), var(--cd-card)); }
+.todo-tl-item[data-depth="0"] .todo-tl-prog { background: color-mix(in srgb, var(--todo-tint) var(--todo-tl-top-fill), var(--cd-card)); }
 .todo-tl-lg-st { display: inline-block; width: 12px; height: 8px; border-radius: 2px; border: 1px solid var(--cd-border); background: var(--todo-col-todo); }
 .todo-tl-lg-st[data-status="doing"] { background: var(--todo-sub-doing); border-color: var(--todo-seg-doing); }
 .todo-tl-lg-st[data-status="review"] { background: color-mix(in srgb, var(--todo-seg-review) 30%, var(--cd-card)); border-color: var(--todo-seg-review); }

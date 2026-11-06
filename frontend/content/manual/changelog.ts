@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "변경", title: "PC 앱 설치 — 브라우저 앱 항목 삭제, 데스크탑 위젯 두 단계 설치로 안내",
+    body: "홈의 PC 앱 설치 메뉴에서 ‘브라우저 앱으로 설치’ 항목을 뺐습니다. 브라우저 앱은 트레이 상주와 알림이 없어 메신저로 쓰기 어렵기 때문입니다. 이제 1단계(보안 경고 끄기)와 2단계(데스크탑 위젯 설치 파일)만 보입니다.",
+    articles: ["home.dashboard", "start.mobile"],
+  },
+  {
     date: "2026-11-06", kind: "변경", title: "프로필 아이콘 — 원형에서 둥근 사각형으로",
     body: "직원 사진·이름 글자·기본 사람 그림으로 표시되는 프로필 아이콘이 원에서 모서리가 둥근 사각형으로 바뀌었습니다. 웹 화면(상단 내 프로필, 주소록, 메일, 게시판, 할 일, 근태·휴가, 결재선 등)과 휴대폰 앱·PC 앱의 대화·메일·주소록·할 일에 모두 적용됩니다.",
     articles: ["home.dashboard", "start.mobile"],

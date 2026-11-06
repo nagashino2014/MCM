@@ -18,6 +18,11 @@ import { useTheme } from '@/theme/useTheme';
  *    레인은 **주마다** 독립 배정(최대 3), 초과분은 셀 아래 "+N". 셀 높이는 그 주의 레인 수에 맞춰 가변.
  *    `breakOnHoliday` 바(할 일)는 토·일·공휴일에서 끊긴다 — 휴일에는 바를 그리지 않고 전후를 별도 세그먼트로.
  *  - `picker`: 날짜·기간 선택 전용(이벤트 없음, 셀 44). DatePickerSheet 가 쓴다.
+ *  - `dots`: 높이가 고정된 작은 달력(홈 2열의 캘린더 카드, 2026-11-06) — 바 없이 날짜 아래 **색 점(최대 3)** 만.
+ *    셀 높이가 일정 수와 무관하게 38 로 고정이라 카드 높이를 맞출 수 있다. 휴무일은 다른 변형과 같이 붉은 숫자 + 휴무일명이며,
+ *    당월 휴무일이 있는 주만 휴무일명 한 줄(12)만큼 높아진다.
+ *
+ * `bare`: 바깥 카드(테두리·그림자·여백) 없이 내용만 — 다른 카드 안에 넣을 때(카드 안 카드 금지).
  *
  * picker 모드 덕분에 네이티브 date picker 를 넣지 않아도 되고(= 네이티브 모듈 없이 OTA 배포 유지),
  * 기안 폼의 date·period 필드가 일정 화면과 같은 달력을 쓴다.
@@ -53,6 +58,9 @@ const OVERFLOW_ROW_H = 14;
 const CELL_MIN_H = 54;
 const CELL_MIN_H_LAST = 44;
 const CELL_H_PICKER = 44;
+/** dots 변형 — 날짜 줄 28 + 점 줄. */
+const CELL_H_DOTS = 38;
+const MAX_DOTS = 3;
 
 export function ymdOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -86,6 +94,7 @@ export function MonthCalendar({
   variant = 'pills',
   selected,
   rangeEnd,
+  bare,
 }: {
   events?: CalendarBar[];
   year: number;
@@ -94,12 +103,14 @@ export function MonthCalendar({
   onMonthChange: (year: number, month0: number) => void;
   onEventPress?: (bar: CalendarBar) => void;
   onDayPress?: (iso: string) => void;
-  /** `pills`·`bars` 는 같은 연속 바 모드(호환), `picker` 는 날짜 선택 전용. */
-  variant?: 'pills' | 'bars' | 'picker';
+  /** `pills`·`bars` 는 같은 연속 바 모드(호환), `picker` 는 날짜 선택 전용, `dots` 는 고정 높이의 색 점 달력. */
+  variant?: 'pills' | 'bars' | 'picker' | 'dots';
   /** 선택된 날짜(YYYY-MM-DD). 범위 선택이면 시작일. */
   selected?: string | null;
   /** 범위 선택의 종료일. */
   rangeEnd?: string | null;
+  /** 바깥 카드 없이 내용만(다른 카드 안에 넣을 때). */
+  bare?: boolean;
 }) {
   const { c, dark } = useTheme();
   // 날짜 숫자 색 — 상수(라이트 전용 hex)를 다크에서 그대로 쓰면 당월이 어둡고 전·익월이 밝아
@@ -113,6 +124,7 @@ export function MonthCalendar({
   const now = useMemo(() => new Date(), []);
   const todayIso = ymdOf(now);
   const isPicker = variant === 'picker';
+  const isDots = variant === 'dots';
 
   const spans = useMemo<Span[]>(
     () =>
@@ -155,8 +167,8 @@ export function MonthCalendar({
 
   return (
     <View
-      className="rounded-lg border bg-cd-card px-3 pb-3 pt-4"
-      style={[{ borderColor: c.cardBorder }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}>
+      className={bare ? '' : 'rounded-lg border bg-cd-card px-3 pb-3 pt-4'}
+      style={bare ? undefined : [{ borderColor: c.cardBorder }, dark ? SHADOW_CARD.dark : SHADOW_CARD.light]}>
       {/* 툴바 — 연·월 + 오늘 / 이전·다음 */}
       <View className="flex-row items-center justify-between px-1">
         <View className="flex-row items-center gap-2">
@@ -181,7 +193,7 @@ export function MonthCalendar({
       </View>
 
       {/* 요일 */}
-      <View className="mt-3 flex-row">
+      <View className={`${isDots ? 'mt-2' : 'mt-3'} flex-row`}>
         {WEEKDAYS.map((w, i) => (
           <Text
             key={w}
@@ -194,6 +206,8 @@ export function MonthCalendar({
 
       {/* 6주 격자 — 격자선 없이 여백으로 나눈다 */}
       {weeks.map((week, wi) => {
+        // dots 변형 — 전부 다른 달인 주(대개 여섯째 주)는 그리지 않는다. 고정 높이 카드에서 그 자리를 아래 목록이 쓴다.
+        if (isDots && week.every((d) => d.getMonth() !== month0)) return null;
         const weekStart = dayNum(ymdOf(week[0]));
         const weekEnd = weekStart + 6;
         const isos = week.map((d) => ymdOf(d));
@@ -204,7 +218,20 @@ export function MonthCalendar({
 
         // 주 단위 세그먼트 — 주 범위로 자르고, breakOnHoliday 면 휴일에서 끊는다.
         const segs: Seg[] = [];
-        for (const it of spans) {
+        // dots 변형 — 날짜별 색 점(같은 색은 한 번, 최대 MAX_DOTS). 바는 만들지 않는다.
+        const dotCols: string[][] = isos.map(() => []);
+        if (isDots) {
+          for (const it of spans) {
+            if (it.e < weekStart || it.s > weekEnd) continue;
+            const a = Math.max(it.s, weekStart) - weekStart;
+            const b = Math.min(it.e, weekEnd) - weekStart;
+            for (let col = a; col <= b; col += 1) {
+              if (it.bar.breakOnHoliday && offCol[col]) continue;
+              if (dotCols[col].length < MAX_DOTS && !dotCols[col].includes(it.bar.color)) dotCols[col].push(it.bar.color);
+            }
+          }
+        }
+        for (const it of isDots ? [] : spans) {
           if (it.e < weekStart || it.s > weekEnd) continue;
           const a = Math.max(it.s, weekStart) - weekStart;
           const b = Math.min(it.e, weekEnd) - weekStart;
@@ -244,11 +271,11 @@ export function MonthCalendar({
         }
         const hasOverflow = overflow.some((n) => n > 0);
         const contentH = DATE_ROW_H + holidayRow + laneCount * LANE_H + (hasOverflow ? OVERFLOW_ROW_H : 0) + 4;
-        const cellH = isPicker ? CELL_H_PICKER : Math.max(wi === 5 ? CELL_MIN_H_LAST : CELL_MIN_H, contentH);
+        const cellH = isPicker ? CELL_H_PICKER : isDots ? CELL_H_DOTS + holidayRow : Math.max(wi === 5 ? CELL_MIN_H_LAST : CELL_MIN_H, contentH);
         const barTop = DATE_ROW_H + holidayRow;
 
         return (
-          <View key={wi} className="flex-row" style={{ height: cellH, marginTop: 2 }}>
+          <View key={wi} className="flex-row" style={{ height: cellH, marginTop: isDots ? 0 : 2 }}>
             {week.map((day, di) => {
               const iso = isos[di];
               const dn = weekStart + di;
@@ -311,6 +338,16 @@ export function MonthCalendar({
                       style={{ color: CAL_MUTED.sun, height: HOLIDAY_ROW_H, lineHeight: HOLIDAY_ROW_H }}>
                       {holiday}
                     </Text>
+                  ) : null}
+
+                  {/* dots 변형 — 그날 일정의 색 점. 전·익월은 흐리게. 같은 주에 휴무일명 줄이 있으면 그만큼 내려 점 높이를 맞춘다. */}
+                  {isDots && holidayRow > 0 && !showHolidayName ? <View style={{ height: holidayRow }} /> : null}
+                  {isDots && dotCols[di].length ? (
+                    <View className="flex-row items-center justify-center gap-[3px]" style={{ height: 6 }}>
+                      {dotCols[di].map((col) => (
+                        <View key={col} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: col, opacity: inMonth ? 1 : 0.4 }} />
+                      ))}
+                    </View>
                   ) : null}
 
                   {/* 레인 초과 "+N" — 바 아래 바닥에 붙인다. */}

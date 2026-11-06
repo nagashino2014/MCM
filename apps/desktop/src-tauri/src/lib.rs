@@ -10,6 +10,7 @@
 //!   - 중복 실행 차단(single-instance) — 시작 메뉴에서 다시 눌러도 새 창이 아니라 있던 창을 띄운다
 //!   - 미읽음 뱃지(트레이 아이콘 점 · 작업표시줄 카운트)와 OS 알림 — 웹앱이 postMessage 로 알려준다
 //!   - 창 위치·크기 기억(window-state), 부팅 시 자동 시작(autostart)
+//!   - 대화 팝업 창(chat-<roomId>) — 웹앱의 mcm:open-chat 을 받아 상단 바(index.html)가 연다. 닫으면 실제로 닫힌다
 
 use tauri::{
     image::Image,
@@ -17,6 +18,55 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+
+/// 처음 실행할 때 주 창이 차지할 수 있는 화면 높이의 비율(2026-11-06 사용자 결정).
+const FIRST_RUN_MAX_HEIGHT_RATIO: f64 = 0.85;
+
+/// 주 창 크기를 화면에 맞춘다.
+///
+/// 초기 크기(1040×1060, 2026-11-06)는 홈 2열에서 "결재 대기" 카드까지 한 화면에 보이도록 잡은 값이다. 큰 화면에서는
+/// 그대로 열리지만 FHD 에서는 세로를 가득 채운다(작업 영역 높이: 배율 100% 약 1032, 125% 약 816). 그래서
+///   - **처음 실행**(저장된 창 상태가 없을 때): 높이를 작업 영역의 85% 까지로 제한한다 — 아래는 스크롤로 본다.
+///   - **그 뒤**: 사용자가 정한 크기(window-state 복원값)를 존중하고, 작업 영역보다 클 때만 그 안으로 줄인다
+///     (더 작은 모니터로 옮겨 온 경우).
+/// 줄였으면 작업 영역 가운데에 다시 놓는다. 폭은 작업 영역을 넘을 때만 줄인다(1040 이 2열 배치의 기준 폭).
+fn fit_main_window_to_monitor(app: &tauri::AppHandle, first_run: bool) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    let (Ok(Some(monitor)), Ok(size)) = (win.current_monitor(), win.outer_size()) else {
+        return;
+    };
+    let area = monitor.work_area();
+    let (max_w, area_h) = (area.size.width, area.size.height);
+    let max_h = if first_run {
+        (f64::from(area_h) * FIRST_RUN_MAX_HEIGHT_RATIO).round() as u32
+    } else {
+        area_h
+    };
+    if size.width <= max_w && size.height <= max_h {
+        return;
+    }
+    let (w, h) = (size.width.min(max_w), size.height.min(max_h));
+    // set_size 는 안쪽 크기 기준이다 — 바깥 크기(보이지 않는 테두리 포함)가 w×h 가 되도록 테두리 몫을 뺀다.
+    let frame = win
+        .inner_size()
+        .map(|inner| (size.width.saturating_sub(inner.width), size.height.saturating_sub(inner.height)))
+        .unwrap_or((0, 0));
+    let _ = win.set_size(tauri::PhysicalSize::new(w.saturating_sub(frame.0), h.saturating_sub(frame.1)));
+    let x = area.position.x + ((max_w - w) / 2) as i32;
+    let y = area.position.y + ((area_h - h) / 2) as i32;
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
+/// 저장된 창 상태(window-state 플러그인의 파일)가 아직 없는가 — 설치 후 첫 실행.
+/// 파일은 종료·닫기 때 만들어지므로 첫 실행의 setup 시점에는 없다. 경로를 못 구하면 첫 실행이 아닌 것으로 본다(크기를 건드리지 않는 쪽).
+fn is_first_run(app: &tauri::AppHandle) -> bool {
+    app.path()
+        .app_config_dir()
+        .map(|dir| !dir.join(tauri_plugin_window_state::DEFAULT_FILENAME).exists())
+        .unwrap_or(false)
+}
 
 /// 트레이 기본 아이콘 원본 — 뱃지 버전은 이 픽셀을 복사해 런타임에 그린다(에셋 추가 없이).
 const TRAY_PNG: &[u8] = include_bytes!("../icons/32x32.png");
@@ -144,10 +194,16 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            let first_run = is_first_run(app.handle());
+            fit_main_window_to_monitor(app.handle(), first_run);
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 닫기 = 트레이로 숨김. 실제 종료는 트레이 메뉴의 "종료"에서만.
+            // 주 창의 닫기 = 트레이로 숨김. 실제 종료는 트레이 메뉴의 "종료"에서만.
+            // 대화 팝업 창(chat-<roomId>, 2026-11-06)은 그대로 닫힌다 — 주 창이 남아 있어 앱은 계속 돈다.
+            if window.label() != "main" {
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
                 api.prevent_close();

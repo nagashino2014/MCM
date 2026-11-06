@@ -17,14 +17,16 @@ import {
 } from '@/components/ui';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { apiJson } from '@/lib/api';
+import { openChatPopup } from '@/lib/chat-popup';
+import { CHAT_LIST_PANE_WIDTH } from '@/lib/platform';
 import { fmtDate, fmtTime } from '@/lib/format';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
 import { useWideLayout } from '@/lib/use-wide-layout';
 import { useTheme } from '@/theme/useTheme';
 import { ChatRoomView } from '@/app/chat/[roomId]';
 
-/** 넓은 배치의 왼쪽 목록 폭(설계안 §6-3). */
-const LIST_PANE_WIDTH = 360;
+/** 넓은 배치의 왼쪽 목록 폭(설계안 §6-3) — 값은 platform.ts(섬 최대 폭 계산과 함께 쓴다). */
+const LIST_PANE_WIDTH = CHAT_LIST_PANE_WIDTH;
 
 interface ChatRoom {
   roomId: number;
@@ -198,6 +200,9 @@ export default function ChatScreen() {
       });
       setPicked(new Map());
       void load();
+      // 넓은 배치에서 오른쪽에 이미 다른 방이 열려 있으면 새 대화는 **별도 창**으로 띄운다(2026-11-06 사용자 요청) —
+      // 보던 방을 밀어내지 않는다. 창을 못 여는 환경(옛 위젯 셸·팝업 차단)이면 거짓이 돌아와 지금처럼 오른쪽 칸에 연다.
+      if (wide && selected && selected.roomId !== res.roomId && openChatPopup(res.roomId)) return;
       // Modal 닫힘 애니메이션이 끝난 뒤 라우팅 — 열린 Modal 위로 push 하면
       // 뒤 화면이 freeze 되어 시트가 화면을 덮은 채 남는다(2026-08-09 실측).
       await new Promise((r) => setTimeout(r, 350));
@@ -207,7 +212,7 @@ export default function ChatScreen() {
     } finally {
       setCreating(false);
     }
-  }, [picked, creating, load, toast, openRoom]);
+  }, [picked, creating, load, toast, openRoom, wide, selected]);
 
   return (
     // 대화방 목록은 그라데이션 없이 흰 바탕(2026-11-04 사용자 요청) — 대화창([roomId]) 안은 그라데이션 유지.
@@ -236,6 +241,8 @@ export default function ChatScreen() {
           data={list}
           keyExtractor={(r) => String(r.roomId)}
           refreshControl={<PullRefresh refreshing={refreshing} onRefresh={() => load(true)} />}
+          // 스크롤 층에 불투명 바탕 — 웹에서 층에 바탕이 없으면 목록 글자가 회색조로 뿌옇게 그려진다(리포트 §8-1).
+          style={{ backgroundColor: c.card }}
           contentContainerStyle={{ paddingBottom: 72 + TAB_BAR_INSET }}
           ListEmptyComponent={
             hits.length ? null : (
@@ -271,7 +278,7 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item }) => <RoomRow r={item} active={wide && selected?.roomId === item.roomId} onPress={() => openRoom(item.roomId, item.name)} />}
+          renderItem={({ item }) => <RoomRow r={item} wide={wide} active={wide && selected?.roomId === item.roomId} onPress={() => openRoom(item.roomId, item.name)} />}
         />
       )}
 
@@ -316,15 +323,16 @@ export default function ChatScreen() {
   );
 }
 
-function RoomRow({ r, active, onPress }: { r: ChatRoom; active?: boolean; onPress: () => void }) {
+function RoomRow({ r, wide, active, onPress }: { r: ChatRoom; wide?: boolean; active?: boolean; onPress: () => void }) {
   const { c } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       accessibilityState={{ selected: !!active }}
-      // 넓은 배치에서 오른쪽에 열린 방은 pillSelected 바탕으로 표시
-      style={active ? { backgroundColor: c.pillSelected } : undefined}
-      className="flex-row items-center gap-3 border-b border-cd-grid-line px-4 py-3 active:opacity-70">
+      // 넓은 배치(2분할): 행을 좌우 8 안쪽으로 들인 **둥근 상자(반경 10)** 로 그리고 구분선을 뺀다 — 오른쪽에 열린 방은
+      // pillSelected 바탕(2026-11-06 사용자 요청: 직사각형 → 둥근 사각형). 글자 시작 위치는 좁은 배치와 같다(8 + 8 = 16).
+      style={[wide ? { marginHorizontal: 8, paddingHorizontal: 8, borderRadius: 10 } : null, active ? { backgroundColor: c.pillSelected } : null]}
+      className={`flex-row items-center gap-3 py-3 active:opacity-70 ${wide ? '' : 'border-b border-cd-grid-line px-4'}`}>
       {r.roomType === 'dm' ? (
         <Avatar name={r.name} photoPath={r.peerPhotoPath} size="md" />
       ) : (

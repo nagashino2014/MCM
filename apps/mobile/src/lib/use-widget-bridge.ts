@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { apiJson } from './api';
-import { IS_STANDALONE_PWA } from './platform';
+import { IS_CHAT_POPUP, IS_STANDALONE_PWA } from './platform';
 
 interface BridgeRoom {
   roomId: number;
@@ -21,6 +21,25 @@ interface DueItem {
 }
 
 const POLL_MS = 15000;
+
+/**
+ * 셸(Tauri 상단 바 문서)의 오리진과 지원 기능 — hello 로 받은 값을 모듈에 보관해 훅 밖(lib/chat-popup.ts)에서도 쓴다.
+ * caps 는 셸 버전에 따라 다르다: 'chat-popup'(1.5.0~) 이 없으면 옛 셸이므로 팝업 요청을 보내지 않는다.
+ */
+let knownShellOrigin: string | null = null;
+let knownShellCaps: string[] = [];
+
+/** 셸이 이 기능을 지원하는가(hello 를 받기 전·브라우저에서는 항상 거짓). */
+export function shellSupports(cap: string): boolean {
+  return !!knownShellOrigin && knownShellCaps.includes(cap);
+}
+
+/** 셸로 메시지를 보낸다 — 오리진을 아는 경우에만('*' 로 흘리지 않는다). 보냈으면 참. */
+export function postToShell(msg: Record<string, unknown>): boolean {
+  if (!knownShellOrigin || typeof window === 'undefined' || window.parent === window) return false;
+  window.parent.postMessage(msg, knownShellOrigin);
+  return true;
+}
 
 /** 위젯 PC 의 오늘(YYYY-MM-DD, 로컬). */
 function todayLocal(): string {
@@ -42,6 +61,7 @@ function todayLocal(): string {
  * (미읽음 + 오늘 할 일). OS 알림(Web Push)은 서버 VAPID 가 필요해 후속.
  *
  *   mcm:theme    — 앱 테마(dark 여부)를 셸 상단 바에 맞춘다(로그인 전에도, 11-04). 셸의 hello 뒤에만 보낸다.
+ *   mcm:open-chat / mcm:close-window — 대화 팝업 창 열기·닫기(11-06, lib/chat-popup.ts 가 postToShell 로 보낸다).
  */
 export function useWidgetBridge(authed: boolean, dark = false) {
   const themeOriginRef = useRef<string | null>(null);
@@ -55,16 +75,25 @@ export function useWidgetBridge(authed: boolean, dark = false) {
     const onMessage = (e: MessageEvent) => {
       if (!e.data || (e.data as { type?: string }).type !== 'mcm:widget-hello') return;
       themeOriginRef.current = e.origin;
+      if (e.source === window.parent) {
+        knownShellOrigin = e.origin;
+        const caps = (e.data as { caps?: unknown }).caps;
+        knownShellCaps = Array.isArray(caps) ? caps.filter((x): x is string => typeof x === 'string') : [];
+      }
       send();
     };
     window.addEventListener('message', onMessage);
     send();
+    // 셸이 iframe 로드 시점을 놓쳤거나 앱이 늦게 떴을 때를 위한 준비 신호(내용 없음) — 로그인 전·팝업 창에서도 보낸다.
+    if (!themeOriginRef.current) window.parent.postMessage({ type: 'mcm:widget-ready' }, '*');
     return () => window.removeEventListener('message', onMessage);
   }, [dark]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !authed) return;
     if (typeof window === 'undefined') return;
+    // 대화 팝업 창은 뱃지·알림을 맡지 않는다(주 창이 이미 같은 폴링을 한다).
+    if (IS_CHAT_POPUP) return;
     const inFrame = window.parent !== window;
     const badgeApi = !inFrame && IS_STANDALONE_PWA && typeof navigator.setAppBadge === 'function';
     if (!inFrame && !badgeApi) return;

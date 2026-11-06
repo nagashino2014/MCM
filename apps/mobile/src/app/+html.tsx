@@ -22,6 +22,14 @@ const PWA_BOOT = `
 })();
 `;
 
+/**
+ * 문서 바탕색(2026-11-06) — 데스크탑 위젯은 이 문서를 다른 오리진의 iframe 으로 싣는다. html 에 배경이 없으면 Chromium 이
+ * "투명 문서"로 보고 글자 전체에서 ClearType(서브픽셀)을 꺼 회색조로 뿌옇게 그린다(리포트 §8-1 실측). 화면에는 셸 그라데이션이
+ * 이 색을 덮으므로 보이는 모양은 그대로다. 값은 theme/tokens.ts 의 bg(라이트 #f1f3f9 · 다크 #141520).
+ * 앱 설정으로 테마를 고정한 경우는 _layout 이 실행 중에 html 배경을 다시 맞춘다.
+ */
+const DOC_BACKGROUND = `html{background-color:#f1f3f9}@media (prefers-color-scheme: dark){html{background-color:#141520}}`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="ko">
@@ -34,6 +42,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#4a63d8" />
         <ScrollViewStyleReset />
+        <style dangerouslySetInnerHTML={{ __html: DOC_BACKGROUND }} />
         <script dangerouslySetInnerHTML={{ __html: PWA_BOOT }} />
       </head>
       <body>{children}</body>

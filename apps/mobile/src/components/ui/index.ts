@@ -4,7 +4,7 @@ export { Card } from "./Card";
 export { Button, IconButton, PrimaryIconButton, ActionBar } from "./Button";
 export { GradientButton, GradientIconButton, OutlineButton, CtaGradientFill, CTA_FROM, CTA_TO } from "./GradientButton";
 export { Badge, Count, Chip, FilterPill } from "./Chip";
-export { Avatar } from "./Avatar";
+export { Avatar, avatarRadius } from "./Avatar";
 export { Input, Textarea, SearchBar } from "./Field";
 export { ListRow, CardRow, EmptyState, SkeletonList, ListFooter, StaleBanner } from "./List";
 export { StatTile, ActionTile, TileGrid, KpiStrip, type KpiItem } from "./Tiles";

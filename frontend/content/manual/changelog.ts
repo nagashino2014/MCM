@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "변경", title: "프로필 아이콘 — 원형에서 둥근 사각형으로",
+    body: "직원 사진·이름 글자·기본 사람 그림으로 표시되는 프로필 아이콘이 원에서 모서리가 둥근 사각형으로 바뀌었습니다. 웹 화면(상단 내 프로필, 주소록, 메일, 게시판, 할 일, 근태·휴가, 결재선 등)과 휴대폰 앱·PC 앱의 대화·메일·주소록·할 일에 모두 적용됩니다.",
+    articles: ["home.dashboard", "start.mobile"],
+  },
+  {
     date: "2026-11-06", kind: "신규", title: "대화 입력창 — Enter 전송 · 멘션 · 여러 파일 · 문서 공유 카드 · 문서함 첨부 · 사진 촬영",
     body: "PC 에서는 Enter 로 보내고 Shift+Enter 로 줄을 바꿉니다. 그룹 대화방에서 @ 를 치면 멤버를 골라 부를 수 있고, 불린 사람은 방 알림을 꺼 두었어도 휴대폰 앱 알림을 받습니다. 파일은 한 번에 10개까지 올릴 수 있습니다. 입력창 왼쪽 + 버튼에서 결재 문서·할 일·사업장을 카드로 보내거나 개인문서함의 파일을 골라 첨부할 수 있고, 휴대폰 앱에서는 사진을 찍어 바로 보낼 수 있습니다.",
     articles: ["start.mobile", "files.personal"],

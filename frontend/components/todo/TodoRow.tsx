@@ -125,7 +125,7 @@ export function Assignee({ name, photoUrl }: { name: string | null; photoUrl: st
   if (!name) {
     return (
       <span className="todo-who" data-none="true">
-        <span className="todo-av inline-flex rounded-full" aria-hidden="true" />
+        <span className="todo-av inline-flex rounded-[var(--cd-radius-avatar,35%)]" aria-hidden="true" />
         <span>담당 없음</span>
       </span>
     );

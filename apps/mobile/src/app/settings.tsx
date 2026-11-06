@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Card, Chip, ConfirmSheet, Screen, useToast } from '@/components/ui';
+import { Card, Chip, ConfirmSheet, Screen, avatarRadius, useToast } from '@/components/ui';
 import { UpdateStatus } from '@/components/UpdateStatus';
 import { ChangePasswordSheet } from '@/components/account/ChangePasswordSheet';
 import { getAutoLogin, setAutoLogin, useAuth } from '@/lib/auth-context';
@@ -104,7 +104,7 @@ export default function SettingsScreen() {
         {/* 계정 — 맨 위에 프로필 요약 */}
         <Card>
           <View className="flex-row items-center gap-3">
-            <View className="h-12 w-12 items-center justify-center rounded-full bg-cd-primary-soft">
+            <View style={{ borderRadius: avatarRadius(48) }} className="h-12 w-12 items-center justify-center bg-cd-primary-soft">
               <Text className="text-[16px] font-semibold text-cd-primary-strong">
                 {(user?.name ?? '?').slice(-2)}
               </Text>

@@ -55,7 +55,8 @@ export function CdAvatar({ name, src, size = "md", className, ...rest }: CdAvata
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-full font-bold shrink-0 select-none overflow-hidden",
+        // 모양은 --cd-radius-avatar(둥근 사각형) — 사진은 overflow-hidden 으로 같은 모양에 잘린다.
+        "inline-flex items-center justify-center rounded-[var(--cd-radius-avatar,35%)] font-bold shrink-0 select-none overflow-hidden",
         SIZE_CLASS[size],
         className
       )}

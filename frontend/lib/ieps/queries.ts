@@ -832,12 +832,24 @@ export interface FacilityListFilter {
   hasContractHistory?: boolean;
   /** 거래 구분(331) — 매출처/매입처로 지정된 사업장만(매입 계약 상대 업체 검색). */
   tradeRole?: "sales" | "purchase";
+  /** partner: 거래처만(사업장 마스터 기본), other: 거래처가 아닌 곳만. 없으면 전체(계약·영업의 업체 검색). */
+  partnerScope?: "partner" | "other";
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
 }
 
 export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry" | "crn";
+
+/**
+ * 거래처 판정(2026-11-06 사용자 결정) — 거래 구분(매출·매입)이 지정됐거나 삭제되지 않은 매출·매입 계약이 있는 사업장.
+ * 행을 옮기지 않고 계약이 생기는 순간 저절로 거래처가 되도록 조회 때 계산한다. f 는 facilities 별칭.
+ */
+export const FACILITY_PARTNER_SQL = `(
+  cardinality(COALESCE(f.trade_roles, '{}')) > 0
+  OR EXISTS (SELECT 1 FROM contracts c WHERE (c.counterparty_facility_id = f.facility_id OR c.facility_id = f.facility_id) AND c.deleted_at IS NULL)
+  OR EXISTS (SELECT 1 FROM purchase_contracts pc WHERE pc.counterparty_facility_id = f.facility_id AND pc.deleted_at IS NULL)
+)`;
 
 // 누락 판정 SQL. 사업자번호는 리스트 표시와 동일하게 site_business_registration_no 폴백까지
 // 모두 비어 있을 때만 누락으로 본다. 값은 코드 내 상수에서만 오므로 리터럴 삽입이 안전하다.
@@ -971,6 +983,8 @@ export async function listFacilities(
     where.push(`$${params.length + 1} = ANY(COALESCE(f.trade_roles, '{}'))`);
     params.push(filter.tradeRole);
   }
+  if (filter.partnerScope === "partner") where.push(FACILITY_PARTNER_SQL);
+  if (filter.partnerScope === "other") where.push(`NOT ${FACILITY_PARTNER_SQL}`);
   if (filter.integratedPermitTarget) {
     where.push(
       `(COALESCE(NULLIF(f.integrated_permit_target, ''), '') <> '' OR EXISTS (SELECT 1 FROM permits pit WHERE pit.facility_id = f.facility_id))`
@@ -1240,6 +1254,7 @@ function mergeSourceOptions(rows: unknown[][]): { value: string; count: number }
 export interface FacilityDetail {
   corporateRegistrationNo?: string | null;
   representativeName: string | null;
+  homepageUrl?: string | null;
   orgCategory?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];

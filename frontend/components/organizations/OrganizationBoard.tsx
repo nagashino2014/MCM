@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Plus, Save, Search, Trash2, Upload, X } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -10,7 +10,7 @@ import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import "@/components/cdash/cdash.css";
 
 interface OrgRow {
-  orgId: string; orgName: string; orgCategory: string | null; businessRegistrationNo: string | null; address: string | null;
+  kind: "organization" | "facility"; orgId: string; orgName: string; orgCategory: string | null; businessRegistrationNo: string | null; address: string | null;
   region: string | null; phoneNumber: string | null; homepageUrl: string | null; contactCount: number;
 }
 interface OrgDetail {
@@ -52,6 +52,8 @@ export function OrganizationBoard() {
   const [rows, setRows] = useState<OrgRow[]>([]);
   const [canEdit, setCanEdit] = useState(false);
   const [canPromote, setCanPromote] = useState(false);
+  const [canViewFacility, setCanViewFacility] = useState(false);
+  const [origin, setOrigin] = useState("");
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,16 +66,19 @@ export function OrganizationBoard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const paging = useClientPaging(rows, "organizations-page-size", loading);
+  const visibleRows = useMemo(() => (origin ? rows.filter((row) => row.kind === origin) : rows), [rows, origin]);
+  const paging = useClientPaging(visibleRows, "organizations-page-size", loading);
+  const isFacility = detail?.source === "facility";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ q, category });
-      const data = await api<{ organizations: OrgRow[]; canEdit: boolean; canPromote: boolean }>(`/api/organizations?${params}`);
+      const data = await api<{ organizations: OrgRow[]; canEdit: boolean; canPromote: boolean; canViewFacility: boolean }>(`/api/organizations?${params}`);
       setRows(data.organizations);
       setCanEdit(data.canEdit);
       setCanPromote(data.canPromote);
+      setCanViewFacility(data.canViewFacility);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -82,16 +87,17 @@ export function OrganizationBoard() {
   }, [q, category]);
   useEffect(() => { void load(); }, [load]);
 
-  const loadDetail = useCallback(async (orgId: string) => {
-    const data = await api<{ organization: OrgDetail; contacts: OrgContact[] }>(`/api/organizations/${encodeURIComponent(orgId)}`);
+  const loadDetail = useCallback(async (orgId: string, kind: OrgRow["kind"] = "organization") => {
+    const base = kind === "facility" ? "/api/organizations/facility/" : "/api/organizations/";
+    const data = await api<{ organization: OrgDetail; contacts: OrgContact[] }>(`${base}${encodeURIComponent(orgId)}`);
     setDetail(data.organization);
     setContacts(data.contacts);
   }, []);
-  const select = (orgId: string) => {
-    setSelectedId(orgId);
+  const select = (row: OrgRow) => {
+    setSelectedId(row.orgId);
     setOrgForm(null);
     setContactForm(null);
-    loadDetail(orgId).catch((e) => setError((e as Error).message));
+    loadDetail(row.orgId, row.kind).catch((e) => setError((e as Error).message));
   };
 
   const act = async (fn: () => Promise<void>) => {
@@ -138,8 +144,9 @@ export function OrganizationBoard() {
     await load();
   });
   const promote = () => detail && window.confirm(`${detail.orgName} 을(를) 거래처로 전환해 사업장 마스터로 옮깁니다. 기관 목록에서는 빠집니다.`) && void act(async () => {
-    const r = await api<{ facilityId: string; created: boolean }>(`/api/organizations/${encodeURIComponent(detail.orgId)}/promote`, jsonInit("POST", { tradeRoles: roles }));
-    setMessage(r.created ? "사업장 마스터에 등록했습니다." : "같은 사업장이 이미 있어 그 사업장에 담당자를 옮겼습니다.");
+    const url = isFacility ? `/api/organizations/facility/${encodeURIComponent(detail.orgId)}` : `/api/organizations/${encodeURIComponent(detail.orgId)}/promote`;
+    const r = await api<{ facilityId: string; created: boolean }>(url, jsonInit("POST", { tradeRoles: roles }));
+    setMessage(isFacility ? "거래처로 지정했습니다. 이제 사업장 마스터에 나옵니다." : r.created ? "사업장 마스터에 등록했습니다." : "같은 사업장이 이미 있어 그 사업장에 담당자를 옮겼습니다.");
     setSelectedId(null);
     setDetail(null);
     setContacts([]);
@@ -175,23 +182,29 @@ export function OrganizationBoard() {
               <option value="">전체 구분</option>
               {ORG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <span className="text-sm cd-text-faint">{rows.length.toLocaleString()}곳</span>
+            <select aria-label="출처" className="cd-input !w-auto" value={origin} onChange={(e) => { setOrigin(e.target.value); paging.resetPage(); }}>
+              <option value="">전체 출처</option>
+              <option value="organization">등록·가져온 기관</option>
+              <option value="facility">기존 사업장</option>
+            </select>
+            <span className="text-sm cd-text-faint">{visibleRows.length.toLocaleString()}곳</span>
           </div>
           <div className="cd-card rounded-lg overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="cd-table-head">
                 <tr className="text-left cd-text-faint">
-                  <th className="p-3">기관명</th><th className="p-3">구분</th><th className="p-3">지역</th><th className="p-3 text-right">담당자</th>
+                  <th className="p-3">기관명</th><th className="p-3">구분</th><th className="p-3">출처</th><th className="p-3">지역</th><th className="p-3 text-right">담당자</th>
                 </tr>
               </thead>
               <tbody>
-                {!loading && rows.length === 0 && <tr><td colSpan={4} className="p-4 text-center cd-text-faint">등록된 기관이 없습니다.</td></tr>}
+                {!loading && visibleRows.length === 0 && <tr><td colSpan={5} className="p-4 text-center cd-text-faint">등록된 기관이 없습니다.</td></tr>}
                 {paging.pageRows.map((row) => (
-                  <tr key={row.orgId} className="border-t cd-border-c cd-text cursor-pointer" style={selectedId === row.orgId ? { backgroundColor: "var(--cd-row-selected)" } : undefined} onClick={() => select(row.orgId)}>
+                  <tr key={row.orgId} className="border-t cd-border-c cd-text cursor-pointer" style={selectedId === row.orgId ? { backgroundColor: "var(--cd-row-selected)" } : undefined} onClick={() => select(row)}>
                     <td className="p-3">
-                      <button type="button" className="font-semibold text-left" onClick={(e) => { e.stopPropagation(); select(row.orgId); }}>{row.orgName}</button>
+                      <button type="button" className="font-semibold text-left" onClick={(e) => { e.stopPropagation(); select(row); }}>{row.orgName}</button>
                     </td>
                     <td className="p-3">{row.orgCategory ?? "—"}</td>
+                    <td className="p-3 whitespace-nowrap">{row.kind === "facility" ? "기존 사업장" : "기관"}</td>
                     <td className="p-3">{row.region ?? "—"}</td>
                     <td className="p-3 text-right tabular-nums">{row.contactCount}</td>
                   </tr>
@@ -229,7 +242,10 @@ export function OrganizationBoard() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-semibold text-base flex-1 min-w-0">{detail.orgName}</h2>
-                {canEdit && (
+                {isFacility && canViewFacility && (
+                  <Link href={`/facilities?focus=${encodeURIComponent(detail.orgId)}`} className="cd-btn cd-btn-ghost cd-btn-sm">사업장 화면 열기</Link>
+                )}
+                {canEdit && !isFacility && (
                   <>
                     <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setOrgForm({
                       orgName: detail.orgName, orgCategory: detail.orgCategory ?? "민간기업", businessRegistrationNo: detail.businessRegistrationNo ?? "",
@@ -257,7 +273,7 @@ export function OrganizationBoard() {
               )}
               <div className="flex items-center gap-2 border-t cd-border-c pt-3">
                 <h3 className="font-semibold flex-1">담당자 {contacts.length}명</h3>
-                {canEdit && <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setContactForm({ ...EMPTY_CONTACT })}><Plus className="w-3.5 h-3.5" /> 담당자 추가</button>}
+                {canEdit && !isFacility && <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setContactForm({ ...EMPTY_CONTACT })}><Plus className="w-3.5 h-3.5" /> 담당자 추가</button>}
               </div>
               {contactForm && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border cd-border-c rounded-lg p-3">
@@ -280,7 +296,7 @@ export function OrganizationBoard() {
                       <div className="font-semibold">{p.personName}{p.title ? ` ${p.title}` : ""}{p.department ? <span className="font-normal cd-text-faint"> · {p.department}</span> : null}</div>
                       <div className="text-xs cd-text-faint">{[p.mobilePhone, p.officePhone, p.email].filter(Boolean).join(" · ") || "연락처 없음"}</div>
                     </div>
-                    {canEdit && (
+                    {canEdit && !isFacility && (
                       <>
                         <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" aria-label={`${p.personName} 수정`} onClick={() => setContactForm({
                           id: p.id, personName: p.personName, title: p.title ?? "", department: p.department ?? "", officePhone: p.officePhone ?? "",

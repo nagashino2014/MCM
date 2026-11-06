@@ -5,6 +5,8 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { upsertOrganization } from "@/lib/contact-import/store";
 import { isOrgCategory } from "@/lib/directory-categories";
+import { FACILITY_PARTNER_SQL } from "@/lib/ieps/queries";
+import { formatCompanyName } from "@/lib/ieps/formatters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,18 +24,27 @@ export async function GET(req: NextRequest) {
     const q = (params.get("q") ?? "").trim();
     const category = (params.get("category") ?? "").trim();
     const db = await getDb();
+    // 거래처가 아닌 기존 사업장은 행을 옮기지 않고 함께 보여 준다. 계약·허가 자료가 facility_id 로 묶여 있기 때문이다.
     const organizations = rowsToObjects(await db.exec(
-      `SELECT o.org_id, o.org_name, o.org_category, o.business_registration_no, o.address, o.region_sido, o.region_sigungu, o.phone_number, o.homepage_url,
+      `SELECT 'organization' AS kind, o.org_id, o.org_name, o.org_category, o.business_registration_no, o.address, o.region_sido, o.region_sigungu, o.phone_number, o.homepage_url,
               (SELECT COUNT(*)::int FROM external_org_contacts c WHERE c.org_id = o.org_id) AS contact_count
          FROM external_organizations o
         WHERE o.deleted_at IS NULL
           AND ($1 = '' OR o.org_name ILIKE '%' || $1 || '%' OR EXISTS (SELECT 1 FROM external_org_contacts c WHERE c.org_id = o.org_id AND c.person_name ILIKE '%' || $1 || '%'))
           AND ($2 = '' OR o.org_category = $2)
-        ORDER BY o.org_name ASC`,
+       UNION ALL
+       SELECT 'facility' AS kind, f.facility_id, f.company_name, f.org_category, COALESCE(NULLIF(TRIM(f.business_registration_no), ''), f.site_business_registration_no), f.site_address, f.region_sido, f.region_sigungu, f.phone_number, f.homepage_url,
+              (SELECT COUNT(*)::int FROM facility_contact_people p WHERE p.facility_id = f.facility_id AND p.status <> 'inactive') AS contact_count
+         FROM facilities f
+        WHERE f.deleted_at IS NULL AND NOT ${FACILITY_PARTNER_SQL}
+          AND ($1 = '' OR f.company_name ILIKE '%' || $1 || '%' OR EXISTS (SELECT 1 FROM facility_contact_people p WHERE p.facility_id = f.facility_id AND p.person_name ILIKE '%' || $1 || '%'))
+          AND ($2 = '' OR f.org_category = $2)
+        ORDER BY org_name ASC`,
       [q, category]
     )).map((r) => ({
+      kind: String(r.kind) as "organization" | "facility",
       orgId: String(r.org_id),
-      orgName: String(r.org_name),
+      orgName: r.kind === "facility" ? formatCompanyName(String(r.org_name)) ?? String(r.org_name) : String(r.org_name),
       orgCategory: r.org_category != null ? String(r.org_category) : null,
       businessRegistrationNo: r.business_registration_no != null ? String(r.business_registration_no) : null,
       address: r.address != null ? String(r.address) : null,
@@ -42,8 +53,10 @@ export async function GET(req: NextRequest) {
       homepageUrl: r.homepage_url != null ? String(r.homepage_url) : null,
       contactCount: Number(r.contact_count ?? 0),
     }));
-    const [canEdit, canPromote] = await Promise.all([hasPermission(actor.userId, "contact.edit"), hasPermission(actor.userId, "facility.edit")]);
-    return NextResponse.json({ organizations, canEdit, canPromote });
+    const [canEdit, canPromote, canViewFacility] = await Promise.all([
+      hasPermission(actor.userId, "contact.edit"), hasPermission(actor.userId, "facility.edit"), hasPermission(actor.userId, "facility.view"),
+    ]);
+    return NextResponse.json({ organizations, canEdit, canPromote, canViewFacility });
   } catch (err) {
     return authErrorToResponse(err);
   }

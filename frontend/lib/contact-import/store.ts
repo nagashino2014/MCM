@@ -267,6 +267,14 @@ export async function registerPartnerFacility(db: PgDatabase, input: PartnerInpu
   return { facilityId, created: true };
 }
 
+/** 거래 구분을 더한다. 거래처 판정(FACILITY_PARTNER_SQL)이 이 값을 본다. */
+export async function addFacilityTradeRoles(db: PgDatabase, facilityId: string, roles: TradeRole[], now: string): Promise<void> {
+  await db.run(
+    `UPDATE facilities SET trade_roles = ARRAY(SELECT DISTINCT unnest(COALESCE(trade_roles, '{}'::text[]) || $2::text[])), updated_at = $3 WHERE facility_id = $1`,
+    [facilityId, roles, now]
+  );
+}
+
 /** 기존 사업장에는 거래 구분을 더하고 비어 있는 홈페이지·연락처 구분만 채운다. */
 async function mergeFacilityExtras(db: PgDatabase, facilityId: string, input: Pick<PartnerInput, "tradeRoles" | "homepage" | "orgCategory" | "now">): Promise<void> {
   await db.run(

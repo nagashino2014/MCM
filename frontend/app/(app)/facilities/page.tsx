@@ -54,6 +54,7 @@ function Inner() {
     waterClass: undefined,
     source: "",
     hasContractHistory: false,
+    partnerScope: "partner",
     sort: "recent",
     limit: 10,
     offset: 0,
@@ -81,6 +82,7 @@ function Inner() {
       if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
       if (filter.source) params.set("source", filter.source);
       if (filter.hasContractHistory) params.set("hasContractHistory", "1");
+      if (filter.partnerScope) params.set("partnerScope", filter.partnerScope);
       if (filter.sort) params.set("sort", filter.sort);
       params.set("limit", String(filter.limit ?? 10));
       params.set("offset", String(filter.offset ?? 0));

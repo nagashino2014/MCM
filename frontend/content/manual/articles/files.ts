@@ -97,6 +97,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
             "거래처 담당자에게는 메일로만 보낼 수 있습니다.",
             "메일 첨부 합계가 25MB를 넘으면 큰 파일은 다운로드 링크로 바뀝니다.",
             "메일을 쓰는 중이라면 메일 쓰기의 [[문서함]] 버튼으로 개인문서함 파일을 골라 바로 첨부할 수도 있습니다.",
+            "앱의 대화방에서는 입력창 왼쪽 + 버튼의 ‘문서함’으로 개인문서함 파일을 골라 그 대화방에 바로 보낼 수 있습니다.",
             "용량이 90%를 넘으면 [[용량이 거의 찼습니다]] 경고가 나옵니다. 용량은 관리자가 배분합니다.",
             "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩과 쪽을 고릅니다. 전체 선택은 지금 보이는 쪽의 파일만 고릅니다.",
           ] },
@@ -105,7 +106,7 @@ export const FILES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["개인문서함", "내 파일", "파일 보내기", "용량", "증명서"],
     sources: ["components/files/PersonalDocsBoard.tsx", "components/mail/MailComposePage.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-06",
   },
   {
     id: "files.library",

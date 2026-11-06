@@ -27,6 +27,13 @@ export const IS_STANDALONE_PWA =
  */
 export const IS_CHAT_POPUP = !!win && new URLSearchParams(win.location.search).get('popup') === '1';
 
+/**
+ * 마우스·물리 키보드로 쓰는 웹(데스크탑 위젯·PC 브라우저·PC 에 설치한 PWA) — 대화 입력창에서 Enter 가 전송, Shift+Enter 가 줄바꿈이다.
+ * 휴대폰 브라우저(터치 키보드)는 주 포인터가 coarse 라 빠지고, 거기서는 네이티브처럼 Enter 가 줄바꿈으로 남는다.
+ */
+export const IS_DESKTOP_WEB =
+  IS_WEB_RAIL && !!win && typeof win.matchMedia === 'function' && win.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 /** 넓은 배치(목록+상세 2분할·홈 2열)를 켜는 창 폭 — 설계안 §6-3(2026-11-04). 이보다 좁으면 모바일 흐름(한 화면씩). */
 export const WIDE_MIN_WIDTH = 900;
 

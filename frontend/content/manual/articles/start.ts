@@ -274,6 +274,33 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "chat-composer",
+        title: "대화 입력창",
+        blocks: [
+          { kind: "list", items: [
+            "PC(데스크탑 위젯·PC 앱)에서는 Enter 로 보내고 Shift+Enter 로 줄을 바꿉니다. 휴대폰 화면 키보드에서는 Enter 가 줄바꿈이고, 오른쪽 보내기 버튼으로 보냅니다.",
+            "파일은 클립 버튼이나 끌어다 놓기로 한 번에 10개까지 올릴 수 있습니다. 올린 순서대로 파일마다 한 메시지씩 나갑니다. 글을 함께 쓰면 파일이 하나일 때는 그 파일의 설명으로, 여러 개일 때는 파일 뒤에 따로 나갑니다.",
+            "그룹 대화방에서 @ 를 치면 멤버 목록이 뜹니다. 이름을 고르면 ‘@이름’이 들어가고, 불린 사람은 그 방의 알림을 꺼 두었어도 휴대폰 앱 알림을 받습니다. PC 에서는 방향키로 고르고 Enter 로 넣습니다.",
+          ] },
+          { kind: "p", text: "입력창 왼쪽 + 버튼에는 자주 쓰지 않는 도구가 모여 있습니다." },
+          {
+            kind: "table",
+            head: ["항목", "하는 일"],
+            rows: [
+              ["[[문서 공유]]", "결재 문서·할 일·사업장을 골라 카드로 보냅니다. 받은 사람은 카드를 눌러 그 화면을 엽니다"],
+              ["[[문서함]]", "내 개인문서함의 파일을 골라 첨부합니다. 원본은 문서함에 그대로 남습니다"],
+              ["[[사진 촬영]] · [[앨범]]", "휴대폰 앱에서만 보입니다. 찍거나 고른 사진을 첨부합니다(앨범은 안드로이드)"],
+              ["[[멘션]]", "그룹 대화방에서만 보입니다. @ 를 넣고 멤버 목록을 띄웁니다"],
+            ],
+          },
+          { kind: "tip", text: "화면을 잡아 보내려면 Windows 의 화면 캡처(Win+Shift+S)로 잡은 뒤 입력창에서 Ctrl+V 로 붙여넣으면 됩니다." },
+          { kind: "list", items: [
+            "문서 공유 목록에는 내가 볼 수 있는 문서만 나옵니다. 받는 사람에게 그 문서를 볼 권한이 없으면 카드는 보이지만 열리지 않습니다.",
+            "멘션 알림을 받지 않으려면 앱의 알림 설정에서 ‘메신저 멘션’을 끕니다.",
+          ] },
+        ],
+      },
+      {
         id: "app-manual",
         title: "앱에서 매뉴얼 보기",
         blocks: [
@@ -286,8 +313,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯"],
-    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx"],
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부"],
+    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx"],
     reviewedAt: "2026-11-06",
   },
 ];

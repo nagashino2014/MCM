@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { authErrorToResponse, requireSession } from "@/lib/auth/guards";
+import { attachmentContentType } from "@/lib/approval/attachments";
 import {
+  buildUserSharedRecord,
   ChatAccessError,
+  type ChatSharedRecord,
+  listMentionedMembers,
   listMessages,
   listPushTargets,
   postFileMessage,
@@ -10,7 +14,9 @@ import {
   postUploadedFileMessage,
   pushInfoForMessage,
 } from "@/lib/chat/queries";
+import { getPersonalDoc } from "@/lib/files/personal";
 import { sendPush } from "@/lib/notify/push-expo";
+import { readContractDocument } from "@/lib/storage/contract-document-storage";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { assertAttachmentsAllowed } from "@/lib/security/attachment-policy";
 
@@ -45,25 +51,31 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ roomId: str
   }
 }
 
-/** 커밋 후 fire-and-forget 푸시 — 실패가 전송 자체를 막지 않는다(approval notify 정책). */
-function firePush(roomId: number, senderId: string, messageId: number, preview: string): void {
+/**
+ * 커밋 후 fire-and-forget 푸시 — 실패가 전송 자체를 막지 않는다(approval notify 정책).
+ * mentionText(본문·캡션)에서 `@이름` 으로 불린 멤버는 방 알림을 꺼 뒀어도 "멘션" 알림을 받고, 일반 알림 대상에서는 뺀다(한 메시지에 한 번).
+ */
+function firePush(roomId: number, senderId: string, messageId: number, preview: string, mentionText = ""): void {
   void (async () => {
     try {
-      const targets = await listPushTargets(roomId, senderId);
-      if (!targets.length) return;
+      const mentioned = mentionText ? await listMentionedMembers(roomId, senderId, mentionText) : [];
+      const targets = (await listPushTargets(roomId, senderId)).filter((id) => !mentioned.includes(id));
+      if (!targets.length && !mentioned.length) return;
       const info = await pushInfoForMessage(roomId, senderId);
       const title =
         info.roomType === "group" && info.roomName
           ? `${info.roomName}: ${info.senderName}`
           : info.senderName;
-      await sendPush(targets, {
-        event: "chat.message",
-        title,
+      const common = {
         body: preview,
         link: `/chat/${roomId}`,
         targetRef: `chat:${roomId}`,
         dedupKey: `chat:${roomId}:${messageId}`,
-      });
+      };
+      if (mentioned.length) {
+        await sendPush(mentioned, { ...common, event: "chat.mention", title: `${title}님이 나를 언급했습니다` });
+      }
+      if (targets.length) await sendPush(targets, { ...common, event: "chat.message", title });
     } catch (e) {
       console.error("[chat] 푸시 발송 실패:", e);
     }
@@ -71,7 +83,8 @@ function firePush(roomId: number, senderId: string, messageId: number, preview: 
 }
 
 // 메시지 전송.
-// - JSON { body, replyTo? } : 텍스트
+// - JSON { body, replyTo?, sharedRecord? } : 텍스트. sharedRecord({ type, id, title })를 주면 사내 기록 카드가 붙는다
+// - JSON { personalDocId, body? } : 내 개인 문서함 파일을 이 방의 첨부로 보낸다(body 는 캡션)
 // - multipart(file + caption?) : 첨부(25MB, image/* 는 image 버블) — MSG-P1
 export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: string }> }) {
   try {
@@ -106,7 +119,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: st
         },
         caption
       );
-      firePush(roomId, userId, messageId, `${file.type.startsWith("image/") ? "🖼" : "📎"} ${file.name}`);
+      firePush(roomId, userId, messageId, `${file.type.startsWith("image/") ? "🖼" : "📎"} ${file.name}`, caption);
       return NextResponse.json({ messageId }, { status: 201 });
     }
 
@@ -114,6 +127,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: st
       | {
           body?: unknown;
           replyTo?: unknown;
+          sharedRecord?: unknown;
+          personalDocId?: unknown;
           upload?: { storageKey?: unknown; fileName?: unknown; contentType?: unknown; byteSize?: unknown };
         }
       | null;
@@ -142,14 +157,41 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ roomId: st
         { storageKey, fileName, contentType, byteSize },
         caption
       );
-      firePush(roomId, userId, messageId, `${contentType.startsWith("image/") ? "🖼" : "📎"} ${fileName}`);
+      firePush(roomId, userId, messageId, `${contentType.startsWith("image/") ? "🖼" : "📎"} ${fileName}`, caption);
+      return NextResponse.json({ messageId }, { status: 201 });
+    }
+
+    // 개인 문서함 파일 보내기 — 본인 문서만. 본문은 서버가 문서함에서 읽어 이 방의 첨부로 복제한다(문서함 원본은 그대로).
+    if (typeof body?.personalDocId === "string" && body.personalDocId) {
+      const doc = await getPersonalDoc(userId, body.personalDocId);
+      if (!doc) return NextResponse.json({ error: "문서함에서 파일을 찾을 수 없습니다." }, { status: 404 });
+      await assertAttachmentsAllowed(userId, [doc.fileName]); // 첨부 확장자 정책(262)
+      const buffer = await readContractDocument(doc.storageKey);
+      if (!buffer) {
+        return NextResponse.json({ error: `'${doc.fileName}' 파일 본문을 읽지 못했습니다.` }, { status: 500 });
+      }
+      const contentType = doc.contentType || attachmentContentType(doc.fileName);
+      const caption = typeof body.body === "string" ? body.body : "";
+      const messageId = await postFileMessage(
+        roomId,
+        userId,
+        { buffer, fileName: doc.fileName, contentType, byteSize: buffer.length },
+        caption
+      );
+      firePush(roomId, userId, messageId, `${contentType.startsWith("image/") ? "🖼" : "📎"} ${doc.fileName}`, caption);
       return NextResponse.json({ messageId }, { status: 201 });
     }
 
     const text = typeof body?.body === "string" ? body.body : "";
     const replyTo = typeof body?.replyTo === "number" ? body.replyTo : null;
-    const messageId = await postTextMessage(roomId, userId, text, replyTo);
-    firePush(roomId, userId, messageId, text.replace(/\s+/g, " ").slice(0, 80));
+    let sharedRecord: ChatSharedRecord | undefined;
+    if (body?.sharedRecord != null) {
+      const built = buildUserSharedRecord(body.sharedRecord);
+      if (!built) return NextResponse.json({ error: "공유할 문서를 확인하세요." }, { status: 400 });
+      sharedRecord = built;
+    }
+    const messageId = await postTextMessage(roomId, userId, text, replyTo, sharedRecord);
+    firePush(roomId, userId, messageId, text.replace(/\s+/g, " ").slice(0, 80), text);
     return NextResponse.json({ messageId }, { status: 201 });
   } catch (err) {
     if (err instanceof ChatAccessError) {

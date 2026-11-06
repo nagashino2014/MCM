@@ -16,6 +16,7 @@ import type { ChannelSendResult } from "./email-ses";
 /** 푸시 이벤트 키 — 앱 설정 화면과 공유하는 카탈로그. */
 export type PushEventKey =
   | "chat.message"
+  | "chat.mention"
   | "board.posted"
   | "approval.step_pending"
   | "approval.result"
@@ -50,6 +51,7 @@ export type PushEventKey =
  */
 const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "chat.message": true,
+  "chat.mention": true,
   "board.posted": true,
   "approval.step_pending": true,
   "approval.result": true,
@@ -80,6 +82,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "intel.briefing", label: "정기 영업 브리핑", description: "구독 중인 관심 분야의 정기 보고서가 준비됐을 때" },
   { key: "intel.important", label: "중요 영업 변화", description: "구독 중인 투자 프로젝트의 중요한 변화가 확인됐을 때" },
   { key: "chat.message", label: "메신저 새 메시지", description: "대화방에 새 메시지가 왔을 때(방별 알림 끄기와 별개)" },
+  { key: "chat.mention", label: "메신저 멘션", description: "그룹 대화방에서 @이름으로 나를 불렀을 때(방 알림을 꺼 둔 방에서도 받음)" },
   { key: "approval.step_pending", label: "결재 차례 도착", description: "내가 결재할 문서가 올라왔을 때" },
   { key: "approval.result", label: "기안 결과", description: "내가 올린 문서가 승인·반려됐을 때" },
   { key: "approval.remind", label: "결재 재촉", description: "결재가 지연될 때 알림" },

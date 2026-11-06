@@ -28,6 +28,10 @@ export function routeForLink(link: string | null | undefined): Href | null {
     return docId ? { pathname: "/approval/[docId]", params: { docId } } : "/(tabs)/approval";
   }
 
+  // 사업장 — 대화방 문서 공유 카드(2026-11-06)가 /facility/{id} 로 온다.
+  const facility = /^\/facility\/([^/]+)$/.exec(path);
+  if (facility) return { pathname: "/facility/[facilityId]", params: { facilityId: decodeURIComponent(facility[1]) } };
+
   // 메신저 — 새 메시지 푸시는 /chat/{roomId} 로 온다(MSG-P1).
   const chat = /^\/chat\/(\d+)$/.exec(path);
   if (chat) return { pathname: "/chat/[roomId]", params: { roomId: chat[1] } };

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { recordAuditLogInline } from "@/lib/auth/audit";
-import { addFacilityTradeRoles, TRADE_ROLES, type TradeRole } from "@/lib/contact-import/store";
+import { changeFacilityListing, TRADE_ROLES, type ListingAction, type TradeRole } from "@/lib/contact-import/store";
 import { formatBusinessRegistrationNo, formatCompanyName } from "@/lib/ieps/formatters";
 
 export const runtime = "nodejs";
@@ -17,19 +16,19 @@ const text = (value: unknown): string | null => {
   return s || null;
 };
 
-/** 기관 목록에 보이는 기존 사업장(거래처 아님)의 요약과 담당자. 고치는 곳은 사업장 화면이다. */
+/** 사업장 조회 권한이 없는 직원용 요약과 담당자. 권한이 있으면 화면은 사업장 상세를 그대로 쓴다. */
 export async function GET(_: NextRequest, ctx: RouteContext) {
   try {
     await requirePermission("contact.view");
     const { id } = await ctx.params;
     const db = await getDb();
     const facility = rowsToObjects(await db.exec(
-      `SELECT facility_id, company_name, org_category, COALESCE(NULLIF(TRIM(business_registration_no), ''), site_business_registration_no) AS brn,
-              site_address, phone_number, homepage_url
+      `SELECT company_name, org_category, COALESCE(NULLIF(TRIM(business_registration_no), ''), site_business_registration_no) AS brn,
+              representative_name, site_address, phone_number, homepage_url
          FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [id]
     ))[0];
-    if (!facility) return NextResponse.json({ error: "사업장을 찾을 수 없습니다." }, { status: 404 });
+    if (!facility) return NextResponse.json({ error: "찾을 수 없습니다." }, { status: 404 });
     const contacts = rowsToObjects(await db.exec(
       `SELECT p.id, p.person_name, p.title, d.department_name, p.office_phone, p.mobile_phone, p.email
          FROM facility_contact_people p
@@ -39,17 +38,14 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
       [id]
     ));
     return NextResponse.json({
-      organization: {
-        orgId: String(facility.facility_id),
-        orgName: formatCompanyName(String(facility.company_name)) ?? String(facility.company_name),
+      party: {
+        companyName: formatCompanyName(String(facility.company_name)) ?? String(facility.company_name),
         orgCategory: text(facility.org_category),
         businessRegistrationNo: formatBusinessRegistrationNo(text(facility.brn)),
-        corporateRegistrationNo: null,
+        representativeName: text(facility.representative_name),
         address: text(facility.site_address),
         phoneNumber: text(facility.phone_number),
         homepageUrl: text(facility.homepage_url),
-        memo: null,
-        source: "facility",
       },
       contacts: contacts.map((r) => ({
         id: Number(r.id),
@@ -58,7 +54,6 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
         department: text(r.department_name),
         officePhone: text(r.office_phone),
         mobilePhone: text(r.mobile_phone),
-        faxNumber: null,
         email: text(r.email),
       })),
     });
@@ -67,24 +62,24 @@ export async function GET(_: NextRequest, ctx: RouteContext) {
   }
 }
 
-/** 거래처로 지정한다. 거래 구분이 생기면 사업장 마스터 기본 목록으로 옮겨 보인다. */
+/** 사업장 마스터 ↔ 기타 목록 이동, 거래처 승격. */
 export async function POST(req: NextRequest, ctx: RouteContext) {
   try {
-    const actor = await requirePermission("facility.edit");
+    const actor = await requirePermission("facility.edit", { fallbackRoles: ["editor"] });
     const { id } = await ctx.params;
-    const body = (await req.json().catch(() => ({}))) as { tradeRoles?: string[] };
-    const roles = (body.tradeRoles ?? []).filter((r): r is TradeRole => (TRADE_ROLES as readonly string[]).includes(r));
-    if (!roles.length) return NextResponse.json({ error: "매출·매입 중 거래 구분을 골라 주세요." }, { status: 400 });
-    const now = new Date().toISOString();
-    const found = await withDbWrite(async (db) => {
-      const facility = rowsToObjects(await db.exec(`SELECT facility_id FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`, [id]));
-      if (!facility.length) return false;
-      await addFacilityTradeRoles(db, id, roles, now);
-      await recordAuditLogInline(db, { actorUserId: actor.userId, action: "organization_promote", targetTable: "facilities", targetId: id, after: { tradeRoles: roles } });
-      return true;
-    });
-    if (!found) return NextResponse.json({ error: "사업장을 찾을 수 없습니다." }, { status: 404 });
-    return NextResponse.json({ facilityId: id, created: false });
+    const body = (await req.json().catch(() => ({}))) as { action?: string; tradeRoles?: string[] };
+    let change: ListingAction;
+    if (body.action === "other" || body.action === "master") {
+      change = { action: body.action };
+    } else if (body.action === "promote") {
+      const tradeRoles = (body.tradeRoles ?? []).filter((r): r is TradeRole => (TRADE_ROLES as readonly string[]).includes(r));
+      if (!tradeRoles.length) return NextResponse.json({ error: "매출·매입 중 거래 구분을 골라 주세요." }, { status: 400 });
+      change = { action: "promote", tradeRoles };
+    } else {
+      return NextResponse.json({ error: "요청 값이 올바르지 않습니다." }, { status: 400 });
+    }
+    await withDbWrite((db) => changeFacilityListing(db, id, change, actor.userId));
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
         : undefined,
       hasContractHistory: searchParams.get("hasContractHistory") === "1",
       tradeRole: (["sales", "purchase"] as const).find((r) => r === searchParams.get("tradeRole")),
-      partnerScope: (["partner", "other"] as const).find((s) => s === searchParams.get("partnerScope")),
+      listScope: (["master", "other"] as const).find((s) => s === searchParams.get("listScope")),
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: clampLimit(Number(searchParams.get("limit") ?? "50")),
       offset: Math.max(0, Number(searchParams.get("offset") ?? "0")),

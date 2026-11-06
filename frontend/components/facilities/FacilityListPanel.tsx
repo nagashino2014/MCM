@@ -171,7 +171,7 @@ export function FacilityListPanel({
     if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
     if (filter.source) params.set("source", filter.source);
     if (filter.hasContractHistory) params.set("hasContractHistory", "1");
-    if (filter.partnerScope) params.set("partnerScope", filter.partnerScope);
+    if (filter.listScope) params.set("listScope", filter.listScope);
     if (filter.sort) params.set("sort", filter.sort);
     params.set("format", format);
     return params;
@@ -205,17 +205,17 @@ export function FacilityListPanel({
       <div className="flex items-center justify-between mb-3">
         <h3 className="cd-card-title">사업장 ({total}건)</h3>
         <div className="flex items-center gap-3">
-          {/* 사업장 마스터는 거래처만 보여 준다. 거래처가 아닌 곳은 기관 목록에 있고, 여기서도 켜서 볼 수 있다(2026-11-06). */}
+          {/* 기타 업체·기관으로 분류된 곳은 기본 목록에서 빠진다. 켜면 여기서도 함께 본다(2026-11-06). */}
           <label
             className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted shrink-0 cursor-pointer select-none"
-            title="거래처가 아닌 사업장까지 함께 표시"
+            title="기타 업체·기관까지 함께 표시"
           >
             <input
               type="checkbox"
-              checked={!filter.partnerScope}
-              onChange={(e) => onFilterChange({ ...filter, partnerScope: e.target.checked ? undefined : "partner", offset: 0 })}
+              checked={!filter.listScope}
+              onChange={(e) => onFilterChange({ ...filter, listScope: e.target.checked ? undefined : "master", offset: 0 })}
             />
-            비거래처 포함
+            기타 포함
           </label>
           <span className="text-[11px] cd-text-faint font-medium">
             표시 {items.length} / 전체 {total}

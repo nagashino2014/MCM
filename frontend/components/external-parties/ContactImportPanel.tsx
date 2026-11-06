@@ -24,7 +24,7 @@ const KIND_LABELS: Record<string, string> = {
   brn: "사업자번호 일치", name_region: "이름·지역 일치", name: "이름 일치·지역 다름", prefix_region: "이름 일부·지역 일치", prefix: "이름 일부 일치", address: "주소만 일치",
 };
 const SOURCE_LABELS: Record<string, string> = { dart: "DART", fsc: "금융위원회", naver: "네이버 기업정보", bizno: "비즈노" };
-const DECISION_LABELS: Record<string, string> = { link: "사업장 연결", partner: "거래처 등록", organization: "기관 목록", exclude: "제외" };
+const DECISION_LABELS: Record<string, string> = { link: "사업장 연결", partner: "거래처 등록", other: "기타 목록", exclude: "제외" };
 
 interface MatchCandidate { facilityId: string; companyName: string; address: string | null; kind: string }
 interface SearchCandidate { source: string; name: string; brn: string | null; address: string | null; url: string | null; sameRegion: boolean; sameDomain: boolean }
@@ -197,7 +197,7 @@ export function ContactImportPanel() {
     <div className="cdash cd-fields-white p-4 md:p-5 flex flex-col gap-4 min-h-full rounded-lg" data-theme={theme}>
       <CdPageHeader
         title="연락처 가져오기"
-        helpTopic="organizations.import"
+        helpTopic="external-parties.import"
         actions={
           <>
             <input ref={fileRef} type="file" accept=".xlsx" className="hidden" aria-label="연락처 엑셀 파일" onChange={(e) => upload(e.target.files?.[0])} />
@@ -267,7 +267,7 @@ export function ContactImportPanel() {
                     <label className="flex items-center gap-1"><input type="checkbox" checked={roles.includes("purchase")} onChange={() => selectRole("purchase")} />매입</label>
                     <button type="button" disabled={busy || !roles.length} className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => decide("partner")}>거래처로 등록</button>
                   </span>
-                  <button type="button" disabled={busy} className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => decide("organization")}>기관 목록으로</button>
+                  <button type="button" disabled={busy} className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => decide("other")}>기타 목록으로</button>
                   <button type="button" disabled={busy} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => decide("exclude")}>제외</button>
                 </>
               )}

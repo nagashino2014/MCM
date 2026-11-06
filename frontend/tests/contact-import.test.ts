@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import {
-  autoLinkTarget, baseKey, buildFacilityIndex, companyDomain, companyKey, contactDedupeKey, formatPhone, judgeProfiles, matchFacilities, roadKey, suggestCategory,
+  autoLinkTarget, baseKey, buildFacilityIndex, companyDomain, companyKey, contactDedupeKey, formatPhone, isNonCorporateBrn, judgeProfiles, matchFacilities, roadKey, suggestCategory,
   type FacilityRef,
 } from "../../scraper/lib/contact-import/rules";
 import type { Profile } from "../../scraper/lib/facility-quality/rules";
@@ -89,6 +89,12 @@ test("기관 구분 어림", () => {
     ["환경부", "공공기관"], ["환경부 원주지방환경청", "공공기관"], ["금천구청", "공공기관"], ["안동시", "공공기관"], ["경기도의회", "공공기관"],
     ["태양금속공업(주)", "민간기업"], ["주식회사 심텍", "민간기업"],
   ] as const) assert.equal(suggestCategory(name), category, name);
+});
+
+test("사업자번호 구분코드 — 기업이 아닌 곳", () => {
+  for (const brn of ["123-80-00001", "123-82-00001", "1238300001", "123-89-00001"]) assert.equal(isNonCorporateBrn(brn), true, brn);
+  for (const brn of ["123-81-00001", "123-84-00001", "123-85-00001", "123-86-00001", "123-87-00001", "123-88-00001", "123-12-00001", "123-90-00001"]) assert.equal(isNonCorporateBrn(brn), false, brn);
+  for (const brn of [null, "", "123-83", "123-83-00001, 123-83-00002"]) assert.equal(isNonCorporateBrn(brn), false, String(brn));
 });
 
 test("도메인·전화·중복 키", () => {

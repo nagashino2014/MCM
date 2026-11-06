@@ -6,7 +6,7 @@ import { COMPANY_STAGE_SQL, COMPANY_STAGES, decideCompany, type CompanyStage, ty
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DECISIONS = ["link", "partner", "organization", "exclude", "reopen"];
+const DECISIONS = ["link", "partner", "other", "exclude", "reopen"];
 
 /** 회사 단위 검토 목록. 담당자 개인정보는 싣지 않고 수만 준다(상세는 [id]). */
 export async function GET(req: NextRequest) {
@@ -28,12 +28,11 @@ export async function GET(req: NextRequest) {
     const companies = rowsToObjects(await db.exec(
       `SELECT c.company_id, c.display_name, c.address, c.region_sido, c.region_sigungu, c.homepage_url, c.email_domain, c.suggested_category,
               c.match_candidates, c.search_status, c.search_outcomes, c.search_candidates, c.search_verdict, c.found_brn, c.search_note,
-              c.decision, c.decided_facility_id, c.decided_org_id, c.decided_at,
-              f.company_name AS decided_facility_name, o.org_name AS decided_org_name,
+              c.decision, c.decided_facility_id, c.decided_at,
+              f.company_name AS decided_facility_name,
               (SELECT COUNT(*)::int FROM contact_import_rows r WHERE r.company_id = c.company_id) AS contact_count
          FROM contact_import_companies c
          LEFT JOIN facilities f ON f.facility_id = c.decided_facility_id
-         LEFT JOIN external_organizations o ON o.org_id = c.decided_org_id
         WHERE ${where}
         ORDER BY contact_count DESC, c.display_name ASC
         LIMIT $3 OFFSET $4`,
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
       foundBrn: r.found_brn != null ? String(r.found_brn) : null,
       searchNote: r.search_note != null ? String(r.search_note) : null,
       decision: r.decision != null ? String(r.decision) : null,
-      decidedName: r.decided_facility_name != null ? String(r.decided_facility_name) : r.decided_org_name != null ? String(r.decided_org_name) : null,
+      decidedName: r.decided_facility_name != null ? String(r.decided_facility_name) : null,
       contactCount: Number(r.contact_count ?? 0),
     }));
     return NextResponse.json({ stage, counts, total, companies });

@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         : undefined,
       source: searchParams.get("source") || undefined,
       hasContractHistory,
-      partnerScope: (["partner", "other"] as const).find((s) => s === searchParams.get("partnerScope")),
+      listScope: (["master", "other"] as const).find((s) => s === searchParams.get("listScope")),
       sort: (searchParams.get("sort") as "recent" | "name") || "recent",
       limit: 100000,
       offset: 0,

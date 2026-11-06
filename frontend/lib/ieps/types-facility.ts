@@ -64,8 +64,8 @@ export interface FacilityListFilter {
   missing?: FacilityMissingField[];
   /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장. */
   hasContractHistory?: boolean;
-  /** partner: 거래처만(사업장 마스터 기본), other: 거래처가 아닌 곳만. */
-  partnerScope?: "partner" | "other";
+  /** master: 사업장 마스터 기본 목록, other: 기타 업체·기관만. */
+  listScope?: "master" | "other";
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";

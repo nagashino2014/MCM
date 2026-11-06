@@ -68,6 +68,36 @@ fn is_first_run(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// 앱 화면의 최대 폭(apps/mobile `WEB_SHELL_MAX_WIDTH`) — tauri.conf.json 의 초기 폭과 같다. 창이 이보다 넓으면 좌우에 배경 띠가 남는다.
+const APP_SHELL_WIDTH: f64 = 1040.0;
+/// 저장된 폭을 맞췄다는 표시 파일. 있으면 다시 맞추지 않는다.
+const WIDTH_FIT_MARKER: &str = ".window-width-fit-1040";
+
+/// 이전 버전이 저장해 둔 넓은 창 폭을 앱 화면 폭으로 한 번만 줄인다(2026-11-06 사용자 요청).
+/// window-state 복원값이 초기 폭을 덮어써, 업데이트해도 좌우 배경 띠가 남기 때문이다.
+/// 그 뒤에 사용자가 넓힌 폭은 존중한다(대화 탭은 더 넓게 쓸 수 있다). 높이·위치는 그대로 둔다.
+fn fit_saved_width_once(app: &tauri::AppHandle) {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
+    let marker = dir.join(WIDTH_FIT_MARKER);
+    if marker.exists() {
+        return;
+    }
+    if let Some(win) = app.get_webview_window("main") {
+        if !win.is_maximized().unwrap_or(false) {
+            if let (Ok(scale), Ok(inner)) = (win.scale_factor(), win.inner_size()) {
+                let width = (APP_SHELL_WIDTH * scale).round() as u32;
+                if inner.width > width {
+                    let _ = win.set_size(tauri::PhysicalSize::new(width, inner.height));
+                }
+            }
+        }
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(marker, b"");
+}
+
 /// 트레이 기본 아이콘 원본 — 뱃지 버전은 이 픽셀을 복사해 런타임에 그린다(에셋 추가 없이).
 const TRAY_PNG: &[u8] = include_bytes!("../icons/32x32.png");
 
@@ -195,6 +225,7 @@ pub fn run() {
                 })
                 .build(app)?;
             let first_run = is_first_run(app.handle());
+            fit_saved_width_once(app.handle());
             fit_main_window_to_monitor(app.handle(), first_run);
             Ok(())
         })

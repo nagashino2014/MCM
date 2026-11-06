@@ -6,8 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Button, Input } from '@/components/ui';
 import { getAutoLogin, getLastIdentifier, useAuth } from '@/lib/auth-context';
+import { IS_WEB_RAIL } from '@/lib/platform';
 import { useTheme } from '@/theme/useTheme';
 import { ChangePasswordSheet } from '@/components/account/ChangePasswordSheet';
+
+// 데스크탑 위젯·PC 웹에서 양식이 창 폭만큼 늘어나지 않게 휴대폰(390 − 좌우 여백 48) 폭으로 가운데에 둔다(2026-11-06 사용자 요청).
+const WEB_FORM_STYLE = IS_WEB_RAIL ? ({ width: '100%', maxWidth: 342, alignSelf: 'center' } as const) : undefined;
 
 // 로그인 화면 — 사번/아이디 + 비밀번호. 성공 시 루트 게이트가 (tabs)로 이동시킨다.
 export default function LoginScreen() {
@@ -53,7 +57,7 @@ export default function LoginScreen() {
           <Text className="mt-1 text-[14px] text-cd-muted">한국환경안전연구원 그룹웨어</Text>
         </View>
 
-        <View className="gap-3">
+        <View className="gap-3" style={WEB_FORM_STYLE}>
           <Input
             placeholder="사번 또는 아이디"
             autoCapitalize="none"

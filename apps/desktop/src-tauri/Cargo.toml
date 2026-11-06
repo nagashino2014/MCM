@@ -1,6 +1,6 @@
 [package]
 name = "mcm-desktop"
-version = "1.5.0"
+version = "1.5.1"
 description = "MCM 데스크탑 위젯"
 authors = ["KOENSAIN"]
 edition = "2021"

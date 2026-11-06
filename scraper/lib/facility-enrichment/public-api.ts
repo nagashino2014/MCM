@@ -63,7 +63,7 @@ export async function dart(snapshot: Snapshot, reserve = async () => {}): Promis
     const data = await (await get(`https://opendart.fss.or.kr/api/company.json?${q}`, proxy)).json() as any;
     if (data.status === "013") continue;
     if (data.status !== "000") throw new ProviderError("blocked", `DART 응답 코드 ${s(data.status)}`);
-    profiles.push({ source: "dart", name: s(data.corp_name), url: `https://opendart.fss.or.kr/api/company.json?corp_code=${encodeURIComponent(c.code)}`, retrievedAt: new Date().toISOString(), externalId: c.code, scope: "headquarters", values: {
+    profiles.push({ source: "dart", name: s(data.corp_name), url: `https://opendart.fss.or.kr/api/company.json?corp_code=${encodeURIComponent(c.code)}`, retrievedAt: new Date().toISOString(), externalId: c.code, scope: "headquarters", homepage: s(data.hm_url) || undefined, values: {
       business_registration_no: s(data.bizr_no), corporate_registration_no: s(data.jurir_no), representative_name: s(data.ceo_nm), phone_number: s(data.phn_no), site_address: s(data.adres),
     } });
   }

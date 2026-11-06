@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
-import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
+import { Pencil, Save, X, MapPin, Phone, Hash, Building2, Globe, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -1288,6 +1288,7 @@ function FacilityContactsModal({
   // 명함 촬영(이미지 선택) → Claude vision 파싱 → 담당자 신규 폼 프리필 (M2)
   const cardInputRef = useRef<HTMLInputElement>(null);
   const [cardParsing, setCardParsing] = useState(false);
+  const [cardHomepage, setCardHomepage] = useState<string | null>(null);
   const handleCardFile = async (file: File | null) => {
     if (!file) return;
     if (!orgCategory) {
@@ -1303,6 +1304,7 @@ function FacilityContactsModal({
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const f = (data.fields ?? {}) as Record<string, string | null>;
       if (data.warning) alert(String(data.warning));
+      setCardHomepage(f.homepage ?? null);
       setTab("person");
       setSelectedPersonId(null);
       setPersonForm({
@@ -1392,12 +1394,14 @@ function FacilityContactsModal({
           departments: nextDepartments,
           people: nextPeople,
           logs: nextLogs,
+          homepage: editing ? cardHomepage : null,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
+      setCardHomepage(null);
       setEditing(false);
       setMainNumberEditing(false);
       await reload();
@@ -2249,6 +2253,7 @@ function ReadView({
       <DetailField icon={Hash} label="사업자등록번호" value={formatBusinessRegistrationNo(detail.businessRegistrationNo)} />
       <DetailField icon={Building2} label="대표자명" value={detail.representativeName ?? null} />
       <PhoneContactField value={detail.phoneNumber} onOpenContacts={onOpenContacts} />
+      <DetailField icon={Globe} label="홈페이지" value={detail.homepageUrl ?? null} />
       <DetailField
         icon={MapPin}
         label={detail.additionalSiteAddresses.length > 0 ? "소재지 (대표)" : "소재지"}
@@ -2474,6 +2479,7 @@ function EditView({
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
   const [corporateRegistrationNo, setCorporateRegistrationNo] = useState(detail.corporateRegistrationNo ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
+  const [homepageUrl, setHomepageUrl] = useState(detail.homepageUrl ?? "");
   const [siteAddress, setSiteAddress] = useState(detail.siteAddress ?? "");
   const [hasMultipleSites, setHasMultipleSites] = useState(
     (detail.additionalSiteAddresses?.length ?? 0) > 0
@@ -2530,6 +2536,7 @@ function EditView({
     setCertificateCorporateNo(detail.businessCertificateCorporateRegistrationNo ?? "");
   }, [detail.businessCertificateBusinessType, detail.businessCertificateBusinessItem, detail.businessCertificateCorporateRegistrationNo]);
   useEffect(() => { setRepresentativeName(detail.representativeName ?? ""); }, [detail.representativeName]);
+  useEffect(() => { setHomepageUrl(detail.homepageUrl ?? ""); }, [detail.homepageUrl]);
   useEffect(() => { setCorporateRegistrationNo(detail.corporateRegistrationNo ?? ""); }, [detail.corporateRegistrationNo]);
   const [logoPath, setLogoPath] = useState(detail.logoPath ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -2618,6 +2625,7 @@ function EditView({
           companyName: formatCompanyName(companyName) ?? companyName,
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
           representativeName: representativeName || null,
+          homepageUrl: homepageUrl.trim() || null,
           siteAddress: siteAddress.trim() || null,
           additionalSiteAddresses: hasMultipleSites
             ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
@@ -2679,6 +2687,7 @@ function EditView({
       <FieldInput label="사업자등록번호" value={businessRegistrationNo} onChange={setBrn} />
       <FieldInput label="법인등록번호 (마스터)" value={corporateRegistrationNo} onChange={setCorporateRegistrationNo} />
       <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
+      <FieldInput label="홈페이지" value={homepageUrl} onChange={setHomepageUrl} />
       <FieldInput
         label={hasMultipleSites ? "소재지 (대표)" : "소재지"}
         value={siteAddress}

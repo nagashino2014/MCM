@@ -13,9 +13,10 @@ import fs from "node:fs";
 import os from "node:os";
 import { connectQualityDb } from "../lib/facility-quality/postgres";
 import { processQualityRun } from "../lib/facility-enrichment/runner";
+import { processContactSearch } from "../lib/contact-import/search";
 import { resolveWorkerBackendUrl } from "../lib/worker-backend";
 
-type JobType = "collect" | "parse" | "facility-enrich";
+type JobType = "collect" | "parse" | "facility-enrich" | "contact-import-search";
 type ParseCategory = "integratedFirst" | "integratedChange" | "annualReport";
 
 interface QueueMessage {
@@ -111,6 +112,9 @@ async function pollOnce(runtimeDb: ReturnType<typeof connectQualityDb>): Promise
     if (body.type === "facility-enrich") {
       if (!body.runId || !/^[a-f0-9-]{36}$/.test(body.runId)) throw new Error("Invalid facility quality run ID");
       await processQualityRun(runtimeDb.db, runtimeDb.tx, body.runId);
+    } else if (body.type === "contact-import-search") {
+      const result = await processContactSearch(runtimeDb.db, runtimeDb.tx);
+      console.log(`[worker] contact search processed=${result.processed} stopped=${result.stopped.join(",")}`);
     } else if (body.type === "collect" || body.type === "parse") await runCliCollect(body);
     else throw new Error("Unsupported worker job type");
     if (visibilityLost) throw new Error("SQS visibility heartbeat failed; durable progress retained");

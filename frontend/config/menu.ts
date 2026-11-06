@@ -245,6 +245,16 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: Factory,
     group: "main",
   },
+  // 거래처(매출·매입)만 사업장 마스터에 두고, 그 외 기관·업체는 여기에 둔다(342, 2026-11-06 사용자 요청).
+  {
+    title: "기관",
+    href: "/organizations",
+    icon: BookUser,
+    submenu: [
+      { title: "기관 목록", href: "/organizations" },
+      { title: "연락처 가져오기", href: "/organizations/import" },
+    ],
+  },
   {
     title: "계약",
     href: "/contracts",

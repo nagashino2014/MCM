@@ -23,6 +23,7 @@ const SOURCE_LABELS: Record<string, string> = {
   ieps: "IEPS",
   manual: "수동 등록",
   legal_entity: "계약현황",
+  "contact-import": "연락처 가져오기",
 };
 
 /**

@@ -2,6 +2,32 @@ import type { HelpTopic } from "../types";
 
 /** 사업 운영 — 사업장·계약 화면의 ? 도움말. sources[0] 파일에 topic="id" 가 있어야 한다(test:manual). */
 export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
+  // ── 기관 ──
+  {
+    id: "organizations.list",
+    label: "기관 목록 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "거래처(매출·매입)가 아닌 기관·업체와 담당자를 모아 둡니다. 거래처는 사업장 마스터에 있습니다.",
+        "거래가 시작되면 매출·매입을 고르고 [[거래처로 전환]]을 누릅니다. 담당자까지 사업장 마스터로 옮겨지고 여기서는 빠집니다.",
+      ] },
+    ],
+    more: { article: "organizations.main" },
+    sources: ["components/organizations/OrganizationBoard.tsx"],
+  },
+  {
+    id: "organizations.import",
+    label: "연락처 가져오기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "아마란스10 연락처에서 받은 엑셀을 [[엑셀 올리기]]로 올리면 대기 명단에 들어갑니다. 올리는 것만으로는 다른 직원에게 공개되지 않습니다.",
+        "관리자가 회사마다 [[사업장에 연결]]·[[거래처로 등록]]·[[기관 목록으로]]·[[제외]] 중 하나를 고르면 담당자가 옮겨집니다.",
+        "사업자번호는 회사명으로만 검색합니다. 담당자 이름과 번호는 외부로 보내지 않습니다.",
+      ] },
+    ],
+    more: { article: "organizations.import" },
+    sources: ["components/organizations/ContactImportPanel.tsx"],
+  },
   // ── 사업장 ──
   {
     id: "facilities.contacts",

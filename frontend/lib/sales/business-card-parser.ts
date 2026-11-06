@@ -19,7 +19,8 @@ export interface BusinessCardFields {
   faxNumber: string | null;
   email: string | null;
   address: string | null;
-  /** 명함에 있는 그 외 텍스트(홈페이지 등) 한 줄 요약 */
+  homepage: string | null;
+  /** 명함에 있는 그 외 텍스트 한 줄 요약 */
   etc: string | null;
 }
 
@@ -30,7 +31,7 @@ export interface BusinessCardParseResult {
 
 const FIELD_KEYS: (keyof BusinessCardFields)[] = [
   "personName", "title", "department", "companyName",
-  "mobilePhone", "officePhone", "faxNumber", "email", "address", "etc",
+  "mobilePhone", "officePhone", "faxNumber", "email", "address", "homepage", "etc",
 ];
 
 /** Anthropic 이미지 제한(5MB·8000px) 대응 — 장변 1600px·JPEG 재인코딩. 명함 판독에는 충분. */
@@ -68,6 +69,15 @@ function normalizePhone(v: string | null): string | null {
   return v.trim();
 }
 
+/** 홈페이지 표기 정규화 — 앞의 라벨·프로토콜과 끝 슬래시를 지운다. 도메인 형태가 아니거나 이메일이면 버린다. */
+export function normalizeHomepage(v: string | null): string | null {
+  if (!v) return null;
+  const s = v.trim().replace(/^(homepage|home page|web ?site|web|url|홈페이지)\s*[:：]?\s*/i, "").trim();
+  if (s.includes("@")) return null;
+  const cleaned = s.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  return /^[a-z0-9가-힣-]+(\.[a-z0-9가-힣-]+)+(\/\S*)?$/i.test(cleaned) ? cleaned : null;
+}
+
 /**
  * 명함 이미지 1장을 필드로 파싱. 키 미설정이면 null(호출부 수동 입력 폴백).
  * 실패(HTTP·파싱)는 throw — 라우트에서 사용자 메시지로 변환.
@@ -90,7 +100,7 @@ export async function parseBusinessCard(image: Buffer): Promise<BusinessCardPars
     "㈜/(주)/Co.,Ltd 가 붙은 표기, 이메일 도메인, 주소와 함께 적힌 회사명을 우선 채택.\n" +
     '{"personName": 이름, "title": 직급·직책, "department": 부서, "companyName": 회사명, ' +
     '"mobilePhone": 휴대폰(M/Mobile/HP), "officePhone": 유선전화(T/Tel), "faxNumber": 팩스(F/Fax), ' +
-    '"email": 이메일, "address": 주소, "etc": 그 외 정보(홈페이지 등) 한 줄 또는 null}';
+    '"email": 이메일, "address": 주소, "homepage": 홈페이지 주소(www·http 표기나 도메인. 이메일 주소는 넣지 말 것), "etc": 그 외 정보 한 줄 또는 null}';
 
   const r = await claudeMessages({
     feature: "business_card.parse",
@@ -128,5 +138,6 @@ export async function parseBusinessCard(image: Buffer): Promise<BusinessCardPars
   fields.mobilePhone = normalizePhone(fields.mobilePhone);
   fields.officePhone = normalizePhone(fields.officePhone);
   fields.faxNumber = normalizePhone(fields.faxNumber);
+  fields.homepage = normalizeHomepage(fields.homepage);
   return { fields, model: MODEL };
 }

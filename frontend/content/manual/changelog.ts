@@ -6,6 +6,16 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-06", kind: "신규", title: "기관 목록·연락처 가져오기 — 거래처가 아닌 곳은 따로 관리",
+    body: "왼쪽 메뉴에 ‘기관’을 새로 만들었습니다. 거래처(매출·매입)는 사업장 마스터에, 그 외 기관·업체는 기관 목록에 둡니다. 아마란스10에서 받은 연락처 엑셀을 올리면 회사별로 묶어 사업자번호를 찾아 주고, 관리자가 사업장 연결·거래처 등록·기관 목록·제외로 분류합니다.",
+    articles: ["organizations.main", "organizations.import"],
+  },
+  {
+    date: "2026-11-06", kind: "개선", title: "사업장 홈페이지 — 명함에서 자동 인식",
+    body: "사업장 정보에 홈페이지 칸이 생겼습니다. 명함을 촬영하면 홈페이지를 읽어, 사업장 홈페이지가 비어 있을 때 함께 채웁니다.",
+    articles: ["facilities.main"],
+  },
+  {
     date: "2026-11-06", kind: "신규", title: "사용자 등록 — 부서 삭제",
     body: "부서 편집의 ‘부서 삭제’로 비어 있는 부서를 지울 수 있습니다. 직원·하위 부서·계약·결재 문서처럼 그 부서를 쓰는 데이터가 남아 있으면 이유와 정리 방법을 보여 주고 삭제하지 않습니다.",
     articles: ["admin.registry"],

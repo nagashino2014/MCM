@@ -1374,7 +1374,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
-              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, purchase_contract_types, created_at, updated_at
+              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, purchase_contract_types, homepage_url, created_at, updated_at
          FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [facilityId]
     );
@@ -1546,6 +1546,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
     corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
+    homepageUrl: f.homepage_url != null ? String(f.homepage_url) : null,
     tradeRoles: parsePgTextArray(f.trade_roles),
     purchaseContractTypes: parsePgTextArray(f.purchase_contract_types),
     siteAddress:

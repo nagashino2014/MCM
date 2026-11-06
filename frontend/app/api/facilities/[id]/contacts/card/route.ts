@@ -5,6 +5,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { putEmployeeDocument } from "@/lib/storage/employee-document-storage";
 import { sanitizeFilename, sanitizePathSegment } from "@/lib/storage/contract-document-storage";
+import { normalizeHomepage } from "@/lib/sales/business-card-parser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ interface CardFieldsBody {
   officePhone?: string | null;
   email?: string | null;
   duties?: string | null;
+  homepage?: string | null; // 사업장에 홈페이지가 비어 있을 때만 채운다
 }
 
 const nullableText = (v: unknown): string | null => {
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const officePhone = nullableText(body.officePhone);
     const email = nullableText(body.email);
     const duties = nullableText(body.duties);
+    const homepage = normalizeHomepage(nullableText(body.homepage));
     const now = new Date().toISOString();
 
     let personId = 0;
@@ -162,6 +165,14 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           )
         );
         personId = Number(ins[0]?.id ?? 0);
+      }
+
+      if (homepage) {
+        await wdb.run(
+          `UPDATE facilities SET homepage_url = $2, updated_at = $3
+            WHERE facility_id = $1 AND NULLIF(TRIM(COALESCE(homepage_url, '')), '') IS NULL`,
+          [facilityId, homepage, now]
+        );
       }
 
       await recordAuditLogInline(wdb, {

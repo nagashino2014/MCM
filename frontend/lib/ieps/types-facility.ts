@@ -114,6 +114,8 @@ export interface FacilityDetail {
   representativeName: string | null;
   /** 주소록 연락처 구분(기관 유형) — 공공기관·민간기업 등. */
   orgCategory?: string | null;
+  /** 홈페이지(341) — 프로토콜 없이 저장될 수 있다. */
+  homepageUrl?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];
   /** 계약 유형 중 매입 계약(334) — outsourcing·subscription·lease·management 복수. */

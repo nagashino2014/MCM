@@ -57,21 +57,61 @@ export interface ChatMessageRow {
   } | null;
 }
 
+/**
+ * 메시지에 붙는 사내 기록 카드. intel_briefing 은 브리핑 공유 업무가 서버 안에서만 만들고,
+ * 나머지는 대화방 입력창의 [문서 공유]로 보낸다(2026-11-06).
+ */
+export type ChatSharedRecordType = "intel_briefing" | "approval_doc" | "todo" | "facility";
+
 export interface ChatSharedRecord {
-  type: "intel_briefing";
+  type: ChatSharedRecordType;
   id: string;
   title: string;
   href: string;
+}
+
+/** 카드 종류별 고정 경로 — 앱이 이 경로를 화면으로 바꾼다(apps/mobile/src/lib/deeplink.ts routeForLink). */
+const SHARED_RECORD_HREF: Record<ChatSharedRecordType, (id: string) => string> = {
+  intel_briefing: (id) => `/sales/rag?briefingId=${encodeURIComponent(id)}`,
+  approval_doc: (id) => `/approval?docId=${encodeURIComponent(id)}`,
+  todo: (id) => `/todo/${encodeURIComponent(id)}`,
+  facility: (id) => `/facility/${encodeURIComponent(id)}`,
+};
+
+function sharedRecordType(value: unknown): ChatSharedRecordType | null {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(SHARED_RECORD_HREF, value)
+    ? (value as ChatSharedRecordType)
+    : null;
 }
 
 /** 저장된 카드도 고정 문서 경로와 대조한다. 임의 외부 URL은 카드로 내리지 않는다. */
 export function parseChatSharedRecord(value: unknown): ChatSharedRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (record.type !== "intel_briefing" || typeof record.id !== "string" || !record.id || record.id.length > 160 || typeof record.title !== "string") return null;
-  const href = `/sales/rag?briefingId=${encodeURIComponent(record.id)}`;
+  const type = sharedRecordType(record.type);
+  if (!type || typeof record.id !== "string" || !record.id || record.id.length > 160 || typeof record.title !== "string") return null;
+  const href = SHARED_RECORD_HREF[type](record.id);
   if (record.href !== href) return null;
-  return { type: "intel_briefing", id: record.id, title: record.title.slice(0, 200), href };
+  return { type, id: record.id, title: record.title.slice(0, 200), href };
+}
+
+/** 입력창에서 보낼 수 있는 카드 종류 — 브리핑은 공유 업무(수신자 지정·전달 기록)를 거쳐야 하므로 뺀다. */
+const USER_SHARED_RECORD_TYPES = new Set<ChatSharedRecordType>(["approval_doc", "todo", "facility"]);
+
+/**
+ * 입력창에서 온 카드 요청({type, id, title})을 저장용 카드로 만든다. 경로는 서버가 정한다(임의 주소를 받지 않는다).
+ * 제목은 보낸 사람이 자기 권한으로 조회한 목록에서 고른 글자 그대로다(할 일 연결 linkLabel 과 같은 정책) —
+ * 서버가 남의 문서 제목을 대신 찾아 주지 않는다. 받는 사람의 열람 권한은 카드를 열 때 각 화면이 판정한다.
+ */
+export function buildUserSharedRecord(value: unknown): ChatSharedRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const type = sharedRecordType(record.type);
+  if (!type || !USER_SHARED_RECORD_TYPES.has(type)) return null;
+  if (typeof record.id !== "string" || !/^[A-Za-z0-9_.:-]{1,160}$/.test(record.id)) return null;
+  const title = typeof record.title === "string" ? record.title.replace(/\s+/g, " ").trim() : "";
+  if (!title) return null;
+  return { type, id: record.id, title: title.slice(0, 200), href: SHARED_RECORD_HREF[type](record.id) };
 }
 
 export interface ChatRoomMember {
@@ -391,19 +431,20 @@ export async function postDirectSharedRecordInTransaction(db: PgDatabase, sender
   return { roomId, messageId: await insertMessage(db, roomId, senderId, "text", text, null, undefined, safeRecord) };
 }
 
-/** 텍스트 메시지 전송. 반환: 생성된 메시지 id. */
+/** 텍스트 메시지 전송. sharedRecord 를 주면 사내 기록 카드가 붙는다. 반환: 생성된 메시지 id. */
 export async function postTextMessage(
   roomId: number,
   userId: string,
   body: string,
-  replyTo?: number | null
+  replyTo?: number | null,
+  sharedRecord?: ChatSharedRecord
 ): Promise<number> {
   const text = body.trim();
   if (!text) throw new ChatAccessError("메시지 내용이 비어 있습니다.");
   if (text.length > 4000) throw new ChatAccessError("메시지는 4,000자 이내로 입력해 주세요.");
   return withDbWrite(async (db) => {
     if (!(await memberRow(db, roomId, userId))) throw new ChatAccessError("대화방 멤버가 아닙니다.");
-    return insertMessage(db, roomId, userId, "text", text, replyTo ?? null);
+    return insertMessage(db, roomId, userId, "text", text, replyTo ?? null, undefined, sharedRecord);
   });
 }
 
@@ -756,6 +797,46 @@ export async function pushInfoForMessage(
     roomName: r.room_name != null ? String(r.room_name) : null,
     roomType: (String(r.room_type ?? "dm") as "dm" | "group"),
   };
+}
+
+/**
+ * 본문의 `@이름` 과 맞는 이름만 추린다. 긴 이름부터 맞춰 소비한다("김철" 이 "@김철수" 에 걸리지 않게).
+ * 앱의 강조 표시(apps/mobile/src/lib/chat-mentions.ts splitMentions)와 같은 규칙이다.
+ */
+export function matchMentionedNames(body: string, names: string[]): string[] {
+  let rest = body;
+  const hit: string[] = [];
+  for (const name of [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => b.length - a.length)) {
+    const token = `@${name}`;
+    if (!rest.includes(token)) continue;
+    hit.push(name);
+    rest = rest.split(token).join(" ");
+  }
+  return hit;
+}
+
+/**
+ * 본문에서 `@이름` 으로 불린 방 멤버(발신자 제외) — 멘션 알림 대상. 그룹 방에서만 의미가 있고, 방별 알림 끄기와 무관하다.
+ * 동명이인은 누구를 불렀는지 알 수 없어 모두 대상이다.
+ * (할 일 댓글 멘션 resolveMentions 와 같은 방식 — 클라이언트가 대상 id 를 따로 보내지 않는다.)
+ */
+export async function listMentionedMembers(roomId: number, senderId: string, body: string): Promise<string[]> {
+  if (!body.includes("@")) return [];
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT m.user_id, COALESCE(e.name, u.name) AS name
+         FROM chat_room_members m
+         JOIN chat_rooms r ON r.room_id = m.room_id AND r.room_type = 'group'
+         JOIN users u ON u.user_id = m.user_id
+         LEFT JOIN employee_profiles e ON e.user_id = m.user_id
+        WHERE m.room_id = $1 AND m.user_id <> $2 AND m.left_at IS NULL`,
+      [roomId, senderId]
+    )
+  );
+  const members = rows.map((r) => ({ userId: String(r.user_id), name: String(r.name ?? "").trim() }));
+  const called = new Set(matchMentionedNames(body, members.map((m) => m.name)));
+  return members.filter((m) => called.has(m.name)).map((m) => m.userId);
 }
 
 /** 방 멤버 user_id 목록(발신자 제외·음소거 제외) — 푸시 수신자 계산용(MSG-P1). */

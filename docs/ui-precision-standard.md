@@ -31,6 +31,8 @@
 
 **버튼 반경 후속 지시:** `frontend/app/globals.css`의 `--mcm-action-radius: 10px`(2026-10-28 8→10)를 일반·작은·아이콘·태그형·필터·탭 버튼 모두의 네 모서리에 적용한다. `--cd-radius-control`도 이 값에 연결한다. 반경 속성만 공용 `!important` 규칙으로 고정해 `rounded-xl`, `rounded-full`, 페이지 CSS, 인라인 스타일이 덮어쓰지 못하게 한다. 버튼으로 쓰는 링크·업로드 label 등에는 `cd-action`을 부여한다. 연결형/밑줄형 탭의 배치·테두리·선택 방식은 보존하면서 반경만 통일한다. 표시 전용 배지, 아바타, 스위치 노브, 도표, 문서 콘텐츠는 동작 버튼으로 취급하지 않는다.
 
+**프로필 아이콘 후속 지시(2026-11-06 사용자 요청):** 사람을 나타내는 프로필 아이콘(직원 사진·이니셜·기본 실루엣, 그룹 대화방 아이콘 포함)은 원이 아니라 **모서리가 많이 둥근 사각형**이다. 반경은 한 변의 35%로, 웹은 `--cd-radius-avatar`(`frontend/components/cdash/cdash.css`)를 `rounded-[var(--cd-radius-avatar,35%)]`로, 앱은 `avatarRadius(px)`(`apps/mobile/src/components/ui/Avatar.tsx`)로 쓴다. 공용 컴포넌트(`CdAvatar`·`EmployeeAvatar`, 앱 `Avatar`·`MiniAvatar`)를 쓰고, 직접 그릴 때도 같은 값을 쓴다. 사람 이름 칩(pill)·상태 점·결재 승인 도장·종류 아이콘 원은 대상이 아니다.
+
 글꼴은 **Pretendard Variable** 하나다(2026-10-27 KESI Precision 디자인 시스템 결정 — 종전 "폰트 다운로드 없음" 방침을 대체). `frontend/public/fonts/PretendardVariable.woff2`(v1.3.9, SIL OFL 1.1)를 `font-display: swap`으로 싣고, 스택은 `"Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif`. Inter·Noto Sans KR은 스택에서 뺀다. 주 버튼은 블루→바이올렛 그라데이션 대신 `--cd-primary-fill`(깊은 남색) + `--cd-primary-fill-edge` 1px 테두리다. 세부 규칙(닫힌 글자 스케일·굵기 600 상한·반경 10px/pill — 10-28 개정)과 모듈별 정리 순서는 [design-system-cleanup-2026-10-27.md](design-system-cleanup-2026-10-27.md).
 
 ## 2. 메뉴

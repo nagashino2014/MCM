@@ -9,6 +9,13 @@ import { getAccessToken } from "@/lib/tokens";
 const SIZES = { sm: 28, md: 40, lg: 56 } as const;
 
 /**
+ * 프로필 아이콘의 모서리 반경 — 원이 아니라 **모서리가 많이 둥근 사각형**이다(2026-11-06 사용자 요청).
+ * 지름의 35%(홈 빠른 실행 타일 54 → 19 와 같은 비율)라 18~56px 어느 크기에서도 같은 모양이다.
+ * 사람을 나타내는 아이콘을 직접 그리는 곳(그룹 대화방 아이콘·소형 아바타)도 이 값을 쓴다.
+ */
+export const avatarRadius = (px: number) => Math.round(px * 0.35);
+
+/**
  * 한글 이름은 성을 제외한 뒤 두 글자, 영문은 첫 글자 2개까지.
  * 회사명·직급이 섞인 표시명("㈜재영물산 이재연")은 personName 으로 이름만 추린 뒤 자른다 —
  * 예전에는 `slice(1)` 이라 원 안에 "재영물산 이재연"이 통째로 들어갔다.
@@ -82,7 +89,7 @@ export function Avatar({
   /** 앱 API 의 사진 경로 — 인증 헤더를 붙여 불러온다. */
   photoPath?: string | null;
   size?: keyof typeof SIZES;
-  /** 지름을 직접 지정(정해진 세 크기 사이가 필요한 곳 — 대화방 말풍선 옆 34). 글자 크기는 지름에 비례. */
+  /** 한 변 길이를 직접 지정(정해진 세 크기 사이가 필요한 곳 — 대화방 말풍선 옆 34). 글자 크기는 길이에 비례. */
   px?: number;
 }) {
   const px = pxOverride ?? SIZES[size];
@@ -94,7 +101,7 @@ export function Avatar({
     return (
       <Image
         source={source}
-        style={{ width: px, height: px, borderRadius: px / 2 }}
+        style={{ width: px, height: px, borderRadius: avatarRadius(px) }}
         contentFit="cover"
         transition={120}
       />
@@ -102,7 +109,7 @@ export function Avatar({
   }
   return (
     <View
-      style={{ width: px, height: px, borderRadius: px / 2 }}
+      style={{ width: px, height: px, borderRadius: avatarRadius(px) }}
       className="items-center justify-center bg-cd-primary-soft">
       <Text style={{ fontSize: font }} className="font-semibold text-cd-primary-strong">
         {initials(name)}

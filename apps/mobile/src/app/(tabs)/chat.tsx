@@ -13,6 +13,7 @@ import {
   Screen,
   SearchBar,
   SegmentedTabs,
+  avatarRadius,
   useToast,
 } from '@/components/ui';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
@@ -336,7 +337,7 @@ function RoomRow({ r, wide, active, onPress }: { r: ChatRoom; wide?: boolean; ac
       {r.roomType === 'dm' ? (
         <Avatar name={r.name} photoPath={r.peerPhotoPath} size="md" />
       ) : (
-        <View className="h-10 w-10 items-center justify-center rounded-full bg-cd-primary-soft">
+        <View style={{ borderRadius: avatarRadius(40) }} className="h-10 w-10 items-center justify-center bg-cd-primary-soft">
           <Ionicons name="people" size={19} color={c.primary} />
         </View>
       )}

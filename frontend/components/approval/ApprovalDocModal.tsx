@@ -440,7 +440,7 @@ export function ApprovalDocViewer({
                   <div key={st.key} className="flex items-center" title={st.comment ?? undefined}>
                     <div className="flex items-center gap-2">
                       <span
-                        className="w-[34px] h-[34px] rounded-full inline-flex items-center justify-center text-xs font-semibold shrink-0"
+                        className="w-[34px] h-[34px] rounded-[var(--cd-radius-avatar,35%)] inline-flex items-center justify-center text-xs font-semibold shrink-0"
                         style={{
                           background: `color-mix(in srgb, ${tone} 16%, transparent)`,
                           color: tone,

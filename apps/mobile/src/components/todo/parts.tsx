@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { useAuthedSource } from '@/components/ui/Avatar';
+import { avatarRadius, useAuthedSource } from '@/components/ui/Avatar';
 import { LIGHT } from '@/theme/tokens';
 import { useTheme } from '@/theme/useTheme';
 import { TODO_STATUS_LABELS, type TodoApprovalEvent, type TodoPriority, type TodoStatus } from '@/lib/todo-types';
@@ -102,16 +102,16 @@ export function DueBadge({ label, tone }: { label: string; tone: DueTone }) {
 }
 
 /**
- * 소형 아바타(20~28px) — 사진(`photoUrl`, 앱 API 상대경로면 Bearer 헤더)이 있으면 원형 사진,
+ * 소형 아바타(20~28px) — 사진(`photoUrl`, 앱 API 상대경로면 Bearer 헤더)이 있으면 둥근 사각형 사진(공용 Avatar 와 같은 모양),
  * 없으면 중립 이니셜(배경 surface · 글자 muted). 사용자별 색은 쓰지 않는다(§19-8).
  */
 export function MiniAvatar({ name, photoUrl, size = 22 }: { name: string | null | undefined; photoUrl?: string | null; size?: number }) {
   const source = useAuthedSource(photoUrl);
   if (source) {
-    return <Image source={source} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" transition={120} />;
+    return <Image source={source} style={{ width: size, height: size, borderRadius: avatarRadius(size) }} contentFit="cover" transition={120} />;
   }
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2 }} className="items-center justify-center bg-cd-surface">
+    <View style={{ width: size, height: size, borderRadius: avatarRadius(size) }} className="items-center justify-center bg-cd-surface">
       <Text style={{ fontSize: Math.round(size * 0.42) }} className="font-semibold text-cd-muted">
         {initials(name)}
       </Text>

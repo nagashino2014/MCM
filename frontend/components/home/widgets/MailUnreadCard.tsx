@@ -72,7 +72,7 @@ export function MailUnreadCard() {
             <li key={m.messageId}>
               <HomeRow href="/mail">
                 <span
-                  className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[11px] font-bold shrink-0"
+                  className="w-7 h-7 rounded-[var(--cd-radius-avatar,35%)] inline-flex items-center justify-center text-[11px] font-bold shrink-0"
                   style={{
                     background: `color-mix(in srgb, var(--cd-av-${av}) 18%, transparent)`,
                     color: `var(--cd-av-${av})`,

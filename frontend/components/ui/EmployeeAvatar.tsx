@@ -27,7 +27,7 @@ export function EmployeeAvatar({
       <img
         src={src}
         alt=""
-        className={`rounded-full object-cover shrink-0 ${className ?? ""}`}
+        className={`rounded-[var(--cd-radius-avatar,35%)] object-cover shrink-0 ${className ?? ""}`}
         style={{ width: size, height: size }}
         onError={() => setFailed(true)}
       />
@@ -35,7 +35,7 @@ export function EmployeeAvatar({
   }
   return (
     <span
-      className={`rounded-full flex items-center justify-center cd-surface-bg shrink-0 ${className ?? ""}`}
+      className={`rounded-[var(--cd-radius-avatar,35%)] flex items-center justify-center cd-surface-bg shrink-0 ${className ?? ""}`}
       style={{ width: size, height: size }}
     >
       <UserRound className="cd-text-muted" style={{ width: size * 0.58, height: size * 0.58 }} />

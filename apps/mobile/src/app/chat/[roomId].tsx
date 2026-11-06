@@ -1,5 +1,5 @@
 import { ShellBackground } from '@/theme/ShellBackground';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -17,18 +19,26 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as FSFile } from 'expo-file-system';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 import { AppHeader, Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from '@/components/ui';
+import { ChatCamera } from '@/components/chat/ChatCamera';
+import { ComposerPlusSheet, type ComposerPlusItem } from '@/components/chat/ComposerPlusSheet';
 import { EmojiPickerSheet } from '@/components/chat/EmojiPickerSheet';
+import { MentionSuggestions, type MentionCandidate } from '@/components/chat/MentionSuggestions';
+import { PersonalDocPickerSheet, type PersonalDoc } from '@/components/chat/PersonalDocPickerSheet';
+import { SharePickerSheet } from '@/components/chat/SharePickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
 import { apiFetch, apiJson } from '@/lib/api';
+import { applyMention, mentionQueryAtEnd, splitMentions } from '@/lib/chat-mentions';
 import { closeChatPopup } from '@/lib/chat-popup';
+import { CHAT_SHARE_ICONS, CHAT_SHARE_LABELS, isChatShareType, shareFallbackBody, type ChatShare } from '@/lib/chat-share';
 import { useAuth } from '@/lib/auth-context';
 import { API_BASE_URL } from '@/lib/config';
 import { fmtTime } from '@/lib/format';
 import { routeForLink } from '@/lib/deeplink';
 import { openAttachment } from '@/lib/open-attachment';
-import { IS_CHAT_POPUP } from '@/lib/platform';
+import { IS_CHAT_POPUP, IS_DESKTOP_WEB } from '@/lib/platform';
 import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
 import { useApi } from '@/lib/use-api';
@@ -56,7 +66,8 @@ interface ChatMessage {
   createdAt: string;
   deleted: boolean;
   attachment: ChatAttachment | null;
-  sharedRecord?: { type: 'intel_briefing'; id: string; title: string; href: string } | null;
+  /** 사내 기록 카드 — 브리핑(intel_briefing) 또는 입력창 [문서 공유]로 보낸 결재 문서·할 일·사업장. 모르는 종류는 본문만 그린다. */
+  sharedRecord?: { type: string; id: string; title: string; href: string } | null;
   replyTo: {
     messageId: number;
     senderName: string;
@@ -86,6 +97,8 @@ const MULTIPART_MAX = 25 * 1024 * 1024;
 const PRESIGNED_MAX = 2 * 1024 * 1024 * 1024;
 /** 끌어다 놓기·클립보드 붙여넣기 파일당 상한(웹·데스크탑 위젯) — 큰 파일은 📎 로. */
 const DROP_MAX = 30 * 1024 * 1024;
+/** 한 번에 보낼 수 있는 첨부 수 — 여러 개는 고른 순서대로 하나씩 전송한다(메시지도 파일마다 하나). */
+const MAX_PENDING = 10;
 const sizeText = (b: number) =>
   b >= 1024 * 1024 * 1024 ? `${(b / 1024 / 1024 / 1024).toFixed(2)}GB` : `${(b / 1024 / 1024).toFixed(1)}MB`;
 
@@ -96,6 +109,8 @@ interface PendingFile {
   size: number | null;
   mimeType: string | null;
   webFile?: Blob;
+  /** 개인 문서함에서 고른 파일 — 본문을 올리지 않고 서버가 문서함에서 복제한다. */
+  personalDocId?: string;
 }
 
 function fmtBytes(n?: number | null): string {
@@ -106,6 +121,13 @@ function fmtBytes(n?: number | null): string {
 }
 
 const POLL_MS = 3000;
+
+/** 이름 없는 첨부(클립보드 이미지·촬영 사진)의 파일명 — `클립보드-142233.png`. */
+function stampName(prefix: string, ext: string): string {
+  const t = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${prefix}-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.${ext}`;
+}
 
 function dayKey(iso: string): string {
   const d = new Date(iso);
@@ -156,7 +178,13 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  /** 최신 대기 첨부 — 끌어다 놓기·붙여넣기 리스너와 전송이 렌더 사이에 연달아 불려도 개수를 정확히 센다. */
+  const pendingRef = useRef<PendingFile[]>([]);
+  const setPending = useCallback((next: PendingFile[]) => {
+    pendingRef.current = next;
+    setPendingFiles(next);
+  }, []);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   // §26-1 메시지 길게 누르기 메뉴(답장 · 할 일로 만들기)
   const [msgMenu, setMsgMenu] = useState<ChatMessage | null>(null);
@@ -167,6 +195,13 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
   const [renameValue, setRenameValue] = useState('');
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
+  /** 전송 대기 중인 문서 공유 카드 — 첨부처럼 입력창 위에 보이고, 보내기를 눌러야 나간다. */
+  const [pendingShare, setPendingShare] = useState<ChatShare | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const inputRef = useRef<TextInput>(null);
   const [dragOver, setDragOver] = useState(false);
   const snapshot = useDirectorySnapshot(!inviteOpen);
 
@@ -247,9 +282,11 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
     }
   }, [roomId, markRead]);
 
+  // 방 상세도 들어올 때 한 번 받는다 — 멘션 후보와 본문 강조에 멤버 이름이 필요하다(관리 시트를 열 때도 다시 받는다).
   useEffect(() => {
     void loadInitial();
-  }, [loadInitial]);
+    void loadDetail();
+  }, [loadInitial, loadDetail]);
 
   useFocusEffect(
     useCallback(() => {
@@ -290,49 +327,134 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
     [policy.data]
   );
 
+  /** 전송 대기 첨부에 추가 — 차단 확장자·크기 상한(max)을 넘는 파일은 빼고 안내한다. 한 번에 MAX_PENDING 개까지. */
+  const addPending = useCallback(
+    (files: PendingFile[], max: number, overMessage: (size: number) => string) => {
+      const ok: PendingFile[] = [];
+      for (const f of files) {
+        const bad = blockedExtOf(f.name);
+        if (bad) {
+          toast.show(`보안 정책상 .${bad} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, 'error');
+          continue;
+        }
+        if (f.size != null && f.size > max) {
+          toast.show(overMessage(f.size), 'error');
+          continue;
+        }
+        ok.push(f);
+      }
+      const room = MAX_PENDING - pendingRef.current.length;
+      if (ok.length > room) toast.show(`첨부는 한 번에 ${MAX_PENDING}개까지 보낼 수 있습니다.`, 'error');
+      if (room > 0 && ok.length) setPending([...pendingRef.current, ...ok.slice(0, room)]);
+    },
+    [toast, blockedExtOf, setPending]
+  );
+  const overPicked = useCallback((size: number) => `첨부는 파일당 2GB 까지 보낼 수 있습니다. (${sizeText(size)})`, []);
+
   const pickFile = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: true });
     if (res.canceled || !res.assets?.length) return;
-    const a = res.assets[0];
-    const bad = blockedExtOf(a.name ?? '');
-    if (bad) {
-      toast.show(`보안 정책상 .${bad} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, 'error');
+    addPending(
+      res.assets.map((a) => ({
+        uri: a.uri,
+        name: a.name ?? 'file',
+        size: a.size ?? null,
+        mimeType: a.mimeType ?? null,
+        webFile: (a as { file?: Blob }).file,
+      })),
+      PRESIGNED_MAX,
+      overPicked
+    );
+  }, [addPending, overPicked]);
+
+  /** 사진 촬영(앱) — 권한을 받은 뒤 자체 카메라 덮개를 연다. */
+  const openCamera = useCallback(async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      toast.show('카메라 권한이 필요합니다. 설정에서 허용해주세요.', 'error');
       return;
     }
-    if (a.size != null && a.size > PRESIGNED_MAX) {
-      toast.show(`첨부는 파일당 2GB 까지 보낼 수 있습니다. (${sizeText(a.size)})`, 'error');
-      return;
+    setCameraOpen(true);
+  }, [toast]);
+
+  const onShot = useCallback(
+    (uri: string) => {
+      let size: number | null = null;
+      try {
+        size = new FSFile(uri).size ?? null;
+      } catch {
+        // 크기를 못 읽어도 전송은 된다(25MB 이하 경로) — 촬영 사진은 수 MB 다.
+      }
+      addPending([{ uri, name: stampName('사진', 'jpg'), size, mimeType: 'image/jpeg' }], PRESIGNED_MAX, overPicked);
+    },
+    [addPending, overPicked]
+  );
+
+  /** 앨범에서 고르기(앱) — 여러 장을 한 번에 고를 수 있다. */
+  const pickFromAlbum = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        toast.show('사진 접근 권한이 필요합니다. 설정에서 허용해주세요.', 'error');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        selectionLimit: Math.max(1, MAX_PENDING - pendingRef.current.length),
+      });
+      if (result.canceled || !result.assets?.length) return;
+      addPending(
+        result.assets.map((a) => ({
+          uri: a.uri,
+          name: a.fileName ?? stampName('사진', 'jpg'),
+          size: a.fileSize ?? null,
+          mimeType: a.mimeType ?? 'image/jpeg',
+        })),
+        PRESIGNED_MAX,
+        overPicked
+      );
+    } catch (e) {
+      toast.show(`사진을 가져오지 못했습니다: ${(e as Error).message}`, 'error');
     }
-    setPendingFile({
-      uri: a.uri,
-      name: a.name ?? 'file',
-      size: a.size ?? null,
-      mimeType: a.mimeType ?? null,
-      webFile: (a as { file?: Blob }).file,
-    });
-  }, [toast, blockedExtOf]);
+  }, [toast, addPending, overPicked]);
+
+  /** 개인 문서함에서 고른 파일 → 전송 대기 첨부. 본문은 보낼 때 서버가 문서함에서 복제한다. */
+  const addPersonalDocs = useCallback(
+    (docs: PersonalDoc[]) => {
+      addPending(
+        docs.map((d) => ({
+          uri: `personal-doc:${d.documentId}`,
+          name: d.fileName,
+          size: d.byteSize,
+          mimeType: d.contentType,
+          personalDocId: d.documentId,
+        })),
+        PRESIGNED_MAX,
+        overPicked
+      );
+    },
+    [addPending, overPicked]
+  );
 
   /** 웹에서 받은 DOM File → 전송 대기 첨부(드래그앤드롭·붙여넣기 공통). 파일당 30MB — 큰 파일은 📎 파일 선택으로. */
-  const acceptWebFile = useCallback(
-    (file: File, nameOverride?: string) => {
-      const bad = blockedExtOf(nameOverride ?? file.name ?? '');
-      if (bad) {
-        toast.show(`보안 정책상 .${bad} 파일은 보낼 수 없습니다. 필요하면 관리자에게 허용을 요청하세요.`, 'error');
-        return;
-      }
-      if (file.size > DROP_MAX) {
-        toast.show(`끌어다 놓기는 파일당 30MB 까지입니다(${sizeText(file.size)}). 큰 파일은 📎 로 첨부해 주세요.`, 'error');
-        return;
-      }
-      setPendingFile({
-        uri: URL.createObjectURL(file),
-        name: nameOverride ?? file.name ?? 'file',
-        size: file.size,
-        mimeType: file.type || null,
-        webFile: file,
-      });
+  const acceptWebFiles = useCallback(
+    (files: File[], nameOverride?: string) => {
+      addPending(
+        files.map((file) => ({
+          uri: URL.createObjectURL(file),
+          name: nameOverride ?? file.name ?? 'file',
+          size: file.size,
+          mimeType: file.type || null,
+          webFile: file,
+        })),
+        DROP_MAX,
+        (size) => `끌어다 놓기는 파일당 30MB 까지입니다(${sizeText(size)}). 큰 파일은 📎 로 첨부해 주세요.`
+      );
     },
-    [toast, blockedExtOf]
+    [addPending]
   );
 
   /**
@@ -366,8 +488,8 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
       e.preventDefault();
       depth = 0;
       setDragOver(false);
-      const f = e.dataTransfer?.files?.[0];
-      if (f) acceptWebFile(f);
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length) acceptWebFiles(files);
     };
     const onPaste = (e: ClipboardEvent) => {
       const item = Array.from(e.clipboardData?.items ?? []).find(
@@ -378,9 +500,7 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
       if (!f) return;
       e.preventDefault();
       const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-      const t = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      acceptWebFile(f, `클립보드-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.${ext}`);
+      acceptWebFiles([f], stampName('클립보드', ext));
     };
     document.addEventListener('dragenter', onEnter);
     document.addEventListener('dragover', onOver);
@@ -394,73 +514,197 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
       document.removeEventListener('drop', onDrop);
       document.removeEventListener('paste', onPaste);
     };
-  }, [acceptWebFile]);
+  }, [acceptWebFiles]);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if ((!text && !pendingFile) || sending) return;
-    setSending(true);
-    try {
-      if (pendingFile && (pendingFile.size ?? 0) > MULTIPART_MAX) {
-        // 대용량(25MB 초과) — presigned PUT 직행 후 확정(MSG-P2).
+  /** 첨부 하나 전송 — 25MB 초과는 presigned PUT 직행 후 확정(MSG-P2), 이하는 API 경유 multipart. */
+  const sendFile = useCallback(
+    async (file: PendingFile, caption: string) => {
+      if (file.personalDocId) {
+        await apiJson(`/api/chat/rooms/${roomId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: caption, personalDocId: file.personalDocId }),
+        });
+        return;
+      }
+      if ((file.size ?? 0) > MULTIPART_MAX) {
         const presign = await apiJson<{ url: string; storageKey: string; fileName: string }>(
           `/api/chat/rooms/${roomId}/uploads`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              fileName: pendingFile.name,
-              contentType: pendingFile.mimeType ?? 'application/octet-stream',
-              byteSize: pendingFile.size ?? 0,
+              fileName: file.name,
+              contentType: file.mimeType ?? 'application/octet-stream',
+              byteSize: file.size ?? 0,
             }),
           }
         );
-        await uploadLargeFile(presign.url, pendingFile);
+        await uploadLargeFile(presign.url, file);
         await apiJson(`/api/chat/rooms/${roomId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            body: text,
+            body: caption,
             upload: {
               storageKey: presign.storageKey,
               fileName: presign.fileName,
-              contentType: pendingFile.mimeType ?? 'application/octet-stream',
-              byteSize: pendingFile.size ?? 0,
+              contentType: file.mimeType ?? 'application/octet-stream',
+              byteSize: file.size ?? 0,
             },
           }),
         });
-        setPendingFile(null);
-      } else if (pendingFile) {
-        // 첨부 전송 — 웹은 DOM File, 네이티브는 expo-file-system File(SDK57 winter fetch 규칙, card.tsx 패턴).
-        const fd = new FormData();
-        if (Platform.OS === 'web' && pendingFile.webFile) {
-          fd.append('file', pendingFile.webFile, pendingFile.name);
-        } else {
-          fd.append('file', new FSFile(pendingFile.uri) as unknown as Blob, pendingFile.name);
-        }
-        if (text) fd.append('caption', text);
-        const res = await apiFetch(`/api/chat/rooms/${roomId}/messages`, { method: 'POST', body: fd });
-        if (!res.ok) {
-          const d = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(d.error ?? `전송 실패 (HTTP ${res.status})`);
-        }
-        setPendingFile(null);
+        return;
+      }
+      // 웹은 DOM File, 네이티브는 expo-file-system File(SDK57 winter fetch 규칙, card.tsx 패턴).
+      const fd = new FormData();
+      if (Platform.OS === 'web' && file.webFile) {
+        fd.append('file', file.webFile, file.name);
       } else {
+        fd.append('file', new FSFile(file.uri) as unknown as Blob, file.name);
+      }
+      if (caption) fd.append('caption', caption);
+      const res = await apiFetch(`/api/chat/rooms/${roomId}/messages`, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error ?? `전송 실패 (HTTP ${res.status})`);
+      }
+    },
+    [roomId]
+  );
+
+  const send = useCallback(async () => {
+    const text = input.trim();
+    const files = pendingRef.current;
+    const share = pendingShare;
+    if ((!text && !files.length && !share) || sending) return;
+    setSending(true);
+    // 입력은 먼저 비운다 — Enter 로 연달아 보낼 때, 전송 중에 친 다음 글이 완료 시점에 지워지지 않게. 실패하면 되돌린다.
+    setInput('');
+    // 첨부가 하나면 글은 그 파일의 캡션(종전 동작), 여러 개면 파일을 차례로 보낸 뒤 글을 따로 보낸다.
+    // 문서 공유 카드는 글 메시지에 붙는다 — 글이 없으면 "[종류] 제목" 을 본문으로 보낸다.
+    const caption = files.length === 1 && !share ? text : '';
+    let sentAny = false;
+    try {
+      for (const f of files) {
+        await sendFile(f, caption);
+        sentAny = true;
+        setPending(pendingRef.current.filter((p) => p !== f));
+      }
+      if (share || (text && !caption)) {
         await apiJson(`/api/chat/rooms/${roomId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: text, replyTo: replyTarget?.messageId ?? undefined }),
+          body: JSON.stringify({
+            body: text || (share ? shareFallbackBody(share) : ''),
+            replyTo: replyTarget?.messageId ?? undefined,
+            sharedRecord: share ?? undefined,
+          }),
         });
+        setPendingShare(null);
       }
-      setInput('');
       setReplyTarget(null);
       await poll(); // 서버 확정본을 즉시 반영(낙관적 렌더 없이 단순하게).
     } catch (e) {
       toast.show((e as Error).message, 'error');
+      // 여기 오면 글은 아직 나가지 않았다 — 그 사이 새로 친 글이 없을 때만 되돌린다. 이미 나간 첨부는 목록에 반영한다.
+      if (text) setInput((cur) => cur || text);
+      if (sentAny) void poll();
     } finally {
       setSending(false);
     }
-  }, [input, pendingFile, replyTarget, sending, roomId, poll, toast]);
+  }, [input, pendingShare, replyTarget, sending, roomId, poll, toast, sendFile, setPending]);
+
+  // 멘션(@) — 그룹 방에서만. 입력 끝의 `@질의` 로 멤버 후보를 띄우고, 고르면 `@이름 ` 으로 바꾼다.
+  // 알림 대상은 서버가 본문의 `@이름` 을 방 멤버 이름과 맞춰 정한다(여기서 id 를 따로 보내지 않는다).
+  const isGroup = detail?.roomType === 'group';
+  const mentionNames = useMemo(() => (isGroup ? (detail?.members ?? []).map((m) => m.name) : []), [isGroup, detail]);
+  const mention = useMemo(() => (isGroup ? mentionQueryAtEnd(input) : null), [isGroup, input]);
+  /** Esc 로 후보를 닫은 입력 값 — 글이 바뀌면 다시 뜬다. */
+  const [mentionClosedFor, setMentionClosedFor] = useState<string | null>(null);
+  const [mentionNav, setMentionNav] = useState<{ query: string; index: number }>({ query: '', index: 0 });
+  const mentionCandidates = useMemo<MentionCandidate[]>(() => {
+    if (!mention || !detail || mentionClosedFor === input) return [];
+    const hits = detail.members.filter((m) => m.userId !== myId && m.name.includes(mention.query));
+    // 이름을 끝까지 다 친 상태면 후보를 접는다 — Enter 가 곧바로 전송이 되게.
+    if (hits.length === 1 && hits[0].name === mention.query) return [];
+    return hits.slice(0, 8);
+  }, [mention, detail, mentionClosedFor, input, myId]);
+  const mentionIndex =
+    mention && mentionNav.query === mention.query ? Math.min(mentionNav.index, Math.max(0, mentionCandidates.length - 1)) : 0;
+
+  const pickMention = useCallback(
+    (m: MentionCandidate) => {
+      if (!mention) return;
+      setInput(applyMention(input, mention.start, m.name));
+      inputRef.current?.focus();
+    },
+    [mention, input]
+  );
+
+  /** 더하기 메뉴의 [멘션] — 입력 끝에 `@` 를 붙여 후보를 띄운다. */
+  const startMention = useCallback(() => {
+    setInput((v) => (v && !/\s$/.test(v) ? `${v} @` : `${v}@`));
+    inputRef.current?.focus();
+  }, []);
+
+  /**
+   * PC(데스크탑 위젯·브라우저) 키 입력 — Enter 전송, Shift+Enter 줄바꿈. 멘션 후보가 떠 있으면 방향키·Enter·Tab·Esc 는 후보에 쓴다.
+   * 웹(react-native-web)의 nativeEvent 는 DOM KeyboardEvent 다. 한글 조합 중(isComposing·keyCode 229)의 Enter 는 글자 확정이라 건드리지 않는다.
+   */
+  const onInputKey = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      const ne = e.nativeEvent as unknown as KeyboardEvent;
+      if (ne.isComposing || ne.keyCode === 229) return;
+      if (mention && mentionCandidates.length) {
+        if (ne.key === 'ArrowDown' || ne.key === 'ArrowUp') {
+          e.preventDefault();
+          const n = mentionCandidates.length;
+          setMentionNav({ query: mention.query, index: (mentionIndex + (ne.key === 'ArrowDown' ? 1 : n - 1)) % n });
+          return;
+        }
+        if (ne.key === 'Enter' || ne.key === 'Tab') {
+          e.preventDefault();
+          pickMention(mentionCandidates[mentionIndex]);
+          return;
+        }
+        if (ne.key === 'Escape') {
+          e.preventDefault();
+          setMentionClosedFor(input);
+          return;
+        }
+      }
+      if (ne.key === 'Enter' && !ne.shiftKey) {
+        e.preventDefault();
+        void send();
+      }
+    },
+    [mention, mentionCandidates, mentionIndex, pickMention, input, send]
+  );
+
+  // 더하기(+) 메뉴 항목 — 환경과 방 종류에 맞는 것만 넣는다. 넣을 것이 없으면 + 버튼을 그리지 않는다.
+  const plusItems = useMemo<ComposerPlusItem[]>(() => {
+    const items: ComposerPlusItem[] = [];
+    if (Platform.OS !== 'web') {
+      items.push({ key: 'camera', icon: 'camera-outline', label: '사진 촬영' });
+      // iOS 는 시스템 사진 선택기가 결과를 돌려주지 않는 문제로 앨범을 숨긴다(명함·영수증 화면과 동일).
+      if (Platform.OS !== 'ios') items.push({ key: 'album', icon: 'images-outline', label: '앨범' });
+    }
+    items.push({ key: 'share', icon: 'document-attach-outline', label: '문서 공유' });
+    items.push({ key: 'docs', icon: 'folder-open-outline', label: '문서함' });
+    if (isGroup) items.push({ key: 'mention', icon: 'at-outline', label: '멘션' });
+    return items;
+  }, [isGroup]);
+  const onPlusPick = useCallback(
+    (key: string) => {
+      if (key === 'camera') void openCamera();
+      else if (key === 'album') void pickFromAlbum();
+      else if (key === 'share') setSharePickerOpen(true);
+      else if (key === 'docs') setDocPickerOpen(true);
+      else if (key === 'mention') startMention();
+    },
+    [openCamera, pickFromAlbum, startMention]
+  );
 
   // 방 관리 액션(MSG-P2) — 시트에서 실행.
   const toggleMute = useCallback(async () => {
@@ -567,12 +811,13 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
             m={item}
             mine={item.senderId === myId}
             grouped={grouped}
+            mentionNames={mentionNames}
             onReply={item.kind !== 'system' && !item.deleted ? () => setMsgMenu(item) : undefined}
           />
         </View>
       );
     },
-    [msgs, myId]
+    [msgs, myId, mentionNames]
   );
 
   return (
@@ -634,6 +879,11 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
               : undefined
           }>
 
+        {/* 멘션 후보 — 그룹 방에서 @ 를 쳤을 때만 */}
+        {mentionCandidates.length ? (
+          <MentionSuggestions candidates={mentionCandidates} activeIndex={mentionIndex} onPick={pickMention} framed={framed} />
+        ) : null}
+
         {/* 답장 인용 바(MSG-P2) */}
         {replyTarget ? (
           <View className={`flex-row items-center gap-2 bg-cd-card px-4 py-2 ${framed ? 'border-b border-cd-border' : 'border-t border-cd-border'}`}>
@@ -652,30 +902,76 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
           </View>
         ) : null}
 
-        {/* 전송 대기 첨부 미리보기 */}
-        {pendingFile ? (
+        {/* 전송 대기 첨부 미리보기 — 여러 개면 줄마다 하나, 세 줄을 넘으면 안에서 스크롤 */}
+        {pendingFiles.length ? (
+          <ScrollView
+            style={{ maxHeight: 132 }}
+            keyboardShouldPersistTaps="handled"
+            className={`bg-cd-card ${framed ? 'border-b border-cd-border' : 'border-t border-cd-border'}`}>
+            {pendingFiles.map((f, i) => (
+              <View key={`${f.uri}-${i}`} className="flex-row items-center gap-2 px-4 py-2">
+                <Ionicons
+                  name={(f.mimeType ?? '').startsWith('image/') ? 'image-outline' : 'document-outline'}
+                  size={17}
+                  color={c.primary}
+                />
+                <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-text">
+                  {f.name}
+                  {f.size ? <Text className="text-cd-faint">  {fmtBytes(f.size)}</Text> : null}
+                </Text>
+                <Pressable
+                  onPress={() => setPending(pendingRef.current.filter((p) => p !== f))}
+                  disabled={sending}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${f.name} 첨부 취소`}
+                  className="active:opacity-60">
+                  <Ionicons name="close-circle" size={19} color={c.faint} />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {/* 전송 대기 문서 공유 카드 */}
+        {pendingShare ? (
           <View className={`flex-row items-center gap-2 bg-cd-card px-4 py-2 ${framed ? 'border-b border-cd-border' : 'border-t border-cd-border'}`}>
-            <Ionicons
-              name={(pendingFile.mimeType ?? '').startsWith('image/') ? 'image-outline' : 'document-outline'}
-              size={17}
-              color={c.primary}
-            />
+            <Ionicons name={CHAT_SHARE_ICONS[pendingShare.type]} size={17} color={c.primary} />
             <Text numberOfLines={1} className="flex-1 text-[13px] text-cd-text">
-              {pendingFile.name}
-              {pendingFile.size ? <Text className="text-cd-faint">  {fmtBytes(pendingFile.size)}</Text> : null}
+              <Text className="text-cd-faint">{CHAT_SHARE_LABELS[pendingShare.type]}  </Text>
+              {pendingShare.title}
             </Text>
-            <Pressable onPress={() => setPendingFile(null)} hitSlop={8} className="active:opacity-60">
+            <Pressable
+              onPress={() => setPendingShare(null)}
+              disabled={sending}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="문서 공유 취소"
+              className="active:opacity-60">
               <Ionicons name="close-circle" size={19} color={c.faint} />
             </Pressable>
           </View>
         ) : null}
 
-        {/* 입력바 — 📎 첨부(대용량) · 이모지 · 텍스트. 일반 파일은 드래그앤드롭/붙여넣기. */}
+        {/* 입력바 — ＋ 더하기 · 📎 첨부(대용량) · 이모지 · 텍스트. 일반 파일은 드래그앤드롭/붙여넣기. */}
         <View className={`flex-row items-end gap-1.5 bg-cd-card py-2 ${framed ? 'px-2' : 'border-t border-cd-border px-3'}`}>
+          {plusItems.length ? (
+            <Pressable
+              onPress={() => setPlusOpen(true)}
+              disabled={sending}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="추가"
+              className="h-[40px] w-[30px] items-center justify-center active:opacity-60">
+              <Ionicons name="add" size={25} color={c.muted} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => void pickFile()}
             disabled={sending}
             hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="파일 첨부"
             className="h-[40px] w-[30px] items-center justify-center active:opacity-60">
             <Ionicons name="attach" size={23} color={c.muted} />
           </Pressable>
@@ -687,8 +983,10 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
             <Ionicons name="happy-outline" size={21} color={c.muted} />
           </Pressable>
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
+            onKeyPress={IS_DESKTOP_WEB ? onInputKey : undefined}
             placeholder="메시지를 입력하세요"
             placeholderTextColor={c.faint}
             multiline
@@ -704,9 +1002,9 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
           />
           <Pressable
             onPress={() => void send()}
-            disabled={(!input.trim() && !pendingFile) || sending}
+            disabled={(!input.trim() && !pendingFiles.length && !pendingShare) || sending}
             className="h-[40px] w-[40px] items-center justify-center rounded-full active:opacity-70"
-            style={{ backgroundColor: input.trim() || pendingFile ? c.primaryFill : c.border }}>
+            style={{ backgroundColor: input.trim() || pendingFiles.length || pendingShare ? c.primaryFill : c.border }}>
             {sending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
@@ -725,10 +1023,31 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
           <View className="items-center gap-2 rounded-3xl border-2 border-dashed border-cd-primary bg-cd-card px-8 py-7">
             <Ionicons name="cloud-upload-outline" size={34} color={c.primary} />
             <Text className="text-[15px] font-extrabold text-cd-text">여기에 놓아 첨부</Text>
-            <Text className="text-[12px] text-cd-faint">파일 1개 · 선택 최대 2GB · 끌어다 놓기 30MB</Text>
+            <Text className="text-[12px] text-cd-faint">한 번에 {MAX_PENDING}개 · 선택 최대 2GB · 끌어다 놓기 30MB</Text>
           </View>
         </View>
       ) : null}
+
+      <ComposerPlusSheet visible={plusOpen} onClose={() => setPlusOpen(false)} items={plusItems} onPick={onPlusPick} />
+
+      <SharePickerSheet
+        visible={sharePickerOpen}
+        onClose={() => setSharePickerOpen(false)}
+        onPick={(share) => {
+          setSharePickerOpen(false);
+          setPendingShare(share);
+        }}
+      />
+
+      <PersonalDocPickerSheet
+        visible={docPickerOpen}
+        max={MAX_PENDING - pendingFiles.length}
+        onClose={() => setDocPickerOpen(false)}
+        onDone={(docs) => {
+          setDocPickerOpen(false);
+          addPersonalDocs(docs);
+        }}
+      />
 
       <EmojiPickerSheet
         visible={emojiOpen}
@@ -882,6 +1201,11 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
         }}
         onCancel={() => setLeaveConfirm(false)}
       />
+
+      {/* 사진 촬영 — 자체 카메라 덮개(앱) */}
+      {cameraOpen ? (
+        <ChatCamera onClose={() => setCameraOpen(false)} onShot={onShot} onError={(m) => toast.show(m, 'error')} />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -970,11 +1294,14 @@ function MessageRow({
   m,
   mine,
   grouped,
+  mentionNames,
   onReply,
 }: {
   m: ChatMessage;
   mine: boolean;
   grouped: boolean;
+  /** 그룹 방 멤버 이름 — 본문의 `@이름` 을 굵게 그린다. 1대1 방은 빈 배열. */
+  mentionNames: string[];
   onReply?: () => void;
 }) {
   const { c } = useTheme();
@@ -989,6 +1316,11 @@ function MessageRow({
   const body = m.deleted ? '삭제된 메시지입니다.' : m.body;
   const shared = !m.deleted && m.sharedRecord?.type === 'intel_briefing' ? m.sharedRecord : null;
   const sharedRoute = shared && shared.href === `/sales/rag?briefingId=${encodeURIComponent(shared.id)}` ? routeForLink(shared.href) : null;
+  // 입력창 [문서 공유]로 보낸 카드(결재 문서·할 일·사업장) — 앱에서 열 화면이 있을 때만 카드로 그린다.
+  const card = !m.deleted && m.sharedRecord && isChatShareType(m.sharedRecord.type) ? { ...m.sharedRecord, type: m.sharedRecord.type } : null;
+  const cardRoute = card ? routeForLink(card.href) : null;
+  // 글 없이 카드만 보낸 메시지의 본문("[종류] 제목")은 카드와 같은 말이라 숨긴다.
+  const cardOnly = !!card && !!cardRoute && body === shareFallbackBody(card);
   const hasAttachment = !m.deleted && m.attachment != null;
   // 이미지는 버블 패딩 없이 그대로, 파일·텍스트는 버블 패딩.
   const bare = hasAttachment && m.kind === 'image';
@@ -1014,12 +1346,38 @@ function MessageRow({
         <Text numberOfLines={3} className="text-[14px] font-medium text-cd-text">{shared.title}</Text>
         <Text className="text-[13px] text-cd-primary">브리핑 열기</Text>
       </Pressable> : null}
-      {body && !sharedRoute ? (
+      {card && cardRoute ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`${CHAT_SHARE_LABELS[card.type]} 열기: ${card.title}`}
+          onPress={() => router.push(cardRoute)}
+          className="min-w-[200px] gap-2 rounded-lg border border-cd-border bg-cd-card p-3 active:opacity-70">
+          <View className="flex-row items-center gap-1.5">
+            <Ionicons name={CHAT_SHARE_ICONS[card.type]} size={14} color={c.muted} />
+            <Text className="text-[12px] text-cd-muted">{CHAT_SHARE_LABELS[card.type]}</Text>
+          </View>
+          <Text numberOfLines={3} className="text-[14px] font-medium text-cd-text">
+            {card.title}
+          </Text>
+          <Text className="text-[13px] text-cd-primary">열기</Text>
+        </Pressable>
+      ) : null}
+      {body && !sharedRoute && !cardOnly ? (
         <Text
           className={`text-[15px] leading-5 ${
             mine ? (m.deleted ? 'italic text-white/70' : 'text-white') : m.deleted ? 'italic text-cd-faint' : 'text-cd-text'
-          } ${hasAttachment ? 'mt-1.5' : ''}`}>
-          {body}
+          } ${hasAttachment || (card && cardRoute) ? 'mt-1.5' : ''}`}>
+          {m.deleted
+            ? body
+            : splitMentions(body, mentionNames).map((seg, i) =>
+                seg.mention ? (
+                  <Text key={i} className={`font-semibold ${mine ? 'text-white' : 'text-cd-primary'}`}>
+                    {seg.text}
+                  </Text>
+                ) : (
+                  seg.text
+                )
+              )}
         </Text>
       ) : null}
     </>

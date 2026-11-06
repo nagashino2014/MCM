@@ -49,6 +49,8 @@ interface CreateBody {
   // 등록 출처 — 모바일 명함 촬영의 간이 등록은 'mobile-quick' 으로 저장해
   // 추후 데스크톱 관리자 화면의 "임시 등록 사업장" 정보 완성 대상으로 식별한다.
   source?: "manual" | "mobile-quick";
+  /** 기타 업체·기관 직접 등록(342). 없으면 사업자번호 규칙을 따른다. */
+  listing?: "other" | null;
 }
 
 interface DuplicateFacility {
@@ -186,6 +188,9 @@ export async function POST(req: NextRequest) {
           normalizeInput("corporate_registration_no", body.corporateRegistrationNo),
         ]
       );
+      if (body.listing === "other") {
+        await db.run("UPDATE facilities SET listing = 'other' WHERE facility_id = $1", [facilityId]);
+      }
       const services = normalizeServiceCategories(body.serviceCategories);
       for (const category of services) {
         await db.run(

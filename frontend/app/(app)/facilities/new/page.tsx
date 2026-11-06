@@ -94,6 +94,14 @@ function Inner() {
   const [companySize, setCompanySize] = useState<FacilityCompanySize | "">("");
   const [memo, setMemo] = useState("");
   const [pending, setPending] = useState(false);
+  // 기타 업체·기관 직접 등록(?kind=other) — 항목은 같고 용역 분류만 뺀다.
+  const [otherList, setOtherList] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("kind") === "other") {
+      setOtherList(true);
+      setServiceCategories([]);
+    }
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [duplicateFacility, setDuplicateFacility] = useState<DuplicateFacilityInfo | null>(null);
 
@@ -138,6 +146,7 @@ function Inner() {
           serviceCategories,
           purchaseContractTypes,
           companySize: companySize || null,
+          listing: otherList ? "other" : null,
           memo: memo || null,
           allowDuplicateBusinessRegistrationNo: options?.allowDuplicateBrn ?? false,
         }),
@@ -171,7 +180,8 @@ function Inner() {
         }
       }
       toast.show(body.updatedExisting ? "기존 사업장 정보를 갱신했습니다." : "사업장이 등록되었습니다.");
-      router.replace(body.facilityId ? "/facilities?focus=" + body.facilityId : "/facilities");
+      const listPath = otherList ? "/external-parties" : "/facilities";
+      router.replace(body.facilityId ? listPath + "?focus=" + body.facilityId : listPath);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -254,13 +264,13 @@ function Inner() {
       <CdPageHeader
         icon={<FileText className="w-5 h-5" />}
         eyebrow="Facility · New"
-        title="사업장 수동 등록"
-        subtitle="수동 등록한 사업장은 IEPS 수집 데이터와 자동 병합되지 않습니다."
+        title={otherList ? "기타 업체·기관 등록" : "사업장 수동 등록"}
+        subtitle={otherList ? "입력 항목은 사업장과 같습니다. 거래가 생기면 거래처로 승격합니다." : "수동 등록한 사업장은 IEPS 수집 데이터와 자동 병합되지 않습니다."}
         help="IEPS에서 수집되지 않은 사업장을 등록합니다. 나중에 같은 사업장이 수집되면 ‘중복 병합’에서 직접 합칠 수 있습니다."
         actions={
           <>
-            <Link href="/facilities" className="cd-btn cd-btn-ghost cd-btn-sm">
-              <ArrowLeft className="w-3.5 h-3.5" /> 사업장 마스터
+            <Link href={otherList ? "/external-parties" : "/facilities"} className="cd-btn cd-btn-ghost cd-btn-sm">
+              <ArrowLeft className="w-3.5 h-3.5" /> {otherList ? "기타 업체·기관" : "사업장 마스터"}
             </Link>
           </>
         }
@@ -551,14 +561,16 @@ function Inner() {
         </div>
         {/* 사업장 분류 칸은 종전 절반 폭(전체의 1/4)으로 오른쪽 끝에 두고, 남는 폭에 계약 유형 체크박스를 한 줄로 둔다(2026-11-03 사용자 요청). */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-4">
-          <Field label="계약 유형">
-            <FacilityContractTypeFields
-              serviceCategories={serviceCategories}
-              onServiceCategoriesChange={setServiceCategories}
-              purchaseContractTypes={purchaseContractTypes}
-              onPurchaseContractTypesChange={setPurchaseContractTypes}
-            />
-          </Field>
+          {!otherList && (
+            <Field label="계약 유형">
+              <FacilityContractTypeFields
+                serviceCategories={serviceCategories}
+                onServiceCategoriesChange={setServiceCategories}
+                purchaseContractTypes={purchaseContractTypes}
+                onPurchaseContractTypesChange={setPurchaseContractTypes}
+              />
+            </Field>
+          )}
           <Field label="사업장 분류">
             <select
               className="cd-select"
@@ -627,7 +639,7 @@ function Inner() {
 
         <div className="md:col-span-2 flex items-center justify-end gap-2 pt-2 border-t cd-border-c/70">
           <Link
-            href="/facilities"
+            href={otherList ? "/external-parties" : "/facilities"}
             className="cd-btn cd-btn-ghost rounded-lg px-4 py-2 text-sm font-semibold cd-text-muted"
           >
             취소

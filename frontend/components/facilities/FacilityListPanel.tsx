@@ -23,6 +23,7 @@ const SOURCE_LABELS: Record<string, string> = {
   ieps: "IEPS",
   manual: "수동 등록",
   legal_entity: "계약현황",
+  "contact-import": "연락처 가져오기",
 };
 
 /**
@@ -170,6 +171,7 @@ export function FacilityListPanel({
     if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
     if (filter.source) params.set("source", filter.source);
     if (filter.hasContractHistory) params.set("hasContractHistory", "1");
+    if (filter.listScope) params.set("listScope", filter.listScope);
     if (filter.sort) params.set("sort", filter.sort);
     params.set("format", format);
     return params;
@@ -202,9 +204,23 @@ export function FacilityListPanel({
     <section className="cd-card p-5 cd-reveal flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-3">
         <h3 className="cd-card-title">사업장 ({total}건)</h3>
-        <span className="text-[11px] cd-text-faint font-medium">
-          표시 {items.length} / 전체 {total}
-        </span>
+        <div className="flex items-center gap-3">
+          {/* 기타 업체·기관으로 분류된 곳은 기본 목록에서 빠진다. 켜면 여기서도 함께 본다(2026-11-06). */}
+          <label
+            className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted shrink-0 cursor-pointer select-none"
+            title="기타 업체·기관까지 함께 표시"
+          >
+            <input
+              type="checkbox"
+              checked={!filter.listScope}
+              onChange={(e) => onFilterChange({ ...filter, listScope: e.target.checked ? undefined : "master", offset: 0 })}
+            />
+            기타 포함
+          </label>
+          <span className="text-[11px] cd-text-faint font-medium">
+            표시 {items.length} / 전체 {total}
+          </span>
+        </div>
       </div>
 
       {/* 필터 범위와 선택 해제를 같은 영역에서 제공한다. */}

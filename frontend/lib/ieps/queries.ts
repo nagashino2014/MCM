@@ -1,3 +1,4 @@
+import { NON_CORPORATE_BRN_CODES } from "@scraper/lib/contact-import/rules";
 import { certificateAnalysisWarning } from "./business-certificate-status";
 /**
  * /data/status, /data/review용 PostgreSQL 조회 헬퍼.
@@ -832,12 +833,37 @@ export interface FacilityListFilter {
   hasContractHistory?: boolean;
   /** 거래 구분(331) — 매출처/매입처로 지정된 사업장만(매입 계약 상대 업체 검색). */
   tradeRole?: "sales" | "purchase";
+  /** master: 사업장 마스터 기본 목록, other: 기타 업체·기관만. 없으면 전체(계약·영업의 업체 검색). */
+  listScope?: "master" | "other";
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
 }
 
 export type FacilityMissingField = "brn" | "representative" | "phone" | "address" | "industry" | "crn";
+
+/**
+ * 기타 업체·기관 판정(2026-11-06 사용자 결정) — 사업장 마스터에 두지 않는 곳.
+ * 사람이 옮겼거나(listing='other'), 사업자번호가 기업이 아닌 구분코드이면서 허가 자료가 없는 곳이다.
+ * 거래 구분이나 살아 있는 매출·매입 계약이 있으면 어떤 경우든 거래처로 본다.
+ * 행을 옮기지 않고 조회 때 계산해 계약이 생기는 순간 저절로 사업장 마스터로 넘어간다. f 는 facilities 별칭.
+ */
+const BRN_DIGITS_SQL = `regexp_replace(COALESCE(NULLIF(TRIM(f.business_registration_no), ''), f.site_business_registration_no, ''), '[^0-9]', '', 'g')`;
+export const FACILITY_OTHER_SQL = `(
+  cardinality(COALESCE(f.trade_roles, '{}')) = 0
+  AND NOT EXISTS (SELECT 1 FROM contracts c WHERE (c.counterparty_facility_id = f.facility_id OR c.facility_id = f.facility_id) AND c.deleted_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM purchase_contracts pc WHERE pc.counterparty_facility_id = f.facility_id AND pc.deleted_at IS NULL)
+  AND (
+    -- listing 이 NULL 이어도 참·거짓으로 떨어져야 한다. NULL 이 되면 NOT 으로 뒤집어도 NULL 이라 사업장이 양쪽에서 사라진다.
+    COALESCE(f.listing, '') = 'other'
+    OR (
+      f.listing IS NULL
+      AND ${BRN_DIGITS_SQL} ~ '^[0-9]{10}$'
+      AND substring(${BRN_DIGITS_SQL} from 4 for 2) IN (${NON_CORPORATE_BRN_CODES.map((code) => `'${code}'`).join(", ")})
+      AND NOT EXISTS (SELECT 1 FROM permits p WHERE p.facility_id = f.facility_id)
+    )
+  )
+)`;
 
 // 누락 판정 SQL. 사업자번호는 리스트 표시와 동일하게 site_business_registration_no 폴백까지
 // 모두 비어 있을 때만 누락으로 본다. 값은 코드 내 상수에서만 오므로 리터럴 삽입이 안전하다.
@@ -971,6 +997,8 @@ export async function listFacilities(
     where.push(`$${params.length + 1} = ANY(COALESCE(f.trade_roles, '{}'))`);
     params.push(filter.tradeRole);
   }
+  if (filter.listScope === "master") where.push(`NOT ${FACILITY_OTHER_SQL}`);
+  if (filter.listScope === "other") where.push(FACILITY_OTHER_SQL);
   if (filter.integratedPermitTarget) {
     where.push(
       `(COALESCE(NULLIF(f.integrated_permit_target, ''), '') <> '' OR EXISTS (SELECT 1 FROM permits pit WHERE pit.facility_id = f.facility_id))`
@@ -1240,6 +1268,7 @@ function mergeSourceOptions(rows: unknown[][]): { value: string; count: number }
 export interface FacilityDetail {
   corporateRegistrationNo?: string | null;
   representativeName: string | null;
+  homepageUrl?: string | null;
   orgCategory?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];
@@ -1374,7 +1403,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
               industry_code, industry_name,
               business_certificate_business_type, business_certificate_business_item,
               business_certificate_corporate_registration_no,
-              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, purchase_contract_types, created_at, updated_at
+              region_sido, region_sigungu, source, memo, logo_path, company_size, org_category, trade_roles, purchase_contract_types, homepage_url, created_at, updated_at
          FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`,
       [facilityId]
     );
@@ -1546,6 +1575,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
     corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
+    homepageUrl: f.homepage_url != null ? String(f.homepage_url) : null,
     tradeRoles: parsePgTextArray(f.trade_roles),
     purchaseContractTypes: parsePgTextArray(f.purchase_contract_types),
     siteAddress:

@@ -84,6 +84,9 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/files/personal", keys: [] },
   // ── 사업 운영 ──
   { path: "/facilities", keys: ["facility.view"] },
+  // 기타 업체·기관(342) — 담당자 연락처처럼 전 직원이 본다(contact.view).
+  { path: "/external-parties", keys: ["contact.view"] },
+  { path: "/external-parties/import", keys: ["contact.edit"] },
   { path: "/contracts", keys: ["contract.view"] },
   // 매입 계약 관리(331) — 회계·총무 성격이라 contract.view 와 분리한 purchase.view
   { path: "/contracts/purchase", keys: ["purchase.view"] },

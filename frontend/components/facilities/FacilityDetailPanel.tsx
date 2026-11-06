@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { loadKsicMap, lookupKsicName } from "@/lib/ieps/ksic-lookup";
-import { Pencil, Save, X, MapPin, Phone, Hash, Building2, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
+import { Pencil, Save, X, MapPin, Phone, Hash, Building2, Globe, FileText, Layers, ClipboardList, Trash2, Plus, History, Upload, Tags, Briefcase, FolderTree, ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ORG_CATEGORIES } from "@/lib/directory-categories";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -79,6 +79,10 @@ interface Props {
   canEdit: boolean;
   /** 사업장 삭제(휴지통) 버튼 — 삭제 API 와 같은 facility.delete 로 노출(F-24). */
   canDelete?: boolean;
+  /** 기타 업체·기관 화면 — 용역 분류·허가·수주처럼 거래처에만 있는 항목을 뺀다. */
+  otherList?: boolean;
+  /** 있으면 '기타 목록으로' 버튼을 보여 준다(사업장 마스터 화면). */
+  onMovedToOther?: () => void;
   onUpdated: () => void;
   onDeleted: () => void;
 }
@@ -163,7 +167,7 @@ interface FacilityContactMainNumber {
   updatedAt?: string;
 }
 
-export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, onUpdated, onDeleted }: Props) {
+export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, otherList = false, onMovedToOther, onUpdated, onDeleted }: Props) {
   const [detail, setDetail] = useState<FacilityDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +236,20 @@ export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, on
   }
   const hasIntegratedService =
     detail.serviceCategories.length === 0 || detail.serviceCategories.includes("integrated");
+  const moveToOther = async () => {
+    if (!window.confirm(`${detail.companyName} 을(를) 기타 업체·기관으로 옮깁니다. 거래 구분은 지워지고, 자료는 그대로 남습니다.`)) return;
+    const res = await fetch("/api/external-parties/" + encodeURIComponent(detail.facilityId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "other" }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(body?.error ?? "옮기지 못했습니다.");
+      return;
+    }
+    onMovedToOther?.();
+  };
 
   return (
     <section className="cd-card rounded-lg p-6 cd-reveal delay-2 flex flex-col gap-5 min-h-0 overflow-y-auto scrollbar-hide">
@@ -255,13 +273,24 @@ export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, on
         </div>
         {!editing && (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setOrdersOpen(true)}
-              className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs font-semibold cd-text-muted flex items-center gap-1"
-            >
-              <FolderTree className="w-3.5 h-3.5" /> 수주
-            </button>
+            {canEdit && onMovedToOther && (
+              <button
+                type="button"
+                onClick={moveToOther}
+                className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs font-semibold cd-text-muted flex items-center gap-1"
+              >
+                기타 목록으로
+              </button>
+            )}
+            {!otherList && (
+              <button
+                type="button"
+                onClick={() => setOrdersOpen(true)}
+                className="cd-btn cd-btn-ghost rounded-lg px-3 py-2 text-xs font-semibold cd-text-muted flex items-center gap-1"
+              >
+                <FolderTree className="w-3.5 h-3.5" /> 수주
+              </button>
+            )}
             {canEdit && (
               <>
                 <button
@@ -369,10 +398,11 @@ export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, on
       )}
 
       {!editing ? (
-        <ReadView detail={detail} onOpenContacts={() => setContactsOpen(true)} />
+        <ReadView detail={detail} otherList={otherList} onOpenContacts={() => setContactsOpen(true)} />
       ) : (
         <EditView
           detail={detail}
+          otherList={otherList}
           onCancel={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
@@ -391,7 +421,7 @@ export function FacilityDetailPanel({ facilityId, canEdit, canDelete = false, on
         }}
       />
 
-      {hasIntegratedService ? (
+      {otherList ? null : hasIntegratedService ? (
         <>
           <PermitsSection detail={detail} canEdit={canEdit} onChanged={() => { reload(); onUpdated(); }} />
           <AnnualReportSection
@@ -1288,6 +1318,7 @@ function FacilityContactsModal({
   // 명함 촬영(이미지 선택) → Claude vision 파싱 → 담당자 신규 폼 프리필 (M2)
   const cardInputRef = useRef<HTMLInputElement>(null);
   const [cardParsing, setCardParsing] = useState(false);
+  const [cardHomepage, setCardHomepage] = useState<string | null>(null);
   const handleCardFile = async (file: File | null) => {
     if (!file) return;
     if (!orgCategory) {
@@ -1303,6 +1334,7 @@ function FacilityContactsModal({
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       const f = (data.fields ?? {}) as Record<string, string | null>;
       if (data.warning) alert(String(data.warning));
+      setCardHomepage(f.homepage ?? null);
       setTab("person");
       setSelectedPersonId(null);
       setPersonForm({
@@ -1392,12 +1424,14 @@ function FacilityContactsModal({
           departments: nextDepartments,
           people: nextPeople,
           logs: nextLogs,
+          homepage: editing ? cardHomepage : null,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? "HTTP " + res.status);
       }
+      setCardHomepage(null);
       setEditing(false);
       setMainNumberEditing(false);
       await reload();
@@ -2216,9 +2250,11 @@ function ManualProductsSection({ products }: { products: FacilityManualProduct[]
 
 function ReadView({
   detail,
+  otherList = false,
   onOpenContacts,
 }: {
   detail: FacilityDetail;
+  otherList?: boolean;
   onOpenContacts: () => void;
 }) {
   const industries =
@@ -2228,7 +2264,7 @@ function ReadView({
   const primaryAlias = detail.aliases.find((alias) => alias.isPrimary) ?? detail.aliases[0];
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div className="sm:col-span-2 cd-surface-bg border cd-border-c rounded-lg p-3">
+      <div className={"sm:col-span-2 cd-surface-bg border cd-border-c rounded-lg p-3" + (otherList && !primaryAlias && !detail.companySize ? " hidden" : "")}>
         <div className="min-w-0">
           {primaryAlias && (
             <div className="text-xs cd-text-faint truncate">
@@ -2237,7 +2273,7 @@ function ReadView({
             </div>
           )}
           <div className="flex flex-wrap gap-1.5 mt-2">
-            <ServiceTags categories={detail.serviceCategories} />
+            {!otherList && <ServiceTags categories={detail.serviceCategories} />}
             {detail.companySize && (
               <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold cd-card-bg border cd-border-c cd-text-muted">
                 {FACILITY_COMPANY_SIZE_LABELS[detail.companySize]}
@@ -2249,6 +2285,7 @@ function ReadView({
       <DetailField icon={Hash} label="사업자등록번호" value={formatBusinessRegistrationNo(detail.businessRegistrationNo)} />
       <DetailField icon={Building2} label="대표자명" value={detail.representativeName ?? null} />
       <PhoneContactField value={detail.phoneNumber} onOpenContacts={onOpenContacts} />
+      <DetailField icon={Globe} label="홈페이지" value={detail.homepageUrl ?? null} />
       <DetailField
         icon={MapPin}
         label={detail.additionalSiteAddresses.length > 0 ? "소재지 (대표)" : "소재지"}
@@ -2288,7 +2325,7 @@ function ReadView({
           )}
         </div>
       </div>
-      <DetailField icon={Layers} label="허가 건수" value={String(detail.permits.length)} />
+      {!otherList && <DetailField icon={Layers} label="허가 건수" value={String(detail.permits.length)} />}
       <DetailField
         icon={FileText}
         label="사업자등록증 업태"
@@ -2463,10 +2500,12 @@ function BusinessCertificatesSection({
 
 function EditView({
   detail,
+  otherList = false,
   onCancel,
   onSaved,
 }: {
   detail: FacilityDetail;
+  otherList?: boolean;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -2474,6 +2513,7 @@ function EditView({
   const [businessRegistrationNo, setBrn] = useState(formatBusinessRegistrationNo(detail.businessRegistrationNo) ?? "");
   const [corporateRegistrationNo, setCorporateRegistrationNo] = useState(detail.corporateRegistrationNo ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
+  const [homepageUrl, setHomepageUrl] = useState(detail.homepageUrl ?? "");
   const [siteAddress, setSiteAddress] = useState(detail.siteAddress ?? "");
   const [hasMultipleSites, setHasMultipleSites] = useState(
     (detail.additionalSiteAddresses?.length ?? 0) > 0
@@ -2530,6 +2570,7 @@ function EditView({
     setCertificateCorporateNo(detail.businessCertificateCorporateRegistrationNo ?? "");
   }, [detail.businessCertificateBusinessType, detail.businessCertificateBusinessItem, detail.businessCertificateCorporateRegistrationNo]);
   useEffect(() => { setRepresentativeName(detail.representativeName ?? ""); }, [detail.representativeName]);
+  useEffect(() => { setHomepageUrl(detail.homepageUrl ?? ""); }, [detail.homepageUrl]);
   useEffect(() => { setCorporateRegistrationNo(detail.corporateRegistrationNo ?? ""); }, [detail.corporateRegistrationNo]);
   const [logoPath, setLogoPath] = useState(detail.logoPath ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -2545,7 +2586,7 @@ function EditView({
       : [{ alias: "", aliasType: "site", note: "", isPrimary: true }]
   );
   const [serviceCategories, setServiceCategories] = useState<FacilityServiceCategory[]>(
-    detail.serviceCategories.length ? detail.serviceCategories : ["integrated"]
+    detail.serviceCategories.length ? detail.serviceCategories : otherList ? [] : ["integrated"]
   );
   const [companySize, setCompanySize] = useState<FacilityCompanySize | "">(detail.companySize ?? "");
   // 거래 구분(331) — 매출처·매입처 복수. 매입 계약 상대 업체 검색에서 매입처를 먼저 보여 주는 근거.
@@ -2618,6 +2659,7 @@ function EditView({
           companyName: formatCompanyName(companyName) ?? companyName,
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
           representativeName: representativeName || null,
+          homepageUrl: homepageUrl.trim() || null,
           siteAddress: siteAddress.trim() || null,
           additionalSiteAddresses: hasMultipleSites
             ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
@@ -2679,6 +2721,7 @@ function EditView({
       <FieldInput label="사업자등록번호" value={businessRegistrationNo} onChange={setBrn} />
       <FieldInput label="법인등록번호 (마스터)" value={corporateRegistrationNo} onChange={setCorporateRegistrationNo} />
       <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
+      <FieldInput label="홈페이지" value={homepageUrl} onChange={setHomepageUrl} />
       <FieldInput
         label={hasMultipleSites ? "소재지 (대표)" : "소재지"}
         value={siteAddress}
@@ -2967,15 +3010,17 @@ function EditView({
       </div>
 
       <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 cd-surface-bg border cd-border-c rounded-lg p-3">
-        <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-medium cd-text-faint">계약 유형</span>
-          <FacilityContractTypeFields
-            serviceCategories={serviceCategories}
-            onServiceCategoriesChange={setServiceCategories}
-            purchaseContractTypes={purchaseContractTypes}
-            onPurchaseContractTypesChange={setPurchaseContractTypes}
-          />
-        </div>
+        {!otherList && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-medium cd-text-faint">계약 유형</span>
+            <FacilityContractTypeFields
+              serviceCategories={serviceCategories}
+              onServiceCategoriesChange={setServiceCategories}
+              purchaseContractTypes={purchaseContractTypes}
+              onPurchaseContractTypesChange={setPurchaseContractTypes}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium cd-text-faint">사업장 분류</span>
           <select className="cd-select" value={companySize} onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}>
@@ -3008,7 +3053,7 @@ function EditView({
         </div>
       </div>
 
-      {!hasIntegratedService && (
+      {!otherList && !hasIntegratedService && (
         <div className="sm:col-span-2 flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-lg p-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium cd-text-faint">수동 주요 생산품</span>

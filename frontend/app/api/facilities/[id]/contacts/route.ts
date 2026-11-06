@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { normalizeHomepage } from "@/lib/sales/business-card-parser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ interface PutBody {
   departments?: DepartmentBody[];
   people?: PersonBody[];
   logs?: LogBody[];
+  homepage?: string | null; // 명함 인식분 — 사업장에 홈페이지가 비어 있을 때만 채운다
 }
 
 const nullableText = (value: unknown): string | null => {
@@ -214,8 +216,16 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
       }))
       .filter((item) => item.memo || item.eventDate);
     const now = new Date().toISOString();
+    const homepage = normalizeHomepage(nullableText(body.homepage));
 
     await withDbWrite(async (db) => {
+      if (homepage) {
+        await db.run(
+          `UPDATE facilities SET homepage_url = $2, updated_at = $3
+            WHERE facility_id = $1 AND NULLIF(TRIM(COALESCE(homepage_url, '')), '') IS NULL`,
+          [id, homepage, now]
+        );
+      }
       const before = {
         departments: await db.exec("SELECT * FROM facility_contact_departments WHERE facility_id = $1", [id]),
         people: await db.exec("SELECT * FROM facility_contact_people WHERE facility_id = $1", [id]),

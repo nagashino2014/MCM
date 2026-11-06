@@ -39,6 +39,7 @@ interface PatchBody {
   // 동일 사업자등록번호로 2개 이상의 소재지를 운영하는 사업장의 보조 소재지 목록.
   additionalSiteAddresses?: (string | null | undefined)[] | null;
   phoneNumber?: string | null;
+  homepageUrl?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
   businessCertificateBusinessType?: string | null;
@@ -109,6 +110,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       if (body.phoneNumber !== undefined) {
         if (body.phoneNumber !== before.phoneNumber) pushSet("phone_number", normalizeInput("phone_number", body.phoneNumber));
+      }
+      if (body.homepageUrl !== undefined) {
+        pushSet("homepage_url", body.homepageUrl?.trim() || null);
       }
       if (body.industryCode !== undefined) {
         pushSet("industry_code", body.industryCode);

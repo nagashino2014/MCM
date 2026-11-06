@@ -54,6 +54,7 @@ function Inner() {
     waterClass: undefined,
     source: "",
     hasContractHistory: false,
+    listScope: "master",
     sort: "recent",
     limit: 10,
     offset: 0,
@@ -81,6 +82,7 @@ function Inner() {
       if (filter.waterClass != null) params.set("waterClass", String(filter.waterClass));
       if (filter.source) params.set("source", filter.source);
       if (filter.hasContractHistory) params.set("hasContractHistory", "1");
+      if (filter.listScope) params.set("listScope", filter.listScope);
       if (filter.sort) params.set("sort", filter.sort);
       params.set("limit", String(filter.limit ?? 10));
       params.set("offset", String(filter.offset ?? 0));
@@ -181,6 +183,11 @@ function Inner() {
           facilityId={selectedId}
           canEdit={canEdit}
           canDelete={canDelete}
+          onMovedToOther={() => {
+            setSelectedId(null);
+            reload();
+            toast.show("기타 업체·기관으로 옮겼습니다.");
+          }}
           onDeleted={() => {
             setSelectedId(null);
             setFilter({ ...filter, offset: 0 });

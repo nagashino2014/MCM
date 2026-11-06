@@ -3,7 +3,7 @@ import type { CollectionConfig } from "./types";
 import type { ParseCategory } from "./job-runner";
 import { resolveJobBackendUrl } from "./job-backend-url";
 
-export type AwsJobType = "collect" | "parse" | "facility-enrich";
+export type AwsJobType = "collect" | "parse" | "facility-enrich" | "contact-import-search";
 
 export interface AwsJobRequest {
   type: AwsJobType;
@@ -74,7 +74,7 @@ export async function enqueueAwsJob(request: AwsJobRequest): Promise<AwsQueuedJo
     })
   );
 
-  if (request.type === "facility-enrich") await startQualityWorker(jobId);
+  if (request.type === "facility-enrich" || request.type === "contact-import-search") await startQualityWorker(jobId);
 
   return { jobId, queueUrl };
 }

@@ -2,6 +2,33 @@ import type { HelpTopic } from "../types";
 
 /** 사업 운영 — 사업장·계약 화면의 ? 도움말. sources[0] 파일에 topic="id" 가 있어야 한다(test:manual). */
 export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
+  // ── 기타 업체·기관 ──
+  {
+    id: "external-parties.list",
+    label: "기타 업체·기관 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "사업장 마스터에 두지 않는 기관과 거래 없는 업체입니다. 입력 항목은 사업장과 같고 용역 분류·허가·수주만 없습니다.",
+        "거래가 시작되면 매출·매입을 고르고 [[거래처로 승격]]을 누릅니다. 계약을 등록해도 자동으로 사업장 마스터로 넘어갑니다.",
+        "잘못 분류됐으면 [[사업장 마스터로]]를 누릅니다.",
+      ] },
+    ],
+    more: { article: "external-parties.main" },
+    sources: ["components/external-parties/ExternalPartyBoard.tsx"],
+  },
+  {
+    id: "external-parties.import",
+    label: "연락처 가져오기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "아마란스10 연락처에서 받은 엑셀을 [[엑셀 올리기]]로 올리면 대기 명단에 들어갑니다. 올리는 것만으로는 다른 직원에게 공개되지 않습니다.",
+        "관리자가 회사마다 [[사업장에 연결]]·[[거래처로 등록]]·[[기타 목록으로]]·[[제외]] 중 하나를 고르면 담당자가 옮겨집니다.",
+        "사업자번호는 회사명으로만 검색합니다. 담당자 이름과 번호는 외부로 보내지 않습니다.",
+      ] },
+    ],
+    more: { article: "external-parties.import" },
+    sources: ["components/external-parties/ContactImportPanel.tsx"],
+  },
   // ── 사업장 ──
   {
     id: "facilities.contacts",

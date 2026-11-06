@@ -64,6 +64,8 @@ export interface FacilityListFilter {
   missing?: FacilityMissingField[];
   /** 거래 이력 업체만: 계약상대(counterparty)로 잡힌 계약 건이 1건 이상 존재하는 사업장. */
   hasContractHistory?: boolean;
+  /** master: 사업장 마스터 기본 목록, other: 기타 업체·기관만. */
+  listScope?: "master" | "other";
   limit?: number;
   offset?: number;
   sort?: "recent" | "name";
@@ -114,6 +116,8 @@ export interface FacilityDetail {
   representativeName: string | null;
   /** 주소록 연락처 구분(기관 유형) — 공공기관·민간기업 등. */
   orgCategory?: string | null;
+  /** 홈페이지(341) — 프로토콜 없이 저장될 수 있다. */
+  homepageUrl?: string | null;
   /** 거래 구분(331) — 'sales'(매출처) / 'purchase'(매입처) 복수. */
   tradeRoles?: string[];
   /** 계약 유형 중 매입 계약(334) — outsourcing·subscription·lease·management 복수. */

@@ -21,8 +21,8 @@ const SALES_STAFF_PERMS = [...STAFF_PERMS, "sales.view@all", "sales.edit@all", "
 const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finance.view@all", "sales.view@all"];
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
-  assert.equal(MENU_ITEMS.length, 27);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 82);
+  assert.equal(MENU_ITEMS.length, 28);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 84);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [

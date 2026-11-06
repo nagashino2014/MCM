@@ -81,6 +81,8 @@ export interface Profile {
   name: string; url: string; retrievedAt: string; sourceDate?: string | null; externalId?: string;
   firstPublishedAt?: string | null; lastPublishedAt?: string | null;
   values: Partial<Record<Field, string>>; scope: "headquarters" | "site" | "unknown";
+  /** DART 기업개황의 홈페이지. 회사 도메인 대조에만 쓴다. */
+  homepage?: string;
 }
 export type Proposal = { field: Field; value: string; source: Source; url: string | null; evidence: Record<string, unknown>; match: "format" | "entity" | "site" | "review" | "blocked"; recommended: boolean };
 export const nameKey = (s: string) => s.normalize("NFKC").replace(/주식회사|유한회사|\(주\)|\(유\)|㈜/g, "").replace(/[\s.,·()]/g, "").toLowerCase();

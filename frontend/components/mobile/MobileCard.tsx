@@ -17,6 +17,7 @@ interface CardFields {
   faxNumber: string | null;
   email: string | null;
   address: string | null;
+  homepage: string | null;
   etc: string | null;
 }
 
@@ -92,6 +93,7 @@ export function MobileCard() {
         mobilePhone: fields?.mobilePhone ?? "",
         officePhone: fields?.officePhone ?? "",
         email: fields?.email ?? "",
+        homepage: fields?.homepage ?? "",
         duties: "",
         deptType: "",
       });
@@ -319,6 +321,7 @@ export function MobileCard() {
             <Field label="휴대폰" value={form.mobilePhone ?? ""} onChange={(v) => setForm((s) => ({ ...s, mobilePhone: v }))} inputMode="tel" />
             <Field label="사무실" value={form.officePhone ?? ""} onChange={(v) => setForm((s) => ({ ...s, officePhone: v }))} inputMode="tel" />
             <Field label="이메일" value={form.email ?? ""} onChange={(v) => setForm((s) => ({ ...s, email: v }))} inputMode="email" />
+            <Field label="홈페이지" value={form.homepage ?? ""} onChange={(v) => setForm((s) => ({ ...s, homepage: v }))} />
             <Field label="업무" value={form.duties ?? ""} onChange={(v) => setForm((s) => ({ ...s, duties: v }))} />
           </section>
 

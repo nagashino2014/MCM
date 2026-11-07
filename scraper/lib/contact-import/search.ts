@@ -4,7 +4,7 @@ import type { Profile, Snapshot } from "../facility-quality/rules";
 import { bizno, naver, type Outcome } from "../facility-enrichment/browser";
 import { dart, fsc, ProviderError } from "../facility-enrichment/public-api";
 import { createSourceGuard } from "../facility-enrichment/source-guard";
-import { judgeProfiles, type MatchCandidate } from "./rules";
+import { isHangulName, judgeProfiles, lookupNames, type MatchCandidate } from "./rules";
 
 // 공개 API 를 먼저 쓴다. 비즈노는 하루 한도가 작아 앞선 정보원에서 못 찾은 회사만 간다.
 export const SEARCH_SOURCES = ["dart", "fsc", "naver", "bizno"] as const;
@@ -19,9 +19,9 @@ interface CompanyRow {
 export type SearchProviders = Partial<Record<Source, (snapshot: Snapshot) => Promise<Outcome>>>;
 
 /** 외부에는 회사명만 보낸다. 담당자 이름·번호는 조회에 쓰지 않는다. */
-function snapshotOf(c: CompanyRow): Snapshot {
+function snapshotOf(c: CompanyRow, name: string): Snapshot {
   return {
-    facility_id: c.company_id, company_name: c.display_name, business_registration_no: null, site_business_registration_no: null,
+    facility_id: c.company_id, company_name: name, business_registration_no: null, site_business_registration_no: null,
     phone_number: null, representative_name: null, corporate_registration_no: null, business_certificate_corporate_registration_no: null,
     site_address: c.address,
   };
@@ -30,6 +30,7 @@ function snapshotOf(c: CompanyRow): Snapshot {
 /**
  * 대기 중인 회사의 사업자번호를 찾는다. 회사마다 정보원을 차례로 돌리다 추천 판정이 나오면 멈춘다.
  * 한도·차단으로 멈춘 회사는 paused 로 남겨 다음 실행에서 이어 간다.
+ * 동명 업체가 많은 결과는 다시 조회해도 같으므로 재시도하지 않고 사람에게 넘긴다.
  */
 export async function processContactSearch(db: Database, tx: Transaction, providers: SearchProviders = {}): Promise<{ processed: number; stopped: string[] }> {
   const guard = createSourceGuard(db);
@@ -46,36 +47,48 @@ export async function processContactSearch(db: Database, tx: Transaction, provid
         RETURNING company_id,display_name,address,homepage_url,email_domain,match_candidates,search_outcomes`))[0];
       if (!company) break;
       const evidence = { name: company.display_name, address: company.address, homepage: company.homepage_url, emailDomain: company.email_domain };
-      const snapshot = snapshotOf(company);
+      const names = lookupNames(company.display_name);
       const outcomes = { ...company.search_outcomes };
       const profiles: Profile[] = [];
       let verdict = judgeProfiles(evidence, profiles);
       let unfinished = false;
       let flaky = false;
+      let ambiguous = false;
       for (const source of SEARCH_SOURCES) {
         if (verdict.verdict === "recommend") break;
         if (stopped.has(source)) { unfinished = true; continue; }
-        let result: Outcome;
-        try {
-          const provider = providers[source];
-          if (provider) result = await provider(snapshot);
-          else if (source === "dart") result = await dart(snapshot, () => guard.budget(source));
-          else if (source === "fsc") result = await fsc(snapshot, () => guard.budget(source));
-          else {
-            browser ??= await chromium.launch({ headless: true });
-            result = await (source === "naver" ? naver : bizno)(browser, snapshot, guard.navigate);
+        const queries = source === "bizno" ? names.filter(isHangulName) : names;
+        let found = false;
+        for (const name of queries) {
+          const snapshot = snapshotOf(company, name);
+          let result: Outcome;
+          try {
+            const provider = providers[source];
+            if (provider) result = await provider(snapshot);
+            else if (source === "dart") result = await dart(snapshot, () => guard.budget(source));
+            else if (source === "fsc") result = await fsc(snapshot, () => guard.budget(source));
+            else {
+              browser ??= await chromium.launch({ headless: true });
+              result = await (source === "naver" ? naver : bizno)(browser, snapshot, guard.navigate);
+            }
+          } catch (error) {
+            result = { status: error instanceof ProviderError ? error.status : (error as Error).name === "TimeoutError" ? "timeout" : "error", profiles: [], note: error instanceof Error ? error.message : String(error) };
           }
-        } catch (error) {
-          result = { status: error instanceof ProviderError ? error.status : (error as Error).name === "TimeoutError" ? "timeout" : "error", profiles: [], note: error instanceof ProviderError ? error.message : "연결·조회 실패" };
+          if (STOP.has(result.status)) { stopped.set(source, result.status); unfinished = true; }
+          const retryable = RETRYABLE.has(result.status) && !result.ambiguous;
+          failures.set(source, retryable ? (failures.get(source) ?? 0) + 1 : 0);
+          if ((failures.get(source) ?? 0) >= 3) stopped.set(source, result.status);
+          if (retryable) flaky = true;
+          if (result.ambiguous) ambiguous = true;
+          // 앞선 이름에서 찾았으면 뒤 이름의 못 찾음으로 덮지 않는다.
+          if (!found || result.status === "success" || STOP.has(result.status)) outcomes[source] = { status: result.status, ...(result.note ? { note: result.note } : {}) };
+          found ||= result.status === "success";
+          profiles.push(...result.profiles);
+          verdict = judgeProfiles(evidence, profiles);
+          if (verdict.verdict === "recommend" || stopped.has(source)) break;
         }
-        if (STOP.has(result.status)) { stopped.set(source, result.status); unfinished = true; }
-        failures.set(source, RETRYABLE.has(result.status) ? (failures.get(source) ?? 0) + 1 : 0);
-        if ((failures.get(source) ?? 0) >= 3) stopped.set(source, result.status);
-        if (RETRYABLE.has(result.status)) flaky = true;
-        outcomes[source] = { status: result.status, ...(result.note ? { note: result.note } : {}) };
-        profiles.push(...result.profiles);
-        verdict = judgeProfiles(evidence, profiles);
       }
+      if (verdict.verdict === "not_found" && ambiguous) verdict = { ...verdict, verdict: "review", note: "동명 업체가 많아 사람이 확인해야 합니다" };
       const brnMatches = verdict.brn ? await rows<{ facility_id: string; company_name: string; site_address: string | null; business_registration_no: string | null }>(db,
         `SELECT facility_id,company_name,site_address,business_registration_no FROM facilities
           WHERE deleted_at IS NULL AND regexp_replace(COALESCE(business_registration_no,''),'[^0-9]','','g')=$1 LIMIT 15`, [verdict.brn]) : [];

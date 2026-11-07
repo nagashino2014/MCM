@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-07", kind: "개선", title: "연락처 가져오기 — 영문이 섞인 회사 이름도 사업자번호 검색",
+    body: "LG이노텍을 엘지이노텍으로 읽거나 ‘SAMSUNG DISPLAY 삼성 디스플레이’에서 한글 이름을 떼어 함께 찾습니다. 동명 업체가 많은 회사는 다시 찾지 않고 검토로 넘깁니다.",
+    articles: ["external-parties.import"],
+  },
+  {
     date: "2026-11-06", kind: "신규", title: "기타 업체·기관·연락처 가져오기 — 거래 없는 곳은 따로 관리",
     body: "왼쪽 메뉴에 ‘기타 업체·기관’을 새로 만들었습니다. 사업자번호가 기업이 아닌 코드(비영리·국가·지자체 등)이면서 허가 자료와 거래가 없는 곳은 사업장 기본 목록에서 빠져 이쪽에 나오고, ‘기타 포함’을 켜면 사업장에서도 함께 볼 수 있습니다. 사업장 상세의 ‘기타 목록으로’로 거래 없는 업체를 옮길 수 있고, ‘거래처로 승격’이나 계약 등록으로 언제든 사업장으로 돌아옵니다. 아마란스10에서 받은 연락처 엑셀을 올리면 회사별로 묶어 사업자번호를 찾아 주고, 관리자가 분류합니다.",
     articles: ["external-parties.main", "external-parties.import"],

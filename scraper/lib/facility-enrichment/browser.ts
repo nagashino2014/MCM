@@ -1,7 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { FIELDS, nameKey, searchNames, type Field, type Profile, type Snapshot } from "../facility-quality/rules";
 
-export type Outcome = { status: "success" | "not_found" | "not_exposed" | "parse_error" | "blocked" | "not_configured" | "quota" | "timeout" | "error"; profiles: Profile[]; missing?: Field[]; note?: string };
+export type Outcome = { status: "success" | "not_found" | "not_exposed" | "parse_error" | "blocked" | "not_configured" | "quota" | "timeout" | "error"; profiles: Profile[]; missing?: Field[]; note?: string; /** 동명 업체가 많아 고를 수 없음. 다시 조회해도 같다. */ ambiguous?: boolean };
 export type Navigate = (page: Page, url: string, source: string) => Promise<void>;
 export const BIZNO_LABELS: Record<string, Field> = { "사업자등록번호": "business_registration_no", "법인등록번호": "corporate_registration_no", "전화번호": "phone_number", "회사주소": "site_address" };
 export const NAVER_LABELS: Record<string, Field> = { ...BIZNO_LABELS, "대표자": "representative_name", "대표자명": "representative_name", "본사": "site_address", "주소": "site_address", "전화": "phone_number" };
@@ -38,7 +38,7 @@ export async function naver(browser: Browser, snapshot: Snapshot, navigate: Navi
       await navigate(page, `https://search.naver.com/search.naver?query=${encodeURIComponent(searchNames(snapshot.company_name)[1])}`, "naver");
       card = await page.evaluate(readNaverCard);
     }
-    if (card.status !== "success") return { status: card.status === "not_found" ? "not_found" : "parse_error", profiles: [] };
+    if (card.status !== "success") return { status: card.status === "not_found" ? "not_found" : "parse_error", profiles: [], ambiguous: card.status === "ambiguous" };
     for (const label of ["더보기", "기본정보"]) {
       const link = card.links.find(a => label === "더보기" ? a.text.endsWith(" 더보기") : a.text === label);
       if (!link) continue;
@@ -66,7 +66,7 @@ export async function bizno(browser: Browser, snapshot: Snapshot, navigate: Navi
     const matching = links.filter(a => searchNames(snapshot.company_name).some(n => nameKey(a.name) === nameKey(n)));
     const unique = [...new Map(matching.map(a => [a.url, a])).values()];
     if (!unique.length) return { status: "not_found", profiles: [] };
-    if (unique.length > 3) return { status: "parse_error", profiles: [], note: "동명 업체가 많아 수동 확인 필요" };
+    if (unique.length > 3) return { status: "parse_error", profiles: [], note: "동명 업체가 많아 수동 확인 필요", ambiguous: true };
     const profiles: Profile[] = [];
     for (const link of unique) {
       const u = new URL(link.url);

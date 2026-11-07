@@ -37,7 +37,7 @@ export async function fsc(snapshot: Snapshot, reserve = async () => {}): Promise
       } });
     if (page * 30 >= Number(body.totalCount ?? items.length)) return { status: profiles.length ? "success" : "not_found", profiles };
   }
-  return { status: "parse_error", profiles: [], note: "금융위 검색결과가 150건을 초과합니다. 업체 식별 필요" };
+  return { status: "parse_error", profiles: [], note: "금융위 검색결과가 150건을 초과합니다. 업체 식별 필요", ambiguous: true };
 }
 export async function dart(snapshot: Snapshot, reserve = async () => {}): Promise<Outcome> {
   const key = process.env.DART_API_KEY;
@@ -55,7 +55,7 @@ export async function dart(snapshot: Snapshot, reserve = async () => {}): Promis
   }
   const matches = dartCodes.filter(c => searchNames(snapshot.company_name).some(n => nameKey(c.name) === nameKey(n)));
   if (!matches.length) return { status: "not_found", profiles: [] };
-  if (matches.length > 5) return { status: "parse_error", profiles: [], note: "DART 동명 업체가 많습니다" };
+  if (matches.length > 5) return { status: "parse_error", profiles: [], note: "DART 동명 업체가 많습니다", ambiguous: true };
   const profiles: Profile[] = [];
   for (const c of matches) {
     await reserve();

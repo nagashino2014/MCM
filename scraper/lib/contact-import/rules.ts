@@ -122,6 +122,61 @@ export function autoLinkTarget(candidates: MatchCandidate[]): string | null {
   return confident.length === 1 && candidates.length === 1 ? confident[0].facilityId : null;
 }
 
+const LATIN_LETTERS: Record<string, string> = {
+  A: "에이", B: "비", C: "씨", D: "디", E: "이", F: "에프", G: "지", H: "에이치", I: "아이", J: "제이", K: "케이", L: "엘", M: "엠",
+  N: "엔", O: "오", P: "피", Q: "큐", R: "알", S: "에스", T: "티", U: "유", V: "브이", W: "더블유", X: "엑스", Y: "와이", Z: "지",
+};
+const ENGLISH_FORMS = /,?\s*\b(?:co\.?,?\s*ltd\.?|corp(?:oration)?\.?|inc\.?|ltd\.?|company|group)(?=[\s/()]|$)/gi;
+const hasLatin = (s: string) => /[A-Za-z]/.test(s);
+/** 비즈노는 한글 상호로만 찾을 수 있다. */
+export const isHangulName = (s: string) => /[가-힣]/.test(s) && !hasLatin(s);
+
+/** LG이노텍 → 엘지이노텍. 대문자 약어(5자 이하)만 읽는다. 일반 영어 낱말이 남으면 읽지 않는다. */
+function spellLatin(name: string): string | null {
+  const spelled = name
+    .replace(/\bkorea\b/gi, "코리아")
+    .replace(/&|(?<=[A-Z])n(?=[A-Z])/g, "앤")
+    .replace(/[A-Z]{1,5}(?![A-Za-z])/g, (run) => [...run].map((c) => LATIN_LETTERS[c]).join(""))
+    .replace(/\s+/g, "");
+  return hasLatin(spelled) ? null : spelled;
+}
+
+/**
+ * 외부 조회에 쓸 이름. 표시 이름을 맨 앞에 두고, 영문·병기 이름은 등기명에 가까운 변형을 더한다.
+ * 등기부에는 LG이노텍이 엘지이노텍으로 올라 있고, 연락처에는 SAMSUNG DISPLAY 삼성 디스플레이나
+ * 청해ENV(주)/청해환경처럼 적혀 있다. 변형은 찾는 데만 쓰고 추천 조건(지역·도메인)은 그대로다.
+ */
+export function lookupNames(name: string): string[] {
+  const bare = name.normalize("NFKC").replace(/\(유한\)/g, " ").replace(LEGAL_FORMS, " ").replace(ENGLISH_FORMS, " ");
+  const hangul: string[] = [];
+  const spelled: string[] = [];
+  const plain: string[] = [];
+  for (const segment of bare.split(/[/()]/).map(cleanSpace).filter(Boolean)) {
+    plain.push(segment);
+    // 공백으로 떨어진 한글 토막만 이름으로 본다. 대우C&M 처럼 붙은 이름은 쪼개지 않는다.
+    const tokens = segment.split(" ");
+    let run = "";
+    for (const token of [...tokens, "A"]) {
+      if (/^[가-힣]+$/.test(token)) { run += token; continue; }
+      if (run.length >= 3 && !SITE_SUFFIX.test(run)) hangul.push(run);
+      run = "";
+    }
+    if (hasLatin(segment)) {
+      const spell = spellLatin(segment);
+      if (spell) spelled.push(spell);
+    }
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const candidate of [name, ...hangul, ...spelled, ...plain]) {
+    const key = companyKey(candidate);
+    if (key.length < 2 || seen.has(key)) continue;
+    seen.add(key);
+    out.push(candidate);
+  }
+  return out.length ? out.slice(0, 3) : [name];
+}
+
 export interface SearchCandidate {
   source: string; name: string; brn: string | null; crn: string | null; address: string | null;
   phone: string | null; homepage: string | null; url: string | null; sourceDate: string | null;
@@ -135,14 +190,15 @@ export interface CompanyEvidence { name: string; address: string | null; homepag
  * 맞을 때만이다. 이름만 같은 후보는 다른 회사일 수 있어 사람이 본다.
  */
 export function judgeProfiles(company: CompanyEvidence, profiles: Profile[]): SearchVerdict {
-  const names = searchNames(company.name).map(nameKey);
-  const key = companyKey(company.name);
+  const lookups = lookupNames(company.name);
+  const names = [...searchNames(company.name), ...lookups].map(nameKey);
+  const keys = new Set(lookups.map(companyKey));
   const region = regionOf(company.address);
   const domain = companyDomain(company.homepage) ?? companyDomain(company.emailDomain);
   const candidates: SearchCandidate[] = [];
   const seen = new Set<string>();
   for (const p of profiles) {
-    const sameName = names.includes(nameKey(p.name)) || companyKey(p.name) === key;
+    const sameName = names.includes(nameKey(p.name)) || keys.has(companyKey(p.name));
     if (!sameName) continue;
     const brnDigits = identifier(p.values.business_registration_no);
     const crnDigits = identifier(p.values.corporate_registration_no);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import {
-  autoLinkTarget, baseKey, buildFacilityIndex, companyDomain, companyKey, contactDedupeKey, formatPhone, isNonCorporateBrn, judgeProfiles, matchFacilities, roadKey, suggestCategory,
+  autoLinkTarget, baseKey, buildFacilityIndex, companyDomain, companyKey, contactDedupeKey, formatPhone, isNonCorporateBrn, judgeProfiles, lookupNames, matchFacilities, roadKey, suggestCategory,
   type FacilityRef,
 } from "../../scraper/lib/contact-import/rules";
 import type { Profile } from "../../scraper/lib/facility-quality/rules";
@@ -81,6 +81,41 @@ test("사업자번호 판정", () => {
   assert.equal(judgeProfiles(company, [profile({ name: "전혀다른회사", brn: BRN_A })]).verdict, "not_found", "이름이 다른 결과는 버린다");
   assert.equal(judgeProfiles(company, [profile({ name: "테스트산업", brn: "1234567890" })]).verdict, "review", "검증자리가 틀린 번호는 번호로 치지 않는다");
   assert.equal(judgeProfiles(company, []).verdict, "not_found");
+});
+
+test("외부 조회 이름 변형", () => {
+  for (const [name, expected] of [
+    // 실제 명단에 있던 모양. 등기명으로 읽거나 병기된 한글을 뗀다.
+    ["LG이노텍", "엘지이노텍"], ["SK하이닉스", "에스케이하이닉스"], ["PI첨단소재", "피아이첨단소재"], ["주식회사 KCC", "케이씨씨"],
+    ["쌍용C&E", "쌍용씨앤이"], ["DL E&C", "디엘이앤씨"], ["LS MnM Inc.", "엘에스엠앤엠"], ["상원 EnC", "상원이앤씨"], ["GMB Korea Corp.", "지엠비코리아"],
+    ["SAMSUNG DISPLAY 삼성 디스플레이", "삼성디스플레이"], ["KEIA 한국환경산업협회", "한국환경산업협회"], ["경인양행 KISCO 인천사업장", "경인양행"],
+    ["AKC Co., Ltd.(주식회사 에이케이씨)", "에이케이씨"], ["청해ENV(주)/청해환경", "청해환경"], ["성산하이텍(성산정밀)", "성산정밀"],
+    ["SCHMID Group/슈미드코리아(주)", "슈미드코리아"], ["KOBI ASSET(코비에셋)", "코비에셋"],
+  ] as const) {
+    const names = lookupNames(name);
+    assert.equal(names[0], name, "표시 이름을 먼저 조회한다");
+    assert.ok(names.includes(expected), `${name} → ${names.join(", ")}`);
+    assert.ok(names.length <= 3, `${name} 조회 수 제한`);
+  }
+  assert.deepEqual(lookupNames("태양금속공업(주)"), ["태양금속공업(주)"], "한글 이름은 변형 없이 한 번만 조회한다");
+  assert.deepEqual(lookupNames("주식회사 심텍"), ["주식회사 심텍"]);
+  assert.ok(!lookupNames("풍산 FNS").includes("풍산"), "두 글자 토막은 다른 회사와 겹치므로 이름으로 쓰지 않는다");
+  assert.ok(!lookupNames("(주)대우C&M").includes("대우"), "붙어 있는 이름은 쪼개지 않는다");
+  assert.ok(!lookupNames("NANO 상주공장").includes("상주공장"), "공장 이름만으로는 찾지 않는다");
+});
+
+test("변형 이름의 판정", () => {
+  const company = { name: "LG이노텍", address: "서울특별시 강서구 마곡중앙10로 30", homepage: null, emailDomain: "lginnotek.com" };
+  const legal = judgeProfiles(company, [profile({ name: "엘지이노텍(주)", brn: BRN_A, address: "서울특별시 강서구 마곡중앙10로 30" })]);
+  assert.equal(legal.verdict, "recommend", "등기명으로 읽은 이름은 같은 이름이다");
+  assert.equal(judgeProfiles(company, [profile({ name: "엘지이노텍(주)", brn: BRN_A, address: "경상북도 구미시 수출대로 1" })]).verdict, "review", "지역·도메인이 안 맞으면 변형 이름도 추천하지 않는다");
+  assert.equal(judgeProfiles(company, [profile({ name: "엘지화학", brn: BRN_A, address: "서울특별시 강서구 마곡중앙10로 30" })]).verdict, "not_found");
+  const many = { name: "트라코월드/(주)월마텍", address: "서울특별시 중구 세종대로 1", homepage: null, emailDomain: null };
+  const split = judgeProfiles(many, [
+    profile({ name: "트라코월드", brn: BRN_A, address: "서울특별시 중구 세종대로 1" }),
+    profile({ name: "월마텍", brn: BRN_B, address: "서울특별시 중구 세종대로 1" }),
+  ]);
+  assert.equal(split.verdict, "review", "두 회사가 함께 적힌 이름은 번호를 고르지 않는다");
 });
 
 test("기관 구분 어림", () => {

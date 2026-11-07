@@ -18,7 +18,7 @@ import { simpleParser, type AddressObject, type ParsedMail } from "mailparser";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getS3Client } from "@/lib/storage/logo-storage";
 import { putContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
-import { ensureMailbox, getSystemFolderId, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
+import { ensureMailbox, getSystemFolderId, listMailDomains, MAIL_DOMAIN, resolveMailboxAddresses } from "@/lib/mail/mailbox";
 import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
 import { applySenderRuleToNewMail, senderCategoryFor } from "@/lib/mail/sender-rules";
@@ -126,17 +126,21 @@ interface TargetMailbox {
 
 /**
  * 수신자 → mailbox 해석. 먼저 주소 원장(280, 도메인 무관 전체 주소)으로 찾고,
- * 남은 앱 도메인(MAIL_DOMAIN) 주소는 로컬파트로 해석한다. 별칭이면 대상 mailbox 로 fan-out.
+ * 남은 회사 도메인(MAIL_DOMAIN + mail_domains 등록 도메인) 주소는 로컬파트로 해석한다. 별칭이면 대상 mailbox 로 fan-out.
+ * 등록 도메인 전체를 받는 이유: koensain.com MX 를 SES 로 옮기면(2단계) 원장에 .com 주소가 없는 직원 메일도
+ * 앱 앞자리(.com 로컬파트 = 앱 이메일 앞자리)로 배달돼야 한다. SES 에 도착하는 도메인은 Receipt Rule 이 정하므로
+ * inbound_mode 전환(338)과 MX 변경 순서가 어긋나도 메일이 빠지지 않는다.
  */
 async function resolveRecipients(destinations: string[]): Promise<TargetMailbox[]> {
   const result = new Map<string, TargetMailbox>();
   const byAddress = await resolveMailboxAddresses(destinations);
   const mailboxIds = [...new Set([...byAddress.values()].map((r) => r.mailboxId))];
+  const companyDomains = new Set([MAIL_DOMAIN, ...(await listMailDomains()).map((d) => d.domain)]);
 
   const locals = new Set<string>();
   for (const d of destinations) {
     const m = d.toLowerCase().match(/^([^@]+)@(.+)$/);
-    if (m && m[2] === MAIL_DOMAIN && !byAddress.has(`${m[1]}@${m[2]}`)) locals.add(m[1]);
+    if (m && companyDomains.has(m[2]) && !byAddress.has(`${m[1]}@${m[2]}`)) locals.add(m[1]);
   }
   if (!locals.size && !mailboxIds.length) return [];
   const db = await getDb();

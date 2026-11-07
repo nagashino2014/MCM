@@ -108,9 +108,13 @@ resource "aws_ses_active_receipt_rule_set" "main" {
 resource "aws_ses_receipt_rule" "store" {
   name          = "store-and-notify"
   rule_set_name = aws_ses_receipt_rule_set.main.rule_set_name
-  recipients    = [var.domain_name]
-  enabled       = true
-  scan_enabled  = true
+  # koensain.com 2단계(MX → SES)는 enable_extra_domain_inbound 로 수신자에 더한다. MX 자체는 Wix(Route53 밖)에서 바꾼다.
+  recipients = compact([
+    var.domain_name,
+    var.enable_extra_domain_inbound ? var.extra_send_domain : "",
+  ])
+  enabled      = true
+  scan_enabled = true
 
   s3_action {
     bucket_name       = aws_s3_bucket.mail_inbound.id

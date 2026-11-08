@@ -258,6 +258,134 @@ export async function getEmployeeAnnual(year: number, name: string): Promise<{
   return { items: [...byItem.values()], monthTotals };
 }
 
+export interface PayrollYearOverviewRow {
+  name: string;
+  employeeId: string | null;
+  empNo: string | null;
+  deptName: string | null;
+  positionName: string | null;
+  hiredAt: string | null;
+  /** 그해 기준 퇴사자의 퇴사일(일자 미상이면 null) */
+  resignedAt: string | null;
+  /** 그해 말 기준 재직·퇴사 */
+  status: "active" | "resigned";
+  /** 대장이 있는 달 수(급여·상여 대장이 같은 달이면 1) */
+  months: number;
+  lines: Record<string, number>;
+  payTotal: number;
+  deductionTotal: number;
+  netPay: number;
+}
+
+/**
+ * 연간 현황 — 해당 연도 대장(급여·상여·인턴)에 등장한 직원 전부(그해 퇴사자 포함)의 항목별 연간 합계.
+ * 직원별 연간과 같이 성명 단위로 묶고, 합계는 원본 기준값(pay_total 등)을 그대로 더한다.
+ * 재직·퇴사는 그해 말 기준: 인사 정보가 퇴사 상태이고 퇴사일이 그해 이후가 아니면 퇴사,
+ * 직원과 연결되지 않은 행은 월별 대장의 퇴사 배지와 같은 규칙으로 퇴사로 본다.
+ */
+export async function getYearOverview(year: number): Promise<{
+  items: PayrollItemDef[];
+  rows: PayrollYearOverviewRow[];
+}> {
+  const db = await getDb();
+  const lineRows = rowsToObjects(
+    await db.exec(
+      `SELECT e.name, li.item_id, d.name AS item_name, d.kind, d.display_order, sum(li.amount) AS amount
+         FROM payroll_entries e
+         JOIN payroll_ledgers l ON l.ledger_id = e.ledger_id
+         JOIN payroll_entry_lines li ON li.entry_id = e.entry_id
+         JOIN payroll_item_defs d ON d.item_id = li.item_id
+        WHERE l.pay_year = $1
+        GROUP BY e.name, li.item_id, d.name, d.kind, d.display_order`,
+      [year]
+    )
+  );
+  const totalRows = rowsToObjects(
+    await db.exec(
+      `SELECT e.name, count(DISTINCT l.pay_month) AS months,
+              sum(e.pay_total) AS pay, sum(e.deduction_total) AS ded, sum(e.net_pay) AS net
+         FROM payroll_entries e
+         JOIN payroll_ledgers l ON l.ledger_id = e.ledger_id
+        WHERE l.pay_year = $1
+        GROUP BY e.name`,
+      [year]
+    )
+  );
+  // 인적사항 — 그해 마지막 대장 행 기준, 매칭 직원은 현재 인사 정보 우선(직원별 연간과 같은 규칙)
+  const profRows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT ON (e.name)
+              e.name, e.employee_id, COALESCE(p.employee_no, e.emp_no) AS emp_no,
+              COALESCE(d.dept_name, e.dept_name) AS dept_name,
+              COALESCE(pos.position_name, e.position_name) AS position_name,
+              COALESCE(p.hired_at, e.hired_at) AS hired_at,
+              p.status AS profile_status,
+              (SELECT max(h.event_date) FROM employee_hr_events h
+                WHERE h.employee_id = e.employee_id AND h.event_type = 'resignation') AS hr_resigned_at,
+              (SELECT max(x.resigned_at) FROM payroll_entries x
+                WHERE x.name = e.name AND x.resigned_at ~ '^\\d{4}-\\d{2}-\\d{2}') AS ledger_resigned_at
+         FROM payroll_entries e
+         JOIN payroll_ledgers l ON l.ledger_id = e.ledger_id
+         LEFT JOIN employee_profiles p ON p.employee_id = e.employee_id
+         LEFT JOIN positions pos ON pos.position_id = p.position_id
+         LEFT JOIN departments d ON d.dept_id = p.dept_id
+        WHERE l.pay_year = $1
+        ORDER BY e.name, l.pay_month DESC, (l.ledger_kind = 'salary') DESC`,
+      [year]
+    )
+  );
+
+  const items = new Map<string, PayrollItemDef>();
+  const linesByName = new Map<string, Record<string, number>>();
+  for (const r of lineRows) {
+    const id = String(r.item_id);
+    if (!items.has(id)) {
+      items.set(id, {
+        itemId: id,
+        name: String(r.item_name),
+        kind: r.kind === "deduction" ? "deduction" : "pay",
+        aliases: [],
+        inOrdinaryWage: false,
+        displayOrder: toNum(r.display_order),
+        isActive: true,
+        ruleEligible: true,
+      });
+    }
+    const map = linesByName.get(String(r.name)) ?? {};
+    map[id] = (map[id] ?? 0) + toNum(r.amount);
+    linesByName.set(String(r.name), map);
+  }
+  const profByName = new Map(profRows.map((r) => [String(r.name), r]));
+  const iso = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+
+  const rows: PayrollYearOverviewRow[] = totalRows.map((t) => {
+    const name = String(t.name);
+    const p = profByName.get(name) ?? {};
+    const employeeId = p.employee_id ? String(p.employee_id) : null;
+    const resignDate = iso(p.hr_resigned_at) ?? iso(p.ledger_resigned_at);
+    // 재입사자의 과거 퇴사 기록이 재직을 덮지 않도록 매칭 직원은 퇴사 상태일 때만 퇴사일을 쓴다
+    const left = employeeId ? p.profile_status === "inactive" : true;
+    const resigned = left && (!resignDate || Number(resignDate.slice(0, 4)) <= year);
+    return {
+      name,
+      employeeId,
+      empNo: p.emp_no ? String(p.emp_no) : null,
+      deptName: p.dept_name ? String(p.dept_name) : null,
+      positionName: p.position_name ? String(p.position_name) : null,
+      hiredAt: p.hired_at ? String(p.hired_at) : null,
+      resignedAt: resigned ? resignDate : null,
+      status: resigned ? "resigned" : "active",
+      months: toNum(t.months),
+      lines: linesByName.get(name) ?? {},
+      payTotal: toNum(t.pay),
+      deductionTotal: toNum(t.ded),
+      netPay: toNum(t.net),
+    };
+  });
+  rows.sort((a, b) => (a.status === b.status ? a.name.localeCompare(b.name, "ko") : a.status === "active" ? -1 : 1));
+  return { items: [...items.values()].sort((a, b) => a.displayOrder - b.displayOrder), rows };
+}
+
 /** 항목 사전 전체(설정 화면, 사용 라인 수 포함) */
 export async function listPayrollItems(): Promise<PayrollItemDef[]> {
   const db = await getDb();

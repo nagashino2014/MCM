@@ -9,7 +9,7 @@ import LedgerCreateModal from "@/components/payroll/LedgerCreateModal";
 import LedgerImportModal from "@/components/payroll/LedgerImportModal";
 import StatementSendModal from "@/components/payroll/StatementSendModal";
 import BonusPlanModal from "@/components/payroll/BonusPlanModal";
-import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth } from "@/lib/payroll/queries";
+import type { PayrollEntryRow, PayrollItemDef, PayrollLedgerMonth, PayrollYearOverviewRow } from "@/lib/payroll/queries";
 import type { AnnualProfile, PrepaidSummary, SeveranceEstimate } from "@/lib/payroll/annual-statement";
 import { filenameFromDisposition } from "@/lib/client-download";
 
@@ -17,6 +17,7 @@ import { filenameFromDisposition } from "@/lib/client-download";
  * 급여대장 보드 (PL-P1, 블루프린트 §4-1)
  * - 월별 대장: 플랫 그리드(직원 1행, 열=값 있는 항목만) + KPI + 행 클릭 상세 패널
  * - 직원별 연간: 성명 선택 → 항목×월 피벗 + 퇴직금 적립·추계, 연간 급여 명세서 엑셀·PDF 출력
+ * - 연간 현황: 그해 대장에 등장한 직원 전부(퇴사자 포함) 1행씩 항목별 연간 합계 + 전체 합계, 행 클릭 → 직원별 연간
  * 원본 3단 구조의 합계(지급/공제/차인)는 검증 기준값 그대로 표시한다.
  */
 
@@ -34,7 +35,7 @@ function fmtTotal(v: number): string {
 type AnnualItem = PayrollItemDef & { amounts: Record<number, number>; total: number };
 
 export default function PayrollLedgerBoard() {
-  const [view, setView] = useState<"month" | "annual">("month");
+  const [view, setView] = useState<"month" | "annual" | "overview">("month");
   const [ledgers, setLedgers] = useState<PayrollLedgerMonth[]>([]);
   const [year, setYear] = useState<number | null>(null);
   const [month, setMonth] = useState<number | null>(null);
@@ -53,6 +54,10 @@ export default function PayrollLedgerBoard() {
   const [severance, setSeverance] = useState<SeveranceEstimate | null>(null);
   const [prepaid, setPrepaid] = useState<PrepaidSummary | null>(null);
   const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null);
+
+  // 연간 현황 상태
+  const [overviewItems, setOverviewItems] = useState<PayrollItemDef[]>([]);
+  const [overviewRows, setOverviewRows] = useState<PayrollYearOverviewRow[]>([]);
 
   // 새 대장 생성(P4)
   const [createOpen, setCreateOpen] = useState(false);
@@ -248,6 +253,23 @@ export default function PayrollLedgerBoard() {
       .finally(() => setLoading(false));
   }, [view, year, annualName]);
 
+  // 연간 현황: 그해 전 직원 항목별 합계
+  useEffect(() => {
+    if (view !== "overview" || !year) return;
+    setLoading(true);
+    fetch(`/api/payroll/annual/overview?year=${year}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        setOverviewItems(d.items ?? []);
+        setOverviewRows(d.rows ?? []);
+      })
+      .catch(() => {
+        setOverviewItems([]);
+        setOverviewRows([]);
+      })
+      .finally(() => setLoading(false));
+  }, [view, year]);
+
   // 연간 급여 명세서 다운로드(사업장 마스터와 같은 엑셀·PDF 아이콘)
   const exportAnnual = async (format: "xlsx" | "pdf") => {
     if (exporting || !year || !annualName) return;
@@ -289,12 +311,30 @@ export default function PayrollLedgerBoard() {
     [monthTotals]
   );
 
+  const overviewPayItems = overviewItems.filter((i) => i.kind === "pay");
+  const overviewDedItems = overviewItems.filter((i) => i.kind === "deduction");
+  const overviewSum = useMemo(() => {
+    const lines: Record<string, number> = {};
+    for (const r of overviewRows) for (const [id, v] of Object.entries(r.lines)) lines[id] = (lines[id] ?? 0) + v;
+    return {
+      lines,
+      pay: overviewRows.reduce((a, r) => a + r.payTotal, 0),
+      ded: overviewRows.reduce((a, r) => a + r.deductionTotal, 0),
+      net: overviewRows.reduce((a, r) => a + r.netPay, 0),
+      resigned: overviewRows.filter((r) => r.status === "resigned").length,
+    };
+  }, [overviewRows]);
+
   return (
     <>
       <CdPageHeader
         title="급여대장"
         helpTopic="payroll.ledger"
-        meta={current ? `${current.title ?? `${year}년 ${month}월분`} · ${kpi.count}명` : undefined}
+        meta={
+          view === "overview"
+            ? `${year}년 · ${overviewRows.length}명(재직 ${overviewRows.length - overviewSum.resigned} · 퇴사 ${overviewSum.resigned})`
+            : current ? `${current.title ?? `${year}년 ${month}월분`} · ${kpi.count}명` : undefined
+        }
         actions={
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {view === "month" && isDraft && (
@@ -345,13 +385,14 @@ export default function PayrollLedgerBoard() {
                 <Plus className="w-4 h-4" /> 새 대장
               </button>
             )}
-            {/* 월별 대장 / 직원별 연간 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
-            <CdTabs<"month" | "annual">
+            {/* 월별 대장 / 직원별 연간 / 연간 현황 — 페이지 탭은 공통 밑줄형(UI 기준 §4) */}
+            <CdTabs<"month" | "annual" | "overview">
               active={view}
               onChange={setView}
               items={[
                 { key: "month", label: "월별 대장" },
                 { key: "annual", label: "직원별 연간" },
+                { key: "overview", label: "연간 현황" },
               ]}
             />
             <select
@@ -674,6 +715,105 @@ export default function PayrollLedgerBoard() {
                     </tr>
                   )}
                 </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      )}
+
+      {view === "overview" && (
+        <section className="cd-card rounded-3xl flex-1 min-h-0 flex flex-col cd-reveal">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-5 pt-4 pb-3">
+            <h2 className="text-[15px] font-extrabold tracking-tight cd-text">{year}년 연간 급여 현황</h2>
+            <span className="text-[11px] cd-text-faint">재직·퇴사는 {year}년 말 기준 · 행을 누르면 직원별 연간으로 이동</span>
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto px-3 pb-3">
+            {loading ? (
+              <p className="p-4 text-sm cd-text-faint">불러오는 중…</p>
+            ) : (
+              <table className="w-full text-sm" style={{ minWidth: 820 + (overviewPayItems.length + overviewDedItems.length) * 104 }}>
+                <thead className="cd-table-head">
+                  <tr className="cd-text-faint text-[11px] border-b cd-border-c">
+                    <th className="text-left font-semibold p-2.5 sticky left-0 z-10" style={{ background: "var(--cd-surface)", boxShadow: "-14px 0 0 var(--cd-surface)" }}>성명</th>
+                    <th className="text-left font-semibold p-2.5">직급</th>
+                    <th className="text-left font-semibold p-2.5">부서</th>
+                    <th className="text-left font-semibold p-2.5 whitespace-nowrap">입사일</th>
+                    <th className="text-left font-semibold p-2.5 whitespace-nowrap">퇴사일</th>
+                    <th className="text-right font-semibold p-2.5 whitespace-nowrap">지급월</th>
+                    {overviewPayItems.map((i) => (
+                      <th key={i.itemId} className="text-right font-semibold p-2.5 whitespace-nowrap">{i.name}</th>
+                    ))}
+                    <th className="text-right font-semibold p-2.5 whitespace-nowrap" style={{ color: "var(--cd-primary)" }}>지급합계</th>
+                    {overviewDedItems.map((i) => (
+                      <th key={i.itemId} className="text-right font-semibold p-2.5 whitespace-nowrap">{i.name}</th>
+                    ))}
+                    <th className="text-right font-semibold p-2.5 whitespace-nowrap" style={{ color: "var(--cd-warning)" }}>공제합계</th>
+                    <th className="text-right font-semibold p-2.5 whitespace-nowrap" style={{ color: "var(--cd-primary)" }}>차인지급액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overviewRows.map((r) => (
+                    <tr
+                      key={r.name}
+                      onClick={() => {
+                        setAnnualName(r.name);
+                        setView("annual");
+                      }}
+                      title={`${r.name} 직원별 연간 보기`}
+                      className="border-b cd-border-c last:border-0 cursor-pointer transition hover:bg-[color:var(--cd-surface)]"
+                    >
+                      <td className="p-2.5 font-semibold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
+                        {r.name}
+                        {r.status === "resigned" && (
+                          <span
+                            className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                            style={{ color: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}
+                          >
+                            퇴사
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2.5 cd-text whitespace-nowrap">{r.positionName ?? "-"}</td>
+                      <td className="p-2.5 cd-text whitespace-nowrap">{r.deptName ?? "-"}</td>
+                      <td className="p-2.5 cd-text whitespace-nowrap tabular-nums">{r.hiredAt?.slice(0, 10) ?? "-"}</td>
+                      <td className="p-2.5 cd-text whitespace-nowrap tabular-nums">{r.resignedAt ?? (r.status === "resigned" ? "미상" : "")}</td>
+                      <td className="p-2.5 text-right cd-text tabular-nums">{r.months}개월</td>
+                      {overviewPayItems.map((i) => (
+                        <td key={i.itemId} className="p-2.5 text-right cd-text tabular-nums">{fmt(r.lines[i.itemId])}</td>
+                      ))}
+                      <td className="p-2.5 text-right font-bold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(r.payTotal)}</td>
+                      {overviewDedItems.map((i) => (
+                        <td key={i.itemId} className="p-2.5 text-right cd-text tabular-nums">{fmt(r.lines[i.itemId])}</td>
+                      ))}
+                      <td className="p-2.5 text-right font-bold tabular-nums" style={{ color: "var(--cd-warning)" }}>{fmtTotal(r.deductionTotal)}</td>
+                      <td className="p-2.5 text-right font-extrabold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(r.netPay)}</td>
+                    </tr>
+                  ))}
+                  {!overviewRows.length && (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-sm cd-text-faint">해당 연도 대장이 없습니다.</td>
+                    </tr>
+                  )}
+                </tbody>
+                {overviewRows.length > 0 && (
+                  <tfoot className="sticky bottom-0 z-10">
+                    <tr className="border-t-2 cd-border-c" style={{ background: "var(--cd-card-solid)" }}>
+                      <td className="p-2.5 font-extrabold cd-text sticky left-0 z-10 whitespace-nowrap" style={{ background: "var(--cd-card-solid)", boxShadow: "-14px 0 0 var(--cd-card-solid)" }}>
+                        합계
+                      </td>
+                      <td colSpan={5} className="p-2.5 text-right text-xs cd-text-faint whitespace-nowrap">{overviewRows.length}명</td>
+                      {overviewPayItems.map((i) => (
+                        <td key={i.itemId} className="p-2.5 text-right font-bold cd-text tabular-nums">{fmtTotal(overviewSum.lines[i.itemId] ?? 0)}</td>
+                      ))}
+                      <td className="p-2.5 text-right font-extrabold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(overviewSum.pay)}</td>
+                      {overviewDedItems.map((i) => (
+                        <td key={i.itemId} className="p-2.5 text-right font-bold cd-text tabular-nums">{fmtTotal(overviewSum.lines[i.itemId] ?? 0)}</td>
+                      ))}
+                      <td className="p-2.5 text-right font-extrabold tabular-nums" style={{ color: "var(--cd-warning)" }}>{fmtTotal(overviewSum.ded)}</td>
+                      <td className="p-2.5 text-right font-extrabold tabular-nums" style={{ color: "var(--cd-primary)" }}>{fmtTotal(overviewSum.net)}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             )}
           </div>

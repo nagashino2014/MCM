@@ -13,11 +13,12 @@ export const HR_PAYROLL_ADMIN_HELP: HelpTopic[] = [
         "확정과 명세서 발행에는 급여 확정 권한이 따로 필요합니다.",
         "명절 상여는 ‘상여금 지급 계획’을 결재받으면 상여대장이 자동으로 만들어집니다.",
         "과거 엑셀 대장은 ‘엑셀 가져오기’로, 직원별 연간 명세서(퇴직금 적립·추계 포함)는 직원별 연간 탭의 엑셀·PDF 아이콘으로 받습니다.",
+        "연간 현황 탭은 그해 급여를 받은 직원 전부(퇴사자 포함)의 항목별 연간 합계와 전체 합계를 보여 줍니다.",
       ] },
     ],
     more: { article: "payroll.ledger", section: "flow" },
     sources: ["components/payroll/PayrollLedgerBoard.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-11-08",
   },
   {
     id: "payroll.ledger-create",

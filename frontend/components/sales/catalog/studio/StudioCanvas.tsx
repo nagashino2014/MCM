@@ -7,7 +7,8 @@
 //   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 변·모서리 손잡이로 크기 — 12열 그리드·4pt 기준선에 맞춘다(L3 쪽만)
 //     이미지·일러스트는 모서리를 끌면 비율 유지(Shift = 비율 풀기), 그 밖의 요소는 Shift 로 비율 유지. 사진은 틀과 한 요소로 움직인다(select.ts PHOTO_FRAME_RE)
 //   여러 개 고르기: Shift·Ctrl+클릭으로 더하고 뺀다 → 묶음 손잡이로 함께 옮기고(상대 위치 유지, 묶음 왼쪽 위를 그리드에 맞춤) Delete·Ctrl+D 도 함께
-//   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt), Delete = 숨기기, Ctrl+C·X·V = 복사·잘라내기·붙여넣기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
+//   그리드 맞춤 풀기: Alt 를 누른 채 끌거나 Alt+방향키 = 1pt 단위 자유 배치(표지 물방울처럼 열과 무관한 장식 요소, 사용자 지시 2026-11-08)
+//   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt, Alt 1pt), Delete = 숨기기, Ctrl+C·X·V = 복사·잘라내기·붙여넣기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
 //   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도·겹침(주황)
 //   겹침: 옮기는 중(끌기·묶음 끌기) 겹치는 다른 글 상자에 옅은 주황 테두리 — 막지는 않는다. 놓은 뒤에는 쪽 검사의 '겹침' 경고로 남는다
 
@@ -44,8 +45,8 @@ import type { StudioKit } from "./kit";
 import { selectionLabel } from "./types";
 
 export interface CanvasHandle {
-  /** 방향키 옮기기(가로 = 열, 세로 = 4pt) */
-  nudge: (dx: -1 | 0 | 1, dy: number) => void;
+  /** 방향키 옮기기(가로 = 열, 세로 = 4pt). free = 그리드 맞춤 없이 가로 dx·세로 dy 만큼(1pt 단위) */
+  nudge: (dx: -1 | 0 | 1, dy: number, free?: boolean) => void;
   /** 지표 넣기 자리 — 고치는 중인 글이면 커서 자리, 아니면 고른 글 끝. 글 블록이 아니면 null */
   captureBind: () => BindTarget | null;
   /** 넣은 칩 뒤로 커서를 옮겨 이어서 고치게 한다 */
@@ -457,8 +458,8 @@ export function StudioCanvas({
 
   // ── 옮기기·크기(그리드 맞춤) ──
   const commitMove = useCallback(
-    (id: string, el: HTMLElement, rect: Rect, cs: ElPos, dx: number, dy: number) => {
-      const patch = movePatch(rect, cs, snapX(rect.x + dx) - rect.x, snapY(rect.y + dy) - rect.y);
+    (id: string, el: HTMLElement, rect: Rect, cs: ElPos, dx: number, dy: number, free = false) => {
+      const patch = movePatch(rect, cs, ...snapDelta(rect, dx, dy, free));
       if (patch) onPatchStyles(withPhotoReset([{ id, patch }]));
       void el;
     },
@@ -538,8 +539,7 @@ export function StudioCanvas({
     const dx = (e.clientX - d.startX) / zoom;
     const dy = (e.clientY - d.startY) / zoom;
     if (d.mode === "move") {
-      const ddx = snapX(d.rect.x + dx) - d.rect.x;
-      const ddy = snapY(d.rect.y + dy) - d.rect.y;
+      const [ddx, ddy] = snapDelta(d.rect, dx, dy, e.altKey);
       d.el.style.transform = `${d.orig.transform} translate(${ddx}px, ${ddy}px)`;
       const overlap = overlapAt(d.ov, ddx, ddy);
       setRects((r) => ({ ...r, sel: { ...d.rect, x: d.rect.x + ddx, y: d.rect.y + ddy }, overlap }));
@@ -562,10 +562,10 @@ export function StudioCanvas({
     groupDragRef.current = { startX: e.clientX, startY: e.clientY, rect, items, ov: dragOverlap(items.map((it) => it.id)) };
   };
 
-  const groupDelta = (g: { startX: number; startY: number; rect: Rect }, e: RPointerEvent<HTMLElement>) => ({
-    ddx: snapX(g.rect.x + (e.clientX - g.startX) / zoom) - g.rect.x,
-    ddy: snapY(g.rect.y + (e.clientY - g.startY) / zoom) - g.rect.y,
-  });
+  const groupDelta = (g: { startX: number; startY: number; rect: Rect }, e: RPointerEvent<HTMLElement>) => {
+    const [ddx, ddy] = snapDelta(g.rect, (e.clientX - g.startX) / zoom, (e.clientY - g.startY) / zoom, e.altKey);
+    return { ddx, ddy };
+  };
 
   const onGroupMove = (e: RPointerEvent<HTMLElement>) => {
     const g = groupDragRef.current;
@@ -597,7 +597,7 @@ export function StudioCanvas({
     d.el.style.transform = d.orig.transform;
     d.el.style.width = d.orig.width;
     d.el.style.height = d.orig.height;
-    if (d.mode === "move") commitMove(d.id, d.el, d.rect, d.cs, dx, dy);
+    if (d.mode === "move") commitMove(d.id, d.el, d.rect, d.cs, dx, dy, e.altKey);
     else {
       const patch = resizePatch(d.rect, d.cs, resizeBox(d.rect, d.mode, dx, dy, d.ratio !== e.shiftKey));
       if (!patch) return;
@@ -607,15 +607,15 @@ export function StudioCanvas({
     }
   };
 
-  // 방향키 옮기기 — 가로는 한 열, 세로는 4pt(Shift 16pt)
+  // 방향키 옮기기 — 가로는 한 열, 세로는 4pt(Shift 16pt). free 면 1pt 단위
   useEffect(() => {
     if (!handleRef) return;
     handleRef.current = {
-      nudge: (dir, dy) => {
+      nudge: (dir, dy, free = false) => {
         if (multi) {
           const items = groupItems();
           const g = unionRect(items.map((it) => it.rect));
-          if (g) commitGroup(items, dir === 0 ? 0 : snapX(g.x + dir * COL_STEP) - g.x, snapY(g.y + dy) - g.y);
+          if (g) commitGroup(items, ...snapDelta(g, dir === 0 ? 0 : dir * (free ? 1 : COL_STEP), dy, free));
           return;
         }
         if (!frame || !selectedId || !selCaps?.move) return;
@@ -623,8 +623,8 @@ export function StudioCanvas({
         const el = elOf(id);
         const rect = rectOf(el);
         if (!el || !rect) return;
-        const dx = dir === 0 ? 0 : dir * COL_STEP;
-        commitMove(id, el, rect, readCs(el, frame.win), dx, dy);
+        const dx = dir === 0 ? 0 : dir * (free ? 1 : COL_STEP);
+        commitMove(id, el, rect, readCs(el, frame.win), dx, dy, free);
       },
       captureBind: () => {
         const active = frame?.doc.activeElement as HTMLElement | null;
@@ -814,6 +814,12 @@ function movePatch(rect: Rect, cs: ElPos, ddx: number, ddy: number): Record<stri
   if (Math.abs(ddx) < 0.01 && Math.abs(ddy) < 0.01) return null;
   if (cs.position === "absolute") return { left: px(cs.left + ddx), top: px(cs.top + ddy), right: "", bottom: "", width: px(rect.w) };
   return { position: "relative", left: px(cs.left + ddx), top: px(cs.top + ddy) };
+}
+
+/** 옮긴 거리 → 실제 적용할 거리. 그리드 맞춤(열 시작선·4pt 기준선)이 기본, free 면 1pt 단위 그대로 */
+function snapDelta(rect: Rect, dx: number, dy: number, free: boolean): [number, number] {
+  if (free) return [Math.round(dx), Math.round(dy)];
+  return [snapX(rect.x + dx) - rect.x, snapY(rect.y + dy) - rect.y];
 }
 
 /** 손잡이로 바뀐 상자 → 스타일. 절대 위치는 늘 왼쪽·위 기준으로 적는다(오른쪽·아래에 붙은 요소가 반대로 자라지 않게). 바뀐 게 없으면 null */

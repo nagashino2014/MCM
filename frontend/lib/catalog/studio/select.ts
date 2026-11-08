@@ -155,7 +155,7 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     move: maxLevel >= 3 && !isRoot,
     resize: maxLevel >= 3 && !isRoot && n.tag !== "#text",
     // 넣은 일러스트는 글자 크기·색을 일러스트 패널(그림 비율·색 모드)로 고친다
-    typeStep: maxLevel >= 3 && (sel.kind === "text" || added) && !n.widget,
+    typeStep: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "item" || added) && !n.widget,
     color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added) && !n.widget,
     duplicate: maxLevel >= 3 && !isRoot && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset || n.attrs?.src))),
   };

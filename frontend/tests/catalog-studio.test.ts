@@ -409,6 +409,19 @@ test("스튜디오 — 복사·붙여넣기: 글은 지금 모양으로 찍고, 
   assert.equal(r.edits.added?.length, 40);
 });
 
+test("스튜디오 — 목록 항목도 글자 크기를 바꿀 수 있다(표지 분야 목록·주요 서비스)", () => {
+  const base = pageTree(makeFixture(), "area-1");
+  const derived = applyEdits(base, { v: 1 });
+  const list = findBy(derived, hasClass("kc-list"))!;
+  const li = (list.children ?? []).find((c) => c.tag === "li")!;
+  const sel = resolveSelection(derived, li.id)!;
+  assert.equal(sel.kind, "item");
+  assert.equal(capabilities(sel, 3).typeStep, true);
+  assert.equal(capabilities(sel, 2).typeStep, false, "자유 배치 쪽에서만");
+  const edits = patchNodeStyle({ v: 1 }, derived, li.id, { fontSize: "12px", lineHeight: "1.5" });
+  assert.equal(findNode(applyEdits(base, edits), li.id)?.style?.fontSize, "12px");
+});
+
 test("스튜디오 — 글자 크기 직접 지정: 저장되고, 단계를 고르면 직접 지정을 지운다", () => {
   const base = pageTree(makeFixture(), "area-1");
   let derived = applyEdits(base, { v: 1 });

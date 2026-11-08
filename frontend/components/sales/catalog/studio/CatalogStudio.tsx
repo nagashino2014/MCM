@@ -495,8 +495,8 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         if (key === "Escape") setSelection([]);
         else if (key === "Delete" || key === "Backspace") ops.hideMany(selection);
         else if (key.startsWith("Arrow") && item?.maxLevel === 3) {
-          const step = e.shiftKey ? 16 : 4;
-          canvasHandle.current?.nudge(key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0, key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0);
+          const step = e.altKey ? 1 : e.shiftKey ? 16 : 4;
+          canvasHandle.current?.nudge(key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0, key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0, e.altKey);
         } else return false;
         return true;
       }
@@ -514,11 +514,12 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         return true;
       }
       if (key.startsWith("Arrow") && caps?.move) {
-        const step = e.shiftKey ? 16 : 4;
-        if (key === "ArrowLeft") canvasHandle.current?.nudge(-1, 0);
-        else if (key === "ArrowRight") canvasHandle.current?.nudge(1, 0);
-        else if (key === "ArrowUp") canvasHandle.current?.nudge(0, -step);
-        else canvasHandle.current?.nudge(0, step);
+        // Alt = 그리드 맞춤 없이 1pt
+        const step = e.altKey ? 1 : e.shiftKey ? 16 : 4;
+        if (key === "ArrowLeft") canvasHandle.current?.nudge(-1, 0, e.altKey);
+        else if (key === "ArrowRight") canvasHandle.current?.nudge(1, 0, e.altKey);
+        else if (key === "ArrowUp") canvasHandle.current?.nudge(0, -step, e.altKey);
+        else canvasHandle.current?.nudge(0, step, e.altKey);
         return true;
       }
       return false;
@@ -803,7 +804,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 </select>
               </span>
             </div>
-            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고르고, 고른 글을 다시 누르면 글을 고칩니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기, Delete 숨기기, Ctrl+C·V 복사·붙여넣기, Ctrl+D 복제, Esc 선택 해제">
+            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고르고, 고른 글을 다시 누르면 글을 고칩니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기(Alt 1pt), Alt+끌기 자유 배치, Delete 숨기기, Ctrl+C·V 복사·붙여넣기, Ctrl+D 복제, Esc 선택 해제">
               <StudioCanvas
                 kit={kit}
                 fontSet={studio.fontSet}

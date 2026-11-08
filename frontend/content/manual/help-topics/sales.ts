@@ -345,12 +345,12 @@ export const SALES_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비). B 그린은 CI 그린 면에 네이비 글자·짙은 녹색 주색, C 차콜은 차콜 면과 주색에 CI 그린 강조, D 스틸 블루는 연구소 제안서 양식의 네이비 머리 띠와 청회색 글자입니다.",
         "색은 디자인 시스템 색, 글자 크기는 디자인 시스템 단계, 폭은 12열 묶음으로만 고릅니다.",
-        "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다.",
+        "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다. Alt 를 누른 채 끌거나 Alt+방향키는 그리드에 맞추지 않고 1pt 씩 옮깁니다(표지 물방울 같은 장식 요소).",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "levels" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx"],
-    reviewedAt: "2026-10-30",
+    reviewedAt: "2026-11-08",
   },
   {
     id: "catalog.studio-fonts",

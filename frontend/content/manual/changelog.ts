@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-08", kind: "변경", title: "회사소개서 — 옮기기 자유 배치 기본, 눈썹 글자 확대, 회사 개요 일반현황 라벨",
+    body: "스튜디오에서 요소를 끌면 1pt 단위로 자유롭게 놓이고, [안내선·맞춤]을 켠 동안만 12열 그리드에 맞춰 붙습니다(특정 자리에서 열 선으로 튕기던 문제). 쪽 제목 위 눈썹 글(숫자로 보는 KESI·비전·연혁 등)을 12pt 로 키웠고, 회사 개요 쪽 로고 아래 표에 '일반현황' 라벨을 붙였습니다.",
+    articles: ["sales.catalog-studio", "sales.catalog"],
+  },
+  {
     date: "2026-11-08", kind: "개선", title: "회사소개서 스튜디오 — 목록 항목 글자 크기, Alt 자유 배치",
     body: "사업 분야 목록처럼 목록 항목으로 잡히는 글도 도구 줄에서 글자 크기를 바꿀 수 있습니다. Alt 를 누른 채 끌거나 Alt+방향키로 누르면 12열 그리드에 맞추지 않고 1pt 씩 옮겨, 표지 물방울 같은 장식 요소를 원하는 자리에 둘 수 있습니다.",
     articles: ["sales.catalog-studio"],

@@ -496,7 +496,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         else if (key === "Delete" || key === "Backspace") ops.hideMany(selection);
         else if (key.startsWith("Arrow") && item?.maxLevel === 3) {
           const step = e.altKey ? 1 : e.shiftKey ? 16 : 4;
-          canvasHandle.current?.nudge(key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0, key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0, e.altKey);
+          canvasHandle.current?.nudge(key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0, key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0, e.altKey);
         } else return false;
         return true;
       }
@@ -514,10 +514,10 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         return true;
       }
       if (key.startsWith("Arrow") && caps?.move) {
-        // Alt = 그리드 맞춤 없이 1pt
+        // 4pt(Shift 16pt, Alt 1pt). 안내선이 켜 있으면 캔버스가 가로는 한 열·세로는 4pt 에 맞춘다
         const step = e.altKey ? 1 : e.shiftKey ? 16 : 4;
-        if (key === "ArrowLeft") canvasHandle.current?.nudge(-1, 0, e.altKey);
-        else if (key === "ArrowRight") canvasHandle.current?.nudge(1, 0, e.altKey);
+        if (key === "ArrowLeft") canvasHandle.current?.nudge(-step, 0, e.altKey);
+        else if (key === "ArrowRight") canvasHandle.current?.nudge(step, 0, e.altKey);
         else if (key === "ArrowUp") canvasHandle.current?.nudge(0, -step, e.altKey);
         else canvasHandle.current?.nudge(0, step, e.altKey);
         return true;
@@ -792,8 +792,9 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                   data-active={showGuides ? "true" : undefined}
                   aria-pressed={showGuides}
                   onClick={() => setShowGuides((v) => !v)}
+                  title="12열 그리드·여백 안내선을 보이고, 켜 있는 동안 옮기기를 그리드에 맞춥니다(Alt 를 누르면 맞추지 않음)"
                 >
-                  <Grid3x3 className="w-3.5 h-3.5" /> 안내선
+                  <Grid3x3 className="w-3.5 h-3.5" /> 안내선·맞춤
                 </button>
                 <select className="cd-select" style={{ width: 84 }} aria-label="확대" value={String(zoomMode)} onChange={(e) => setZoomMode(e.target.value === "fit" ? "fit" : Number(e.target.value))}>
                   <option value="fit">맞춤</option>
@@ -804,7 +805,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                 </select>
               </span>
             </div>
-            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고르고, 고른 글을 다시 누르면 글을 고칩니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기(Alt 1pt), Alt+끌기 자유 배치, Delete 숨기기, Ctrl+C·V 복사·붙여넣기, Ctrl+D 복제, Esc 선택 해제">
+            <div ref={mainRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--cd-bg)" }} tabIndex={0} aria-label="A4 캔버스 — 요소를 눌러 고르고, 고른 글을 다시 누르면 글을 고칩니다. Shift·Ctrl+클릭 여러 개 고르기, 방향키 옮기기(4pt, Shift 16pt, Alt 1pt), 안내선을 켜면 그리드 맞춤, Delete 숨기기, Ctrl+C·V 복사·붙여넣기, Ctrl+D 복제, Esc 선택 해제">
               <StudioCanvas
                 kit={kit}
                 fontSet={studio.fontSet}

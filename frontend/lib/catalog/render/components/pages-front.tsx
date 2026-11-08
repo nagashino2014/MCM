@@ -459,11 +459,15 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
                 <img src={ctx.url(visualPhoto)} alt={`${c.name} 사진`} />
               </div>
             ) : (
-              <div className="kc-photo--frame kc-ratio-hero" style={{ position: "relative", display: "grid", placeItems: "center", overflow: "hidden", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
+              // 로고 판은 사진 띠(2.4:1)보다 낮게(3:1) — 아래 '일반현황' 라벨 자리를 낸다(사용자 지시 2026-11-08)
+              <div className="kc-photo--frame" style={{ position: "relative", display: "grid", placeItems: "center", overflow: "hidden", aspectRatio: "3", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
                 <img src={ctx.url("k/assets/kesi-ko-horizontal-gradient.png")} alt="KESI ㈜한국환경안전연구원 국문 좌우조합(그라데이션)" style={{ display: "block", width: "70%", height: "auto" }} />
               </div>
             )}
           </figure>
+          <p className="kc-blockhead" style={{ border: 0, paddingTop: 0, marginBottom: -6 }}>
+            일반현황
+          </p>
           <dl className="kc-facts">
             {facts.map(([k, v]) => (
               <Fact key={k} k={k} v={v} />

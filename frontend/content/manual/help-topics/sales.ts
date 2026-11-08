@@ -291,7 +291,7 @@ export const SALES_HELP: HelpTopic[] = [
     ],
     more: { article: "sales.catalog-studio", section: "layout" },
     sources: ["components/sales/catalog/studio/CatalogStudio.tsx"],
-    reviewedAt: "2026-11-05",
+    reviewedAt: "2026-11-08",
   },
   {
     id: "catalog.studio-levels",
@@ -345,7 +345,7 @@ export const SALES_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "색 컨셉은 문서 전체의 색 묶음입니다(기본 A 네이비). B 그린은 CI 그린 면에 네이비 글자·짙은 녹색 주색, C 차콜은 차콜 면과 주색에 CI 그린 강조, D 스틸 블루는 연구소 제안서 양식의 네이비 머리 띠와 청회색 글자입니다.",
         "색은 디자인 시스템 색, 글자 크기는 디자인 시스템 단계, 폭은 12열 묶음으로만 고릅니다.",
-        "옮기기·크기는 그리드에 맞춰 붙습니다. 방향키는 가로 1열·세로 4pt 씩 옮깁니다. Alt 를 누른 채 끌거나 Alt+방향키는 그리드에 맞추지 않고 1pt 씩 옮깁니다(표지 물방울 같은 장식 요소).",
+        "옮기기는 1pt 단위 자유 배치이고, [[안내선·맞춤]]을 켜면 12열 그리드·4pt 기준선에 맞춰 붙습니다(Alt 를 누르면 켜 있어도 맞추지 않음). 크기는 늘 그리드에 맞춥니다. 방향키는 4pt(Shift 16pt, Alt 1pt), 안내선이 켜 있으면 가로 1열·세로 4pt 씩 옮깁니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "levels" },

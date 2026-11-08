@@ -2,12 +2,13 @@ import type { Page } from "playwright";
 import { rows, type Database } from "../facility-quality/store";
 import { ProviderError } from "./public-api";
 import type { Navigate } from "./browser";
+import { dailyLimit } from "./limits";
 
 /** 외부 정보원 일일 한도·접속 간격·차단 감지. 사업장 전수 점검과 연락처 가져오기가 같은 한도를 나눠 쓴다. */
 export function createSourceGuard(db: Database) {
   let lastNavigation = 0;
   async function budget(source: string) {
-    const max = Math.max(1, Math.min(10000, Number(process.env[`FACILITY_QUALITY_${source.toUpperCase()}_DAILY_LIMIT`] || (source === "bizno" ? 100 : 600))));
+    const max = dailyLimit(source);
     const reserved = await rows(db, `INSERT INTO facility_quality_source_requests(source,day,requests) VALUES($1,CURRENT_DATE,1)
       ON CONFLICT(source,day) DO UPDATE SET requests=facility_quality_source_requests.requests+1 WHERE facility_quality_source_requests.requests<$2 RETURNING requests`, [source, max]);
     if (!reserved.length) throw new ProviderError("quota", "일일 조회 한도 도달");

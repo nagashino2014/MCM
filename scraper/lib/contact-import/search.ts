@@ -4,10 +4,11 @@ import type { Profile, Snapshot } from "../facility-quality/rules";
 import { bizno, naver, type Outcome } from "../facility-enrichment/browser";
 import { dart, fsc, ProviderError } from "../facility-enrichment/public-api";
 import { createSourceGuard } from "../facility-enrichment/source-guard";
+import { SEARCH_SOURCES } from "../facility-enrichment/limits";
 import { isHangulName, judgeProfiles, lookupNames, type MatchCandidate } from "./rules";
 
 // 공개 API 를 먼저 쓴다. 비즈노는 하루 한도가 작아 앞선 정보원에서 못 찾은 회사만 간다.
-export const SEARCH_SOURCES = ["dart", "fsc", "naver", "bizno"] as const;
+export { SEARCH_SOURCES };
 type Source = typeof SEARCH_SOURCES[number];
 const STOP = new Set<Outcome["status"]>(["blocked", "quota", "not_configured"]);
 const RETRYABLE = new Set<Outcome["status"]>(["timeout", "error", "parse_error"]);

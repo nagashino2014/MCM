@@ -15,6 +15,7 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     ],
     more: { article: "external-parties.main" },
     sources: ["components/external-parties/ExternalPartyBoard.tsx"],
+    reviewedAt: "2026-11-06",
   },
   {
     id: "external-parties.import",
@@ -28,6 +29,7 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     ],
     more: { article: "external-parties.import" },
     sources: ["components/external-parties/ContactImportPanel.tsx"],
+    reviewedAt: "2026-11-08",
   },
   // ── 사업장 ──
   {

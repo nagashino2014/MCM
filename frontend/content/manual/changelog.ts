@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-08", kind: "개선", title: "연락처 가져오기 — 사업자번호 검색 진행 막대",
+    body: "검색 중에는 끝난 회사 수, 분당 처리 수, 끝날 예상 시각을 막대로 보여 줍니다. 정보원별 오늘 조회량과 한도가 풀리는 시각도 함께 나옵니다.",
+    articles: ["external-parties.import"],
+  },
+  {
     date: "2026-11-07", kind: "개선", title: "연락처 가져오기 — 영문이 섞인 회사 이름도 사업자번호 검색",
     body: "LG이노텍을 엘지이노텍으로 읽거나 ‘SAMSUNG DISPLAY 삼성 디스플레이’에서 한글 이름을 떼어 함께 찾습니다. 동명 업체가 많은 회사는 다시 찾지 않고 검토로 넘깁니다.",
     articles: ["external-parties.import"],

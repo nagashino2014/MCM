@@ -3,6 +3,7 @@
  *
  *   nodes[기본 노드 id]
  *     content  고정한 자식(글 고치기·목록 항목 L1) — 이 노드는 자동 갱신에서 빠진다(바인딩 해제). 안의 지표 칩은 계속 최신 값
+ *     anchor   고정할 때 그 자리 원래 글의 지문(anchorOf) — 코드가 바뀌어 id 가 밀리면 지문이 달라 붙지 않는다(고아 편집으로 보임)
  *     style    위치·크기(L3, 그리드 맞춤 값)·열 수·사진 비율(L2)·토큰 색 — 빈 문자열 = 기본 스타일의 그 키를 지움
  *     type     타입 스케일 단계(L3)
  *     hidden   숨김(L2)
@@ -18,7 +19,7 @@ import { resolveInfoMetrics, sanitizeInfoSpec, type InfoIllust, type InfoSpec } 
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { infographicToTree } from "./convert";
 import { PHOTO_RATIOS, isTokenVar, isTypeStep, nearestTypeStep, typeStepStyle } from "./design-system";
-import { BASE_ID_RE, USER_ID_RE, findPath, newUserId, type CNode, type ImageRef } from "./nodes";
+import { BASE_ID_RE, USER_ID_RE, findNode, findPath, newUserId, type CNode, type ImageRef } from "./nodes";
 import { isDataBindKey } from "./binds";
 
 export interface InfoOverride {
@@ -32,6 +33,7 @@ export interface InfoOverride {
 
 export interface NodeEdit {
   content?: CNode[];
+  anchor?: string;
   style?: Record<string, string>;
   type?: string;
   hidden?: boolean;
@@ -325,6 +327,10 @@ export function sanitizeNodeEdit(input: unknown): NodeEdit | undefined {
   const out: NodeEdit = {};
   const content = sanitizeContent(o.content);
   if (content) out.content = content;
+  if (content && typeof o.anchor === "string") {
+    const anchor = cleanAnchor(o.anchor);
+    if (anchor != null) out.anchor = anchor;
+  }
   const style = sanitizeEditStyle(o.style);
   if (style) out.style = style;
   if (isTypeStep(o.type)) out.type = o.type as string;
@@ -369,6 +375,75 @@ export function sanitizePageEdits(input: unknown): PageEdits {
   return out;
 }
 
+// ───────────────────────── 자리 지문(anchor) ─────────────────────────
+// 기본 노드 id 는 자리 해시라 쪽 코드가 형제 앞에 자식을 넣으면 한 칸씩 밀린다(convert.ts). 고친 글은 그 자리 원래 글의 지문을 함께 저장하고,
+// 붙일 때 지금 자리의 글과 대조해 많이 다르면 붙이지 않는다 — 엉뚱한 카드에 붙는 대신 '붙을 곳을 잃은 편집'으로 남는다.
+// 지표 칩(bind) 글은 빼고 숫자는 # 로 바꿔, 데이터 값이 바뀌어도 같은 자리로 본다.
+
+const ANCHOR_MAX = 120;
+
+/** 노드의 자리 지문 — 지표 칩을 뺀 글(숫자 → #, 공백 하나로) 앞 120자 */
+export function anchorOf(n: CNode): string {
+  const parts: string[] = [];
+  const walk = (x: CNode) => {
+    if (x.bind) return;
+    if (x.tag === "#text") parts.push(x.text ?? "");
+    x.children?.forEach(walk);
+  };
+  walk(n);
+  return parts.join(" ").replace(/\d+([.,]\d+)*/g, "#").replace(/\s+/g, " ").trim().slice(0, ANCHOR_MAX);
+}
+
+function cleanAnchor(v: string): string | null {
+  // eslint-disable-next-line no-control-regex
+  const s = v.replace(/[\u0000-\u001f]/g, "").slice(0, ANCHOR_MAX);
+  return s.length === v.length ? s : null;
+}
+
+function bigrams(s: string): Map<string, number> {
+  const out = new Map<string, number>();
+  const t = s.replace(/\s+/g, "");
+  for (let i = 0; i < t.length - 1; i++) out.set(t.slice(i, i + 2), (out.get(t.slice(i, i + 2)) ?? 0) + 1);
+  return out;
+}
+
+/** 지금 자리의 글이 고칠 때의 지문과 같은 자리인가 — 지문이 없으면(옛 편집) 그대로 붙인다. 글 일부(회사명 등 데이터 글)만 바뀌면 같은 자리로 본다 */
+export function anchorMatches(n: CNode, anchor: string | undefined): boolean {
+  if (anchor == null) return true;
+  const now = anchorOf(n);
+  if (now === anchor) return true;
+  const a = bigrams(now);
+  const b = bigrams(anchor);
+  let total = 0;
+  let common = 0;
+  for (const v of a.values()) total += v;
+  for (const [k, v] of b) {
+    total += v;
+    common += Math.min(v, a.get(k) ?? 0);
+  }
+  // 두 글자 묶음 Dice 계수 — 다른 카드 라벨(예: '최초허가' ↔ '변경허가·변경신고')은 0.3 아래
+  return total > 0 && (2 * common) / total >= 0.5;
+}
+
+/**
+ * 이번 조작으로 새로 생기거나 바뀐 고정 글에 자리 지문을 단다(지문이 이미 있으면 그대로). base = 그 쪽 기본 트리.
+ * 스튜디오 편집 경로(useStudio.setPageEdits)가 모든 조작 뒤에 부른다 — 글 고치기·목록 조작·AI 바꿈이 같은 규칙을 따른다.
+ */
+export function anchorPins(next: PageEdits, prev: PageEdits | undefined, base: CNode | null): PageEdits {
+  if (!base || !next.nodes) return next;
+  let out: PageEdits | null = null;
+  for (const [id, ne] of Object.entries(next.nodes)) {
+    if (!ne.content || ne.anchor != null) continue;
+    const before = prev?.nodes?.[id]?.content;
+    if (before && JSON.stringify(before) === JSON.stringify(ne.content)) continue;
+    const node = findNode(base, id);
+    if (!node) continue;
+    out ??= { ...next, nodes: { ...next.nodes } };
+    out.nodes![id] = { ...ne, anchor: anchorOf(node) };
+  }
+  return out ?? next;
+}
+
 // ───────────────────────── 적용(apply) ─────────────────────────
 
 export interface ApplyOptions {
@@ -406,6 +481,22 @@ export function mergeInfoSpec(base: InfoSpec, o: InfoOverride | undefined): Info
   return { type, variant, colorMode: o.colorMode ?? base.colorMode, content: o.content ?? base.content, ...(illust ? { illust } : {}) };
 }
 
+/** 쪽 고유 도식(InfoSource)인가 — 쪽 컴포넌트 마크업 그대로 그린 인포그래픽 자리(convert.ts) */
+export function isInfoSource(n: CNode): boolean {
+  return n.widget === "infographic" && (n.props as { source?: unknown } | undefined)?.source === true;
+}
+
+/**
+ * 이 덮어쓰기로 자리를 spec 으로 다시 그리는가. 범용 자리(InfoSlot)는 늘 spec 으로 그린다.
+ * 쪽 고유 도식은 유형·일러스트를 바꾼 경우만 — 원래 마크업은 spec 이 아니라 데이터에서 따로 만든 것이라 내용(항목 이름·값)만
+ * 바꿔서는 원래 모양에 반영할 길이 없고, 다시 그리면 원래 화면(C04 카드 4×2 등)이 범용 도식으로 바뀌어 버린다.
+ */
+export function infoRedraws(n: CNode, o: InfoOverride | undefined): boolean {
+  if (!o) return false;
+  if (!isInfoSource(n)) return true;
+  return Boolean(o.type || o.illust);
+}
+
 /** 기본 트리 + 편집층 → 파생 트리. 원본은 건드리지 않는다. */
 export function applyEdits(base: CNode, edits: PageEdits | undefined, opts: ApplyOptions = {}): CNode {
   const nodes = edits?.nodes ?? {};
@@ -415,11 +506,17 @@ export function applyEdits(base: CNode, edits: PageEdits | undefined, opts: Appl
     let n: CNode = { ...node, origin: "base" };
     if (e?.info && node.widget === "infographic" && node.props) {
       const p = node.props as unknown as InfoSlotProps;
-      const merged = mergeInfoSpec(p.spec, e.info);
-      const rebuilt = infographicToTree({ ...p, spec: { ...merged, content: resolveInfoMetrics(merged.content, opts.metrics) } }, node.id);
-      if (rebuilt) n = { ...rebuilt, origin: "base", edited: true };
+      if (infoRedraws(node, e.info)) {
+        const merged = mergeInfoSpec(p.spec, e.info);
+        const rebuilt = infographicToTree({ ...p, spec: { ...merged, content: resolveInfoMetrics(merged.content, opts.metrics) } }, node.id);
+        // drawn = spec 으로 다시 그림(패널이 내용 편집기를 연다), source 는 되돌리기·패널 판단에 남긴다
+        if (rebuilt) n = { ...rebuilt, origin: "base", edited: true, props: { ...rebuilt.props, drawn: true, ...(isInfoSource(node) ? { source: true } : {}) } };
+      } else {
+        // 쪽 고유 도식의 다시 그리지 않는 덮어쓰기(내용·색만) — 원래 화면을 두고, 다시 그릴 때 쓰도록 보관 중임을 알린다
+        n = { ...n, edited: true, props: { ...node.props, held: true } };
+      }
     }
-    if (e?.content) {
+    if (e?.content && anchorMatches(node, e.anchor)) {
       n.children = e.content.map((c) => markOwned(c, "pin", node.id));
       n.pinned = true;
     } else if (n.children) {
@@ -617,18 +714,46 @@ export function unhideNode(edits: PageEdits, id: string): PageEdits {
   return next;
 }
 
-/** 자동 값으로 되돌리기 — 기본 노드의 편집 일부(또는 전부)를 지운다 */
-export function resetNode(edits: PageEdits, id: string, parts: Array<keyof NodeEdit> | "all" = "all"): PageEdits {
+/** 위젯(데이터 영역·인포그래픽) 안 노드 중 편집이 붙어 있는 것의 id — base = 기본 트리. 위젯 안은 화면에서 고를 수 없으니 위젯 되돌리기로 함께 지운다 */
+export function editsWithin(base: CNode, edits: PageEdits | undefined, id: string): string[] {
+  const node = findNode(base, id);
+  if (!node?.widget || !edits?.nodes) return [];
+  const out: string[] = [];
+  const walk = (n: CNode) => {
+    if (edits.nodes![n.id]) out.push(n.id);
+    n.children?.forEach(walk);
+  };
+  node.children?.forEach(walk);
+  return out;
+}
+
+function dropWithin(next: PageEdits, base: CNode | undefined, id: string): void {
+  if (!base) return;
+  for (const inner of editsWithin(base, next, id)) delete next.nodes![inner];
+  if (next.nodes && Object.keys(next.nodes).length === 0) delete next.nodes;
+}
+
+/**
+ * 자동 값으로 되돌리기 — 기본 노드의 편집 일부(또는 전부)를 지운다.
+ * base(기본 트리)를 주고 전부 되돌리면, 위젯이면 그 안 노드의 편집(옛 버전에서 생긴 고정 글 등)도 함께 지운다.
+ */
+export function resetNode(edits: PageEdits, id: string, parts: Array<keyof NodeEdit> | "all" = "all", base?: CNode): PageEdits {
+  const inner = parts === "all" && base ? editsWithin(base, edits, id) : [];
+  if (!edits.nodes?.[id] && !inner.length) return edits;
   const next = cloneEdits(edits);
-  if (!next.nodes?.[id]) return edits;
-  if (parts === "all") delete next.nodes[id];
-  else for (const p of parts) delete next.nodes[id][p];
-  pruneNode(next, id);
+  if (next.nodes?.[id]) {
+    if (parts === "all") delete next.nodes[id];
+    else for (const p of parts) delete next.nodes[id][p];
+    // 지문은 고친 글에 딸린 것
+    if (parts !== "all" && parts.includes("content")) delete next.nodes[id]?.anchor;
+    pruneNode(next, id);
+  }
+  if (inner.length) dropWithin(next, base, id);
   return next;
 }
 
-/** 인포그래픽 유형·변형·색·내용 바꾸기(L2) — null = 기본 spec 으로 */
-export function setInfo(edits: PageEdits, id: string, info: InfoOverride | null): PageEdits {
+/** 인포그래픽 유형·변형·색·내용 바꾸기(L2) — null = 기본 spec 으로(base 를 주면 위젯 안 노드의 편집도 함께 지운다) */
+export function setInfo(edits: PageEdits, id: string, info: InfoOverride | null, base?: CNode): PageEdits {
   const added = edits.added?.find((a) => a.id === id && a.widget === "infographic");
   if (added) {
     const clean = info ? sanitizeInfoOverride(info) : undefined;
@@ -643,9 +768,12 @@ export function setInfo(edits: PageEdits, id: string, info: InfoOverride | null)
   const next = cloneEdits(edits);
   if (!info) {
     if (next.nodes?.[id]) delete next.nodes[id].info;
+    dropWithin(next, base, id);
   } else {
     const clean = sanitizeInfoOverride(info);
     if (clean) nodeEdit(next, id).info = clean;
+    // 남은 덮어쓰기가 없으면(예: 내용만 고쳤다가 [내용 원래대로]) 지운다
+    else if (next.nodes?.[id]) delete next.nodes[id].info;
   }
   pruneNode(next, id);
   return next;
@@ -847,13 +975,26 @@ export function setVariant(edits: PageEdits, key: string, value: string | null):
   return next;
 }
 
-/** 이 쪽 편집층이 가리키지만 지금 기본 트리에 없는 노드 id(데이터 구조가 바뀌어 붙을 곳을 잃은 편집) */
+/**
+ * 이 쪽 편집층이 가리키지만 지금 기본 트리에 없는 노드 id(데이터 구조가 바뀌어 붙을 곳을 잃은 편집),
+ * 그리고 고친 글의 자리 지문이 지금 자리와 맞지 않는 노드 id(쪽 코드가 바뀌어 id 가 밀림 — 그 글은 붙이지 않았다).
+ */
 export function orphanEdits(base: CNode, edits: PageEdits | undefined): string[] {
-  const ids = new Set<string>();
+  const byId = new Map<string, CNode>();
   const walk = (n: CNode) => {
-    ids.add(n.id);
+    byId.set(n.id, n);
     n.children?.forEach(walk);
   };
   walk(base);
-  return Object.keys(edits?.nodes ?? {}).filter((id) => !ids.has(id));
+  return Object.entries(edits?.nodes ?? {})
+    .filter(([id, ne]) => {
+      const n = byId.get(id);
+      return !n || (ne.content != null && !anchorMatches(n, ne.anchor));
+    })
+    .map(([id]) => id);
+}
+
+/** 붙을 곳을 잃은 편집 지우기 — 노드가 없으면 그 편집 전부, 지문이 어긋난 고친 글이면 글만(같은 노드의 위치·크기 등은 둔다) */
+export function dropOrphanEdits(edits: PageEdits, base: CNode): PageEdits {
+  return orphanEdits(base, edits).reduce((acc, id) => resetNode(acc, id, findNode(base, id) ? ["content"] : "all"), edits);
 }

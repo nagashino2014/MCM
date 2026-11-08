@@ -35,7 +35,20 @@ interface Company {
   decision: string | null; decidedName: string | null; contactCount: number;
 }
 interface Contact { id: number; personName: string; title: string | null; department: string | null; officePhone: string | null; mobilePhone: string | null; email: string | null; status: string }
+interface Progress {
+  remaining: number; finished: number; total: number; paused: number; active: boolean; perMinute: number; etaMinutes: number | null;
+  lastFinishedAt: string | null; sources: { source: string; used: number; limit: number }[]; resetAt: string | null;
+}
 interface Batch { batchId: string; filename: string; uploadedAt: string; uploaderName: string; rowCount: number; newCount: number; duplicateCount: number; pendingCount: number }
+
+function durationText(minutes: number): string {
+  if (minutes < 1) return "1분 안쪽";
+  if (minutes < 60) return `약 ${Math.ceil(minutes)}분`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m ? `약 ${h}시간 ${m}분` : `약 ${h}시간`;
+}
+const timeText = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { cache: "no-store", ...init });
@@ -52,6 +65,7 @@ export function ContactImportPanel() {
   const [queueEnabled, setQueueEnabled] = useState(true);
   const [stage, setStage] = useState<Stage>("connect");
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [progress, setProgress] = useState<Progress | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -82,6 +96,10 @@ export function ContactImportPanel() {
     setTotal(data.total);
   }, [stage, q, offset]);
 
+  const loadProgress = useCallback(async () => {
+    setProgress(await api<Progress>("/api/contact-import/search"));
+  }, []);
+
   useEffect(() => {
     loadBatches().catch((e) => setError((e as Error).message));
   }, [loadBatches]);
@@ -91,12 +109,19 @@ export function ContactImportPanel() {
     setOpenId(null);
     loadCompanies().catch((e) => setError((e as Error).message));
   }, [canReview, loadCompanies]);
-  // 검색 중인 회사가 있으면 진행 상황을 따라간다.
   useEffect(() => {
-    if (!canReview || !(counts.searching > 0)) return;
-    const timer = setInterval(() => void loadCompanies().catch(() => {}), 15000);
+    if (canReview) loadProgress().catch(() => {});
+  }, [canReview, loadProgress]);
+  // 검색 중인 회사가 있으면 진행 상황을 따라간다.
+  const searching = (counts.searching ?? 0) > 0 || (progress?.remaining ?? 0) > 0;
+  useEffect(() => {
+    if (!canReview || !searching) return;
+    const timer = setInterval(() => {
+      void loadCompanies().catch(() => {});
+      void loadProgress().catch(() => {});
+    }, 15000);
     return () => clearInterval(timer);
-  }, [canReview, counts.searching, loadCompanies]);
+  }, [canReview, searching, loadCompanies, loadProgress]);
 
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -168,6 +193,7 @@ export function ContactImportPanel() {
     await api("/api/contact-import/search", { method: "POST" });
     setMessage("사업자번호 검색을 이어서 시작했습니다.");
     await loadCompanies();
+    await loadProgress();
   });
 
   const toggleOpen = (companyId: string) => {
@@ -191,6 +217,11 @@ export function ContactImportPanel() {
     else next.add(id);
     return next;
   });
+  const exhausted = progress?.sources.filter((s) => s.used >= s.limit) ?? [];
+  const pct = progress && progress.total > 0 ? Math.round((progress.finished / progress.total) * 100) : 0;
+  // 대기 회사가 남았는데 조회 중인 회사도, 최근 5분 안에 끝난 회사도 없으면 멈춘 것으로 본다.
+  const stalled = !!progress && progress.remaining > 0 && !progress.active
+    && (!progress.lastFinishedAt || Date.now() - Date.parse(progress.lastFinishedAt) > 5 * 60_000);
   const selectRole = (role: string) => setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
 
   return (
@@ -239,6 +270,43 @@ export function ContactImportPanel() {
 
       {canReview && (
         <section className="flex flex-col gap-3" aria-label="회사 분류">
+          {progress && (progress.remaining > 0 || exhausted.length > 0) && (
+            <div className="cd-card p-3 flex flex-col gap-2 text-sm cd-text" aria-label="사업자번호 검색 진행">
+              {progress.remaining > 0 && (
+                <>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <b>사업자번호 검색 {stalled ? "멈춤" : "중"}</b>
+                    <span className="tabular-nums">{progress.finished.toLocaleString()} / {progress.total.toLocaleString()}곳 ({pct}%)</span>
+                    <span className="text-xs cd-text-muted tabular-nums">
+                      {stalled
+                        ? "최근 5분 동안 끝난 회사가 없습니다. 검색을 시작하는 중일 수 있습니다. 계속 그대로면 [검색 재개]를 눌러 주세요."
+                        : progress.etaMinutes != null
+                          ? `분당 ${progress.perMinute.toFixed(1)}곳 · 남은 ${progress.remaining.toLocaleString()}곳 · ${durationText(progress.etaMinutes)} 남음(${timeText(new Date(Date.now() + progress.etaMinutes * 60_000).toISOString())}쯤 끝남)`
+                          : `남은 ${progress.remaining.toLocaleString()}곳 · 속도를 재는 중입니다`}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full cd-tint-primary overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="사업자번호 검색 진행률">
+                    <div className="h-full" style={{ width: `${pct}%`, background: "var(--cd-primary)" }} />
+                  </div>
+                </>
+              )}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs cd-text-muted tabular-nums">
+                <span>오늘 조회량</span>
+                {progress.sources.map((s) => (
+                  <span key={s.source} className={s.used >= s.limit ? "cd-warning-text" : undefined}>
+                    {SOURCE_LABELS[s.source] ?? s.source} {s.used.toLocaleString()}/{s.limit.toLocaleString()}
+                  </span>
+                ))}
+              </div>
+              {exhausted.length > 0 && (
+                <p className="text-xs cd-warning-text">
+                  {exhausted.map((s) => SOURCE_LABELS[s.source] ?? s.source).join("·")} 하루 한도를 다 썼습니다.
+                  {progress.paused > 0 && ` 이 정보원을 거치지 못한 ${progress.paused.toLocaleString()}곳은 검토 필요에 남고,`}
+                  {progress.resetAt ? ` ${new Date(progress.resetAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 이후` : " 다음 날"} [검색 재개]로 이어 갑니다.
+                </p>
+              )}
+            </div>
+          )}
           <CdTabs
             items={STAGES.map((s) => ({ key: s.key, label: `${s.label} ${(counts[s.key] ?? 0).toLocaleString()}` }))}
             active={stage}

@@ -399,7 +399,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
           <RotateCcw className="w-3.5 h-3.5" /> 위치·크기·글자 원래대로
         </button>
       ) : null}
-      {caps.move ? <p className="text-[11px] cd-text-faint">캔버스의 [옮기기] 손잡이를 끌거나 방향키로 옮깁니다(가로 1열, 세로 4pt, Shift 16pt). Alt 를 누른 채 끌거나 Alt+방향키는 그리드에 맞추지 않고 1pt 씩 옮깁니다. 이미지는 모서리를 끌면 비율이 유지됩니다(Shift 로 풀기).</p> : null}
+      {caps.move ? <p className="text-[11px] cd-text-faint">캔버스의 [옮기기] 손잡이를 끌거나 방향키(4pt, Shift 16pt, Alt 1pt)로 옮깁니다. [안내선·맞춤]을 켜면 12열 그리드·4pt 기준선에 맞춰 붙고, Alt 를 누르면 맞추지 않습니다. 이미지는 모서리를 끌면 비율이 유지됩니다(Shift 로 풀기).</p> : null}
     </section>
   );
 }

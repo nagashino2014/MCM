@@ -36,6 +36,10 @@ ${BODY} .kc-kpi, ${BODY} .kc-card, ${BODY} .kc-strengths__method, ${BODY} .kc-fx
 ${BODY} .kc-strengths__hero { border-radius: 14px; }
 ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 
+/* 쪽 눈썹 글(제목 위 '숫자로 보는 KESI'·'비전'·'연혁'·'사업 분야 01' 등) — 9 → 12px(대표이사 지시 2026-11-08: 너무 작다).
+   연구소·ESG 제안형(.kc-tpl--research .kc-eyebrow 14px)은 그대로. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.pk-sheet .kc-eyebrow { font-size: 12px; line-height: 16px; letter-spacing: 0.3px; }
+
 /* 사업 분야 쪽 라벨(주요 서비스·수행 업종·수행 절차·대표 실적)과 그 아래 요소 사이(사용자 지시 2026-11-05) — 0 → 6px.
    늘어난 높이는 오른쪽 단 블록 사이(14 → 10px, pages-business.tsx)에서 받아 쪽 넘침을 막는다 */
 .kc-areapage .kc-blockhead { margin-bottom: 6px; }

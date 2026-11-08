@@ -4,11 +4,12 @@
 //   글 블록: 한 번 누르면 요소를 고르고(옮기기·복사·삭제), 고른 글을 다시 누르면(두 번 누르기) 글을 고친다(contentEditable).
 //     지표 값·아이콘·쪽 번호 링크는 칩(고칠 수 없음, 지울 수는 있음)
 //     Ctrl+K = 지표 넣기(커서 자리), 글을 고치지 않은 채 Ctrl+Z/Y = 스튜디오 실행 취소/다시(칩 넣기 되돌리기)
-//   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 변·모서리 손잡이로 크기 — 12열 그리드·4pt 기준선에 맞춘다(L3 쪽만)
+//   선택 상자: 끌기 손잡이(왼쪽 위)로 옮기고, 변·모서리 손잡이로 크기(L3 쪽만)
+//     옮기기는 기본 1pt 자유 배치. [안내선]을 켜면 12열 그리드·4pt 기준선에 맞춘다(사용자 지시 2026-11-08: 맞춤이 기본이면 열 선으로 튕겨 자리를 못 잡음). 크기는 늘 맞춤
 //     이미지·일러스트는 모서리를 끌면 비율 유지(Shift = 비율 풀기), 그 밖의 요소는 Shift 로 비율 유지. 사진은 틀과 한 요소로 움직인다(select.ts PHOTO_FRAME_RE)
 //   여러 개 고르기: Shift·Ctrl+클릭으로 더하고 뺀다 → 묶음 손잡이로 함께 옮기고(상대 위치 유지, 묶음 왼쪽 위를 그리드에 맞춤) Delete·Ctrl+D 도 함께
-//   그리드 맞춤 풀기: Alt 를 누른 채 끌거나 Alt+방향키 = 1pt 단위 자유 배치(표지 물방울처럼 열과 무관한 장식 요소, 사용자 지시 2026-11-08)
-//   키보드: 방향키 = 옮기기(가로 1열·세로 4pt, Shift 세로 16pt, Alt 1pt), Delete = 숨기기, Ctrl+C·X·V = 복사·잘라내기·붙여넣기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
+//   Alt 를 누른 채 끌거나 Alt+방향키 = 안내선이 켜 있어도 1pt 자유 배치
+//   키보드: 방향키 = 옮기기(4pt, Shift 16pt, Alt 1pt · 안내선 켜짐이면 가로 1열·세로 4pt), Delete = 숨기기, Ctrl+C·X·V = 복사·잘라내기·붙여넣기, Ctrl+D = 복제, Esc = 선택 해제, Ctrl+Z/Y = 실행 취소/다시
 //   안내선: 12열·여백. 검사 표식: 넘침(빨강)·대비·해상도·겹침(주황)
 //   겹침: 옮기는 중(끌기·묶음 끌기) 겹치는 다른 글 상자에 옅은 주황 테두리 — 막지는 않는다. 놓은 뒤에는 쪽 검사의 '겹침' 경고로 남는다
 
@@ -45,8 +46,8 @@ import type { StudioKit } from "./kit";
 import { selectionLabel } from "./types";
 
 export interface CanvasHandle {
-  /** 방향키 옮기기(가로 = 열, 세로 = 4pt). free = 그리드 맞춤 없이 가로 dx·세로 dy 만큼(1pt 단위) */
-  nudge: (dx: -1 | 0 | 1, dy: number, free?: boolean) => void;
+  /** 방향키 옮기기 — dx·dy(pt)만큼. 안내선이 켜 있으면 가로는 한 열·세로는 4pt 에 맞춘다. free(Alt) = 안내선과 무관하게 그대로 */
+  nudge: (dx: number, dy: number, free?: boolean) => void;
   /** 지표 넣기 자리 — 고치는 중인 글이면 커서 자리, 아니면 고른 글 끝. 글 블록이 아니면 null */
   captureBind: () => BindTarget | null;
   /** 넣은 칩 뒤로 커서를 옮겨 이어서 고치게 한다 */
@@ -457,13 +458,16 @@ export function StudioCanvas({
   }, [tree, selectedIds, multi, maxLevel]);
 
   // ── 옮기기·크기(그리드 맞춤) ──
+  // 그리드 맞춤은 안내선을 켰을 때만(Alt 는 늘 자유)
+  const snapOn = useCallback((alt: boolean) => showGuides && !alt, [showGuides]);
+
   const commitMove = useCallback(
-    (id: string, el: HTMLElement, rect: Rect, cs: ElPos, dx: number, dy: number, free = false) => {
-      const patch = movePatch(rect, cs, ...snapDelta(rect, dx, dy, free));
+    (id: string, el: HTMLElement, rect: Rect, cs: ElPos, dx: number, dy: number, alt = false) => {
+      const patch = movePatch(rect, cs, ...snapDelta(rect, dx, dy, !snapOn(alt)));
       if (patch) onPatchStyles(withPhotoReset([{ id, patch }]));
       void el;
     },
-    [onPatchStyles, withPhotoReset]
+    [onPatchStyles, withPhotoReset, snapOn]
   );
 
   // 묶음 옮기기 — 묶음 왼쪽 위만 그리드에 맞추고 같은 거리만큼 모두 옮긴다(서로의 자리 유지)
@@ -539,7 +543,7 @@ export function StudioCanvas({
     const dx = (e.clientX - d.startX) / zoom;
     const dy = (e.clientY - d.startY) / zoom;
     if (d.mode === "move") {
-      const [ddx, ddy] = snapDelta(d.rect, dx, dy, e.altKey);
+      const [ddx, ddy] = snapDelta(d.rect, dx, dy, !snapOn(e.altKey));
       d.el.style.transform = `${d.orig.transform} translate(${ddx}px, ${ddy}px)`;
       const overlap = overlapAt(d.ov, ddx, ddy);
       setRects((r) => ({ ...r, sel: { ...d.rect, x: d.rect.x + ddx, y: d.rect.y + ddy }, overlap }));
@@ -563,7 +567,7 @@ export function StudioCanvas({
   };
 
   const groupDelta = (g: { startX: number; startY: number; rect: Rect }, e: RPointerEvent<HTMLElement>) => {
-    const [ddx, ddy] = snapDelta(g.rect, (e.clientX - g.startX) / zoom, (e.clientY - g.startY) / zoom, e.altKey);
+    const [ddx, ddy] = snapDelta(g.rect, (e.clientX - g.startX) / zoom, (e.clientY - g.startY) / zoom, !snapOn(e.altKey));
     return { ddx, ddy };
   };
 
@@ -607,15 +611,17 @@ export function StudioCanvas({
     }
   };
 
-  // 방향키 옮기기 — 가로는 한 열, 세로는 4pt(Shift 16pt). free 면 1pt 단위
+  // 방향키 옮기기 — 안내선이 켜 있으면 가로는 한 열·세로는 4pt 맞춤, 아니면 dx·dy 그대로
   useEffect(() => {
     if (!handleRef) return;
     handleRef.current = {
-      nudge: (dir, dy, free = false) => {
+      nudge: (dx, dy, free = false) => {
+        const snap = snapOn(free);
+        const hx = dx === 0 ? 0 : snap ? Math.sign(dx) * COL_STEP : dx;
         if (multi) {
           const items = groupItems();
           const g = unionRect(items.map((it) => it.rect));
-          if (g) commitGroup(items, ...snapDelta(g, dir === 0 ? 0 : dir * (free ? 1 : COL_STEP), dy, free));
+          if (g) commitGroup(items, ...snapDelta(g, hx, dy, !snap));
           return;
         }
         if (!frame || !selectedId || !selCaps?.move) return;
@@ -623,8 +629,7 @@ export function StudioCanvas({
         const el = elOf(id);
         const rect = rectOf(el);
         if (!el || !rect) return;
-        const dx = dir === 0 ? 0 : dir * (free ? 1 : COL_STEP);
-        commitMove(id, el, rect, readCs(el, frame.win), dx, dy, free);
+        commitMove(id, el, rect, readCs(el, frame.win), hx, dy, free);
       },
       captureBind: () => {
         const active = frame?.doc.activeElement as HTMLElement | null;
@@ -680,7 +685,7 @@ export function StudioCanvas({
         s?.addRange(r);
       },
     };
-  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt, multi, groupItems, commitGroup, layoutId]);
+  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt, multi, groupItems, commitGroup, layoutId, snapOn]);
 
   // iframe 안의 단축키 → 화면 쪽 처리기
   useEffect(() => {
@@ -816,7 +821,7 @@ function movePatch(rect: Rect, cs: ElPos, ddx: number, ddy: number): Record<stri
   return { position: "relative", left: px(cs.left + ddx), top: px(cs.top + ddy) };
 }
 
-/** 옮긴 거리 → 실제 적용할 거리. 그리드 맞춤(열 시작선·4pt 기준선)이 기본, free 면 1pt 단위 그대로 */
+/** 옮긴 거리 → 실제 적용할 거리. free 면 1pt 단위 그대로, 아니면 그리드 맞춤(열 시작선·4pt 기준선) */
 function snapDelta(rect: Rect, dx: number, dy: number, free: boolean): [number, number] {
   if (free) return [Math.round(dx), Math.round(dy)];
   return [snapX(rect.x + dx) - rect.x, snapY(rect.y + dy) - rect.y];

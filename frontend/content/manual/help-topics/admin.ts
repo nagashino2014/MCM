@@ -89,6 +89,21 @@ export const ADMIN_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-21",
   },
   {
+    id: "admin.roster",
+    label: "직원 일람표 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "인사카드와 근로계약 값을 모아 보여 줍니다. 고치는 곳은 사용자 등록(인사카드)과 근로계약 관리입니다.",
+        "연령은 오늘 기준 만 나이, 경력 이전은 입사일 전 근무지 경력을 겹치지 않게 더한 값입니다.",
+        "붉은 ‘미등록’은 채워야 할 칸입니다. [[미등록 있음]]으로 그런 직원만 봅니다.",
+        "연봉 칸은 급여 열람 권한이 있을 때만 보입니다.",
+      ] },
+    ],
+    more: { article: "admin.roster", section: "missing" },
+    sources: ["components/admin/users/EmployeeRosterTable.tsx"],
+    reviewedAt: "2026-11-08",
+  },
+  {
     id: "admin.positions",
     label: "사용 가능 직급 도움말",
     blocks: [

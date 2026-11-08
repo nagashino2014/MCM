@@ -337,6 +337,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "계정·권한 관리", href: "/admin/users" },
       { title: "사용자 등록", href: "/admin/users/registry" },
+      // 직원 일람표(2026-11-08) — 1명 1행 직위·연령·학력·경력·자격증·연봉. 표는 staffing.view 전사, 연봉 칸은 payroll.view 전사.
+      { title: "직원 일람표", href: "/admin/users/roster" },
       // 접속기록(PR-P1) — 로그인·열람·다운로드 이력. security.access_log RBAC 가드.
       { title: "접속기록 조회", href: "/admin/access-log" },
       // AI API 사용량·과금(docs/ai-api-usage-management-blueprint.md P1) — ai.usage.view RBAC 가드.

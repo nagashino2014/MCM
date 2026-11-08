@@ -172,6 +172,14 @@ variable "extra_send_domain" {
   default = ""
 }
 
+# 추가 도메인(koensain.com) 수신 2단계 스위치 — true 면 SES Receipt Rule 수신자에 extra_send_domain 을 더한다.
+# 아마란스 해지에 맞춘 MX 전환용. Wix MX 를 SES 로 바꾸기 전에 켜 둬도 안전하다(MX 가 바뀌기 전엔 .com 메일이 SES 로 오지 않음).
+# 절차: docs/koensain-com-mx-cutover.md.
+variable "enable_extra_domain_inbound" {
+  type    = bool
+  default = false
+}
+
 # 추가 발신 도메인의 Custom MAIL FROM 서브도메인(bounce.koensain.com). Wix 에 MX·TXT 를 넣기 전까지는
 # behavior_on_mx_failure=UseDefaultValue 로 amazonses.com MAIL FROM 을 써서 발송이 막히지 않는다.
 variable "extra_mail_from_subdomain" {

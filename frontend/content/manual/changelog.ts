@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-08", kind: "신규", title: "급여대장 — 연간 현황 탭",
+    body: "급여대장에 ‘연간 현황’ 탭을 추가했습니다. 연도를 고르면 그해 급여를 받은 직원 전부(중간 퇴사자 포함)가 한 줄씩 나오고, 지급·공제 항목별 연간 합계와 지급합계·공제합계·차인지급액, 맨 아래 전 직원 합계를 한 표로 봅니다. 줄을 누르면 그 직원의 직원별 연간으로 옮겨 갑니다.",
+    articles: ["payroll.ledger"],
+  },
+  {
     date: "2026-11-08", kind: "변경", title: "회사소개서 — 옮기기 자유 배치 기본, 눈썹 글자 확대, 회사 개요 일반현황 라벨",
     body: "스튜디오에서 요소를 끌면 1pt 단위로 자유롭게 놓이고, [안내선·맞춤]을 켠 동안만 12열 그리드에 맞춰 붙습니다(특정 자리에서 열 선으로 튕기던 문제). 쪽 제목 위 눈썹 글(숫자로 보는 KESI·비전·연혁 등)을 12pt 로 키웠고, 회사 개요 쪽 로고 아래 표에 '일반현황' 라벨을 붙였습니다.",
     articles: ["sales.catalog-studio", "sales.catalog"],

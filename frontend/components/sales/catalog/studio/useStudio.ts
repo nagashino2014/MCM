@@ -11,7 +11,8 @@ import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "@/li
 import { usableFontSet, type FontSetDef } from "@/lib/catalog/fonts";
 import { composePage, orderedPlan, variantsOf, type ComposedPage } from "@/lib/catalog/studio/compose";
 import { pageState, upsertPage, withOrder, type StudioDoc, type StudioPageState } from "@/lib/catalog/studio/doc";
-import type { PageEdits } from "@/lib/catalog/studio/edits";
+import { anchorPins, type PageEdits } from "@/lib/catalog/studio/edits";
+import type { CNode } from "@/lib/catalog/studio/nodes";
 import type { TreeEnv } from "@/lib/catalog/studio/render-tree";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
 import { illustIdsIn, type IllustrationRender } from "@/lib/catalog/illustration-types";
@@ -163,6 +164,12 @@ export function useStudio(docId: string) {
     },
     [pages, data]
   );
+  // 고친 글에 자리 지문을 달 때 쓰는 그 쪽 기본 트리(edits.ts anchorPins)
+  const baseOf = useRef<(key: string) => CNode | null>(() => null);
+  baseOf.current = (key) => {
+    const it = plan.find((p) => p.key === key);
+    return it ? composedOf(it).base : null;
+  };
 
   // ── 편집(실행 취소 가능) ──
   // 같은 조작이 잇달아 오면(입력칸 타자·밀대 끌기) 실행 취소 한 단계로 묶는다
@@ -213,7 +220,7 @@ export function useStudio(docId: string) {
     (key: string, fn: (edits: PageEdits) => PageEdits, mergeKey?: string) =>
       apply((s) => {
         const st = pageState(s.pages, key);
-        const edits = fn(st.edits);
+        const edits = anchorPins(fn(st.edits), st.edits, baseOf.current(key));
         return edits === st.edits ? s : { ...s, pages: upsertPage(s.pages, { ...st, edits }) };
       }, mergeKey),
     [apply]

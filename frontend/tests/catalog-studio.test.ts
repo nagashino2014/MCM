@@ -14,8 +14,15 @@ import { elementToTree } from "@/lib/catalog/studio/convert";
 import { orderPlan, type StudioPageState } from "@/lib/catalog/studio/doc";
 import {
   addElement,
+  anchorMatches,
+  anchorOf,
+  anchorPins,
   applyEdits,
+  dropOrphanEdits,
   duplicateNode,
+  editsWithin,
+  orphanEdits,
+  resetNode,
   hideNode,
   listItemOp,
   pasteNodes,
@@ -562,4 +569,116 @@ test("스튜디오 — 요소 겹침 대상: 옮긴 요소(위치 편집·추가
   assert.ok(boxes.includes("ueeeeeeee"), "추가한 글상자는 글 상자");
   assert.ok(!boxes.includes("ugggggggg"), "도형은 글 상자가 아니다");
   assert.ok(!boxes.includes("uffffffff"), "추가 요소 안으로 내려가지 않는다");
+});
+
+// ── 쪽 고유 도식(InfoSource) 편집 결함(2026-11-08 C04 KPI 카드 중복) ──
+const figuresOf = (t: CNode) => findBy(t, (n) => n.widget === "infographic" && (n.props as { slot: string }).slot === "c04.figures")!;
+const kpiCards = (t: CNode) => figuresOf(t).children!.filter(hasClass("kc-kpi"));
+const c04Tree = (variant?: Record<string, string>) => {
+  const item = buildPagePlan(ctxOf(), makeFixture(), COVER, variant ? { c04: variant } : undefined).find((p) => p.key === "c04")!;
+  return elementToTree(item.element, "c04");
+};
+
+test("쪽 고유 도식 — 내용만 고치면 원래 화면(C04 카드 4×2)을 두고, 유형·일러스트를 바꿔야 다시 그린다", () => {
+  const base = c04Tree();
+  const fig = figuresOf(base);
+  assert.equal((fig.props as { source?: boolean }).source, true, "InfoSource 자리 표시");
+  assert.equal(kpiCards(base).length, 8);
+  const spec = (fig.props as unknown as { spec: { content: { items: Array<{ label: string }> } } }).spec;
+  const content = { ...spec.content, items: spec.content.items.map((it, i) => (i === 0 ? { ...it, label: "고친 첫 항목" } : it)) };
+  let edits = setInfo({ v: 1 }, fig.id, { content } as never);
+  let d = figuresOf(applyEdits(base, edits));
+  assert.ok(hasClass("kc-kpis")(d), "원래 카드 묶음 그대로");
+  assert.equal(kpiCards(applyEdits(base, edits)).length, 8);
+  assert.equal((d.props as { held?: boolean }).held, true, "다시 그릴 때 쓰도록 보관 중");
+  assert.ok(!(d.props as { drawn?: boolean }).drawn);
+  // 색만 바꿔도 원래 화면
+  edits = setInfo(edits, fig.id, { content, colorMode: "mono" } as never);
+  assert.ok(hasClass("kc-kpis")(figuresOf(applyEdits(base, edits))));
+  // 유형을 고르면 spec(보관한 내용 포함)으로 다시 그린다
+  edits = setInfo(edits, fig.id, { content, colorMode: "mono", type: "stats", variant: "row" } as never);
+  d = figuresOf(applyEdits(base, edits));
+  assert.equal((d.props as { drawn?: boolean }).drawn, true);
+  assert.equal((d.props as { source?: boolean }).source, true, "다시 그려도 쪽 고유 도식 표시는 남는다");
+  assert.ok(!hasClass("kc-kpis")(d), "범용 도식으로 다시 그림");
+  assert.ok(textOf(d).includes("고친 첫 항목"));
+  // 범용 자리(InfoSlot)는 내용만 고쳐도 그대로 다시 그린다(기존 동작)
+  const area = pageTree(makeFixture(), "area-1");
+  const proc = findBy(area, (n) => n.widget === "infographic" && (n.props as { slot: string }).slot === "area-1.process")!;
+  assert.ok(!(proc.props as { source?: boolean }).source);
+  const pspec = (proc.props as unknown as { spec: { content: { items: Array<{ label: string }> } } }).spec;
+  const pe = setInfo({ v: 1 }, proc.id, { content: { ...pspec.content, items: pspec.content.items.map((it, i) => (i === 0 ? { ...it, label: "바꾼 단계" } : it)) } } as never);
+  assert.ok(textOf(findNode(applyEdits(area, pe), proc.id)!).includes("바꾼 단계"));
+  // [내용 원래대로] — 내용만 있던 덮어쓰기는 통째로 지워진다
+  const cleared = setInfo(setInfo({ v: 1 }, fig.id, { content } as never), fig.id, {} as never);
+  assert.equal(cleared.nodes, undefined);
+});
+
+test("위젯 되돌리기 — 고를 수 없는 위젯 안 노드의 옛 고정 글도 함께 지운다", () => {
+  const base = c04Tree();
+  const fig = figuresOf(base);
+  const label = findBy(kpiCards(base)[1], hasClass("kc-kpi__label"))!;
+  // 옛 버전에서 생긴 카드 글 고정값 + 도식 내용 덮어쓰기
+  const legacy: PageEdits = sanitizePageEdits({
+    v: 1,
+    nodes: { [label.id]: { content: [{ id: "uaaaaaaaa", tag: "#text", text: "화학사고 예방·영업허가 등" }] }, [fig.id]: { info: { colorMode: "mono" } } },
+  });
+  const derived = applyEdits(base, legacy);
+  assert.equal(resolveSelection(derived, label.id)!.id, fig.id, "위젯 안은 위젯 통째로 고른다");
+  assert.deepEqual(editsWithin(base, legacy, fig.id), [label.id]);
+  // [이 요소 편집 모두 되돌리기]
+  assert.equal(resetNode(legacy, fig.id, "all", base).nodes, undefined);
+  // [원래 유형·내용으로]
+  assert.equal(setInfo(legacy, fig.id, null, base).nodes, undefined);
+  // 위젯 자신에 편집이 없어도 안쪽 편집만 지울 수 있다
+  const innerOnly: PageEdits = { v: 1, nodes: { [label.id]: legacy.nodes![label.id] } };
+  assert.equal(resetNode(innerOnly, fig.id, "all", base).nodes, undefined);
+  // 일부만 되돌리기·기본 트리 없이 부르면 안쪽은 그대로(다른 호출부 호환)
+  assert.ok(resetNode(legacy, fig.id, ["style"], base).nodes?.[label.id]);
+  assert.ok(resetNode(legacy, fig.id, "all").nodes?.[label.id]);
+  // 위젯이 아닌 노드는 안쪽을 건드리지 않는다
+  assert.deepEqual(editsWithin(base, legacy, kpiCards(base)[1].id), []);
+});
+
+test("자리 해시 id 밀림 — 실행 중 조건부 자식은 자리를 지키고, 코드가 바뀌어 밀린 고정 글은 지문이 달라 붙지 않는다", () => {
+  // 띠 배경(조건부 첫 자식)이 있어도 없어도 카드 id 는 같다(null 이 자리를 지킴)
+  const grid = c04Tree();
+  const band = c04Tree({ layout: "band", photo: "k/assets/hq-cover-tall.webp" });
+  assert.ok(findBy(band, hasClass("kc-kpis__bg")), "띠 배경이 있어야 함");
+  assert.deepEqual(kpiCards(band).map((n) => n.id), kpiCards(grid).map((n) => n.id));
+
+  const cards = kpiCards(grid);
+  const labelOf = (i: number) => findBy(cards[i], hasClass("kc-kpi__label"))!;
+  // 새 고정 글에는 편집 경로(useStudio)가 자리 지문을 단다
+  let edits: PageEdits = { v: 1 };
+  edits = anchorPins(setNodeContent(edits, applyEdits(grid, edits), labelOf(0).id, [{ id: "ubbbbbbbb", tag: "#text", text: "통합허가 최초허가(고침)" }]), edits, grid);
+  assert.equal(edits.nodes![labelOf(0).id].anchor, anchorOf(labelOf(0)));
+  edits = sanitizePageEdits(JSON.parse(JSON.stringify(edits)));
+  assert.ok(edits.nodes![labelOf(0).id].anchor, "저장 왕복 뒤에도 지문 유지");
+  assert.ok(textOf(findNode(applyEdits(grid, edits), labelOf(0).id)!).includes("(고침)"));
+  // 글이 그대로면 지문을 다시 달지 않는다(옛 고정 글을 지금 자리로 굳히지 않음)
+  const legacyPin: PageEdits = { v: 1, nodes: { [labelOf(2).id]: { content: [{ id: "ucccccccc", tag: "#text", text: "x" }] } } };
+  assert.equal(anchorPins(legacyPin, legacyPin, grid), legacyPin);
+
+  // 2026-10-29 실제 사례 재현: 쪽 코드가 카드 앞에 자식을 넣어 id 가 한 칸 밀림 — 2번째 카드('변경허가')에서 만든 고정 글이 1번째 카드 id 에 붙어 있다
+  const shifted: PageEdits = sanitizePageEdits({
+    v: 1,
+    nodes: { [labelOf(0).id]: { content: [{ id: "udddddddd", tag: "#text", text: "변경허가·변경신고" }], anchor: anchorOf(labelOf(1)) } },
+  });
+  const d = applyEdits(grid, shifted);
+  assert.ok(textOf(findNode(d, labelOf(0).id)!).includes("최초허가"), "1번째 카드는 원래 글 그대로");
+  assert.ok(!findNode(d, labelOf(0).id)!.pinned);
+  assert.deepEqual(orphanEdits(grid, shifted), [labelOf(0).id], "붙을 곳을 잃은 편집으로 보인다");
+  assert.equal(dropOrphanEdits(shifted, grid).nodes, undefined);
+  // 지문이 없는 옛 고정 글은 예전처럼 붙는다(호환)
+  const old: PageEdits = { v: 1, nodes: { [labelOf(0).id]: { content: shifted.nodes![labelOf(0).id].content } } };
+  assert.ok(findNode(applyEdits(grid, old), labelOf(0).id)!.pinned);
+  assert.deepEqual(orphanEdits(grid, old), []);
+  // 숫자·일부 데이터 글이 바뀐 것은 같은 자리로 본다
+  const note = findBy(cards[0], hasClass("kc-kpi__note"))!;
+  const anchor = anchorOf(note);
+  assert.ok(/#/.test(anchor), anchor);
+  const renum: CNode = JSON.parse(JSON.stringify(note).replace(/\d/g, "7"));
+  assert.ok(anchorMatches(renum, anchor));
+  assert.ok(!anchorMatches(labelOf(1), anchorOf(labelOf(0))));
 });

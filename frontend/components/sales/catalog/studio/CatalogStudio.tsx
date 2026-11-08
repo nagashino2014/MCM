@@ -23,6 +23,7 @@ import { pageState } from "@/lib/catalog/studio/doc";
 import {
   addElement,
   DUPLICATE_OFFSET,
+  dropOrphanEdits,
   duplicateNode,
   hideNode,
   listItemOp,
@@ -382,9 +383,10 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         if (ids.length < clip.nodes.length) toast("이 쪽에 추가할 수 있는 요소 수(40개)를 넘었습니다.", "error");
       },
       unhide: (id) => pe((e) => unhideNode(e, id)),
-      reset: (id, parts) => pe((e) => resetNode(e, id, parts ?? "all")),
+      // 전부 되돌리기면 위젯 안 노드의 편집(화면에서 고를 수 없는 옛 고정 글 등)도 함께 지운다
+      reset: (id, parts) => pe((e) => resetNode(e, id, parts ?? "all", composed?.base)),
       setInfo: (id, patch, slot) => {
-        pe((e) => setInfo(e, id, patch === null ? null : mergeOverride(e.nodes?.[id]?.info, patch)), patch && "content" in patch ? `info:${id}` : undefined);
+        pe((e) => setInfo(e, id, patch === null ? null : mergeOverride(e.nodes?.[id]?.info, patch), composed?.base), patch && "content" in patch ? `info:${id}` : undefined);
         if (patch?.type && slot) void catalogFetch("/api/catalog/studio/prefs", { method: "POST", body: JSON.stringify({ slot, type: patch.type, variant: patch.variant ?? null }) }).catch(() => undefined);
       },
       setImage: (id, ref) => pe((e) => setImage(e, derived, id, ref), `image:${id}`),
@@ -427,7 +429,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         const n = findNode(derived, blockId);
         if (n) setBindTarget({ blockId, children: appendCaret(n.children ?? []), atCaret: false });
       },
-      dropOrphans: () => pe((e) => (composed?.orphans ?? []).reduce((acc, id) => resetNode(acc, id), e)),
+      dropOrphans: () => composed && pe((e) => dropOrphanEdits(e, composed.base)),
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
     };

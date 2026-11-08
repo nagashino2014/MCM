@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-08", kind: "수정", title: "회사소개서 스튜디오 — 쪽 고유 도식 내용 고침이 원래 화면을 바꾸던 문제",
+    body: "숫자로 보는 KESI 카드 같은 쪽 고유 도식은 내용만 고쳐도 범용 숫자 한 줄로 바뀌던 문제를 고쳤습니다. 원래 모양에서는 내용 편집을 막고, 유형을 바꾸거나 일러스트로 그릴 때 고칩니다. [원래 유형·내용으로]와 [이 요소 편집 모두 되돌리기]는 안쪽에 예전에 고친 글도 함께 지우고, 쪽 모양이 바뀌어 자리가 어긋난 고친 글은 다른 카드에 붙지 않습니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
     date: "2026-11-08", kind: "개선", title: "회사소개서 스튜디오 — 목록 항목 글자 크기, Alt 자유 배치",
     body: "사업 분야 목록처럼 목록 항목으로 잡히는 글도 도구 줄에서 글자 크기를 바꿀 수 있습니다. Alt 를 누른 채 끌거나 Alt+방향키로 누르면 12열 그리드에 맞추지 않고 1pt 씩 옮겨, 표지 물방울 같은 장식 요소를 원하는 자리에 둘 수 있습니다.",
     articles: ["sales.catalog-studio"],

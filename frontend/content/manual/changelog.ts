@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-08", kind: "개선", title: "회사소개서 스튜디오 — 목록 항목 글자 크기, Alt 자유 배치",
+    body: "사업 분야 목록처럼 목록 항목으로 잡히는 글도 도구 줄에서 글자 크기를 바꿀 수 있습니다. Alt 를 누른 채 끌거나 Alt+방향키로 누르면 12열 그리드에 맞추지 않고 1pt 씩 옮겨, 표지 물방울 같은 장식 요소를 원하는 자리에 둘 수 있습니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
     date: "2026-11-08", kind: "개선", title: "연락처 가져오기 — 사업자번호 검색 진행 막대",
     body: "검색 중에는 끝난 회사 수, 분당 처리 수, 끝날 예상 시각을 막대로 보여 줍니다. 정보원별 오늘 조회량과 한도가 풀리는 시각도 함께 나옵니다.",
     articles: ["external-parties.import"],

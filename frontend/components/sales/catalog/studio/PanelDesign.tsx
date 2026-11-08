@@ -406,8 +406,10 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
 
 /** 인포그래픽 유형 바꾸기 — 규칙 기반 후보를 실제 내용으로 그려 보여 준다(블루프린트 §4-3·4-4) */
 function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps & { sel: Selection }) {
-  const slot = sel.node.props as unknown as InfoSlotProps;
+  const slot = sel.node.props as unknown as InfoSlotProps & { source?: boolean; drawn?: boolean };
   const spec: InfoSpec = slot.spec;
+  // 쪽 고유 도식의 원래 모양 — 아직 어느 유형으로도 그리지 않았다(변형·색은 유형을 고른 뒤에)
+  const original = Boolean(slot.source && !slot.drawn);
   const theme = studio.state!.theme;
   const [showBlocked, setShowBlocked] = useState(false);
   const [overflow, setOverflow] = useState<Record<string, boolean>>({});
@@ -480,7 +482,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
         인포그래픽 유형 바꾸기 <CdHelp topic="catalog.studio-infographic" />
       </h3>
       <p className="text-xs cd-text-muted">
-        지금 {meta.label} · 내용 {spec.content.items.length}항목 · 자리 {Math.round(slot.box.w)}×{Math.round(slot.box.h)}pt
+        지금 {original ? "쪽 고유 도식(원래 모양)" : meta.label} · 내용 {spec.content.items.length}항목 · 자리 {Math.round(slot.box.w)}×{Math.round(slot.box.h)}pt
       </p>
       <p className="text-[11px] cd-text-faint flex items-center gap-1" aria-live="polite">
         {ranking ? (
@@ -497,7 +499,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
       </p>
       <ul className="flex flex-col gap-2">
         {top.map((c) => {
-          const cur = c.type === spec.type && !spec.illust;
+          const cur = c.type === spec.type && !spec.illust && !original;
           const w = Math.min(268, slot.box.w);
           const srcH = Math.max(slot.box.h, INFO_TYPE_META[c.type].minHeight) + 8;
           const key = `${c.type}:${c.variant}`;
@@ -539,7 +541,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
       {spec.illust ? (
         <p className="text-[11px] cd-text-muted">지금 모양은 보유 일러스트입니다(아래 '일러스트로 그리기'). 위 유형을 고르면 기본 도식으로 바뀝니다.</p>
       ) : null}
-      {!spec.illust && onAiShrink && overflow[`${spec.type}:${top.find((c) => c.type === spec.type)?.variant}`] ? (
+      {!spec.illust && !original && onAiShrink && overflow[`${spec.type}:${top.find((c) => c.type === spec.type)?.variant}`] ? (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="cd-pill cd-pill-warn">지금 유형이 자리를 넘칩니다</span>
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => onAiShrink([sel.id])}>
@@ -548,7 +550,9 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
           <span className="cd-text-faint">또는 넘치지 않는 다른 유형을 고르세요.</span>
         </div>
       ) : null}
-      <div className="flex flex-col gap-1" hidden={Boolean(spec.illust)}>
+      {/* hidden 속성은 .flex 에 덮이므로 그리지 않는 쪽으로 숨긴다 */}
+      {spec.illust || original ? null : (
+      <div className="flex flex-col gap-1">
         <p className="text-xs cd-text-muted">변형</p>
         <div className="flex flex-wrap gap-1.5">
           {meta.variants.map((v) => (
@@ -572,6 +576,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
           ))}
         </div>
       </div>
+      )}
       {blocked.length ? (
         <div className="text-xs">
           <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" aria-expanded={showBlocked} onClick={() => setShowBlocked((v) => !v)}>

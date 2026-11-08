@@ -1,7 +1,9 @@
 /*
  * 쪽 React 요소 → 노드 트리(기본 트리). 쪽 컴포넌트는 훅·컨텍스트 없는 순수 함수라 직접 불러 펼친다.
  * 노드 id 는 React 의 재조정 규칙과 같은 '자리'(부모 경로 + key 또는 순번 + 태그)에서 해시로 만든다 → 같은 데이터 모양이면 같은 id,
- * 목록 항목이 늘어도 그 뒤 형제의 id 는 그대로다(map 결과 배열이 한 자리를 차지).
+ * 목록 항목이 늘어도 그 뒤 형제의 id 는 그대로다(map 결과 배열이 한 자리를 차지). `{조건 ? <A/> : null}` 도 null 이 자리를 지켜 형제가 밀리지 않는다.
+ * ⚠ 쪽 컴포넌트 코드에서 형제 앞에 자식을 새로 넣으면 뒤 형제 id 가 모두 한 칸씩 밀린다(2026-10-29 TP2 가 C04 카드 앞에 띠 배경 자리를 넣어
+ *   고친 카드 글이 다음 카드에 붙었다). 새 자식은 형제 뒤에 두거나 key 를 단다. 고친 글은 붙을 때 자리 지문(edits.ts anchor)을 대조해 엉뚱한 자리에 붙지 않는다.
  * 특별히 다루는 것: Icon → x-icon 노드, InfoSlot → 인포그래픽 위젯(spec 을 props 로), data-metric/data-bind → bind, data-widget → widget.
  */
 import { Fragment, isValidElement, type ReactElement, type ReactNode } from "react";
@@ -84,7 +86,8 @@ function convertAt(c: ReactNode, path: string, out: CNode[]): void {
     const root = made.find((n) => n.tag !== "#text");
     if (root) {
       root.widget = "infographic";
-      root.props = { slot: sp.slot, spec: sp.spec, box: sp.box, ...(sp.area != null ? { area: sp.area } : {}) };
+      // source = 쪽 고유 도식 — 유형·일러스트를 바꿀 때만 spec 으로 다시 그린다(내용만 고쳐서는 원래 모양을 바꾸지 않음, edits.ts infoRedraws)
+      root.props = { slot: sp.slot, spec: sp.spec, box: sp.box, ...(sp.area != null ? { area: sp.area } : {}), source: true };
     }
     out.push(...made);
     return;

@@ -316,11 +316,12 @@ export const SALES_HELP: HelpTopic[] = [
         "'자리 넘침' 후보는 그 자리에 다 들어가지 않습니다. 지금 유형이 넘치면 [[AI로 줄이기]]로 라벨·설명을 줄인 제안을 봅니다.",
         "AI 를 쓸 수 있으면 AI 가 내용의 뜻으로 순서를 다시 매기고 이유를 한 줄 답니다(✦). 아니면 규칙 점수 순입니다.",
         "유형을 바꿔도 항목 내용은 그대로입니다. 목록 ↔ 수치형처럼 모양이 다른 변환은 막습니다.",
+        "쪽 고유 도식은 원래 모양일 때 내용을 고칠 수 없습니다. 유형을 바꾸거나 일러스트로 그린 뒤에 고칩니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "infographic" },
     sources: ["components/sales/catalog/studio/PanelDesign.tsx", "components/sales/catalog/studio/PanelContent.tsx"],
-    reviewedAt: "2026-10-24",
+    reviewedAt: "2026-11-08",
   },
   {
     id: "catalog.studio-ai",

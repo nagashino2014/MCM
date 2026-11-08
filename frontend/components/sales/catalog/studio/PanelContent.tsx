@@ -8,6 +8,7 @@ import { ArrowDown, ArrowUp, Copy, CornerLeftUp, EyeOff, ImagePlus, RotateCcw, T
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { INFO_TYPE_META, type InfoContent, type InfoItem, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
+import { editsWithin } from "@/lib/catalog/studio/edits";
 import { findNode, newUserId, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { capabilities, describe, isTextBlock, parentSelection, type Selection } from "@/lib/catalog/studio/select";
 import { selectionLabel, type PanelProps } from "./types";
@@ -36,6 +37,8 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
   const hiddenIds = Object.entries(composed.state?.edits.nodes ?? {})
     .filter(([, e]) => e.hidden)
     .map(([id]) => id);
+  // 위젯 안 노드에 붙은 편집(옛 버전에서 생긴 고정 글 등) — 고를 수 없으니 위젯 되돌리기로 함께 지운다
+  const innerEdits = sel?.node.widget && sel.node.origin === "base" ? editsWithin(composed.base, composed.state?.edits, sel.id).length : 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -63,6 +66,11 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
             </span>
           </div>
           {caps?.locked ? <p className="text-xs cd-text-muted">{caps.locked}</p> : null}
+          {innerEdits > 0 ? (
+            <p className="text-xs cd-text-muted">
+              <span className="cd-pill cd-pill-warn">안쪽 편집 {innerEdits}건</span> 예전 버전에서 안쪽 요소를 고친 편집이 붙어 있습니다. 아래 [이 요소 편집 모두 되돌리기]로 함께 지웁니다.
+            </p>
+          ) : null}
 
           {caps?.editText ? (
             <div className="text-xs cd-text-muted flex flex-col gap-1">
@@ -97,8 +105,13 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
                 {sel.node.origin === "base" || !sel.node.origin ? "이 요소 숨기기" : "이 요소 지우기"}
               </button>
               ) : null}
-              {(sel.node.edited || sel.frame?.edited) && sel.node.origin === "base" ? (
-                <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => (ops.reset(sel.id), sel.frame && ops.reset(sel.frame.id))}>
+              {(sel.node.edited || sel.frame?.edited || innerEdits > 0) && sel.node.origin === "base" ? (
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-ghost cd-btn-sm"
+                  onClick={() => (ops.reset(sel.id), sel.frame && ops.reset(sel.frame.id))}
+                  title={innerEdits ? `안쪽 요소의 편집 ${innerEdits}건도 함께 지웁니다.` : undefined}
+                >
                   <RotateCcw className="w-3.5 h-3.5" /> 이 요소 편집 모두 되돌리기
                 </button>
               ) : null}
@@ -288,7 +301,27 @@ function ImageControls({ sel, ops }: { sel: Selection; ops: PanelProps["ops"] })
 
 /** 인포그래픽 내용(중립 구조) 편집 — 유형을 바꿔도 이 내용은 그대로 */
 function InfoContentEditor({ sel, ops }: { sel: Selection; ops: PanelProps["ops"] }) {
-  const p = sel.node.props as unknown as InfoSlotProps;
+  const p = sel.node.props as unknown as InfoSlotProps & { source?: boolean; drawn?: boolean; held?: boolean };
+  // 쪽 고유 도식은 원래 모양일 때 내용을 고치지 않는다 — 원래 마크업은 이 내용(spec)이 아니라 데이터에서 따로 그려서 고쳐도 반영할 길이 없고,
+  // 반영하려고 다시 그리면 원래 화면이 범용 도식으로 바뀐다(edits.ts infoRedraws)
+  if (p.source && !p.drawn) {
+    return (
+      <div className="flex flex-col gap-1.5 text-xs cd-text-muted">
+        <p>
+          쪽 고유 도식입니다. 원래 모양에서는 항목 이름·값을 여기서 고칠 수 없습니다. 숫자는 데이터에서 자동으로 채웁니다. 내용을 고치려면 디자인 탭에서 유형을 바꾸거나 일러스트로 그리세요.
+          <CdHelp topic="catalog.studio-infographic" />
+        </p>
+        {p.held ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="cd-pill cd-pill-warn">보관한 내용 고침 · 원래 모양에는 안 보임</span>
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.setInfo(sel.id, { content: undefined, colorMode: undefined }, p.slot)}>
+              <RotateCcw className="w-3.5 h-3.5" /> 보관한 고침 지우기
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   const spec: InfoSpec = p.spec;
   const content = spec.content;
   const meta = INFO_TYPE_META[spec.type];

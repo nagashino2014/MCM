@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-09", kind: "변경", title: "계약 — 부서장 매출 계약 전체 열람, 매입 계약은 대표이사·관리자만",
+    body: "매출 계약 관리에서 부서장도 임원·대표이사·관리자처럼 전체 계약을 봅니다(수행부서·수행인력이 등록되지 않은 용역 포함). 사원은 그대로 본인이 수행인력으로 참여한 계약만 봅니다. 매입 계약 관리는 대표이사와 관리자만 보도록 좁혔습니다. 바뀐 메뉴는 다시 로그인하면 반영됩니다.",
+    articles: ["contracts.manage", "contracts.purchase"],
+  },
+  {
     date: "2026-11-09", kind: "변경", title: "회사소개서 — 응용소프트웨어 제품 5종",
     body: "응용소프트웨어 제품에 PDF 문서 레이아웃 복원앱과 화관법 통합관리 플랫폼을 더했습니다. 숫자로 보는 KESI 의 제품 수가 5종이 되고, 응용소프트웨어 쪽에 제품 카드 5장이 한 줄로 나옵니다.",
     articles: ["sales.catalog"],

@@ -402,11 +402,10 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             head: ["역할", "볼 수 있는 계약"],
             rows: [
               ["사원", "본인이 수행인력으로 참여한 계약(종료 포함)"],
-              ["부서장", "소속 부서가 수행부서인 계약과 부서원이 참여한 계약"],
-              ["임원·관리자", "전체 계약"],
+              ["부서장·임원·대표이사·관리자", "전체 계약"],
             ],
           },
-          { kind: "p", text: "계약 등록·수정·단계 입력·변경계약은 계약 편집 권한(부서장·관리자)이, 계약 삭제는 계약 삭제 권한이 있어야 저장됩니다. 전자발행은 계산서 발행 권한이 있는 회계 담당자가 합니다." },
+          { kind: "p", text: "계약 등록·수정·단계 입력·변경계약은 계약 편집 권한(부서장은 소속 부서 계약, 관리자는 전체)이, 계약 삭제는 계약 삭제 권한이 있어야 저장됩니다. 전자발행은 계산서 발행 권한이 있는 회계 담당자가 합니다." },
           { kind: "p", text: "[[신규 계약]]·[[변경계약 입력]]은 계약 편집 권한, [[계약 삭제]]는 계약 삭제 권한이 있는 사람에게만 보입니다. 버튼이 없으면 담당 권한자에게 요청하세요." },
           { kind: "warn", text: "[[전자발행]] 버튼은 계산서 발행 권한이 없어도 보입니다. 권한이 없으면 발행할 때 거절됩니다." },
         ],
@@ -578,7 +577,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-09",
   },
   {
     id: "contracts.dashboard",
@@ -994,7 +993,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
     title: "매입 계약 관리 — 외주·구독·임대·관리 계약과 세금계산서 수취·대금 지급",
     routes: ["/contracts/purchase$"],
     requires: ["purchase.view"],
-    audience: ["head", "exec", "admin"],
+    audience: ["exec", "admin"],
     keywords: ["매입 계약", "매입", "외주 계약", "정기 구독", "임대 계약", "관리 계약", "세금계산서 수취", "대금 지급", "매입처", "계정과목", "홈택스 매입", "단가 계약", "추가 지출", "종량제", "관리비 명세서", "차량 렌트", "복합기 렌트", "부동산 임대", "납부 현황"],
     summary: [
       "매출 계약과 별도로 우리 회사가 돈을 내는 계약(외주 계약·정기 구독·임대 계약·관리 계약)을 원장으로 관리합니다.",
@@ -1012,7 +1011,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             "왼쪽 트리의 부모는 계약 유형 4가지(외주 계약·정기 구독·임대 계약·관리 계약)이고, 펼치면 계약이 계약일 순으로 나옵니다. 아이콘 색은 매출 원장의 통합허가·화관법·HAPs·ESG 색을 순서대로 씁니다.",
             "검색창은 계약명·업체·분류로 거르고, 연도 선택은 계약일 기준입니다. 하단에 계약 건수·진행·지급 완료 집계가 나옵니다.",
             "계약을 고르면 오른쪽에 계약 정보와 유형별 영역이 열립니다 — 외주: 지급 진척도·(단가 계약 요약)·청구·수금 단계, 정기 구독: 추가 지출, 임대: 분류 상세·(종량제 요금 추이), 관리: 납부 현황. [[계약서 보기]]로 PDF 뷰어를 엽니다(관리 계약은 계약서 대신 관리비 명세서 목록).",
-            "이 화면은 매입 계약 조회 권한(purchase.view)을 가진 회계·관리자·대표이사·영업관리 담당자만 봅니다.",
+            "이 화면은 매입 계약 조회 권한(purchase.view)을 가진 대표이사·관리자만 봅니다.",
           ] },
         ],
       },
@@ -1075,6 +1074,6 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/purchase/FeeStatementPreviewModal.tsx",
       "components/contracts/RateCardEditor.tsx",
     ],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-09",
   },
 ];

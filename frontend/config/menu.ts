@@ -262,7 +262,7 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       // 매입 계약 관리가 생기며 '계약 관리' → '매출 계약 관리'로 개칭(2026-11-02 사용자 요청). 경로는 그대로.
       { title: "매출 계약 관리", href: "/contracts" },
-      // 매입 계약 관리(331) — 외주·구독·임대·관리 계약. purchase.view(회계·관리자·대표이사·영업관리)로 한정.
+      // 매입 계약 관리(331) — 외주·구독·임대·관리 계약. purchase.view(관리자·대표이사)로 한정(345).
       { title: "매입 계약 관리", href: "/contracts/purchase" },
       { title: "Dashboard", href: "/contracts/dashboard" },
       { title: "수주/수금/발행 현황", href: "/contracts/billing" },

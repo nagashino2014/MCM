@@ -1,6 +1,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { getCatalogAsset } from "@/lib/catalog/clients";
 import { getCredential } from "@/lib/company/profile";
+import { readCredentialVisual } from "@/lib/company/credential-preview";
 import { buildPrintHtml, type PrintFontFace } from "@/lib/print-kit/document";
 import { PRINT_ORIGIN, type PrintAsset } from "@/lib/print-kit/converter";
 import { contentTypeOf, imageSize, readPublicFile, readPublicText, renderStatic } from "@/lib/print-kit/server";
@@ -95,9 +96,9 @@ export async function loadImageKey(key: ImageKey): Promise<{ data: Buffer; conte
     return data && asset ? { data, contentType: asset.contentType } : null;
   }
   if (kind === "c") {
+    // 이미지 증빙은 원본, PDF 증빙은 첫 쪽 미리보기 PNG
     const cred = await getCredential(id);
-    const data = cred?.file ? await readContractDocument(cred.file.storageKey) : null;
-    return data && cred?.file ? { data, contentType: contentTypeOf(cred.file.fileName) } : null;
+    return readCredentialVisual(cred?.file);
   }
   if (kind === "e") {
     const db = await getDb();

@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-09", kind: "개선", title: "회사소개서 인증 쪽 — PDF 증빙도 증서 그림으로",
+    body: "회사 프로필의 면허·인증에 PDF 로 올린 증빙도 첫 쪽을 그림으로 바꿔 회사소개서 인증 쪽 증서 자리에 자동으로 넣습니다(흰 여백은 잘라냄). 증서 틀은 건수에 맞춰 모두 같은 크기(A4 세로)로 맞춥니다. 이미 올려 둔 PDF 도 소개서를 열면 채워집니다. 그전에는 이미지 파일만 들어가고 PDF 는 기본 아이콘으로 나왔습니다. 증빙 없이 등록한 항목은 수정 → [문서 분석]으로 증빙을 붙이면 되며, 이때 이미 적힌 명칭·번호·날짜는 바뀌지 않습니다.",
+    articles: ["admin.company-profile", "sales.catalog"],
+  },
+  {
     date: "2026-11-09", kind: "수정", title: "회사소개서 스튜디오 — 친 글이 다른 요소를 누르면 사라지던 문제",
     body: "글 칸·일러스트 글자 자리에 글을 친 뒤 아이콘·도형 등 다른 요소를 누르면 친 글이 원래대로 돌아가고 저장되지 않던 문제를 고쳤습니다.",
     articles: ["sales.catalog"],

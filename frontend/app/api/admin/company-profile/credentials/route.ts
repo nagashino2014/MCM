@@ -9,6 +9,7 @@ import {
   saveCredential,
   setCredentialPublic,
 } from "@/lib/company/profile";
+import { ensureCredentialPreview } from "@/lib/company/credential-preview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
       targetId: saved.credentialId,
       after: { name: saved.name, kind: saved.kind, hasFile: Boolean(saved.file) },
     });
+    // PDF 증빙이면 회사소개서 인증 쪽 그림(첫 쪽 미리보기)을 미리 만들어 둔다 — 응답은 기다리지 않는다(실패해도 쪽을 그릴 때 다시 시도)
+    void ensureCredentialPreview(saved.file);
     const [credentials, history] = await Promise.all([listCredentials(), listHistory()]);
     return NextResponse.json({ credential: saved, credentials, history });
   } catch (err) {

@@ -10,25 +10,45 @@ const LOGO = "k/assets/kesi-signature-ko.png";
 const LOGO_ALT = "KESI ㈜한국환경안전연구원 Korean Environment Safety Institute Co. LTD";
 
 // ── C16 인증·등록·특허 ──
-/** 인증 보기 변형(TP2) — view: gallery(증서 썸네일 5열, 기본) | table(목록형 행, 격조 — 8건이 넘으면 2단) */
+/**
+ * 증서 갤러리 배치 — 증서 틀을 모두 같은 크기의 A4 세로 종이로(2026-11-09 사용자 요청: 그림 크기가 들쭉날쭉하지 않게).
+ * 건수에 맞춰 열 수(5~10)와 틀 높이를 골라 한 쪽 안에 들어가는 가장 큰 틀을 쓴다. 증서 영역 = 본문 폭 746pt × 높이 약 390pt,
+ * 카드 글(종류·이름·번호) 약 66pt. 그림은 틀 안에 비율을 지켜 담는다(contain).
+ */
+function credentialGallery(n: number): { cols: number; thumbH: number } {
+  const W = 746, H = 390, TEXT = 66, GX = 16, GY = 18, A4 = 297 / 210;
+  let best = { cols: 5, thumbH: 0 };
+  for (let cols = 5; cols <= 10; cols++) {
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const colW = (W - (cols - 1) * GX) / cols;
+    const h = Math.floor(Math.min(colW * A4, (H - (rows - 1) * GY) / rows - TEXT));
+    if (h > best.thumbH) best = { cols, thumbH: h };
+  }
+  return best;
+}
+
+/** 인증 보기 변형(TP2) — view: gallery(증서 썸네일, 같은 크기 A4 세로 틀, 기본) | table(목록형 행, 격조 — 8건이 넘으면 2단) */
 export function CredentialsPage({ ctx, data, variant }: { ctx: RenderCtx; data: CatalogRenderData; variant?: Record<string, string> }) {
   const counts = new Map<string, number>();
   for (const c of data.credentials) counts.set(c.kind, (counts.get(c.kind) ?? 0) + 1);
   const title = ["등록", "인증", "특허", "수상"].filter((k) => counts.get(k)).map((k) => `${k} ${counts.get(k)}`).join(" · ");
   const table = variant?.view === "table";
+  const gallery = credentialGallery(data.credentials.length);
   const grid = table
     ? { gridTemplateColumns: data.credentials.length > 8 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", columnGap: 24, rowGap: 0 }
-    : { gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "18px 16px" };
+    : { gridTemplateColumns: `repeat(${gallery.cols}, minmax(0, 1fr))`, gap: "18px 16px" };
+  // 갤러리 증서 틀 — 모두 같은 A4 세로 종이(흰 바탕), 카드 글은 틀 아래 가운데
+  const frame = table ? undefined : { height: gallery.thumbH, width: "auto", aspectRatio: "210 / 297", alignSelf: "center", background: "#fff", padding: 3, boxSizing: "border-box" as const, overflow: "hidden" };
   return (
     <Sheet ctx={ctx} anchors={["sec-05", "c16"]} section="05 신뢰 근거" outline="인증·등록·특허">
       <Head ctx={ctx} num="05" name="신뢰 근거" sub="인증·등록·특허" />
       <TitleBlock eyebrow="인증·등록·특허" title={title || "인증·등록·특허"} />
       <div className={table ? "kc-creds kc-creds--table" : "kc-creds"} style={{ ...grid, flex: 1, minHeight: 0, alignContent: "start" }} data-widget="credentials">
         {data.credentials.map((c) => (
-          <div className={table ? "kc-cred kc-cred--table" : "kc-cred"} key={c.key}>
-            <div className="kc-cred__thumb">
+          <div className={table ? "kc-cred kc-cred--table" : "kc-cred"} key={c.key} style={table ? undefined : { textAlign: "center" }}>
+            <div className="kc-cred__thumb" style={frame}>
               {c.image ? (
-                <img src={ctx.url(c.image)} alt={c.name} style={{ display: "block", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                <img src={ctx.url(c.image)} alt={c.name} style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }} />
               ) : (
                 <Icon name="award" cls="kc-icon kc-icon--lg" />
               )}

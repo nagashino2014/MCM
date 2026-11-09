@@ -106,7 +106,7 @@ export const METRIC_DEFS: MetricDef[] = [
     id: "software.products",
     label: "응용소프트웨어 제품",
     unit: "종",
-    footnote: "자체 개발·공급하는 응용소프트웨어 제품 수(그룹웨어 & ERP · 통합허가 계획서 플랫폼 · ESG 통합관리 플랫폼).",
+    footnote: `자체 개발·공급하는 응용소프트웨어 제품 수(${SOFTWARE_PRODUCTS.join(" · ")}).`,
   },
   {
     id: "projects.total",

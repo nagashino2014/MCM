@@ -34,6 +34,7 @@ import {
   setInfo,
   setNodeContent,
   setNodeType,
+  setCases,
   setVariant,
   snapshotNode,
   unhideNode,
@@ -424,6 +425,8 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
         if (next) pe((e) => setInfo(e, w.id, mergeOverride(e.nodes?.[w.id]?.info, { content: next })), `info:${w.id}`);
       },
       setVariant: (k, v) => pe((e) => setVariant(e, k, v)),
+      // 대표 실적 직접 입력 — 입력칸 타자는 실행 취소 한 단계로 묶는다
+      setCases: (cases) => pe((e) => setCases(e, cases), "cases"),
       pickImage: (cb) => setPicker(() => cb),
       requestBind: (blockId) => {
         const n = findNode(derived, blockId);

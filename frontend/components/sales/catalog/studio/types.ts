@@ -4,7 +4,7 @@
 
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
 import type { ComposedPage } from "@/lib/catalog/studio/compose";
-import type { InfoOverride, ListOp } from "@/lib/catalog/studio/edits";
+import type { CasesEdit, InfoOverride, ListOp } from "@/lib/catalog/studio/edits";
 import type { CNode, ImageRef } from "@/lib/catalog/studio/nodes";
 import type { Capabilities, Selection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
@@ -43,6 +43,8 @@ export interface StudioOps {
   /** 캔버스에서 고친 일러스트 글자 자리 → 그 인포그래픽 내용 */
   commitSlot: (slotNodeId: string, text: string) => void;
   setVariant: (key: string, value: string | null) => void;
+  /** 지금 쪽 대표 실적 직접 입력 — null = 자동 선별로 되돌림 */
+  setCases: (cases: CasesEdit | null) => void;
   /** 사진 고르기 창 — 고르면 onPick */
   pickImage: (onPick: (key: string) => void) => void;
   /** 지표 넣기 창 — 고른 글 끝에 칩을 넣는다 */

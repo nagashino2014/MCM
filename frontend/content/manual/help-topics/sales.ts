@@ -300,12 +300,12 @@ export const SALES_HELP: HelpTopic[] = [
       { kind: "list", items: [
         "내용 = 글·사진·목록, 구조 = 숨김·인포그래픽 유형·쪽 변형·열 수, 자유 배치 = 옮기기·크기·글자 크기·색·요소 추가.",
         "자동으로 채우는 쪽은 구조까지, 부록은 글만 고칩니다.",
-        "데이터 영역(대표 실적·명단·표 등)의 행은 데이터 화면에서 고칩니다.",
+        "데이터 영역(명단·표 등)의 행은 데이터 화면에서 고칩니다. 사업 분야 쪽의 대표 실적은 내용 탭에서 직접 입력으로 바꿔 적을 수도 있습니다.",
       ] },
     ],
     more: { article: "sales.catalog-studio", section: "levels" },
     sources: ["components/sales/catalog/studio/PanelContent.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-11-09",
   },
   {
     id: "catalog.studio-infographic",
@@ -381,6 +381,21 @@ export const SALES_HELP: HelpTopic[] = [
     more: { article: "sales.catalog-studio", section: "data" },
     sources: ["components/sales/catalog/studio/PanelData.tsx", "components/sales/catalog/studio/BindPicker.tsx"],
     reviewedAt: "2026-10-26",
+  },
+  {
+    id: "catalog.studio-cases",
+    label: "대표 실적 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "[[자동 선별]]: 계약 관리에서 ‘대표 실적’으로 표시한 계약을 싣습니다. 표시한 계약이 없으면 금액이 큰 준공 계약 최대 4건입니다.",
+        "[[직접 입력]]: 연도·용역명·오른쪽 칸(통합환경허가는 허가일, 다른 분야는 수행 기간)을 자유롭게 적습니다. 바꿀 때 지금 자동 행이 처음 값으로 옮겨집니다.",
+        "직접 입력은 이 쪽에만 적용되고, 데이터가 바뀌어도 자동으로 바뀌지 않습니다. [[자동 선별]]을 누르면 적은 행을 버리고 자동으로 돌아갑니다(실행 취소로 되살림).",
+        "행이 많아 쪽을 넘치면 쪽 아래 검사에 넘침으로 나옵니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "levels" },
+    sources: ["components/sales/catalog/studio/PanelCases.tsx"],
+    reviewedAt: "2026-11-09",
   },
   {
     id: "catalog.studio-checks",

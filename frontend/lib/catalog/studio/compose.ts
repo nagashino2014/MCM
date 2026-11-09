@@ -6,7 +6,7 @@ import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
 import type { CatalogRenderData, RenderCtx } from "@/lib/catalog/render/types";
 import { elementToTree } from "./convert";
 import { orderPlan, type StudioPageState } from "./doc";
-import { applyEdits, orphanEdits, type ApplyOptions } from "./edits";
+import { applyEdits, orphanEdits, type ApplyOptions, type CasesEdit } from "./edits";
 import type { CNode } from "./nodes";
 
 export interface ComposedPage {
@@ -25,9 +25,43 @@ export function variantsOf(pages: StudioPageState[]): Record<string, PageVariant
   return out;
 }
 
+type CaseLine = CatalogRenderData["areas"][number]["featured"][number];
+
+/** 대표 실적 직접 입력에서 그릴 행 — 연도·용역명·오른쪽 칸이 모두 빈 행은 뺀다 */
+export function manualCaseLines(cases: CasesEdit): CaseLine[] {
+  return cases.rows.map((r) => ({ year: r.year.trim(), title: r.title.trim(), meta: r.meta.trim() })).filter((r) => r.year || r.title || r.meta);
+}
+
+/** 쪽 키의 지금 자동 선별 대표 실적(직접 입력으로 바꿀 때 처음 행으로 쓴다). 사업 분야 쪽이 아니면 null */
+export function autoCasesOf(data: CatalogRenderData, key: string): CaseLine[] | null {
+  const m = key.match(/^area-(\d+)$/);
+  const area = m ? data.areas.find((a) => a.index === Number(m[1]) && a.index <= 5) : undefined;
+  if (area) return area.featured;
+  const custom = (data.customAreas ?? []).find((a) => a.key === key);
+  return custom ? custom.featured : null;
+}
+
+/**
+ * 사업 분야 쪽(area-1~5·새 분야)의 대표 실적을 쪽 편집층의 직접 입력(PageEdits.cases)으로 바꾼 데이터.
+ * 직접 입력이 없는 분야는 그대로(자동 선별 — 대표 실적 표시 계약, 없으면 금액 순).
+ */
+export function withCaseEdits(data: CatalogRenderData, pages: StudioPageState[]): CatalogRenderData {
+  const manual = new Map<string, CaseLine[]>();
+  for (const p of pages) if (p.edits.cases) manual.set(p.key, manualCaseLines(p.edits.cases));
+  if (!manual.size) return data;
+  return {
+    ...data,
+    areas: data.areas.map((a) => {
+      const rows = a.index <= 5 ? manual.get(`area-${a.index}`) : undefined;
+      return rows ? { ...a, featured: rows, featuredFallback: false } : a;
+    }),
+    ...(data.customAreas ? { customAreas: data.customAreas.map((a) => (manual.has(a.key) ? { ...a, featured: manual.get(a.key)! } : a)) } : {}),
+  };
+}
+
 /** 순서대로 정렬한 쪽 계획(숨긴 쪽 포함) */
 export function orderedPlan(ctx: RenderCtx, data: CatalogRenderData, cover: CoverChoice, pages: StudioPageState[]): PagePlanItem[] {
-  return orderPlan(buildPagePlan(ctx, data, cover, variantsOf(pages)), pages);
+  return orderPlan(buildPagePlan(ctx, withCaseEdits(data, pages), cover, variantsOf(pages)), pages);
 }
 
 export function composePage(item: PagePlanItem, state: StudioPageState | null, opts: ApplyOptions = {}): ComposedPage {

@@ -127,13 +127,14 @@ export function useStudio(docId: string) {
   const pages = state?.pages;
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
-  // 쪽 계획은 쪽 변형·순서가 바뀔 때만 다시 만든다(글·배치 편집 때는 그대로 → 편집한 쪽만 다시 변환)
+  // 쪽 계획은 쪽 변형·순서·대표 실적 직접 입력이 바뀔 때만 다시 만든다(글·배치 편집 때는 그대로 → 편집한 쪽만 다시 변환)
   const variantSig = useMemo(() => JSON.stringify(variantsOf(pages ?? [])), [pages]);
   const orderSig = useMemo(() => JSON.stringify((pages ?? []).map((p) => [p.key, p.order])), [pages]);
+  const casesSig = useMemo(() => JSON.stringify((pages ?? []).filter((p) => p.edits.cases).map((p) => [p.key, p.edits.cases])), [pages]);
   const plan: PagePlanItem[] = useMemo(
     () => (ctx && data && cover && pagesRef.current ? orderedPlan(ctx, data, cover, pagesRef.current) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ctx, data, cover, variantSig, orderSig]
+    [ctx, data, cover, variantSig, orderSig, casesSig]
   );
   // 일러스트 SVG 는 그릴 때 등록표에서 꺼낸다 — 새로 받으면 env 를 바꿔 캔버스·썸네일을 다시 그린다
   const [illustTick, setIllustTick] = useState(0);

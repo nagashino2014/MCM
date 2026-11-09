@@ -11,6 +11,7 @@
  *     image    사진 교체·초점·확대·맞춤(L1)
  *   added      추가한 글상자·도형·이미지(L3, 쪽 기준 절대 위치)
  *   variant    쪽 변형(L2, 예: 분야 상세 { hero: "photo", photo: "a/…" })
+ *   cases      사업 분야 쪽 대표 실적 직접 입력(L2) — 있으면 자동 선별(대표 실적 표시 계약·금액 순) 대신 이 행을 싣는다(compose.ts withCaseEdits)
  *
  * 기본 트리는 저장하지 않으므로 데이터가 바뀌어도 편집층은 같은 노드 id 에 다시 붙는다. 노드가 사라지면(데이터 쪽 구조 변화) 그 편집은 쓰이지 않고 남는다.
  * 보안: 편집층은 신뢰하지 않는 입력이다 — 태그·속성·스타일·클래스·바인딩 경로를 모두 화이트리스트로 다시 만든다(서버 저장 전·클라이언트 불러온 뒤).
@@ -41,17 +42,58 @@ export interface NodeEdit {
   image?: ImageRef;
 }
 
+/** 대표 실적 한 줄 — 연도 · 용역명 · 오른쪽 칸(허가일·수행 기간 등) */
+export interface CaseRowEdit {
+  year: string;
+  title: string;
+  meta: string;
+}
+
+/** 대표 실적 직접 입력(사용자 요청 2026-11-09) — 이 값이 있으면 자동 선별 대신 이 행을 싣는다. 없으면 자동 */
+export interface CasesEdit {
+  mode: "manual";
+  rows: CaseRowEdit[];
+}
+
+export const CASES_MAX_ROWS = 8;
+export const CASE_LIMITS = { year: 10, title: 80, meta: 30 } as const;
+
 export interface PageEdits {
   v: 1;
   nodes?: Record<string, NodeEdit>;
   added?: CNode[];
   variant?: Record<string, string>;
+  cases?: CasesEdit;
 }
 
 export const EMPTY_EDITS: PageEdits = { v: 1 };
 
 export function isEmptyEdits(e: PageEdits | undefined): boolean {
-  return !e || ((!e.nodes || Object.keys(e.nodes).length === 0) && (!e.added || e.added.length === 0) && (!e.variant || Object.keys(e.variant).length === 0));
+  return (
+    !e ||
+    ((!e.nodes || Object.keys(e.nodes).length === 0) && (!e.added || e.added.length === 0) && (!e.variant || Object.keys(e.variant).length === 0) && !e.cases)
+  );
+}
+
+/** 대표 실적 직접 입력 정리 — 글자 수·행 수 제한, 제어 문자·줄바꿈 제거. 편집 중 빈 행은 남긴다(그릴 때 거른다) */
+export function sanitizeCases(input: unknown): CasesEdit | undefined {
+  const o = (input && typeof input === "object" ? input : null) as Record<string, unknown> | null;
+  if (!o || o.mode !== "manual" || !Array.isArray(o.rows)) return undefined;
+  const cell = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]+/g, " ").slice(0, max) : "");
+  const rows = o.rows.slice(0, CASES_MAX_ROWS).map((r) => {
+    const x = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+    return { year: cell(x.year, CASE_LIMITS.year), title: cell(x.title, CASE_LIMITS.title), meta: cell(x.meta, CASE_LIMITS.meta) };
+  });
+  return { mode: "manual", rows };
+}
+
+/** 대표 실적 직접 입력 저장 — null = 자동 선별로 되돌림 */
+export function setCases(edits: PageEdits, cases: CasesEdit | null): PageEdits {
+  const next = cloneEdits(edits);
+  const clean = cases ? sanitizeCases(cases) : undefined;
+  if (clean) next.cases = clean;
+  else delete next.cases;
+  return next;
 }
 
 // ───────────────────────── 정리(sanitize) ─────────────────────────
@@ -372,6 +414,8 @@ export function sanitizePageEdits(input: unknown): PageEdits {
     }
     if (Object.keys(variant).length) out.variant = variant;
   }
+  const cases = sanitizeCases(o.cases);
+  if (cases) out.cases = cases;
   return out;
 }
 

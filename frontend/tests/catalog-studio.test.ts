@@ -689,3 +689,34 @@ test("응용소프트웨어 — 지표(제품 수)의 이름 목록과 15쪽 제
   assert.deepEqual([...SOFTWARE_PRODUCTS], SOFTWARE_CONTENT.products.map((p) => p.name));
   assert.equal(SOFTWARE_PRODUCTS.length, 5);
 });
+
+test("대표 실적 직접 입력 — 쪽 편집층(cases)이 자동 선별을 바꾸고, 정리·되돌리기가 된다", async () => {
+  const { setCases } = await import("@/lib/catalog/studio/edits");
+  const { autoCasesOf, withCaseEdits } = await import("@/lib/catalog/studio/compose");
+  const data = makeFixture();
+  const auto = autoCasesOf(data, "area-1");
+  assert.ok(auto && auto.length > 0, "통합환경허가 쪽 자동 대표 실적");
+  assert.equal(autoCasesOf(data, "c04"), null, "사업 분야 쪽이 아니면 null");
+
+  // 정리 — 글자 수·행 수 제한, 제어 문자 제거, 모르는 mode 는 버림
+  const dirty = sanitizePageEdits({ v: 1, cases: { mode: "manual", rows: [{ year: "2024\n", title: "가".repeat(200), meta: "2024-01-02" }, ...Array(12).fill({ year: "2020", title: "x", meta: "" })] } });
+  assert.equal(dirty.cases?.rows.length, 8);
+  assert.equal(dirty.cases?.rows[0].year, "2024 ");
+  assert.equal(dirty.cases?.rows[0].title.length, 80);
+  assert.equal(sanitizePageEdits({ v: 1, cases: { mode: "auto", rows: [] } }).cases, undefined);
+
+  // 적용 — 빈 행은 빼고 그 분야만 바뀐다
+  const edits = setCases({ v: 1 }, { mode: "manual", rows: [{ year: "2025", title: " 직접 적은 용역 ", meta: "2025-03-04" }, { year: "", title: "", meta: "" }] });
+  const pages: StudioPageState[] = [{ key: "area-1", order: null, hidden: false, edits }];
+  const next = withCaseEdits(data, pages);
+  assert.deepEqual(next.areas[0].featured, [{ year: "2025", title: "직접 적은 용역", meta: "2025-03-04" }]);
+  assert.equal(next.areas[1].featured, data.areas[1].featured, "다른 분야는 그대로");
+  const composed = composeDocument(ctxOf(), data, COVER, pages);
+  const page = composed.find((p) => p.item.key === "area-1")!;
+  const casesNode = findBy(page.tree, (n) => n.widget === "cases")!;
+  assert.match(textOf(casesNode), /직접 적은 용역/);
+
+  // 자동 선별로 되돌리기 = cases 지움
+  assert.equal(setCases(edits, null).cases, undefined);
+  assert.equal(withCaseEdits(data, [{ key: "area-1", order: null, hidden: false, edits: setCases(edits, null) }]), data);
+});

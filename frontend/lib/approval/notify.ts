@@ -633,21 +633,31 @@ export async function notifyCancelRequested(params: {
   }
 }
 
-/** 결재 취소(canceled) 완료를 기안자에게 알림. dedup: canceled:{docId}:{requestId}. */
-export async function notifyDocCanceled(docId: string, requestId: string): Promise<void> {
+/** 결재 취소(canceled) 완료를 기안자에게 알림. dedup: canceled:{docId}:{requestId}. requestId 'direct' = 관리자 직접 취소(346). */
+export async function notifyDocCanceled(
+  docId: string,
+  requestId: string,
+  opts: { reason?: string; originalDocNo?: string | null } = {}
+): Promise<void> {
   try {
-    const doc = await loadDocHeader(docId);
-    if (!doc || !doc.drafterUserId) return;
-    const contacts = await resolveContacts([doc.drafterUserId]);
+    const header = await loadDocHeader(docId);
+    const drafterUserId = header?.drafterUserId;
+    if (!header || !drafterUserId) return;
+    // 취소하면 번호를 반납하므로(346) 알림에는 취소 전 번호를 싣는다
+    const doc = { ...header, docNo: header.docNo ?? (opts.originalDocNo ? `${opts.originalDocNo}(취소, 번호 반납)` : null) };
+    const reason = opts.reason;
+    const contacts = await resolveContacts([drafterUserId]);
+    const head =
+      requestId === "direct" ? "관리자가 승인 완료된 문서의 결재를 취소했습니다." : "요청하신 문서의 결재가 취소되었습니다.";
     await deliver({
       event: "canceled",
       docId,
       stepId: null,
       dedupKey: `canceled:${docId}:${requestId}`,
-      userId: doc.drafterUserId,
-      contact: contacts.get(doc.drafterUserId),
+      userId: drafterUserId,
+      contact: contacts.get(drafterUserId),
       subject: `[전자결재] 결재 취소 완료: ${doc.title}`,
-      text: `요청하신 문서의 결재가 취소되었습니다. 휴가 문서는 연차 대장 사용분도 함께 회수되었습니다.\n\n제목: ${doc.title}${commonFooter(doc)}`,
+      text: `${head} 휴가 문서는 연차 대장 사용분도 함께 회수되었습니다.${reason ? `\n취소 사유: ${reason}` : ""}\n\n제목: ${doc.title}${commonFooter(doc)}`,
       pushBody: doc.title,
     });
   } catch (err) {

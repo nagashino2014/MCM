@@ -23,6 +23,7 @@ import { AmountInput } from "@/components/ui/AmountInput";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
+import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import { ClauseLibraryModal } from "@/components/contracts/agreements/ClauseLibraryModal";
@@ -1668,6 +1669,7 @@ export function AgreementBoard() {
                   <h4 className="font-semibold cd-text text-[13px] flex items-center gap-1.5">
                     <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                   </h4>
+                  <FixedWatcherNote formId={AGREEMENT_FORM_ID} mailCc />
                   {watchers.length === 0 ? (
                     <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
                   ) : (

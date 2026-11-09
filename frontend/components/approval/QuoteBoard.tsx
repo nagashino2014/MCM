@@ -22,6 +22,7 @@ import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import { AmountInput } from "@/components/ui/AmountInput";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
+import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { QuoteItemTreeEditor } from "@/components/approval/QuoteItemTreeEditor";
 import { FacilityRecipientPicker, QuickFacilityModal, RecipientPicker } from "@/components/approval/ApprovalLetterBoard";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
@@ -2047,6 +2048,7 @@ export function QuoteBoard() {
                   <Eye className="w-3.5 h-3.5 cd-text-primary" /> 참조 · 열람
                   <span className="ml-auto text-[11px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
                 </h4>
+                <FixedWatcherNote formId={QUOTE_FORM_ID} />
                 {watchers.length === 0 ? (
                   <p className="text-[11px] cd-text-faint">필요 시 사내 참조/열람자를 지정하세요(선택).</p>
                 ) : (

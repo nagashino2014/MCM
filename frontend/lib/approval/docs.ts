@@ -21,6 +21,7 @@ import { runFormActionsForDoc } from "@/lib/approval/actions";
 import { findLineProxyAbsence, kstToday, resolveAbsence } from "@/lib/approval/absence-routing";
 import { fixedLineReady, resolveFixedLine } from "@/lib/approval/fixed-line";
 import { describeFixedLine, sameLineAssignees } from "@/lib/approval/fixed-line-rules";
+import { applyFixedWatchers, docFixedWatcherIds } from "@/lib/approval/fixed-watchers";
 import { userHeadDeptIds, userPostDeptIds } from "@/lib/org/posts";
 
 /*
@@ -154,6 +155,8 @@ export interface ApprovalWatcher {
   /** 현재 직급명(조회 시 positions 조인 — 저장 스냅샷 아님). 작성 화면의 결재선과 같은 표기용 */
   position: string | null;
   kind: string; // ref | view
+  /** 고정 참조·열람자 규칙(346)으로 들어간 사람 — 공문·계약서 발송 메일 Cc 에서 뺀다 */
+  fixed?: boolean;
 }
 
 function mapStep(r: Record<string, unknown>): ApprovalStep {
@@ -443,10 +446,13 @@ export async function saveDoc(params: {
         );
       }
     }
-    // 참조/열람자 교체 저장(중복 제거)
+    // 참조/열람자 교체 저장(중복 제거). 고정 규칙으로 들어갔던 사람(346, fixed=1)은 화면이 되돌려 보내도
+    // 직접 지정으로 바꾸지 않는다 — 아래 applyFixedWatchers 가 다시 넣는다(공문·계약서 발송 Cc 제외 유지).
+    const fixedBefore = await docFixedWatcherIds(txn, docId);
     await txn.run(`DELETE FROM approval_watchers WHERE doc_id = $1`, [docId]);
     const seen = new Set<string>();
     for (const w of watchers) {
+      if (fixedBefore.has(w.userId)) continue;
       const dk = `${w.userId}:${w.kind}`;
       if (seen.has(dk)) continue;
       seen.add(dk);
@@ -455,6 +461,8 @@ export async function saveDoc(params: {
         ["awch-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14), docId, w.userId, w.kind, now]
       );
     }
+    // 고정 참조·열람자(346) — 관리자가 정한 사람을 자유 지정과 무관하게 넣는다(기안자·결재선 인원 제외)
+    await applyFixedWatchers(txn, docId, params.formId, params.actorUserId);
     // 공문 번호 수동 지정(관리자) — draft 단계에서 doc_no 를 선점한다. 상신은 doc_no 가
     // 이미 있으면 그대로 쓰므로(submitDoc) 이 번호가 확정 번호가 된다.
     if (params.manualDocNo !== undefined) {
@@ -543,32 +551,44 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     await txn.run(`DELETE FROM official_letters WHERE doc_id = $1`, [docId]);
     await txn.run(`DELETE FROM quotations WHERE doc_id = $1`, [docId]);
     await txn.run(`DELETE FROM approval_docs WHERE doc_id = $1`, [docId]);
-    // 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다.
-    // 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}`.
-    const letterM = docNo ? new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY})-(\\d+)$`).exec(docNo) : null;
-    // 내부고시(267) `내부고시-{일련}호` — 통산 번호라 연도 키는 'ALL'
-    const noticeM = !letterM && docNo ? new RegExp(`^${NOTICE_RULE_KEY}-(\\d+)호$`).exec(docNo) : null;
-    const quoteLabels = Object.values(QUOTE_NO_LABELS).join("|");
-    const quoteM = !letterM && !noticeM && docNo ? new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo) : null;
-    const m = !letterM && !noticeM && !quoteM && docNo ? /^(.+)-(\d{4})-(\d+)$/.exec(docNo) : null;
-    const pool = letterM
-      ? { rule: letterM[2], year: letterM[1], seq: Number(letterM[3]) }
-      : noticeM
-        ? { rule: NOTICE_RULE_KEY, year: NOTICE_SEQ_YEAR, seq: Number(noticeM[1]) }
-      : quoteM
-        ? { rule: QUOTE_RULE_PREFIX + quoteM[2], year: quoteM[1], seq: Number(quoteM[3]) }
-        : m
-          ? { rule: m[1], year: m[2], seq: Number(m[3]) }
-          : null;
-    if (pool) {
-      await txn.run(
-        `INSERT INTO doc_no_pool (rule_key, year, seq, released_at) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (rule_key, year, seq) DO NOTHING`,
-        [pool.rule, pool.year, pool.seq, new Date().toISOString()]
-      );
+    // 관리자 값 수정 이력(346) — 외래키가 없어 문서와 함께 지운다
+    const editsOk = rowsToObjects(await txn.exec(`SELECT to_regclass('approval_doc_edits') IS NOT NULL AS ok`))[0]?.ok;
+    if (editsOk === true || editsOk === "t") {
+      await txn.run(`DELETE FROM approval_doc_edits WHERE doc_id = $1`, [docId]);
     }
+    await releaseDocNo(txn, docNo);
   });
   return { docNo, title };
+}
+
+/**
+ * 문서번호 → 반납 번호 풀(doc_no_pool, 130) 키.
+ * 형식: 일반 `{약칭}-{연도}-{일련}` / 공문(135) `{연도}-대외-{일련}` / 견적(136) `{연도}-{종류}-{일련}` /
+ * 내부고시(267) `내부고시-{일련}호`(통산 번호라 연도 키 'ALL'). 형식이 다르면 null(반납하지 않음).
+ */
+export function docNoPoolKey(docNo: string | null): { rule: string; year: string; seq: number } | null {
+  if (!docNo) return null;
+  const letterM = new RegExp(`^(\\d{4})-(${LETTER_RULE_KEY})-(\\d+)$`).exec(docNo);
+  if (letterM) return { rule: letterM[2], year: letterM[1], seq: Number(letterM[3]) };
+  const noticeM = new RegExp(`^${NOTICE_RULE_KEY}-(\\d+)호$`).exec(docNo);
+  if (noticeM) return { rule: NOTICE_RULE_KEY, year: NOTICE_SEQ_YEAR, seq: Number(noticeM[1]) };
+  const quoteLabels = Object.values(QUOTE_NO_LABELS).join("|");
+  const quoteM = new RegExp(`^(\\d{4})-(${quoteLabels})-(\\d+)$`).exec(docNo);
+  if (quoteM) return { rule: QUOTE_RULE_PREFIX + quoteM[2], year: quoteM[1], seq: Number(quoteM[3]) };
+  const m = /^(.+)-(\d{4})-(\d+)$/.exec(docNo);
+  return m ? { rule: m[1], year: m[2], seq: Number(m[3]) } : null;
+}
+
+/** 문서번호 반납(130) — 다음 상신이 이 번호를 이어받는다. 삭제(deleteDoc)·관리자 취소(346)가 쓴다. */
+export async function releaseDocNo(txn: PgDatabase, docNo: string | null): Promise<boolean> {
+  const pool = docNoPoolKey(docNo);
+  if (!pool) return false;
+  await txn.run(
+    `INSERT INTO doc_no_pool (rule_key, year, seq, released_at) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (rule_key, year, seq) DO NOTHING`,
+    [pool.rule, pool.year, pool.seq, new Date().toISOString()]
+  );
+  return true;
 }
 
 /** 라우팅 기준 — 기안자(대결자 제외 대상)와 최종 순번(최대 step_order, 부재 미적용 단계·D-2). */
@@ -886,6 +906,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     }
     const stepCount = rowsToObjects(await txn.exec(`SELECT count(*) AS c FROM approval_steps WHERE doc_id = $1`, [docId]));
     if (Number(stepCount[0]?.c ?? 0) === 0) throw new Error("결재선에 결재자를 1명 이상 지정하세요.");
+    // 고정 참조·열람자(346) — 346 이전에 임시저장한 문서·모바일 상신도 빠지지 않게 상신 시점에 한 번 더 넣는다
+    await applyFixedWatchers(txn, docId, String(doc.form_id), actorUserId);
     // 표 필수 열(지출 내역의 지출 목적 등) — 기안 화면과 같은 규칙으로 서버에서도 막는다.
     const rowMissing = missingTableRequirements(
       parseFields(doc.fields),
@@ -1493,7 +1515,8 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
   );
   const watcherRows = rowsToObjects(
     await db.exec(
-      `SELECT w.user_id, w.kind, COALESCE(ep.name, u.email) AS name, p.position_name
+      `SELECT w.user_id, w.kind, COALESCE(ep.name, u.email) AS name, p.position_name,
+              COALESCE((to_jsonb(w)->>'fixed')::int, 0) AS fixed
          FROM approval_watchers w
          LEFT JOIN users u ON u.user_id = w.user_id
          LEFT JOIN employee_profiles ep ON ep.employee_id = u.employee_id
@@ -1531,6 +1554,7 @@ export async function getDoc(docId: string): Promise<ApprovalDocDetail | null> {
       name: w.name != null ? String(w.name) : null,
       position: w.position_name != null ? String(w.position_name) : null,
       kind: String(w.kind ?? "ref"),
+      fixed: Number(w.fixed ?? 0) === 1,
     })),
     refDoc,
     formRefFormId: r.form_ref_form_id != null ? String(r.form_ref_form_id) : null,

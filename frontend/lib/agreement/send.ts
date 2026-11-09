@@ -144,7 +144,8 @@ export async function processAgreementSend(
     }
 
     const seen = new Set(to.map((a) => a.address.toLowerCase()));
-    const watcherIds = doc.watchers.map((w) => w.userId).filter(Boolean);
+    // 고정 참조·열람자(346, fixed)는 결재 열람용이라 발송 메일 Cc 에서 뺀다 — 기안자가 직접 지정한 사람만.
+    const watcherIds = doc.watchers.filter((w) => !w.fixed).map((w) => w.userId).filter(Boolean);
     const cc = (await internalCcAddresses(watcherIds)).filter((a) =>
       seen.has(a.address.toLowerCase()) ? false : (seen.add(a.address.toLowerCase()), true)
     );

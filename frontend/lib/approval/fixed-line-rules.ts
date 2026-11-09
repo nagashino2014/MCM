@@ -5,6 +5,7 @@
 //   3) 다 빠져 비면 기안자보다 한 칸 위 사다리 역할을 넣는다 — 대표이사 본인은 본인 1단계.
 //   4) 연달아 같은 사람은 한 번만(연구소 부서장=임원 신총식).
 //   5) 하나라도 못 풀면(공석·부서장 복수·담당자 미지정·퇴사) 상신 불가 — errors 에 이유를 담는다.
+//   6) headDrafterTo(347) — 기안자가 부서장이면 사다리를 그 역할까지 채운다(휴가 등: 부서장 기안 → 임원 → 대표이사).
 
 export type LineRole = "dept_head" | "exec" | "ceo" | "manager";
 
@@ -41,6 +42,12 @@ export interface LineTemplate {
   steps: LineTemplateStep[];
   enforceWhen: LineEnforceWhen | null;
   enabled: boolean;
+  /** 부서장이 기안하면 사다리를 이 역할까지 채운다(347, 2026-11-09 사용자 확정). 일반 직원·임원 기안에는 영향 없음 */
+  headDrafterTo?: "exec" | "ceo" | null;
+}
+
+export function parseHeadDrafterTo(raw: unknown): "exec" | "ceo" | null {
+  return raw === "exec" || raw === "ceo" ? raw : null;
 }
 
 export interface LinePerson {
@@ -186,6 +193,16 @@ export function resolveLineSteps(tpl: LineTemplate, facts: FixedLineFacts): { st
       continue;
     }
     pushRole(step.role, step.proxyUserIds ?? []);
+  }
+
+  // 부서장 기안 — 템플릿이 정한 역할까지 빠진 사다리 단계를 뒤에 채운다(이미 있는 역할은 다시 넣지 않음)
+  const headTo = tpl.headDrafterTo ? LADDER_RANK[tpl.headDrafterTo] ?? 0 : 0;
+  if (rank === 1 && headTo > 1 && !errors.length) {
+    for (const r of LADDER) {
+      const lr = LADDER_RANK[r] ?? 0;
+      if (lr <= rank || lr > headTo || raw.some((x) => x.role === r)) continue;
+      pushRole(r);
+    }
   }
 
   if (!raw.length && !errors.length) {

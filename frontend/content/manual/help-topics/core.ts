@@ -43,12 +43,27 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
       { kind: "p", text: "휴가·출장·교육 신청서를 고치거나 취소하려면 반려 요청을 보냅니다. 일반 결재 문서에는 회수 버튼이 없습니다." },
       { kind: "list", items: [
         "결재 중: 지금 차례인 결재자에게 반려 요청 알림이 갑니다. 반려되면 고쳐서 재상신합니다.",
-        "승인 후: 관리자에게 결재 취소 요청이 갑니다. 취소되면 휴가로 차감된 연차가 돌아옵니다.",
+        "승인 후: 관리자에게 결재 취소 요청이 갑니다. 취소되면 휴가로 차감된 연차가 돌아오고 문서번호는 반납됩니다.",
       ] },
     ],
     more: { article: "approval.home", section: "fix" },
     sources: ["components/approval/ApprovalDocModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-09",
+  },
+  {
+    id: "approval.admin-actions",
+    label: "관리자 조치 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "결재 운영 권한이 있는 관리자에게만 보이고, 승인 완료 문서에만 씁니다.",
+        "**값 수정**: 일자·시각·기간·글·선택 항목 하나를 사유와 함께 고칩니다. 전후 값과 사유는 문서의 ‘관리자 수정 이력’에 남아 문서를 보는 사람 모두가 봅니다.",
+        "**결재 취소**: 삭제하지 않고 ‘취소’로 남깁니다. 사유는 기안자에게 알림으로 갑니다. 문서번호는 반납되어 다음 문서가 이어받습니다.",
+        "금액·표·첨부·사람 선택이 틀렸다면 결재 취소 후 다시 기안합니다.",
+      ] },
+    ],
+    more: { article: "approval.home", section: "admin" },
+    sources: ["components/approval/ApprovalDocAdminPanel.tsx"],
+    reviewedAt: "2026-11-09",
   },
   {
     id: "approval.delete-resubmit",

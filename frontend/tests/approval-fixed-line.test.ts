@@ -158,3 +158,25 @@ test("템플릿 파싱 — 잘못된 역할은 버린다", () => {
   assert.deepEqual(parseTemplateSteps('[{"role":"ceo"},{"role":"boss"}]'), [{ role: "ceo" }]);
   assert.equal(parseEnforceWhen({ field: "" }), null);
 });
+
+test("부서장 기안 시 대표이사까지(347, 안 B) — 부서장만 올라가고 직원·연구소·임원은 그대로", () => {
+  const headOnlyUp = { ...T.headOnly, headDrafterTo: "ceo" as const };
+  const headExecUp = { ...T.headExec, headDrafterTo: "ceo" as const };
+  // 부서장(한도경) 기안 — 휴가 등: 정득종 → 이유억, 교육: 정득종 → 이유억
+  const head = facts({ drafter: HDG });
+  assert.equal(names(resolveLineSteps(headOnlyUp, head)), "정득종→이유억");
+  assert.equal(names(resolveLineSteps(headExecUp, head)), "정득종→이유억");
+  assert.deepEqual(resolveLineSteps(headOnlyUp, head).steps.map((s) => s.role), ["exec", "ceo"]);
+  // 옵션이 없으면 종전처럼 정득종 단독
+  assert.equal(names(resolveLineSteps(T.headOnly, head)), "정득종");
+  // 일반 직원 — 그대로
+  const staff = facts({ drafter: STAFF });
+  assert.equal(names(resolveLineSteps(headOnlyUp, staff)), "한도경");
+  assert.equal(names(resolveLineSteps(headExecUp, staff)), "한도경→정득종");
+  // 연구소 직원 — 그대로(부서장=임원 신총식)
+  const lab = facts({ drafter: STAFF, heads: [SSK], exec: SSK });
+  assert.equal(names(resolveLineSteps(headOnlyUp, lab)), "신총식");
+  // 연구소장(임원 취급) 기안 — 그대로 대표이사 단독
+  const labHead = facts({ drafter: SSK, heads: [SSK], exec: SSK, isExec: true });
+  assert.equal(names(resolveLineSteps(headOnlyUp, labHead)), "이유억");
+});

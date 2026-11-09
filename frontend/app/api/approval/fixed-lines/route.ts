@@ -51,6 +51,7 @@ interface PutBody {
   steps?: LineTemplateStep[];
   enforceWhen?: LineEnforceWhen | null;
   enabled?: boolean;
+  headDrafterTo?: "exec" | "ceo" | null;
   role?: FixedLineRole;
   deptId?: string | null;
   userId?: string;
@@ -69,6 +70,7 @@ export async function PUT(req: NextRequest) {
         steps: Array.isArray(body.steps) ? body.steps : [],
         enforceWhen: body.enforceWhen ?? null,
         enabled: body.enabled !== false,
+        headDrafterTo: body.headDrafterTo ?? null,
       });
     } else if (body.kind === "role") {
       await setRoleUser(actor.userId, { role: body.role as FixedLineRole, deptId: body.deptId ?? null, userId: String(body.userId ?? "") });

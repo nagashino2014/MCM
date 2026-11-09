@@ -23,6 +23,8 @@ interface TemplateRow {
   steps: LineTemplateStep[];
   enforceWhen: LineEnforceWhen | null;
   enabled: boolean;
+  /** 부서장이 기안하면 사다리를 이 역할까지 채움(347) */
+  headDrafterTo?: "exec" | "ceo" | null;
 }
 
 interface RoleUserRow {
@@ -145,7 +147,14 @@ export function ApprovalFixedLinesBoard() {
     if (!editing) return;
     const ok = await call(
       "PUT",
-      { kind: "template", formId: editing.formId, steps: editing.steps, enforceWhen: editing.enforceWhen, enabled: editing.enabled },
+      {
+        kind: "template",
+        formId: editing.formId,
+        steps: editing.steps,
+        enforceWhen: editing.enforceWhen,
+        enabled: editing.enabled,
+        headDrafterTo: editing.headDrafterTo ?? null,
+      },
       undefined,
       editing.steps.length ? `'${editing.formName}' 결재선을 저장했습니다.` : `'${editing.formName}'을 자유 지정으로 되돌렸습니다.`
     );
@@ -361,6 +370,9 @@ export function ApprovalFixedLinesBoard() {
                             {t.enforceWhen.whenMissing === "enforce" ? " · 값이 없으면 강제" : " · 값이 없으면 자유 지정"}
                           </span>
                         )}
+                        {t.steps.length > 0 && t.headDrafterTo === "ceo" && (
+                          <span className="block text-[11px] cd-text-faint">부서장이 기안하면 대표이사까지</span>
+                        )}
                         {t.steps.some((s) => s.proxyUserIds?.length) && (
                           <span className="block text-[11px] cd-text-faint">
                             부재 시 대결 {t.steps.flatMap((s) => s.proxyUserIds ?? []).map((id) => nameOf.get(id) ?? id).join(", ")}
@@ -509,6 +521,14 @@ export function ApprovalFixedLinesBoard() {
                 </div>
               </div>
             )}
+            <label className="flex items-center gap-2 text-[13px] cd-text">
+              <input
+                type="checkbox"
+                checked={editing.headDrafterTo === "ceo"}
+                onChange={(e) => setEditing((prev) => (prev ? { ...prev, headDrafterTo: e.target.checked ? "ceo" : null } : prev))}
+              />
+              부서장이 기안하면 대표이사까지 올림(일반 직원 결재선은 그대로)
+            </label>
             <label className="flex items-center gap-2 text-[13px] cd-text">
               <input type="checkbox" checked={editing.enabled} onChange={(e) => setEditing((prev) => (prev ? { ...prev, enabled: e.target.checked } : prev))} />
               사용(끄면 이 양식은 자유 지정)

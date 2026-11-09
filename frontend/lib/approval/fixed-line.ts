@@ -15,6 +15,7 @@ import { postsTableExists } from "@/lib/org/posts";
 import {
   isLineEnforced,
   parseEnforceWhen,
+  parseHeadDrafterTo,
   parseTemplateSteps,
   resolveLineSteps,
   type FixedLineFacts,
@@ -53,6 +54,7 @@ function mapTemplate(r: Record<string, unknown>): LineTemplate {
     steps: parseTemplateSteps(r.steps),
     enforceWhen: parseEnforceWhen(r.enforce_when),
     enabled: Number(r.enabled ?? 1) === 1,
+    headDrafterTo: parseHeadDrafterTo(r.head_drafter_to),
   };
 }
 
@@ -209,7 +211,8 @@ export async function listLineTemplates(): Promise<LineTemplateRow[]> {
   const rows = rowsToObjects(
     await db.exec(
       ready
-        ? `SELECT f.form_id, f.name AS form_name, t.steps, t.enforce_when, COALESCE(t.enabled, 1) AS enabled, t.updated_at
+        ? `SELECT f.form_id, f.name AS form_name, t.steps, t.enforce_when, COALESCE(t.enabled, 1) AS enabled, t.updated_at,
+                  to_jsonb(t)->>'head_drafter_to' AS head_drafter_to
              FROM approval_forms f
              LEFT JOIN approval_form_folders fo ON fo.folder_id = f.folder_id
              LEFT JOIN approval_line_templates t ON t.form_id = f.form_id
@@ -257,7 +260,7 @@ export async function listRoleUsers(): Promise<RoleUserRow[]> {
 /** 템플릿 저장 — steps 가 비면 템플릿을 지운다(자유 지정으로 복귀). */
 export async function saveLineTemplate(
   actorUserId: string,
-  input: { formId: string; steps: LineTemplateStep[]; enforceWhen: LineEnforceWhen | null; enabled: boolean }
+  input: { formId: string; steps: LineTemplateStep[]; enforceWhen: LineEnforceWhen | null; enabled: boolean; headDrafterTo?: "exec" | "ceo" | null }
 ): Promise<void> {
   const formId = input.formId.trim();
   if (!formId) throw userError("양식을 선택하세요.");
@@ -265,8 +268,13 @@ export async function saveLineTemplate(
   if (steps.length !== (input.steps ?? []).length) throw userError("결재 단계의 역할이 올바르지 않습니다.");
   const enforceWhen = input.enforceWhen ? parseEnforceWhen(input.enforceWhen) : null;
   if (input.enforceWhen && !enforceWhen) throw userError("강제 조건의 필드 키를 입력하세요.");
+  const headDrafterTo = parseHeadDrafterTo(input.headDrafterTo);
   const db = await getDb();
   if (!(await fixedLineReady(db))) throw userError("고정 결재선 표(335)가 아직 적용되지 않았습니다.", 409);
+  const headColumn = rowsToObjects(
+    await db.exec(`SELECT 1 FROM information_schema.columns WHERE table_name = 'approval_line_templates' AND column_name = 'head_drafter_to'`)
+  ).length > 0;
+  if (headDrafterTo && !headColumn) throw userError("부서장 기안 옵션 열(347)이 아직 적용되지 않았습니다.", 409);
   const f = rowsToObjects(await db.exec(`SELECT 1 FROM approval_forms WHERE form_id = $1`, [formId]));
   if (!f.length) throw userError("양식을 찾을 수 없습니다.", 404);
   const now = new Date().toISOString();
@@ -283,6 +291,9 @@ export async function saveLineTemplate(
            updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`,
         [formId, JSON.stringify(steps), enforceWhen ? JSON.stringify(enforceWhen) : null, input.enabled ? 1 : 0, actorUserId, now]
       );
+      if (headColumn) {
+        await txn.run(`UPDATE approval_line_templates SET head_drafter_to = $2 WHERE form_id = $1`, [formId, headDrafterTo]);
+      }
     }
     await recordAuditLogInline(txn, {
       actorUserId,
@@ -290,7 +301,7 @@ export async function saveLineTemplate(
       targetTable: "approval_line_templates",
       targetId: formId,
       before,
-      after: steps.length ? { steps, enforceWhen, enabled: input.enabled } : null,
+      after: steps.length ? { steps, enforceWhen, enabled: input.enabled, headDrafterTo } : null,
     });
   });
 }

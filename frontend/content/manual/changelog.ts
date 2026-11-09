@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-09", kind: "변경", title: "전자결재 — 부서장 기안 휴가·초과근무·출장·교육 문서는 대표이사까지",
+    body: "부서장이 휴가신청서·초과/휴일근무 신청·국내 출장 신청·출장보고서·교육훈련 신청·교육훈련 보고를 기안하면 총괄본부장에 이어 대표이사까지 결재합니다. 일반 직원 결재선은 그대로입니다.",
+    articles: ["approval-ops.fixed-lines", "approval.home"],
+  },
+  {
     date: "2026-11-09", kind: "신규", title: "전자결재 — 승인 문서 관리자 결재 취소·값 수정",
     body: "관리자는 승인 완료 문서 아래 관리자 조치에서 결재를 사유와 함께 취소하거나, 일자·시각·기간·글 같은 간단한 값을 사유와 함께 고칠 수 있습니다. 취소한 문서는 ‘취소’로 남고 문서번호는 반납되어 다음 문서가 이어받습니다. 고친 기록은 문서의 ‘관리자 수정 이력’에 남습니다.",
     articles: ["approval.home"],

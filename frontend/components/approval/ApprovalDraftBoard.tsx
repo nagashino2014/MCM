@@ -15,6 +15,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
+import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
@@ -1770,6 +1771,7 @@ export function ApprovalDraftBoard() {
                 <CdHelp topic="approval.draft-watchers" />
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">상신 후 진행 중에도 열람 · 참조/열람은 표시만 다름</span>
               </h4>
+              <FixedWatcherNote formId={form?.formId} />
               {/* 참조/열람 프리셋 — 결재선 없이 참조·열람자만 저장한 묶음 */}
               {presets.some((p) => p.steps.length === 0 && p.watchers.length > 0) && (
                 <div className="flex flex-wrap items-center gap-1">

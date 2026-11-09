@@ -230,7 +230,7 @@ function FieldCell({
   );
 }
 
-function FieldInput({
+export function FieldInput({
   field: f,
   value,
   onSet,

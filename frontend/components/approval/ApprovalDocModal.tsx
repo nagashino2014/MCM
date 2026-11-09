@@ -4,7 +4,7 @@
 // G3: 뷰어 본체(ApprovalDocViewer)를 분리해 결재함 3-pane 미리보기와 모달이 공유한다.
 // 모달(ApprovalDocModal)은 뷰어를 오버레이로 감싼 래퍼 — 양식별 조회/문서함에서 계속 사용.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, Paperclip, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
@@ -19,6 +19,13 @@ import { AGREEMENT_FORM_ID } from "@/lib/agreement/types";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { stepDisplay } from "@/lib/approval/step-display";
+import {
+  AdminEditHistory,
+  ApprovalDocAdminPanel,
+  CanceledDocBanner,
+  type DocAdminEditView,
+  type DocCancelInfoView,
+} from "@/components/approval/ApprovalDocAdminPanel";
 
 export interface DocStepRow {
   stepId: string;
@@ -62,6 +69,11 @@ export interface DocDetailData {
   cancelRequest?: { requestId: string; reason: string; requestedByName: string | null; requestedAt: string } | null;
   canRequestCancel?: boolean;
   canCancel?: boolean;
+  /** 승인 문서 관리자 값 수정(346) */
+  canAdminEdit?: boolean;
+  /** 취소 기록(취소 문서)·관리자 수정 이력(346) */
+  cancelInfo?: DocCancelInfoView | null;
+  adminEdits?: DocAdminEditView[];
   /** 선행 문서 연결(127) — 신청서→보고서 연관 표시(예: 출장보고서에 연결된 출장신청서). */
   refDoc?: { docId: string; docNo: string | null; title: string; formName: string; status: string } | null;
   /** 문서 삭제 권한 — 관리자(전 상태) 또는 기안자 본인(작성중·반려). */
@@ -106,6 +118,9 @@ export function ApprovalDocViewer({
   // 반려 요청(기안자) — 버튼을 누르면 사유 입력 폼이 펼쳐진다.
   const [cancelReasonOpen, setCancelReasonOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // 관리자 값 수정(346) 뒤 다시 불러오기
+  const [reloadKey, setReloadKey] = useState(0);
+  const loadedDocRef = useRef<string | null>(null);
   // 본문 / 첨부서류 탭 — 첨부가 있는 문서에서만 노출.
   const [tab, setTab] = useState<"doc" | "attach">("doc");
   const attachments = ((detail?.fieldValues?.file_attachments ?? []) as DocAttachment[]).filter((f) => f?.key);
@@ -193,10 +208,14 @@ export function ApprovalDocViewer({
   useEffect(() => {
     let cancelled = false;
     // pane 재사용 대비 — 문서 전환 시 이전 상세/의견 리셋
-    setDetail(null);
+    // 같은 문서를 다시 읽을 때(관리자 값 수정 뒤)는 화면을 비우지 않는다
+    if (loadedDocRef.current !== docId) {
+      loadedDocRef.current = docId;
+      setDetail(null);
+      setComment("");
+      setTab("doc");
+    }
     setError(null);
-    setComment("");
-    setTab("doc");
     fetch(`/api/approval/docs/${encodeURIComponent(docId)}`, { cache: "no-store" })
       .then(async (r) => {
         const data = await r.json();
@@ -209,7 +228,7 @@ export function ApprovalDocViewer({
     return () => {
       cancelled = true;
     };
-  }, [docId]);
+  }, [docId, reloadKey]);
 
   const act = async (action: "approve" | "reject" | "final") => {
     if (!detail?.myStepId) return;
@@ -271,13 +290,26 @@ export function ApprovalDocViewer({
     }
   };
 
-  // 결재 취소(관리자) — 승인 완료 문서를 취소하고 휴가면 연차 대장을 회수한다.
+  // 결재 취소(관리자) — 기안자 반려 요청 건. 승인 완료 문서를 취소하고 휴가면 연차 대장을 회수한다.
+  // 취소 사유는 필수(346) — 요청 사유를 기본값으로 채운다. 번호는 반납된다.
   const cancelDoc = async () => {
     if (!detail) return;
-    if (!confirm("승인 완료된 결재를 취소합니다. 휴가 문서는 연차 대장 사용분도 회수됩니다. 계속할까요?")) return;
+    const reason = window.prompt(
+      "결재 취소 사유를 입력하세요. 휴가 문서는 연차 대장 사용분도 회수되고, 문서번호는 반납됩니다.",
+      detail.cancelRequest?.reason ?? ""
+    );
+    if (reason == null) return;
+    if (!reason.trim()) {
+      alert("취소 사유를 입력하세요.");
+      return;
+    }
     setActing(true);
     try {
-      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/cancel`, { method: "POST" });
+      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "결재 취소 실패");
       onActed?.();
@@ -313,7 +345,8 @@ export function ApprovalDocViewer({
                 )}
                 {detail.title}
                 <span className="ml-2 text-[11px] font-normal cd-text-faint">
-                  {detail.docNo ?? "미채번"} · {DOC_STATUS_LABEL[detail.status] ?? detail.status}
+                  {detail.docNo ?? (detail.cancelInfo?.canceledDocNo ? `${detail.cancelInfo.canceledDocNo}(반납)` : "미채번")} ·{" "}
+                  {DOC_STATUS_LABEL[detail.status] ?? detail.status}
                 </span>
               </h3>
               {/* 계약서(147)·내부고시(266) — HWPX 다운로드(한글 원본 확인용). 결재 중에도 on-demand 렌더. */}
@@ -493,6 +526,9 @@ export function ApprovalDocViewer({
                 )}
               </div>
             )}
+
+            {/* 결재 취소된 문서(346) — 사유·처리자·원래 번호를 상단에 고정 노출 */}
+            {detail.status === "canceled" && <CanceledDocBanner info={detail.cancelInfo} />}
 
             {/* 선행 문서 연관(127) — 보고서에 연결된 신청서 표시 */}
             {detail.refDoc && (
@@ -766,6 +802,9 @@ export function ApprovalDocViewer({
               </div>
             )}
 
+            {/* 관리자 수정 이력(346) — 문서를 볼 수 있는 사람 모두에게 */}
+            <AdminEditHistory edits={detail.adminEdits} />
+
             {detail.myStepId && detail.status === "in_progress" && (
               // 하단 처리 바 — 반려(위험 윤곽) 좌측, 승인(그라데이션 CTA) 우측.
               <div className="flex items-center gap-2 pt-1">
@@ -830,6 +869,18 @@ export function ApprovalDocViewer({
                   </button>
                 )}
               </div>
+            )}
+            {/* 관리자 조치(346) — 승인 문서 결재 취소·값 수정. 반려 요청이 걸린 문서의 취소는 위 요청 카드 버튼으로 */}
+            {detail.status === "approved" && (
+              <ApprovalDocAdminPanel
+                docId={detail.docId}
+                fields={detail.fields}
+                fieldValues={detail.fieldValues}
+                canCancel={!!detail.canCancel && !detail.cancelRequest}
+                canEdit={!!detail.canAdminEdit}
+                onCanceled={() => onActed?.()}
+                onEdited={() => setReloadKey((k) => k + 1)}
+              />
             )}
             {detail.canRequestCancel && (
               <div className="flex flex-col gap-2 pt-1">

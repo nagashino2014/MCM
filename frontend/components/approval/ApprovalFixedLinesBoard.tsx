@@ -2,6 +2,7 @@
 
 // 고정 결재선(335, 결재 운영) — 양식별 결재 단계(역할)·역할 담당자(대표이사·관리자·부서별 임원)·임원 취급 인원을 관리하고,
 // 재직자별로 결재선이 실제로 누구로 풀리는지 미리 본다. 기안 화면은 이 규칙으로 결재선을 잠그고 서버도 같은 규칙으로 강제한다.
+// 모든 양식 고정 참조·열람자(346)도 같은 카드에서 정한다 — 저장·상신 때 서버가 문서에 넣는다.
 // 설계: docs/approval-fixed-line-plan-2026-11-03.md.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -41,16 +42,31 @@ interface PreviewRow {
   lines: Record<string, { ok: boolean; text: string }>;
 }
 
+interface FixedWatcherRow {
+  entryId: string;
+  formId: string;
+  userId: string;
+  userName: string | null;
+  kind: "ref" | "view";
+  active: boolean;
+}
+
 interface Snapshot {
   ready: boolean;
   templates: TemplateRow[];
   roleUsers: RoleUserRow[];
   departments: Array<{ deptId: string; deptName: string }>;
   preview?: PreviewRow[];
+  /** 고정 참조·열람자(346) — 표가 없으면 watchersReady=false */
+  watchersReady?: boolean;
+  fixedWatchers?: FixedWatcherRow[];
 }
 
 /** 조직도 선택 대상 — 역할 담당자 지정 또는 편집 중 단계의 지정 대결자 추가 */
-type PickTarget = { kind: "role"; role: RoleKey; deptId: string } | { kind: "proxy"; stepIndex: number };
+type PickTarget =
+  | { kind: "role"; role: RoleKey; deptId: string }
+  | { kind: "proxy"; stepIndex: number }
+  | { kind: "watcher"; watchKind: "ref" | "view" };
 
 function stepsText(steps: LineTemplateStep[]): string {
   return steps.length ? steps.map((s) => LINE_ROLE_LABELS[s.role]).join(" → ") : "자유 지정";
@@ -114,6 +130,7 @@ export function ApprovalFixedLinesBoard() {
   const defaultOf = (role: RoleKey) => roleUsers.find((r) => r.role === role && r.deptId === "*") ?? null;
   const deptExecs = roleUsers.filter((r) => r.role === "exec" && r.deptId !== "*");
   const execMembers = roleUsers.filter((r) => r.role === "exec_member");
+  const allFormWatchers = (data?.fixedWatchers ?? []).filter((w) => w.formId === "*");
   const templates = data?.templates ?? [];
   const fixedTemplates = templates.filter((t) => t.steps.length > 0);
   const previewFormId = previewForm || fixedTemplates[0]?.formId || "";
@@ -270,6 +287,50 @@ export function ApprovalFixedLinesBoard() {
               추가
             </CdButton>
           </div>
+
+          <h3 className="text-[13px] font-semibold cd-text mt-2">모든 양식 고정 참조·열람</h3>
+          <p className="text-[11px] cd-text-faint">
+            여기 있는 사람은 모든 결재 문서에 참조·열람자로 자동으로 들어갑니다(기안자 본인·결재선에 있는 사람 제외). 기안자는 뺄 수 없고, 공문·계약서 발송 메일 Cc 는 받지 않습니다.
+          </p>
+          {data && data.watchersReady === false ? (
+            <p className="text-[12px] cd-error-text">고정 참조·열람자 표(마이그레이션 346)가 아직 적용되지 않았습니다.</p>
+          ) : (
+            (["ref", "view"] as const).map((k) => (
+              <div key={k} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[12px] cd-text font-semibold w-12">{k === "ref" ? "참조" : "열람"}</span>
+                {allFormWatchers
+                  .filter((w) => w.kind === k)
+                  .map((w) => (
+                    <span key={w.entryId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
+                      <span className="text-[12px] px-2 py-0.5 cd-text">
+                        {w.userName ?? w.userId}
+                        {!w.active && <span className="cd-error-text text-[11px]"> (퇴사·계정 없음)</span>}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[11px] px-1.5 cd-text-faint hover:text-[color:var(--cd-error)]"
+                        title={k === "ref" ? "고정 참조 해제" : "고정 열람 해제"}
+                        onClick={() => {
+                          if (confirm(`${w.userName ?? w.userId}님을 모든 양식 고정 ${k === "ref" ? "참조" : "열람"}에서 뺄까요?`)) {
+                            void call("DELETE", null, `/api/approval/fixed-lines?watcherEntryId=${encodeURIComponent(w.entryId)}`, "고정 참조·열람에서 뺐습니다.");
+                          }
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                <CdButton
+                  size="sm"
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  disabled={!data?.watchersReady}
+                  onClick={() => setPicker({ kind: "watcher", watchKind: k })}
+                >
+                  {k === "ref" ? "참조자 추가" : "열람자 추가"}
+                </CdButton>
+              </div>
+            ))
+          )}
         </div>
 
         {/* 양식별 결재선 */}
@@ -507,7 +568,13 @@ export function ApprovalFixedLinesBoard() {
 
       <OrgPickerModal
         open={picker != null}
-        title={picker?.kind === "proxy" ? "지정 대결자 선택 — 조직도에서 선택" : "결재자 선택 — 조직도에서 선택"}
+        title={
+          picker?.kind === "proxy"
+            ? "지정 대결자 선택 — 조직도에서 선택"
+            : picker?.kind === "watcher"
+              ? `모든 양식 고정 ${picker.watchKind === "ref" ? "참조자" : "열람자"} 선택 — 조직도에서 선택`
+              : "결재자 선택 — 조직도에서 선택"
+        }
         hint="인원을 클릭하면 지정됩니다."
         onClose={() => setPicker(null)}
         onSelect={(emp) => {
@@ -521,6 +588,10 @@ export function ApprovalFixedLinesBoard() {
           if (target.kind === "proxy") {
             const s = editing?.steps[target.stepIndex];
             if (s && !(s.proxyUserIds ?? []).includes(emp.userId)) updateStep(target.stepIndex, { proxyUserIds: [...(s.proxyUserIds ?? []), emp.userId] });
+            return;
+          }
+          if (target.kind === "watcher") {
+            void call("PUT", { kind: "watcher", watchKind: target.watchKind, userId: emp.userId }, undefined, `${emp.name}님을 모든 양식 고정 ${target.watchKind === "ref" ? "참조자" : "열람자"}로 지정했습니다.`);
             return;
           }
           void call("PUT", { kind: "role", role: target.role, deptId: target.deptId, userId: emp.userId }, undefined, `${emp.name}님을 지정했습니다.`);

@@ -21,6 +21,7 @@ import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
+import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
@@ -1497,6 +1498,7 @@ export function ApprovalLetterBoard() {
               <p className="text-[11px] cd-text-faint leading-relaxed">
                 여기에 지정한 사내 인원은 <b className="cd-text">발송 공문 메일을 참조(Cc)로 함께 받습니다.</b> 사내 공유가 필요한 인원을 추가하세요(선택).
               </p>
+              <FixedWatcherNote formId={LETTER_FORM_ID} mailCc />
               {watchers.length === 0 ? null : (
                 watchers.map((w, i) => (
                   <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">

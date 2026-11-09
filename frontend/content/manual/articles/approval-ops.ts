@@ -386,6 +386,18 @@ export const APPROVAL_OPS_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "watchers",
+        title: "모든 양식 고정 참조·열람",
+        blocks: [
+          { kind: "list", items: [
+            "[[모든 양식 고정 참조·열람]]에서 [[참조자 추가]] 또는 [[열람자 추가]]로 조직도에서 사람을 고릅니다. 이름 옆 ×로 뺍니다.",
+            "여기 있는 사람은 모든 결재 문서에 참조·열람자로 자동으로 들어가 참조/열람함에서 문서를 봅니다. 기안자 본인이거나 그 문서 결재선에 있는 사람은 넣지 않습니다.",
+            "기안자는 기안 화면에서 이름만 보고 뺄 수 없습니다. 공문·계약서 발송 메일 Cc 는 받지 않습니다(기안자가 직접 넣은 사람만 받습니다).",
+            "이미 상신된 문서에는 들어가지 않습니다. 바뀐 담당자는 다음 저장·상신부터 적용됩니다.",
+          ] },
+        ],
+      },
+      {
         id: "templates",
         title: "양식별 결재선 편집",
         blocks: [
@@ -412,9 +424,9 @@ export const APPROVAL_OPS_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["고정 결재선", "결재선 고정", "결재선 템플릿", "부서장", "임원", "대표이사", "관리자", "지정 대결자", "최종안"],
+    keywords: ["고정 결재선", "결재선 고정", "결재선 템플릿", "부서장", "임원", "대표이사", "관리자", "지정 대결자", "최종안", "고정 참조", "고정 열람", "참조자", "열람자"],
     sources: ["components/approval/ApprovalFixedLinesBoard.tsx"],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-09",
   },
   {
     id: "approval-ops.notify",

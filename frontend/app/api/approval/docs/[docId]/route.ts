@@ -7,6 +7,7 @@ import { unlinkDocCards } from "@/lib/barobill/classify";
 import { unlinkDocReceipts } from "@/lib/finance/receipts";
 import { resolveDocAccess } from "@/lib/approval/access";
 import { CANCELABLE_FORM_IDS, getOpenCancelRequest } from "@/lib/approval/cancel";
+import { adminControlsReady, getDocAdminInfo } from "@/lib/approval/admin-controls";
 import { canFinalApprove, docDeptId } from "@/lib/approval/final-rules";
 import { getDb } from "@/lib/db";
 
@@ -47,7 +48,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     const cancelable = (CANCELABLE_FORM_IDS as readonly string[]).includes(doc.formId);
     const canRequestCancel =
       cancelable && doc.drafterUserId === ctx.userId && ["in_progress", "approved"].includes(doc.status) && !cancelRequest;
-    const canCancel = doc.status === "approved" && cancelRequest != null && isManager;
+    // 결재 취소·값 수정(관리자, 346) — 반려 요청이 없어도 모든 승인 문서. 346 적용 전에는 사유를 기록할 곳이 없어 숨긴다
+    // (346 은 next 배포 앞에 적용한다).
+    const adminReady = isManager && doc.status === "approved" && (await adminControlsReady());
+    const canCancel = adminReady;
+    const canAdminEdit = adminReady;
+    // 취소 기록·관리자 수정 이력 — 문서를 열람할 수 있는 사람 모두에게 보인다(투명성)
+    const { cancelInfo, edits: adminEdits } = await getDocAdminInfo(docId);
     // 이어 작성·재기안 — 본인 기안의 작성중/반려 문서(saveDoc·submitDoc 의 허용 범위와 동일).
     const isOwnEditable = doc.drafterUserId === ctx.userId && ["draft", "rejected"].includes(doc.status);
     const canEdit = isOwnEditable;
@@ -55,7 +62,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     // 기안자는 아직 결재가 걸려 있지 않은 본인 문서(작성중·반려)만.
     const canDelete = isManager || isOwnEditable;
     return NextResponse.json({
-      doc: { ...doc, myStepId: myStep?.stepId ?? null, canFinal, cancelRequest, canRequestCancel, canCancel, canEdit, canDelete },
+      doc: {
+        ...doc,
+        myStepId: myStep?.stepId ?? null,
+        canFinal,
+        cancelRequest,
+        canRequestCancel,
+        canCancel,
+        canAdminEdit,
+        cancelInfo,
+        adminEdits,
+        canEdit,
+        canDelete,
+      },
     });
   } catch (err) {
     return authErrorToResponse(err);

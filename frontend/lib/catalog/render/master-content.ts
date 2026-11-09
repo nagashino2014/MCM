@@ -283,12 +283,13 @@ export const SOFTWARE_CONTENT = {
       whenLabel: "개발 완료",
       when: "2027년 초",
     },
-    // ↓ 2026-11-09 추가 — 에코씨앤엠 기업부설연구소 사업 추진 계획서 요약본(04 KESI-ReDoc·05 KESI-CHEM, 2026.11) 기준. 사업비·인력 등 대외비 내용은 싣지 않는다
+    // ↓ 2026-11-09 추가 — 에코씨앤엠 기업부설연구소 사업 추진 계획서 요약본(04 KESI-ReDoc·05 KESI-CHEM, 2026.11) 기준. 사업비·인력 등 대외비 내용은 싣지 않는다.
+    //   계획서 일정은 지원사업 신청용으로 조정된 것 — 복원앱 실제 착수는 2026.8(사용자 확인 2026-11-09)
     {
       name: "PDF 문서 레이아웃 복원앱",
       icon: "file-text",
       area: 0,
-      status: "기획·기술 검토",
+      status: "개발 중",
       pitch: "PDF·스캔 문서를 원본 모양 그대로 한글·워드·엑셀·PPT로",
       points: [
         "문단·표·글상자·다단 등 레이아웃 구조를 복원하는 AI 변환(hwpx·docx·xlsx·pptx)",
@@ -296,7 +297,7 @@ export const SOFTWARE_CONTENT = {
         "병합·분할·번역·요약·검색 등 PDF 작업을 한 곳에서",
       ],
       whenLabel: "개발 착수",
-      when: "2027.4",
+      when: "2026.8",
     },
     {
       name: "화관법 통합관리 플랫폼",
@@ -315,10 +316,11 @@ export const SOFTWARE_CONTENT = {
   ],
   milesAside: "2026년 11월 기준 계획",
   miles: [
+    { when: "2026.8", text: "PDF 문서 레이아웃 복원앱 개발 착수", area: 0 },
     { when: "2026.12", text: "통합허가 계획서 플랫폼 1차 릴리스", area: 0 },
     { when: "2027년 초", text: "그룹웨어 & ERP 정식 출시", area: 0 },
     { when: "2027년 초", text: "ESG 통합관리 플랫폼 개발 완료", area: 4 },
-    { when: "2027.4", text: "레이아웃 복원앱·화관법 플랫폼 개발 착수", area: 2 },
+    { when: "2027.4", text: "화관법 통합관리 플랫폼 개발 착수", area: 2 },
     { when: "2027 하반기", text: "계획서 플랫폼 폐쇄망 에디션", area: 0 },
   ],
   note: "그룹웨어 & ERP는 이 앱(MCM)입니다. 일정은 계획이며 바뀌면 이 쪽을 고칩니다.",

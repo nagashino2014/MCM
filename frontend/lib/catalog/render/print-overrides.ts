@@ -36,6 +36,13 @@ ${BODY} .kc-kpi, ${BODY} .kc-card, ${BODY} .kc-strengths__method, ${BODY} .kc-fx
 ${BODY} .kc-strengths__hero { border-radius: 14px; }
 ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 
+/* 응용소프트웨어 쪽 제품 카드 5장(2026-11-09) — 한 줄에 다 놓도록 안쪽 여백·글자를 한 단계 줄인다 */
+.kc-sw--compact { gap: 10px; }
+.kc-sw--compact .kc-sw__card { padding: 12px 11px 10px; gap: 6px; }
+.kc-sw--compact .kc-sw__name { font-size: 12.5px; line-height: 17px; }
+.kc-sw--compact .kc-sw__pitch { font-size: 9px; line-height: 14px; }
+.kc-sw--compact .kc-sw__list li { font-size: 8.5px; line-height: 13px; }
+
 /* 쪽 눈썹 글(제목 위 '숫자로 보는 KESI'·'비전'·'연혁'·'사업 분야 01' 등) — 9 → 12px(대표이사 지시 2026-11-08: 너무 작다).
    연구소·ESG 제안형(.kc-tpl--research .kc-eyebrow 14px)은 그대로. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
 .pk-sheet .kc-eyebrow { font-size: 12px; line-height: 16px; letter-spacing: 0.3px; }

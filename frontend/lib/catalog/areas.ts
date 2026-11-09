@@ -19,7 +19,8 @@ export function areaIndex(category: string): number {
 }
 
 /** 응용소프트웨어 제품(현재 공급 계약 없음 — 소개서는 제품 수를 보여 준다) */
-export const SOFTWARE_PRODUCTS = ["그룹웨어 & ERP", "통합허가 계획서 플랫폼", "ESG 통합관리 플랫폼"] as const;
+// 2026-11-09 사용자 지시로 PDF 문서 레이아웃 복원앱·화관법 통합관리 플랫폼 추가(3 → 5종). render/master-content.ts SOFTWARE_CONTENT.products 와 같은 순서·이름
+export const SOFTWARE_PRODUCTS = ["그룹웨어 & ERP", "통합허가 계획서 플랫폼", "ESG 통합관리 플랫폼", "PDF 문서 레이아웃 복원앱", "화관법 통합관리 플랫폼"] as const;
 
 /** 응용소프트웨어 공급 계약 판정 — 계약의 서비스 유형(service_type)에 소프트웨어·SW·그룹웨어·ERP 가 들어가면. */
 export function isSoftwareServiceType(serviceType: string | null | undefined): boolean {

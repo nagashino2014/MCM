@@ -30,6 +30,13 @@ const ORBIT_POS = [
   { left: 520, top: 300, x2: 520, y2: 350 },
 ];
 
+/** 이름을 두 개씩 ' · ' 로 묶은 줄 */
+function pairNames(names: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < names.length; i += 2) out.push(names.slice(i, i + 2).join(" · "));
+  return out;
+}
+
 /** C08 원형 도식의 내용 — 스튜디오에서 유형을 바꾸거나 일러스트로 그릴 때 이 내용(분야명·누적 건수 지표·주요 서비스)이 그대로 간다 */
 function businessMapSpec(data: CatalogRenderData): InfoSpec {
   return {
@@ -78,7 +85,8 @@ export function BusinessMapPage({ ctx, data, sectionStart, linked }: { ctx: Rend
         {data.areas.map((a, i) => {
           const pos = ORBIT_POS[i];
           const sw = a.index === 6;
-          const bullets = sw ? SOFTWARE_CONTENT.products.map((p) => `${p.name}(${p.status === "개발 중" ? `${p.whenLabel} ${p.when}` : p.status})`) : AREA_CONTENT[a.category]?.overview ?? [];
+          // 응용소프트웨어는 제품이 늘어(5종) 이름만 두 개씩 한 줄로 — 상태·시기는 응용소프트웨어 쪽 카드에 있다(다섯 줄이면 카드가 쪽 각주를 덮음)
+          const bullets = sw ? pairNames(SOFTWARE_CONTENT.products.map((p) => p.name)) : AREA_CONTENT[a.category]?.overview ?? [];
           return (
             <a
               key={a.index}
@@ -401,7 +409,7 @@ export function SoftwarePage({ ctx, data, area }: { ctx: RenderCtx; data: Catalo
     <Sheet ctx={ctx} area={6} anchors={[`area-${area.index}`, "c09-software"]} outline={area.name}>
       <Head ctx={ctx} num="02" name="사업 분야" sub={area.name} />
       <TitleBlock eyebrow={c.eyebrow} title={c.title} lead={c.lead} />
-      <div className="kc-sw">
+      <div className={cx("kc-sw", c.products.length > 3 && "kc-sw--compact")} style={c.products.length > 3 ? { gridTemplateColumns: `repeat(${c.products.length}, minmax(0, 1fr))` } : undefined}>
         {c.products.map((p) => (
           <section key={p.name} className={cx("kc-sw__card", p.area ? `kc-area-${p.area}` : null)}>
             <div className="kc-sw__top">

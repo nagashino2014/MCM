@@ -41,6 +41,8 @@ import { capabilities, outermost, parentSelection, resolveSelection } from "@/li
 import { findOverlaps, intersectRect, isMovedNode, movedNodes, textBoxNodes, type OverlapBox } from "@/lib/catalog/studio/overlap";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import { makeFixture } from "./catalog-studio-fixture";
+import { SOFTWARE_PRODUCTS } from "@/lib/catalog/areas";
+import { SOFTWARE_CONTENT } from "@/lib/catalog/render/master-content";
 
 const COVER: CoverChoice = { cover: "leaf", photo: "k/assets/hq-cover-tall.webp" };
 const ctxOf = (opts: RenderOptions = { edition: "print", naming: "masked" }): RenderCtx => ({ url: (k) => `/x/${k}`, opts, docLabel: "회사소개서 2026.10", fontSet: "pretendard", concept: "navy" });
@@ -681,4 +683,9 @@ test("자리 해시 id 밀림 — 실행 중 조건부 자식은 자리를 지�
   const renum: CNode = JSON.parse(JSON.stringify(note).replace(/\d/g, "7"));
   assert.ok(anchorMatches(renum, anchor));
   assert.ok(!anchorMatches(labelOf(1), anchorOf(labelOf(0))));
+});
+
+test("응용소프트웨어 — 지표(제품 수)의 이름 목록과 15쪽 제품 카드가 같다", () => {
+  assert.deepEqual([...SOFTWARE_PRODUCTS], SOFTWARE_CONTENT.products.map((p) => p.name));
+  assert.equal(SOFTWARE_PRODUCTS.length, 5);
 });

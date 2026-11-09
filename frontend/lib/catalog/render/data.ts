@@ -2,8 +2,7 @@ import { getDb, rowsToObjects } from "@/lib/db";
 import {
   applyAppendixRules,
   buildDisplayIndustry,
-  buildDisplayTitle,
-  formatPermitNo,
+  buildDisplayTitle,
   isCompleted,
   type CatalogProjectRow,
 } from "@/lib/catalog/appendix";
@@ -151,15 +150,12 @@ function caseTitle(row: CatalogProjectRow): string {
   return t.replace(/\s*준공\s*(\([^)]*\))?\s*$/, "").replace(/\s*수행 중\s*$/, "").trim();
 }
 
-/** 대표 실적 한 줄(연도·표기·허가일 또는 기간) — 분야 쪽(C09)·새 분야 쪽 공용 */
+/** 대표 실적 한 줄(연도·표기·허가일 또는 기간) — 분야 쪽(C09)·새 분야 쪽 공용. 결정번호는 칸이 좁아 싣지 않는다(2026-11-09) */
 export function caseRow(p: CatalogProjectRow): { year: string; title: string; meta: string } {
   return {
     year: p.year,
     title: caseTitle(p),
-    meta:
-      p.category === CATALOG_CATEGORIES[0] && p.permitIssuedAt
-        ? [p.permitIssuedAt.slice(0, 10), formatPermitNo(p.permitNo) ? `제${formatPermitNo(p.permitNo)}호` : ""].filter(Boolean).join(" · ")
-        : periodShort(p),
+    meta: p.category === CATALOG_CATEGORIES[0] && p.permitIssuedAt ? p.permitIssuedAt.slice(0, 10) : periodShort(p),
   };
 }
 

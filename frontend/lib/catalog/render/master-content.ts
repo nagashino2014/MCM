@@ -52,7 +52,7 @@ export const AREA_CONTENT: Record<string, AreaContent> = {
       { label: "사후관리", desc: "정기검사·변경·재검토 대응" },
     ],
     overview: ["통합환경허가 최초허가·변경허가·변경신고", "허가 재검토·정기검사 대응", "사후관리 컨설팅(연간 가이드북·교육)"],
-    casesAside: "허가일 · 결정번호",
+    casesAside: "허가일",
     heroCaption: "통합환경허가 누적 수행(최초·변경·재검토)",
   },
   "장외·화관법": {

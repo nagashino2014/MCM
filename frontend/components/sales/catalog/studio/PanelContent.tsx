@@ -11,6 +11,7 @@ import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { editsWithin } from "@/lib/catalog/studio/edits";
 import { findNode, newUserId, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { capabilities, describe, isTextBlock, parentSelection, type Selection } from "@/lib/catalog/studio/select";
+import { CasesEditor, hasCasesEditor } from "./PanelCases";
 import { selectionLabel, type PanelProps } from "./types";
 
 const snippet = (n: CNode) => textOf(n).replace(/\s+/g, " ").trim().slice(0, 28) || "(글 없음)";
@@ -39,6 +40,9 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
     .map(([id]) => id);
   // 위젯 안 노드에 붙은 편집(옛 버전에서 생긴 고정 글 등) — 고를 수 없으니 위젯 되돌리기로 함께 지운다
   const innerEdits = sel?.node.widget && sel.node.origin === "base" ? editsWithin(composed.base, composed.state?.edits, sel.id).length : 0;
+  // 사업 분야 쪽 대표 실적 — 자동 선별·직접 입력(영역을 고르거나, 아무것도 고르지 않았을 때 쪽 정보 아래)
+  const casesPage = hasCasesEditor({ studio, item });
+  const casesSelected = casesPage && sel?.node.widget === "cases";
 
   return (
     <div className="flex flex-col gap-3">
@@ -65,7 +69,8 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
               </button>
             </span>
           </div>
-          {caps?.locked ? <p className="text-xs cd-text-muted">{caps.locked}</p> : null}
+          {caps?.locked && !casesSelected ? <p className="text-xs cd-text-muted">{caps.locked}</p> : null}
+          {casesSelected ? <CasesEditor studio={studio} item={item} ops={ops} /> : null}
           {innerEdits > 0 ? (
             <p className="text-xs cd-text-muted">
               <span className="cd-pill cd-pill-warn">안쪽 편집 {innerEdits}건</span> 예전 버전에서 안쪽 요소를 고친 편집이 붙어 있습니다. 아래 [이 요소 편집 모두 되돌리기]로 함께 지웁니다.
@@ -131,6 +136,7 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
                 : "부록 쪽입니다. 글만 고칩니다. 행은 실적 노출 관리에서 고칩니다."}
           </p>
           <p className="text-xs cd-text-faint">캔버스에서 요소를 누르거나 아래 목록에서 고릅니다. Shift·Ctrl+클릭으로 여러 개 고릅니다.</p>
+          {casesPage ? <CasesEditor studio={studio} item={item} ops={ops} /> : null}
         </section>
       )}
 

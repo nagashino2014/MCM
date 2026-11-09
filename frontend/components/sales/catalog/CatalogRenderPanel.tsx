@@ -4,7 +4,7 @@
 // 만든 PDF 는 검토용 생성본으로 이력(catalog_editions)에 남는다. 발행 담당은 검토한 인쇄·배포본 생성본을 그대로 [발행]할 수 있다(P7).
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Eye, FileText, Loader2, MonitorPlay, Send } from "lucide-react";
+import { Download, Eye, FileText, Loader2, MonitorPlay, Send, Trash2 } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import type { CatalogEditionSummary } from "@/lib/catalog/render/editions";
 import { EDITION_LABEL, NAMING_LABEL, SCOPE_LABEL, type EditionKind, type NamingMode, type ScopeMode } from "@/lib/catalog/render/types";
@@ -47,6 +47,24 @@ export function CatalogRenderPanel({
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // 생성본 지우기 — 이력과 PDF 파일을 함께 지운다(발행본은 서버가 거절)
+  const [removing, setRemoving] = useState<string | null>(null);
+  const remove = async (e: CatalogEditionSummary) => {
+    if (!window.confirm(`${fmtWhen(e.createdAt)}에 만든 '${e.label}' PDF 를 지웁니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+    setRemoving(e.editionId);
+    setError(null);
+    try {
+      await catalogFetch(`/api/catalog/editions/${encodeURIComponent(e.editionId)}`, { method: "DELETE" });
+      if (previewId === e.editionId) setPreviewId(null);
+      if (last?.editionId === e.editionId) setLast(null);
+      await reload();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const generate = async () => {
     setBusy(true);
@@ -187,6 +205,16 @@ export function CatalogRenderPanel({
                         <Send className="w-3.5 h-3.5" /> 발행
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="cd-icon-button cd-icon-button-sm ml-1 align-middle"
+                      onClick={() => void remove(e)}
+                      disabled={removing === e.editionId}
+                      aria-label={`${e.label} PDF 지우기`}
+                      title="이 PDF 지우기"
+                    >
+                      {removing === e.editionId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </button>
                   </td>
                 </tr>
               ))}

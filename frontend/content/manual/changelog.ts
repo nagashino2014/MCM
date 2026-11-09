@@ -6,6 +6,16 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-09", kind: "수정", title: "회사소개서 스튜디오 — 친 글이 다른 요소를 누르면 사라지던 문제",
+    body: "글 칸·일러스트 글자 자리에 글을 친 뒤 아이콘·도형 등 다른 요소를 누르면 친 글이 원래대로 돌아가고 저장되지 않던 문제를 고쳤습니다.",
+    articles: ["sales.catalog"],
+  },
+  {
+    date: "2026-11-09", kind: "개선", title: "회사소개서 — 만든 PDF(마스킹판·실명판) 지우기",
+    body: "PDF 만들기로 만든 검토용 PDF 를 목록 줄 끝 휴지통 단추로 지울 수 있습니다. 파일까지 함께 지워지며, 발행본은 배포 이력이라 지울 수 없습니다.",
+    articles: ["sales.catalog"],
+  },
+  {
     date: "2026-11-09", kind: "변경", title: "계약 — 부서장 매출 계약 전체 열람, 매입 계약은 대표이사·관리자만",
     body: "매출 계약 관리에서 부서장도 임원·대표이사·관리자처럼 전체 계약을 봅니다(수행부서·수행인력이 등록되지 않은 용역 포함). 사원은 그대로 본인이 수행인력으로 참여한 계약만 봅니다. 매입 계약 관리는 대표이사와 관리자만 보도록 좁혔습니다. 바뀐 메뉴는 다시 로그인하면 반영됩니다.",
     articles: ["contracts.manage", "contracts.purchase"],

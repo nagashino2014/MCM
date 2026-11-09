@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { renderHtmlPdf, type PrintWarning } from "@/lib/print-kit/converter";
-import { putContractDocument, readContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
+import { deleteContractDocument, putContractDocument, readContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { loadStudioDoc } from "@/lib/catalog/studio/store";
 import { computeCatalogFingerprint, resolvePendingByEdition, runCatalogRefresh } from "@/lib/catalog/refresh/service";
 import { loadCatalogRenderData } from "./data";
@@ -340,3 +340,22 @@ export async function deleteDistribution(editionId: string, distId: string): Pro
     await txn.run("DELETE FROM catalog_edition_distributions WHERE dist_id = $1 AND edition_id = $2", [s(distId), s(editionId)]);
   });
 }
+
+/**
+ * 생성본(검토용 PDF) 지우기 — 이력 행과 PDF 파일을 함께 지운다(사용자 요청 2026-11-09: PDF 만들기 결과가 쌓이기만 함).
+ * 발행본은 대외 배포 이력(배포 기록·반영 대기 해소)이 붙어 있어 지우지 않는다. 지운 판 요약을 돌려준다(감사 기록용).
+ */
+export async function deleteGeneratedEdition(editionId: string): Promise<{ label: string; naming: string; pages: number }> {
+  const db = await getDb();
+  const r = rowsToObjects(await db.exec("SELECT edition_id, options, pdf_key, png_prefix FROM catalog_editions WHERE edition_id = $1", [s(editionId)]))[0];
+  if (!r) throw new EditionError("PDF 를 찾을 수 없습니다.", 404);
+  const options = (typeof r.options === "string" ? JSON.parse(r.options) : r.options ?? {}) as Record<string, unknown>;
+  if (s(options.stage) === "published") throw new EditionError("발행본은 배포 이력이라 지울 수 없습니다.", 409);
+  await withDbWrite(async (txn) => {
+    await txn.run("DELETE FROM catalog_editions WHERE edition_id = $1 AND COALESCE(options->>'stage', 'generated') <> 'published'", [s(editionId)]);
+  });
+  // 파일 정리는 이력을 지운 뒤 best-effort(실패해도 목록에서는 사라진다)
+  if (s(r.pdf_key)) await deleteContractDocument(s(r.pdf_key));
+  return { label: s(options.label) || editionLabel("generated", s(options.edition) === "draft" ? "draft" : "print", s(options.naming) === "real" ? "real" : "masked", s(options.scope) === "summary" ? "summary" : "full"), naming: s(options.naming), pages: Number(options.pages ?? 0) || 0 };
+}
+

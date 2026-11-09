@@ -194,6 +194,8 @@ export type AuditAction =
   | "catalog_update"
   // 회사소개서 PDF 생성본(P4 렌더러, catalog_editions)
   | "catalog_render"
+  // 회사소개서 생성본(검토용 PDF) 지우기 — 발행본은 지우지 않는다
+  | "catalog_edition_delete"
   // 회사소개서 발행(P7) — 발행본 확정·배포 기록
   | "catalog_publish"
   | "catalog_distribution"

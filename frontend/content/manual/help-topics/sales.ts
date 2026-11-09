@@ -405,11 +405,12 @@ export const SALES_HELP: HelpTopic[] = [
         "[[PDF 만들기]]는 지금 데이터로 마스터본을 만듭니다. 보통 1분 안에 끝납니다. 요약본은 부록을 뺍니다.",
         "인쇄·배포본은 검토용 안내문을 숨기고, 작업본은 그대로 보여 줍니다. 실명판에만 부록 C(수행인력 상세 이력)가 붙습니다.",
         "여기서 만든 PDF 는 검토용입니다. 넘침 경고가 0건인지 확인한 뒤 인쇄·배포본 줄의 [[발행]]으로 그대로 발행본이 됩니다(발행 담당).",
+        "필요 없는 PDF 는 줄 끝 휴지통 단추로 지웁니다. 발행본은 지울 수 없습니다.",
       ] },
     ],
     more: { article: "sales.catalog", section: "pdf" },
     sources: ["components/sales/catalog/CatalogRenderPanel.tsx"],
-    reviewedAt: "2026-10-26",
+    reviewedAt: "2026-11-09",
   },
   {
     id: "catalog.reference",

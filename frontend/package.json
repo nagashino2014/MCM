@@ -9,6 +9,7 @@
     "test:dept-delete": "node scripts/test-dept-delete.mjs",
     "test:approval-absence": "node scripts/test-approval-absence.mjs",
     "test:approval-fixed-line": "node scripts/test-approval-fixed-line.mjs",
+    "test:approval-admin-controls": "node scripts/test-approval-admin-controls.mjs",
     "test:approval-linkage": "node scripts/test-approval-linkage.mjs",
     "test:money-gates": "node scripts/test-money-gates.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",

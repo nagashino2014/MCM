@@ -18,6 +18,7 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
+import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { useDragOrder } from "@/components/approval/useDragOrder";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
@@ -836,6 +837,7 @@ export function ApprovalNoticeBoard() {
                 <span className="ml-auto text-[11px] font-normal cd-text-faint">사내 참조(결재 시스템)</span>
               </h4>
               <p className="text-[11px] cd-text-faint leading-relaxed">여기에 지정한 사내 인원은 결재 문서(고시 지면)를 함께 열람합니다(선택).</p>
+              <FixedWatcherNote formId={NOTICE_FORM_ID} />
               {watchers.map((w, i) => (
                 <div key={`${w.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-1.5 flex items-center gap-2">
                   <select

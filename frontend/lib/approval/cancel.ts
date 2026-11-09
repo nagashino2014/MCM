@@ -2,9 +2,8 @@
  * 반려 요청(취소 요청)·결재 취소 코어 — 일정(캘린더)의 본인 스케줄 취소·변경 흐름(124).
  *   createCancelRequest: 기안자 본인이 진행중(in_progress)·승인완료(approved) 문서에 요청.
  *     in_progress 는 결재자가 기존 반려 기능으로 처리(actOnDoc 이 요청을 자동 resolve),
- *     approved 는 관리자가 cancelApprovedDoc 으로 처리한다.
- *   cancelApprovedDoc: status='canceled' 전이 + 휴가 문서면 연차 대장 use 행 회수.
- *     조건부 UPDATE(WHERE status='approved') 0행이면 오류 — 이중 호출에 멱등.
+ *     approved 는 관리자가 결재 취소(lib/approval/admin-controls.ts adminCancelDoc, 346)로 처리한다.
+ *   관리자 취소는 반려 요청이 없어도 모든 승인 문서에 쓸 수 있고, 사유·원래 번호를 남기며 번호를 반납한다.
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
@@ -135,41 +134,4 @@ export async function resolveOpenCancelRequests(
       WHERE doc_id = $1 AND status = 'requested'`,
     [docId, resolution, new Date().toISOString(), resolvedBy]
   );
-}
-
-/**
- * 승인 완료 문서의 결재 취소(관리자) — canceled 전이 + 휴가면 연차 대장 use 회수.
- * 캘린더 제외는 조회 필터(status IN in_progress/approved)로 자연 처리되고,
- * 휴가는 ledger 행 삭제로 홈 캘린더·잔여 연차에도 즉시 반영된다.
- */
-export async function cancelApprovedDoc(params: {
-  docId: string;
-  actorUserId: string;
-}): Promise<{ ledgerReversed: boolean }> {
-  let ledgerReversed = false;
-  await withDbWrite(async (txn) => {
-    const now = new Date().toISOString();
-    const updated = rowsToObjects(
-      await txn.exec(
-        `UPDATE approval_docs SET status = 'canceled', updated_at = $2
-          WHERE doc_id = $1 AND status = 'approved'
-          RETURNING form_id`,
-        [params.docId, now]
-      )
-    );
-    if (!updated.length) throw new Error("승인 완료 상태의 문서만 취소할 수 있습니다.");
-
-    // 휴가 문서면 이 문서로 적재된 연차 대장 use 행을 회수한다(doc_id 기준 — 자연 멱등).
-    if (String(updated[0].form_id) === LEAVE_FORM_ID) {
-      const del = rowsToObjects(
-        await txn.exec(`DELETE FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use' RETURNING entry_id`, [
-          params.docId,
-        ])
-      );
-      ledgerReversed = del.length > 0;
-    }
-
-    await resolveOpenCancelRequests(txn, params.docId, "canceled", params.actorUserId);
-  });
-  return { ledgerReversed };
 }

@@ -329,19 +329,30 @@ export function CompanyProfilePanel() {
         warning?: string;
       };
       const fields = data.fields;
-      // 수정 중인 항목에 문서를 올리면 증빙만 교체하고 항목 id 는 유지한다
+      // 수정 중인 항목에 문서를 올리면 증빙을 붙이고 항목 id 는 유지한다 — 이미 적힌 값은 두고 빈 칸만 분석 값으로 채운다
+      // (증빙 보관 기능 전에 손으로 등록한 항목에 증빙만 붙일 때 고쳐 둔 명칭·번호가 바뀌지 않게, 2026-11-09)
       setCredDraft((prev) =>
         fields
-          ? {
-              ...prev,
-              kind: prev.credentialId ? prev.kind : fields.kind,
-              name: fields.name || prev.name,
-              credentialNo: fields.credentialNo,
-              issuedAt: fields.issuedAt,
-              validUntil: fields.validUntil,
-              issuer: fields.issuer,
-              file: data.file,
-            }
+          ? prev.credentialId
+            ? {
+                ...prev,
+                name: prev.name || fields.name,
+                credentialNo: prev.credentialNo || fields.credentialNo,
+                issuedAt: prev.issuedAt || fields.issuedAt,
+                validUntil: prev.validUntil || fields.validUntil,
+                issuer: prev.issuer || fields.issuer,
+                file: data.file,
+              }
+            : {
+                ...prev,
+                kind: fields.kind,
+                name: fields.name || prev.name,
+                credentialNo: fields.credentialNo,
+                issuedAt: fields.issuedAt,
+                validUntil: fields.validUntil,
+                issuer: fields.issuer,
+                file: data.file,
+              }
           : { ...prev, file: data.file }
       );
       if (data.warning) alert(data.warning);

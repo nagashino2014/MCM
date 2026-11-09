@@ -19,6 +19,7 @@ import { MASTER_DOC_ID, getAppendixRules, getDocumentTheme, listCatalogProjects 
 import { REGION_GROUPS, REGION_UNKNOWN } from "@/lib/catalog/regions";
 import { activePermitIndustries, permitIndustriesSnapshot } from "@/lib/ieps/integrated-permit-industries";
 import { getCompanyProfile, listCredentials, listHistory } from "@/lib/company/profile";
+import { credentialVisualReady } from "@/lib/company/credential-preview";
 import { AREA_DISPLAY_NAME, CLIENT_GROUP_LABEL, MATRIX_DESC, OFFICE_CONTENT, VISION_CONTENT } from "./master-content";
 import { initialOf, maskNamesIn, nameMasker } from "./masking";
 import type {
@@ -319,12 +320,15 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   // ── 인증·등록·특허 ──
   const KIND: Record<string, string> = { license: "등록", certification: "인증", patent: "특허", award: "수상" };
   const KIND_ORDER: Record<string, number> = { license: 0, certification: 1, patent: 2, award: 3 };
-  const credCards: CredentialCard[] = credentials
+  const shownCreds = credentials
     .filter((c) => c.isPublic)
-    .sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) || (a.issuedAt || "9999").localeCompare(b.issuedAt || "9999"))
-    .map((c) => {
+    .sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) || (a.issuedAt || "9999").localeCompare(b.issuedAt || "9999"));
+  // 증서 그림 — 이미지 증빙은 원본, PDF 증빙은 첫 쪽 미리보기(처음 한 번 그려 저장소에 보관, credential-preview.ts)
+  const credVisual = await Promise.all(shownCreds.map((c) => credentialVisualReady(c.file).catch(() => false)));
+  const credCards: CredentialCard[] = shownCreds
+    .map((c, i) => {
       const ym = c.issuedAt.match(/(\d{4})\D?(\d{1,2})/);
-      const isImage = Boolean(c.file && /\.(png|jpe?g|webp)$/i.test(c.file.fileName));
+      const isImage = credVisual[i];
       return {
         key: c.credentialId,
         kind: KIND[c.kind] ?? "등록",

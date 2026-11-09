@@ -243,6 +243,17 @@ export function StudioCanvas({
   // 글을 친 뒤 아직 반영(blur)하지 않은 블록 — 이때 Ctrl+Z 는 브라우저 기본(글 안 되돌리기)
   const dirtyRef = useRef(new Set<string>());
 
+  // 고칠 수 있는 칸의 innerHTML 값 — 글이 같으면 같은 객체를 돌려준다. React 19 는 dangerouslySetInnerHTML 을 객체 동일성으로 비교해,
+  // 매번 새 객체면 다시 그릴 때마다(요소 고르기·저장 등) innerHTML 을 덮어써 아직 반영(blur) 전인 친 글이 사라졌다(2026-11-09)
+  const htmlCache = useRef(new Map<string, { __html: string }>());
+  const stableHtml = useCallback((id: string, html: string) => {
+    const hit = htmlCache.current.get(id);
+    if (hit && hit.__html === html) return hit;
+    const next = { __html: html };
+    htmlCache.current.set(id, next);
+    return next;
+  }, []);
+
   const commitBlock = useCallback(
     (n: CNode, el: HTMLElement) => {
       dirtyRef.current.delete(n.id);
@@ -290,7 +301,7 @@ export function StudioCanvas({
             contentEditable: true,
             suppressContentEditableWarning: true,
             spellCheck: false,
-            dangerouslySetInnerHTML: { __html: text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>") },
+            dangerouslySetInnerHTML: stableHtml(n.id, text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")),
             onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
               if (e.key === "Enter" && multi) {
                 e.preventDefault();
@@ -323,7 +334,7 @@ export function StudioCanvas({
           contentEditable: true,
           suppressContentEditableWarning: true,
           spellCheck: false,
-          dangerouslySetInnerHTML: { __html: toEditableHtml(kids, (c) => (isChip(c) ? chipHtml(c) : "")) },
+          dangerouslySetInnerHTML: stableHtml(n.id, toEditableHtml(kids, (c) => (isChip(c) ? chipHtml(c) : ""))),
           onKeyDown: (e: RKeyboardEvent<HTMLElement>) => {
             const d = e.currentTarget.ownerDocument;
             const mod = e.ctrlKey || e.metaKey;
@@ -356,7 +367,7 @@ export function StudioCanvas({
       },
     };
     return renderNode(tree, env, hooks);
-  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect, captureAt, onRequestBind, onKeyCommand, onCommitSlot, maxLevel]);
+  }, [tree, env, textBlocks, chipHtml, commitBlock, folio, onSelect, captureAt, onRequestBind, onKeyCommand, onCommitSlot, maxLevel, stableHtml]);
 
   const sheetEl = useCallback(() => (scaleRef.current?.querySelector(".pk-sheet") as HTMLElement | null) ?? null, []);
   const elOf = useCallback((id: string | null) => (id && frame ? (frame.doc.querySelector(`[data-cn="${CSS.escape(id)}"]`) as HTMLElement | null) : null), [frame]);

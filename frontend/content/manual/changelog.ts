@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-09", kind: "수정", title: "회사소개서 스튜디오 — 친 글이 다른 요소를 누르면 사라지던 문제",
+    body: "글 칸·일러스트 글자 자리에 글을 친 뒤 아이콘·도형 등 다른 요소를 누르면 친 글이 원래대로 돌아가고 저장되지 않던 문제를 고쳤습니다.",
+    articles: ["sales.catalog"],
+  },
+  {
     date: "2026-11-09", kind: "개선", title: "회사소개서 — 만든 PDF(마스킹판·실명판) 지우기",
     body: "PDF 만들기로 만든 검토용 PDF 를 목록 줄 끝 휴지통 단추로 지울 수 있습니다. 파일까지 함께 지워지며, 발행본은 배포 이력이라 지울 수 없습니다.",
     articles: ["sales.catalog"],

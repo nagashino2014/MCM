@@ -1267,6 +1267,8 @@ function mergeSourceOptions(rows: unknown[][]): { value: string; count: number }
 
 export interface FacilityDetail {
   corporateRegistrationNo?: string | null;
+  /** 종사업장 번호(349) — 숫자 4자리. */
+  taxRegId?: string | null;
   representativeName: string | null;
   homepageUrl?: string | null;
   orgCategory?: string | null;
@@ -1413,6 +1415,14 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
   const facRows = rowsToObjects(facRow);
   if (!facRows.length) return null;
   const f = facRows[0];
+  // 종사업장 번호(349) — 마이그레이션 적용 전 DB 에서도 상세가 열리도록 별도 조회·실패 무시.
+  let taxRegId: string | null = null;
+  try {
+    const taxRows = rowsToObjects(await db.exec(`SELECT tax_reg_id FROM facilities WHERE facility_id = $1`, [facilityId]));
+    taxRegId = taxRows[0]?.tax_reg_id != null ? String(taxRows[0].tax_reg_id) : null;
+  } catch {
+    taxRegId = null;
+  }
 
   const isClosed = rowsToObjects(
     await db.exec(
@@ -1574,6 +1584,7 @@ export async function getFacilityDetail(facilityId: string): Promise<FacilityDet
         : null,
     representativeName: f.representative_name != null ? String(f.representative_name) : null,
     corporateRegistrationNo: f.corporate_registration_no != null ? String(f.corporate_registration_no) : null,
+    taxRegId,
     orgCategory: f.org_category != null ? String(f.org_category) : null,
     homepageUrl: f.homepage_url != null ? String(f.homepage_url) : null,
     tradeRoles: parsePgTextArray(f.trade_roles),

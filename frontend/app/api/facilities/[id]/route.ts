@@ -40,6 +40,8 @@ interface PatchBody {
   additionalSiteAddresses?: (string | null | undefined)[] | null;
   phoneNumber?: string | null;
   homepageUrl?: string | null;
+  /** 종사업장 번호(349) — 숫자 4자리 또는 null(본점). */
+  taxRegId?: string | null;
   industryCode?: string | null;
   industryName?: string | null;
   businessCertificateBusinessType?: string | null;
@@ -113,6 +115,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       if (body.homepageUrl !== undefined) {
         pushSet("homepage_url", body.homepageUrl?.trim() || null);
+      }
+      if (body.taxRegId !== undefined) {
+        const taxRegDigits = String(body.taxRegId ?? "").replace(/[^0-9]/g, "");
+        if (taxRegDigits && (taxRegDigits.length > 4 || /^0+$/.test(taxRegDigits))) {
+          throw Object.assign(new Error("종사업장 번호는 0001~9999 네 자리입니다."), { status: 400 });
+        }
+        pushSet("tax_reg_id", taxRegDigits ? taxRegDigits.padStart(4, "0") : null);
       }
       if (body.industryCode !== undefined) {
         pushSet("industry_code", body.industryCode);

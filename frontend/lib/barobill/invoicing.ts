@@ -39,6 +39,19 @@ export interface IssuePrefillContact {
   deptTypes: string[];
   /** '계산서' 태그가 켜진 담당자 = 이 사업장의 기본 계산서 수신처. */
   billing: boolean;
+  /** 담당자가 속한 사업장(2026-11-10) — 계약 상대가 아닌 관계 사업장 담당자도 후보로 보인다. */
+  facilityId: string;
+  facilityName: string;
+  /** counterparty = 계약 상대(공급받는자) / site = 계약 대상 사업장 / related = 운영 주체 관리·사업장 그룹 연결 법인으로 연결된 사업장 */
+  source: "counterparty" | "site" | "related";
+}
+
+/** 공급받는자 종사업장 번호 기본값의 출처 — 모달이 '사업장에 저장' 대상을 안내할 때 쓴다. */
+export interface IssuePrefillTaxRegTarget {
+  facilityId: string;
+  facilityName: string;
+  /** 그 사업장 마스터에 저장된 번호(없으면 null). */
+  taxRegId: string | null;
 }
 
 export interface IssuePrefill {
@@ -54,7 +67,12 @@ export interface IssuePrefill {
   defaultRemark: string;
   writeDate: string; // YYYY-MM-DD (오늘)
   invoicer: { corpNum: string; corpName: string; ceoName: string; addr: string; bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType: string; bizClass: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType: string; bizClass: string; taxRegId: string };
+  /**
+   * 종사업장 번호를 저장·불러오는 사업장 — 계약 대상 사업장이 공급받는자와 같은 법인(사업자번호)의
+   * 다른 사업장이면 그 사업장, 아니면 공급받는자 사업장 자신.
+   */
+  taxRegTarget: IssuePrefillTaxRegTarget | null;
   contacts: IssuePrefillContact[];
   /** 저장해 둔 발행 담당자 이메일(188) — 모달 목록에서 골라 쓴다. env 기본값이 항상 첫 항목. */
   issuerEmails: Array<{ email: string; label: string | null }>;
@@ -212,13 +230,138 @@ export async function deleteIssuerEmail(email: string): Promise<void> {
   });
 }
 
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+interface LinkedFacility {
+  facilityId: string;
+  name: string;
+  brn: string;
+  source: IssuePrefillContact["source"];
+}
+
+/**
+ * 수신처 후보 사업장 — 계약 상대 → 계약 대상 사업장 → 운영 주체 관리 연결(양방향, 해제되지 않은 관계)
+ * → 사업장 그룹에서 같은 연결 법인에 묶인 사업장 순.
+ * 사업자번호만 같고 연결이 없는 사업장이나 그룹 전체 계열사는 넣지 않는다(무관한 담당자가 섞인다).
+ */
+async function loadLinkedFacilities(db: Db, counterpartyId: string | null, siteId: string | null): Promise<LinkedFacility[]> {
+  const seeds = [counterpartyId, siteId].filter((v): v is string => Boolean(v));
+  if (!seeds.length) return [];
+  const relatedRows = rowsToObjects(
+    await db.exec(
+      `SELECT DISTINCT CASE WHEN r.facility_id = ANY($1::text[]) THEN r.related_facility_id ELSE r.facility_id END AS facility_id
+         FROM facility_operating_entities r
+        WHERE r.ended_at IS NULL
+          AND r.related_facility_id IS NOT NULL
+          AND (r.facility_id = ANY($1::text[]) OR r.related_facility_id = ANY($1::text[]))`,
+      [seeds],
+    ),
+  ).map((r) => String(r.facility_id ?? ""));
+  // 사업장 그룹의 같은 연결 법인(facility_group_companies 한 곳)에 묶인 사업장 — 예: 삼성전기㈜(본사)·부산·세종.
+  // 그룹 전체(삼성그룹 계열사 전부)는 넣지 않는다.
+  let sameEntityRows: string[] = [];
+  try {
+    sameEntityRows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT m2.facility_id
+           FROM facility_group_memberships m1
+           JOIN facility_group_memberships m2 ON m2.company_id = m1.company_id
+          WHERE m1.facility_id = ANY($1::text[])
+            AND m1.ended_at IS NULL AND m2.ended_at IS NULL
+          ORDER BY m2.facility_id`,
+        [seeds],
+      ),
+    ).map((r) => String(r.facility_id ?? ""));
+  } catch {
+    sameEntityRows = [];
+  }
+  const ordered: Array<{ id: string; source: IssuePrefillContact["source"] }> = [];
+  const push = (id: string | null, source: IssuePrefillContact["source"]) => {
+    if (id && !ordered.some((o) => o.id === id)) ordered.push({ id, source });
+  };
+  push(counterpartyId, "counterparty");
+  push(siteId, "site");
+  for (const id of relatedRows) push(id, "related");
+  for (const id of sameEntityRows) push(id, "related");
+  const info = new Map(
+    rowsToObjects(
+      await db.exec(
+        `SELECT facility_id, company_name, business_registration_no FROM facilities
+          WHERE facility_id = ANY($1::text[]) AND deleted_at IS NULL`,
+        [ordered.map((o) => o.id)],
+      ),
+    ).map((r) => [String(r.facility_id), r]),
+  );
+  return ordered
+    .filter((o) => info.has(o.id))
+    .map((o) => {
+      const r = info.get(o.id)!;
+      return {
+        facilityId: o.id,
+        name: String(r.company_name ?? ""),
+        brn: String(r.business_registration_no ?? "").replace(/[^0-9]/g, ""),
+        source: o.source,
+      };
+    });
+}
+
+/** 담당자 정렬 — 사업장 순서(계약 상대 먼저)를 지키고, 같은 이메일은 앞선 사업장의 한 명만 남긴다. */
+function orderContacts(rows: Array<Record<string, unknown>>, facilities: LinkedFacility[]): IssuePrefillContact[] {
+  const seen = new Set<string>();
+  const out: IssuePrefillContact[] = [];
+  for (const f of facilities) {
+    for (const c of rows.filter((r) => String(r.facility_id) === f.facilityId)) {
+      const email = c.email ? String(c.email).trim() : null;
+      if (email) {
+        const key = email.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
+      out.push({
+        name: String(c.person_name ?? ""),
+        title: c.title ? String(c.title) : null,
+        email,
+        tel: c.office_phone ? String(c.office_phone) : null,
+        mobile: c.mobile_phone ? String(c.mobile_phone) : null,
+        deptTypes,
+        billing: deptTypes.includes("billing"),
+        facilityId: f.facilityId,
+        facilityName: f.name,
+        source: f.source,
+      });
+    }
+  }
+  return out;
+}
+
+/** 종사업장 번호(349) — 열이 아직 없는 DB(마이그레이션 적용 전)에서도 발행 모달이 열리도록 실패는 null. */
+async function loadFacilityTaxRegId(db: Db, facilityId: string): Promise<string | null> {
+  try {
+    const rows = rowsToObjects(await db.exec(`SELECT tax_reg_id FROM facilities WHERE facility_id = $1`, [facilityId]));
+    const value = rows[0]?.tax_reg_id;
+    return value ? String(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 종사업장 번호 형식 — 숫자만 남겨 4자리로 0을 채운다("3" → "0003"). 비면 "" (본점 발행). */
+export function normalizeTaxRegId(value: unknown): string {
+  const d = String(value ?? "").replace(/[^0-9]/g, "");
+  if (!d) return "";
+  if (d.length > 4) throw Object.assign(new Error("종사업장 번호는 숫자 4자리입니다."), { status: 400 });
+  if (/^0+$/.test(d)) throw Object.assign(new Error("종사업장 번호 0000 은 쓸 수 없습니다. 본점 발행이면 비워 두세요."), { status: 400 });
+  return d.padStart(4, "0");
+}
+
 /** 발행 모달 프리필 — 공급자는 회사 프로필, 공급받는자는 계약 발주처(facilities) + 담당자 연락처. */
 export async function buildIssuePrefill(contractId: string, milestoneId: string): Promise<IssuePrefill> {
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
       `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
-              c.contract_title, c.contract_amount, c.counterparty_facility_id,
+              c.contract_title, c.contract_amount, c.counterparty_facility_id, c.facility_id AS site_facility_id,
               (SELECT SUM(s.amount) FROM contract_payment_milestones s WHERE s.contract_id = m.contract_id) AS stage_total,
               f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address,
               -- 공급받는자 업태·종목(2026-08-26) — 사업자등록증 파싱 값. 없으면 빈 값으로 발행된다.
@@ -233,19 +376,33 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
   if (!rows.length) throw Object.assign(new Error("계약 단계를 찾을 수 없습니다."), { status: 404 });
   const row = rows[0];
   const facilityId = row.counterparty_facility_id ? String(row.counterparty_facility_id) : null;
+  const siteFacilityId = row.site_facility_id ? String(row.site_facility_id) : null;
 
-  const contactRows = facilityId
+  // 수신처 후보 사업장(2026-11-10) — 계약 상대 + 계약 대상 사업장 + 운영 주체 관리로 연결된 사업장(양방향).
+  // 계약 상대가 법인(삼성전기㈜)이고 담당자는 대상 사업장(부산사업장)에만 있는 경우를 받기 위해서다.
+  const linkedFacilities = await loadLinkedFacilities(db, facilityId, siteFacilityId);
+  const contactRows = linkedFacilities.length
     ? rowsToObjects(
         await db.exec(
-          `SELECT person_name, title, email, office_phone, mobile_phone,
+          `SELECT facility_id, person_name, title, email, office_phone, mobile_phone,
                   COALESCE(NULLIF(dept_types, '{}'), CASE WHEN dept_type IS NULL THEN '{}' ELSE ARRAY[dept_type] END) AS dept_types
              FROM facility_contact_people
-            WHERE facility_id = $1 AND status = 'active'
+            WHERE facility_id = ANY($1::text[]) AND status = 'active'
             ORDER BY (NOT ('billing' = ANY(COALESCE(dept_types, '{}')))), (email IS NULL), person_name`,
-          [facilityId],
+          [linkedFacilities.map((f) => f.facilityId)],
         ),
       )
     : [];
+  const contacts = orderContacts(contactRows, linkedFacilities);
+
+  // 종사업장 번호 — 대상 사업장이 공급받는자와 같은 사업자번호의 다른 사업장이면 그 사업장의 번호를 쓴다.
+  const invoiceeBrn = String(row.business_registration_no ?? "").replace(/[^0-9]/g, "");
+  const site = linkedFacilities.find((f) => f.source === "site");
+  const counterparty = linkedFacilities.find((f) => f.source === "counterparty");
+  const taxRegTargetBase = site && invoiceeBrn && site.brn === invoiceeBrn ? site : counterparty ?? null;
+  const taxRegTarget: IssuePrefillTaxRegTarget | null = taxRegTargetBase
+    ? { facilityId: taxRegTargetBase.facilityId, facilityName: taxRegTargetBase.name, taxRegId: await loadFacilityTaxRegId(db, taxRegTargetBase.facilityId) }
+    : null;
 
   const [profile, cert, issuerEmails] = await Promise.all([
     getCompanyProfile(),
@@ -285,7 +442,9 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       // 바로빌 규약: BizType=업태 / BizClass=종목(공급자 매핑과 동일).
       bizType: String(row.business_certificate_business_type ?? ""),
       bizClass: String(row.business_certificate_business_item ?? ""),
+      taxRegId: taxRegTarget?.taxRegId ?? "",
     },
+    taxRegTarget,
     issuerEmails,
     openStages: rowsToObjects(
       await db.exec(
@@ -300,18 +459,7 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
       stageLabel: String(m.stage_label ?? ""),
       amount: Number(m.invoice_amount ?? m.amount ?? 0),
     })),
-    contacts: contactRows.map((c) => {
-      const deptTypes = Array.isArray(c.dept_types) ? (c.dept_types as unknown[]).map((v) => String(v)) : [];
-      return {
-        name: String(c.person_name ?? ""),
-        title: c.title ? String(c.title) : null,
-        email: c.email ? String(c.email) : null,
-        tel: c.office_phone ? String(c.office_phone) : null,
-        mobile: c.mobile_phone ? String(c.mobile_phone) : null,
-        deptTypes,
-        billing: deptTypes.includes("billing"),
-      };
-    }),
+    contacts,
     existing: (await listContractInvoices(contractId)).filter((inv) => inv.milestoneId === milestoneId),
     cert: { ok: cert.ok, message: cert.message },
   };
@@ -342,7 +490,12 @@ export interface IssueParams {
   items?: Array<{ name: string; spec?: string; remark?: string; qty?: number; unitPrice?: number; amount: number; tax?: number }>;
   remark1?: string;
   /** email = 대표 수신처(바로빌이 메일 발송), ccEmails = 추가 수신처(발행 후 앱이 안내 메일 발송). */
-  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; ceoName?: string; addr?: string; bizType?: string; bizClass?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
+  invoicee: { facilityId?: string | null; corpNum: string; corpName: string; taxRegId?: string; ceoName?: string; addr?: string; bizType?: string; bizClass?: string; contactName?: string; email: string; tel?: string; hp?: string; ccEmails?: string[] };
+  /**
+   * 발행에 쓴 종사업장 번호를 사업장 마스터에 저장(2026-11-10) — 이 계약의 계약 상대 또는 대상 사업장만 허용.
+   * 발행이 성공한 뒤에만 저장한다.
+   */
+  saveTaxRegToFacilityId?: string | null;
   invoicer: { corpNum: string; corpName: string; ceoName?: string; addr?: string; bizClass?: string; bizType?: string; contactName?: string; tel?: string; email: string };
   sendSms?: boolean;
   forceIssue?: boolean;
@@ -358,7 +511,21 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     throw Object.assign(new Error("공급가액 + 세액이 합계금액과 맞지 않습니다."), { status: 400 });
   }
   if (params.totalAmount <= 0) throw Object.assign(new Error("금액이 0원입니다."), { status: 400 });
-  const lines = (params.items ?? []).filter((it) => it.name.trim() && Math.round(it.amount) !== 0);
+  const taxRegId = normalizeTaxRegId(params.invoicee.taxRegId);
+  // 종사업장 번호 저장 대상은 이 계약의 계약 상대·대상 사업장만 — 임의 사업장 덮어쓰기를 막는다.
+  let saveTaxRegFacilityId: string | null = null;
+  if (params.saveTaxRegToFacilityId) {
+    const db = await getDb();
+    const owned = rowsToObjects(
+      await db.exec(
+        `SELECT 1 FROM contracts WHERE contract_id = $1 AND $2 IN (COALESCE(counterparty_facility_id, ''), COALESCE(facility_id, ''))`,
+        [params.contractId, String(params.saveTaxRegToFacilityId)],
+      ),
+    );
+    if (!owned.length) throw Object.assign(new Error("종사업장 번호를 저장할 사업장이 이 계약과 연결돼 있지 않습니다."), { status: 400 });
+    saveTaxRegFacilityId = String(params.saveTaxRegToFacilityId);
+  }
+  const lines =(params.items ?? []).filter((it) => it.name.trim() && Math.round(it.amount) !== 0);
   if (lines.length) {
     const lineSupply = lines.reduce((acc, it) => acc + Math.round(it.amount), 0);
     if (lineSupply !== Math.round(params.amountTotal)) {
@@ -434,6 +601,7 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
     invoicee: {
       corpNum: params.invoicee.corpNum,
       corpName: params.invoicee.corpName,
+      taxRegId: taxRegId || undefined,
       ceoName: params.invoicee.ceoName,
       addr: params.invoicee.addr,
       bizType: inBizType || undefined,
@@ -547,6 +715,27 @@ export async function issueTaxInvoice(params: IssueParams, actorUserId: string |
       );
     }
   });
+
+  // 종사업장 번호 기록·저장(349) — 발행은 이미 끝났으므로 실패해도 예외로 올리지 않는다(로그만).
+  // tax_invoices 는 재무 지문 감시 표라 열을 두지 않고 보조 표에 남긴다.
+  if (taxRegId || saveTaxRegFacilityId) {
+    await withDbWrite(async (db) => {
+      if (taxRegId) {
+        await db.run(
+          `INSERT INTO tax_invoice_invoicee_extras (invoice_id, tax_reg_id, created_at) VALUES ($1, $2, $3)
+           ON CONFLICT (invoice_id) DO UPDATE SET tax_reg_id = EXCLUDED.tax_reg_id`,
+          [invoiceId, taxRegId, now],
+        );
+      }
+      if (saveTaxRegFacilityId) {
+        await db.run(`UPDATE facilities SET tax_reg_id = $2, updated_at = $3 WHERE facility_id = $1`, [
+          saveTaxRegFacilityId,
+          taxRegId || null,
+          new Date().toISOString(),
+        ]);
+      }
+    }).catch((err) => console.warn("[tax-invoice] 종사업장 번호 기록 실패:", invoiceId, (err as Error).message));
+  }
 
   // 발행에 쓴 담당자 이메일을 최근 사용으로 올린다(목록 정렬용) — 저장된 주소가 아니면 아무 일도 하지 않는다.
   await withDbWrite(async (db) => {
@@ -725,6 +914,17 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
         ),
   );
 
+  // 원본이 종사업장 앞으로 발행됐으면 수정분도 같은 종사업장 번호로 낸다(349 보조 표).
+  let originTaxRegId: string | undefined;
+  try {
+    const extra = rowsToObjects(
+      await db.exec(`SELECT tax_reg_id FROM tax_invoice_invoicee_extras WHERE invoice_id = $1`, [String(params.originalInvoiceId)]),
+    );
+    originTaxRegId = extra[0]?.tax_reg_id ? String(extra[0].tax_reg_id) : undefined;
+  } catch {
+    originTaxRegId = undefined;
+  }
+
   // 음수 금액은 바로빌에 "-" 붙은 문자열로 그대로 전달한다(수정분 규칙).
   const amount = String(Math.round(params.amountTotal));
   const tax = String(Math.round(params.taxTotal));
@@ -747,6 +947,7 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
       invoicee: {
         corpNum: String(origin.invoicee_corp_num ?? ""),
         corpName: String(origin.invoicee_corp_name ?? ""),
+        taxRegId: originTaxRegId,
         bizType: modBiz.length && modBiz[0].t ? String(modBiz[0].t) : undefined,
         bizClass: modBiz.length && modBiz[0].i ? String(modBiz[0].i) : undefined,
         email,
@@ -807,6 +1008,15 @@ export async function issueModifiedTaxInvoice(params: ModifyParams, actorUserId:
       ],
     );
   });
+  if (originTaxRegId) {
+    await withDbWrite(async (tx) => {
+      await tx.run(
+        `INSERT INTO tax_invoice_invoicee_extras (invoice_id, tax_reg_id, created_at) VALUES ($1, $2, $3)
+         ON CONFLICT (invoice_id) DO UPDATE SET tax_reg_id = EXCLUDED.tax_reg_id`,
+        [invoiceId, originTaxRegId, now],
+      );
+    }).catch((err) => console.warn("[tax-invoice] 수정분 종사업장 번호 기록 실패:", invoiceId, (err as Error).message));
+  }
   return { invoiceId, mgtKey };
 }
 

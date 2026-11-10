@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
           milestoneId: body.milestoneId,
           totalAmount: body.totalAmount,
           invoicee: body.invoicee?.corpName,
+          invoiceeTaxRegId: body.invoicee?.taxRegId || null,
+          saveTaxRegToFacilityId: body.saveTaxRegToFacilityId || null,
           mgtKey: result.mgtKey,
         },
       });

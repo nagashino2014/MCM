@@ -2344,6 +2344,12 @@ function ReadView({
         value={detail.businessCertificateCorporateRegistrationNo ?? null}
       />
       <DetailField icon={Hash} label="법인등록번호 (마스터)" value={detail.corporateRegistrationNo ?? null} />
+      <DetailField
+        icon={Hash}
+        label="종사업장 번호"
+        value={detail.taxRegId ?? null}
+        secondary={detail.taxRegId ? "세금계산서 공급받는자 종사업장으로 자동 입력" : null}
+      />
       <OperatingEntityCard detail={detail} />
       <GroupInfoCard detail={detail} />
     </div>
@@ -2514,6 +2520,8 @@ function EditView({
   const [corporateRegistrationNo, setCorporateRegistrationNo] = useState(detail.corporateRegistrationNo ?? "");
   const [representativeName, setRepresentativeName] = useState(detail.representativeName ?? "");
   const [homepageUrl, setHomepageUrl] = useState(detail.homepageUrl ?? "");
+  // 종사업장 번호(349) — 숫자 4자리. 같은 법인의 지점·공장 앞으로 세금계산서를 받을 때 쓴다.
+  const [taxRegId, setTaxRegId] = useState(detail.taxRegId ?? "");
   const [siteAddress, setSiteAddress] = useState(detail.siteAddress ?? "");
   const [hasMultipleSites, setHasMultipleSites] = useState(
     (detail.additionalSiteAddresses?.length ?? 0) > 0
@@ -2571,6 +2579,7 @@ function EditView({
   }, [detail.businessCertificateBusinessType, detail.businessCertificateBusinessItem, detail.businessCertificateCorporateRegistrationNo]);
   useEffect(() => { setRepresentativeName(detail.representativeName ?? ""); }, [detail.representativeName]);
   useEffect(() => { setHomepageUrl(detail.homepageUrl ?? ""); }, [detail.homepageUrl]);
+  useEffect(() => { setTaxRegId(detail.taxRegId ?? ""); }, [detail.taxRegId]);
   useEffect(() => { setCorporateRegistrationNo(detail.corporateRegistrationNo ?? ""); }, [detail.corporateRegistrationNo]);
   const [logoPath, setLogoPath] = useState(detail.logoPath ?? "");
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -2636,6 +2645,12 @@ function EditView({
   };
 
   const handleSave = async () => {
+    const taxRegDigits = taxRegId.replace(/[^0-9]/g, "");
+    if (taxRegDigits && (taxRegDigits.length > 4 || /^0+$/.test(taxRegDigits))) {
+      setError("종사업장 번호는 0001~9999 네 자리입니다. 본점이면 비워 두세요.");
+      return;
+    }
+    const nextTaxRegId = taxRegDigits ? taxRegDigits.padStart(4, "0") : null;
     setPending(true);
     setError(null);
     const normalizedIndustries = industries
@@ -2660,6 +2675,8 @@ function EditView({
           businessRegistrationNo: formatBusinessRegistrationNo(businessRegistrationNo) || null,
           representativeName: representativeName || null,
           homepageUrl: homepageUrl.trim() || null,
+          // 바뀐 경우에만 보낸다 — 349 적용 전 DB 에서 다른 항목 저장이 막히지 않게.
+          ...(nextTaxRegId !== (detail.taxRegId ?? null) ? { taxRegId: nextTaxRegId } : {}),
           siteAddress: siteAddress.trim() || null,
           additionalSiteAddresses: hasMultipleSites
             ? additionalSiteAddresses.map((addr) => addr.trim()).filter(Boolean)
@@ -2722,6 +2739,11 @@ function EditView({
       <FieldInput label="법인등록번호 (마스터)" value={corporateRegistrationNo} onChange={setCorporateRegistrationNo} />
       <FieldInput label="대표자명" value={representativeName} onChange={setRepresentativeName} multiline />
       <FieldInput label="홈페이지" value={homepageUrl} onChange={setHomepageUrl} />
+      <FieldInput
+        label="종사업장 번호 (지점·공장 4자리, 본점이면 비움)"
+        value={taxRegId}
+        onChange={(value) => setTaxRegId(value.replace(/[^0-9]/g, "").slice(0, 4))}
+      />
       <FieldInput
         label={hasMultipleSites ? "소재지 (대표)" : "소재지"}
         value={siteAddress}

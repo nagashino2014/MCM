@@ -19,6 +19,10 @@ interface Contact {
   /** 사업장 담당자 업무 분류 태그(187) — 'billing'이 계산서 수신 담당자. */
   deptTypes?: string[];
   billing?: boolean;
+  /** 담당자가 속한 사업장 — 계약 상대가 아니면(대상 사업장·운영 주체 연결) 꼬리표로 표시한다. */
+  facilityId?: string;
+  facilityName?: string;
+  source?: "counterparty" | "site" | "related";
 }
 
 /** 품목 행 — 홈택스 발행 화면과 같은 축(품목명·규격·수량·단가·공급가액). 금액은 문자열(숫자만) 보관. */
@@ -57,7 +61,9 @@ interface Prefill {
     corpNum: string; corpName: string; ceoName: string; addr: string;
     bizClass: string; bizType: string; tel: string; contactId: string; contactName: string; email: string;
   };
-  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType?: string; bizClass?: string };
+  invoicee: { facilityId: string | null; corpNum: string; corpName: string; ceoName: string; addr: string; bizType?: string; bizClass?: string; taxRegId?: string };
+  /** 종사업장 번호를 저장·불러오는 사업장(대상 사업장이 같은 법인의 지점이면 그 사업장). */
+  taxRegTarget?: { facilityId: string; facilityName: string; taxRegId: string | null } | null;
   contacts: Contact[];
   issuerEmails: Array<{ email: string; label: string | null }>;
   existing: ExistingInvoice[];
@@ -76,6 +82,11 @@ const fmtCorpNum = (value: string) => {
   return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
 };
 const isEmail = (value: string) => /.+@.+\..+/.test(value.trim());
+/** 종사업장 번호 — 숫자 4자리, 앞을 0으로 채운다("3" → "0003"). 비면 본점 발행. */
+const padTaxRegId = (value: string) => {
+  const d = digits(value).slice(0, 4);
+  return d ? d.padStart(4, "0") : "";
+};
 
 export default function TaxInvoiceIssueModal({
   contractId,
@@ -108,6 +119,9 @@ export default function TaxInvoiceIssueModal({
   const [invoiceeCorpName, setInvoiceeCorpName] = useState("");
   const [invoiceeCeo, setInvoiceeCeo] = useState("");
   const [invoiceeAddr, setInvoiceeAddr] = useState("");
+  // 공급받는자 종사업장 번호(2026-11-10) — 바로빌 InvoiceeParty.TaxRegID. 비우면 본점 발행.
+  const [invoiceeTaxRegId, setInvoiceeTaxRegId] = useState("");
+  const [saveTaxReg, setSaveTaxReg] = useState(false);
   const [invoicerEmail, setInvoicerEmail] = useState("");
   // 발행 담당자 이메일 목록(188) — 저장해 둔 주소를 눌러 바로 바꿔 쓴다.
   const [issuerEmails, setIssuerEmails] = useState<Array<{ email: string; label: string | null }>>([]);
@@ -140,10 +154,14 @@ export default function TaxInvoiceIssueModal({
         setInvoiceeCorpName(p.invoicee.corpName);
         setInvoiceeCeo(p.invoicee.ceoName);
         setInvoiceeAddr(p.invoicee.addr);
+        setInvoiceeTaxRegId(p.invoicee.taxRegId ?? "");
         setInvoicerEmail(p.invoicer.email);
         setIssuerEmails(p.issuerEmails ?? []);
         // 사업장 담당자에 '계산서' 태그가 지정돼 있으면 그 담당자가 기본 수신처다(첫 명이 대표, 나머지는 추가).
-        const billing = p.contacts.filter((c) => c.billing && c.email);
+        // 계약 상대에 '계산서' 담당자가 있으면 그쪽만 쓰고, 없을 때만 관계 사업장의 '계산서' 담당자를 쓴다.
+        const billingAll = p.contacts.filter((c) => c.billing && c.email);
+        const billingOwn = billingAll.filter((c) => (c.source ?? "counterparty") === "counterparty");
+        const billing = billingOwn.length ? billingOwn : billingAll;
         const primary = billing[0] ?? p.contacts.find((c) => c.email);
         if (primary) {
           setEmail(primary.email ?? "");
@@ -313,6 +331,7 @@ export default function TaxInvoiceIssueModal({
             facilityId: prefill.invoicee.facilityId,
             corpNum: digits(invoiceeCorpNum),
             corpName: invoiceeCorpName,
+            taxRegId: padTaxRegId(invoiceeTaxRegId) || undefined,
             ceoName: invoiceeCeo,
             addr: invoiceeAddr,
             // 업태·종목(2026-08-26) — 사업장 사업자등록증 값 그대로 전달(서버도 비면 DB 로 보강).
@@ -324,6 +343,8 @@ export default function TaxInvoiceIssueModal({
             ccEmails: ccEmails.filter((e) => e !== email),
           },
           invoicer: { ...prefill.invoicer, corpNum: digits(prefill.invoicer.corpNum), email: invoicerEmail },
+          // 종사업장 번호를 사업장 마스터에 저장(발행 성공 후 서버가 반영)
+          saveTaxRegToFacilityId: taxRegChanged && saveTaxReg ? prefill.taxRegTarget?.facilityId : undefined,
         }),
       });
       const data = await res.json();
@@ -348,6 +369,10 @@ export default function TaxInvoiceIssueModal({
   };
 
   const liveExisting = (prefill?.existing ?? []).filter((e) => !e.canceledAt);
+  const taxRegPadded = padTaxRegId(invoiceeTaxRegId);
+  const taxRegValid = taxRegPadded === "" || (taxRegPadded.length === 4 && taxRegPadded !== "0000");
+  // 사업장 마스터에 저장된 값과 다르면 '저장' 선택지를 보인다.
+  const taxRegChanged = Boolean(prefill?.taxRegTarget) && taxRegPadded !== (prefill?.taxRegTarget?.taxRegId ?? "");
   // 입력이 시작된 행은 품목명·금액이 모두 채워져야 발행한다(반쯤 적힌 행이 조용히 빠지지 않게).
   const filledLines = lineItems.filter((li) => li.name.trim() || digits(li.amount));
   const validLines = filledLines.filter((li) => li.name.trim() && Number(digits(li.amount) || 0) > 0);
@@ -357,6 +382,7 @@ export default function TaxInvoiceIssueModal({
     Boolean(prefill?.cert.ok) &&
     amounts.total > 0 &&
     digits(invoiceeCorpNum).length === 10 &&
+    taxRegValid &&
     Boolean(email) &&
     validLines.length > 0 &&
     validLines.length === filledLines.length;
@@ -473,8 +499,8 @@ export default function TaxInvoiceIssueModal({
 
                 <div className="rounded-lg border cd-border-c p-3">
                   <div className="text-xs font-semibold mb-2">공급받는자 (발주처)</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="col-span-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] gap-2">
+                    <label className="col-span-3">
                       <span className="text-[11px] cd-text-faint">상호</span>
                       <input className="cd-input mt-0.5" value={invoiceeCorpName} onChange={(e) => setInvoiceeCorpName(e.target.value)} />
                     </label>
@@ -489,14 +515,43 @@ export default function TaxInvoiceIssueModal({
                       />
                     </label>
                     <label>
+                      <span className="text-[11px] cd-text-faint">종사업장</span>
+                      <input
+                        className="cd-input mt-0.5 text-center font-mono"
+                        value={invoiceeTaxRegId}
+                        onChange={(e) => setInvoiceeTaxRegId(digits(e.target.value).slice(0, 4))}
+                        onBlur={() => setInvoiceeTaxRegId(padTaxRegId(invoiceeTaxRegId))}
+                        inputMode="numeric"
+                        placeholder="본점"
+                        aria-label="종사업장 번호"
+                        aria-invalid={!taxRegValid}
+                        title="지점·공장 앞으로 발행할 때 종사업장 번호 4자리(예: 0003). 본점이면 비워 둡니다."
+                      />
+                    </label>
+                    <label>
                       <span className="text-[11px] cd-text-faint">대표자</span>
                       <input className="cd-input mt-0.5" value={invoiceeCeo} onChange={(e) => setInvoiceeCeo(e.target.value)} />
                     </label>
-                    <label className="col-span-2">
+                    <label className="col-span-3">
                       <span className="text-[11px] cd-text-faint">주소</span>
                       <input className="cd-input mt-0.5" value={invoiceeAddr} onChange={(e) => setInvoiceeAddr(e.target.value)} />
                     </label>
                   </div>
+                  {!taxRegValid && <div className="text-[11px] cd-error-text mt-1.5">종사업장 번호는 0001~9999 네 자리입니다. 본점 발행이면 비워 두세요.</div>}
+                  {prefill.taxRegTarget && taxRegValid && (
+                    <div className="text-[11px] cd-text-faint mt-1.5">
+                      {taxRegChanged ? (
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" checked={saveTaxReg} onChange={(e) => setSaveTaxReg(e.target.checked)} />
+                          {taxRegPadded
+                            ? `${prefill.taxRegTarget.facilityName} 정보에 종사업장 ${taxRegPadded} 저장`
+                            : `${prefill.taxRegTarget.facilityName} 정보의 종사업장 번호 지우기`}
+                        </label>
+                      ) : prefill.taxRegTarget.taxRegId ? (
+                        <span>{prefill.taxRegTarget.facilityName}의 종사업장 번호입니다.</span>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -525,6 +580,14 @@ export default function TaxInvoiceIssueModal({
                         <span className="cd-text font-medium">{c.name}</span>
                         {c.title && <span className="cd-text-muted">{c.title}</span>}
                         {c.billing && <span className="rounded-full px-1.5 py-0.5 cd-tint-primary">계산서</span>}
+                        {c.source && c.source !== "counterparty" && c.facilityName && (
+                          <span
+                            className="rounded-full border cd-border-c px-1.5 py-0.5 cd-text-muted shrink-0"
+                            title={c.source === "site" ? "계약 대상 사업장 담당자" : "운영 주체 관리·사업장 그룹(같은 연결 법인)으로 연결된 사업장 담당자"}
+                          >
+                            {c.facilityName}
+                          </span>
+                        )}
                         <span className="cd-text-faint truncate flex-1" title={c.email ?? ""}>{c.email ?? "이메일 없음"}</span>
                         {isPrimary ? (
                           <span className="rounded-full border cd-border-c px-2 py-0.5 cd-text-muted">대표</span>

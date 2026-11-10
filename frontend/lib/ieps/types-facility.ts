@@ -110,6 +110,8 @@ export interface PermitDetail {
 
 export interface FacilityDetail {
   corporateRegistrationNo?: string | null;
+  /** 종사업장 번호(349) — 숫자 4자리. 이 사업장 앞으로 세금계산서를 발행할 때 공급받는자 종사업장으로 쓴다. */
+  taxRegId?: string | null;
   facilityId: string;
   companyName: string;
   businessRegistrationNo: string | null;

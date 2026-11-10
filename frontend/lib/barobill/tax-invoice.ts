@@ -29,6 +29,8 @@ export interface InvoiceParty {
   corpNum: string;
   mgtNum?: string; // 정발급은 공급자 측 필수(연동사 부여 고유키 ≤24자)
   corpName: string;
+  /** 종사업장 번호(숫자 4자리, 예 0003) — 지점·공장 앞으로 발행할 때만. 비우면 본점 발행. */
+  taxRegId?: string;
   ceoName?: string;
   addr?: string;
   bizClass?: string; // 업종
@@ -79,6 +81,7 @@ function partyXml(tag: string, p: InvoiceParty): string {
     el("CorpNum", p.corpNum.replace(/[^0-9]/g, "")) +
     el("MgtNum", p.mgtNum) +
     el("CorpName", toPlainCompanyName(p.corpName)) +
+    el("TaxRegID", p.taxRegId) + // WSDL 순서: CorpName 다음, CEOName 앞
     el("CEOName", p.ceoName) +
     el("Addr", p.addr) +
     el("BizClass", p.bizClass) +

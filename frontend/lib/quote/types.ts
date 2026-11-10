@@ -39,17 +39,9 @@ export function parseQuoteNo(no: string): { year: string; label: string; seq: nu
   return seq > 0 ? { year: m[1], label: m[2], seq } : null;
 }
 
-/** 용역 대분류→세분류 — 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응, 사용자 확정).
- *  작성 화면(QuoteBoard)과 기준 관리 화면(QuoteSettingsBoard)이 공유한다.
- *  2026-08-06 정정(사용자 지시): 영업허가는 장외&화관법 소속, 대분류와 중복인 '장외&화관법'
- *  항목 제외, '장외영향평가'→'화학사고예방관리계획' 개칭. 계약 데이터는 마이그 138 에서 정리. */
-export const QUOTE_SERVICE_OPTIONS: { type: string; subtypes: string[] }[] = [
-  { type: "통합허가", subtypes: ["최초허가", "변경허가", "변경신고", "통합교육", "사후관리", "재검토"] },
-  { type: "장외&화관법", subtypes: ["영업허가", "화학사고예방관리계획", "설치검사", "화관법기준", "위해관리계획", "배출저감계획", "배출량조사", "판매업허가", "정기검사", "안전진단"] },
-  { type: "HAPs", subtypes: ["HAPs", "HAPs최초", "HAPs변경", "HAPs연간", "시설구축", "명판부착", "배출저감", "정기점검대응"] },
-  { type: "ESG탄소중립", subtypes: ["ESG탄소중립", "ESG경영", "CBAM", "공급망실사", "LCA평가", "배출량산정", "배출권관련"] },
-  { type: "기타", subtypes: ["기타", "총량제신고", "매체별인허가", "환경자문", "환경R&D", "기타인허가"] },
-];
+/** 용역 대분류→세분류 목록은 계약관리와 같은 원천(관리자 설정 '용역 분류', 348)으로 합쳤다(2026-11-10).
+ *  화면: lib/contracts/use-contract-service-options.ts useContractServiceOptions(), 서버: loadContractServiceTypes().
+ *  (예전 QUOTE_SERVICE_OPTIONS 복제본은 삭제 — 기본값은 lib/contracts/service-options.ts) */
 
 /**
  * 복수 업무(2026-10-01) — 한 용역에 여러 세분류 업무가 섞인 견적(예: 사후관리 + 변경허가·신고 + 재검토).

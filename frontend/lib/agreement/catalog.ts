@@ -317,10 +317,16 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
   },
 ];
 
-/** 세분류의 코드 시드 폴백 — 없으면 null (기준 관리 화면 "미지정") */
+/**
+ * 세분류의 코드 시드 폴백 — 없으면 null (기준 관리 화면 "미지정").
+ * 2026-11-10: 세분류는 관리자 설정 '용역 분류'(348)에서 추가·이름 변경되므로, 시드 목록에 없는 세분류도
+ * 같은 대분류의 시드를 쓴다(대분류는 이름이 고정돼 있다). 목록에 있는 세분류의 결과는 전과 같다.
+ */
 export function seedForSubtype(serviceType: string, serviceSubtype: string): SeedTemplate | null {
   return (
-    SEED_TEMPLATES.find((t) => t.serviceType === serviceType && t.serviceSubtypes.includes(serviceSubtype)) ?? null
+    SEED_TEMPLATES.find((t) => t.serviceType === serviceType && t.serviceSubtypes.includes(serviceSubtype)) ??
+    SEED_TEMPLATES.find((t) => t.serviceType === serviceType) ??
+    null
   );
 }
 

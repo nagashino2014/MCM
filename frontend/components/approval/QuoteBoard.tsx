@@ -39,7 +39,6 @@ import {
   QUOTE_MULTI_WORK_MAX,
   QUOTE_REVISION_REASONS,
   QUOTE_REVISION_REASON_LABEL,
-  QUOTE_SERVICE_OPTIONS,
   SUMMARY_SHEET_MIN_SITES,
   deductionCostOf,
   engineeringDeduction,
@@ -68,11 +67,11 @@ import {
   type QuoteWorkTag,
   type SituationEntry,
 } from "@/lib/quote/types";
+import { subtypesOf, withCurrentServiceOption } from "@/lib/contracts/service-categories";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import { computeAmounts, gradeTotals, matrixLaborCost, mdVectorTotal, priceFromSum, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
-// 계약관리 CONTRACT_SERVICE_OPTIONS 와 동일(전 세분류 대응 — 사용자 확정). 기준 관리 화면과 공유.
-const SERVICE_OPTIONS = QUOTE_SERVICE_OPTIONS;
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -292,10 +291,13 @@ export function QuoteBoard() {
       .catch(() => {});
   }, []);
 
-  const subtypeOptions = useMemo(
-    () => SERVICE_OPTIONS.find((o) => o.type === serviceType)?.subtypes ?? [],
-    [serviceType]
+  // 용역 분류 — 계약관리와 같은 원천(관리자 설정 '용역 분류', 348). 불러온 문서의 값이 목록에 없으면(사용 중지·옛 이름) 덧붙인다.
+  const { options: activeServiceOptions } = useContractServiceOptions();
+  const serviceOptions = useMemo(
+    () => withCurrentServiceOption(activeServiceOptions, serviceType, serviceSubtype === QUOTE_MULTI_SUBTYPE ? "" : serviceSubtype),
+    [activeServiceOptions, serviceType, serviceSubtype]
   );
+  const subtypeOptions = useMemo(() => subtypesOf(serviceOptions, serviceType), [serviceOptions, serviceType]);
   const isMulti = serviceSubtype === QUOTE_MULTI_SUBTYPE;
   // 수신처 사업장 — 전용 기준 세트 조회 키
   const facilityIdsKey = useMemo(
@@ -1260,12 +1262,12 @@ export function QuoteBoard() {
                       value={serviceType}
                       onChange={(e) => {
                         const t = e.target.value;
-                        const subs = SERVICE_OPTIONS.find((o) => o.type === t)?.subtypes ?? [];
+                        const subs = serviceOptions.find((o) => o.type === t)?.subtypes ?? [];
                         setServiceType(t);
                         if (!subs.includes(serviceSubtype) && serviceSubtype !== QUOTE_MULTI_SUBTYPE) setServiceSubtype(subs[0] ?? "");
                       }}
                     >
-                      {SERVICE_OPTIONS.map((o) => (
+                      {serviceOptions.map((o) => (
                         <option key={o.type} value={o.type}>{o.type}</option>
                       ))}
                     </select>
@@ -1408,7 +1410,7 @@ export function QuoteBoard() {
                               aria-label="구성 업무의 용역 대분류"
                               onChange={(e) => setWorkType(e.target.value)}
                             >
-                              {SERVICE_OPTIONS.map((o) => (
+                              {serviceOptions.map((o) => (
                                 <option key={o.type} value={o.type}>{o.type}</option>
                               ))}
                             </select>
@@ -1421,7 +1423,7 @@ export function QuoteBoard() {
                               onChange={(e) => e.target.value && addWork(activeSite, workType ?? serviceType, e.target.value)}
                             >
                               <option value="">구성 업무 선택</option>
-                              {(SERVICE_OPTIONS.find((o) => o.type === (workType ?? serviceType))?.subtypes ?? []).map((s) => (
+                              {(serviceOptions.find((o) => o.type === (workType ?? serviceType))?.subtypes ?? []).map((s) => (
                                 <option key={s} value={s}>{s}</option>
                               ))}
                             </select>

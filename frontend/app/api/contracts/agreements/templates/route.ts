@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getTemplate, listTemplates, resolveTemplateForSubtype, upsertTemplate } from "@/lib/agreement/store";
-import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
+import { activeServiceOptions } from "@/lib/contracts/service-categories";
+import { loadContractServiceTypes } from "@/lib/contracts/service-categories-server";
 import { seedForSubtype, seedAsTemplateRow } from "@/lib/agreement/catalog";
 import type { TemplateProfile } from "@/lib/deliverable/types";
 import type { AgreementRenderMode, AgreementSpec } from "@/lib/agreement/types";
@@ -33,8 +34,10 @@ export async function GET(req: NextRequest) {
 
     // 기준 관리 목록 — 용역 대분류→세분류 매트릭스(견적 기준 관리 스타일).
     // DB 활성 셋이 있으면 그것, 없으면 시드, 둘 다 없으면 null(미지정) 으로 채운다.
+    // 대분류→세분류는 관리자 설정 '용역 분류'(348) 사용 중 항목.
     const dbRows = await listTemplates({});
-    const standard = QUOTE_SERVICE_OPTIONS.map((o) => ({
+    const serviceOptions = activeServiceOptions(await loadContractServiceTypes());
+    const standard = serviceOptions.map((o) => ({
       serviceType: o.type,
       subtypes: o.subtypes.map((sub) => {
         const db = dbRows.find(

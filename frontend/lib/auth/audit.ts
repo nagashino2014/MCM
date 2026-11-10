@@ -156,6 +156,7 @@ export type AuditAction =
   | "mail_send"
   | "attachment_policy_change" // 첨부 확장자 정책(262) — 전사 기본·인원별 예외 변경
   | "permit_industry_change" // 통합허가 대상 업종(325) — 추가·수정·사용 중지·순서
+  | "contract_service_category_change" // 계약 용역 대분류·세분류(348) — 추가·이름 변경(저장 값 일괄 변경)·순서·사용 중지·삭제
   | "auth_find_id"
   | "auth_password_reset"
   | "admin_password_sync"

@@ -48,7 +48,8 @@ import {
   industryIdFromKsic,
   type IntegratedPermitIndustry,
 } from "@/lib/ieps/integrated-permit-industries";
-import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
+import { contractServiceOptionsSnapshot, subtypesOf, withCurrentServiceOption } from "@/lib/contracts/service-categories";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import { RateCardEditor, type RateCardData } from "@/components/contracts/RateCardEditor";
 import { createRateCard, rateCardHasContent, rateCardStageOptions, upgradeRateCard } from "@/lib/contracts/rate-card";
 import {
@@ -2214,10 +2215,13 @@ function NewContractModal({
   const [documentFileName, setDocumentFileName] = useState("");
   const outsourcingFileRef = useRef<File | null>(null);
   const [outsourcingFileName, setOutsourcingFileName] = useState("");
-  const subtypeOptions = useMemo(
-    () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === state.serviceType)?.subtypes ?? [],
-    [state.serviceType]
+  // 용역 분류 — 관리자 설정 '용역 분류'(348)가 원천. 저장된 값이 목록에 없으면(사용 중지·옛 이름) 덧붙여 값을 잃지 않게 한다.
+  const { options: activeServiceOptions } = useContractServiceOptions();
+  const serviceOptions = useMemo(
+    () => withCurrentServiceOption(activeServiceOptions, state.serviceType, state.serviceSubtype),
+    [activeServiceOptions, state.serviceType, state.serviceSubtype]
   );
+  const subtypeOptions = useMemo(() => subtypesOf(serviceOptions, state.serviceType), [serviceOptions, state.serviceType]);
 
   useEffect(() => {
     const q = state.counterpartyQuery.trim();
@@ -2815,7 +2819,7 @@ function NewContractModal({
                 value={state.serviceType}
                 onChange={(e) => {
                   const nextType = e.target.value;
-                  const nextSubtypes = CONTRACT_SERVICE_OPTIONS.find((item) => item.type === nextType)?.subtypes ?? [];
+                  const nextSubtypes = subtypesOf(serviceOptions, nextType);
                   onChange({
                     ...state,
                     serviceType: nextType,
@@ -2825,7 +2829,7 @@ function NewContractModal({
                   });
                 }}
               >
-                {CONTRACT_SERVICE_OPTIONS.map((option) => (
+                {serviceOptions.map((option) => (
                   <option key={option.type} value={option.type}>{option.type}</option>
                 ))}
               </select>
@@ -3739,7 +3743,8 @@ function createMilestoneDraft(): ContractMilestoneDraft {
 }
 
 function createEmptyContractState(): NewContractModalState {
-  const defaultService = CONTRACT_SERVICE_OPTIONS[0];
+  // 관리자 설정 '용역 분류'의 첫 사용 중 항목(아직 못 읽었으면 코드 기본 목록)
+  const defaultService = contractServiceOptionsSnapshot()[0] ?? { type: "", subtypes: [] as string[] };
   return {
     contractTitle: "",
     counterpartyQuery: "",
@@ -3749,7 +3754,7 @@ function createEmptyContractState(): NewContractModalState {
     facilityQuery: "",
     selectedFacilities: [],
     serviceType: defaultService.type,
-    serviceSubtype: defaultService.subtypes[0],
+    serviceSubtype: defaultService.subtypes[0] ?? "",
     contractKind: "standard",
     paymentMethod: PAYMENT_METHOD_OPTIONS[0],
     orderingSubjectType: ORDERING_SUBJECT_OPTIONS[0].value,

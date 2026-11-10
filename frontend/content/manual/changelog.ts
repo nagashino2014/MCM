@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-10", kind: "신규", title: "관리 — 용역 분류(대분류·세분류) 설정",
+    body: "관리 > 용역 분류에서 계약 용역의 대분류·세분류를 추가하고 이름·순서를 바꿀 수 있습니다. 계약 입력·변경계약·견적서·계약서 화면이 같은 목록을 씁니다. 세분류 이름을 바꾸면 저장된 계약·견적도 새 이름으로 바뀌고, 이미 쓰인 분류는 지우는 대신 사용 중지합니다.",
+    articles: ["admin.contract-service-categories", "contracts.manage"],
+  },
+  {
     date: "2026-11-10", kind: "수정", title: "휴대폰 앱 — 안드로이드 알림 켜기 실패",
     body: "안드로이드 앱에서 알림 설정의 [켜기]를 누르면 ‘알림 등록에 실패했습니다’만 뜨고 알림을 켤 수 없던 문제를 고쳤습니다. 스토어에서 새 버전으로 업데이트한 뒤 다시 켜 주세요. 이제 켜기에 실패하면 실패한 단계와 사유가 함께 표시되고, 서버 등록이 실패했는데 성공으로 표시되던 문제도 고쳤습니다.",
     articles: ["start.mobile"],

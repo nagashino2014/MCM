@@ -3,6 +3,8 @@
  * (2026-08-24 — 변경계약 모달의 변경 대분류·세분류가 자유 텍스트라 오타 값이
  *  contracts.service_type 에 저장되던 문제를 목록 선택으로 통일하며 공용 모듈로 승격.
  *  contracts/page.tsx 에 있던 상수를 그대로 옮겼다. quote/agreement 쪽 복제본은 별개.)
+ * 2026-11-10: 단일 원천은 DB 표(348, 관리자 설정 '용역 분류')로 옮겼다. 이 상수는 표 적용 전 기본값·348 시드와 같은 목록이며,
+ *  화면은 useContractServiceOptions(), 서버는 loadContractServiceTypes() 를 쓴다(lib/contracts/service-categories.ts).
  */
 export const CONTRACT_SERVICE_OPTIONS = [
   {
@@ -11,7 +13,7 @@ export const CONTRACT_SERVICE_OPTIONS = [
   },
   {
     // 2026-08-06 정리(마이그 138): 영업허가는 장외&화관법 소속, 대분류 중복 항목 제외,
-    // 장외영향평가 → 화학사고예방관리계획 개칭. 견적 QUOTE_SERVICE_OPTIONS 와 동일 체계.
+    // 장외영향평가 → 화학사고예방관리계획 개칭. 견적·계약서도 같은 목록을 쓴다(348).
     type: "장외&화관법",
     subtypes: [
       "영업허가",

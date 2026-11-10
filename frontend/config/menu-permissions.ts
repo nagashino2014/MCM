@@ -21,6 +21,7 @@ export const ADMIN_AREA_KEYS: readonly string[] = [
   "security.access_log",
   "security.attachment_policy",
   "master.permit_industry.manage",
+  "master.contract_service.manage",
   "ai.usage.view",
   "ops.integration.view",
   "recruit.view",
@@ -42,6 +43,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/admin/integrations", keys: ["ops.integration.view"] },
   { path: "/admin/attachment-policy", keys: ["security.attachment_policy"] },
   { path: "/admin/permit-industries", keys: ["master.permit_industry.manage"] },
+  { path: "/admin/contract-service-categories", keys: ["master.contract_service.manage"] },
   { path: "/admin/company-profile", keys: ["org.edit"] },
   { path: "/admin/recruit", keys: ["recruit.view"] },
   // 결재 운영 설정(양식·의미 사전·관계 맵·지표·정책·전결 규정·알림)

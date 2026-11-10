@@ -7,7 +7,8 @@ import { useToast } from "@/components/ui/Toast";
 import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { FileDropZone } from "@/components/ui/FileDropZone";
 import { IndustryOptionsEditorButton, useContractIndustryOptions } from "@/components/contracts/IndustryOptionsEditor";
-import { CONTRACT_SERVICE_OPTIONS } from "@/lib/contracts/service-options";
+import { subtypesOf } from "@/lib/contracts/service-categories";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import { RateCardEditor, type RateCardData, type RateCardRound } from "@/components/contracts/RateCardEditor";
 import {
   createRateCard,
@@ -389,10 +390,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     }
   };
 
-  // 변경 대분류에 따라 세분류 옵션이 갈린다(신규 계약 모달과 동일 체계).
+  // 변경 대분류에 따라 세분류 옵션이 갈린다(신규 계약 모달과 동일 체계). 원천은 관리자 설정 '용역 분류'(348, 사용 중 항목만).
+  const { options: serviceOptions } = useContractServiceOptions();
   const nextSubtypeOptions = useMemo(
-    () => CONTRACT_SERVICE_OPTIONS.find((item) => item.type === serviceCategory.nextType)?.subtypes ?? [],
-    [serviceCategory.nextType]
+    () => subtypesOf(serviceOptions, serviceCategory.nextType),
+    [serviceOptions, serviceCategory.nextType]
   );
 
   const newCurrentAmount = useMemo(() => {
@@ -1024,7 +1026,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     value={serviceCategory.nextType}
                     onChange={(e) => {
                       const nextType = e.target.value;
-                      const subtypes = CONTRACT_SERVICE_OPTIONS.find((item) => item.type === nextType)?.subtypes ?? [];
+                      const subtypes = subtypesOf(serviceOptions, nextType);
                       setServiceCategory({
                         ...serviceCategory,
                         nextType,
@@ -1035,7 +1037,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     }}
                   >
                     <option value="">변경 없음</option>
-                    {CONTRACT_SERVICE_OPTIONS.map((option) => (
+                    {serviceOptions.map((option) => (
                       <option key={option.type} value={option.type}>{option.type}</option>
                     ))}
                   </select>

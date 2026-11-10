@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "app.koensain.mcm",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#6b7cf6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

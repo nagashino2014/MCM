@@ -3,7 +3,7 @@ import { Switch, Text, View } from 'react-native';
 
 import { Button, EmptyState, ListRow, Screen, SectionTitle, SkeletonList, useToast } from '@/components/ui';
 import { apiJson } from '@/lib/api';
-import { registerForPush } from '@/lib/push';
+import { registerForPush, type PushRegisterStage } from '@/lib/push';
 import { useTheme } from '@/theme/useTheme';
 
 interface PrefEvent {
@@ -17,6 +17,13 @@ interface Prefs {
   quiet: { enabled: boolean; from: string; to: string };
   deviceCount: number;
 }
+
+const STAGE_LABEL: Record<PushRegisterStage, string> = {
+  permission: '권한 확인',
+  channel: '알림 채널',
+  token: '기기 토큰 발급',
+  server: '서버 등록',
+};
 
 // 알림 설정 — 이벤트별 수신 토글 + 방해금지. 서버 /api/mobile/push/prefs 와 1:1.
 export default function NotificationsScreen() {
@@ -84,7 +91,8 @@ export default function NotificationsScreen() {
     } else if (r.reason === 'unsupported') {
       toast.show('실제 기기에서만 푸시를 받을 수 있습니다.', 'error');
     } else {
-      toast.show('알림 등록에 실패했습니다.', 'error');
+      // 어느 단계에서 실패했는지 그대로 보여 준다(문의 시 화면만으로 원인 구분).
+      toast.show(`알림 등록에 실패했습니다(${STAGE_LABEL[r.stage]}): ${r.message}`, 'error');
     }
   };
 

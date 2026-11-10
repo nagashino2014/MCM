@@ -41,15 +41,25 @@ async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
+/** 실패한 단계 — 화면에서 원인을 구분해 보여 주기 위해 돌려준다. */
+export type PushRegisterStage = "permission" | "channel" | "token" | "server";
+
 export type PushRegisterResult =
   | { ok: true; token: string }
-  | { ok: false; reason: "denied" | "unsupported" | "error" };
+  | { ok: false; reason: "denied" }
+  | { ok: false; reason: "unsupported" }
+  | { ok: false; reason: "error"; stage: PushRegisterStage; message: string };
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 /**
  * 권한을 확인·요청하고 토큰을 서버에 등록한다.
  * `promptIfNeeded=false` 면 이미 허용된 경우에만 조용히 갱신한다(앱 시작 시 호출용).
  */
 export async function registerForPush(promptIfNeeded = false): Promise<PushRegisterResult> {
+  let stage: PushRegisterStage = "permission";
   try {
     if (!Device.isDevice) return { ok: false, reason: "unsupported" };
 
@@ -64,12 +74,17 @@ export async function registerForPush(promptIfNeeded = false): Promise<PushRegis
     }
     if (status !== "granted") return { ok: false, reason: "denied" };
 
+    stage = "channel";
     await ensureAndroidChannel();
 
+    // 안드로이드는 빌드에 google-services.json(FCM)이 없으면 여기서 예외가 난다.
+    stage = "token";
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: projectId() });
-    if (!token) return { ok: false, reason: "error" };
+    if (!token) return { ok: false, reason: "error", stage, message: "빈 토큰" };
 
-    await apiFetch("/api/mobile/push/register", {
+    // apiFetch 는 4xx·5xx 에서도 throw 하지 않으므로 상태 코드를 직접 확인한다.
+    stage = "server";
+    const res = await apiFetch("/api/mobile/push/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -79,10 +94,15 @@ export async function registerForPush(promptIfNeeded = false): Promise<PushRegis
         appVersion: Constants.expoConfig?.version ?? null,
       }),
     });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: unknown };
+      const detail = typeof data.error === "string" && data.error ? data.error : `HTTP ${res.status}`;
+      return { ok: false, reason: "error", stage, message: detail };
+    }
     return { ok: true, token };
   } catch (e) {
-    console.warn("[push] 등록 실패:", e);
-    return { ok: false, reason: "error" };
+    console.warn(`[push] 등록 실패(${stage}):`, e);
+    return { ok: false, reason: "error", stage, message: errorMessage(e) };
   }
 }
 

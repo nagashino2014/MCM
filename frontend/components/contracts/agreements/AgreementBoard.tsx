@@ -31,7 +31,8 @@ import { AgreementCompareModal, AgreementVersionCard } from "@/components/contra
 import { DocStageSwitch, LockedVersionNotice } from "@/components/approval/DocStagePanel";
 import { DOC_STAGE_LABEL, docStageOf, isDraftSent, versionStateLabel, type DocStage, type DocVersionItem } from "@/lib/approval/doc-stage";
 import type { LetterRecipient } from "@/lib/letter/types";
-import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
+import { subtypesOf, withCurrentServiceOption } from "@/lib/contracts/service-categories";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import { amountLine, computeAmounts, distributePayments, paymentClauseBody } from "@/lib/agreement/compose";
 import {
   AGREEMENT_FORM_ID,
@@ -45,7 +46,6 @@ import {
 } from "@/lib/agreement/types";
 import "@/components/cdash/cdash.css";
 
-const SERVICE_OPTIONS = QUOTE_SERVICE_OPTIONS;
 
 interface LineStep {
   stepType: "agree" | "approve";
@@ -251,10 +251,13 @@ export function AgreementBoard() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const subtypeOptions = useMemo(
-    () => SERVICE_OPTIONS.find((o) => o.type === serviceType)?.subtypes ?? [],
-    [serviceType]
+  // 용역 분류 — 관리자 설정 '용역 분류'(348). 불러온 계약서의 값이 목록에 없으면(사용 중지·옛 이름) 덧붙인다.
+  const { options: activeServiceOptions } = useContractServiceOptions();
+  const serviceOptions = useMemo(
+    () => withCurrentServiceOption(activeServiceOptions, serviceType, serviceSubtype),
+    [activeServiceOptions, serviceType, serviceSubtype]
   );
+  const subtypeOptions = useMemo(() => subtypesOf(serviceOptions, serviceType), [serviceOptions, serviceType]);
   const amounts = useMemo(() => computeAmounts(amountSupply), [amountSupply]);
 
   // ── 목록 로드 ──
@@ -1270,8 +1273,8 @@ export function AgreementBoard() {
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
                         <span className="text-[11px] cd-text-faint">용역 대분류</span>
-                        <select className="cd-select" value={serviceType} onChange={(e) => { setServiceType(e.target.value); setServiceSubtype(SERVICE_OPTIONS.find((o) => o.type === e.target.value)?.subtypes[0] ?? ""); }}>
-                          {SERVICE_OPTIONS.map((o) => (
+                        <select className="cd-select" value={serviceType} onChange={(e) => { setServiceType(e.target.value); setServiceSubtype(subtypesOf(serviceOptions, e.target.value)[0] ?? ""); }}>
+                          {serviceOptions.map((o) => (
                             <option key={o.type} value={o.type}>{o.type}</option>
                           ))}
                         </select>

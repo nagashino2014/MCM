@@ -224,4 +224,18 @@ export const ADMIN_HELP: HelpTopic[] = [
     sources: ["components/admin/PermitIndustriesBoard.tsx"],
     reviewedAt: "2026-11-01",
   },
+  {
+    id: "admin.contract-service-categories",
+    label: "용역 분류 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "여기 목록이 계약 입력·변경계약·견적서·계약서 화면의 용역 분류 선택에 함께 쓰입니다.",
+        "세분류 이름을 바꾸면 그 이름으로 저장된 계약·견적·계약서도 새 이름으로 바뀝니다.",
+        "쓰인 분류는 지우지 않고 [[사용 중지]]합니다. 저장된 계약의 분류는 그대로 보입니다.",
+      ] },
+    ],
+    more: { article: "admin.contract-service-categories", section: "edit" },
+    sources: ["components/admin/ContractServiceCategoriesBoard.tsx"],
+    reviewedAt: "2026-11-10",
+  },
 ];

@@ -20,7 +20,6 @@ import {
   DEFAULT_MD_GRADES,
   LABOR_GRADES,
   QUOTE_MULTI_SUBTYPE,
-  QUOTE_SERVICE_OPTIONS,
   treeRowsToWorkItems,
   workItemsToTreeRows,
   mdSnapUnit,
@@ -30,6 +29,7 @@ import {
   type QuoteReportBucket,
   type QuoteTreeRow,
 } from "@/lib/quote/types";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import { gradeTotals, mdVectorTotal, reverseAllocate, validateSumConstraint } from "@/lib/quote/rates";
 import "@/components/cdash/cdash.css";
 
@@ -135,6 +135,8 @@ function BucketTable({ title, buckets, compact = false }: { title: string; bucke
 }
 
 export function QuoteSettingsBoard() {
+  // 용역 분류 — 관리자 설정 '용역 분류'(348) 사용 중 항목. 계약·견적 작성 화면과 같은 목록.
+  const { options: serviceOptions } = useContractServiceOptions();
   const { theme } = useCdashTheme();
   const [tab, setTab] = useState<Tab>("sets");
   const [sets, setSets] = useState<SetSummary[]>([]);
@@ -611,7 +613,7 @@ export function QuoteSettingsBoard() {
             <div className="flex flex-col lg:flex-row gap-4 items-start">
               {/* 좌: 세분류 리스트 */}
               <div className="w-full lg:w-[260px] shrink-0 flex flex-col gap-2.5">
-                {QUOTE_SERVICE_OPTIONS.map((g) => (
+                {serviceOptions.map((g) => (
                   <div key={g.type} className="rounded-lg border cd-border-c p-2.5">
                     <p className="text-[11px] font-semibold cd-text-faint px-1 mb-1">{g.type}</p>
                     <div className="flex flex-col">

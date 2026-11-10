@@ -1,6 +1,7 @@
 import { getDb, rowsToObjects } from "@/lib/db";
 import { DASHBOARD_SERVICE_CATEGORIES } from "./contract-categories";
 import { withCurrentContractDocumentNames } from "@/lib/contracts/document-names";
+import { loadContractServiceTypes } from "@/lib/contracts/service-categories-server";
 
 export interface ContractListFilter {
   q?: string;
@@ -359,11 +360,12 @@ export async function listContractsForTree(
     groupMap.get(serviceType)!.push(node);
   }
 
+  const typeOrder = await serviceTypeOrder();
   const groups: ContractTreeServiceGroup[] = Array.from(groupMap.entries())
     .map(([serviceType, contracts]) => ({ serviceType, contracts }))
     .sort((a, b) => {
-      const pa = serviceTypePriority(a.serviceType);
-      const pb = serviceTypePriority(b.serviceType);
+      const pa = serviceTypeRank(a.serviceType, typeOrder);
+      const pb = serviceTypeRank(b.serviceType, typeOrder);
       if (pa !== pb) return pa - pb;
       return a.serviceType.localeCompare(b.serviceType, "ko");
     });
@@ -454,11 +456,12 @@ export async function listContractsForTreeByFacility(facilityId: string): Promis
     groupMap.get(serviceType)!.push(node);
   }
 
+  const typeOrder = await serviceTypeOrder();
   const groups: ContractTreeServiceGroup[] = Array.from(groupMap.entries())
     .map(([serviceType, contracts]) => ({ serviceType, contracts }))
     .sort((a, b) => {
-      const pa = serviceTypePriority(a.serviceType);
-      const pb = serviceTypePriority(b.serviceType);
+      const pa = serviceTypeRank(a.serviceType, typeOrder);
+      const pb = serviceTypeRank(b.serviceType, typeOrder);
       if (pa !== pb) return pa - pb;
       return a.serviceType.localeCompare(b.serviceType, "ko");
     });
@@ -1406,6 +1409,21 @@ export async function getContractOrdersStatus(
         r.facility_industry_code != null ? String(r.facility_industry_code) : null,
     })),
   };
+}
+
+/** 관리자 설정 '용역 분류'(348)의 대분류 순서(사용 중지 포함). 읽기 실패 시 빈 목록 → 아래 고정 우선순위. */
+async function serviceTypeOrder(): Promise<string[]> {
+  try {
+    return (await loadContractServiceTypes()).map((t) => t.label);
+  } catch {
+    return [];
+  }
+}
+
+/** 트리 그룹 순위 — 설정 목록에 있는 대분류는 그 순서, 없는 값(옛 자유 입력 등)은 그 뒤에 고정 우선순위로. */
+function serviceTypeRank(serviceType: string, order: string[]): number {
+  const index = order.indexOf(serviceType.trim());
+  return index >= 0 ? index : 1000 + serviceTypePriority(serviceType);
 }
 
 /**

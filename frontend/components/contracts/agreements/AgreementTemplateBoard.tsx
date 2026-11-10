@@ -11,7 +11,8 @@ import { ArrowDown, ArrowUp, BookOpen, Building2, Copy, Download, FileSignature,
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
-import { QUOTE_SERVICE_OPTIONS } from "@/lib/quote/types";
+import { subtypesOf } from "@/lib/contracts/service-categories";
+import { useContractServiceOptions } from "@/lib/contracts/use-contract-service-options";
 import type { TemplateProfile } from "@/lib/deliverable/types";
 import type { AgreementClause, AgreementRenderMode, AgreementSpec, AgreementTemplateRow } from "@/lib/agreement/types";
 import "@/components/cdash/cdash.css";
@@ -42,6 +43,8 @@ let seq = 0;
 const newClauseId = () => `c-${Date.now().toString(36)}-${seq++}`;
 
 export function AgreementTemplateBoard() {
+  // 용역 분류 — 관리자 설정 '용역 분류'(348) 사용 중 항목
+  const { options: serviceOptions } = useContractServiceOptions();
   const { theme } = useCdashTheme();
   const [tab, setTab] = useState<"standard" | "custom" | "library">("standard");
   const [typeTab, setTypeTab] = useState<string>("");
@@ -260,7 +263,7 @@ export function AgreementTemplateBoard() {
 
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] cd-text-faint">다른 세분류 셋 복제:</span>
-                {QUOTE_SERVICE_OPTIONS.flatMap((o) =>
+                {serviceOptions.flatMap((o) =>
                   o.subtypes
                     .filter((s) => !(o.type === editing.serviceType && s === editing.serviceSubtype))
                     .slice(0, 0) // 드롭다운으로 대체 — 아래 select
@@ -839,13 +842,14 @@ function ClauseLibraryTab() {
 
 /** 복제 원본 선택 드롭다운 — 대분류/세분류 2단 */
 function CopySelect({ onCopy, exclude }: { onCopy: (serviceType: string, serviceSubtype: string) => void; exclude: { serviceType: string; serviceSubtype: string } }) {
-  const [type, setType] = useState(QUOTE_SERVICE_OPTIONS[0].type);
-  const subtypes = QUOTE_SERVICE_OPTIONS.find((o) => o.type === type)?.subtypes ?? [];
+  const { options: serviceOptions } = useContractServiceOptions();
+  const [type, setType] = useState(serviceOptions[0]?.type ?? "");
+  const subtypes = subtypesOf(serviceOptions, type);
   const [sub, setSub] = useState(subtypes[0] ?? "");
   return (
     <span className="inline-flex items-center gap-1">
-      <select className="cd-select" style={{ width: 110 }} value={type} onChange={(e) => { setType(e.target.value); setSub(QUOTE_SERVICE_OPTIONS.find((o) => o.type === e.target.value)?.subtypes[0] ?? ""); }}>
-        {QUOTE_SERVICE_OPTIONS.map((o) => (
+      <select className="cd-select" style={{ width: 110 }} value={type} onChange={(e) => { setType(e.target.value); setSub(subtypesOf(serviceOptions, e.target.value)[0] ?? ""); }}>
+        {serviceOptions.map((o) => (
           <option key={o.type} value={o.type}>{o.type}</option>
         ))}
       </select>

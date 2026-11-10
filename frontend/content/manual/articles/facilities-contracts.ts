@@ -438,7 +438,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
           { kind: "steps", items: [
             "[[신규 계약]]을 누르면 [[신규 계약 입력]] 창이 열립니다.",
             "[[계약 상세정보]] 탭: [[계약명]]을 넣고 [[중복확인]]을 누릅니다. 같은 이름이 있으면 연도·차수를 붙여 자동으로 고쳐 줍니다.",
-            "[[계약상대 업체]]를 검색해 고르고, [[발주 주체 구분]]·[[용역분류]]·[[용역세분류]]·[[계약 종류]]·[[대금 지급 방식]]·[[업종]]·[[계약일]]을 넣습니다.",
+            "[[계약상대 업체]]를 검색해 고르고, [[발주 주체 구분]]·[[용역분류]]·[[용역세분류]]·[[계약 종류]]·[[대금 지급 방식]]·[[업종]]·[[계약일]]을 넣습니다. 용역분류·용역세분류 목록은 관리자가 관리 > 용역 분류에서 정합니다.",
             "[[청구·수금 단계]] 탭에서 선급금·중도금·준공금 같은 단계를 [[단계 추가]]합니다. 단계 금액의 합계가 [[계약금액]]이 됩니다(직접 입력 칸 없음).",
             "필요하면 [[외주 용역]]과 [[계약서 PDF]]를 넣고 [[계약 등록]]을 누릅니다. PDF는 첨부 영역에 끌어다 놓거나 영역을 클릭해 탐색기에서 고릅니다(변경계약 입력의 계약서·외주 계약서도 같은 방식).",
           ] },
@@ -577,7 +577,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-09",
+    reviewedAt: "2026-11-10",
   },
   {
     id: "contracts.dashboard",
@@ -784,7 +784,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
         title: "양식 기준 관리",
         blocks: [
           { kind: "list", items: [
-            "용역 대분류·세분류마다 표준 셋(조문 묶음)을 정해 둡니다. 비어 있는 세분류는 기본 시드를 씁니다.",
+            "용역 대분류·세분류마다 표준 셋(조문 묶음)을 정해 둡니다. 비어 있는 세분류는 기본 시드를 씁니다. 세분류 목록은 관리 > 용역 분류를 따릅니다.",
             "[[발주처 자체양식 업로드/분석]]: 발주처가 자기 양식을 요구하면 올립니다. [[원본 서식 보존 (권장)]]은 원본 서식에 값만 채우고, [[조문 편집형 (재구축)]]은 조문을 다시 구성해 편집할 수 있게 합니다.",
             "[[조항 라이브러리]]에 자주 쓰는 조항을 모아 두고 작성 화면에서 불러옵니다.",
           ] },
@@ -799,7 +799,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/agreements/AgreementVersions.tsx",
       "components/approval/DocStagePanel.tsx",
     ],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-10",
   },
   {
     id: "contracts.deliverables",

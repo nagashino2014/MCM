@@ -703,7 +703,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
         title: "작성 흐름",
         blocks: [
           { kind: "steps", items: [
-            "[[기본 정보]]에 건명(전체), 용역 분류·세분류, 견적일을 넣습니다.",
+            "[[기본 정보]]에 건명(전체), 용역 분류·세분류, 견적일을 넣습니다. 분류 목록은 계약관리와 같으며 관리 > 용역 분류에서 정합니다.",
             "발송 방식을 고릅니다 — 메일 발송(승인 후 참조 담당자에게 PDF 자동 발송) 또는 발송 안 함 · 직접 제출(승인 후 내려받아 전자조달시스템 등에 직접 제출).",
             "수신처(사업장/기관)와 [[참조 담당자]]를 지정합니다. 메일 발송이면 메일 주소가 있는 참조 담당자가 1명 이상 있어야 합니다.",
             "[[사업장별 견적]]에서 사업장마다 라벨·건명을 넣고 제출 견적가로 금액을 산정합니다. 여러 사업장이면 [[사업장 추가]]로 탭을 늘립니다.",
@@ -844,7 +844,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["견적", "견적서", "제출 견적가", "MD", "역산", "노임단가", "제경비", "기술료", "직접경비", "출장비", "인쇄비", "공제료", "엔지니어링공제료", "기준 세트", "복수 업무", "재견적", "견적번호", "초안", "최종안", "초안 송부"],
     sources: ["components/approval/QuoteBoard.tsx", "components/approval/QuoteItemTreeEditor.tsx", "lib/quote/types.ts", "lib/quote/rates.ts", "components/approval/DocStagePanel.tsx"],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-10",
   },
   {
     id: "quote.settings",
@@ -920,7 +920,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["견적 기준", "기준 세트", "표준 MD", "노임단가", "상황 변수", "수주 분석", "수주율", "전용 기준 세트", "요율"],
     sources: ["components/approval/QuoteSettingsBoard.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-10",
   },
   // ── 회사소개서(카탈로그) ──
   {

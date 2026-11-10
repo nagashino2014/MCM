@@ -19,6 +19,7 @@ import {
   CalendarClock,
   ListChecks,
   Layers,
+  ListTree,
   CarFront,
   SlidersHorizontal,
   Landmark,
@@ -361,6 +362,13 @@ export const MENU_ITEMS: MenuItem[] = [
     title: "통합허가 업종",
     href: "/admin/permit-industries",
     icon: Layers,
+    group: "system",
+  },
+  // 계약 용역 대분류·세분류 단일 원천(348) — 계약 입력·변경계약·견적·계약서 화면이 같은 목록을 읽는다. master.contract_service.manage RBAC 가드.
+  {
+    title: "용역 분류",
+    href: "/admin/contract-service-categories",
+    icon: ListTree,
     group: "system",
   },
   // 홍보·채용공고 — 클로드 디자인 핸드오프 템플릿 기반 채용공고 편집기(마이그 212, recruit.*).

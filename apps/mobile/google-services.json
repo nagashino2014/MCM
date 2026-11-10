@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387180476419",
+    "project_id": "mcm-groupware",
+    "storage_bucket": "mcm-groupware.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387180476419:android:7798c253fecc531d223636",
+        "android_client_info": {
+          "package_name": "app.koensain.mcm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEvMSoA28BuzalKYkgKpcL1FpOTD8rbq8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

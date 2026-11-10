@@ -302,6 +302,18 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "app-push",
+        title: "앱 알림 켜기",
+        blocks: [
+          { kind: "steps", items: [
+            "앱 홈의 종 아이콘 → 오른쪽 위 톱니(알림 설정)로 들어갑니다.",
+            "‘알림이 꺼져 있습니다’ 카드의 [[켜기]]를 누르고, 휴대폰이 알림 허용을 물으면 허용합니다.",
+            "카드가 ‘알림 받는 중’으로 바뀌면 끝입니다. 아래 스위치로 받을 알림을 고릅니다.",
+          ] },
+          { kind: "tip", text: "켜기에 실패하면 실패한 단계(권한 확인·기기 토큰 발급·서버 등록)와 사유가 함께 표시됩니다. 그 문구를 그대로 관리자에게 알려 주세요. 안드로이드는 2026-11-10 이후 스토어에서 받은 새 버전부터 알림을 켤 수 있습니다." },
+        ],
+      },
+      {
         id: "app-manual",
         title: "앱에서 매뉴얼 보기",
         blocks: [
@@ -314,8 +326,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부"],
-    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx"],
-    reviewedAt: "2026-11-06",
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부", "앱 알림", "푸시", "알림 켜기"],
+    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx", "../apps/mobile/src/app/notification-settings.tsx"],
+    reviewedAt: "2026-11-10",
   },
 ];

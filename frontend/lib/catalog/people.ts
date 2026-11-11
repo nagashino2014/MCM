@@ -22,7 +22,7 @@ export interface CatalogPersonMeta {
   orderNo: number | null;
   roleLabel: string;
   bioShort: string;
-  /** 임원진 카드 학력·자격 직접 입력(353) — 비우면 인사 기록(학력·자격증)에서 채운다 */
+  /** 임원진 카드 학력·자격 직접 입력(354) — 비우면 인사 기록(학력·자격증)에서 채운다 */
   eduOverride: string;
   certOverride: string;
   /** null 미확인 · true 동의 · false 거부 */

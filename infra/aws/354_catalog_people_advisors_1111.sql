@@ -1,4 +1,4 @@
--- 353 회사소개서 인물 — 임원진 학력·자격 직접 입력 칸 + 외부자문위원 17명 + 임원진 자리 바꾸기(사용자 지시 2026-11-11)
+-- 354 회사소개서 인물 — 임원진 학력·자격 직접 입력 칸 + 외부자문위원 17명 + 임원진 자리 바꾸기(사용자 지시 2026-11-11)
 --
 -- 1) 칸: 임원진 카드 학력·자격을 인물 노출 관리에서 직접 고친다.
 --    catalog_people_meta.edu_override·cert_override(비우면 인사 기록), catalog_extra_people.edu·cert(촉탁 임원은 인사 기록이 없다).
@@ -21,11 +21,11 @@ DECLARE
   ts text := to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 BEGIN
   IF EXISTS (SELECT 1 FROM catalog_advisors) THEN
-    RAISE NOTICE '353: 자문위원이 이미 있어 17명 입력을 건너뜁니다.';
+    RAISE NOTICE '354: 자문위원이 이미 있어 17명 입력을 건너뜁니다.';
     RETURN;
   END IF;
   INSERT INTO catalog_advisors (advisor_id, name, field, org, title, career, order_no, is_public, created_at, updated_at, updated_by)
-  SELECT 'cad_353_' || lpad(v.n::text, 2, '0'), v.name, v.field, v.org, v.title, v.career, v.n, 1, ts, ts, NULL
+  SELECT 'cad_354_' || lpad(v.n::text, 2, '0'), v.name, v.field, v.org, v.title, v.career, v.n, 1, ts, ts, NULL
     FROM (VALUES
       (1,  '이○호', '총괄',               '법무법인 율촌',               '전문위원',     '(前) 환경부 환경정책실장, 기획재정담당관 등'),
       (2,  '최○철', '법률자문',           '법무법인 광장',               '환경전문위원', '(前) 수도권매립지관리공사 환경에너지타운 본부장'),
@@ -45,7 +45,7 @@ BEGIN
       (16, '김○록', '측정기기',           '한림대학교 환경생명공학과',   '교수',         '(現) (사)굴뚝자동측정기기협회 사무총장'),
       (17, '김○준', '환경 인허가',        '도움엔텍',                    '대표이사',     '(前) 인천시 수도권매립지 정책개선 단장, 인천서구청 환경관리과장')
     ) AS v(n, name, field, org, title, career);
-  RAISE NOTICE '353: 외부자문위원 17명을 넣었습니다.';
+  RAISE NOTICE '354: 외부자문위원 17명을 넣었습니다.';
 END $$;
 
 -- ── 3) 임원진 자리 바꾸기 ──
@@ -60,7 +60,7 @@ DECLARE
   n int;
 BEGIN
   IF EXISTS (SELECT 1 FROM catalog_extra_people WHERE name = '심무경') THEN
-    RAISE NOTICE '353: 심무경 고문이 이미 직접 입력 임원에 있어 임원진 자리 바꾸기를 건너뜁니다.';
+    RAISE NOTICE '354: 심무경 고문이 이미 직접 입력 임원에 있어 임원진 자리 바꾸기를 건너뜁니다.';
     RETURN;
   END IF;
 
@@ -68,7 +68,7 @@ BEGIN
   SELECT COUNT(*) INTO n FROM employee_profiles WHERE COALESCE(status, 'active') = 'active' AND name IN ('권오종', '김명호', '이홍길', '조옥환')
     GROUP BY name HAVING COUNT(*) > 1 LIMIT 1;
   IF n IS NOT NULL THEN
-    RAISE NOTICE '353: 권오종·김명호·이홍길·조옥환 중 같은 이름의 재직자가 둘 이상이라 임원진 자리 바꾸기를 건너뜁니다.';
+    RAISE NOTICE '354: 권오종·김명호·이홍길·조옥환 중 같은 이름의 재직자가 둘 이상이라 임원진 자리 바꾸기를 건너뜁니다.';
     RETURN;
   END IF;
   SELECT employee_id INTO id_kwon FROM employee_profiles WHERE COALESCE(status, 'active') = 'active' AND name = '권오종';
@@ -77,16 +77,16 @@ BEGIN
   SELECT employee_id INTO id_cho  FROM employee_profiles WHERE COALESCE(status, 'active') = 'active' AND name = '조옥환';
   SELECT employee_id INTO id_sim  FROM employee_profiles WHERE COALESCE(status, 'active') = 'active' AND name = '심무경' LIMIT 1;
   IF id_kwon IS NULL OR id_kim IS NULL OR id_lee IS NULL OR id_cho IS NULL THEN
-    RAISE NOTICE '353: 재직자 중 권오종(%)·김명호(%)·이홍길(%)·조옥환(%)을 모두 찾지 못해 임원진 자리 바꾸기를 건너뜁니다.', id_kwon, id_kim, id_lee, id_cho;
+    RAISE NOTICE '354: 재직자 중 권오종(%)·김명호(%)·이홍길(%)·조옥환(%)을 모두 찾지 못해 임원진 자리 바꾸기를 건너뜁니다.', id_kwon, id_kim, id_lee, id_cho;
     RETURN;
   END IF;
   IF EXISTS (SELECT 1 FROM catalog_people_meta WHERE employee_id = id_kwon AND display_override = 'never') THEN
-    RAISE NOTICE '353: 권오종이 이미 임원진에서 빠져 있어 자리 바꾸기를 건너뜁니다.';
+    RAISE NOTICE '354: 권오종이 이미 임원진에서 빠져 있어 자리 바꾸기를 건너뜁니다.';
     RETURN;
   END IF;
 
   -- 지금 임원진 순서(소개서 렌더러 data.ts leaderItems 와 같은 규칙)를 10 단위 순서 번호로 굳힌다
-  CREATE TEMP TABLE _353_lead ON COMMIT DROP AS
+  CREATE TEMP TABLE _354_lead ON COMMIT DROP AS
   WITH emp AS (
     SELECT e.employee_id AS id, 'e'::text AS kind, p.position_name, COALESCE(p.rank_order, 0) AS rnk, m.order_no,
            row_number() OVER (ORDER BY m.order_no ASC NULLS LAST, p.rank_order DESC NULLS LAST, e.hired_at ASC NULLS LAST, e.name ASC) AS seq
@@ -109,18 +109,18 @@ BEGIN
   )
   SELECT id, kind, 10 * row_number() OVER (ORDER BY ord, rnk DESC, seq) AS new_order FROM allp;
 
-  SELECT new_order INTO o_kwon FROM _353_lead WHERE kind = 'e' AND id = id_kwon;
-  SELECT new_order INTO o_kim  FROM _353_lead WHERE kind = 'e' AND id = id_kim;
-  SELECT new_order INTO o_lee  FROM _353_lead WHERE kind = 'e' AND id = id_lee;
+  SELECT new_order INTO o_kwon FROM _354_lead WHERE kind = 'e' AND id = id_kwon;
+  SELECT new_order INTO o_kim  FROM _354_lead WHERE kind = 'e' AND id = id_kim;
+  SELECT new_order INTO o_lee  FROM _354_lead WHERE kind = 'e' AND id = id_lee;
   IF o_kwon IS NULL OR o_kim IS NULL OR o_lee IS NULL THEN
-    RAISE NOTICE '353: 권오종(%)·김명호(%)·이홍길(%) 중 지금 임원진에 없는 사람이 있어 자리 바꾸기를 건너뜁니다.', o_kwon, o_kim, o_lee;
+    RAISE NOTICE '354: 권오종(%)·김명호(%)·이홍길(%) 중 지금 임원진에 없는 사람이 있어 자리 바꾸기를 건너뜁니다.', o_kwon, o_kim, o_lee;
     RETURN;
   END IF;
 
   INSERT INTO catalog_people_meta (employee_id, order_no, updated_at)
-  SELECT id, new_order, ts FROM _353_lead WHERE kind = 'e'
+  SELECT id, new_order, ts FROM _354_lead WHERE kind = 'e'
   ON CONFLICT (employee_id) DO UPDATE SET order_no = EXCLUDED.order_no, updated_at = EXCLUDED.updated_at;
-  UPDATE catalog_extra_people x SET order_no = l.new_order, updated_at = ts FROM _353_lead l WHERE l.kind = 'x' AND l.id = x.person_id;
+  UPDATE catalog_extra_people x SET order_no = l.new_order, updated_at = ts FROM _354_lead l WHERE l.kind = 'x' AND l.id = x.person_id;
 
   -- 김명호 → 권오종 자리, 조옥환 → 이홍길 자리(구획 임원진·항상 싣기), 권오종·이홍길 빼기
   UPDATE catalog_people_meta SET order_no = o_kwon, updated_at = ts WHERE employee_id = id_kim;
@@ -147,8 +147,8 @@ BEGIN
       updated_at = EXCLUDED.updated_at;
   ELSE
     INSERT INTO catalog_extra_people (person_id, name, role_label, employment_type, bio_short, career, edu, cert, order_no, is_public, count_in_total, created_at, updated_at)
-    VALUES ('cxp_353_simmugyeong', '심무경', '고문', '촉탁', sim_bio, NULL, '강원대학교 환경공학 박사', '수질환경기사, 행정사', o_kim, 1, 1, ts, ts)
+    VALUES ('cxp_354_simmugyeong', '심무경', '고문', '촉탁', sim_bio, NULL, '강원대학교 환경공학 박사', '수질환경기사, 행정사', o_kim, 1, 1, ts, ts)
     ON CONFLICT (person_id) DO NOTHING;
   END IF;
-  RAISE NOTICE '353: 임원진 자리를 바꿨습니다(김명호 %, 심무경 %, 조옥환 %; 권오종·이홍길 빼기).', o_kwon, o_kim, o_lee;
+  RAISE NOTICE '354: 임원진 자리를 바꿨습니다(김명호 %, 심무경 %, 조옥환 %; 권오종·이홍길 빼기).', o_kwon, o_kim, o_lee;
 END $$;

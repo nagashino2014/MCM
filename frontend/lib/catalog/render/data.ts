@@ -365,7 +365,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       initial: initialOf(p.name),
       role: p.meta?.roleLabel || p.positionName,
       photo: photoKey(p),
-      // 학력·자격은 인물 노출 관리에서 직접 고친 값이 있으면 그것을(353), 없으면 인사 기록
+      // 학력·자격은 인물 노출 관리에서 직접 고친 값이 있으면 그것을(354), 없으면 인사 기록
       edu: p.meta?.eduOverride || highestEdu(d).text,
       cert: p.meta?.certOverride || (d?.certs ?? []).slice(0, 4).join(", "),
       career: careerSummary(years, p.meta?.bioShort ?? "", d),

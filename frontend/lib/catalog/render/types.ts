@@ -57,6 +57,8 @@ export interface Office {
   /** 주소 둘째 줄(건물·층) — 뒤표지 3칸 표기용 */
   addressLines: string[];
   phone: string;
+  /** 대표 전화 아래 담당자 휴대전화(오시는 길) — 사용자관리 휴대전화에서 채운다 */
+  contacts?: Array<{ label: string; phone: string }>;
   transit: Array<{ label: string; text: string }>;
   lon: number;
   lat: number;

@@ -123,10 +123,17 @@ export function ContactPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
                 {o.transit.map((t) => (
                   <Transit key={t.label} label={t.label} text={t.text} />
                 ))}
-                {o.phone ? (
+                {o.phone || o.contacts?.length ? (
                   <>
                     <dt>전화</dt>
-                    <dd className="kc-num">{o.phone}</dd>
+                    <dd>
+                      {o.phone ? <span className="kc-num">{o.phone}</span> : null}
+                      {(o.contacts ?? []).map((c) => (
+                        <span key={c.label} style={{ display: "block" }}>
+                          {c.label} <span className="kc-num">{c.phone}</span>
+                        </span>
+                      ))}
+                    </dd>
                   </>
                 ) : null}
               </dl>

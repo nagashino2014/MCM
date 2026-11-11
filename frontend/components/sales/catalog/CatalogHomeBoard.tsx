@@ -67,7 +67,7 @@ export function CatalogHomeBoard() {
   const [data, setData] = useState<MetricsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [permitFilter, setPermitFilter] = useState<"completed" | "ongoing" | "all">("completed");
+  const [permitFilter, setPermitFilter] = useState<"completed" | "ongoing" | "all" | "unknown">("completed");
   const [editions, setEditions] = useState<CatalogEditionSummary[]>([]);
   const [documents, setDocuments] = useState<CatalogDocumentSummary[]>([]);
   const [modal, setModal] = useState<"pending" | "publish" | null>(null);
@@ -120,7 +120,10 @@ export function CatalogHomeBoard() {
 
   const permitRows = useMemo(() => {
     const rows = data?.initialPermit.rows ?? [];
-    return permitFilter === "all" ? rows : rows.filter((r) => (permitFilter === "completed" ? r.completed : !r.completed));
+    if (permitFilter === "all") return rows;
+    // 업종 미판정 — 총괄표 '업종 미판정' 칸에 세는 완료 계약(업종이 비었거나 업종 묶음에 없는 업종)
+    if (permitFilter === "unknown") return rows.filter((r) => r.completed && !r.cohortId);
+    return rows.filter((r) => (permitFilter === "completed" ? r.completed : !r.completed));
   }, [data, permitFilter]);
   const { pageRows, pager, resetPage } = useClientPaging(permitRows, "catalog-initial-permit-page-size", loading);
   const cohortLabel = (id: string | null) => data?.initialPermit.byCohort.find((c) => c.id === id)?.label ?? "업종 미판정";
@@ -290,16 +293,31 @@ export function CatalogHomeBoard() {
             >
               <option value="completed">완료</option>
               <option value="ongoing">수행 중</option>
+              <option value="unknown">업종 미판정</option>
               <option value="all">전체</option>
             </select>
           </div>
           {data && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {data.initialPermit.byCohort.map((c) => (
-                <span key={c.id} className="cd-pill cd-pill-idle tabular-nums">
-                  {c.label} {c.sites}
-                </span>
-              ))}
+              {data.initialPermit.byCohort.map((c) =>
+                c.id === "unknown" && c.sites > 0 ? (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="cd-pill cd-pill-warn cursor-pointer tabular-nums"
+                    onClick={() => {
+                      setPermitFilter("unknown");
+                      resetPage();
+                    }}
+                  >
+                    {c.label} {c.sites} · 목록 보기
+                  </button>
+                ) : (
+                  <span key={c.id} className="cd-pill cd-pill-idle tabular-nums">
+                    {c.label} {c.sites}
+                  </span>
+                )
+              )}
             </div>
           )}
           {permitRows.length === 0 ? (

@@ -44,6 +44,8 @@ const emptyExtra: Omit<CatalogExtraPerson, "personId"> & { personId: string | nu
   employmentType: "촉탁",
   bioShort: "",
   career: "",
+  edu: "",
+  cert: "",
   photoAssetId: null,
   orderNo: null,
   isPublic: true,
@@ -59,10 +61,12 @@ export function CatalogPeopleBoard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<CatalogPerson | null>(null);
-  const [personDraft, setPersonDraft] = useState<{ orderNo: string; roleLabel: string; bioShort: string; photoAssetId: string | null }>({
+  const [personDraft, setPersonDraft] = useState<{ orderNo: string; roleLabel: string; bioShort: string; eduOverride: string; certOverride: string; photoAssetId: string | null }>({
     orderNo: "",
     roleLabel: "",
     bioShort: "",
+    eduOverride: "",
+    certOverride: "",
     photoAssetId: null,
   });
   const [advisorDraft, setAdvisorDraft] = useState<typeof emptyAdvisor | null>(null);
@@ -326,6 +330,8 @@ export function CatalogPeopleBoard() {
                               orderNo: p.meta?.orderNo != null ? String(p.meta.orderNo) : "",
                               roleLabel: p.meta?.roleLabel ?? "",
                               bioShort: p.meta?.bioShort ?? "",
+                              eduOverride: p.meta?.eduOverride ?? "",
+                              certOverride: p.meta?.certOverride ?? "",
                               photoAssetId: p.meta?.photoAssetId ?? null,
                             });
                           }}
@@ -487,6 +493,7 @@ export function CatalogPeopleBoard() {
                   orderNo: personDraft.orderNo.trim() === "" ? null : Number(personDraft.orderNo),
                   roleLabel: personDraft.roleLabel,
                   bioShort: personDraft.bioShort,
+                  ...(editing.section === "exec" ? { eduOverride: personDraft.eduOverride, certOverride: personDraft.certOverride } : {}),
                   photoAssetId: personDraft.photoAssetId,
                 });
                 if (ok) setEditing(null);
@@ -550,6 +557,18 @@ export function CatalogPeopleBoard() {
             <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분)</span>
             <textarea className="cd-input" rows={4} value={personDraft.bioShort} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
           </label>
+          {editing?.section === "exec" && (
+            <>
+              <label className="grid gap-1">
+                <span className="text-xs cd-text-muted">임원진 카드 학력(비우면 인사 기록의 최종 학력)</span>
+                <input className="cd-input" value={personDraft.eduOverride} placeholder="예: 강원대학교 환경공학 박사" onChange={(e) => setPersonDraft({ ...personDraft, eduOverride: e.target.value })} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs cd-text-muted">임원진 카드 자격(비우면 인사 기록의 자격증, 쉼표로 구분)</span>
+                <input className="cd-input" value={personDraft.certOverride} placeholder="예: 대기관리기술사, 수질환경기사" onChange={(e) => setPersonDraft({ ...personDraft, certOverride: e.target.value })} />
+              </label>
+            </>
+          )}
         </div>
       </CdModal>
 
@@ -612,8 +631,18 @@ export function CatalogPeopleBoard() {
                 </div>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1">
+                <span className="text-xs cd-text-muted">학력</span>
+                <input className="cd-input" value={extraDraft.edu} placeholder="예: 강원대학교 환경공학 박사" onChange={(e) => setExtraDraft({ ...extraDraft, edu: e.target.value })} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs cd-text-muted">자격(쉼표로 구분)</span>
+                <input className="cd-input" value={extraDraft.cert} placeholder="예: 수질환경기사, 행정사" onChange={(e) => setExtraDraft({ ...extraDraft, cert: e.target.value })} />
+              </label>
+            </div>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분)</span>
+              <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분 · 맨 앞에 'N년'을 적으면 임원 평균 경력에 셉니다)</span>
               <textarea className="cd-input" rows={4} value={extraDraft.bioShort} onChange={(e) => setExtraDraft({ ...extraDraft, bioShort: e.target.value })} />
             </label>
             <label className="grid gap-1">

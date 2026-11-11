@@ -730,7 +730,8 @@ export function CasePage({ ctx }: { ctx: RenderCtx; data: CatalogRenderData }) {
     <Sheet ctx={ctx} area={1} anchors={["c11"]} outline="대표 성공 사례">
       <Head ctx={ctx} num="03" name="핵심 역량" sub="대표 성공 사례" />
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
-        <article className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 위·가운데 글 영역과 아래 KPI 사이에 몰리던 빈칸을 블록 사이에 고르게 나눈다(사용자 지시 2026-11-11) */}
+        <article className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14, justifyContent: "space-between" }}>
           <div className="kc-case">
             <span className="kc-case__num">{c.num}</span>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 4 }}>
@@ -771,7 +772,7 @@ export function CasePage({ ctx }: { ctx: RenderCtx; data: CatalogRenderData }) {
               ))}
             </ul>
           </div>
-          <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: "auto" }}>
+          <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
             {c.kpis.map((k) => (
               <Kpi key={k.label} label={k.label} value={k.value} unit={k.unit} />
             ))}

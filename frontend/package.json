@@ -11,6 +11,7 @@
     "test:approval-fixed-line": "node scripts/test-approval-fixed-line.mjs",
     "test:approval-admin-controls": "node scripts/test-approval-admin-controls.mjs",
     "test:approval-linkage": "node scripts/test-approval-linkage.mjs",
+    "test:card-evidence": "node scripts/test-card-evidence.mjs",
     "test:approval-receiver-parse": "node scripts/test-approval-receiver-parse.mjs",
     "test:money-gates": "node scripts/test-money-gates.mjs",
     "test:facility-quality": "node scripts/test-facility-quality.mjs",

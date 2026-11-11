@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-11", kind: "신규", title: "재무 — 카드 증빙 대조·누락 내역 분석",
+    body: "계좌·카드 원장에 카드 증빙 대조 탭이 생겼습니다. 결재 문서가 없는 법인카드 건을 모아 같은 날짜의 출장과 견주어 출장 경비 누락 추정과 그 외 사용으로 나누고, 고른 건은 부서장에게 소명을 요청합니다.",
+    articles: ["finance.card-evidence"],
+  },
+  {
     date: "2026-11-11", kind: "개선", title: "출장보고서 — 미계약 업체 접견인 직접 입력",
     body: "업체를 ‘미계약 업체(직접 입력)’로 적으면 접견인을 ‘홍길동 부장, 김철수 대리’처럼 직접 적어 상신할 수 있습니다. 칸 아래에 인식 결과가 보입니다. 휴대폰 앱도 같습니다.",
     articles: ["approval.draft"],

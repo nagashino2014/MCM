@@ -373,6 +373,34 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "approval.card-audit",
+    chapter: "approval",
+    title: "법인카드 사용 내역 소명 — 재무 담당이 요청했을 때",
+    routes: ["/approval/card-audit"],
+    audience: ["staff", "head", "exec", "admin"],
+    summary: [
+      "증빙(결재 문서)이 없는 법인카드 사용 건에 대해 재무 담당이 소명을 요청하면 할 일과 알림이 옵니다.",
+      "할 일의 링크를 열어 건마다 사유를 적고 [[회신]]을 누릅니다.",
+    ],
+    sections: [
+      {
+        id: "reply",
+        title: "회신하기",
+        blocks: [
+          { kind: "list", items: [
+            "건마다 사용일·가맹점·금액과 카드가 보입니다. 같은 날짜의 출장이 추정돼 있으면 그 문서를 눌러 확인합니다.",
+            "누가 어떤 용도로 썼는지 적고 [[회신]]을 누릅니다. 회신한 뒤에도 고쳐서 다시 보낼 수 있습니다.",
+            "출장 경비라면 출장자가 출장보고서의 지출 내역에 그 카드 건을 담아 올리면 됩니다. 상신되면 ‘증빙 완료’로 바뀝니다.",
+            "추정한 출장은 틀릴 수 있습니다. 부서 사용이 아니면 그렇게 적어 회신하세요.",
+          ] },
+        ],
+      },
+    ],
+    keywords: ["법인카드", "소명", "카드 증빙", "증빙 누락", "출장 경비"],
+    sources: ["components/approval/CardAuditReplyBoard.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
     id: "approval.contact-request",
     chapter: "approval",
     title: "접견인 명함 등록 — 운영자가 요청했을 때",

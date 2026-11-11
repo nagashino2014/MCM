@@ -122,6 +122,8 @@ export type AuditAction =
   | "approval_line_role_delete"
   | "approval_line_watcher_set"
   | "approval_line_watcher_delete"
+  | "approval_line_user_rule_set"
+  | "approval_line_user_rule_delete"
   | "approval_doc_admin_edit"
   | "approval_doc_delete"
   | "approval_doc_recall"

@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Lock } from "lucide-react";
-import { LINE_ROLE_LABELS, type FixedLineResult, type FixedLineStep } from "@/lib/approval/fixed-line-rules";
+import { LINE_STEP_ROLE_LABELS, type FixedLineResult, type FixedLineStep } from "@/lib/approval/fixed-line-rules";
 
 export interface FixedLineEditorStep {
   stepType: "agree" | "approve";
@@ -84,7 +84,7 @@ export function FixedLineList({
       {steps.map((s, i) => (
         <div key={`${s.userId}-${i}`} className="rounded-lg border cd-border-c px-3 py-2 flex items-center gap-2">
           <span className="text-[11px] font-mono cd-text-faint w-4">{i + 1}</span>
-          <span className="cd-pill cd-pill-outline shrink-0">{LINE_ROLE_LABELS[s.role]}</span>
+          <span className="cd-pill cd-pill-outline shrink-0">{LINE_STEP_ROLE_LABELS[s.role]}</span>
           <span className="text-[13px] cd-text truncate flex-1">
             {s.name}
             {s.position ? <span className="cd-text-faint text-[11px]"> {s.position}</span> : null}

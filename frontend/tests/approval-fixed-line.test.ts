@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  describeFixedLine,
+  insertDrafterExtras,
   isLineEnforced,
+  parseExtraPosition,
+  pickDrafterRules,
+  type FixedLineStep,
   parseEnforceWhen,
   parseTemplateSteps,
   resolveLineSteps,
@@ -179,4 +184,55 @@ test("부서장 기안 시 대표이사까지(347, 안 B) — 부서장만 올�
   // 연구소장(임원 취급) 기안 — 그대로 대표이사 단독
   const labHead = facts({ drafter: SSK, heads: [SSK], exec: SSK, isExec: true });
   assert.equal(names(resolveLineSteps(headOnlyUp, labHead)), "이유억");
+});
+
+// 기안자별 추가 결재자·참조·열람(353, 2026-11-11 사용자 요청)
+test("기안자별 추가 결재자 — 자리·중복·본인 제외", () => {
+  const base = (people: LinePerson[]): FixedLineStep[] => people.map((p) => ({ ...p, role: "dept_head" as const, proxies: [] }));
+  const line = base([HDG, JDJ, CEO]);
+  const nm = (steps: FixedLineStep[]) => steps.map((s) => s.name).join("→");
+  // 맨 앞 · 최종 결재자 바로 앞 · 맨 뒤
+  assert.equal(nm(insertDrafterExtras(line, [{ person: JOH, position: "first" }], STAFF.userId)), "조옥환→한도경→정득종→이유억");
+  assert.equal(nm(insertDrafterExtras(line, [{ person: JOH, position: "before_last" }], STAFF.userId)), "한도경→정득종→조옥환→이유억");
+  assert.equal(nm(insertDrafterExtras(line, [{ person: JOH, position: "last" }], STAFF.userId)), "한도경→정득종→이유억→조옥환");
+  // 추가 단계 표기 역할은 extra
+  assert.deepEqual(insertDrafterExtras(line, [{ person: JOH, position: "first" }], STAFF.userId).map((s) => s.role), ["extra", "dept_head", "dept_head", "dept_head"]);
+  // 이미 결재선에 있는 사람·기안자 본인·같은 사람 두 번은 건너뜀
+  assert.equal(
+    nm(
+      insertDrafterExtras(
+        line,
+        [
+          { person: JDJ, position: "first" },
+          { person: STAFF, position: "first" },
+          { person: LDH, position: "first" },
+          { person: LDH, position: "last" },
+          { person: LJY, position: "first" },
+        ],
+        STAFF.userId
+      )
+    ),
+    "이도희→이재영→한도경→정득종→이유억"
+  );
+  // 결재자 1명 — 최종 결재자 바로 앞 = 그 사람 앞
+  assert.equal(nm(insertDrafterExtras(base([HDG]), [{ person: JOH, position: "before_last" }], STAFF.userId)), "조옥환→한도경");
+  // 해석 실패(빈 결재선)면 그대로
+  assert.equal(insertDrafterExtras([], [{ person: JOH, position: "first" }], STAFF.userId).length, 0);
+  // 표기
+  assert.equal(describeFixedLine(insertDrafterExtras(base([HDG]), [{ person: JOH, position: "first" }], STAFF.userId)), "조옥환(추가 결재) → 한도경(부서장)");
+});
+
+test("기안자별 규칙 — 양식 행이 모든 양식 행을 덮어씀", () => {
+  const rules = [
+    { formId: "*", kind: "approve" as const, targetUserId: "u-a", position: "first" as const },
+    { formId: "*", kind: "ref" as const, targetUserId: "u-b", position: null },
+    { formId: "frm-leave", kind: "view" as const, targetUserId: "u-a", position: null },
+    { formId: "frm-other", kind: "approve" as const, targetUserId: "u-c", position: "last" as const },
+  ];
+  const leave = pickDrafterRules(rules, "frm-leave");
+  assert.deepEqual(leave.map((r) => `${r.targetUserId}:${r.kind}`), ["u-b:ref", "u-a:view"]);
+  const trip = pickDrafterRules(rules, "frm-trip");
+  assert.deepEqual(trip.map((r) => `${r.targetUserId}:${r.kind}`), ["u-a:approve", "u-b:ref"]);
+  assert.equal(parseExtraPosition("weird"), "first");
+  assert.equal(parseExtraPosition("before_last"), "before_last");
 });

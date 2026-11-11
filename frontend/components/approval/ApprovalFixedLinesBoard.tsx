@@ -3,6 +3,7 @@
 // 고정 결재선(335, 결재 운영) — 양식별 결재 단계(역할)·역할 담당자(대표이사·관리자·부서별 임원)·임원 취급 인원을 관리하고,
 // 재직자별로 결재선이 실제로 누구로 풀리는지 미리 본다. 기안 화면은 이 규칙으로 결재선을 잠그고 서버도 같은 규칙으로 강제한다.
 // 모든 양식 고정 참조·열람자(346)도 같은 카드에서 정한다 — 저장·상신 때 서버가 문서에 넣는다.
+// 직원별 추가 결재자·참조·열람(353) — 직원 요청을 받아 그 직원이 기안하는 문서에만 결재자·참조·열람자를 덧붙인다.
 // 설계: docs/approval-fixed-line-plan-2026-11-03.md.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,7 +13,18 @@ import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdInput, CdSelect } from "@/components/cdash/CdField";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
-import { LINE_ROLE_LABELS, LINE_ROLES, type LineEnforceWhen, type LineRole, type LineTemplateStep } from "@/lib/approval/fixed-line-rules";
+import {
+  DRAFTER_RULE_KIND_LABELS,
+  EXTRA_POSITION_LABELS,
+  EXTRA_POSITIONS,
+  LINE_ROLE_LABELS,
+  LINE_ROLES,
+  type DrafterRuleKind,
+  type ExtraPosition,
+  type LineEnforceWhen,
+  type LineRole,
+  type LineTemplateStep,
+} from "@/lib/approval/fixed-line-rules";
 import "@/components/cdash/cdash.css";
 
 type RoleKey = "ceo" | "exec" | "manager" | "exec_member";
@@ -53,6 +65,46 @@ interface FixedWatcherRow {
   active: boolean;
 }
 
+interface UserRuleRow {
+  ruleId: string;
+  drafterUserId: string;
+  drafterName: string | null;
+  drafterActive: boolean;
+  formId: string;
+  formName: string | null;
+  kind: DrafterRuleKind;
+  targetUserId: string;
+  targetName: string | null;
+  targetActive: boolean;
+  position: ExtraPosition | null;
+  note: string | null;
+}
+
+/** 직원별 규칙 입력 중 값 */
+interface RuleDraft {
+  drafterUserId: string;
+  drafterName: string;
+  formId: string;
+  kind: DrafterRuleKind;
+  position: ExtraPosition;
+  targetUserId: string;
+  targetName: string;
+  note: string;
+}
+
+const EMPTY_RULE: RuleDraft = {
+  drafterUserId: "",
+  drafterName: "",
+  formId: "*",
+  kind: "approve",
+  position: "first",
+  targetUserId: "",
+  targetName: "",
+  note: "",
+};
+
+const RULE_DONE_LABELS: Record<DrafterRuleKind, string> = { approve: "결재자로", ref: "참조자로", view: "열람자로" };
+
 interface Snapshot {
   ready: boolean;
   templates: TemplateRow[];
@@ -62,13 +114,18 @@ interface Snapshot {
   /** 고정 참조·열람자(346) — 표가 없으면 watchersReady=false */
   watchersReady?: boolean;
   fixedWatchers?: FixedWatcherRow[];
+  /** 직원별 추가 결재자·참조·열람(353) — 표가 없으면 userRulesReady=false */
+  userRulesReady?: boolean;
+  userRules?: UserRuleRow[];
 }
 
 /** 조직도 선택 대상 — 역할 담당자 지정 또는 편집 중 단계의 지정 대결자 추가 */
 type PickTarget =
   | { kind: "role"; role: RoleKey; deptId: string }
   | { kind: "proxy"; stepIndex: number }
-  | { kind: "watcher"; watchKind: "ref" | "view" };
+  | { kind: "watcher"; watchKind: "ref" | "view" }
+  | { kind: "ruleDrafter" }
+  | { kind: "ruleTarget" };
 
 function stepsText(steps: LineTemplateStep[]): string {
   return steps.length ? steps.map((s) => LINE_ROLE_LABELS[s.role]).join(" → ") : "자유 지정";
@@ -86,6 +143,7 @@ export function ApprovalFixedLinesBoard() {
   const [editing, setEditing] = useState<TemplateRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [previewForm, setPreviewForm] = useState("");
+  const [rule, setRule] = useState<RuleDraft>(EMPTY_RULE);
 
   const load = useCallback(async (withPreview = true) => {
     setError(null);
@@ -142,6 +200,27 @@ export function ApprovalFixedLinesBoard() {
     for (const p of data?.preview ?? []) m.set(p.userId, p.name);
     return m;
   }, [roleUsers, data?.preview]);
+
+  const userRules = data?.userRules ?? [];
+  // 결재자 추가는 고정 결재선이 있는 양식에만 들어간다 — 양식 목록도 그에 맞춘다
+  const ruleForms = rule.kind === "approve" ? fixedTemplates : templates;
+  const addRule = async () => {
+    const ok = await call(
+      "PUT",
+      {
+        kind: "userRule",
+        drafterUserId: rule.drafterUserId,
+        formId: rule.formId,
+        ruleKind: rule.kind,
+        targetUserId: rule.targetUserId,
+        position: rule.kind === "approve" ? rule.position : null,
+        note: rule.note,
+      },
+      undefined,
+      `${rule.drafterName}님 기안 문서에 ${rule.targetName}님을 ${RULE_DONE_LABELS[rule.kind]} 넣었습니다.`
+    );
+    if (ok) setRule((prev) => ({ ...prev, targetUserId: "", targetName: "", note: "" }));
+  };
 
   const saveEditing = async () => {
     if (!editing) return;
@@ -393,6 +472,151 @@ export function ApprovalFixedLinesBoard() {
         </div>
       </div>
 
+      {/* 직원별 추가 결재자·참조·열람(353) */}
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+        <h2 className="text-[14px] font-semibold cd-text">직원별 추가 결재선·참조·열람</h2>
+        <p className="text-[11px] cd-text-faint">
+          직원이 요청하면 그 직원이 기안하는 문서에만 결재자를 덧붙이거나 참조·열람자를 넣습니다. 양식별 고정 결재선은 그대로이고, 결재자 추가는 고정 결재선이 있는 양식에만 들어갑니다. 결과는 아래 미리보기에서 확인하세요.
+        </p>
+        {data && data.userRulesReady === false ? (
+          <p className="text-[12px] cd-error-text">직원별 결재선 표(마이그레이션 353)가 아직 적용되지 않았습니다.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-col gap-1">
+                <span className="cd-label">기안자(요청한 직원)</span>
+                <CdButton onClick={() => setPicker({ kind: "ruleDrafter" })}>
+                  {rule.drafterName || "직원 선택"}
+                </CdButton>
+              </div>
+              <div className="w-40">
+                <CdSelect
+                  label="구분"
+                  value={rule.kind}
+                  onChange={(e) => {
+                    const kind = e.target.value as DrafterRuleKind;
+                    setRule((prev) => ({
+                      ...prev,
+                      kind,
+                      // 결재자 추가로 바꾸면 고정 결재선이 없는 양식 선택은 '모든 양식'으로 되돌린다
+                      formId: kind === "approve" && prev.formId !== "*" && !fixedTemplates.some((t) => t.formId === prev.formId) ? "*" : prev.formId,
+                    }));
+                  }}
+                >
+                  {(["approve", "ref", "view"] as const).map((k) => (
+                    <option key={k} value={k}>
+                      {DRAFTER_RULE_KIND_LABELS[k]}
+                    </option>
+                  ))}
+                </CdSelect>
+              </div>
+              <div className="w-52">
+                <CdSelect label="양식" value={rule.formId} onChange={(e) => setRule((prev) => ({ ...prev, formId: e.target.value }))}>
+                  <option value="*">모든 양식</option>
+                  {ruleForms.map((t) => (
+                    <option key={t.formId} value={t.formId}>
+                      {t.formName}
+                    </option>
+                  ))}
+                </CdSelect>
+              </div>
+              {rule.kind === "approve" && (
+                <div className="w-48">
+                  <CdSelect
+                    label="넣을 자리"
+                    value={rule.position}
+                    onChange={(e) => setRule((prev) => ({ ...prev, position: e.target.value as ExtraPosition }))}
+                  >
+                    {EXTRA_POSITIONS.map((p) => (
+                      <option key={p} value={p}>
+                        {EXTRA_POSITION_LABELS[p]}
+                      </option>
+                    ))}
+                  </CdSelect>
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <span className="cd-label">넣을 사람</span>
+                <CdButton onClick={() => setPicker({ kind: "ruleTarget" })}>
+                  {rule.targetName || "직원 선택"}
+                </CdButton>
+              </div>
+              <div className="w-56">
+                <CdInput
+                  label="메모(요청 내용)"
+                  value={rule.note}
+                  maxLength={200}
+                  placeholder="예: 팀장 결재 추가 요청"
+                  onChange={(e) => setRule((prev) => ({ ...prev, note: e.target.value }))}
+                />
+              </div>
+              <CdButton
+                variant="primary"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                disabled={saving || !rule.drafterUserId || !rule.targetUserId}
+                onClick={addRule}
+              >
+                추가
+              </CdButton>
+            </div>
+            {rule.kind === "approve" && rule.position === "last" && (
+              <p className="text-[11px] cd-error-text">맨 뒤에 넣으면 이 사람이 최종 결재자가 됩니다.</p>
+            )}
+            {userRules.length === 0 ? (
+              <p className="text-[12px] cd-text-faint">없음 — 모든 직원이 양식별 고정 결재선과 모든 양식 고정 참조·열람만 씁니다.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead className="cd-table-head">
+                    <tr className="text-left cd-text-faint text-[11px]">
+                      <th className="py-1.5 pr-3 font-semibold">기안자</th>
+                      <th className="py-1.5 pr-3 font-semibold">양식</th>
+                      <th className="py-1.5 pr-3 font-semibold">구분</th>
+                      <th className="py-1.5 pr-3 font-semibold">넣을 사람</th>
+                      <th className="py-1.5 pr-3 font-semibold">자리</th>
+                      <th className="py-1.5 pr-3 font-semibold">메모</th>
+                      <th className="py-1.5 font-semibold" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userRules.map((r, i) => (
+                      <tr key={r.ruleId} className="border-t cd-border-c">
+                        <td className="py-1.5 pr-3 cd-text whitespace-nowrap">
+                          {i > 0 && userRules[i - 1].drafterUserId === r.drafterUserId ? "" : r.drafterName ?? r.drafterUserId}
+                          {!r.drafterActive && <span className="cd-error-text text-[11px]"> (퇴사·계정 없음)</span>}
+                        </td>
+                        <td className="py-1.5 pr-3 cd-text whitespace-nowrap">{r.formId === "*" ? "모든 양식" : r.formName ?? r.formId}</td>
+                        <td className="py-1.5 pr-3 cd-text whitespace-nowrap">{DRAFTER_RULE_KIND_LABELS[r.kind]}</td>
+                        <td className="py-1.5 pr-3 cd-text whitespace-nowrap">
+                          {r.targetName ?? r.targetUserId}
+                          {!r.targetActive && <span className="cd-error-text text-[11px]"> (퇴사·계정 없음 — 적용 안 됨)</span>}
+                        </td>
+                        <td className="py-1.5 pr-3 cd-text-faint whitespace-nowrap">{r.position ? EXTRA_POSITION_LABELS[r.position] : "-"}</td>
+                        <td className="py-1.5 pr-3 cd-text-faint">{r.note ?? ""}</td>
+                        <td className="py-1.5 text-right">
+                          <CdButton
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trash2 className="w-3.5 h-3.5" />}
+                            onClick={() => {
+                              if (confirm(`${r.drafterName ?? r.drafterUserId}님 기안 문서의 ${DRAFTER_RULE_KIND_LABELS[r.kind]}(${r.targetName ?? r.targetUserId}) 설정을 지울까요?`)) {
+                                void call("DELETE", null, `/api/approval/fixed-lines?userRuleId=${encodeURIComponent(r.ruleId)}`, "직원별 설정을 지웠습니다.");
+                              }
+                            }}
+                          >
+                            삭제
+                          </CdButton>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       {/* 편집 */}
       {editing && (
         <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
@@ -593,7 +817,11 @@ export function ApprovalFixedLinesBoard() {
             ? "지정 대결자 선택 — 조직도에서 선택"
             : picker?.kind === "watcher"
               ? `모든 양식 고정 ${picker.watchKind === "ref" ? "참조자" : "열람자"} 선택 — 조직도에서 선택`
-              : "결재자 선택 — 조직도에서 선택"
+              : picker?.kind === "ruleDrafter"
+                ? "기안자(요청한 직원) 선택 — 조직도에서 선택"
+                : picker?.kind === "ruleTarget"
+                  ? "넣을 사람 선택 — 조직도에서 선택"
+                  : "결재자 선택 — 조직도에서 선택"
         }
         hint="인원을 클릭하면 지정됩니다."
         onClose={() => setPicker(null)}
@@ -608,6 +836,14 @@ export function ApprovalFixedLinesBoard() {
           if (target.kind === "proxy") {
             const s = editing?.steps[target.stepIndex];
             if (s && !(s.proxyUserIds ?? []).includes(emp.userId)) updateStep(target.stepIndex, { proxyUserIds: [...(s.proxyUserIds ?? []), emp.userId] });
+            return;
+          }
+          if (target.kind === "ruleDrafter") {
+            setRule((prev) => ({ ...prev, drafterUserId: emp.userId!, drafterName: emp.name }));
+            return;
+          }
+          if (target.kind === "ruleTarget") {
+            setRule((prev) => ({ ...prev, targetUserId: emp.userId!, targetName: emp.name }));
             return;
           }
           if (target.kind === "watcher") {

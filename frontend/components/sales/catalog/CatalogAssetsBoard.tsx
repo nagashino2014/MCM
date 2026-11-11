@@ -12,6 +12,7 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 import { CLIENT_CATEGORIES, type CatalogClient, type ClientCandidate } from "@/lib/catalog/client-types";
 import { catalogFetch } from "./catalogFetch";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "./CatalogBackLink";
 
 interface ClientsResponse {
   clients: CatalogClient[];
@@ -111,9 +112,12 @@ export function CatalogAssetsBoard() {
         helpTopic="catalog.clients"
         meta={<span className="text-xs cd-text-muted">로고 등록 {withLogo} / {clients.length}</span>}
         actions={
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
-            <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
-          </button>
+          <>
+            <CatalogBackLink />
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
+              <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
+            </button>
+          </>
         }
       />
 

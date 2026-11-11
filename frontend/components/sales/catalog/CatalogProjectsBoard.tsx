@@ -47,6 +47,7 @@ import {
   type ManualDraft,
 } from "./CatalogManualProjects";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "./CatalogBackLink";
 
 type TabKey = "list" | "manual" | "rules";
 type VisibilityFilter = "" | "shown" | "hidden" | "unreviewed" | "featured" | "private" | "grouped";
@@ -282,6 +283,7 @@ export function CatalogProjectsBoard() {
         }
         actions={
           <div className="flex items-center gap-1.5">
+            <CatalogBackLink />
             <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => setLabelOpen(true)} disabled={loading || busy || awkwardCount === 0}>
               <Sparkles className="w-3.5 h-3.5" /> 표기 제안{awkwardCount ? ` ${awkwardCount.toLocaleString("ko-KR")}` : ""}
             </button>

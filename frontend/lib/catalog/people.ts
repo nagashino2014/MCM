@@ -209,6 +209,7 @@ function mapExtra(r: Record<string, unknown>): CatalogExtraPerson {
     edu: s(r.edu),
     cert: s(r.cert),
     photoAssetId: r.photo_asset_id != null ? String(r.photo_asset_id) : null,
+    photoConsent: r.photo_consent == null ? null : Number(r.photo_consent) === 1,
     orderNo: r.order_no != null ? Number(r.order_no) : null,
     isPublic: Number(r.is_public ?? 1) === 1,
     countInTotal: Number(r.count_in_total ?? 1) === 1,
@@ -232,12 +233,12 @@ export async function saveExtraPerson(input: Partial<CatalogExtraPerson> & { nam
     await txn.run(
       `INSERT INTO catalog_extra_people
          (person_id, name, role_label, employment_type, bio_short, career, photo_asset_id, order_no, is_public, count_in_total,
-          created_at, created_by, updated_at, updated_by, edu, cert)
-       VALUES ($1, $2, $3, $4, $5, $6, (SELECT asset_id FROM catalog_assets WHERE asset_id = $7), $8, $9, $10, $11, $12, $11, $12, $13, $14)
+          created_at, created_by, updated_at, updated_by, edu, cert, photo_consent)
+       VALUES ($1, $2, $3, $4, $5, $6, (SELECT asset_id FROM catalog_assets WHERE asset_id = $7), $8, $9, $10, $11, $12, $11, $12, $13, $14, $15)
        ON CONFLICT (person_id) DO UPDATE SET
          name = EXCLUDED.name, role_label = EXCLUDED.role_label, employment_type = EXCLUDED.employment_type,
          bio_short = EXCLUDED.bio_short, career = EXCLUDED.career, photo_asset_id = EXCLUDED.photo_asset_id,
-         edu = EXCLUDED.edu, cert = EXCLUDED.cert,
+         edu = EXCLUDED.edu, cert = EXCLUDED.cert, photo_consent = EXCLUDED.photo_consent,
          order_no = EXCLUDED.order_no, is_public = EXCLUDED.is_public, count_in_total = EXCLUDED.count_in_total,
          updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
       [
@@ -255,6 +256,7 @@ export async function saveExtraPerson(input: Partial<CatalogExtraPerson> & { nam
         actorUserId,
         s(input.edu).slice(0, 200) || null,
         s(input.cert).slice(0, 300) || null,
+        input.photoConsent == null ? null : input.photoConsent ? 1 : 0,
       ]
     );
   });

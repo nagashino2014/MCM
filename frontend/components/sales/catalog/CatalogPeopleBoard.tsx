@@ -18,6 +18,7 @@ import { EXTRA_EMPLOYMENT_TYPES, type CatalogExtraPerson } from "@/lib/catalog/p
 import type { LeaderCardFields } from "@/lib/catalog/render/data";
 import { catalogFetch } from "./catalogFetch";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "./CatalogBackLink";
 
 type TabKey = "exec" | "staff" | "advisors";
 
@@ -48,6 +49,7 @@ const emptyExtra: Omit<CatalogExtraPerson, "personId"> & { personId: string | nu
   edu: "",
   cert: "",
   photoAssetId: null,
+  photoConsent: null,
   orderNo: null,
   isPublic: true,
   countInTotal: true,
@@ -169,6 +171,22 @@ export function CatalogPeopleBoard() {
     }
   };
 
+  // 직접 입력 임원 사진 게재 — 표의 선택 칸에서 바로 저장(사용자관리 임원의 사진 칸과 같은 방식)
+  const patchExtraPhoto = async (x: CatalogExtraPerson, photoConsent: boolean | null) => {
+    setBusy(true);
+    try {
+      const data = await catalogFetch<{ extraPeople: CatalogExtraPerson[] }>("/api/catalog/extra-people", {
+        method: "POST",
+        body: JSON.stringify({ ...x, photoConsent }),
+      });
+      setExtras(data.extraPeople);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeExtra = async (x: CatalogExtraPerson) => {
     if (!confirm(`'${x.name}'을(를) 임원 목록에서 삭제할까요?`)) return;
     setBusy(true);
@@ -216,9 +234,12 @@ export function CatalogPeopleBoard() {
           </span>
         }
         actions={
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
-            <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
-          </button>
+          <>
+            <CatalogBackLink />
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
+              <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
+            </button>
+          </>
         }
         tabs={
           <CdTabs<TabKey>
@@ -387,7 +408,7 @@ export function CatalogPeopleBoard() {
                   <table className="cd-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 64 }}>사진</th>
+                        <th>사진</th>
                         <th>이름</th>
                         <th>직함·구분</th>
                         <th>약력 요약</th>
@@ -399,13 +420,30 @@ export function CatalogPeopleBoard() {
                     <tbody>
                       {extras.map((x) => (
                         <tr key={x.personId}>
-                          <td>
-                            {x.photoAssetId ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={`/api/catalog/assets/${encodeURIComponent(x.photoAssetId)}`} alt={`${x.name} 사진`} className="w-10 h-12 object-cover rounded border cd-border-c" />
-                            ) : (
-                              <span className="text-xs cd-text-faint">없음</span>
-                            )}
+                          <td className="whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              {x.photoAssetId ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={`/api/catalog/assets/${encodeURIComponent(x.photoAssetId)}`} alt={`${x.name} 사진`} className="w-10 h-12 object-cover rounded border cd-border-c" />
+                              ) : (
+                                <span className="text-xs cd-text-faint">없음</span>
+                              )}
+                              <select
+                                className="cd-select"
+                                style={{ width: 96 }}
+                                value={x.photoConsent == null ? "" : x.photoConsent ? "1" : "0"}
+                                disabled={busy}
+                                onChange={(e) => patchExtraPhoto(x, e.target.value === "" ? null : e.target.value === "1")}
+                                aria-label={`${x.name} 사진 게재 동의`}
+                              >
+                                <option value="">미확인</option>
+                                <option value="1">동의</option>
+                                <option value="0">거부</option>
+                              </select>
+                              <span className={`cd-pill ${x.photoAssetId && x.photoConsent !== false ? "cd-pill-info" : "cd-pill-idle"}`}>
+                                {!x.photoAssetId ? "사진 없음" : x.photoConsent !== false ? "싣기" : "안 실음"}
+                              </span>
+                            </div>
                           </td>
                           <td className="cd-text font-semibold whitespace-nowrap">{x.name}</td>
                           <td className="cd-text-muted whitespace-nowrap">

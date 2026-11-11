@@ -113,7 +113,8 @@ function PersonCard({ ctx, p, card = "square" }: { ctx: RenderCtx; p: LeaderCard
         <span className="kc-person__name">{p.name}</span>
         <span className="kc-person__role">
           {p.role}
-          {p.manual ? (ctx.opts.edition === "draft" ? " · 촉탁(직접 입력)" : " · 촉탁") : ""}
+          {/* 촉탁 여부는 소개서에 적지 않는다(사용자 지시 2026-11-11) — 작업본에만 직접 입력 표시 */}
+          {p.manual && ctx.opts.edition === "draft" ? " · 직접 입력" : ""}
         </span>
         <PersonMeta p={p} />
       </div>
@@ -132,9 +133,10 @@ function PersonCard({ ctx, p, card = "square" }: { ctx: RenderCtx; p: LeaderCard
           <span className="kc-person__name">{p.name}</span>
           <span className="kc-person__role">{p.role}</span>
         </p>
-        {p.manual ? (
+        {/* 촉탁 여부는 소개서에 적지 않는다(사용자 지시 2026-11-11) — 작업본에만 직접 입력 표시 */}
+        {p.manual && ctx.opts.edition === "draft" ? (
           <span className="kc-badge kc-badge--line" style={{ margin: "3px 0 1px" }}>
-            {ctx.opts.edition === "draft" ? "촉탁 · 직접 입력" : "촉탁"}
+            직접 입력
           </span>
         ) : null}
         <ul className="kc-person__meta">
@@ -205,7 +207,6 @@ const STAFF_HEAD_GAP = { marginBottom: 14 } as const;
 
 export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const st = data.staffStats;
-  const extraExec = (mval(data, "staff.exec") ?? 0) - data.leaders.filter((l) => !l.manual).length;
   const d = st.degrees;
   const degreeParts = [
     { label: "박사", value: d.doctor, tone: 1 },
@@ -226,7 +227,7 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
           note={
             <>
               임원 <span data-metric="staff.exec">{fmt(mval(data, "staff.exec"))}</span>
-              {extraExec > 0 ? `(촉탁 ${extraExec})` : ""} · 직원 <span data-metric="staff.employee">{fmt(mval(data, "staff.employee"))}</span>
+              {/* 촉탁 인원은 소개서에 따로 적지 않는다(사용자 지시 2026-11-11) */} · 직원 <span data-metric="staff.employee">{fmt(mval(data, "staff.employee"))}</span>
             </>
           }
         />

@@ -3,6 +3,22 @@ import type { HelpTopic } from "../types";
 /** 결재 운영 설정 화면의 ? 도움말. sources[0] 에 topic="id" 가 있어야 한다. */
 export const APPROVAL_OPS_HELP: HelpTopic[] = [
   {
+    id: "approval-ops.unlisted-companies",
+    label: "미계약 업체 정리 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "결재 문서에 직접 입력된 업체를 업체별로 모았습니다. 기존 업체에 연결하거나 새로 등록하면 그 업체의 문서가 모두 연결됩니다.",
+        "새 업체의 기본 위치는 기타 업체·기관입니다. 계약이 생기면 거래처로 승격합니다.",
+        "접견인은 그 업체의 담당자로 등록되고 원 문서에 연결됩니다.",
+        "연락처가 필요하면 기안자에게 명함 등록을 요청합니다.",
+      ] },
+      { kind: "warn", text: "후보는 이름이 비슷한 업체입니다. 같은 곳인지 확인하고 고르세요." },
+    ],
+    more: { article: "approval-ops.unlisted-companies", section: "resolve" },
+    sources: ["components/approval/ApprovalUnlistedCompaniesBoard.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
     id: "approval-ops.field-meaning",
     label: "데이터 의미 도움말",
     blocks: [

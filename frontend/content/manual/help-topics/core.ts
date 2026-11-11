@@ -156,6 +156,28 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "approval.card-audit",
+    label: "법인카드 소명 도움말",
+    blocks: [
+      { kind: "p", text: "증빙이 없는 법인카드 사용 건입니다. 누가 어떤 용도로 썼는지 적어 회신하세요. 출장 경비라면 출장보고서에 담아 올리면 증빙 완료로 바뀝니다." },
+      { kind: "p", text: "함께 보이는 출장은 날짜와 지역으로 추정한 것이라 틀릴 수 있습니다." },
+    ],
+    more: { article: "approval.card-audit", section: "reply" },
+    sources: ["components/approval/CardAuditReplyBoard.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
+    id: "approval.contact-request",
+    label: "접견인 명함 등록 도움말",
+    blocks: [
+      { kind: "p", text: "미계약 업체로 올린 문서의 접견인 연락처를 운영자가 요청한 건입니다. 명함 사진을 올리면 읽은 내용이 칸에 들어가고, 직접 적어도 됩니다. 성명만 필수입니다." },
+      { kind: "p", text: "등록한 내용은 운영자가 확인한 뒤 업체와 담당자로 반영합니다." },
+    ],
+    more: { article: "approval.contact-request", section: "respond" },
+    sources: ["components/approval/ApprovalContactRequestBoard.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
     id: "letter.recipients",
     label: "공문 수신처·참조 도움말",
     blocks: [

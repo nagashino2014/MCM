@@ -154,6 +154,11 @@ export type AuditAction =
   | "approval_semantic_update"
   | "approval_metric_update"
   | "approval_doc_relink" // 관계 맵 직접 입력 보정 — 이관 문서 등의 계약·사업장 직접 입력을 마스터에 연결(2026-10-21)
+  | "card_audit_request_create" // 법인카드 증빙 소명 요청(352, 2026-11-11)
+  | "card_audit_request_cancel"
+  | "approval_unlisted_company_resolve" // 미계약 업체 정리 — 직접 입력 업체·접견인을 마스터에 등록·연결(2026-11-11)
+  | "approval_contact_request_create" // 접견인 명함 등록 요청(351)
+  | "approval_contact_request_cancel"
   | "approval_precheck_llm"
   | "mail_send"
   | "attachment_policy_change" // 첨부 확장자 정책(262) — 전사 기본·인원별 예외 변경

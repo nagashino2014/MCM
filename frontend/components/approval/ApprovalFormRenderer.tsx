@@ -27,6 +27,7 @@ import {
   type ApprovalTimeRange,
 } from "@/lib/approval/fields";
 import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import { formatReceivers, parseReceivers } from "@/lib/approval/receiver-parse";
 
 type Values = Record<string, unknown>;
 
@@ -412,8 +413,14 @@ export function FieldInput({
         />
       );
     }
-    case "contact_select":
-      return <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} />;
+    case "contact_select": {
+      // 같은 양식의 업체가 '미계약 업체(직접 입력)'면 담당자 마스터에 사람이 없다 —
+      // 검색 대신 `성명 직함, 성명 직함` 자유 입력을 받는다(2026-11-11 사용자 요청).
+      const companyField = allFields.find((x) => x.type === "company_select" && !isPlaceField(x));
+      const cv = companyField ? (allValues[companyField.key] as CompanyValue | undefined) : undefined;
+      const manualCompany = cv && typeof cv === "object" && cv.manual === true ? (cv.name ?? "").trim() : null;
+      return <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} manualCompany={manualCompany} />;
+    }
     case "leave_type":
       return <LeaveTypeInput value={value} onSet={onSet} readOnly={dis} />;
     case "asset_select":
@@ -878,10 +885,12 @@ function ContractSelectInput({
  * 저장 값: { id, name, title?, facilityName? }[] — 구버전 text 값(문자열)은 그대로 표시(호환).
  */
 interface ContactPersonValue {
-  id: number;
+  /** 담당자 마스터 id — 미계약 업체 자유 입력(manual)은 없다 */
+  id?: number;
   name: string;
   title?: string | null;
   facilityName?: string | null;
+  manual?: boolean;
 }
 
 interface ContactOption {
@@ -898,16 +907,29 @@ function ContactSelectInput({
   value,
   onSet,
   readOnly,
+  manualCompany,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
   onSet: (v: unknown) => void;
   readOnly?: boolean;
+  /** 업체가 미계약(직접 입력)일 때의 업체명(빈 문자열 가능). null 이면 담당자 검색 방식 */
+  manualCompany?: string | null;
 }) {
   const people: ContactPersonValue[] = Array.isArray(value)
     ? (value as ContactPersonValue[]).filter((p) => p && p.name)
     : [];
   const legacyText = !Array.isArray(value) && typeof value === "string" ? value : "";
+  const linkedPeople = people.filter((p) => p.id != null);
+  const manualPeople = people.filter((p) => p.id == null);
+  const manualMode = manualCompany != null;
+  // 자유 입력란 — 값(사람 목록)이 밖에서 바뀌면(임시저장 불러오기 등) 입력란 문자열도 맞춘다
+  const manualText = formatReceivers(manualPeople);
+  const [freeText, setFreeText] = useState(manualText);
+  useEffect(() => {
+    setFreeText((cur) => (formatReceivers(parseReceivers(cur)) === manualText ? cur : manualText));
+  }, [manualText]);
+  const personKey = (p: ContactPersonValue) => (p.id != null ? `id:${p.id}` : `m:${p.name}|${p.title ?? ""}`);
   const [q, setQ] = useState("");
   const [options, setOptions] = useState<ContactOption[]>([]);
   const [open, setOpen] = useState(false);
@@ -959,11 +981,50 @@ function ContactSelectInput({
       <div className="w-full flex items-center gap-1.5 flex-wrap text-[13px] cd-text">
         {people.length > 0
           ? people.map((p) => (
-              <span key={p.id} className="inline-flex items-center rounded-full cd-tint-primary px-2.5 py-1 text-[12px]">
+              <span key={personKey(p)} className="inline-flex items-center rounded-full cd-tint-primary px-2.5 py-1 text-[12px]">
                 {tagLabel(p)}
               </span>
             ))
           : legacyText || <span className="cd-text-faint">-</span>}
+      </div>
+    );
+  }
+
+  if (manualMode) {
+    return (
+      <div className="w-full">
+        <input
+          className="cd-input w-full text-[13px]"
+          placeholder="성명 직함, 성명 직함 (예: 홍길동 부장, 김철수 대리)"
+          value={freeText}
+          onChange={(e) => {
+            setFreeText(e.target.value);
+            onSet([
+              ...linkedPeople,
+              ...parseReceivers(e.target.value).map((p) => ({ name: p.name, title: p.title || null, manual: true })),
+            ]);
+          }}
+        />
+        <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] cd-text-faint">
+          {people.length > 0 ? (
+            <>
+              <span className="shrink-0">인식 결과 {people.length}명</span>
+              {people.map((p) => (
+                <span key={personKey(p)} className="inline-flex items-center gap-1 rounded-full cd-tint-primary px-2 py-0.5 text-[12px] cd-text">
+                  {p.name}
+                  {p.title ? <span className="cd-text-faint">{p.title}</span> : null}
+                  {p.id != null && (
+                    <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x !== p))}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </>
+          ) : (
+            <span>미계약 업체는 접견인을 직접 적습니다. 쉼표로 여러 명을 구분합니다.</span>
+          )}
+        </div>
       </div>
     );
   }
@@ -982,9 +1043,9 @@ function ContactSelectInput({
           }}
         />
         {people.map((p) => (
-          <span key={p.id} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
+          <span key={personKey(p)} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
             {tagLabel(p)}
-            <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x.id !== p.id))}>
+            <button type="button" title="제거" onClick={() => onSet(people.filter((x) => x !== p))}>
               <X className="w-3 h-3" />
             </button>
           </span>

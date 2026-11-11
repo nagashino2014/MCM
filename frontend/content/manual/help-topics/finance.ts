@@ -19,6 +19,22 @@ export const FINANCE_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "finance.card-evidence",
+    label: "카드 증빙 대조 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "결재 문서가 없는 카드 승인 건을 모읍니다. 임시저장·반려 문서에만 담긴 건도 포함합니다.",
+        "분석은 사용일이 겹치는 모든 부서의 출장을 후보로 보고 가맹점 소재지·지출 성격으로 점수를 매긴 추정입니다.",
+        "카드에 지정된 부서를 사용자로 보지 않습니다.",
+        "소명 요청은 체크한 건만, 확인한 대상(부서장)에게 보냅니다.",
+      ] },
+      { kind: "warn", text: "가맹점 주소가 없는 건은 지역을 대조하지 못해 확신도가 낮게 나옵니다." },
+    ],
+    more: { article: "finance.card-evidence", section: "analyze" },
+    sources: ["components/finance/CardEvidencePanel.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
     id: "finance.card-classify",
     label: "계정과목 분류 도움말",
     blocks: [

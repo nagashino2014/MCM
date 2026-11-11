@@ -162,6 +162,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "계약명과 업체명을 함께 적는 양식은 계약명을 고르면 업체명이 자동으로 채워지고 잠깁니다. 계약 전 업무라 [[미등록 용역(직접 입력)]]을 켠 경우에만 업체명을 직접 검색·입력합니다. 출장지는 계약 업체와 다를 수 있어 잠그지 않습니다.",
             "계약·업체 검색 목록은 다른 곳을 누르거나 Esc를 누르면 닫힙니다.",
             "날짜 칸은 숫자 8자리(예: 20261124)를 이어 치면 날짜로 바뀝니다. 달력에서 고르려면 칸 오른쪽 끝의 달력 아이콘을 누르거나 칸에서 Alt+↓를 누릅니다. 달력 안에서는 화살표로 날짜를, PageUp·PageDown으로 달을 옮기고 Enter로 고르며 Esc로 닫습니다. 기간은 시작일·종료일 칸 각각에서 엽니다.",
+            "출장보고서에서 업체를 [[미계약 업체(직접 입력)]]로 적으면 접견인 칸이 직접 입력으로 바뀝니다. ‘홍길동 부장, 김철수 대리’처럼 성명과 직함을 쉼표로 구분해 적으면 칸 아래에 인식 결과가 보입니다. 인식 결과가 다르면 띄어쓰기를 고쳐 주세요.",
           ] },
         ],
       },
@@ -370,6 +371,68 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     keywords: ["내부고시", "고시", "공지 문서", "통산 번호"],
     sources: ["components/approval/ApprovalNoticeBoard.tsx", "components/approval/ApprovalDocModal.tsx"],
     reviewedAt: "2026-10-20",
+  },
+  {
+    id: "approval.card-audit",
+    chapter: "approval",
+    title: "법인카드 사용 내역 소명 — 재무 담당이 요청했을 때",
+    routes: ["/approval/card-audit"],
+    audience: ["staff", "head", "exec", "admin"],
+    summary: [
+      "증빙(결재 문서)이 없는 법인카드 사용 건에 대해 재무 담당이 소명을 요청하면 할 일과 알림이 옵니다.",
+      "할 일의 링크를 열어 건마다 사유를 적고 [[회신]]을 누릅니다.",
+    ],
+    sections: [
+      {
+        id: "reply",
+        title: "회신하기",
+        blocks: [
+          { kind: "list", items: [
+            "건마다 사용일·가맹점·금액과 카드가 보입니다. 같은 날짜의 출장이 추정돼 있으면 그 문서를 눌러 확인합니다.",
+            "누가 어떤 용도로 썼는지 적고 [[회신]]을 누릅니다. 회신한 뒤에도 고쳐서 다시 보낼 수 있습니다.",
+            "출장 경비라면 출장자가 출장보고서의 지출 내역에 그 카드 건을 담아 올리면 됩니다. 상신되면 ‘증빙 완료’로 바뀝니다.",
+            "추정한 출장은 틀릴 수 있습니다. 부서 사용이 아니면 그렇게 적어 회신하세요.",
+          ] },
+        ],
+      },
+    ],
+    keywords: ["법인카드", "소명", "카드 증빙", "증빙 누락", "출장 경비"],
+    sources: ["components/approval/CardAuditReplyBoard.tsx"],
+    reviewedAt: "2026-11-11",
+  },
+  {
+    id: "approval.contact-request",
+    chapter: "approval",
+    title: "접견인 명함 등록 — 운영자가 요청했을 때",
+    routes: ["/approval/contact-request"],
+    audience: ["staff", "head", "exec", "admin"],
+    summary: [
+      "미계약 업체로 올린 문서의 접견인 연락처를 운영자가 요청하면 할 일과 알림이 옵니다.",
+      "할 일의 링크를 열어 [[명함 사진 올리기]]로 칸을 채우거나 직접 입력하고 [[등록 완료]]를 누릅니다.",
+    ],
+    sections: [
+      {
+        id: "respond",
+        title: "등록하기",
+        blocks: [
+          { kind: "steps", items: [
+            "할 일 ‘접견인 명함 등록 요청’의 링크를 엽니다.",
+            "[[명함 사진 올리기]]를 누르고 명함 사진을 고릅니다. 읽은 내용이 성명·직함·연락처 칸에 들어갑니다.",
+            "명함이 없으면 칸에 직접 적습니다. 여러 명이면 [[접견인 추가]]로 줄을 더합니다.",
+            "업체 주소·대표 전화·홈페이지·사업자등록번호는 아는 만큼 적습니다.",
+            "[[등록 완료]]를 누릅니다.",
+          ] },
+          { kind: "list", items: [
+            "성명만 필수입니다. 문서에 적었던 접견인은 미리 들어가 있습니다.",
+            "명함에서 읽은 내용은 틀릴 수 있으니 확인하고 고칩니다.",
+            "등록한 내용은 운영자가 확인한 뒤 업체와 담당자로 반영합니다. 그 전에는 다시 열어 고칠 수 있습니다.",
+          ] },
+        ],
+      },
+    ],
+    keywords: ["접견인", "명함", "명함 등록", "미계약 업체", "출장보고서", "담당자"],
+    sources: ["components/approval/ApprovalContactRequestBoard.tsx"],
+    reviewedAt: "2026-11-11",
   },
   {
     id: "approval.absence",

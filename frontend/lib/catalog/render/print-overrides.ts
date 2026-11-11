@@ -58,6 +58,12 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 .kc-timeline__tick { box-sizing: border-box; width: 15px; height: 15px; margin: 0 0 2px -3px; background: var(--area); border: 3px solid var(--paper); }
 .pk-sheet .kc-timeline > li.is-highlight .kc-timeline__tick { box-sizing: border-box; width: 15px; height: 15px; margin: 0 0 2px -3px; background: var(--area); border: 2px solid var(--paper); border-radius: 50%; }
 
+/* 제품 일정 점선(.kc-miles, 사용자 지시 2026-11-11 '통합허가 플랫폼 개발 일정이 깨져 있다') — ol 기본 왼쪽 들여쓰기(40px) 때문에
+   선이 첫 점보다 왼쪽에서 시작하고 칸 사이 틈이 없어 글이 옆 칸에 붙었다 → 들여쓰기 0, 선은 첫 점 가운데부터, 칸 사이 10px.
+   선 높이(top 19px)는 위 여백 14px 기준이라 쪽에서 padding-top 을 바꾸지 않는다. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-miles { padding-left: 0; column-gap: 10px; }
+.kc-miles::before { left: 5.5px; right: 0; }
+
 /* 연구소형 주요연혁(사용자 지시 2026-10-30) — 세로선이 점 중심에서 4px 어긋남 → 점을 22px 칸 가운데(27px)에 두고 선도 27px 중심으로,
    점 13 → 9px(30% 축소), 위(최근)는 진하게·아래로 갈수록 연하게(is-t0~9). ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
 .kc-tpl--research .kc-rs-tl::before { left: 26px; }

@@ -30,6 +30,7 @@ import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { DigitDateInput } from "@/components/finance/DigitDateInput";
+import { CardEvidencePanel } from "@/components/finance/CardEvidencePanel";
 import { BAROBILL_BANKS, FinLogo, logoFileCode } from "@/components/finance/FinLogo";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { JournalPanel, LedgerPanel, TrialPanel } from "@/components/finance/JournalPanels";
@@ -56,19 +57,20 @@ const SYNC_LOG_KIND_LABEL: Record<string, string> = { bank: "계좌", card: "카
 type Tab =
   | "connections" | "bank" | "card" | "recon" | "vat" | "invoice" | "journal" | "ledger" | "trial" | "pnl" | "cash"
   | "hometax" | "vatreturn" | "vatbasis" | "vatpost" | "fixedassets" | "triplog" | "budget" | "withholding" | "balance" | "closing"
-  | "shopreceipt" | "expsettle" | "incomeledger" | "severance" | "transactionlinks" | "supplyreviews";
+  | "shopreceipt" | "expsettle" | "incomeledger" | "severance" | "transactionlinks" | "supplyreviews" | "cardevidence";
 
 const TAB_KEYS: Tab[] = [
   "connections", "bank", "card", "recon", "vat", "invoice", "journal", "ledger", "trial", "pnl", "cash",
   "hometax", "vatreturn", "vatbasis", "vatpost", "fixedassets", "triplog", "budget", "withholding", "balance", "closing",
-  "shopreceipt", "expsettle", "incomeledger", "severance", "transactionlinks", "supplyreviews",
+  "shopreceipt", "expsettle", "incomeledger", "severance", "transactionlinks", "supplyreviews", "cardevidence",
 ];
 
 /** 사이드바 소메뉴 = 탭 그룹. 소메뉴 진입 시 첫 탭이 열린다(menu.ts 의 href 와 짝). */
 const TAB_GROUPS: Array<{ title: string; tabs: [Tab, string][] }> = [
   { title: "연결 관리", tabs: [["connections", "연결 관리"]] },
   // 경비 환급 탭은 폐지(G-8, 2026-10-20) — 개인 경비 이체 경로는 '경비 정산 > 개인 경비 정산'(CMS) 하나다.
-  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"]] },
+  // 카드 증빙 대조(2026-11-11) — 결재 문서가 없는 카드 건을 출장 문서와 견주고 부서에 소명을 요청한다.
+  { title: "계좌·카드 원장", tabs: [["bank", "계좌 원장"], ["card", "법인카드 원장"], ["cardevidence", "카드 증빙 대조"]] },
   { title: "계산서·수금", tabs: [["invoice", "세금계산서"], ["recon", "수금 대조"], ["transactionlinks", "거래 연결"], ["supplyreviews", "공급 근거 기록"]] },
   // 부가세 신고(P5) — 카드 매입 집계 + 홈택스 매입·매출 계산서 + 신고서 자동 작성(accounting-expansion §5 P5).
   { title: "부가세 신고", tabs: [["vat", "카드 매입 집계"], ["shopreceipt", "쇼핑몰 전표 수집"], ["hometax", "매입·매출 계산서"], ["vatbasis", "신고 근거"], ["vatreturn", "신고서"], ["vatpost", "접수·납부"], ["withholding", "원천세"], ["incomeledger", "소득대장"]] },
@@ -325,6 +327,7 @@ export function FinanceBoard() {
         {tab === "connections" && <ConnectionsPanel />}
         {tab === "bank" && <BankLedgerPanel />}
         {tab === "card" && <CardLedgerPanel />}
+        {tab === "cardevidence" && <CardEvidencePanel />}
         {tab === "recon" && <ReconPanel />}
         {tab === "transactionlinks" && <TransactionLinkPanel />}
         {tab === "supplyreviews" && <SupplyReviewPanel />}

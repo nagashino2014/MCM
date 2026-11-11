@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDatePopover } from "@/components/ui/DatePopover";
 
 /**
  * 8자리 숫자(YYYYMMDD)를 연속 입력하면 자동으로 YYYY-MM-DD 로 완성되는 날짜 입력.
  * 네이티브 date 입력은 연도 칸이 6자리까지 숫자를 흡수해 "20260612" 연속 입력이
  * 불가능하므로, 텍스트 입력 + 자동 하이픈 삽입 방식으로 구현한다.
  * 값(value)은 항상 완성된 ISO(YYYY-MM-DD) 또는 빈 문자열로만 부모에 전달된다.
+ * 날짜 입력은 오른쪽 달력 아이콘(또는 Alt+↓)으로 달력에서 골라 넣을 수도 있다(2026-11-11) — 월 입력·비활성은 제외.
  */
 export function AutoDateInput({
   value,
@@ -23,6 +25,7 @@ export function AutoDateInput({
 }) {
   const digitLen = mode === "month" ? 6 : 8;
   const [text, setText] = useState(value ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // 부모 값이 바뀌면(모달 프리필 등) 표시 텍스트를 동기화한다.
   // 입력 중(부분 입력)에는 onChange 를 호출하지 않으므로 타이핑을 방해하지 않는다.
@@ -45,22 +48,43 @@ export function AutoDateInput({
     }
   };
 
+  const picker = useDatePopover({
+    inputRef,
+    value: isValidIsoDate(text) ? text : value ?? "",
+    onPick: (iso) => commit(iso),
+    enabled: mode === "date" && !rest.disabled && !rest.readOnly,
+  });
+  const pick = picker.inputProps;
+
   return (
-    <input
-      {...rest}
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      maxLength={mode === "month" ? 7 : 10}
-      className={className}
-      placeholder={placeholder ?? (mode === "month" ? "YYYYMM" : "YYYYMMDD")}
-      value={text}
-      onChange={(e) => commit(e.target.value)}
-      onBlur={() => {
-        // 미완성/잘못된 값은 마지막 유효 값으로 되돌린다.
-        if (text !== "" && !isValid(text)) setText(value ?? "");
-      }}
-    />
+    <>
+      <input
+        {...rest}
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={mode === "month" ? 7 : 10}
+        className={className}
+        placeholder={placeholder ?? (mode === "month" ? "YYYYMM" : "YYYYMMDD")}
+        value={text}
+        onChange={(e) => commit(e.target.value)}
+        onBlur={() => {
+          // 미완성/잘못된 값은 마지막 유효 값으로 되돌린다.
+          if (text !== "" && !isValid(text)) setText(value ?? "");
+        }}
+        {...(pick && {
+          style: { ...pick.style, ...rest.style },
+          title: rest.title ?? pick.title,
+          "aria-haspopup": pick["aria-haspopup"],
+          "aria-expanded": pick["aria-expanded"],
+          onClick: (e: React.MouseEvent<HTMLInputElement>) => { rest.onClick?.(e); pick.onClick(e); },
+          onMouseMove: (e: React.MouseEvent<HTMLInputElement>) => { rest.onMouseMove?.(e); pick.onMouseMove(e); },
+          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { rest.onKeyDown?.(e); pick.onKeyDown(e); },
+        })}
+      />
+      {picker.popover}
+    </>
   );
 }
 

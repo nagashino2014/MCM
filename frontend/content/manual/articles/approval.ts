@@ -161,6 +161,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "휴가 양식은 잔여 연차를, 초과근무 양식은 근무일이 속한 주의 사용량과 내 출퇴근 유형에 따른 초과근무 인정 시작 시각을 화면 위에 보여 줍니다.",
             "계약명과 업체명을 함께 적는 양식은 계약명을 고르면 업체명이 자동으로 채워지고 잠깁니다. 계약 전 업무라 [[미등록 용역(직접 입력)]]을 켠 경우에만 업체명을 직접 검색·입력합니다. 출장지는 계약 업체와 다를 수 있어 잠그지 않습니다.",
             "계약·업체 검색 목록은 다른 곳을 누르거나 Esc를 누르면 닫힙니다.",
+            "날짜 칸은 숫자 8자리(예: 20261124)를 이어 치면 날짜로 바뀝니다. 달력에서 고르려면 칸 오른쪽 끝의 달력 아이콘을 누르거나 칸에서 Alt+↓를 누릅니다. 달력 안에서는 화살표로 날짜를, PageUp·PageDown으로 달을 옮기고 Enter로 고르며 Esc로 닫습니다. 기간은 시작일·종료일 칸 각각에서 엽니다.",
           ] },
         ],
       },
@@ -194,6 +195,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "모든 행에 **지출 목적**을 목록에서 골라야 상신됩니다.",
             "출장 경비 4종 전부와 [[초과근무 식대]], [[인쇄/제본비]]는 **연관 용역/사업장**도 골라야 합니다.",
             "출장보고서는 출장 기간을 먼저 입력해야 하고, 기간 밖이거나 사용일을 모르는 카드·영수증 내역은 불러오지 않습니다.",
+            "출장보고서의 지출 내역은 필수가 아닙니다. 법인 차량으로 다녀온 근거리 출장처럼 쓴 경비가 없으면 지출 내역을 비운 채 상신합니다. 경비를 썼다면 빠짐없이 담아야 합니다.",
           ] },
           {
             kind: "table",
@@ -266,7 +268,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["기안", "상신", "결재선", "고정 결재선", "결재선 잠금", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
     sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx", "components/approval/ApprovalFormRenderer.tsx", "components/approval/FixedLineList.tsx"],
-    reviewedAt: "2026-11-03",
+    reviewedAt: "2026-11-11",
   },
   {
     id: "approval.letter",

@@ -15,6 +15,7 @@ import { CdModal } from "@/components/cdash/CdModal";
 import type { DisplayOverride } from "@/lib/catalog/appendix";
 import type { CatalogAdvisor, CatalogPerson } from "@/lib/catalog/people";
 import { EXTRA_EMPLOYMENT_TYPES, type CatalogExtraPerson } from "@/lib/catalog/people-types";
+import type { LeaderCardFields } from "@/lib/catalog/render/data";
 import { catalogFetch } from "./catalogFetch";
 import "@/components/cdash/cdash.css";
 
@@ -69,6 +70,9 @@ export function CatalogPeopleBoard() {
     certOverride: "",
     photoAssetId: null,
   });
+  // 임원진 카드에 지금 실리는 학력·자격·경력(인사 기록 + 직접 고친 값) — 표에 보여 주고 편집 창 처음 값으로 쓴다
+  const [leaderCards, setLeaderCards] = useState<Record<string, LeaderCardFields>>({});
+  const [personInit, setPersonInit] = useState<{ edu: string; cert: string; career: string } | null>(null);
   const [advisorDraft, setAdvisorDraft] = useState<typeof emptyAdvisor | null>(null);
   // 직접 입력 임원(촉탁)
   const [extras, setExtras] = useState<CatalogExtraPerson[]>([]);
@@ -79,8 +83,11 @@ export function CatalogPeopleBoard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await catalogFetch<{ people: CatalogPerson[]; extraPeople: CatalogExtraPerson[]; advisors: CatalogAdvisor[] }>("/api/catalog/people");
+      const data = await catalogFetch<{ people: CatalogPerson[]; extraPeople: CatalogExtraPerson[]; advisors: CatalogAdvisor[]; leaderCards?: Record<string, LeaderCardFields> }>(
+        "/api/catalog/people"
+      );
       setPeople(data.people);
+      setLeaderCards(data.leaderCards ?? {});
       setExtras(data.extraPeople ?? []);
       setAdvisors(data.advisors);
     } catch (e) {
@@ -317,7 +324,15 @@ export function CatalogPeopleBoard() {
                       </td>
                       <td className="cd-text-muted text-xs" style={{ maxWidth: 280 }}>
                         {p.meta?.roleLabel && <span className="block cd-text">{p.meta.roleLabel}</span>}
-                        <span className="block truncate">{p.meta?.bioShort || "—"}</span>
+                        {p.section === "exec" && leaderCards[p.employeeId] ? (
+                          <>
+                            <span className="block truncate">학력 {leaderCards[p.employeeId].edu || "—"}</span>
+                            <span className="block truncate">자격 {leaderCards[p.employeeId].cert || "—"}</span>
+                            <span className="block truncate">경력 {leaderCards[p.employeeId].career || "—"}</span>
+                          </>
+                        ) : (
+                          <span className="block truncate">{p.meta?.bioShort || "—"}</span>
+                        )}
                       </td>
                       <td>
                         <button
@@ -326,12 +341,15 @@ export function CatalogPeopleBoard() {
                           aria-label={`${p.name} 직함·약력 편집`}
                           onClick={() => {
                             setEditing(p);
+                            // 임원은 지금 소개서에 실리는 학력·자격·경력 줄로 채워 연다(고치지 않은 칸은 그대로 둔다)
+                            const lc = p.section === "exec" ? leaderCards[p.employeeId] : undefined;
+                            setPersonInit(lc ? { edu: lc.edu, cert: lc.cert, career: lc.career } : null);
                             setPersonDraft({
                               orderNo: p.meta?.orderNo != null ? String(p.meta.orderNo) : "",
                               roleLabel: p.meta?.roleLabel ?? "",
-                              bioShort: p.meta?.bioShort ?? "",
-                              eduOverride: p.meta?.eduOverride ?? "",
-                              certOverride: p.meta?.certOverride ?? "",
+                              bioShort: lc ? lc.career : p.meta?.bioShort ?? "",
+                              eduOverride: lc ? lc.edu : p.meta?.eduOverride ?? "",
+                              certOverride: lc ? lc.cert : p.meta?.certOverride ?? "",
                               photoAssetId: p.meta?.photoAssetId ?? null,
                             });
                           }}
@@ -489,11 +507,22 @@ export function CatalogPeopleBoard() {
               disabled={busy || photoUploading}
               onClick={async () => {
                 if (!editing) return;
+                const lc = editing.section === "exec" ? leaderCards[editing.employeeId] : undefined;
+                // 임원 칸: 처음 값 그대로면 건드리지 않고, 인사 기록 값과 같게 고치거나 비우면 직접 입력을 지운다(인사 기록을 따라감)
+                const pick = (draft: string, init: string | undefined, auto: string | undefined) => {
+                  const v = draft.trim();
+                  if (init != null && v === init.trim()) return undefined;
+                  return auto != null && v === auto.trim() ? "" : v;
+                };
+                const edu = lc ? pick(personDraft.eduOverride, personInit?.edu, lc.eduAuto) : undefined;
+                const cert = lc ? pick(personDraft.certOverride, personInit?.cert, lc.certAuto) : undefined;
+                const bio = lc ? pick(personDraft.bioShort, personInit?.career, lc.careerAuto) : personDraft.bioShort;
                 const ok = await patchPerson(editing.employeeId, {
                   orderNo: personDraft.orderNo.trim() === "" ? null : Number(personDraft.orderNo),
                   roleLabel: personDraft.roleLabel,
-                  bioShort: personDraft.bioShort,
-                  ...(editing.section === "exec" ? { eduOverride: personDraft.eduOverride, certOverride: personDraft.certOverride } : {}),
+                  ...(bio !== undefined ? { bioShort: bio } : {}),
+                  ...(edu !== undefined ? { eduOverride: edu } : {}),
+                  ...(cert !== undefined ? { certOverride: cert } : {}),
                   photoAssetId: personDraft.photoAssetId,
                 });
                 if (ok) setEditing(null);
@@ -553,21 +582,27 @@ export function CatalogPeopleBoard() {
             <span className="text-xs cd-text-muted">소개서 직함(비우면 인사 직위)</span>
             <input className="cd-input" value={personDraft.roleLabel} placeholder={editing?.positionName || "예: 대표이사 / 기술연구소장"} onChange={(e) => setPersonDraft({ ...personDraft, roleLabel: e.target.value })} />
           </label>
-          <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분)</span>
-            <textarea className="cd-input" rows={4} value={personDraft.bioShort} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
-          </label>
-          {editing?.section === "exec" && (
+          {editing?.section === "exec" ? (
             <>
+              <p className="text-xs cd-text-faint">아래 세 칸은 회사소개서 임원진 카드의 학력·자격·경력 줄에 그대로 실립니다. 비우면 인사 기록(학력·자격증·경력)으로 채웁니다.</p>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">임원진 카드 학력(비우면 인사 기록의 최종 학력)</span>
-                <input className="cd-input" value={personDraft.eduOverride} placeholder="예: 강원대학교 환경공학 박사" onChange={(e) => setPersonDraft({ ...personDraft, eduOverride: e.target.value })} />
+                <span className="text-xs cd-text-muted">학력</span>
+                <input className="cd-input" value={personDraft.eduOverride} placeholder={leaderCards[editing.employeeId]?.eduAuto || "예: 강원대학교 환경공학 박사"} onChange={(e) => setPersonDraft({ ...personDraft, eduOverride: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">임원진 카드 자격(비우면 인사 기록의 자격증, 쉼표로 구분)</span>
-                <input className="cd-input" value={personDraft.certOverride} placeholder="예: 대기관리기술사, 수질환경기사" onChange={(e) => setPersonDraft({ ...personDraft, certOverride: e.target.value })} />
+                <span className="text-xs cd-text-muted">자격(쉼표로 구분)</span>
+                <input className="cd-input" value={personDraft.certOverride} placeholder={leaderCards[editing.employeeId]?.certAuto || "예: 대기관리기술사, 수질환경기사"} onChange={(e) => setPersonDraft({ ...personDraft, certOverride: e.target.value })} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-xs cd-text-muted">경력(맨 앞 'N년'이 경력 연수 — 임원 평균 경력에 셉니다)</span>
+                <textarea className="cd-input" rows={4} value={personDraft.bioShort} placeholder={leaderCards[editing.employeeId]?.careerAuto || "예: 37년 · 前 환경부 대기환경과장"} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
               </label>
             </>
+          ) : (
+            <label className="grid gap-1">
+              <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분)</span>
+              <textarea className="cd-input" rows={4} value={personDraft.bioShort} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
+            </label>
           )}
         </div>
       </CdModal>

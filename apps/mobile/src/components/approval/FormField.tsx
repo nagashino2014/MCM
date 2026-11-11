@@ -9,6 +9,7 @@ import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
+import { formatReceivers, parseReceivers } from '@/lib/approval/receiver-parse';
 
 /**
  * 기안 폼의 필드 하나 — 웹 `ApprovalFormRenderer` 의 필드 렌더를 모바일로 옮긴 것.
@@ -131,6 +132,54 @@ function buildFillValue(target: ApprovalFieldDef | undefined, text: string, ref?
     default:
       return text;
   }
+}
+
+/**
+ * 미계약 업체의 접견인 — `성명 직함, 성명 직함` 자유 입력(웹 렌더러와 같은 값 구조).
+ * 마스터에서 고른 사람(id 있음)은 그대로 두고, 자유 입력분만 다시 읽어 `{name,title,manual:true}` 로 담는다.
+ */
+function ManualReceiversField({
+  people,
+  onSet,
+}: {
+  people: { id?: string; name: string; title?: string | null }[];
+  onSet: (v: unknown) => void;
+}) {
+  const linked = people.filter((p) => p.id != null);
+  const manualText = formatReceivers(people.filter((p) => p.id == null));
+  const [text, setText] = useState(manualText);
+  useEffect(() => {
+    setText((cur) => (formatReceivers(parseReceivers(cur)) === manualText ? cur : manualText));
+  }, [manualText]);
+  return (
+    <View className="gap-1.5">
+      <Input
+        value={text}
+        onChangeText={(t: string) => {
+          setText(t);
+          onSet([...linked, ...parseReceivers(t).map((p) => ({ name: p.name, title: p.title || null, manual: true }))]);
+        }}
+        placeholder="홍길동 부장, 김철수 대리"
+      />
+      {people.length ? (
+        <View className="flex-row flex-wrap items-center gap-1.5">
+          <Text className="text-[11px] text-cd-faint">인식 결과 {people.length}명</Text>
+          {people.map((p) => (
+            <View
+              key={p.id != null ? `id:${p.id}` : `m:${p.name}|${p.title ?? ''}`}
+              className="rounded-full bg-cd-primary-soft px-2.5 py-1">
+              <Text className="text-[12px] font-semibold text-cd-primary">
+                {p.name}
+                {p.title ? ` ${p.title}` : ''}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text className="text-[11px] text-cd-faint">미계약 업체는 접견인을 직접 적습니다. 쉼표로 여러 명을 구분합니다.</Text>
+      )}
+    </View>
+  );
 }
 
 const rec = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
@@ -463,16 +512,21 @@ export function FormField({
 
       case 'contact_select': {
         const people = Array.isArray(value)
-          ? (value as { id: string; name: string; title?: string | null; facilityName?: string | null }[])
+          ? (value as { id?: string; name: string; title?: string | null; facilityName?: string | null }[])
           : [];
+        // 같은 양식의 업체가 '미계약 업체(직접 입력)'면 담당자 검색 대신 자유 입력을 받는다(웹과 동일, 2026-11-11).
+        const companyField = (allFields ?? []).find((x) => x.type === 'company_select' && !isPlaceField(x));
+        if (companyField && rec((allValues ?? {})[companyField.key]).manual === true) {
+          return <ManualReceiversField people={people} onSet={onSet} />;
+        }
         return (
           <View className="gap-2">
             {people.length ? (
               <View className="flex-row flex-wrap gap-1.5">
                 {people.map((p) => (
                   <Pressable
-                    key={p.id}
-                    onPress={() => onSet(people.filter((x) => x.id !== p.id))}
+                    key={p.id != null ? `id:${p.id}` : `m:${p.name}|${p.title ?? ''}`}
+                    onPress={() => onSet(people.filter((x) => x !== p))}
                     className="flex-row items-center gap-1 rounded-full bg-cd-primary-soft px-2.5 py-1 active:opacity-70">
                     <Text className="text-[12px] font-semibold text-cd-primary">
                       {p.name}
@@ -533,7 +587,7 @@ export function FormField({
     } else if (f.type === 'asset_select') {
       onSet({ assetId: o.id, name: o.label });
     } else {
-      const cur = Array.isArray(value) ? (value as { id: string }[]) : [];
+      const cur = Array.isArray(value) ? (value as { id?: string }[]) : [];
       if (!cur.some((p) => p.id === o.id)) {
         onSet([...cur, { id: o.id, name: str(o.raw.personName), title: o.raw.title ?? null, facilityName: o.raw.facilityName ?? null }]);
       }

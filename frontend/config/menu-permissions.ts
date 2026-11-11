@@ -54,6 +54,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   { path: "/approval/policies", keys: ["approval.manage"] },
   { path: "/approval/final-rules", keys: ["approval.manage"] },
   { path: "/approval/fixed-lines", keys: ["approval.manage"] },
+  { path: "/approval/unlisted-companies", keys: ["approval.manage"] },
   { path: "/approval/settings", keys: ["approval.manage"] },
   // 양식별 문서 조회·결재 인사이트 — 전자결재 메뉴 하위지만 API(query·insights)가 approval.manage(2026-10-20 F-1)
   { path: "/approval/records", keys: ["approval.manage"] },

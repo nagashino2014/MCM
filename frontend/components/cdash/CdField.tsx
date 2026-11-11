@@ -3,7 +3,8 @@
 // cdash 공통 폼 필드 — cdash.css .cd-label/.cd-input/.cd-select/.cd-textarea 래핑(G0).
 // 라벨 + 컨트롤 + 오류/힌트를 한 덩어리로. cd-fields-white 스코프에서 흰 배경(기존 규칙).
 
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useId, useImperativeHandle, useRef, type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { useDatePopover } from "@/components/ui/DatePopover";
 import { cn } from "@/lib/utils";
 
 interface FieldShellProps {
@@ -124,6 +125,7 @@ export interface CdDateInputProps
  * MCM 표준 날짜 입력. **네이티브 `type="date"` 를 쓰지 않는다** —
  * 칸을 옮겨 가며 채우는 방식이 손이 많이 가고 붙여넣기도 불편해서다.
  * 숫자 8자리를 이어 치면 구분선이 자동으로 붙는다(20260701 → 2026-07-01).
+ * 오른쪽 달력 아이콘(또는 Alt+↓)으로 달력에서 골라 넣을 수도 있다(2026-11-11) — 타이핑 방식은 그대로다.
  */
 export const CdDateInput = forwardRef<HTMLInputElement, CdDateInputProps>(function CdDateInput(
   { label, required, hint, error, labelExtra, className, value, onChange, ...rest },
@@ -133,6 +135,10 @@ export const CdDateInput = forwardRef<HTMLInputElement, CdDateInputProps>(functi
   const descriptionId = useId();
   const controlId = rest.id ?? `${descriptionId}-control`;
   const describedBy = [rest["aria-describedby"], (hint || error || malformed) && descriptionId].filter(Boolean).join(" ") || undefined;
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
+  const picker = useDatePopover({ inputRef, value, onPick: onChange, enabled: !rest.disabled && !rest.readOnly });
+  const pick = picker.inputProps;
 
   return (
     <FieldShell
@@ -146,7 +152,7 @@ export const CdDateInput = forwardRef<HTMLInputElement, CdDateInputProps>(functi
       controlId={controlId}
     >
       <input
-        ref={ref}
+        ref={inputRef}
         type="text"
         inputMode="numeric"
         autoComplete="off"
@@ -160,7 +166,17 @@ export const CdDateInput = forwardRef<HTMLInputElement, CdDateInputProps>(functi
         aria-required={required}
         aria-invalid={error || malformed ? true : rest["aria-invalid"]}
         aria-describedby={describedBy}
+        {...(pick && {
+          style: { ...pick.style, ...rest.style },
+          title: rest.title ?? pick.title,
+          "aria-haspopup": pick["aria-haspopup"],
+          "aria-expanded": pick["aria-expanded"],
+          onClick: (e: MouseEvent<HTMLInputElement>) => { rest.onClick?.(e); pick.onClick(e); },
+          onMouseMove: (e: MouseEvent<HTMLInputElement>) => { rest.onMouseMove?.(e); pick.onMouseMove(e); },
+          onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => { rest.onKeyDown?.(e); pick.onKeyDown(e); },
+        })}
       />
+      {picker.popover}
     </FieldShell>
   );
 });

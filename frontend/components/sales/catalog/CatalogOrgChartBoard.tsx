@@ -20,6 +20,7 @@ import {
 import { catalogFetch } from "./catalogFetch";
 import { ContentVersions } from "./ContentVersions";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "./CatalogBackLink";
 
 type ContentState = AnyContentState<"org_chart">;
 type Path = number[];
@@ -212,9 +213,12 @@ export function CatalogOrgChartBoard() {
           )
         }
         actions={
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
-            <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
-          </button>
+          <>
+            <CatalogBackLink />
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
+              <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
+            </button>
+          </>
         }
       />
 

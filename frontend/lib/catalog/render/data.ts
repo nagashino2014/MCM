@@ -429,7 +429,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         name: nm(x.name),
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
-        photo: !masked && x.photoAssetId ? `a/${x.photoAssetId}` : null,
+        // 사진 — 마스킹판은 빼고, 사진 게재를 '거부'로 고른 사람도 뺀다(355)
+        photo: !masked && x.photoAssetId && x.photoConsent !== false ? `a/${x.photoAssetId}` : null,
         edu: x.edu,
         cert: x.cert,
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),

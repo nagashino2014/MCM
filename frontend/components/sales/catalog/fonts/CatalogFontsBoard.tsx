@@ -16,6 +16,7 @@ import { FontDetailDrawer } from "./FontDetailDrawer";
 import { FontSetEditor } from "./FontSetEditor";
 import { FontUploadModal } from "./FontUploadModal";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "../CatalogBackLink";
 
 type SetRow = CatalogFontSet & { available: boolean; issues: string[]; warnings: string[] };
 
@@ -128,6 +129,7 @@ export function CatalogFontsBoard() {
         helpTopic="catalog.fonts"
         actions={
           <>
+            <CatalogBackLink />
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
               <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
             </button>

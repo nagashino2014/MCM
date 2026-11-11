@@ -274,6 +274,8 @@ function areaOfLabel(label: string): number | null {
   return null;
 }
 
+const shownBadge = (badge: string) => (badge === "촉탁" ? "" : badge);
+
 function OrgBox({ node, cls, style, align }: { node: OrgNode; cls?: string; style?: CSSProperties; align?: "left" }) {
   const area = areaOfLabel(node.label);
   return (
@@ -282,7 +284,8 @@ function OrgBox({ node, cls, style, align }: { node: OrgNode; cls?: string; styl
       style={{ ...(align === "left" ? { alignItems: "flex-start", textAlign: "left" } : null), ...(cls?.includes("--soft") && area ? { borderTop: "3px solid var(--area)" } : null), ...style }}
     >
       {node.label}
-      {node.badge || node.sub ? <small>{[node.badge, node.sub].filter(Boolean).join(" · ")}</small> : null}
+      {/* '촉탁' 표시는 상자 배치(바깥 가지)에만 쓰고 글로는 적지 않는다(사용자 지시 2026-11-11) */}
+      {shownBadge(node.badge) || node.sub ? <small>{[shownBadge(node.badge), node.sub].filter(Boolean).join(" · ")}</small> : null}
     </div>
   );
 }

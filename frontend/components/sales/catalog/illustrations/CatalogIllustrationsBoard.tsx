@@ -17,6 +17,7 @@ import { catalogFetch } from "../catalogFetch";
 import { IllustrationDetailDrawer } from "./IllustrationDetailDrawer";
 import { IllustrationImportModal } from "./IllustrationImportModal";
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "../CatalogBackLink";
 
 export const thumbUrl = (id: string, updatedAt?: string) => `/api/catalog/illustrations/${encodeURIComponent(id)}/file?f=thumb${updatedAt ? `&v=${encodeURIComponent(updatedAt)}` : ""}`;
 export const svgUrl = (id: string) => `/api/catalog/illustrations/${encodeURIComponent(id)}/file?f=svg`;
@@ -70,6 +71,7 @@ export function CatalogIllustrationsBoard() {
         helpTopic="catalog.illustrations"
         actions={
           <>
+            <CatalogBackLink />
             <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => void reload()} disabled={loading}>
               <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
             </button>

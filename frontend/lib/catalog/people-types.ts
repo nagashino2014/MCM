@@ -14,6 +14,8 @@ export interface CatalogExtraPerson {
   edu: string;
   cert: string;
   photoAssetId: string | null;
+  /** 사진 게재 동의(355) — null 미확인 · true 동의 · false 거부. 임원이라 거부가 아니면 싣는다 */
+  photoConsent: boolean | null;
   orderNo: number | null;
   isPublic: boolean;
   /** 임직원·임원 인원 수에 넣는지 */

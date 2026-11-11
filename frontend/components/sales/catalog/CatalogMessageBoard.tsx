@@ -15,6 +15,7 @@ import { ContentVersions } from "./ContentVersions";
 
 type ContentState = AnyContentState<"ceo_message">;
 import "@/components/cdash/cdash.css";
+import { CatalogBackLink } from "./CatalogBackLink";
 
 const API = "/api/catalog/contents/ceo_message";
 
@@ -133,9 +134,12 @@ export function CatalogMessageBoard() {
           )
         }
         actions={
-          <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
-            <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
-          </button>
+          <>
+            <CatalogBackLink />
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={reload} disabled={loading || busy}>
+              <RefreshCw className="w-3.5 h-3.5" /> 새로 고침
+            </button>
+          </>
         }
       />
 

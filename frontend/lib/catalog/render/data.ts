@@ -138,7 +138,15 @@ function careerYears(p: CatalogPerson, d: HrDetail | undefined, nowYears: number
   return known ? Math.max(0, Math.floor(total)) : null;
 }
 
+/** 약력 맨 앞의 'N년'(예: '37년 · 前 환경부') — 있으면 그 연수를 경력 연수로 쓴다(인물 노출 관리에서 직접 고친 경력 줄) */
+function bioLeadYears(bio: string): number | null {
+  const m = bio.trim().match(/^(\d{1,2})\s*년/);
+  return m ? Number(m[1]) : null;
+}
+
+/** 임원진 카드 경력 줄 = '{연수}년 · {약력 또는 前 이전 직장}' — 약력이 'N년'으로 시작하면 약력을 그대로 쓴다 */
 function careerSummary(years: number | null, bio: string, d: HrDetail | undefined): string {
+  if (bioLeadYears(bio) != null) return bio.trim();
   const prev = (d?.careers ?? [])
     .filter((c) => c.company)
     .slice(-3)
@@ -215,6 +223,40 @@ function buildMatrix(rows: CatalogProjectRow[], names: Record<string, string>): 
 function maskOrg(doc: OrgChartDoc, names: string[]): OrgChartDoc {
   const walk = (n: OrgNode): OrgNode => ({ ...n, label: maskNamesIn(n.label, names), sub: maskNamesIn(n.sub, names), children: n.children.map(walk) });
   return { nodes: doc.nodes.map(walk) };
+}
+
+/** 인물 노출 관리 — 임원진 카드의 학력·자격·경력 줄(지금 실리는 값 effective, 직접 고친 값을 비웠을 때의 인사 기록 값 auto) */
+export interface LeaderCardFields {
+  edu: string;
+  cert: string;
+  career: string;
+  eduAuto: string;
+  certAuto: string;
+  careerAuto: string;
+}
+
+export async function leaderCardFields(people: CatalogPerson[]): Promise<Record<string, LeaderCardFields>> {
+  const asOf = kstToday();
+  const nowYears = Number(asOf.slice(0, 4)) + (Number(asOf.slice(5, 7)) - 0.5) / 12;
+  const execs = people.filter((p) => p.section === "exec");
+  const hr = await loadHrDetails(execs.map((p) => p.employeeId));
+  const out: Record<string, LeaderCardFields> = {};
+  for (const p of execs) {
+    const d = hr.get(p.employeeId);
+    const autoYears = careerYears(p, d, nowYears);
+    const bio = p.meta?.bioShort ?? "";
+    const eduAuto = highestEdu(d).text;
+    const certAuto = (d?.certs ?? []).slice(0, 4).join(", ");
+    out[p.employeeId] = {
+      edu: p.meta?.eduOverride || eduAuto,
+      cert: p.meta?.certOverride || certAuto,
+      career: careerSummary(bioLeadYears(bio) ?? autoYears, bio, d),
+      eduAuto,
+      certAuto,
+      careerAuto: careerSummary(autoYears, "", d),
+    };
+  }
+  return out;
 }
 
 export interface LoadOptions extends RenderOptions {
@@ -358,7 +400,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   const ceoPerson = people.find((p) => p.positionName === "대표이사") ?? null;
   const toLeader = (p: CatalogPerson): LeaderCard => {
     const d = hr.get(p.employeeId);
-    const years = careerYears(p, d, nowYears);
+    const years = bioLeadYears(p.meta?.bioShort ?? "") ?? careerYears(p, d, nowYears);
     return {
       key: p.employeeId,
       name: nm(p.name),

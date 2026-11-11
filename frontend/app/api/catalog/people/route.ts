@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { recordAuditLog } from "@/lib/auth/audit";
 import { listAdvisors, listCatalogPeople, listExtraPeople, savePersonMeta, type PersonMetaPatch } from "@/lib/catalog/people";
+import { leaderCardFields } from "@/lib/catalog/render/data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,9 @@ export async function GET() {
   try {
     await requirePermission("catalog.manage");
     const [people, extraPeople, advisors] = await Promise.all([listCatalogPeople(), listExtraPeople(), listAdvisors()]);
-    return NextResponse.json({ people, extraPeople, advisors });
+    // 임원진 카드에 지금 실리는 학력·자격·경력(인사 기록 + 직접 고친 값) — 화면에 보여 주고 편집 창 처음 값으로 쓴다
+    const leaderCards = await leaderCardFields(people);
+    return NextResponse.json({ people, extraPeople, advisors, leaderCards });
   } catch (err) {
     return authErrorToResponse(err);
   }

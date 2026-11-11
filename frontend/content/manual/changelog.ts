@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-11", kind: "신규", title: "재무 — 카드 증빙 대조·누락 내역 분석",
+    body: "계좌·카드 원장에 카드 증빙 대조 탭이 생겼습니다. 결재 문서가 없는 법인카드 건을 모아 같은 날짜의 출장과 견주어 출장 경비 누락 추정과 그 외 사용으로 나누고, 고른 건은 부서장에게 소명을 요청합니다.",
+    articles: ["finance.card-evidence"],
+  },
+  {
     date: "2026-11-11", kind: "개선", title: "날짜 칸 — 달력에서 고르기",
     body: "날짜 칸 오른쪽 끝에 달력 아이콘이 생겼습니다. 아이콘을 누르거나 칸에서 Alt+↓를 누르면 달력이 열려 날짜를 골라 넣을 수 있습니다. 숫자 8자리를 이어 치는 방식은 그대로입니다. 전자결재 양식의 출장일자·기간·표 안 날짜를 비롯해 앱의 날짜 칸에 함께 적용됩니다(연월만 넣는 칸과 재무 원장의 좁은 기간 칸은 제외).",
     articles: ["approval.draft"],

@@ -541,7 +541,7 @@ export function PlatformPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
           <p className="kc-blockhead" style={{ margin: "4px 0 0" }}>
             개발 일정
           </p>
-          <ol className="kc-miles" style={{ paddingTop: 6 }}>
+          <ol className="kc-miles">
             {c.miles.map((m) => (
               <li key={m.when} className={m.done ? "is-done" : undefined}>
                 <b>{m.when}</b>

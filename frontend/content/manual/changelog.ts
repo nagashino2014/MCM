@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-11", kind: "개선", title: "회사소개서 — 제품 일정 타임라인 정렬",
+    body: "통합허가 플랫폼 쪽 개발 일정의 선이 원 아래로 밀려 있던 것을 원 가운데를 지나도록 고쳤습니다. 응용소프트웨어 쪽 출시 일정과 함께 선이 첫 원에서 시작하고, 칸 사이에 틈을 두어 글이 옆 칸에 붙지 않습니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
     date: "2026-11-11", kind: "신규", title: "재무 — 카드 증빙 대조·누락 내역 분석",
     body: "계좌·카드 원장에 카드 증빙 대조 탭이 생겼습니다. 결재 문서가 없는 법인카드 건을 모아 같은 날짜의 출장과 견주어 출장 경비 누락 추정과 그 외 사용으로 나누고, 고른 건은 부서장에게 소명을 요청합니다.",
     articles: ["finance.card-evidence"],

@@ -2,7 +2,8 @@ import { getDb, rowsToObjects } from "@/lib/db";
 import {
   applyAppendixRules,
   buildDisplayIndustry,
-  buildDisplayTitle,
+  buildDisplayTitle,
+
   isCompleted,
   type CatalogProjectRow,
 } from "@/lib/catalog/appendix";
@@ -101,6 +102,20 @@ function highestEdu(d: HrDetail | undefined): { level: string; text: string } {
   if (!best) return { level: "", text: "" };
   const school = best.school.replace(/학교$/, "");
   return { level: best.level, text: [school, best.major, DEGREE_LABEL[best.level] ?? ""].filter(Boolean).join(" ") };
+}
+
+/** 기술인력 현황 '자격 보유 인원' 막대 순서(사용자 지시 2026-11-11) — 목록 밖 자격은 그 뒤에 인원 많은 순 */
+const CERT_ORDER = ["대기관리기술사", "대기환경기사", "수질환경기사", "폐기물처리기사", "화공기사", "온실가스관리기사", "산업안전기사", "위험물산업기사"];
+function certRank(name: string): number {
+  const i = CERT_ORDER.indexOf(name.replace(/\s+/g, ""));
+  return i < 0 ? CERT_ORDER.length : i;
+}
+
+/** 직원 기술인력 명단 소속 순서(사용자 지시 2026-11-11) — 통합1본부·통합2본부·화학안전본부·연구소·울산지사, 같은 소속 안은 직급순 */
+const STAFF_DEPT_ORDER = [/통합\D*1/, /통합\D*2/, /화학/, /연구소/, /지사/];
+function deptRank(dept: string): number {
+  const i = STAFF_DEPT_ORDER.findIndex((re) => re.test(dept));
+  return i < 0 ? STAFF_DEPT_ORDER.length : i;
 }
 
 /** 총 경력 = 이전 직장 경력 합 + 입사 이후(현재까지) */
@@ -350,8 +365,9 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       initial: initialOf(p.name),
       role: p.meta?.roleLabel || p.positionName,
       photo: photoKey(p),
-      edu: highestEdu(d).text,
-      cert: (d?.certs ?? []).slice(0, 4).join(", "),
+      // 학력·자격은 인물 노출 관리에서 직접 고친 값이 있으면 그것을(353), 없으면 인사 기록
+      edu: p.meta?.eduOverride || highestEdu(d).text,
+      cert: p.meta?.certOverride || (d?.certs ?? []).slice(0, 4).join(", "),
       career: careerSummary(years, p.meta?.bioShort ?? "", d),
       careerYears: years,
       manual: false,
@@ -363,7 +379,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     .filter((p) => p.section === "exec")
     .map((p) => ({ card: toLeader(p), order: p === ceoPerson ? -1 : (p.meta?.orderNo ?? 1000), rank: p.rankOrder ?? 0 }));
   for (const x of extras.filter((e) => e.isPublic)) {
-    const yearsMatch = (x.career + " " + x.bioShort).match(/경력\s*(\d{1,2})\s*년/);
+    // 경력 연수 — 약력 맨 앞 'N년'(다른 임원 카드와 같은 표기) 또는 '경력 N년'
+    const yearsMatch = x.bioShort.trim().match(/^(\d{1,2})\s*년/) ?? (x.career + " " + x.bioShort).match(/경력\s*(\d{1,2})\s*년/);
     leaderItems.push({
       card: {
         key: x.personId,
@@ -371,8 +388,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
         photo: !masked && x.photoAssetId ? `a/${x.photoAssetId}` : null,
-        edu: "",
-        cert: "",
+        edu: x.edu,
+        cert: x.cert,
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),
         careerYears: yearsMatch ? Number(yearsMatch[1]) : null,
         manual: true,
@@ -415,14 +432,17 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     experts,
     expertNote: [pro ? `기술사 ${pro}` : "", doctors ? `박사 ${doctors}` : ""].filter(Boolean).join(" · "),
     avgCareer: yearsAll.length ? Math.round((yearsAll.reduce((a, b) => a + b, 0) / yearsAll.length) * 10) / 10 : null,
-    certs: [...certCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).slice(0, 8).map(([name, count]) => ({ name, count })),
+    certs: [...certCount.entries()]
+      .sort((a, b) => certRank(a[0]) - certRank(b[0]) || b[1] - a[1] || a[0].localeCompare(b[0], "ko"))
+      .slice(0, 8)
+      .map(([name, count]) => ({ name, count })),
     degrees,
     careerBuckets: buckets,
     population: people.length,
   };
   const staffRows: StaffRow[] = shownPeople
     .filter((p) => p.section === "staff")
-    .sort((a, b) => (b.rankOrder ?? 0) - (a.rankOrder ?? 0) || a.hiredAt.localeCompare(b.hiredAt))
+    .sort((a, b) => deptRank(a.deptName) - deptRank(b.deptName) || (b.rankOrder ?? 0) - (a.rankOrder ?? 0) || a.hiredAt.localeCompare(b.hiredAt))
     .map((p) => {
       const d = hr.get(p.employeeId);
       return {
@@ -515,6 +535,27 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   const fin = [...profile.finance].filter((f) => Number(f.revenue) > 0).sort((a, b) => b.year.localeCompare(a.year))[0];
   const credit = [...profile.credit].sort((a, b) => b.ratedAt.localeCompare(a.ratedAt))[0];
   const hqLines = profile.address.split(/,\s*/);
+  // 오시는 길 담당자 휴대전화 — 재직자 이름으로 사용자관리 휴대전화를 찾는다(없으면 알림만)
+  const contactSpecs = [...OFFICE_CONTENT.hq.contacts, ...OFFICE_CONTENT.branches.flatMap((b) => b.contacts)];
+  const mobileRows = contactSpecs.length
+    ? rowsToObjects(
+        await db.exec(
+          `SELECT name, mobile_phone FROM employee_profiles
+            WHERE COALESCE(status, 'active') = 'active' AND name = ANY($1) AND COALESCE(mobile_phone, '') <> ''`,
+          [contactSpecs.map((c) => c.name)]
+        )
+      )
+    : [];
+  const mobileOf = new Map(mobileRows.map((r) => [s(r.name), s(r.mobile_phone)]));
+  const contactsOf = (list: ReadonlyArray<{ role: string; name: string }>) =>
+    list.flatMap((c) => {
+      const phone = mobileOf.get(c.name);
+      if (!phone) {
+        notices.push(`오시는 길: ${c.role} ${c.name}의 휴대전화가 사용자관리에 없어 뺐습니다.`);
+        return [];
+      }
+      return [{ label: `${c.role} ${nm(c.name)}`, phone }];
+    });
   const offices: Office[] = [
     {
       key: "hq",
@@ -523,12 +564,13 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       address: profile.address,
       addressLines: hqLines.length > 1 ? [hqLines[0], hqLines.slice(1).join(", ")] : [profile.address],
       phone: profile.phone,
+      contacts: contactsOf(OFFICE_CONTENT.hq.contacts),
       transit: OFFICE_CONTENT.hq.transit,
       lon: OFFICE_CONTENT.hq.lon,
       lat: OFFICE_CONTENT.hq.lat,
       photo: "k/assets/hq-building-3.webp",
     },
-    ...OFFICE_CONTENT.branches.map((b) => ({ ...b, photo: null })),
+    ...OFFICE_CONTENT.branches.map((b) => ({ ...b, contacts: contactsOf(b.contacts), photo: null })),
   ];
   if (!profile.address) notices.push("회사 프로필에 본사 주소가 없습니다.");
 

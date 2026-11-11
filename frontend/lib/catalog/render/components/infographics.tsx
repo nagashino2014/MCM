@@ -287,21 +287,36 @@ function OrgBox({ node, cls, style, align }: { node: OrgNode; cls?: string; styl
   );
 }
 
-export function OrgChart({ doc, advisorsLabel }: { doc: OrgChartDoc; advisorsLabel?: string }) {
+/** 대표이사와 본부 사이 결재 단(예: 총괄본부장) — 자식이 있는 이 이름의 상자는 연구소·지사 아래 세로줄 위에 놓고 본부들을 거느린다 */
+const HUB_RE = /(총괄|본부장)/;
+
+/**
+ * 조직도 단 구성(사용자 지시 2026-11-11):
+ *   대표이사 → ① 바깥 가지(왼쪽 외부자문위원 · 오른쪽 고문 등 '촉탁' 표시 상자, 긴 연결선으로 바깥에)
+ *            → ② 연구소·지사(세로줄 양옆) → ③ 총괄본부장(세로줄 위) → ④ 본부 줄.
+ *   총괄 상자가 없고 대표이사 아래가 하나뿐이면 그 상자를 ③으로 쓰고 그 안의 연구소·지사를 양옆에 둔다(이전 편집본 호환).
+ */
+export function OrgChart({ doc, advisorsLabel, advisorsSub }: { doc: OrgChartDoc; advisorsLabel?: string; advisorsSub?: string }) {
   const root: OrgNode = doc.nodes.length === 1 ? doc.nodes[0] : { id: "root", label: "대표이사", sub: "", badge: "", children: doc.nodes };
+  const isSide = (k: OrgNode) => k.children.length === 0 && SIDE_RE.test(k.label);
   const asides0 = root.children.filter((c) => c.badge);
   const rest = root.children.filter((c) => !c.badge);
-  const hub = rest.length === 1 && rest[0].children.length > 0 ? rest[0] : null;
-  const kids = hub ? hub.children : rest;
-  const sides = kids.filter((k) => k.children.length === 0 && SIDE_RE.test(k.label));
-  const units = kids.filter((k) => !sides.includes(k));
-  const left = sides.filter((_, i) => i % 2 === 0);
-  const right = sides.filter((_, i) => i % 2 === 1);
-  const showAdvisors = advisorsLabel && !root.children.some((c) => /자문/.test(c.label));
+  const namedHub = rest.find((c) => HUB_RE.test(c.label) && c.children.length > 0) ?? null;
+  const legacyHub = !namedHub && rest.length === 1 && rest[0].children.length > 0 ? rest[0] : null;
+  const hub = namedHub ?? legacyHub;
+  // ② 연구소·지사 단 — 대표이사 바로 아래의 연구소·지사(총괄 상자가 따로 있을 때)
+  const rootSides = namedHub ? rest.filter((c) => c !== namedHub && isSide(c)) : [];
+  const kids = legacyHub ? legacyHub.children : namedHub ? [...namedHub.children, ...rest.filter((c) => c !== namedHub && !isSide(c))] : rest;
+  // 총괄 상자 양옆 연구소·지사(이전 편집본) 또는 총괄 상자가 없을 때 대표이사 아래 연구소·지사
+  const hubSides = namedHub ? namedHub.children.filter(isSide) : kids.filter(isSide);
+  const units = kids.filter((k) => !hubSides.includes(k));
+  const sidesTier = rootSides.length ? rootSides : hub ? [] : hubSides;
+  const besideHub = hub ? hubSides : [];
+  const showAdvisors = Boolean(advisorsLabel) && !root.children.some((c) => /자문/.test(c.label));
   const large = units.length <= 6;
-  const aside = (nodes: ReactNode[], side: "left" | "right") =>
+  const aside = (nodes: ReactNode[], side: "left" | "right", far?: boolean) =>
     nodes.length ? (
-      <div className={cx("kc-org__aside", side === "left" && "kc-org__aside--left")}>
+      <div className={cx("kc-org__aside", side === "left" && "kc-org__aside--left", far && "kc-org__aside--far")}>
         {side === "right" ? <span className="kc-org__hline"></span> : null}
         {nodes}
         {side === "left" ? <span className="kc-org__hline"></span> : null}
@@ -309,19 +324,24 @@ export function OrgChart({ doc, advisorsLabel }: { doc: OrgChartDoc; advisorsLab
     ) : (
       <span></span>
     );
-  const topAsides: ReactNode[] = [];
+  const pair = (list: OrgNode[]) => ({ left: list.filter((_, i) => i % 2 === 0), right: list.filter((_, i) => i % 2 === 1) });
+  const soft = (n: OrgNode) => <OrgBox key={n.id} node={n} cls="kc-org__box--soft" align="left" />;
+  // ① 바깥 가지 — 왼쪽 외부자문위원, 오른쪽 고문 등(촉탁). 한쪽만 있으면 그쪽에만
+  const farLeft: ReactNode[] = showAdvisors
+    ? [
+        <span key="adv" className="kc-org__box kc-org__box--soft">
+          {advisorsLabel}
+          {advisorsSub ? <small>{advisorsSub}</small> : null}
+        </span>,
+      ]
+    : [];
+  const farRight: ReactNode[] = [];
   asides0.forEach((n, i) => {
-    if (i > 0) topAsides.push(<span key={`h${i}`} className="kc-org__hline kc-org__hline--s"></span>);
-    topAsides.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" />);
+    if (i > 0) farRight.push(<span key={`h${i}`} className="kc-org__hline kc-org__hline--s"></span>);
+    farRight.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" />);
   });
-  if (showAdvisors) {
-    if (topAsides.length) topAsides.push(<span key="hadv" className="kc-org__hline kc-org__hline--s"></span>);
-    topAsides.push(
-      <span key="adv" className="kc-org__box kc-org__box--soft">
-        자문위원<small>{advisorsLabel}</small>
-      </span>
-    );
-  }
+  const sideTier = pair(sidesTier);
+  const hubTier = pair(besideHub);
   return (
     <div className={cx("kc-org", large && "kc-org--lg", "kc-ig")} style={{ flex: 1, minHeight: 0, justifyContent: "center" }} data-widget="org">
       <div className="kc-org__tier">
@@ -331,21 +351,40 @@ export function OrgChart({ doc, advisorsLabel }: { doc: OrgChartDoc; advisorsLab
             {root.label}
           </span>
         </div>
-        {aside(topAsides, "right")}
+        <span></span>
       </div>
       <span className="kc-org__vline"></span>
-      {hub || sides.length ? (
+      {farLeft.length || farRight.length ? (
         <>
           <div className="kc-org__tier">
-            {aside(left.map((n) => <OrgBox key={n.id} node={n} cls="kc-org__box--soft" align="left" />), "left")}
+            {aside(farLeft, "left", true)}
+            <div className="kc-org__stem"></div>
+            {aside(farRight, "right", true)}
+          </div>
+          <span className="kc-org__vline"></span>
+        </>
+      ) : null}
+      {sideTier.left.length || sideTier.right.length ? (
+        <>
+          <div className="kc-org__tier">
+            {aside(sideTier.left.map(soft), "left")}
+            <div className="kc-org__stem"></div>
+            {aside(sideTier.right.map(soft), "right")}
+          </div>
+          <span className="kc-org__vline"></span>
+        </>
+      ) : null}
+      {hub ? (
+        <>
+          <div className="kc-org__tier">
+            {aside(hubTier.left.map(soft), "left")}
             <div className="kc-org__stem">
-              {hub ? (
-                <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 20px" }}>
-                  {hub.label}
-                </span>
-              ) : null}
+              <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 20px" }}>
+                {hub.label}
+                {namedHub && hub.sub ? <small>{hub.sub}</small> : null}
+              </span>
             </div>
-            {aside(right.map((n) => <OrgBox key={n.id} node={n} cls="kc-org__box--soft" align="left" />), "right")}
+            {aside(hubTier.right.map(soft), "right")}
           </div>
           <span className="kc-org__vline"></span>
         </>

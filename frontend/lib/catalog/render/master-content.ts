@@ -191,6 +191,14 @@ export const VISION_CONTENT = {
   nameShort: "KESI",
 };
 
+/**
+ * 조직도 기본안(MCM 조직 마스터에서 만드는 안)의 결재 단(사용자 지시 2026-11-11) — 대표이사 아래 연구소·지사를 두고,
+ * 그 아래 세로줄 위의 총괄본부장이 나머지 본부를 거느린다. 확정판을 고칠 때는 회사소개서 > 조직도에서 같은 모양으로 둔다.
+ */
+export const ORG_CONTENT = {
+  hub: { label: "총괄본부장", name: "정득종" },
+};
+
 /** 지사 — 회사 프로필에 지사 칸이 없어 여기 둔다(본사 주소·전화는 회사 프로필에서). */
 export const OFFICE_CONTENT = {
   hq: {
@@ -203,6 +211,8 @@ export const OFFICE_CONTENT = {
       { label: "버스", text: "지선 5537, 마을 금천03·금천07 하차 후 걸어서 약 400m" },
     ],
     photoCaption: "에이스골드타워 12층",
+    /** 대표 전화 아래 담당자 휴대전화(사용자 지시 2026-11-11) — 번호는 사용자관리의 휴대전화(재직자 이름으로 찾음) */
+    contacts: [{ role: "총괄본부장", name: "정득종" }],
   },
   branches: [
     {
@@ -212,6 +222,7 @@ export const OFFICE_CONTENT = {
       address: "울산광역시 남구 테크노산업로55번길 14, 울산과학기술원 산학융합원 기업연구관 204호",
       addressLines: ["울산광역시 남구 테크노산업로55번길 14", "산학융합원 기업연구관 204호"],
       phone: "052-258-1064",
+      contacts: [{ role: "울산지사장", name: "이홍길" }],
       lon: 129.3114,
       lat: 35.5384,
       transit: [] as Array<{ label: string; text: string }>,

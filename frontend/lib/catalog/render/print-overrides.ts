@@ -64,6 +64,14 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 .kc-miles { padding-left: 0; column-gap: 10px; }
 .kc-miles::before { left: 5.5px; right: 0; }
 
+/* 조직도 바깥 가지(사용자 지시 2026-11-11) — 대표이사 바로 아래 외부자문위원(왼쪽)·고문(오른쪽)은 연결선을 늘려 쪽 바깥에 두어
+   그 아래 연구소·지사 상자와 겹치지 않게 한다. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-org__aside--far { justify-content: flex-start; }
+/* 쪽 끝에 붙지 않게 바깥쪽을 띄워 조금 안으로 모은다(같은 날 후속 지시) — 아래 연구소·지사 상자보다는 바깥 */
+.kc-org__aside--far.kc-org__aside--left { padding-left: 64px; }
+.kc-org__aside--far:not(.kc-org__aside--left) { padding-right: 64px; }
+.kc-org__aside--far > .kc-org__hline:not(.kc-org__hline--s) { flex: 1 1 auto; width: auto; min-width: 28px; }
+
 /* 연구소형 주요연혁(사용자 지시 2026-10-30) — 세로선이 점 중심에서 4px 어긋남 → 점을 22px 칸 가운데(27px)에 두고 선도 27px 중심으로,
    점 13 → 9px(30% 축소), 위(최근)는 진하게·아래로 갈수록 연하게(is-t0~9). ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
 .kc-tpl--research .kc-rs-tl::before { left: 26px; }

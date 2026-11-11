@@ -1,13 +1,17 @@
 import { listOrganizationSnapshot } from "@/lib/admin/organization";
 import type { OrgChartDoc, OrgNode } from "./content-types";
 import { listExtraPeople } from "./people";
+import { ORG_CONTENT } from "./render/master-content";
 
 /*
  * 회사소개서 조직도(C12) 기본안 — MCM 조직 마스터(부서·부서장 보직·재직자)에서 만든다(사용자 요구 10-22).
  * 사용자는 이 기본안을 소개서 전용으로 고쳐 확정한다(contents.ts org_chart). 다시 불러오기를 누르면 이 함수 결과로 바뀐다.
  *   최상위 = 대표이사(직급 '대표이사' 재직자), 그 아래 = 직접 입력 촉탁 임원(고문 등, '촉탁' 표시) + 최상위 부서(총괄 제외).
  *   부서 상자의 아래 줄 = 부서장 · 인원(그 부서 재직자 수), 하위 부서는 자식 상자.
+ *   총괄본부장(ORG_CONTENT.hub, 사용자 지시 11-11)이 있으면 연구소·지사는 대표이사 바로 아래, 나머지 본부는 총괄본부장 아래에 둔다.
  */
+
+const SIDE_RE = /(연구소|지사|센터)/;
 
 const EXEC_DEPT_ID = "exec";
 
@@ -54,9 +58,16 @@ export async function buildOrgChartFromMaster(): Promise<OrgChartDoc> {
       children.push({ id: `extra:${role}`, label: role, sub: names.join(" · "), badge: "촉탁", children: [] });
     }
   }
+  const units: OrgNode[] = [];
   for (const d of byParent.get(null) ?? []) {
     if (d.deptId === EXEC_DEPT_ID) continue; // 총괄(임원 소속)은 대표이사 상자가 대신한다
-    children.push(deptNode(d, 2));
+    const node = deptNode(d, 2);
+    if (ORG_CONTENT.hub && !(node.children.length === 0 && SIDE_RE.test(node.label))) units.push(node);
+    else children.push(node);
+  }
+  if (units.length) {
+    const hubPerson = active.find((e) => e.name === ORG_CONTENT.hub.name);
+    children.push({ id: "hub", label: ORG_CONTENT.hub.label, sub: hubPerson?.name ?? ORG_CONTENT.hub.name, badge: "", children: units });
   }
   return {
     nodes: [{ id: "root", label: "대표이사", sub: ceo?.name ?? "", badge: "", children }],

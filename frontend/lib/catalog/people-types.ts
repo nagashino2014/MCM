@@ -10,6 +10,9 @@ export interface CatalogExtraPerson {
   employmentType: (typeof EXTRA_EMPLOYMENT_TYPES)[number];
   bioShort: string;
   career: string;
+  /** 임원진 카드 학력·자격(사용자관리에 없는 인물이라 직접 적는다, 353) */
+  edu: string;
+  cert: string;
   photoAssetId: string | null;
   orderNo: number | null;
   isPublic: boolean;

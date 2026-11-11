@@ -43,7 +43,10 @@ function staffKpiSpec(data: CatalogRenderData): InfoSpec {
 }
 
 export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
-  const units = data.orgChart.nodes[0]?.children.filter((c) => !c.badge && c.children.length > 0).length ?? 0;
+  // 총괄본부장 상자가 있으면 그 아래가 본부 줄이다(조직도 단 구성은 infographics OrgChart)
+  const top = data.orgChart.nodes[0]?.children ?? [];
+  const hubNode = top.find((c) => !c.badge && /(총괄|본부장)/.test(c.label) && c.children.length > 0);
+  const units = (hubNode ? hubNode.children : top).filter((c) => !c.badge && c.children.length > 0).length;
   const advisors = mval(data, "advisors.total") ?? 0;
   return (
     <Sheet ctx={ctx} anchors={["sec-04", "c12"]} section="04 조직과 사람" outline="조직">
@@ -64,7 +67,7 @@ export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData
         </div>
         </InfoSource>
       </div>
-      <OrgChart doc={data.orgChart} advisorsLabel={advisors > 0 ? `매체별 ${fmt(advisors)}명` : undefined} />
+      <OrgChart doc={data.orgChart} advisorsLabel={advisors > 0 ? "외부자문위원" : undefined} advisorsSub={advisors > 0 ? `매체별 ${fmt(advisors)}명` : undefined} />
       <Foot items={[`* ${asOfNote(data)}. 인원은 사용자관리 등록 재직자 기준입니다.`]} />
       <Notes items={["* 조직은 회사소개서 > 조직도의 최신 확정판(없으면 MCM 조직 마스터 기본안)으로 그립니다. 본부 위 색 띠는 그 본부가 주로 맡는 사업 분야 색입니다."]} />
     </Sheet>
@@ -197,6 +200,9 @@ export function LeadersPage({
 }
 
 // ── C14 기술인력 현황 ──
+/** 자격·학위·경력 머리말과 그래프 사이(사용자 지시 2026-11-11: 너무 붙어 있다) — 세 블록 같은 간격 */
+const STAFF_HEAD_GAP = { marginBottom: 14 } as const;
+
 export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const st = data.staffStats;
   const extraExec = (mval(data, "staff.exec") ?? 0) - data.leaders.filter((l) => !l.manual).length;
@@ -231,19 +237,19 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
       </InfoSource>
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
         <section className="kc-span-5 kc-ig">
-          <p className="kc-blockhead">
+          <p className="kc-blockhead" style={STAFF_HEAD_GAP}>
             자격 보유 인원<span className="kc-blockhead__aside">단위: 명, 복수 자격은 각각 셈</span>
           </p>
           <InfoSlot slot="c14.certs" spec={barSpec(st.certs.map((c) => ({ label: c.name, value: c.count })))} box={{ w: 297, h: 250 }} />
         </section>
         <section className="kc-span-4 kc-ig">
-          <p className="kc-blockhead">
+          <p className="kc-blockhead" style={STAFF_HEAD_GAP}>
             학위 구성<span className="kc-blockhead__aside">{fmt(st.population)}명</span>
           </p>
           <InfoSlot slot="c14.degrees" spec={shareSpec(degreeParts, { label: fmt(st.population), desc: "명" })} box={{ w: 233, h: 250 }} />
         </section>
         <section className="kc-span-3 kc-ig">
-          <p className="kc-blockhead">
+          <p className="kc-blockhead" style={STAFF_HEAD_GAP}>
             경력 분포<span className="kc-blockhead__aside">명</span>
           </p>
           <InfoSlot

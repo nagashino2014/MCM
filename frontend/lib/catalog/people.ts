@@ -22,6 +22,9 @@ export interface CatalogPersonMeta {
   orderNo: number | null;
   roleLabel: string;
   bioShort: string;
+  /** 임원진 카드 학력·자격 직접 입력(353) — 비우면 인사 기록(학력·자격증)에서 채운다 */
+  eduOverride: string;
+  certOverride: string;
   /** null 미확인 · true 동의 · false 거부 */
   photoConsent: boolean | null;
   /** 소개서 전용 사진(catalog_assets). null = 인사 사진 사용 */
@@ -73,7 +76,7 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
               COALESCE(e.env_grade, '') AS env_grade, COALESCE(e.eng_grade, '') AS eng_grade,
               COALESCE(e.hired_at, '') AS hired_at, e.photo_public_path,
               (m.employee_id IS NOT NULL) AS has_meta,
-              m.display_override, m.section_override, m.order_no, m.role_label, m.bio_short, m.photo_consent, m.photo_asset_id,
+              m.display_override, m.section_override, m.order_no, m.role_label, m.bio_short, m.edu_override, m.cert_override, m.photo_consent, m.photo_asset_id,
               (SELECT MAX(rank_order) FROM positions WHERE position_name = $1) AS manager_rank
          FROM employee_profiles e
          LEFT JOIN departments d ON d.dept_id = e.dept_id
@@ -96,6 +99,8 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
           orderNo: r.order_no != null ? Number(r.order_no) : null,
           roleLabel: s(r.role_label),
           bioShort: s(r.bio_short),
+          eduOverride: s(r.edu_override),
+          certOverride: s(r.cert_override),
           photoConsent: r.photo_consent == null ? null : Number(r.photo_consent) === 1,
           photoAssetId: r.photo_asset_id != null ? String(r.photo_asset_id) : null,
         }
@@ -139,6 +144,8 @@ export interface PersonMetaPatch {
   orderNo?: number | null;
   roleLabel?: string;
   bioShort?: string;
+  eduOverride?: string;
+  certOverride?: string;
   photoConsent?: boolean | null;
   /** 소개서 전용 사진(catalog_assets id). null = 지우고 인사 사진 사용 */
   photoAssetId?: string | null;
@@ -161,6 +168,8 @@ export async function savePersonMeta(employeeId: string, patch: PersonMetaPatch,
   if (patch.orderNo !== undefined) push("order_no", patch.orderNo == null || !Number.isFinite(Number(patch.orderNo)) ? null : Math.round(Number(patch.orderNo)));
   if (patch.roleLabel !== undefined) push("role_label", s(patch.roleLabel).slice(0, 100) || null);
   if (patch.bioShort !== undefined) push("bio_short", s(patch.bioShort).slice(0, 1000) || null);
+  if (patch.eduOverride !== undefined) push("edu_override", s(patch.eduOverride).slice(0, 200) || null);
+  if (patch.certOverride !== undefined) push("cert_override", s(patch.certOverride).slice(0, 300) || null);
   if (patch.photoConsent !== undefined) push("photo_consent", patch.photoConsent == null ? null : patch.photoConsent ? 1 : 0);
   if (patch.photoAssetId !== undefined) {
     // 없는 자산 id 는 연결하지 않는다
@@ -197,6 +206,8 @@ function mapExtra(r: Record<string, unknown>): CatalogExtraPerson {
     employmentType: ((EXTRA_EMPLOYMENT_TYPES as readonly string[]).includes(t) ? t : "촉탁") as CatalogExtraPerson["employmentType"],
     bioShort: s(r.bio_short),
     career: s(r.career),
+    edu: s(r.edu),
+    cert: s(r.cert),
     photoAssetId: r.photo_asset_id != null ? String(r.photo_asset_id) : null,
     orderNo: r.order_no != null ? Number(r.order_no) : null,
     isPublic: Number(r.is_public ?? 1) === 1,
@@ -221,11 +232,12 @@ export async function saveExtraPerson(input: Partial<CatalogExtraPerson> & { nam
     await txn.run(
       `INSERT INTO catalog_extra_people
          (person_id, name, role_label, employment_type, bio_short, career, photo_asset_id, order_no, is_public, count_in_total,
-          created_at, created_by, updated_at, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, (SELECT asset_id FROM catalog_assets WHERE asset_id = $7), $8, $9, $10, $11, $12, $11, $12)
+          created_at, created_by, updated_at, updated_by, edu, cert)
+       VALUES ($1, $2, $3, $4, $5, $6, (SELECT asset_id FROM catalog_assets WHERE asset_id = $7), $8, $9, $10, $11, $12, $11, $12, $13, $14)
        ON CONFLICT (person_id) DO UPDATE SET
          name = EXCLUDED.name, role_label = EXCLUDED.role_label, employment_type = EXCLUDED.employment_type,
          bio_short = EXCLUDED.bio_short, career = EXCLUDED.career, photo_asset_id = EXCLUDED.photo_asset_id,
+         edu = EXCLUDED.edu, cert = EXCLUDED.cert,
          order_no = EXCLUDED.order_no, is_public = EXCLUDED.is_public, count_in_total = EXCLUDED.count_in_total,
          updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
       [
@@ -241,6 +253,8 @@ export async function saveExtraPerson(input: Partial<CatalogExtraPerson> & { nam
         input.countInTotal === false ? 0 : 1,
         now,
         actorUserId,
+        s(input.edu).slice(0, 200) || null,
+        s(input.cert).slice(0, 300) || null,
       ]
     );
   });

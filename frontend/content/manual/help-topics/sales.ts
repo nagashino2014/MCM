@@ -494,11 +494,12 @@ export const SALES_HELP: HelpTopic[] = [
         "완료 계약의 사업장 수를 더합니다. 실적 노출 관리에서 지정한 허가 사업장 수가 우선이고, 없으면 결정번호 수, 결정번호도 없으면 1개소로 셉니다.",
         "허가 사업장 수를 0으로 지정한 계약은 '집계 제외'로 표시되고 더하지 않습니다.",
         "업종군(1~5차년도)은 사업장 업종으로 묶습니다. 묶음에 없는 업종(통합허가 대상 밖이거나 새로 편입된 업종)은 '업종 미판정'입니다.",
+        "'업종 미판정 · 목록 보기'를 누르거나 거르기에서 '업종 미판정'을 고르면 그 계약만 보입니다. 사업장 이름을 눌러 계약을 열고 업종을 적으면 다음 집계부터 업종군에 들어갑니다.",
       ] },
     ],
     more: { article: "sales.catalog", section: "initial-permit" },
     sources: ["components/sales/catalog/CatalogHomeBoard.tsx"],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-11",
   },
   {
     id: "catalog.projects",
@@ -595,13 +596,13 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "사용자관리에 등록된 재직자만 나오며 퇴사하면 바로 빠집니다. 직급이 부장보다 높으면 임원, 부장 이하는 직원입니다.",
-        "구획·게재·사진 칸은 바꾸는 즉시 저장됩니다. 연필 아이콘으로 순서·직함·약력을 적습니다.",
-        "고문 등 촉탁 임원은 임원진 탭의 [[임원 직접 추가]]로, 자문위원은 [[자문위원]] 탭에서 등록합니다.",
+        "구획·게재·사진 칸은 바꾸는 즉시 저장됩니다. 연필 아이콘으로 순서·직함·약력을 적고, 임원은 임원진 카드의 학력·자격도 직접 고칩니다(비우면 인사 기록).",
+        "고문 등 촉탁 임원은 임원진 탭의 [[임원 직접 추가]]로, 외부자문위원은 [[자문위원]] 탭에서 추가·수정·삭제합니다.",
       ] },
     ],
     more: { article: "sales.catalog-people", section: "rules" },
     sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-11-11",
   },
   {
     id: "catalog.people-rules",
@@ -637,26 +638,28 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "사진은 PNG·JPG·WebP, 10MB 이하입니다. 3:4 세로 사진이 잘 맞습니다.",
-        "약력 요약은 3~4줄로 줄바꿈해 적습니다. 상세 경력은 이력 쪽에 쓰입니다.",
+        "학력·자격은 임원진 카드에 그대로 실립니다(사용자관리에 없는 인물이라 인사 기록이 없습니다).",
+        "약력 요약은 3~4줄로 줄바꿈해 적습니다. 맨 앞에 '44년'처럼 경력 연수를 적으면 임원 평균 경력에 셉니다.",
         "[[임원 인원 수에 포함]]을 끄면 임원진 쪽에만 실리고 인원 수에는 들어가지 않습니다.",
       ] },
     ],
     more: { article: "sales.catalog-people", section: "extra" },
     sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-11-11",
   },
   {
     id: "catalog.org",
     label: "조직도 도움말",
     blocks: [
       { kind: "list", items: [
-        "처음에는 MCM 조직(부서·부서장·인원)으로 만든 기본안이 나옵니다. 소개서용으로 고쳐도 인사 조직은 바뀌지 않습니다.",
+        "처음에는 MCM 조직(부서·부서장·인원)으로 만든 기본안이 나옵니다. 연구소·지사는 대표이사 아래에, 나머지 본부는 총괄본부장 아래에 둡니다. 소개서용으로 고쳐도 인사 조직은 바뀌지 않습니다.",
+        "소개서에는 대표이사 아래 바깥 가지로 외부자문위원(왼쪽, 자문위원 명부 인원)과 '촉탁' 표시 상자(오른쪽, 고문 등)가 그려집니다.",
         "[[임시 저장]]은 편집 중 내용만 남기고, [[확정]]하면 새 판으로 기록됩니다. 소개서는 최신 확정판을 씁니다.",
       ] },
     ],
     more: { article: "sales.catalog-org", section: "edit" },
     sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-11-11",
   },
   {
     id: "catalog.org-edit",

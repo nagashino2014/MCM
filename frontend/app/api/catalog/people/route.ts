@@ -35,7 +35,9 @@ export async function PUT(req: NextRequest) {
       targetId: employeeId,
       after: patch,
     });
-    return NextResponse.json({ people: await listCatalogPeople() });
+    // 저장 뒤 화면이 임원진 카드 값(학력·자격·경력)도 새로 그리도록 함께 돌려준다
+    const people = await listCatalogPeople();
+    return NextResponse.json({ people, leaderCards: await leaderCardFields(people) });
   } catch (err) {
     return authErrorToResponse(err);
   }

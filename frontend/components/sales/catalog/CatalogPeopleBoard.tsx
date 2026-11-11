@@ -107,11 +107,12 @@ export function CatalogPeopleBoard() {
   const patchPerson = async (employeeId: string, patch: Record<string, unknown>) => {
     setBusy(true);
     try {
-      const data = await catalogFetch<{ people: CatalogPerson[] }>("/api/catalog/people", {
+      const data = await catalogFetch<{ people: CatalogPerson[]; leaderCards?: Record<string, LeaderCardFields> }>("/api/catalog/people", {
         method: "PUT",
         body: JSON.stringify({ employeeId, patch }),
       });
       setPeople(data.people);
+      if (data.leaderCards) setLeaderCards(data.leaderCards);
       return true;
     } catch (e) {
       alert((e as Error).message);

@@ -6,11 +6,14 @@
  * - 같은 사람을 기안자가 직접 지정했으면 그 행을 그대로 둔다. 고정으로 넣은 행은 approval_watchers.fixed=1 —
  *   공문·계약서 발송 메일의 내부 Cc 는 fixed=0(직접 지정)만 받는다.
  * - 346 적용 전(표 없음)에는 아무것도 하지 않는다(to_regclass).
+ * - 기안자별 참조·열람(353)도 함께 넣는다 — 같은 사람이면 기안자별 규칙의 구분이 이긴다.
  */
 
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { pickDrafterRules } from "@/lib/approval/fixed-line-rules";
+import { activeRulesForDrafter, lineUserRulesReady } from "@/lib/approval/line-user-rules";
 
 export type FixedWatcherKind = "ref" | "view";
 export const ALL_FORMS = "*";
@@ -70,13 +73,36 @@ export function pickFormWatchers(rows: FixedWatcherRow[], formId: string): Array
   return [...byUser.values()];
 }
 
+/** 기안자별 참조·열람(353) — 재직 중인 대상만, 같은 대상은 양식 행이 '*' 행을 덮어쓴다. */
+async function drafterWatcherRules(
+  conn: PgDatabase,
+  formId: string,
+  drafterUserId: string
+): Promise<Array<{ userId: string; kind: FixedWatcherKind; name: string }>> {
+  if (!(await lineUserRulesReady(conn))) return [];
+  return pickDrafterRules(await activeRulesForDrafter(conn, drafterUserId), formId)
+    .filter((r) => r.kind === "ref" || r.kind === "view")
+    .map((r) => ({ userId: r.targetUserId, kind: r.kind as FixedWatcherKind, name: r.targetName ?? r.targetUserId }));
+}
+
+/** 모든 양식 고정 참조·열람(346) + 기안자별 참조·열람(353) — 같은 사람이면 기안자별 규칙이 이긴다. */
+async function watchersForDoc(
+  conn: PgDatabase,
+  formId: string,
+  drafterUserId: string
+): Promise<Array<{ userId: string; kind: FixedWatcherKind; name: string }>> {
+  const rows = await listFixedWatchers(conn);
+  const names = new Map(rows.map((r) => [r.userId, r.userName ?? r.userId]));
+  const byUser = new Map<string, { userId: string; kind: FixedWatcherKind; name: string }>();
+  for (const w of pickFormWatchers(rows, formId)) byUser.set(w.userId, { ...w, name: names.get(w.userId) ?? w.userId });
+  for (const w of await drafterWatcherRules(conn, formId, drafterUserId)) byUser.set(w.userId, w);
+  byUser.delete(drafterUserId);
+  return [...byUser.values()];
+}
+
 /** 기안 화면 표시용 — 기안자 본인은 뺀다(결재선 중복은 상신 시 서버가 뺀다). */
 export async function fixedWatchersForForm(formId: string, drafterUserId: string): Promise<Array<{ userId: string; name: string; kind: FixedWatcherKind }>> {
-  const rows = await listFixedWatchers();
-  const names = new Map(rows.map((r) => [r.userId, r.userName ?? r.userId]));
-  return pickFormWatchers(rows, formId)
-    .filter((w) => w.userId !== drafterUserId)
-    .map((w) => ({ ...w, name: names.get(w.userId) ?? w.userId }));
+  return watchersForDoc(await getDb(), formId, drafterUserId);
 }
 
 /** 문서에 고정 규칙으로 들어가 있는 참조·열람자(fixed=1) — saveDoc 이 화면에서 되돌아온 행을 자유 지정으로 오인하지 않게 쓴다. */
@@ -93,7 +119,7 @@ export async function docFixedWatcherIds(txn: PgDatabase, docId: string): Promis
  */
 export async function applyFixedWatchers(txn: PgDatabase, docId: string, formId: string, drafterUserId: string): Promise<void> {
   if (!(await fixedWatchersReady(txn))) return;
-  const fixed = pickFormWatchers(await listFixedWatchers(txn), formId);
+  const fixed = await watchersForDoc(txn, formId, drafterUserId);
   const lineIds = new Set(
     rowsToObjects(
       await txn.exec(`SELECT assignee_user_id, delegated_from FROM approval_steps WHERE doc_id = $1`, [docId])

@@ -12,13 +12,17 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { postsTableExists } from "@/lib/org/posts";
+import { activeRulesForDrafter, lineUserRulesReady, listLineUserRules, type LineUserRuleRow } from "@/lib/approval/line-user-rules";
 import {
+  insertDrafterExtras,
   isLineEnforced,
   parseEnforceWhen,
   parseHeadDrafterTo,
   parseTemplateSteps,
+  pickDrafterRules,
   resolveLineSteps,
   type FixedLineFacts,
+  type FixedLineStep,
   type FixedLineResult,
   type LineEnforceWhen,
   type LinePerson,
@@ -166,6 +170,28 @@ async function loadDrafter(conn: PgDatabase, userId: string): Promise<{ userId: 
   return { userId, deptId: r?.dept_id != null ? String(r.dept_id) : null, deptName: r?.dept_name != null ? String(r.dept_name) : null };
 }
 
+/** 기안자별 추가 결재자(353)를 해석 결과에 끼운다 — 재직 중인 대상만, 이름·직급은 loadPeople 로. */
+async function withDrafterExtras(
+  conn: PgDatabase,
+  steps: FixedLineStep[],
+  formId: string,
+  drafterUserId: string,
+  rulesIn?: LineUserRuleRow[]
+): Promise<FixedLineStep[]> {
+  if (!steps.length) return steps;
+  if (!rulesIn && !(await lineUserRulesReady(conn))) return steps;
+  const rules = pickDrafterRules(
+    (rulesIn ?? (await activeRulesForDrafter(conn, drafterUserId))).filter((r) => r.kind === "approve" && r.targetActive),
+    formId
+  );
+  if (!rules.length) return steps;
+  const people = await loadPeople(conn, rules.map((r) => r.targetUserId));
+  const extras = rules
+    .filter((r) => people[r.targetUserId])
+    .map((r) => ({ person: people[r.targetUserId], position: r.position ?? "first" }));
+  return insertDrafterExtras(steps, extras, drafterUserId);
+}
+
 /** 기안자·양식·필드 값 기준 고정 결재선. enforced:false 면 종전처럼 자유 지정. */
 export async function resolveFixedLine(params: {
   formId: string;
@@ -184,7 +210,8 @@ export async function resolveFixedLine(params: {
   const { steps, errors } = resolveLineSteps(tpl, facts);
   const enforceField = tpl.enforceWhen?.field ?? null;
   if (errors.length) return { enforced: true, ok: false, steps, errors, enforceField };
-  return { enforced: true, ok: true, steps, enforceField };
+  // 기안자별 추가 결재자(353) — 고정 결재선이 풀린 뒤에만 끼운다
+  return { enforced: true, ok: true, steps: await withDrafterExtras(conn, steps, tpl.formId, drafter.userId), enforceField };
 }
 
 // ── 관리 화면(결재 운영 > 고정 결재선) ──────────────────────────────────────
@@ -388,17 +415,26 @@ export async function previewFixedLines(): Promise<
     )
   );
   const roleRows = await loadRoleRows(db);
+  // 기안자별 추가 결재자(353) — 한 번에 읽어 기안자별로 나눈다
+  const userRules = (await listLineUserRules(db)).filter((r) => r.kind === "approve" && r.targetActive);
   const out = [];
   for (const u of users) {
     const drafter = await loadDrafter(db, String(u.user_id));
     const facts = await loadFacts(db, tpls, drafter, roleRows);
+    const myRules = userRules.filter((r) => r.drafterUserId === drafter.userId);
     const lines: Record<string, { ok: boolean; text: string }> = {};
     for (const tpl of tpls) {
       if (!tpl.steps.length) continue;
-      const { steps, errors } = resolveLineSteps(tpl, facts);
+      const { steps: base, errors } = resolveLineSteps(tpl, facts);
+      const steps = errors.length || !myRules.length ? base : await withDrafterExtras(db, base, tpl.formId, drafter.userId, myRules);
       lines[tpl.formId] = errors.length
         ? { ok: false, text: errors.join(" / ") }
-        : { ok: true, text: steps.map((s) => s.name + (s.proxies.length ? `(대결 ${s.proxies.map((p) => p.name).join("·")})` : "")).join(" → ") };
+        : {
+            ok: true,
+            text: steps
+              .map((s) => s.name + (s.role === "extra" ? "(추가)" : "") + (s.proxies.length ? `(대결 ${s.proxies.map((p) => p.name).join("·")})` : ""))
+              .join(" → "),
+          };
     }
     out.push({ userId: String(u.user_id), name: String(u.name ?? ""), deptName: u.dept_name != null ? String(u.dept_name) : null, lines });
   }

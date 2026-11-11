@@ -6,6 +6,7 @@
 //   4) 연달아 같은 사람은 한 번만(연구소 부서장=임원 신총식).
 //   5) 하나라도 못 풀면(공석·부서장 복수·담당자 미지정·퇴사) 상신 불가 — errors 에 이유를 담는다.
 //   6) headDrafterTo(347) — 기안자가 부서장이면 사다리를 그 역할까지 채운다(휴가 등: 부서장 기안 → 임원 → 대표이사).
+//   7) 기안자별 추가 결재자(353) — 위 결과에 관리자가 직원별로 정한 결재자를 끼운다(insertDrafterExtras).
 
 export type LineRole = "dept_head" | "exec" | "ceo" | "manager";
 
@@ -21,6 +22,48 @@ export const LINE_ROLE_LABELS: Record<LineRole, string> = {
 /** 사다리 서열 — 관리자(manager)는 사다리 밖(지위와 무관한 지정 담당). */
 const LADDER_RANK: Partial<Record<LineRole, number>> = { dept_head: 1, exec: 2, ceo: 3 };
 const LADDER: LineRole[] = ["dept_head", "exec", "ceo"];
+
+/** 결재선 단계 표기 역할 — 템플릿 역할 + 기안자별 추가 결재자(353). 템플릿에는 extra 를 쓰지 않는다. */
+export type LineStepRole = LineRole | "extra";
+
+export const LINE_STEP_ROLE_LABELS: Record<LineStepRole, string> = { ...LINE_ROLE_LABELS, extra: "추가 결재" };
+
+/** 기안자별 추가 결재자 자리(353) — 맨 앞 · 마지막 결재자 바로 앞 · 맨 뒤(최종 결재) */
+export type ExtraPosition = "first" | "before_last" | "last";
+
+export const EXTRA_POSITIONS: ExtraPosition[] = ["first", "before_last", "last"];
+
+export const EXTRA_POSITION_LABELS: Record<ExtraPosition, string> = {
+  first: "맨 앞",
+  before_last: "최종 결재자 바로 앞",
+  last: "맨 뒤(최종 결재)",
+};
+
+export function parseExtraPosition(raw: unknown): ExtraPosition {
+  return raw === "before_last" || raw === "last" ? raw : "first";
+}
+
+/** 기안자별 규칙(353) — 결재자 추가(approve)·참조(ref)·열람(view). formId '*' = 모든 양식. */
+export type DrafterRuleKind = "approve" | "ref" | "view";
+
+export const DRAFTER_RULE_KIND_LABELS: Record<DrafterRuleKind, string> = { approve: "결재자 추가", ref: "참조", view: "열람" };
+
+export interface DrafterRuleLite {
+  formId: string;
+  kind: DrafterRuleKind;
+  targetUserId: string;
+  position: ExtraPosition | null;
+  /** 정렬 기준(등록 순) */
+  updatedAt?: string | null;
+}
+
+/** 양식에 적용할 기안자별 규칙 — 같은 대상이면 양식 행이 '*' 행을 덮어쓴다. 입력 순서를 지킨다. */
+export function pickDrafterRules<T extends DrafterRuleLite>(rules: T[], formId: string): T[] {
+  const byTarget = new Map<string, T>();
+  for (const r of rules) if (r.formId === "*") byTarget.set(r.targetUserId, r);
+  for (const r of rules) if (r.formId === formId) byTarget.set(r.targetUserId, r);
+  return rules.filter((r) => byTarget.get(r.targetUserId) === r);
+}
 
 export interface LineTemplateStep {
   role: LineRole;
@@ -57,7 +100,7 @@ export interface LinePerson {
 }
 
 export interface FixedLineStep extends LinePerson {
-  role: LineRole;
+  role: LineStepRole;
   /** 지정 대결자(기안자 본인 제외) */
   proxies: LinePerson[];
 }
@@ -229,6 +272,27 @@ export function resolveLineSteps(tpl: LineTemplate, facts: FixedLineFacts): { st
   return { steps, errors };
 }
 
+/**
+ * 기안자별 추가 결재자(353)를 해석된 고정 결재선에 끼운다. 기안자 본인·이미 결재선에 있는 사람·중복은 건너뛴다.
+ * 같은 자리의 추가 결재자는 입력 순서대로. 결재선이 비어 있으면(해석 실패) 그대로 둔다.
+ */
+export function insertDrafterExtras(
+  steps: FixedLineStep[],
+  extras: Array<{ person: LinePerson; position: ExtraPosition }>,
+  drafterUserId: string
+): FixedLineStep[] {
+  if (!steps.length || !extras.length) return steps;
+  const seen = new Set<string>([drafterUserId, ...steps.map((s) => s.userId)]);
+  const groups: Record<ExtraPosition, FixedLineStep[]> = { first: [], before_last: [], last: [] };
+  for (const e of extras) {
+    if (!e.person?.userId || seen.has(e.person.userId)) continue;
+    seen.add(e.person.userId);
+    groups[e.position].push({ ...e.person, role: "extra", proxies: [] });
+  }
+  const last = steps[steps.length - 1];
+  return [...groups.first, ...steps.slice(0, -1), ...groups.before_last, last, ...groups.last];
+}
+
 /** 결재선 비교 — 승인 단계 결재자 순서가 같은가(합의·병렬 없음). */
 export function sameLineAssignees(a: Array<{ assigneeUserId: string; stepType?: string }>, b: Array<{ userId: string }>): boolean {
   if (a.length !== b.length) return false;
@@ -237,5 +301,5 @@ export function sameLineAssignees(a: Array<{ assigneeUserId: string; stepType?: 
 
 /** 결재선 표기 — "한도경(부서장) → 정득종(임원) → 이유억(대표이사)" */
 export function describeFixedLine(steps: FixedLineStep[]): string {
-  return steps.map((s) => `${s.name}(${LINE_ROLE_LABELS[s.role]})`).join(" → ");
+  return steps.map((s) => `${s.name}(${LINE_STEP_ROLE_LABELS[s.role]})`).join(" → ");
 }

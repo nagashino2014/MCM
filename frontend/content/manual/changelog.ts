@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-11", kind: "신규", title: "전자결재 — 직원별 추가 결재자·참조·열람",
+    body: "결재 운영 > 고정 결재선에 ‘직원별 추가 결재선·참조·열람’이 생겼습니다. 결재선에 사람을 더 넣어 달라는 요청이 있으면 관리자가 그 직원이 기안하는 문서에만 결재자를 덧붙이거나(맨 앞·최종 결재자 바로 앞·맨 뒤) 참조·열람자를 넣을 수 있습니다. 양식별 고정 결재선은 그대로이고, 기안 화면의 결재선에는 ‘추가 결재’로 표시됩니다.",
+    articles: ["approval-ops.fixed-lines", "approval.draft"],
+  },
+  {
     date: "2026-11-11", kind: "개선", title: "회사소개서 — 제품 일정 타임라인 정렬",
     body: "통합허가 플랫폼 쪽 개발 일정의 선이 원 아래로 밀려 있던 것을 원 가운데를 지나도록 고쳤습니다. 응용소프트웨어 쪽 출시 일정과 함께 선이 첫 원에서 시작하고, 칸 사이에 틈을 두어 글이 옆 칸에 붙지 않습니다.",
     articles: ["sales.catalog-studio"],

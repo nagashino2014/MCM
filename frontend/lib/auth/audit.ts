@@ -24,6 +24,10 @@ export type AuditAction =
   | "contact_import_upload"
   | "contact_import_batch_delete"
   | "contact_import_decide"
+  | "facility_quick_create" // 주소록 간이 등록(357) — 업체
+  | "facility_contact_person_quick_create" // 주소록 간이 등록(357) — 담당자
+  | "contact_quick_confirm"
+  | "contact_quick_request"
   | "facility_listing_change"
   | "facility_update"
   | "facility_enrich_apply"

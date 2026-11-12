@@ -8,6 +8,7 @@ import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
+import { MailAddressLink, splitMailAddress } from "@/components/mail/MailAddressLink";
 import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 
@@ -38,6 +39,7 @@ export function MailViewerPane({
   onSpam,
   onUnspam,
   onTodo,
+  onAddressClick,
 }: {
   detail: MailMessageDetail | null;
   loading: boolean;
@@ -55,6 +57,8 @@ export function MailViewerPane({
   onUnspam: () => void;
   /** §26-1 이 메일을 연결한 할 일 만들기(/todo?new=1&linkKind=mail…) */
   onTodo?: () => void;
+  /** 보낸사람·받는사람·참조 주소를 누르거나 우클릭 — 주소 메뉴(주소록 추가 등)를 연다(2026-11-12). */
+  onAddressClick?: (address: string, name: string | null, rect: DOMRect) => void;
 }) {
   if (loading) {
     return (
@@ -143,10 +147,34 @@ export function MailViewerPane({
         <div className="flex items-center gap-2.5">
           <CdAvatar name={fromName} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold cd-text truncate">{detail.fromAddr ?? "-"}</p>
+            <p className="text-sm font-semibold cd-text truncate">
+              {detail.fromAddr ? (
+                <MailAddressLink {...splitMailAddress(detail.fromAddr)} label={detail.fromAddr} onOpen={onAddressClick} />
+              ) : (
+                "-"
+              )}
+            </p>
             <p className="text-xs cd-text-faint truncate">
-              받는 사람: {detail.toAddrs.map((a) => a.address).join(", ") || "-"}
-              {detail.ccAddrs.length > 0 && ` · 참조: ${detail.ccAddrs.map((a) => a.address).join(", ")}`}
+              받는 사람:{" "}
+              {detail.toAddrs.length
+                ? detail.toAddrs.map((a, i) => (
+                    <span key={`to-${i}`}>
+                      {i > 0 && ", "}
+                      <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
+                    </span>
+                  ))
+                : "-"}
+              {detail.ccAddrs.length > 0 && (
+                <>
+                  {" · 참조: "}
+                  {detail.ccAddrs.map((a, i) => (
+                    <span key={`cc-${i}`}>
+                      {i > 0 && ", "}
+                      <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
+                    </span>
+                  ))}
+                </>
+              )}
             </p>
           </div>
           <span className="text-xs cd-text-faint shrink-0">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>

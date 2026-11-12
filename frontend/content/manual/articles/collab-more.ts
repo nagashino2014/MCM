@@ -56,7 +56,8 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "출장보고서의 접견인 칸에서도 [[새 담당자]]로 등록하면서 바로 접견인으로 넣을 수 있습니다.",
           ] },
           { kind: "list", items: [
-            "기관·업체는 이미 등록된 사업장에서 고릅니다. 목록에 없으면 사업장 관리 담당자에게 등록을 요청하세요.",
+            "기관·업체는 이미 등록된 사업장에서 고릅니다. 목록에 없으면 사업장 관리 담당자에게 등록을 요청하세요. 메일에서 주소를 눌러 주소록 추가를 하면 업체명만으로 간이 업체를 만들 수 있습니다.",
+            "이름 옆 [[간이]] 표시는 메일에서 간이 등록한 뒤 아직 보완·확정하지 않은 담당자입니다.",
             "[[연락처 구분]]은 소속 기관·업체의 속성이라 사업장 수정 권한이 있는 사람만 바꿉니다. 바꾸면 같은 기관·업체의 담당자 전원에게 함께 적용됩니다.",
             "등록·수정 기록은 누가 언제 바꿨는지 남습니다.",
           ] },
@@ -105,7 +106,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형", "담당자 등록", "접견인", "비상 연락망", "비상연락망", "엑셀", "PDF", "총 인원"],
     sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx"],
-    reviewedAt: "2026-11-05",
+    reviewedAt: "2026-11-12",
   },
 
   // ── 공지·게시판 ──

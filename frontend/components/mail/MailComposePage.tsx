@@ -16,7 +16,6 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdButton } from "@/components/cdash/CdButton";
-import { CdInput } from "@/components/cdash/CdField";
 import { CdModal } from "@/components/cdash/CdModal";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailEditor } from "@/components/mail/MailEditor";
@@ -758,8 +757,11 @@ export function MailComposePage() {
         <p className="text-sm cd-text-faint p-4">불러오는 중입니다.</p>
       ) : (
         // 폭: 고정 max-w 없이 브라우저 폭 추종(네이버 메일 방식 — 셸의 울트라와이드 상한만 적용됨).
-        <div className="relative flex flex-col gap-3 w-full">
+        // 가로 배치(2026-11-12 사용자 요청): sm 이상에서 받는 사람·참조·제목·파일첨부를 "왼쪽 이름표 | 오른쪽 입력란" 한 줄로.
+        // 이름표 칸 폭은 --mail-row-label 하나로 맞춘다(RecipientInput inline 도 같은 변수를 쓴다).
+        <div className="relative flex flex-col gap-2.5 w-full [--mail-row-label:12rem]">
           <RecipientInput
+            inline
             label="받는 사람"
             required
             labelExtra={
@@ -799,6 +801,7 @@ export function MailComposePage() {
           />
           {showCc && !individual && (
             <RecipientInput
+              inline
               label="참조(CC)"
               labelExtra={
                 <span className="flex items-center gap-2">
@@ -831,6 +834,7 @@ export function MailComposePage() {
           )}
           {showBcc && !individual && (
             <RecipientInput
+              inline
               label="숨은 참조(BCC)"
               hint="숨은 참조 수신자는 다른 수신자에게 표시되지 않습니다."
               labelExtra={
@@ -855,20 +859,29 @@ export function MailComposePage() {
               placeholder="숨은 참조 수신자"
             />
           )}
-          <CdInput
-            label="제목"
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value);
-              scheduleDraftSave();
-            }}
-            placeholder="제목"
-          />
+          <div className="flex flex-col gap-1 sm:grid sm:grid-cols-[var(--mail-row-label)_minmax(0,1fr)] sm:gap-x-3 sm:items-center">
+            <label htmlFor="mail-compose-subject" className="cd-label sm:!mb-0">
+              제목
+            </label>
+            <input
+              id="mail-compose-subject"
+              className="cd-input"
+              value={subject}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                scheduleDraftSave();
+              }}
+              placeholder="제목"
+            />
+          </div>
 
           {/* 파일첨부 — 내 PC / 문서함 버튼 + 상시 드롭존(네이버 메일식).
               드롭존·버튼은 불투명 흰 배경 + 윤곽선으로 페이지 배경과 구분. */}
-          <div className="flex flex-col gap-1.5" onDragEnter={() => !attachOpen && changeAttachOpen(true)}>
-            <span className="cd-label !flex items-center gap-2">
+          <div
+            className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[var(--mail-row-label)_minmax(0,1fr)] sm:gap-x-3 sm:items-start"
+            onDragEnter={() => !attachOpen && changeAttachOpen(true)}
+          >
+            <span className="cd-label !flex items-center gap-2 sm:!mb-0 sm:min-h-[2rem]">
               {/* 끌어 놓기 칸 접기·펼치기(2026-11-12 사용자 요청) — 접어도 파일을 끌어오면 다시 펼친다. 상태는 이 브라우저에 기억. */}
               <button
                 type="button"
@@ -880,9 +893,12 @@ export function MailComposePage() {
                 <span>파일첨부{!attachOpen && files.length > 0 ? ` ${files.length}개` : ""}</span>
                 {attachOpen ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
               </button>
-              <span className="mr-3 inline-flex">
+              <span className="inline-flex">
                 <CdHelp topic="mail.attach" />
               </span>
+            </span>
+            <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <CdButton size="sm" className="cd-card-bg" icon={<HardDrive className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
                 내 PC
               </CdButton>
@@ -900,7 +916,7 @@ export function MailComposePage() {
                   {largeCount > 0 ? ` · 대용량 ${largeCount}개는 다운로드 링크로 발송` : ""}
                 </span>
               )}
-            </span>
+            </div>
             {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. 높이 7rem → 4.5rem(11-12). */}
             {attachOpen && (
             <div
@@ -955,6 +971,7 @@ export function MailComposePage() {
               )}
             </div>
             )}
+            </div>
           </div>
 
           <MailEditor

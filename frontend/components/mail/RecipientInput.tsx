@@ -52,6 +52,7 @@ export function RecipientInput({
   placeholder,
   value,
   onChange,
+  inline,
 }: {
   label: ReactNode;
   required?: boolean;
@@ -60,6 +61,11 @@ export function RecipientInput({
   placeholder?: string;
   value: string;
   onChange: (next: string) => void;
+  /**
+   * 가로 배치(2026-11-12 사용자 요청 — 메일 쓰기 줄 수 줄이기): sm 이상에서 이름표를 왼쪽 칸, 입력란을 오른쪽 칸에 둔다.
+   * 왼쪽 칸 폭은 부모의 CSS 변수 --mail-row-label(기본 12rem). 좁은 화면은 종전처럼 위아래.
+   */
+  inline?: boolean;
 }) {
   const [items, setItems] = useState<RecipientSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -132,10 +138,17 @@ export function RecipientInput({
   const showList = open && query.length >= 1 && items.length > 0;
 
   return (
-    <div ref={rootRef} className="relative flex flex-col gap-1">
+    <div
+      ref={rootRef}
+      className={
+        inline
+          ? "relative flex flex-col gap-1 sm:grid sm:grid-cols-[var(--mail-row-label,12rem)_minmax(0,1fr)] sm:gap-x-3 sm:items-start"
+          : "relative flex flex-col gap-1"
+      }
+    >
       {/* 라벨 한 줄에 라벨·부가 단추(개인별·+참조 등)를 나란히 둔다(2026-11-12 사용자 요청 — 메일 쓰기 위쪽 공간 줄이기).
           .cd-label 이 display:block 이라 flex 유틸이 덮여 부가 단추가 아래 줄로 떨어졌었다 → !flex 로 고정. */}
-      <span className="cd-label !flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className={`cd-label !flex flex-wrap items-center gap-x-3 gap-y-1${inline ? " sm:!mb-0 sm:min-h-[2.5rem]" : ""}`}>
         <span>
           {label}
           {required && <span className="cd-error-text ml-0.5">*</span>}
@@ -215,11 +228,13 @@ export function RecipientInput({
           }}
         />
       </div>
-      {hint && <span className="text-xs cd-text-faint">{hint}</span>}
+      {hint && <span className={`text-xs cd-text-faint${inline ? " sm:col-start-2" : ""}`}>{hint}</span>}
 
       {showList && (
         <div
-          className="absolute z-50 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg overflow-hidden"
+          className={`absolute z-50 top-full mt-1 left-0 right-0 rounded-xl border cd-border-c cd-card-bg overflow-hidden${
+            inline ? " sm:left-[calc(var(--mail-row-label,12rem)+0.75rem)]" : ""
+          }`}
           style={{ boxShadow: "var(--cd-shadow)" }}
         >
           {items.map((s, i) => {

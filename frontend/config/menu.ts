@@ -254,6 +254,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "목록", href: "/external-parties" },
       { title: "연락처 가져오기", href: "/external-parties/import" },
+      // 메일 주소에서 '주소록 추가'로 만든 간이 업체·담당자(357, 2026-11-12). 관리자는 확정·상세정보 요청, 직원은 보완.
+      { title: "간이 등록", href: "/external-parties/quick" },
     ],
   },
   {

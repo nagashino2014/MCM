@@ -19,6 +19,7 @@ import { MailViewerPane } from "@/components/mail/MailViewerPane";
 import { MailReceiptsPane } from "@/components/mail/MailReceiptsPane";
 import { MailSettingsPane } from "@/components/mail/MailSettingsPane";
 import { MailSenderMenu, type MailSenderMenuState } from "@/components/mail/MailSenderMenu";
+import { QuickContactModal } from "@/components/directory/QuickContactModal";
 import { PAGE_SIZE_OPTIONS, PaginationControls, usePageSize } from "@/components/ui/PaginationControls";
 import type { MailboxUsage, MailFolderInfo, MailListItem, MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
@@ -38,6 +39,8 @@ export function MailBoard() {
   // 보낸 사람 팝업(10-21) — 열린 주소·위치, 발신자별 자동 분류 규칙(주소 → 분류 폴더 id).
   const [senderMenu, setSenderMenu] = useState<MailSenderMenuState | null>(null);
   const [senderRules, setSenderRules] = useState<Record<string, string>>({});
+  // 주소록 간이 등록(2026-11-12) — 주소 메뉴의 [주소록 추가]가 연다.
+  const [quickContact, setQuickContact] = useState<{ address: string; name: string | null } | null>(null);
   const [folder, setFolder] = useState("inbox");
   const [activeCategory, setActiveCategory] = useState(""); // 받은편지함 카테고리 필터
   const [items, setItems] = useState<MailListItem[]>([]);
@@ -327,19 +330,9 @@ export function MailBoard() {
 
   // ── 보낸 사람 팝업(10-21) ─────────────────────────
   const closeSenderMenu = useCallback(() => setSenderMenu(null), []);
-  const addContact = async (addr: string) => {
-    const name = window.prompt(`주소록에 저장할 이름을 입력하세요.
-(${addr} — 비워 두면 주소만 저장합니다)`, "");
-    if (name == null) return;
-    const r = await fetch("/api/mail/contacts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: addr, name }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (r.ok) toast("내 메일 주소록에 추가했습니다. 메일 쓰기에서 받는 사람으로 바로 찾을 수 있습니다.", "success");
-    else toast(String(d.error ?? "주소록에 추가하지 못했습니다."), "error");
-  };
+  // 요청 9(2026-11-12): 예전에는 내 메일 주소록(mail_contacts)에만 넣어 주소록 화면 검색에 나오지 않았다.
+  // 이제 업체를 정해 사업장 담당자로 넣는 간이 등록 양식을 연다.
+  const addContact = (addr: string, name?: string | null) => setQuickContact({ address: addr, name: name ?? null });
   const blockSenderAddr = async (addr: string) => {
     if (!window.confirm(`${addr} 를 차단할까요?
 받은편지함의 이 주소 메일을 스팸함으로 옮기고, 이후 받는 메일도 스팸함으로 들어갑니다.`)) return;
@@ -409,6 +402,7 @@ export function MailBoard() {
       onSetCategory={setMessageCategory}
       onArchive={() => detail && runBulk([detail.messageId], { action: "archive" })}
       onSpam={markSpam}
+      onAddressClick={(addr, name, rect) => setSenderMenu({ address: addr, name, anchor: { left: rect.left, top: rect.top, bottom: rect.bottom } })}
       onTodo={() => {
         if (!detail) return;
         const q = new URLSearchParams({ new: "1", linkKind: "mail", linkId: detail.messageId, linkLabel: (detail.subject || "(제목 없음)").slice(0, 80), title: (detail.subject || "").slice(0, 120) });
@@ -591,7 +585,7 @@ export function MailBoard() {
         currentCategoryId={senderMenu ? senderRules[senderMenu.address.toLowerCase()] ?? null : null}
         onClose={closeSenderMenu}
         onCompose={(addr) => router.push(`/mail/compose?to=${encodeURIComponent(addr)}`)}
-        onAddContact={(addr) => void addContact(addr)}
+        onAddContact={(addr) => addContact(addr, senderMenu?.name)}
         onBlock={(addr) => void blockSenderAddr(addr)}
         onSearch={(addr) => {
           setQ(addr);
@@ -600,6 +594,9 @@ export function MailBoard() {
         }}
         onAssignCategory={(addr, id) => void assignSenderCategory(addr, id)}
       />
+      {quickContact && (
+        <QuickContactModal email={quickContact.address} displayName={quickContact.name} source="mail" onClose={() => setQuickContact(null)} />
+      )}
     </div>
   );
 }

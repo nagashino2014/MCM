@@ -46,21 +46,22 @@ export const MAIL_ARTICLES: ManualArticle[] = [
       },
       {
         id: "sender",
-        title: "보낸 사람 메뉴 — 검색·주소록·자동 분류",
+        title: "주소 메뉴 — 검색·주소록·자동 분류",
         blocks: [
-          { kind: "p", text: "목록에서 보낸 사람 주소를 누르면 메뉴가 열립니다(보낸편지함 제외)." },
+          { kind: "p", text: "목록에서 보낸 사람 주소를 누르면 메뉴가 열립니다(보낸편지함 제외). 메일을 연 뒤 위쪽의 보낸사람·받는사람·참조 주소를 누르거나 마우스 오른쪽 버튼으로 눌러도 같은 메뉴가 열립니다. 받은 메일·보낸 메일 모두 됩니다." },
           {
             kind: "table",
             head: ["메뉴", "하는 일"],
             rows: [
               ["메일 쓰기", "이 주소를 받는 사람으로 넣고 메일 쓰기를 엽니다."],
-              ["주소록 추가", "이름을 입력해 내 메일 주소록에 저장합니다. 메일 쓰기 받는 사람 칸에서 바로 찾을 수 있습니다."],
+              ["주소록 추가", "[[주소록에 추가]] 창이 열립니다. 업체를 먼저 고르고(메일 도메인으로 찾은 업체가 위에 나옵니다) 담당자 이름·직함·전화를 넣어 [[등록]]합니다. 주소록 외부 연락처와 메일 쓰기 받는 사람 칸에서 바로 찾을 수 있습니다."],
               ["주소 복사", "주소를 클립보드에 복사합니다."],
               ["차단", "받은편지함의 이 주소 메일을 스팸함으로 옮기고, 이후 받는 메일도 스팸함으로 보냅니다."],
               ["[[보낸 사람으로 검색]]", "지금 폴더에서 이 주소로 검색합니다."],
               ["메일 분류 지정", "고른 분류(받은편지함 카테고리)로 이 주소에서 온 받은편지함 메일을 모두 옮기고(다른 분류에 있던 메일 포함), 앞으로 받는 메일도 자동으로 그 분류에 넣습니다. 주소의 대소문자·표시 이름은 따지지 않습니다. [[자동 분류 해제]]로 끌 수 있습니다."],
             ],
           },
+          { kind: "tip", text: "찾는 업체가 없으면 [[새 업체로 간이 등록]]을 눌러 업체명만으로 등록합니다. 간이로 만든 업체·담당자는 관리자가 확인해 확정하고, 담당자 정보가 부족하면 등록한 직원에게 보완을 요청합니다(기타 업체·기관 > 간이 등록)." },
           { kind: "tip", text: "분류는 받은편지함 아래 [[새 카테고리]]로 먼저 만들어 둡니다. 자동 분류를 해제하면 이 규칙으로 옮겨진 메일이 원래 분류(없었으면 미분류)로 돌아갑니다. 그 사이 직접 다른 분류로 바꾸거나 보관한 메일은 그대로 둡니다." },
           { kind: "p", text: "MCM이 보내는 알림·브리핑(no-reply@)과 주간 할 일 요약(noreply@)은 한 발신자로 묶여, 어느 쪽에서 분류를 지정해도 함께 분류됩니다." },
         ],
@@ -127,7 +128,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "여러 개 선택", "Shift", "전체답장", "첨부 전체 저장", "ZIP", "압축", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램", "알림", "PC 알림", "새 메일 알림"],
-    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/mail/MailDesktopNotifySection.tsx"],
+    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailAddressLink.tsx", "components/directory/QuickContactModal.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/mail/MailDesktopNotifySection.tsx"],
     reviewedAt: "2026-11-12",
   },
   {

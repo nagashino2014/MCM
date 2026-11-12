@@ -96,6 +96,8 @@ export async function ingestContactFile(
       );
       company = { company_id: companyId, decision: null };
     }
+    // 이미 사업장으로 옮겨진 사람이 다른 직원 파일에서 다시 나오면, 새로 알게 된 값(이메일 등)을 사업장 담당자의 빈 칸에 채운다.
+    const refilled: number[] = [];
     for (const contact of contacts) {
       const dedupeKey = contactDedupeKey(key, contact.personName, contact.mobilePhone, contact.email);
       const inserted = rowsToObjects(await db.exec(
@@ -110,14 +112,20 @@ export async function ingestContactFile(
            fax_number = COALESCE(contact_import_rows.fax_number, EXCLUDED.fax_number),
            email = COALESCE(contact_import_rows.email, EXCLUDED.email),
            updated_at = EXCLUDED.updated_at
-         RETURNING (xmax = 0) AS is_new`,
+         RETURNING id, status, (xmax = 0) AS is_new`,
         [batchId, companyId, dedupeKey, contact.personName, contact.title, contact.department,
           contact.officePhone, contact.mobilePhone, contact.faxNumber, contact.email, now]
       ));
       if (inserted[0]?.is_new === true || inserted[0]?.is_new === "t") newCount += 1;
-      else duplicateCount += 1;
+      else {
+        duplicateCount += 1;
+        if (inserted[0]?.status === "imported") refilled.push(Number(inserted[0].id));
+      }
     }
-    if (company.decision && company.decision !== "exclude") await moveCompanyContacts(db, companyId, now);
+    if (company.decision && company.decision !== "exclude") {
+      await moveCompanyContacts(db, companyId, now);
+      await refillImportedContacts(db, companyId, refilled, now);
+    }
   }
   await db.run(`UPDATE contact_import_batches SET new_count = $2, duplicate_count = $3 WHERE batch_id = $1`, [batchId, newCount, duplicateCount]);
   await recordAuditLogInline(db, {
@@ -143,8 +151,11 @@ interface ContactFields {
   person_name: unknown; title: unknown; department: unknown; office_phone: unknown; mobile_phone: unknown; fax_number: unknown; email: unknown;
 }
 
-/** 사업장 담당자에 넣는다. 명함 등록과 같은 기준으로 같은 사람은 갱신한다(이름 + 휴대폰). */
-export async function addFacilityContact(db: PgDatabase, facilityId: string, c: ContactFields, now: string): Promise<void> {
+/**
+ * 사업장 담당자에 넣는다. 명함 등록과 같은 기준으로 같은 사람은 갱신한다(이름 + 휴대폰).
+ * fillOnly 면 같은 사람이 있을 때 빈 칸만 채우고, 없으면(사람이 지웠으면) 다시 만들지 않는다.
+ */
+export async function addFacilityContact(db: PgDatabase, facilityId: string, c: ContactFields, now: string, opts: { fillOnly?: boolean } = {}): Promise<void> {
   const name = String(c.person_name);
   const department = toText(c.department);
   const mobile = toText(c.mobile_phone);
@@ -152,7 +163,7 @@ export async function addFacilityContact(db: PgDatabase, facilityId: string, c: 
   if (department) {
     const found = await first(db, `SELECT id FROM facility_contact_departments WHERE facility_id = $1 AND department_name = $2 LIMIT 1`, [facilityId, department]);
     if (found) departmentId = Number(found.id);
-    else {
+    else if (!opts.fillOnly) {
       const created = await first(db,
         `INSERT INTO facility_contact_departments (facility_id, department_name, fax_number, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $4) RETURNING id`, [facilityId, department, toText(c.fax_number), now]);
@@ -178,6 +189,7 @@ export async function addFacilityContact(db: PgDatabase, facilityId: string, c: 
     );
     return;
   }
+  if (opts.fillOnly) return;
   await db.run(
     `INSERT INTO facility_contact_people
        (facility_id, department_id, person_name, title, office_phone, mobile_phone, email, status, created_at, updated_at)
@@ -205,6 +217,19 @@ async function moveCompanyContacts(db: PgDatabase, companyId: string, now: strin
     await db.run(`UPDATE contact_import_rows SET status = 'imported', updated_at = $2 WHERE id = $1`, [Number(row.id), now]);
   }
   return pending.length;
+}
+
+/** 이미 옮긴 담당자 행이 다시 올라와 빈 칸이 채워졌으면, 사업장 담당자의 빈 칸에도 반영한다. */
+async function refillImportedContacts(db: PgDatabase, companyId: string, rowIds: number[], now: string): Promise<void> {
+  if (!rowIds.length) return;
+  const company = await first(db, `SELECT decision, decided_facility_id FROM contact_import_companies WHERE company_id = $1`, [companyId]);
+  if (!company?.decision || company.decision === "exclude" || !company.decided_facility_id) return;
+  const facilityId = String(company.decided_facility_id);
+  const rows = rowsToObjects(await db.exec(
+    `SELECT id, person_name, title, department, office_phone, mobile_phone, fax_number, email
+       FROM contact_import_rows WHERE id = ANY($1::bigint[]) AND status = 'imported'`, [rowIds]
+  ));
+  for (const row of rows) await addFacilityContact(db, facilityId, row as unknown as ContactFields, now, { fillOnly: true });
 }
 
 interface RegisterInput {

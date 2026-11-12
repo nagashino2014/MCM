@@ -46,6 +46,8 @@ interface ExternalContact {
   deptType: string | null;
   orgCategory: string | null;
   status: string;
+  /** 간이 등록(357) 후 보완·확정 전. */
+  quick?: boolean;
 }
 
 const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
@@ -379,7 +381,14 @@ export function DirectoryBoard() {
                   <tbody>
                     {filteredContacts.map((c) => (
                       <tr key={c.id}>
-                        <td className="cd-text font-bold whitespace-nowrap">{c.personName}</td>
+                        <td className="cd-text font-bold whitespace-nowrap">
+                          {c.personName}
+                          {c.quick && (
+                            <span className="ml-1.5 cd-pill cd-pill-warn font-normal" title="메일에서 간이 등록한 담당자 — 상세 정보 보완 전">
+                              간이
+                            </span>
+                          )}
+                        </td>
                         <td className="cd-text-muted whitespace-nowrap">{c.title ?? "-"}</td>
                         <td className="cd-text-muted">{c.facilityName ?? "-"}</td>
                         <td className="whitespace-nowrap">

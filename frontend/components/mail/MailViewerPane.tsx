@@ -9,6 +9,7 @@ import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
+import { MailAddressLink, splitMailAddress } from "@/components/mail/MailAddressLink";
 import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 
@@ -107,6 +108,7 @@ export function MailViewerPane({
   onTodo,
   myAddress,
   onResend,
+  onAddressClick,
 }: {
   detail: MailMessageDetail | null;
   loading: boolean;
@@ -128,6 +130,8 @@ export function MailViewerPane({
   myAddress?: string;
   /** 보낸메일 다시보내기(2026-11-12 직원 요청 16) — 같은 수신자·제목·본문·첨부로 메일 쓰기를 연다. 보낸메일함에서만 표시. */
   onResend?: () => void;
+  /** 보낸사람·받는사람·참조 주소를 누르거나 우클릭 — 주소 메뉴(주소록 추가 등)를 연다(2026-11-12). */
+  onAddressClick?: (address: string, name: string | null, rect: DOMRect) => void;
 }) {
   if (loading) {
     return (
@@ -239,18 +243,49 @@ export function MailViewerPane({
         <div className="flex items-center gap-2.5">
           <CdAvatar name={fromName} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold cd-text truncate">{detail.fromAddr ?? "-"}</p>
+            <p className="text-sm font-semibold cd-text truncate">
+              {detail.fromAddr ? (
+                <MailAddressLink {...splitMailAddress(detail.fromAddr)} label={detail.fromAddr} onOpen={onAddressClick} />
+              ) : (
+                "-"
+              )}
+            </p>
             {/* 받는 사람·참조·숨은 참조는 줄을 나눠 전부 보인다 — 한 줄 말줄임에 참조가 가려져
-                "보낸메일에서 참조자가 안 보인다"는 지적(2026-11-12 직원 요청 15)이 있었다. */}
+                "보낸메일에서 참조자가 안 보인다"는 지적(2026-11-12 직원 요청 15)이 있었다.
+                각 주소는 누르거나 우클릭하면 주소 메뉴(주소록 추가 등)를 연다(직원 요청 20). */}
             <p className="text-xs cd-text-faint break-all">
-              받는 사람: {detail.toAddrs.map((a) => a.address).join(", ") || "-"}
+              받는 사람:{" "}
+              {detail.toAddrs.length
+                ? detail.toAddrs.map((a, i) => (
+                    <span key={`to-${i}`}>
+                      {i > 0 && ", "}
+                      <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
+                    </span>
+                  ))
+                : "-"}
               {detail.sendIndividual && " (개인별 보내기)"}
             </p>
             {detail.ccAddrs.length > 0 && (
-              <p className="text-xs cd-text-faint break-all">참조: {detail.ccAddrs.map((a) => a.address).join(", ")}</p>
+              <p className="text-xs cd-text-faint break-all">
+                참조:{" "}
+                {detail.ccAddrs.map((a, i) => (
+                  <span key={`cc-${i}`}>
+                    {i > 0 && ", "}
+                    <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
+                  </span>
+                ))}
+              </p>
             )}
             {(detail.bccAddrs?.length ?? 0) > 0 && (
-              <p className="text-xs cd-text-faint break-all">숨은 참조: {detail.bccAddrs.map((a) => a.address).join(", ")}</p>
+              <p className="text-xs cd-text-faint break-all">
+                숨은 참조:{" "}
+                {detail.bccAddrs.map((a, i) => (
+                  <span key={`bcc-${i}`}>
+                    {i > 0 && ", "}
+                    <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
+                  </span>
+                ))}
+              </p>
             )}
           </div>
           <span className="text-xs cd-text-faint shrink-0">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>

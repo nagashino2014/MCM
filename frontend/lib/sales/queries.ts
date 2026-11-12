@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { shortSido } from "@/lib/catalog/regions";
 import { syncSalesStaffGrants } from "./staff-access";
+import { openQuickPersonIds } from "@/lib/contact-quick/flags";
 import {
   ACTIVITY_TYPE_META,
   type ActivityAssigneeRole,
@@ -545,6 +546,8 @@ export interface SalesContact {
   transferredAt: string | null;
   resignedAt: string | null;
   updatedAt: string;
+  /** 간이 등록(357) 후 아직 보완·확정 전인 담당자. */
+  quick?: boolean;
 }
 
 export async function listSalesContacts(
@@ -586,7 +589,9 @@ export async function listSalesContacts(
         LIMIT 2000`
     )
   );
+  const quickIds = await openQuickPersonIds(db);
   return rows.map((r) => ({
+    quick: quickIds.has(Number(r.id ?? 0)),
     id: Number(r.id ?? 0),
     facilityId: String(r.facility_id ?? ""),
     facilityName: text(r.facility_name),

@@ -31,6 +31,34 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     sources: ["components/external-parties/ContactImportPanel.tsx"],
     reviewedAt: "2026-11-08",
   },
+  {
+    id: "external-parties.quick",
+    label: "간이 등록 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "메일 주소에서 주소록 추가로 만든 간이 업체·담당자입니다. 주소록에는 이미 나옵니다.",
+        "관리자는 업체 정보를 넣어 [[확정]]하거나, 담당자를 등록한 직원에게 [[상세정보 요청]]을 보냅니다.",
+        "직원은 자기가 등록한 담당자를 [[보완]]으로 채웁니다.",
+      ] },
+    ],
+    more: { article: "external-parties.quick" },
+    sources: ["components/external-parties/QuickRegistrationBoard.tsx"],
+    reviewedAt: "2026-11-12",
+  },
+  {
+    id: "directory.quick-register",
+    label: "주소록 추가 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "주소록 담당자는 업체에 속합니다. 업체를 먼저 고르고 담당자를 적습니다.",
+        "찾는 업체가 없으면 [[새 업체로 간이 등록]]으로 업체명만 적어 만듭니다. 관리자가 나중에 상세 정보를 넣습니다.",
+        "등록하면 주소록과 메일 받는 사람 검색에 바로 나옵니다.",
+      ] },
+    ],
+    more: { article: "external-parties.quick", section: "register" },
+    sources: ["components/directory/QuickContactModal.tsx"],
+    reviewedAt: "2026-11-12",
+  },
   // ── 사업장 ──
   {
     id: "facilities.contacts",

@@ -275,6 +275,8 @@ export function resolveLineSteps(tpl: LineTemplate, facts: FixedLineFacts): { st
 /**
  * 기안자별 추가 결재자(353)를 해석된 고정 결재선에 끼운다. 기안자 본인·이미 결재선에 있는 사람·중복은 건너뛴다.
  * 같은 자리의 추가 결재자는 입력 순서대로. 결재선이 비어 있으면(해석 실패) 그대로 둔다.
+ * 순서: 맨 앞 → 고정 결재선 → 맨 뒤 추가분 순으로 이은 뒤, 그 줄의 최종 결재자 바로 앞에 '최종 결재자 바로 앞' 추가분을 넣는다.
+ * '맨 뒤'가 있으면 최종 결재자는 마지막으로 등록된 맨 뒤 추가 결재자다(2026-11-12 결함 수정 — 종전엔 고정 결재선의 마지막 앞에 넣었다).
  */
 export function insertDrafterExtras(
   steps: FixedLineStep[],
@@ -289,8 +291,9 @@ export function insertDrafterExtras(
     seen.add(e.person.userId);
     groups[e.position].push({ ...e.person, role: "extra", proxies: [] });
   }
-  const last = steps[steps.length - 1];
-  return [...groups.first, ...steps.slice(0, -1), ...groups.before_last, last, ...groups.last];
+  const tail = [...steps, ...groups.last];
+  const final = tail[tail.length - 1];
+  return [...groups.first, ...tail.slice(0, -1), ...groups.before_last, final];
 }
 
 /** 결재선 비교 — 승인 단계 결재자 순서가 같은가(합의·병렬 없음). */

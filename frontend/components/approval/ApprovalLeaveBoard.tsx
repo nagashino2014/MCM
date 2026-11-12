@@ -237,7 +237,7 @@ export function ApprovalLeaveBoard() {
             ))}
           </select>
           <div className="ml-auto flex items-center gap-1.5 text-[12px] cd-text-faint">
-            연차 발생 기준
+            <span className="cd-label-text">연차 발생 기준</span>
             <select className="cd-select" style={{ width: 150 }} value={basis} onChange={(e) => changeBasis(e.target.value as AccrualBasis)}>
               <option value="jan1">회계연도(매년 1/1)</option>
               <option value="hire_date">입사일 기준</option>
@@ -663,11 +663,11 @@ function SpecialLeaveSection({
           <option value="day">일</option>
           <option value="hour">시간</option>
         </select>
-        <span className="cd-text-faint text-[11px]">기준일</span>
+        <span className="cd-label-text">기준일</span>
         <AutoDateInput className="cd-input" style={{ width: 112 }} value={form.effectiveOn} onChange={(effectiveOn) => setForm({ ...form, effectiveOn })} />
         {form.entryType !== "use" && (
           <>
-            <span className="cd-text-faint text-[11px]">소멸일(선택)</span>
+            <span className="cd-label-text">소멸일(선택)</span>
             <AutoDateInput className="cd-input" style={{ width: 112 }} value={form.expiresOn} onChange={(expiresOn) => setForm({ ...form, expiresOn })} />
           </>
         )}

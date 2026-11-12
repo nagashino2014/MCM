@@ -332,7 +332,7 @@ function HolidayModal({
         )}
 
         <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-semibold cd-text">휴무일명</span>
+          <span className="cd-label-text">휴무일명</span>
           <input
             className="cd-input"
             value={name}
@@ -340,11 +340,11 @@ function HolidayModal({
             placeholder="예: 창립기념일"
             maxLength={40}
           />
-          <span className="text-[11px] cd-text-faint">캘린더에 이 이름이 표시됩니다.</span>
+          <span className="cd-hint">캘린더에 이 이름이 표시됩니다.</span>
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-semibold cd-text">지정 사유</span>
+          <span className="cd-label-text">지정 사유</span>
           <select className="cd-select" value={reason} onChange={(e) => pickReason(e.target.value)}>
             {REASONS.map((r) => (
               <option key={r.key} value={r.key}>{r.label}</option>

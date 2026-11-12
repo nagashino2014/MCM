@@ -558,7 +558,7 @@ export function ApprovalNoticeBoard() {
               <FileText className="w-4 h-4 cd-text-primary shrink-0" />
               {manualOn && !noLocked && canAssign ? (
                 <span className="text-[13px] cd-text flex items-center gap-1.5 whitespace-nowrap">
-                  문서번호
+                  <span className="cd-label-text">문서번호</span>
                   <span className="font-mono cd-text-faint">내부고시-</span>
                   <input
                     className="cd-input font-mono text-center"
@@ -620,7 +620,7 @@ export function ApprovalNoticeBoard() {
                 className="flex items-center gap-1.5 text-[12px] cd-text whitespace-nowrap"
                 title="머리의 '시행일자'와 문서 끝 날짜입니다. 비워 두면 결재 완료일이 들어갑니다."
               >
-                시행일
+                <span className="cd-label-text">시행일</span>
                 <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(결재일)" style={{ width: 128 }} />
                 {issueDate && (
                   <button type="button" className="cd-btn cd-text-faint text-[11px] underline" onClick={() => setIssueDate("")}>
@@ -632,7 +632,7 @@ export function ApprovalNoticeBoard() {
 
             <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-2.5">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                수신
+                <span className="cd-label-text">수신</span>
                 <input
                   className="cd-input"
                   value={recipientText}
@@ -641,23 +641,26 @@ export function ApprovalNoticeBoard() {
                 />
               </label>
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                발신(문서 명의)
+                <span className="cd-label-text">발신(문서 명의)</span>
                 <input className="cd-input" value={senderText} onChange={(e) => setSenderText(e.target.value)} placeholder="예: 대표이사" />
               </label>
-              <p className="md:col-span-2 text-[11px] cd-text-faint -mt-1">
+              <p className="md:col-span-2 -mt-1 cd-hint">
                 발신은 고시 지면에 찍히는 명의이고, 기안자는 결재 문서에 기록되는 작성자입니다
                 {drafterName ? ` — 이 문서의 기안자: ${drafterName}` : ""}.
               </p>
             </div>
 
             <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-              제목
+              <span className="cd-label-text">제목</span>
               <input className="cd-input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="예: 「○○ 규정」 제정·시행 알림" />
             </label>
 
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] cd-text-faint">본문 — 분량에 따라 여러 쪽으로 자동 조판됩니다</span>
+                <span>
+                  <span className="cd-label-text">본문</span>
+                  <span className="ml-1.5 cd-hint">분량에 따라 여러 쪽으로 자동 조판됩니다</span>
+                </span>
                 <span className="ml-auto flex items-center gap-1.5">
                   <button
                     type="button"
@@ -676,7 +679,10 @@ export function ApprovalNoticeBoard() {
 
             {/* 붙임 목록 */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] cd-text-faint">붙임 (번호는 자동 부여·일렬종대 정렬)</span>
+              <span>
+                <span className="cd-label-text">붙임</span>
+                <span className="ml-1.5 cd-hint">(번호는 자동 부여·일렬종대 정렬)</span>
+              </span>
               {attachItems.map((t, i) => (
                 <div key={i} className="flex items-center gap-1.5">
                   <span className="text-[11px] font-mono cd-text-faint w-5 text-right">{i + 1}.</span>
@@ -698,8 +704,11 @@ export function ApprovalNoticeBoard() {
 
             {/* 첨부서류 — 결재자·열람자가 문서 뷰어에서 함께 확인한다 */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] cd-text-faint">첨부서류 — 붙임 문서 원본 등(결재 문서에 첨부되어 함께 열람)</span>
-              <span className="text-[11px] cd-text-faint">
+              <span>
+                <span className="cd-label-text">첨부서류</span>
+                <span className="ml-1.5 cd-hint">붙임 문서 원본 등(결재 문서에 첨부되어 함께 열람)</span>
+              </span>
+              <span className="cd-hint">
                 결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">

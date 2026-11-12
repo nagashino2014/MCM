@@ -181,7 +181,7 @@ export function ApprovalAbsenceBoard() {
       {canManage && (
         <div className="cd-card rounded-lg p-5 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-semibold cd-text">설정 대상</span>
+            <span className="cd-label-text">설정 대상</span>
             <span className="text-[13px] cd-text">{target ? `${target.name} (대리 설정)` : "본인"}</span>
             <CdButton size="sm" onClick={() => setPicker("target")}>
               다른 직원 선택
@@ -192,7 +192,7 @@ export function ApprovalAbsenceBoard() {
               </CdButton>
             )}
           </div>
-          <p className="text-[11px] cd-text-faint">결재 관리자는 갑작스러운 부재자를 대신해 등록·취소할 수 있습니다. 등록·취소하면 본인에게 알림이 갑니다.</p>
+          <p className="cd-hint">결재 관리자는 갑작스러운 부재자를 대신해 등록·취소할 수 있습니다. 등록·취소하면 본인에게 알림이 갑니다.</p>
         </div>
       )}
 
@@ -211,7 +211,7 @@ export function ApprovalAbsenceBoard() {
           <CdDateInput label="종료일" required value={endDate} onChange={setEndDate} />
         </div>
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-[12px] font-semibold cd-text mb-1">처리 방식</legend>
+          <legend className="mb-1 cd-label-text">처리 방식</legend>
           <label className="flex items-start gap-2 text-[13px] cd-text">
             <input type="radio" name="absence-mode" checked={mode === "delegate"} onChange={() => setMode("delegate")} className="mt-0.5" />
             <span>
@@ -225,7 +225,7 @@ export function ApprovalAbsenceBoard() {
         </fieldset>
         {mode === "delegate" && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-semibold cd-text">대결자</span>
+            <span className="cd-label-text">대결자</span>
             <span className="text-[13px] cd-text">{delegate ? delegate.name : <span className="cd-text-faint">미지정</span>}</span>
             <CdButton size="sm" onClick={() => setPicker("absence")}>
               {delegate ? "변경" : "조직도에서 선택"}

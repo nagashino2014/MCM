@@ -1200,7 +1200,7 @@ export function QuoteBoard() {
                   <span className="ml-auto shrink-0 text-[11px] cd-text-faint flex items-center gap-1.5 whitespace-nowrap">
                     {manualOn && !noLocked ? (
                       <>
-                        견적번호
+                        <span className="cd-label-text">견적번호</span>
                         <span className="font-mono">{quoteYear}-{quoteNoLabel(serviceType)}-</span>
                         <span className="w-[68px] shrink-0">
                           <input
@@ -1252,11 +1252,11 @@ export function QuoteBoard() {
                 {/* 건명·용역 분류·세분류·견적일 한 줄 — 분류 두 칸은 종전(1/4 열) 대비 75%, 견적일은 60% 고정폭 */}
                 <div className="flex flex-col md:flex-row gap-2.5">
                   <div className="flex-1 min-w-0 flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">건명(전체)</span>
+                    <span className="cd-label-text">건명(전체)</span>
                     <input className="cd-input text-sm" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="예: OOO㈜ OO공장 통합환경허가 취득 용역" />
                   </div>
                   <div className="md:w-[180px] md:shrink-0 flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">용역 분류</span>
+                    <span className="cd-label-text">용역 분류</span>
                     <select
                       className="cd-select"
                       value={serviceType}
@@ -1273,7 +1273,7 @@ export function QuoteBoard() {
                     </select>
                   </div>
                   <div className="md:w-[180px] md:shrink-0 flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">용역 세분류</span>
+                    <span className="cd-label-text">용역 세분류</span>
                     <select className="cd-select" value={serviceSubtype} onChange={(e) => setServiceSubtype(e.target.value)}>
                       {subtypeOptions.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -1283,12 +1283,15 @@ export function QuoteBoard() {
                     </select>
                   </div>
                   <div className="md:w-[144px] md:shrink-0 flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">견적일</span>
+                    <span className="cd-label-text">견적일</span>
                     <CdDateInput className="text-sm" value={issueDate} onChange={setIssueDate} aria-label="견적일" />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-[11px] cd-text-faint">발송 방식 — 승인 완료 후 처리</span>
+                  <span>
+                    <span className="cd-label-text">발송 방식</span>
+                    <span className="ml-1.5 cd-hint">승인 완료 후 처리</span>
+                  </span>
                   <div className="flex items-center gap-4 h-9">
                     <label className="flex items-center gap-1.5 text-[13px] cd-text cursor-pointer">
                       <input type="radio" checked={sendMode === "mail"} onChange={() => setSendMode("mail")} />
@@ -1375,11 +1378,17 @@ export function QuoteBoard() {
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">사업장 라벨(시트명·총괄 표기)</span>
+                        <span>
+                          <span className="cd-label-text">사업장 라벨</span>
+                          <span className="ml-1.5 cd-hint">(시트명·총괄 표기)</span>
+                        </span>
                         <input className="cd-input text-sm" value={site.siteLabel} onChange={(e) => updateSite(activeSite, { siteLabel: e.target.value })} />
                       </div>
                       <div className="md:col-span-2 flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">사업장별 건명(견적서 시트 표기)</span>
+                        <span>
+                          <span className="cd-label-text">사업장별 건명</span>
+                          <span className="ml-1.5 cd-hint">(견적서 시트 표기)</span>
+                        </span>
                         <input
                           className="cd-input text-sm"
                           value={site.subjectLine}
@@ -1919,7 +1928,10 @@ export function QuoteBoard() {
 
                     {/* 특이사항 */}
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">특이사항 (견적서 시트 하단)</span>
+                      <span>
+                        <span className="cd-label-text">특이사항</span>
+                        <span className="ml-1.5 cd-hint">(견적서 시트 하단)</span>
+                      </span>
                       {/* 높이는 cdash.css 의 textarea.cd-input{min-height:64px} 보다 우선하도록 inline(2026-09-30 사용자 요청: 종전의 2.5배) */}
                       <textarea className="cd-input text-[13px]" style={{ minHeight: 210 }} value={site.remarks} onChange={(e) => updateSite(activeSite, { remarks: e.target.value })} />
                     </div>
@@ -1945,7 +1957,7 @@ export function QuoteBoard() {
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-1 shrink-0 text-[12px] cd-text-faint whitespace-nowrap">조정률
+                    <label className="flex items-center gap-1 shrink-0 text-[12px] cd-text-faint whitespace-nowrap"><span className="cd-label-text">조정률</span>
                       <span className="w-16">
                         <input className="cd-input text-right text-[12px]" value={s.rate != null ? String(Math.round(s.rate * 100)) : ""} placeholder="-5" onChange={(e) => setSituation((prev) => prev.map((x, xi) => (xi === i ? { ...x, rate: e.target.value === "" ? undefined : Number(e.target.value) / 100 } : x)))} />
                       </span>%

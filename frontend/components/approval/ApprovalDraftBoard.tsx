@@ -1401,7 +1401,7 @@ export function ApprovalDraftBoard() {
           <div className="cd-card rounded-lg p-5 flex-1 min-w-0 max-w-[1152px] flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[260px]">
-                제목
+                <span className="cd-label-text">제목</span>
                 <input className="cd-input" value={title} onChange={(e) => setTitle(e.target.value)} />
               </label>
               <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer mt-4">
@@ -1620,8 +1620,11 @@ export function ApprovalDraftBoard() {
 
             {/* 첨부서류 — 영수증·증빙 등. 결재자는 문서 뷰어의 [첨부서류] 탭에서 내용을 확인한다. */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] cd-text-faint">
-                첨부서류 — 결재자가 뷰어에서 열 수 있는 형식만 첨부할 수 있습니다 ({ATTACHMENT_ALLOWED_TEXT} · 1건 200MB 까지)
+              <span>
+                <span className="cd-label-text">첨부서류</span>
+                <span className="ml-1.5 cd-hint">
+                  결재자가 뷰어에서 열 수 있는 형식만 첨부할 수 있습니다 ({ATTACHMENT_ALLOWED_TEXT} · 1건 200MB 까지)
+                </span>
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <label

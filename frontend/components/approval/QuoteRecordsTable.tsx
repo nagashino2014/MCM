@@ -60,7 +60,7 @@ function recipientsSummary(list: QuoteRecipient[]): string {
 function RecipientEditGrid({ label, list, onChange }: { label: string; list: QuoteRecipient[]; onChange: (next: QuoteRecipient[]) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold cd-text">{label}</span>
+      <span className="cd-label-text">{label}</span>
       {list.map((r, i) => (
         <div key={i} className="grid grid-cols-2 md:grid-cols-5 gap-1.5 items-center">
           <input className="cd-input" placeholder="업체/기관" value={r.facilityName ?? ""} onChange={(e) => onChange(list.map((x, xi) => (xi === i ? { ...x, facilityName: e.target.value } : x)))} />
@@ -275,7 +275,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
             <span className="text-[11px] font-semibold cd-text">수주 결과 — 수주율·시장 보정계수 분석의 원료(견적 기준 관리 › 수주 분석)</span>
             <div className="grid grid-cols-2 md:grid-cols-[0.8fr_0.9fr_1fr_1fr_1.3fr_auto] gap-2 items-end">
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">결과</span>
+                <span className="cd-label-text">결과</span>
                 <select className="cd-select text-[12px]" value={resultForm.result} onChange={(e) => setResultForm((f) => ({ ...f, result: e.target.value as QuoteResult }))}>
                   {(Object.keys(RESULT_LABEL) as QuoteResult[]).map((k) => (
                     <option key={k} value={k}>{RESULT_LABEL[k]}</option>
@@ -283,11 +283,11 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">결과 확정일</span>
+                <span className="cd-label-text">결과 확정일</span>
                 <CdDateInput value={resultForm.resultAt} onChange={(v) => setResultForm((f) => ({ ...f, resultAt: v }))} aria-label="결과 확정일" />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
+                <span className="cd-label-text">{resultForm.result === "won" ? "계약금액(원)" : "경쟁 낙찰가(원)"}</span>
                 <input
                   className="cd-input text-[12px] text-right"
                   inputMode="numeric"
@@ -297,7 +297,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">사유</span>
+                <span className="cd-label-text">사유</span>
                 <select className="cd-select text-[12px]" value={resultForm.resultReason} onChange={(e) => setResultForm((f) => ({ ...f, resultReason: e.target.value }))}>
                   <option value="">선택 안 함</option>
                   {QUOTE_RESULT_REASONS.map((r) => (
@@ -306,7 +306,7 @@ export function QuoteViewModal({ quoteId, theme, onClose, onChanged }: { quoteId
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">메모</span>
+                <span className="cd-label-text">메모</span>
                 <input className="cd-input text-[12px]" value={resultForm.resultNote} onChange={(e) => setResultForm((f) => ({ ...f, resultNote: e.target.value }))} placeholder="경쟁사·발주처 코멘트 등" />
               </div>
               <div className="col-span-2 md:col-span-1 flex items-center gap-2 whitespace-nowrap">

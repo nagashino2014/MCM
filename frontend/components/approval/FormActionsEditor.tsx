@@ -233,7 +233,7 @@ export function FormActionsEditor({ formId, fields }: { formId: string; fields: 
                   <div className="grid md:grid-cols-2 gap-x-4 gap-y-1.5">
                     {connector.slots.map((slot) => (
                       <label key={slot.key} className="flex items-center gap-2 text-[12px] cd-text-muted min-w-0" title={slot.hint}>
-                        <span className="w-[120px] shrink-0 truncate">
+                        <span className="w-[120px] shrink-0 truncate cd-label-text">
                           {slot.label}
                           {slot.required && <span className="cd-error-text"> *</span>}
                         </span>

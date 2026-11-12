@@ -330,7 +330,7 @@ export function MetricWizard({
               ))}
             </div>
             <label className="text-[12px] cd-text-faint flex items-center gap-2 flex-wrap">
-              집계할 값:
+              <span className="cd-label-text">집계할 값:</span>
               {isDocSource ? (
                 <>
                   <select
@@ -345,7 +345,7 @@ export function MetricWizard({
                       </option>
                     ))}
                   </select>
-                  <span>문서 상태:</span>
+                  <span className="cd-label-text">문서 상태:</span>
                   <select
                     className="cd-select"
                     style={{ width: 130 }}
@@ -507,7 +507,7 @@ export function MetricWizard({
         {step === 10 && comp && (
           <div className="flex flex-col gap-3">
             <label className="text-[12px] cd-text-faint flex items-center gap-2">
-              결합 차원:
+              <span className="cd-label-text">결합 차원:</span>
               <select className="cd-select" style={{ width: 150 }} value={comp.dimensions[0] ?? "ref.contract"} onChange={(e) => patchComp({ dimensions: [e.target.value] })}>
                 {Object.entries(DIMENSION_LABEL).map(([k, l]) => (
                   <option key={k} value={k}>
@@ -515,7 +515,7 @@ export function MetricWizard({
                   </option>
                 ))}
               </select>
-              <span>표시:</span>
+              <span className="cd-label-text">표시:</span>
               <select className="cd-select" style={{ width: 110 }} value={comp.format ?? "number"} onChange={(e) => patchComp({ format: e.target.value as CompositeDefinition["format"] })}>
                 <option value="number">숫자</option>
                 <option value="currency">금액</option>
@@ -604,19 +604,22 @@ export function MetricWizard({
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                지표 이름
+                <span className="cd-label-text">지표 이름</span>
                 <input className="cd-input" value={meta.label} onChange={(e) => setMeta({ ...meta, label: e.target.value })} />
               </label>
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                지표 키(영문 소문자·숫자·_)
+                <span>
+                  <span className="cd-label-text">지표 키</span>
+                  <span className="ml-1.5 cd-hint">(영문 소문자·숫자·_)</span>
+                </span>
                 <input className="cd-input font-mono" placeholder="travel_cost_by_dept" value={meta.metricKey} onChange={(e) => setMeta({ ...meta, metricKey: e.target.value })} />
               </label>
               <label className="text-[11px] cd-text-faint flex flex-col gap-1 md:col-span-2">
-                설명(선택)
+                <span className="cd-label-text">설명(선택)</span>
                 <input className="cd-input" value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
               </label>
               <label className="text-[11px] cd-text-faint flex items-center gap-2">
-                공개 범위
+                <span className="cd-label-text">공개 범위</span>
                 <select className="cd-select" style={{ width: 130 }} value={meta.visibility} onChange={(e) => setMeta({ ...meta, visibility: e.target.value as MetricItem["visibility"] })}>
                   <option value="admin">관리자만</option>
                   <option value="all">전체 공개</option>

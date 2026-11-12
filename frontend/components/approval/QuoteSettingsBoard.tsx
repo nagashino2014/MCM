@@ -721,7 +721,7 @@ export function QuoteSettingsBoard() {
                               : undefined
                           }
                         >
-                          <span className="whitespace-nowrap cd-text">{label}</span>
+                          <span className="whitespace-nowrap cd-label-text">{label}</span>
                           <span className="flex items-center gap-1 shrink-0">
                             {/* 직접경비 요율은 2026-09-30 입력 폐지 — 견적서가 0 고정이라 편집을 막는다(옛 문서 재현용 값만 남음, F-34) */}
                             <input
@@ -734,7 +734,7 @@ export function QuoteSettingsBoard() {
                           </span>
                         </label>
                       ))}
-                      <p className="sm:col-span-2 text-[11px] cd-text-faint">직접경비 요율은 새 견적에 적용되지 않습니다. 직접경비는 견적서에서 출장비·인쇄비로 계산합니다.</p>
+                      <p className="sm:col-span-2 cd-hint">직접경비 요율은 새 견적에 적용되지 않습니다. 직접경비는 견적서에서 출장비·인쇄비로 계산합니다.</p>
                     </div>
 
                     {/* 항목 트리(base_md) */}
@@ -750,7 +750,10 @@ export function QuoteSettingsBoard() {
 
                     {/* 특이사항 템플릿 */}
                     <div className="rounded-lg border cd-border-c p-3.5 flex flex-col gap-1.5">
-                      <p className="text-[12px] font-semibold cd-text">특이사항 기본 문구 (작성 화면 프리필)</p>
+                      <p>
+                        <span className="cd-label-text">특이사항 기본 문구</span>
+                        <span className="ml-1.5 cd-hint">(작성 화면 프리필)</span>
+                      </p>
                       <textarea className="cd-input text-[12px] min-h-[76px]" value={detail.remarksTemplate} onChange={(e) => setDetail({ ...detail, remarksTemplate: e.target.value })} />
                     </div>
 
@@ -890,7 +893,7 @@ export function QuoteSettingsBoard() {
               {/* 기간 필터 */}
               {/* 기간 = 시작·종료 월 2칸. .cd-input 은 width:100% 라 폭을 명시해야 한 줄에 나란히 선다 */}
               <div className="flex items-center gap-2 flex-wrap text-[12px]">
-                <span className="cd-text whitespace-nowrap">기간</span>
+                <span className="whitespace-nowrap cd-label-text">기간</span>
                 <AutoDateInput
                   mode="month"
                   className="cd-input text-[12px] shrink-0"

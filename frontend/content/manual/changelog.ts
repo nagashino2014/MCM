@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-12", kind: "신규", title: "메일 읽기 — 첨부 미리보기",
+    body: "받은·보낸 메일의 첨부 목록에서 눈 아이콘을 누르면 내려받지 않고 창으로 봅니다. 그림·PDF는 그대로, 한글·워드·엑셀·파워포인트는 PDF로 바꿔, txt·csv·html은 글자로 보여 줍니다. 압축 파일·도면 등은 지금처럼 내려받아 확인합니다.",
+    articles: ["mail.box"],
+  },
+  {
     date: "2026-11-12", kind: "개선", title: "결재 문서 — 참조·열람자 확인",
     body: "진행 중인 결재 문서를 열면 결재선 아래 줄에 참조자·열람자가 이름·직급으로 보입니다. 관리자 규칙으로 자동으로 들어간 사람은 ‘자동’으로 표시해 기안자가 직접 넣은 사람과 구분합니다. 앱 결재 문서 화면에도 결재선 아래에 같은 내용이 보입니다.",
     articles: ["approval.home"],

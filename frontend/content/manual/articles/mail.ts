@@ -42,6 +42,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "p", text: "메일을 열면 제목·보낸 사람·첨부와 본문이 한 화면으로 이어져 함께 스크롤됩니다. 답장·전달·삭제 버튼 줄은 위에 남습니다. 메일을 읽다가 브라우저 뒤로 가기를 누르면 그 메일함 목록으로 돌아오고, 폴더를 옮긴 뒤 뒤로 가기를 누르면 앞서 보던 폴더로 돌아옵니다." },
           { kind: "p", text: "첨부는 세로 목록으로 한 줄에 하나씩, 파일 형식(한글·워드·엑셀·파워포인트·PDF·압축·도면·그림 등) 아이콘과 크기와 함께 보입니다. 파일 이름이나 오른쪽 저장 단추를 누르면 내 PC에 받습니다. 첨부가 2개 이상이면 [[전체 저장(ZIP)]]으로 모든 첨부를 압축 파일 하나로 내려받습니다(본문에 그려진 그림과 본문 속 대용량 첨부 링크는 빠집니다). 첨부 칸 머리를 누르면 목록을 접거나 펼칩니다." },
+          { kind: "p", text: "저장 단추 앞 눈 아이콘([[미리보기]])을 누르면 내려받지 않고 창으로 봅니다. 그림(jpg·png·bmp·gif 등)과 PDF는 그대로, 한글(hwp·hwpx)·워드·엑셀·파워포인트는 PDF로 바꿔(큰 문서는 30초 넘게 걸릴 수 있고 서식이 일부 다를 수 있습니다), txt·csv는 글자로, html은 스크립트와 외부 그림을 막은 채 보여 줍니다. 압축 파일·도면 등 미리보기를 지원하지 않는 형식에는 눈 아이콘이 없습니다. 창 아래 [[내 PC에 저장]]으로 바로 받을 수 있고, Esc나 닫기 단추로 닫습니다." },
           { kind: "p", text: "첨부 칸 오른쪽 [[개인문서함으로 저장]]을 켜면 저장 단추가 내 PC 대신 앱 개인문서함 복사로 바뀌고, [[개인문서함에 모두 저장]]으로 그 메일의 첨부 전부를 한 번에 개인문서함에 넣습니다. 켠 상태는 이 브라우저에서 다음 메일에도 유지됩니다. 개인문서함 용량·파일당 200MB 한도를 넘는 파일은 저장되지 않고 알림으로 알려 줍니다." },
           { kind: "warn", text: "[[삭제]]는 휴지통으로 옮기기만 합니다. 휴지통에서 [[영구삭제]]하면 되돌릴 수 없습니다." },
         ],
@@ -129,8 +130,8 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "여러 개 선택", "Shift", "전체답장", "첨부 전체 저장", "ZIP", "첨부 아이콘", "개인문서함으로 저장", "주소 태그", "압축", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램", "알림", "PC 알림", "새 메일 알림"],
-    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailAttachmentList.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailAddressLink.tsx", "components/directory/QuickContactModal.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/mail/MailDesktopNotifySection.tsx"],
+    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "여러 개 선택", "Shift", "전체답장", "첨부 전체 저장", "ZIP", "첨부 아이콘", "첨부 미리보기", "미리보기", "개인문서함으로 저장", "주소 태그", "압축", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램", "알림", "PC 알림", "새 메일 알림"],
+    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailAttachmentList.tsx", "components/mail/MailAttachmentPreviewModal.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailAddressLink.tsx", "components/directory/QuickContactModal.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/mail/MailDesktopNotifySection.tsx"],
     reviewedAt: "2026-11-12",
   },
   {

@@ -27,6 +27,8 @@ export interface DocHeadInfo {
   /** 중앙 큰 제목 — 보통 양식명(지출결의서 등). */
   formName?: string;
   drafterName?: string;
+  /** 기안자 직급 — 신청란 머리에 표시(없으면 '기안'). */
+  drafterPosition?: string;
   deptName?: string;
   draftDate?: string;
   docNo?: string;
@@ -121,7 +123,8 @@ export function ApprovalDocHead({ info }: { info: DocHeadInfo }) {
           stepType: "draft",
           assigneeName: info.drafterName,
           assigneeUserId: "-",
-          assigneePosition: "기안",
+          // 신청자 = 기안자이므로 머리에는 '기안' 대신 기안자 직급을 쓴다(2026-11-12 사용자 요청)
+          assigneePosition: info.drafterPosition?.trim() || "기안",
           status: info.draftDate && info.draftDate !== "-" ? "approved" : "waiting",
           actedAt: info.draftDate ?? null,
         },

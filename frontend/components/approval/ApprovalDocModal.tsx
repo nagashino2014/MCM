@@ -55,6 +55,7 @@ export interface DocDetailData {
   status: string;
   drafterName: string | null;
   drafterUserId: string | null;
+  drafterPosition?: string | null;
   deptName: string | null;
   submittedAt: string | null;
   completedAt: string | null;
@@ -776,6 +777,7 @@ export function ApprovalDocViewer({
                 header={{
                   formName: detail.formName,
                   drafterName: detail.drafterName ?? undefined,
+                  drafterPosition: detail.drafterPosition ?? undefined,
                   deptName: detail.deptName ?? undefined,
                   draftDate: short(detail.submittedAt),
                   docNo: detail.docNo ?? undefined,

@@ -67,6 +67,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
           { kind: "list", items: [
             "경고 카드(주 12시간 초과근무, 식대 기준, 선행 문서 불일치 등)가 보이면 내용을 확인한 뒤 결재하세요.",
             "‘AI 요약’은 참고용입니다. 결재 판단은 본문 기준으로 합니다.",
+            "문서 위쪽 결재란의 신청 칸 머리에는 기안자의 직급이 표시됩니다(신청자 = 기안자).",
             "전결 규정에 해당하면 [[전결]] 버튼이 보입니다. 누르면 뒤에 남은 결재자를 생략하고 바로 최종 승인되며 되돌릴 수 없습니다.",
           ] },
         ],
@@ -133,7 +134,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["결재", "승인", "반려", "결재함", "기안함", "참조", "열람", "결재 대기", "결재 예정", "재상신", "반려 요청", "결재 취소", "전결", "회수", "관리자 수정", "값 수정", "고정 참조"],
     sources: ["components/approval/ApprovalHomeBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx", "components/approval/ApprovalDocAdminPanel.tsx"],
-    reviewedAt: "2026-11-09",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "approval.draft",

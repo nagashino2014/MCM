@@ -112,7 +112,8 @@ export async function generateDocSummary(docId: string): Promise<DocAiSummary | 
     const db = await getDb();
     const rows = rowsToObjects(
       await db.exec(
-        `SELECT d.title, d.field_values, d.form_id, d.form_version, d.drafter_name, f.name AS form_name,
+        `SELECT d.title, d.field_values, d.form_id, d.form_version, d.drafter_name, d.drafter_position, d.dept_name,
+                f.name AS form_name,
                 COALESCE(v.fields, f.fields) AS render_fields
            FROM approval_docs d
            JOIN approval_forms f ON f.form_id = d.form_id
@@ -145,9 +146,15 @@ export async function generateDocSummary(docId: string): Promise<DocAiSummary | 
 
     const system =
       "당신은 한국 기업의 전자결재 검토 보조자입니다. 결재자가 30초 안에 판단하도록 간결한 한국어 요약을 만듭니다. " +
-      "과장·추측 없이 문서에 있는 사실만 사용하세요. 반드시 지정한 JSON 형식만 출력합니다.";
+      "과장·추측 없이 문서에 있는 사실만 사용하세요. 사람의 직급은 [기안자]에 적힌 것만 쓰고, 적혀 있지 않으면 이름만 씁니다. " +
+      "반드시 지정한 JSON 형식만 출력합니다.";
+    // 기안자 직급·소속을 함께 넘긴다 — 이름만 넘기면 모델이 직급을 지어냈다(대리를 '사원'으로, 2026-11-12)
+    const drafter =
+      [r.drafter_name, r.drafter_position].map((x) => (x == null ? "" : String(x).trim())).filter(Boolean).join(" ") || "-";
     const user =
-      `[양식] ${r.form_name}\n[제목] ${r.title}\n[기안자] ${r.drafter_name ?? "-"}\n[내용]\n${lines.join("\n")}\n` +
+      `[양식] ${r.form_name}\n[제목] ${r.title}\n[기안자] ${drafter}\n` +
+      (r.dept_name ? `[소속] ${r.dept_name}\n` : "") +
+      `[내용]\n${lines.join("\n")}\n` +
       (precedent ? `\n[전례 통계]\n${precedent}\n` : "") +
       `\n다음 JSON 으로만 답하세요:\n` +
       `{"lines":["핵심 요약 1","2","3(최대 3줄, 각 40자 내외)"],` +

@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-12", kind: "수정", title: "결재 문서 — 신청란 직급 표시·AI 요약 직급",
+    body: "결재 문서 위쪽 신청란 머리에 ‘기안’ 대신 기안자의 직급을 표시합니다. AI 요약이 기안자 직급을 틀리게 적던 것(예: 대리를 ‘사원’으로)을 고쳐, 문서에 저장된 직급을 그대로 씁니다. 이미 만들어진 요약은 다시 상신할 때 새로 만들어집니다.",
+    articles: ["approval.home"],
+  },
+  {
     date: "2026-11-12", kind: "개선", title: "고정 결재선 — 카드 배치 정리",
     body: "넓은 화면에서 역할 담당자·양식별 결재선 카드 높이를 줄이고 카드 안에서 스크롤합니다. 직원별 추가 결재선·참조·열람과 결재선 편집은 왼쪽 칸에, 직원별 결재선 미리보기는 오른쪽 칸에 나란히 놓여 규칙을 고치면서 바로 결과를 봅니다.",
     articles: ["approval-ops.fixed-lines"],

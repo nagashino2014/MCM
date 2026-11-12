@@ -133,7 +133,9 @@ export function RecipientInput({
 
   return (
     <div ref={rootRef} className="relative flex flex-col gap-1">
-      <span className="cd-label flex items-center justify-between">
+      {/* 라벨 한 줄에 라벨·부가 단추(개인별·+참조 등)를 나란히 둔다(2026-11-12 사용자 요청 — 메일 쓰기 위쪽 공간 줄이기).
+          .cd-label 이 display:block 이라 flex 유틸이 덮여 부가 단추가 아래 줄로 떨어졌었다 → !flex 로 고정. */}
+      <span className="cd-label !flex flex-wrap items-center gap-x-3 gap-y-1">
         <span>
           {label}
           {required && <span className="cd-error-text ml-0.5">*</span>}

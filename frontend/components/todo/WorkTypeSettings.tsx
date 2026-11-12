@@ -109,7 +109,7 @@ export function WorkTypeSettings() {
       {cur && (
         <div className="todo-wt-panel" role="tabpanel">
           <div className="todo-wt-row" data-head="true">
-            <span className="todo-wt-lb">유형 이름</span>
+            <span className="w-16 flex-none whitespace-nowrap cd-label-text">유형 이름</span>
             <input className="cd-input todo-wt-in" value={cur.label} maxLength={40} disabled={!canEdit} onChange={(e) => patchType(cur.typeKey, { label: e.target.value })} aria-label="유형 이름" />
             <label className="todo-wt-chk">
               <input type="checkbox" checked={!cur.isActive} disabled={!canEdit} onChange={(e) => patchType(cur.typeKey, { isActive: !e.target.checked })} />

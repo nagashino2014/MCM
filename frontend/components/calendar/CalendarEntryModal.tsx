@@ -346,7 +346,7 @@ export function CalendarEntryModal({
           <>
             <CdInput label="방문자" required value={visitors} disabled={ro} onChange={(e) => setVisitors(e.target.value)} placeholder="예: ○○산업 김○○ 팀장 외 2명" />
             <div className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-bold cd-text-muted">관련 업무</span>
+              <span className="cd-label-text">관련 업무</span>
               {contractId ? (
                 <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--cd-primary)", background: "var(--cd-primary-soft)" }}>
                   <FileText className="w-4 h-4 shrink-0" style={{ color: "var(--cd-primary)" }} />
@@ -402,14 +402,14 @@ export function CalendarEntryModal({
 
         {/* 참석자 */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12px] font-bold cd-text-muted">참석자 <span className="font-medium cd-text-faint">(회사 직원 — 조직도에서 선택)</span></span>
+          <span className="cd-label-text">참석자<span className="cd-hint ml-1.5">(회사 직원 — 조직도에서 선택)</span></span>
           <AttendeePicker value={attendees} onChange={setAttendees} readOnly={ro} />
         </div>
 
         {/* 면접 이력서 */}
         {kind === "interview" && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[12px] font-bold cd-text-muted">이력서(PDF)</span>
+            <span className="cd-label-text">이력서(PDF)</span>
             {entry?.extra.resume ? (
               <div className="flex items-center gap-2 rounded-xl border cd-line-c px-3 py-2">
                 <FileText className="w-4 h-4 shrink-0" style={{ color: "var(--cd-primary)" }} />
@@ -443,7 +443,7 @@ export function CalendarEntryModal({
                     <button type="button" className="p-0.5 cd-text-faint hover:cd-error-text" onClick={() => setResumeFile(null)} aria-label="선택 취소"><X className="w-3 h-3" /></button>
                   </span>
                 )}
-                <span className="text-[11px] cd-text-faint">{entry ? "저장 시 업로드됩니다." : "등록 후 자동 업로드됩니다."}</span>
+                <span className="cd-hint">{entry ? "저장 시 업로드됩니다." : "등록 후 자동 업로드됩니다."}</span>
               </div>
             )}
           </div>

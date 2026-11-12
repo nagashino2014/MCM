@@ -214,12 +214,12 @@ export function BoardWriteBoard() {
             <CdButton size="sm" className="cd-card-bg" icon={<HardDrive className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
               내 PC
             </CdButton>
-            {totalKB > 0 && <span className="text-[11px] cd-text-faint">합계 {totalKB} KB / 최대 20MB</span>}
+            {totalKB > 0 && <span className="cd-hint">합계 {totalKB} KB / 최대 20MB</span>}
           </span>
           {/* 수정 — 이미 올린 첨부는 그대로 유지되고, 여기서 고른 파일은 추가로 붙는다 */}
           {existingFiles.length > 0 && (
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] cd-text-faint">기존 첨부 {existingFiles.length}건(유지) — 아래에서 고른 파일은 추가로 첨부됩니다.</span>
+              <span className="cd-hint">기존 첨부 {existingFiles.length}건(유지) — 아래에서 고른 파일은 추가로 첨부됩니다.</span>
               {existingFiles.map((a) => (
                 <div key={a.attachmentId} className="flex items-center gap-2 rounded-lg border cd-border-c cd-card-bg px-2.5 py-1.5 text-xs cd-text">
                   <Paperclip className="w-3.5 h-3.5 shrink-0 cd-text-faint" />
@@ -290,7 +290,7 @@ export function BoardWriteBoard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <section className="rounded-xl border cd-border-c cd-card-bg p-4 flex flex-col gap-2">
             <h3 className="text-sm font-bold cd-text">공지 기간</h3>
-            <p className="text-[11px] cd-text-faint">비우면 기간 제한 없이 게시됩니다(YYYYMMDD).</p>
+            <p className="cd-hint">비우면 기간 제한 없이 게시됩니다(YYYYMMDD).</p>
             <div className="flex items-center gap-1.5">
               <AutoDateInput className="cd-input" value={noticeFrom} onChange={setNoticeFrom} />
               <span className="cd-text-faint text-xs">~</span>
@@ -310,7 +310,7 @@ export function BoardWriteBoard() {
                 <span className="cd-text-faint text-xs">~</span>
                 <AutoDateInput className="cd-input" disabled={!pinned} value={pinTo} onChange={setPinTo} />
               </div>
-              <p className="text-[11px] cd-text-faint mt-1">{pinned ? "이 기간 동안 목록 맨 위에 표시됩니다." : "상단 고정을 켜면 기간을 지정할 수 있습니다."}</p>
+              <p className="cd-hint mt-1">{pinned ? "이 기간 동안 목록 맨 위에 표시됩니다." : "상단 고정을 켜면 기간을 지정할 수 있습니다."}</p>
             </div>
           </section>
 
@@ -321,7 +321,7 @@ export function BoardWriteBoard() {
             </h3>
             <CdCheckbox label="메일 알림 발송" disabled={!!editId} checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} />
             <CdCheckbox label="모바일 앱 푸시 알림" disabled={!!editId} checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} />
-            <p className="text-[11px] cd-text-faint">
+            <p className="cd-hint">
               {editId
                 ? "수정할 때는 알림을 다시 보내지 않습니다."
                 : `${scope === "company" ? "전 임직원" : "소속 부서원"}에게 발송됩니다(작성자 본인 제외). 푸시는 MCM 앱에서 알림을 켠 사람에게만 갑니다.`}

@@ -53,15 +53,15 @@ export default function TaskCreateForm({
 
       <div className="rounded-2xl border cd-border-c p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <label className="flex flex-col gap-1.5 md:col-span-1">
-          <span className="text-[11px] font-semibold cd-text-faint">업무분류</span>
+          <span className="cd-label-text">업무분류</span>
           <div className="cd-input text-sm w-full flex items-center cd-text-muted">{category.categoryName}</div>
         </label>
         <label className="flex flex-col gap-1.5 md:col-span-1">
-          <span className="text-[11px] font-semibold cd-text-faint">업무명 *</span>
+          <span className="cd-label-text">업무명 *</span>
           <input className="cd-input text-sm w-full" placeholder="예: 계약/영업관리 웹 플랫폼 개발" value={taskName} onChange={(e) => setTaskName(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1.5 md:col-span-1">
-          <span className="text-[11px] font-semibold cd-text-faint">착수일</span>
+          <span className="cd-label-text">착수일</span>
           <AutoDateInput className="cd-input text-sm w-full" value={startedAt} onChange={setStartedAt} />
         </label>
       </div>

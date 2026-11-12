@@ -262,7 +262,7 @@ export default function ProcessStageSettingModal({
                 <span className="ml-auto text-xs cd-text-faint">기본 10%</span>
                 <ArrowRight className="w-4 h-4 cd-text-faint" />
                 <label className="flex items-center gap-1.5">
-                  <span className="text-xs cd-text-faint">변경값</span>
+                  <span className="cd-label-text">변경값</span>
                   <input
                     type="number"
                     min={1}

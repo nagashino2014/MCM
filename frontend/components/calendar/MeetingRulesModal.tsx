@@ -140,7 +140,7 @@ export function MeetingRulesModal({ open, onClose, onSaved }: { open: boolean; o
                     </CdSelect>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-bold cd-text-muted">시행 주(매월)</span>
+                    <span className="cd-label-text">시행 주(매월)</span>
                     <div className="flex flex-wrap gap-3">
                       {WEEK_ORDINAL_LABELS.map((label, idx) => {
                         const n = idx + 1;
@@ -160,7 +160,7 @@ export function MeetingRulesModal({ open, onClose, onSaved }: { open: boolean; o
                     <CdInput label="회의장소" value={r.location} onChange={(e) => patch(i, { location: e.target.value })} />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-bold cd-text-muted">기본 참석자 <span className="font-medium cd-text-faint">(새로 배치되는 회차에 복사됩니다)</span></span>
+                    <span className="cd-label-text">기본 참석자<span className="cd-hint ml-1.5">(새로 배치되는 회차에 복사됩니다)</span></span>
                     <AttendeePicker value={r.attendees} onChange={(next) => patch(i, { attendees: next })} height="28vh" />
                   </div>
                   <div className="flex justify-end">

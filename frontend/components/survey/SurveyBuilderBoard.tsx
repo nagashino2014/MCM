@@ -395,7 +395,7 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
           <div className="flex flex-wrap gap-4">
             <CdDateInput label="접수 시작일" value={periodStart} onChange={setPeriodStart} className="w-44" />
             <CdDateInput label="접수 종료일" value={periodEnd} onChange={setPeriodEnd} className="w-44" />
-            <span className="self-end pb-2 text-xs cd-text-faint">비우면 상시 접수</span>
+            <span className="self-end pb-2 cd-hint">비우면 상시 접수</span>
           </div>
 
           <div className="flex items-center gap-1">
@@ -408,12 +408,12 @@ export function SurveyBuilderBoard({ surveyId, kind }: { surveyId: string; kind:
             <CdHelp topic="survey.anonymous" />
           </div>
           {locked && (
-            <p className="text-xs cd-text-faint -mt-3">
+            <p className="cd-hint -mt-3">
               응답이 접수된 뒤에는 익명 설정을 바꿀 수 없습니다. 바꾸려면 목록에서 이 설문을 복제하세요.
             </p>
           )}
           {isInternal && isAnonymous && (
-            <p className="text-xs cd-text-faint -mt-3">
+            <p className="cd-hint -mt-3">
               중복 응답을 막기 위해 “누가 응답했는지”는 시스템에 남지만, 집계 화면과 다운로드에는 응답자가 나오지 않습니다.
             </p>
           )}

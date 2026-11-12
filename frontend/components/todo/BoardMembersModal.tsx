@@ -119,7 +119,7 @@ export function BoardMembersModal({ open, board, myUserId, onClose, onChanged }:
             {canManage && (
               <>
                 <label className="todo-field-lb inline-flex items-center gap-2 mr-auto">
-                  추가 역할
+                  <span className="cd-label-text">추가 역할</span>
                   <select className="cd-select todo-w-sel" aria-label="추가할 멤버 역할" value={addRole} onChange={(e) => setAddRole(e.target.value as TodoMemberRole)}>
                     {TODO_MEMBER_ROLES.map((r) => (
                       <option key={r} value={r}>

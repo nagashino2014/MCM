@@ -309,7 +309,7 @@ export function RuleAdminBoard() {
         {/* 좌: 규정·판 목록 + 조문 트리 */}
         <div className="flex flex-col gap-4">
           <div className="cd-card p-4">
-            <div className="text-[11px] font-bold mb-2" style={{ color: "var(--cd-faint)" }}>
+            <div className="mb-2 cd-label-text">
               규정
             </div>
             <select
@@ -430,7 +430,7 @@ export function RuleAdminBoard() {
               <div className="cd-card p-4">
                 <div className="flex items-end gap-3 flex-wrap">
                   <div>
-                    <label className="block text-[11px] font-bold mb-1" style={{ color: "var(--cd-faint)" }}>
+                    <label className="block mb-1 cd-label-text">
                       시행일
                     </label>
                     <input
@@ -446,7 +446,7 @@ export function RuleAdminBoard() {
                     />
                   </div>
                   <div className="flex-1 min-w-[220px]">
-                    <label className="block text-[11px] font-bold mb-1" style={{ color: "var(--cd-faint)" }}>
+                    <label className="block mb-1 cd-label-text">
                       개정 사유·비고
                     </label>
                     <input
@@ -504,7 +504,7 @@ export function RuleAdminBoard() {
               {selected ? (
                 <div className="cd-card p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs font-bold" style={{ color: "var(--cd-faint)" }}>
+                    <span className="cd-label-text">
                       제{selected.no}조
                     </span>
                     <input

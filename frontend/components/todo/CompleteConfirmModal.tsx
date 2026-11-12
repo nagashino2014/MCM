@@ -117,7 +117,7 @@ export function CompleteConfirmModal({ open, target, failure, busy, onConfirm, o
             })}
           </ul>
           <label className="todo-cc-note">
-            <span className="todo-cc-note-lb">
+            <span className="inline-flex items-center gap-1.5 cd-label-text">
               완료 메모{noteRequired ? <b className="todo-cc-req">필수</b> : <span className="todo-mu">선택</span>}
             </span>
             <textarea

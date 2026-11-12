@@ -268,7 +268,7 @@ export default function WorkPlanEditor({
               <option value="staff_input">1차 보고 (담당자)</option>
             </select>
           </Field>
-          <Field label="보고 기간 * (월~금 자동, 연휴 등은 수동 조정)">
+          <Field label={<>보고 기간 *<span className="cd-hint ml-1.5">(월~금 자동, 연휴 등은 수동 조정)</span></>}>
             <div className="flex items-center gap-1.5">
               <AutoDateInput className="cd-input text-sm flex-1" value={periodStart} onChange={setPeriodStart} />
               <span className="cd-text-faint text-xs">~</span>
@@ -433,10 +433,10 @@ export default function WorkPlanEditor({
   );
 }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, className }: { label: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <label className={cn("flex flex-col gap-1.5", className)}>
-      <span className="text-[11px] font-semibold cd-text-faint">{label}</span>
+      <span className="cd-label-text">{label}</span>
       {children}
     </label>
   );

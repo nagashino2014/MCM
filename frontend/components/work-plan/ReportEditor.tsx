@@ -626,11 +626,11 @@ export default function ReportEditor({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* label 로 감싸면 클릭이 내부 첫 버튼으로 전달되므로 div 로 감싼다. */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold cd-text-faint">이번 기간</span>
+              <span className="cd-label-text">이번 기간</span>
               <StructuredNoteEditor value={progressText} onChange={setProgressText} disabled={locked} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold cd-text-faint">다음 기간</span>
+              <span className="cd-label-text">다음 기간</span>
               <StructuredNoteEditor value={planText} onChange={setPlanText} disabled={locked} />
             </div>
           </div>
@@ -848,7 +848,7 @@ export default function ReportEditor({
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <label className={cn("flex flex-col gap-1.5", className)}>
-      <span className="text-[11px] font-semibold cd-text-faint">{label}</span>
+      <span className="cd-label-text">{label}</span>
       {children}
     </label>
   );

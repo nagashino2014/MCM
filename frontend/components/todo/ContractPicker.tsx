@@ -138,7 +138,7 @@ export function ContractPicker({ active, selectedId, onSelect }: ContractPickerP
   return (
     <>
       <div className="flex items-center gap-2">
-        <label className="todo-field-lb" htmlFor="todo-contract-year">
+        <label className="cd-label-text" htmlFor="todo-contract-year">
           계약 연도
         </label>
         <select id="todo-contract-year" className="cd-select todo-w-sel" value={year} onChange={(e) => setYear(e.target.value)}>
@@ -148,7 +148,7 @@ export function ContractPicker({ active, selectedId, onSelect }: ContractPickerP
             </option>
           ))}
         </select>
-        <span className="todo-field-hint">총 {tree?.totalCount ?? 0}건 · 용역분류를 펼쳐 계약을 고르세요</span>
+        <span className="cd-hint">총 {tree?.totalCount ?? 0}건 · 용역분류를 펼쳐 계약을 고르세요</span>
       </div>
       <div className="todo-tree" role="tree" aria-label="계약 트리">
         {!tree || tree.groups.length === 0 ? (

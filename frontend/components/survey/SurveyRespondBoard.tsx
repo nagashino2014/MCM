@@ -276,7 +276,7 @@ function QuestionField({
             );
           })}
           {q.config.maxSelect ? (
-            <span className="text-xs cd-text-faint">최대 {q.config.maxSelect}개 선택</span>
+            <span className="cd-hint">최대 {q.config.maxSelect}개 선택</span>
           ) : null}
         </div>
       )}

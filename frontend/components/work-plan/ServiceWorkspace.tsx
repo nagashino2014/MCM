@@ -350,7 +350,7 @@ function MetaRow({ cols }: { cols: { label: string; value: string; grow?: boolea
     <div className="rounded-2xl border cd-border-c p-4 flex flex-col md:flex-row gap-3">
       {cols.map((c, i) => (
         <label key={i} className={c.grow ? "flex flex-col gap-1.5 flex-1 min-w-0" : "flex flex-col gap-1.5"}>
-          <span className="text-[11px] font-semibold cd-text-faint">{c.label}</span>
+          <span className="cd-label-text">{c.label}</span>
           <div className="cd-input text-sm w-full flex items-center cd-text font-medium truncate">{c.value}</div>
         </label>
       ))}

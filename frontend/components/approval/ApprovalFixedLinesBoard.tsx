@@ -141,7 +141,7 @@ export function ApprovalFixedLinesBoard() {
   const [execDept, setExecDept] = useState("");
   // 편집 중 템플릿(한 번에 하나)
   const [editing, setEditing] = useState<TemplateRow | null>(null);
-  // 위 줄 두 카드 높이 상한(2026-11-12 사용자 요청: 40% 줄이기) — xl 이상에서 두 카드 중 큰 내용 높이의 60%. 그 아래 폭은 상한 없음.
+  // 위 줄 두 카드 높이 상한(2026-11-12 사용자 요청: 40% 줄이기 → 같은 날 30% 다시 늘림) — xl 이상에서 두 카드 중 큰 내용 높이의 78%. 그 아래 폭은 상한 없음.
   const topRowRef = useRef<HTMLDivElement>(null);
   const [topCap, setTopCap] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -291,7 +291,7 @@ export function ApprovalFixedLinesBoard() {
         return;
       }
       const natural = Math.max(0, ...Array.from(row.children).map((c) => (c as HTMLElement).scrollHeight));
-      const next = natural > 0 ? Math.round(natural * 0.6) : null;
+      const next = natural > 0 ? Math.round(natural * 0.78) : null;
       setTopCap((prev) => (prev === next ? prev : next));
     };
     measure();
@@ -316,7 +316,7 @@ export function ApprovalFixedLinesBoard() {
       {msg && <p className="text-[12px] cd-text">{msg}</p>}
       {error && <p className="text-[12px] cd-error-text">{error}</p>}
 
-      {/* 위 줄(역할 담당자·양식별 결재선) — 넓은 화면(xl)에서 두 카드 높이를 내용 높이의 60%로 줄이고 카드 안에서 스크롤한다
+      {/* 위 줄(역할 담당자·양식별 결재선) — 넓은 화면(xl)에서 두 카드 높이를 내용 높이의 78%로 줄이고 카드 안에서 스크롤한다
           (2026-11-12 사용자 요청: 40% 줄이기). 내용이 바뀌면 다시 잰다. */}
       <div ref={topRowRef} className="grid gap-5 xl:grid-cols-2">
         {/* 역할 담당자 */}

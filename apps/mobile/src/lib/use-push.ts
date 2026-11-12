@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "./auth-context";
 import { registerForPush } from "./push";
 import { routeForLink } from "./deeplink";
+import { refreshNavBadges } from "./use-nav-badges";
 
 /**
  * 푸시 배선 — 로그인 상태에서 토큰을 갱신하고, 알림 탭 시 해당 화면으로 이동한다.
@@ -31,6 +32,13 @@ export function usePushSetup(): void {
     const route = routeForLink(link);
     if (route) router.push(route);
   };
+
+  // 앱을 보는 중에 푸시가 오면 탭 배지·아이콘 숫자를 바로 다시 받는다(배지는 주기 폴링하지 않는다).
+  useEffect(() => {
+    if (status !== "authed") return;
+    const sub = Notifications.addNotificationReceivedListener(() => void refreshNavBadges());
+    return () => sub.remove();
+  }, [status]);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((res) => {

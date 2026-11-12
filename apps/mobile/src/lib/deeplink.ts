@@ -36,7 +36,11 @@ export function routeForLink(link: string | null | undefined): Href | null {
   const chat = /^\/chat\/(\d+)$/.exec(path);
   if (chat) return { pathname: "/chat/[roomId]", params: { roomId: chat[1] } };
 
-  // 메일 — 목록·뷰어는 M3.
+  // 메일 — 새 메일 푸시(2026-11-12)는 한 통이면 /mail?id=<messageId>(웹 진입점과 같은 형식), 여러 통을 묶으면 /mail 로 온다.
+  if (path === "/mail") {
+    const id = new URLSearchParams(link.split("?")[1] ?? "").get("id");
+    if (id && /^[a-zA-Z0-9_-]{1,128}$/.test(id)) return { pathname: "/mail/[messageId]", params: { messageId: id } };
+  }
   if (path.startsWith("/mail")) return "/(tabs)/mail";
 
   // 공공입찰 — 마감 임박 푸시는 ?filter=deadline 로 온다(M6-C).

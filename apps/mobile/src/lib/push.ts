@@ -11,16 +11,23 @@ import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
+import { isActiveChatLink } from "./active-chat";
 import { apiFetch } from "./api";
 
-/** 포그라운드에서도 배너를 띄운다(SDK 54+ 필드명: shouldShowBanner/List). */
+/**
+ * 포그라운드에서도 배너를 띄운다(SDK 54+ 필드명: shouldShowBanner/List).
+ * 단, 지금 화면에 띄운 대화방의 새 메시지는 띄우지 않는다 — 이미 보고 있다(2026-11-12).
+ */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (n) => {
+    const watching = isActiveChatLink((n.request.content.data as { link?: unknown } | undefined)?.link);
+    return {
+      shouldShowBanner: !watching,
+      shouldShowList: !watching,
+      shouldPlaySound: !watching,
+      shouldSetBadge: true,
+    };
+  },
 });
 
 function projectId(): string | undefined {
@@ -122,11 +129,3 @@ export async function unregisterPush(): Promise<void> {
   }
 }
 
-/** 앱 아이콘 뱃지 갱신(미결재+안읽은 메일 합). */
-export async function setBadgeCount(n: number): Promise<void> {
-  try {
-    await Notifications.setBadgeCountAsync(Math.max(0, n));
-  } catch {
-    /* noop */
-  }
-}

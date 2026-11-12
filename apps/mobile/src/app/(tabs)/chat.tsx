@@ -85,8 +85,11 @@ export default function ChatScreen() {
     setSeenParam(paramRoom?.roomId);
     if (paramRoom) setSelected(paramRoom);
   }
+  const [rooms, setRooms] = useState<ChatRoom[] | null>(null);
   const openRoom = useCallback(
     (roomId: number, name?: string) => {
+      // 연 방의 안읽음 숫자는 바로 지운다 — 방 화면이 읽음 커서를 서버에 올리고, 다음 목록 갱신이 그 값을 확인한다(2026-11-12).
+      setRooms((prev) => prev?.map((x) => (x.roomId === roomId && x.unreadCount ? { ...x, unreadCount: 0 } : x)) ?? prev);
       if (wide) setSelected({ roomId, name });
       else router.push({ pathname: '/chat/[roomId]', params: name ? { roomId: String(roomId), name } : { roomId: String(roomId) } });
     },
@@ -110,7 +113,6 @@ export default function ChatScreen() {
     },
     [wide, selected, openRoom]
   );
-  const [rooms, setRooms] = useState<ChatRoom[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [seg, setSeg] = useState<Seg>('all');
@@ -375,7 +377,8 @@ function RoomRow({ r, wide, active, onPress }: { r: ChatRoom; wide?: boolean; ac
       </View>
       <View className="items-end gap-1">
         <Text className="text-[11px] text-cd-faint">{fmtRoomTime(r.lastMessageAt)}</Text>
-        <Count value={r.unreadCount} />
+        {/* 오른쪽에 열어 둔 방은 이미 읽고 있다 — 다음 폴링 전에 들어온 메시지로 숫자가 깜빡이지 않게 숨긴다. */}
+        <Count value={active ? 0 : r.unreadCount} />
       </View>
     </Pressable>
   );

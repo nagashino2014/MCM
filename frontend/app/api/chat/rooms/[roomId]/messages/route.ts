@@ -71,6 +71,8 @@ function firePush(roomId: number, senderId: string, messageId: number, preview: 
         link: `/chat/${roomId}`,
         targetRef: `chat:${roomId}`,
         dedupKey: `chat:${roomId}:${messageId}`,
+        // 앱 아이콘 배지 숫자(안읽은 대화+메일+미결재) — iOS 는 푸시에 실어야 꺼진 앱에서도 숫자가 맞는다(2026-11-12).
+        appBadge: true,
       };
       if (mentioned.length) {
         await sendPush(mentioned, { ...common, event: "chat.mention", title: `${title}님이 나를 언급했습니다` });

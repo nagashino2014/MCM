@@ -12,6 +12,7 @@ import crypto from "node:crypto";
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { ChannelSendResult } from "./email-ses";
+import { countAppBadges } from "./app-badge";
 
 /** 푸시 이벤트 키 — 앱 설정 화면과 공유하는 카탈로그. */
 export type PushEventKey =
@@ -88,7 +89,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "approval.remind", label: "결재 재촉", description: "결재가 지연될 때 알림" },
   { key: "approval.delegated", label: "대결 위임", description: "다른 사람의 결재를 대신 맡게 됐을 때" },
   { key: "board.posted", label: "공지·게시판", description: "새 공지·부서 게시글이 등록됐을 때" },
-  { key: "mail.received", label: "새 메일", description: "새 메일을 받았을 때" },
+  { key: "mail.received", label: "새 메일", description: "받은메일함에 새 메일이 왔을 때(스팸함·보낸 사람 자동 분류·대량 발송 메일은 제외, 몰려 오면 한 번에 묶음)" },
   { key: "leave.notice", label: "연차 촉진 고지", description: "연차 사용 촉진 고지가 도착했을 때" },
   { key: "invoice.request", label: "세금계산서 발행", description: "발행 요청·처리 소식" },
   { key: "work.report", label: "업무보고", description: "보고 제출·검토 의견·임원 지시가 도착했을 때" },
@@ -264,6 +265,11 @@ export interface PushPayload {
    */
   dedupKey?: string;
   badge?: number;
+  /**
+   * true 면 수신자마다 앱 아이콘 배지(안읽은 메일+미결재+안읽은 대화 합계)를 실어 보낸다(2026-11-12).
+   * badge 를 함께 주면 badge 가 우선한다.
+   */
+  appBadge?: boolean;
 }
 
 /**
@@ -312,12 +318,14 @@ export async function sendPush(userIds: string[], payload: PushPayload): Promise
       return { ok: false, skipped: "유효한 Expo 토큰 없음" };
     }
 
+    const badges =
+      payload.appBadge && payload.badge == null ? await countAppBadges(targets.map((t) => t.userId)) : null;
     const messages: ExpoPushMessage[] = targets.map((t) => ({
       to: t.token,
       title: payload.title,
       body: payload.body,
       sound: "default",
-      badge: payload.badge,
+      badge: payload.badge ?? badges?.get(t.userId),
       data: { link: payload.link ?? null, event: payload.event, ref: payload.targetRef ?? null },
       priority: "high",
       channelId: "default",

@@ -8,6 +8,7 @@
     "test:dept-scope": "node scripts/test-dept-scope.mjs",
     "test:dept-delete": "node scripts/test-dept-delete.mjs",
     "test:vehicle-booking": "node scripts/test-vehicle-booking.mjs",
+    "test:asset-range-booking": "node scripts/test-asset-range-booking.mjs",
     "test:approval-absence": "node scripts/test-approval-absence.mjs",
     "test:approval-fixed-line": "node scripts/test-approval-fixed-line.mjs",
     "test:approval-admin-controls": "node scripts/test-approval-admin-controls.mjs",

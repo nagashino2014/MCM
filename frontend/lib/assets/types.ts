@@ -64,7 +64,9 @@ export interface AssetReservation {
   reservedBy: string | null;
   reservedByName: string | null;
   reservedOn: string; // YYYY-MM-DD
-  startTime: string | null; // HH:mm (null = 종일)
+  /** 여러 날 예약의 마지막 날(368, 회의실·기타만). null = reservedOn 하루 */
+  reservedUntil: string | null;
+  startTime: string | null; // HH:mm (null = 종일, 여러 날이면 첫날 시작·마지막 날 종료)
   endTime: string | null;
   purpose: string | null;
   createdAt: string;

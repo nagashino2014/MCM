@@ -3,13 +3,15 @@
  * 출장 차량 이용은 출장신청서 상신에서 자동 파생되므로(lib/approval/trip.ts) 여기서는
  * 자산 마스터 CRUD와 직접 예약(회의실 등, 결재 없는 즉시 예약)만 담당한다.
  * 법인차량 직접 예약은 하루 안의 짧은 사용만 받는다(lib/assets/vehicle-booking-rules.ts).
+ * 회의실·기타는 시작일~종료일 범위를 한 건으로 받는다(368 reserved_until, lib/assets/reservation-range.ts).
  * 저장 테이블: reservable_assets / asset_reservations (infra/aws/121_reservable_assets.sql)
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
 import { describeVehicleConflict, findVehicleBookingConflicts } from "@/lib/assets/vehicle-booking";
-import { TRIP_VEHICLE_GUIDE, vehicleReservationTimeError } from "@/lib/assets/vehicle-booking-rules";
+import { TRIP_VEHICLE_GUIDE } from "@/lib/assets/vehicle-booking-rules";
+import { assetSlotsOverlap, reservationRangeError, type AssetSlot } from "@/lib/assets/reservation-range";
 
 export type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
 
@@ -74,6 +76,7 @@ function toReservation(r: Record<string, unknown>): AssetReservation {
     reservedBy: r.reserved_by != null ? String(r.reserved_by) : null,
     reservedByName: r.reserved_by_name != null ? String(r.reserved_by_name) : null,
     reservedOn: String(r.reserved_on ?? ""),
+    reservedUntil: textOrNull(r.reserved_until),
     startTime: r.start_time != null ? String(r.start_time) : null,
     endTime: r.end_time != null ? String(r.end_time) : null,
     purpose: r.purpose != null ? String(r.purpose) : null,
@@ -233,7 +236,7 @@ export async function deleteAsset(assetId: string): Promise<{ deactivated: boole
   });
 }
 
-/** 월별 직접 예약 목록(자산·예약자 조인). month = YYYY-MM. */
+/** 월별 직접 예약 목록(자산·예약자 조인). month = YYYY-MM — 여러 날 예약은 그 달에 걸치면 포함. */
 export async function listReservations(month: string): Promise<AssetReservation[]> {
   const db = await getDb();
   const rows = rowsToObjects(
@@ -244,7 +247,8 @@ export async function listReservations(month: string): Promise<AssetReservation[
          JOIN reservable_assets a ON a.asset_id = r.asset_id
          LEFT JOIN users u ON u.user_id = r.reserved_by
          LEFT JOIN employee_profiles ep ON ep.user_id = r.reserved_by
-        WHERE substr(r.reserved_on, 1, 7) = $1
+        WHERE substr(r.reserved_on, 1, 7) <= $1
+          AND substr(COALESCE(r.reserved_until, r.reserved_on), 1, 7) >= $1
         ORDER BY r.reserved_on, r.start_time NULLS FIRST`,
       [month]
     )
@@ -253,14 +257,16 @@ export async function listReservations(month: string): Promise<AssetReservation[
 }
 
 /**
- * 직접 예약 생성. 같은 자산·같은 날짜의 시간대 겹침은 저장을 차단한다
+ * 직접 예약 생성. 같은 자산의 이용 구간 겹침은 저장을 차단한다
  * (직접 예약이 해당 자산의 유일 데이터원이므로 충돌 없는 상태를 보장할 수 있다).
- * 시간 미지정(종일)은 그날 전체와 겹치는 것으로 본다.
+ * 시간 미지정(종일)은 그날(여러 날이면 기간) 전체와 겹치는 것으로 본다.
+ * reservedUntil(마지막 날)은 회의실·기타만 — 여러 날이면 시각은 첫날 시작·마지막 날 종료다.
  */
 export async function createReservation(input: {
   assetId: string;
   reservedBy: string;
   reservedOn: string; // YYYY-MM-DD
+  reservedUntil?: string | null; // YYYY-MM-DD, 비우면 reservedOn 하루
   startTime?: string | null;
   endTime?: string | null;
   purpose?: string | null;
@@ -268,8 +274,9 @@ export async function createReservation(input: {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.reservedOn)) throw new Error("예약 날짜가 올바르지 않습니다.");
   const start = input.startTime?.trim() || null;
   const end = input.endTime?.trim() || null;
-  if ((start && !end) || (!start && end)) throw new Error("시작·종료 시각은 함께 입력하세요.");
-  if (start && end && start >= end) throw new Error("종료 시각은 시작 시각보다 뒤여야 합니다.");
+  const lastDay = input.reservedUntil?.trim() || input.reservedOn;
+  // 하루짜리는 reserved_until 을 비워 기존 예약과 같은 모양으로 저장한다.
+  const until = lastDay !== input.reservedOn ? lastDay : null;
   const now = new Date().toISOString();
   const reservationId = newId("resv");
 
@@ -279,12 +286,14 @@ export async function createReservation(input: {
     );
     if (!asset.length) throw new Error("자산을 찾을 수 없습니다.");
     if (Number(asset[0].active ?? 0) !== 1) throw new Error("비활성화된 자산입니다.");
+    const kind = toKind(asset[0].kind);
+    // 날짜 범위·시각 검사 — 법인차량은 하루 안의 시작·종료 시각 필수(종료일 불가), 회의실·기타는 범위 허용.
+    const rangeError = reservationRangeError({ kind, startDate: input.reservedOn, endDate: lastDay, startTime: start, endTime: end });
+    if (rangeError) throw new Error(rangeError);
 
     // 법인차량(2026-11-12) — 하루 안의 짧은 사용만 직접 예약한다. 출장은 출장신청서로만 잡고,
     // 결재 중·승인된 출장 기간과 겹치는 직접 예약은 막는다.
-    if (String(asset[0].kind) === "vehicle") {
-      const timeError = vehicleReservationTimeError(start, end);
-      if (timeError) throw new Error(timeError);
+    if (kind === "vehicle") {
       const conflicts = await findVehicleBookingConflicts(db, {
         assetId: input.assetId,
         assetName: String(asset[0].name ?? ""),
@@ -296,25 +305,33 @@ export async function createReservation(input: {
       }
     }
 
-    // 겹침 검사 — 종일 예약(NULL 시간)은 그날 모든 예약과 겹친다.
-    const conflicts = rowsToObjects(
+    // 겹침 검사 — 날짜가 걸치는 같은 자산 예약을 모아 구간으로 비교한다(종일 = 그날·기간 전체).
+    const slot: AssetSlot = { startDate: input.reservedOn, endDate: lastDay, startTime: start, endTime: end };
+    const nearby = rowsToObjects(
       await db.exec(
-        `SELECT count(*)::int AS cnt
+        `SELECT reserved_on, reserved_until, start_time, end_time
            FROM asset_reservations
-          WHERE asset_id = $1 AND reserved_on = $2
-            AND ($3::text IS NULL OR start_time IS NULL OR (start_time < $4 AND end_time > $3))`,
-        [input.assetId, input.reservedOn, start, end]
+          WHERE asset_id = $1 AND reserved_on <= $3 AND COALESCE(reserved_until, reserved_on) >= $2`,
+        [input.assetId, input.reservedOn, lastDay]
       )
     );
-    if (Number(conflicts[0]?.cnt ?? 0) > 0) {
-      throw new Error("해당 시간대에 이미 예약이 있습니다.");
+    const overlapped = nearby.some((r) =>
+      assetSlotsOverlap(slot, {
+        startDate: String(r.reserved_on),
+        endDate: r.reserved_until != null ? String(r.reserved_until) : String(r.reserved_on),
+        startTime: textOrNull(r.start_time),
+        endTime: textOrNull(r.end_time),
+      })
+    );
+    if (overlapped) {
+      throw new Error(until ? "예약 기간에 이미 같은 자산의 예약이 있습니다." : "해당 시간대에 이미 예약이 있습니다.");
     }
 
     await db.run(
       `INSERT INTO asset_reservations
-         (reservation_id, asset_id, reserved_by, reserved_on, start_time, end_time, purpose, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [reservationId, input.assetId, input.reservedBy, input.reservedOn, start, end, input.purpose?.trim() || null, now]
+         (reservation_id, asset_id, reserved_by, reserved_on, reserved_until, start_time, end_time, purpose, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [reservationId, input.assetId, input.reservedBy, input.reservedOn, until, start, end, input.purpose?.trim() || null, now]
     );
   });
 
@@ -326,6 +343,7 @@ export async function createReservation(input: {
     reservedBy: input.reservedBy,
     reservedByName: null,
     reservedOn: input.reservedOn,
+    reservedUntil: until,
     startTime: start,
     endTime: end,
     purpose: input.purpose?.trim() || null,

@@ -2,7 +2,7 @@
 
 // 자산 이용 현황(/assets/reservations) — 자산별 예약·이용을 월 캘린더로 표시.
 // 데이터원 2종: 출장신청서 상신 건의 법인차량(자동, 결재 중=가예약·승인=확정, 취소는 결재 문서에서)
-// + 직접 예약(회의실 등, 법인차량은 하루 안의 짧은 사용만 — 2026-11-12).
+// + 직접 예약(회의실·기타는 시작일~종료일 범위 한 건, 법인차량은 하루 안의 짧은 사용만 — 2026-11-12).
 // 캘린더는 일정 메뉴의 ScheduleCalendar 를 재사용한다 — 색은 차량(주황)/직접 예약(보라) 2계열.
 // 차량 겹침은 출장 상신·직접 예약 저장에서 막고, 그 전에 생긴 겹침은 ⚠ 로 경고한다.
 
@@ -18,7 +18,8 @@ import { ScheduleCalendar } from "@/components/calendar/ScheduleCalendar";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { TAG_COLOR_STRONG, type CalendarEvent } from "@/lib/calendar/types";
 import { ASSET_KIND_LABELS, type ReservableAsset } from "@/lib/assets/types";
-import { TRIP_DRAFT_HREF, TRIP_VEHICLE_GUIDE, vehicleReservationTimeError } from "@/lib/assets/vehicle-booking-rules";
+import { TRIP_DRAFT_HREF, TRIP_VEHICLE_GUIDE } from "@/lib/assets/vehicle-booking-rules";
+import { reservationRangeError } from "@/lib/assets/reservation-range";
 import "@/components/cdash/cdash.css";
 
 interface UsageItem {
@@ -54,7 +55,9 @@ export function AssetCalendarBoard() {
   const [error, setError] = useState<string | null>(null);
   // 새 예약 폼
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ assetId: "", date: "", startTime: "", endTime: "", purpose: "" });
+  // date = 시작일(차량은 그날 하루), endDate = 종료일(회의실·기타만, 기본 = 시작일)
+  const EMPTY_FORM = { assetId: "", date: "", endDate: "", startTime: "", endTime: "", purpose: "" };
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const month = `${cur.y}-${String(cur.m + 1).padStart(2, "0")}`;
@@ -110,20 +113,33 @@ export function AssetCalendarBoard() {
     [filtered]
   );
 
-  const formVehicle = assets.find((a) => a.assetId === form.assetId)?.kind === "vehicle";
+  const formKind = assets.find((a) => a.assetId === form.assetId)?.kind ?? null;
+  const formVehicle = formKind === "vehicle";
+  // 여러 날 예약(회의실·기타) — 시각은 첫날 시작·마지막 날 종료로 본다. 법인차량은 종료일이 없다.
+  const formEndDate = formVehicle ? form.date : form.endDate || form.date;
+  const formMultiDay = !formVehicle && !!form.date && formEndDate > form.date;
+  const formDateError = !formVehicle && form.date && form.endDate && form.endDate < form.date ? "종료일은 시작일과 같거나 뒤여야 합니다." : null;
+
+  const setStartDate = (date: string) =>
+    // 종료일이 비었거나 시작일과 같았거나 새 시작일보다 앞이면 시작일을 따라간다(기본 종료일 = 시작일).
+    setForm((p) => ({ ...p, date, endDate: !p.endDate || p.endDate === p.date || (date && p.endDate < date) ? date : p.endDate }));
 
   const create = async () => {
     if (!form.assetId || !form.date) {
       alert("자산과 날짜를 선택하세요.");
       return;
     }
-    // 법인차량은 하루 안의 짧은 사용만(서버도 같은 규칙으로 막는다)
-    if (formVehicle) {
-      const timeError = vehicleReservationTimeError(form.startTime, form.endTime);
-      if (timeError) {
-        alert(timeError);
-        return;
-      }
+    // 법인차량은 하루 안의 짧은 사용만, 회의실·기타는 시작일~종료일(서버도 같은 규칙으로 막는다)
+    const rangeError = reservationRangeError({
+      kind: formKind,
+      startDate: form.date,
+      endDate: formEndDate,
+      startTime: form.startTime,
+      endTime: form.endTime,
+    });
+    if (rangeError) {
+      alert(rangeError);
+      return;
     }
     setSaving(true);
     try {
@@ -133,6 +149,7 @@ export function AssetCalendarBoard() {
         body: JSON.stringify({
           assetId: form.assetId,
           reservedOn: form.date,
+          reservedUntil: formMultiDay ? formEndDate : null,
           startTime: form.startTime || null,
           endTime: form.endTime || null,
           purpose: form.purpose || null,
@@ -140,7 +157,7 @@ export function AssetCalendarBoard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "예약 실패");
-      setForm({ assetId: "", date: "", startTime: "", endTime: "", purpose: "" });
+      setForm(EMPTY_FORM);
       setFormOpen(false);
       await load();
     } catch (err) {
@@ -153,7 +170,7 @@ export function AssetCalendarBoard() {
   const remove = async (u: UsageItem) => {
     if (!u.id.startsWith("resv:")) return;
     const owner = !u.mine && u.userName ? `${u.userName}님의 ` : "";
-    if (!confirm(`${u.assetName} ${u.startDate} ${owner}예약을 취소할까요?`)) return;
+    if (!confirm(`${u.assetName} ${fmtWhen(u)} ${owner}예약을 취소할까요?`)) return;
     try {
       const res = await fetch(`/api/assets/reservations/${encodeURIComponent(u.id.slice(5))}`, { method: "DELETE" });
       const data = await res.json();
@@ -167,6 +184,8 @@ export function AssetCalendarBoard() {
   const fmtWhen = (u: UsageItem) => {
     const s = u.startDate.slice(5).replace("-", ".");
     const e = u.endDate.slice(5).replace("-", ".");
+    // 여러 날 시각 지정 예약은 첫날 시작 ~ 마지막 날 종료로 적는다(예: 11.13 14:00 ~ 11.15 12:00).
+    if (u.endDate !== u.startDate && u.startTime && u.endTime) return `${s} ${u.startTime} ~ ${e} ${u.endTime}`;
     const range = u.endDate !== u.startDate ? `${s} ~ ${e}` : s;
     const time = u.startTime && u.endTime ? ` ${u.startTime}~${u.endTime}` : u.startTime ? ` ${u.startTime}` : "";
     return range + time;
@@ -210,39 +229,60 @@ export function AssetCalendarBoard() {
         </Link>
       </div>
 
-      {/* 직접 예약 폼 — 회의실 등 + 법인차량 짧은 사용. 출장 차량은 출장신청서 상신으로 자동 반영된다. */}
+      {/* 직접 예약 폼 — 회의실·기타(시작일~종료일) + 법인차량 짧은 사용(하루). 출장 차량은 출장신청서 상신으로 자동 반영된다. */}
       {formOpen && (
-        <div className="rounded-2xl border cd-border-c p-3 flex items-end gap-2 flex-wrap">
-          <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            <span className="cd-label-text">자산</span>
-            <select className="cd-select" style={{ width: 170 }} value={form.assetId} onChange={(e) => setForm((p) => ({ ...p, assetId: e.target.value }))}>
-              <option value="">선택</option>
-              {assets.map((a) => (
-                <option key={a.assetId} value={a.assetId}>
-                  {a.name} ({ASSET_KIND_LABELS[a.kind]})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            <span className="cd-label-text">날짜</span>
-            <AutoDateInput className="cd-input" value={form.date} onChange={(date) => setForm((p) => ({ ...p, date }))} />
-          </label>
-          <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            <span className="cd-label-text">{formVehicle ? "시작(필수)" : "시작(비우면 종일)"}</span>
-            <input type="time" className="cd-input" value={form.startTime} onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))} />
-          </label>
-          <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            <span className="cd-label-text">{formVehicle ? "종료(필수)" : "종료"}</span>
-            <input type="time" className="cd-input" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))} />
-          </label>
-          <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[160px]">
-            <span className="cd-label-text">목적</span>
-            <input className="cd-input w-full" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} placeholder={formVehicle ? "방문처·용도" : "회의명·용도"} />
-          </label>
-          <button type="button" className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving} onClick={create}>
-            {saving ? "등록 중..." : "예약 등록"}
-          </button>
+        <div className="rounded-2xl border cd-border-c p-3 flex flex-col gap-2">
+          <div className="flex items-end gap-2 flex-wrap">
+            <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+              <span className="cd-label-text">자산</span>
+              <select className="cd-select" style={{ width: 170 }} value={form.assetId} onChange={(e) => setForm((p) => ({ ...p, assetId: e.target.value }))}>
+                <option value="">선택</option>
+                {assets.map((a) => (
+                  <option key={a.assetId} value={a.assetId}>
+                    {a.name} ({ASSET_KIND_LABELS[a.kind]})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+              <span className="cd-label-text">{formVehicle ? "날짜" : "시작일"}</span>
+              <AutoDateInput className="cd-input" value={form.date} onChange={setStartDate} />
+            </label>
+            {/* 종료일 — 회의실·기타만. 법인차량은 하루 안의 짧은 사용만 받으므로 숨긴다(출장은 출장신청서로). */}
+            {!formVehicle && (
+              <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+                <span className="cd-label-text">종료일</span>
+                <AutoDateInput
+                  className="cd-input"
+                  value={form.endDate}
+                  onChange={(endDate) => setForm((p) => ({ ...p, endDate }))}
+                  aria-invalid={formDateError ? true : undefined}
+                />
+              </label>
+            )}
+            <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+              <span className="cd-label-text">{formVehicle ? "시작(필수)" : formMultiDay ? "첫날 시작(비우면 종일)" : "시작(비우면 종일)"}</span>
+              <input type="time" className="cd-input" value={form.startTime} onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))} />
+            </label>
+            <label className="text-[11px] cd-text-faint flex flex-col gap-1">
+              <span className="cd-label-text">{formVehicle ? "종료(필수)" : formMultiDay ? "마지막 날 종료" : "종료"}</span>
+              <input type="time" className="cd-input" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))} />
+            </label>
+            <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[160px]">
+              <span className="cd-label-text">목적</span>
+              <input className="cd-input w-full" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} placeholder={formVehicle ? "방문처·용도" : "회의명·용도"} />
+            </label>
+            <button type="button" className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving} onClick={create}>
+              {saving ? "등록 중..." : "예약 등록"}
+            </button>
+          </div>
+          {formDateError ? (
+            <p className="text-[12px] cd-error-text">{formDateError}</p>
+          ) : formVehicle ? (
+            <p className="cd-hint">법인차량은 하루 안의 짧은 사용만 예약합니다. {TRIP_VEHICLE_GUIDE}.</p>
+          ) : formMultiDay ? (
+            <p className="cd-hint">여러 날을 한 건으로 예약합니다. 시각을 비우면 기간 전체 종일입니다.</p>
+          ) : null}
         </div>
       )}
 

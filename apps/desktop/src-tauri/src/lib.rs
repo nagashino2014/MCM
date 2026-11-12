@@ -11,12 +11,13 @@
 //!   - 미읽음 뱃지(트레이 아이콘 점 · 작업표시줄 카운트)와 OS 알림 — 웹앱이 postMessage 로 알려준다
 //!   - 창 위치·크기 기억(window-state), 부팅 시 자동 시작(autostart)
 //!   - 대화 팝업 창(chat-<roomId>) — 웹앱의 mcm:open-chat 을 받아 상단 바(index.html)가 연다. 닫으면 실제로 닫힌다
+//!   - PC 알림 토스트(1.6.0) — 클릭하면 그 화면으로 이동(`show_toast`). 알림 플러그인은 데스크톱에서 클릭 이벤트가 없다
 
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 
 /// 처음 실행할 때 주 창이 차지할 수 있는 화면 높이의 비율(2026-11-06 사용자 결정).
@@ -179,6 +180,63 @@ fn focus_window(app: tauri::AppHandle) {
     show_main_window(&app);
 }
 
+/// 토스트 왼쪽 앱 로고(다우오피스처럼, 2026-11-12 사용자 요청) — 브랜드 아이콘(128px). Windows 는 로컬 파일만 받으므로
+/// 처음 띄울 때 앱 캐시 폴더에 한 번 써 두고 그 경로를 쓴다. 쓰기에 실패하면 로고 없이 띄운다.
+#[cfg(windows)]
+const TOAST_ICON_PNG: &[u8] = include_bytes!("../icons/128x128.png");
+
+#[cfg(windows)]
+fn toast_icon_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let dir = app.path().app_cache_dir().ok()?;
+    let path = dir.join("toast-icon-v1.png");
+    if !path.exists() {
+        std::fs::create_dir_all(&dir).ok()?;
+        std::fs::write(&path, TOAST_ICON_PNG).ok()?;
+    }
+    Some(path)
+}
+
+/// PC 알림 토스트(2026-11-12) — 새 메일·결재·메신저. 누르면 주 창을 띄우고 `mcm:toast-click`(target 그대로)을 보낸다.
+///
+/// 알림 플러그인(`sendNotification`, 웹의 `new Notification` 도 플러그인이 가로챈다)은 Windows 에서 토스트는 뜨지만
+/// 클릭 콜백이 없어(2026-11-12 실측: 알림 기록 DB 에 전달 확인, onclick·onshow 미발생) 화면 이동을 못 한다.
+/// 그래서 플러그인이 내부에서 쓰는 tauri-winrt-notification 을 직접 불러 Activated 이벤트를 받는다.
+/// AppUserModelID 는 플러그인과 같은 규칙 — 설치본은 identifier(인스톨러가 시작 메뉴 바로가기에 심는다),
+/// target/debug·release 에서 직접 돌리면 PowerShell 의 것(알림 출처가 PowerShell 로 보인다).
+#[tauri::command]
+fn show_toast(app: tauri::AppHandle, title: String, body: String, target: serde_json::Value) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use tauri_winrt_notification::{Duration, IconCrop, Toast};
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.display().to_string()))
+            .unwrap_or_default();
+        let sep = std::path::MAIN_SEPARATOR;
+        let dev = exe_dir.ends_with(&format!("{sep}target{sep}debug")) || exe_dir.ends_with(&format!("{sep}target{sep}release"));
+        let app_id = if dev { Toast::POWERSHELL_APP_ID.to_string() } else { app.config().identifier.clone() };
+        let handle = app.clone();
+        let mut toast = Toast::new(&app_id).title(&title).text1(&body).duration(Duration::Short);
+        if let Some(icon) = toast_icon_path(&app) {
+            toast = toast.icon(&icon, IconCrop::Square, "MCM");
+        }
+        toast
+            .on_activated(move |_action| {
+                show_main_window(&handle);
+                let _ = handle.emit_to("main", "mcm:toast-click", target.clone());
+                Ok(())
+            })
+            .show()
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        use tauri_plugin_notification::NotificationExt;
+        let _ = target;
+        app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -193,7 +251,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .invoke_handler(tauri::generate_handler![set_unread, focus_window])
+        .invoke_handler(tauri::generate_handler![set_unread, focus_window, show_toast])
         .setup(|app| {
             // "항상 위 고정"은 창 상단 바의 토글 스위치가 담당한다(index.html) —
             // 두 곳에 두면 체크 상태가 갈라지므로 트레이 메뉴는 열기·종료만 둔다.

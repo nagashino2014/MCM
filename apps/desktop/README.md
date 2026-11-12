@@ -39,6 +39,13 @@ npm run build        # NSIS 인스톨러 생성 → src-tauri/target/release/bun
 - **오늘 할 일 뱃지·알림**(P3, 1.3.0) — 같은 폴링에 `/api/todo/due-soon` 을 얹어 오늘까지 해야 하는
   할 일(예정·마감·지연) 건수를 올린다. 작업표시줄 숫자 = 미읽음 + 오늘 할 일. 알림은 하루 1회
   ("오늘 할 일 N건 · 제목…"), 건수만 바뀌면 뱃지만 갱신한다.
+- **PC 알림 토스트**(1.6.0) — 숨은 iframe `https://koensain.app/pc-notify-bridge.html`(frontend/public, next 배포로 바뀜)이
+  m-app 과 같은 저장소의 로그인 토큰으로 15초마다 `/api/notify/pc-feed` 를 불러 새 메일·내 차례 결재·내 문서 완료/반려·
+  메신저 새 메시지를 셸로 올린다. 셸은 Rust `show_toast`(tauri-winrt-notification, 앱 로고 포함)로 Windows 알림을 띄우고,
+  누르면 대화는 개별 대화창, 메일·결재는 주 창을 `/m-app/mail/<id>`·`/m-app/approval/<id>` 로 연다.
+  알림 플러그인(`sendNotification`, 웹의 `new Notification` 도 플러그인이 가로챔)은 토스트는 뜨지만 데스크톱에서 클릭 이벤트가
+  없어 쓰지 않는다(2026-11-12 실측). 브리지가 살아 있으면 웹앱의 `mcm:unread` 는 뱃지에만 쓴다(중복 방지).
+  브리지 요청에는 `X-MCM-Client: pc-widget` 이 붙어 서버가 "위젯 켜짐"을 알고, 웹 브라우저 알림이 양보한다.
 - 로그인 상태는 웹뷰 저장소에 남아 재시작해도 유지된다(모바일과 같은 토큰 방식).
   로그인 화면의 "자동 로그인"을 끄면 다음 실행 때 다시 로그인해야 한다.
 

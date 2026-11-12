@@ -1,11 +1,11 @@
 "use client";
 
 // 네비 카운트 뱃지 훅(G1) — 안읽은 메일·미결재·할 일(오늘+지연) 60초 폴링. AppShell 에서 1회 구독해 Sidebar/드로어에 공유.
-// mailNotify: 같은 폴링 응답의 mailArrivedAt 으로 새 메일 PC 알림을 판단한다(AppShell 만 켠다 — 홈 통계 카드의 두 번째 구독은 끔).
+// mailNotify: 같은 폴링 응답의 신호(메일·결재·메신저 도착 시각)로 PC 알림을 판단한다(AppShell 만 켠다 — 홈 통계 카드의 두 번째 구독은 끔).
 
 import { useEffect, useState } from "react";
 import type { MenuBadgeKey } from "@/config/menu";
-import { handleMailArrivedSignal } from "@/lib/mail/desktop-notify";
+import { handlePcNotifySignals, readPcNotifySignals } from "@/lib/notify/pc-notify-client";
 
 export type NavBadges = Record<MenuBadgeKey, number>;
 
@@ -29,7 +29,7 @@ export function useNavBadges(opts?: { mailNotify?: boolean }): NavBadges {
             todoDue: Number(d.todoDue) || 0,
           });
         }
-        if (alive && mailNotify) void handleMailArrivedSignal(typeof d.mailArrivedAt === "string" ? d.mailArrivedAt : null);
+        if (alive && mailNotify) void handlePcNotifySignals(readPcNotifySignals(d));
       } catch {
         /* 네비는 실패해도 침묵 */
       }

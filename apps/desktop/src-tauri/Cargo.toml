@@ -1,6 +1,6 @@
 [package]
 name = "mcm-desktop"
-version = "1.5.1"
+version = "1.6.0"
 description = "MCM 데스크탑 위젯"
 authors = ["KOENSAIN"]
 edition = "2021"
@@ -20,6 +20,11 @@ tauri-plugin-autostart = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
+# PC 알림 토스트(1.6.0) — 클릭하면 화면 이동(show_toast). 알림 플러그인이 쓰는 것과 같은 판(Cargo.lock 0.7.3)이라 새로 받지 않는다.
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.7"
 
 [profile.release]
 # 설치본 크기 우선(콘텐츠는 원격이라 셸은 작을수록 좋다).

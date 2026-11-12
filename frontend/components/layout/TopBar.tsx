@@ -7,12 +7,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ClipboardCheck, KeyRound, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
+import { BellRing, ClipboardCheck, KeyRound, ListChecks, LogOut, Mail, Menu, Moon, Plus, Search, Sun } from "lucide-react";
 import { hasPerm, isSystemAdminPerms } from "@/lib/auth/perms";
 import type { CdTheme } from "@/components/cdash/useCdashTheme";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdIconButton } from "@/components/cdash/CdButton";
+import { CdHelp } from "@/components/cdash/CdHelp";
+import { CdModal } from "@/components/cdash/CdModal";
+import { PcNotifySection } from "@/components/notify/PcNotifySection";
 import { AlertBell } from "@/components/dashboard/AlertBell";
 import { TodoNotifyBell } from "@/components/todo/TodoNotifyBell";
 import { GlobalSearch } from "@/components/layout/GlobalSearch";
@@ -78,6 +81,7 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [pcNotifyOpen, setPcNotifyOpen] = useState(false);
   const accountId = useId();
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const accountPanelRef = useRef<HTMLDivElement>(null);
@@ -220,6 +224,18 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
                 <KeyRound className="w-4 h-4" />
                 비밀번호 변경
               </button>
+              {/* PC 알림(메일·결재·메신저, 2026-11-12) — 메일 설정의 같은 칸을 창으로 연다 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setPcNotifyOpen(true);
+                }}
+                className="w-full px-4 py-3 text-sm font-bold cd-text cd-row-hover flex items-center gap-2 border-b cd-hairline-c"
+              >
+                <BellRing className="w-4 h-4" />
+                PC 알림
+              </button>
               <button
                 type="button"
                 onClick={async () => {
@@ -238,6 +254,9 @@ export function TopBar({ userName, userEmail, perms, theme, onToggleTheme, onOpe
       </div>
 
       <GlobalSearch perms={perms} open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <CdModal open={pcNotifyOpen} onClose={() => setPcNotifyOpen(false)} title={<span className="inline-flex items-center gap-1.5">PC 알림 <CdHelp topic="mail.desktop-notify" /></span>} size="md">
+        <PcNotifySection bare />
+      </CdModal>
     </header>
   );
 }

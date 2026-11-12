@@ -65,6 +65,15 @@ const nextConfig = {
         source: "/m-app/briefings/:briefingId([a-zA-Z0-9_-]+)",
         destination: "/m-app/briefings/[briefingId].html",
       },
+      // PC 위젯 알림을 누르면 위젯이 이 주소로 바로 연다(2026-11-12). compose·draft 는 정적 화면이라 제외.
+      {
+        source: "/m-app/mail/:messageId((?!compose$)[a-zA-Z0-9_-]+)",
+        destination: "/m-app/mail/[messageId].html",
+      },
+      {
+        source: "/m-app/approval/:docId((?!draft$)[a-zA-Z0-9_-]+)",
+        destination: "/m-app/approval/[docId].html",
+      },
       {
         source: "/m-app/:route((?!_expo/)(?!assets/)[^.]+)",
         destination: "/m-app/:route.html",

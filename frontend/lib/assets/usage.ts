@@ -4,11 +4,13 @@
  * 출장 차량은 결재 문서 상태에서 파생된다 — 진행 중=가예약, 승인=확정, 반려·취소=목록에서 빠짐(해제).
  * 2026-11-12부터 같은 차량의 겹침은 출장 상신과 직접 예약 저장 양쪽에서 막는다(lib/assets/vehicle-booking.ts).
  * 그 전에 생긴 겹침이 남아 있을 수 있어 경고 플래그(conflict)는 그대로 세운다.
+ * 회의실·기타 직접 예약은 여러 날 범위 한 건일 수 있다(368 reserved_until) — 달력에 연속 막대로 나온다.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import { TRIP_FORM_ID, extractVehicleUse } from "@/lib/approval/trip";
 import type { AssetKind } from "@/lib/assets/types";
-import { tripVehicleSlot, vehicleSlotsOverlap, type VehicleSlot } from "@/lib/assets/vehicle-booking-rules";
+import { tripVehicleSlot, type VehicleSlot } from "@/lib/assets/vehicle-booking-rules";
+import { assetSlotsOverlap } from "@/lib/assets/reservation-range";
 
 export interface AssetUsageItem {
   /** "resv:{reservationId}" | "doc:{docId}" */
@@ -42,7 +44,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
   // 겹침 비교용 구간 — 하루 출장의 오전·오후는 반나절로 본다(표시용 startTime 은 비워 둔다).
   const slotOf = new Map<AssetUsageItem, VehicleSlot>();
 
-  // 1) 직접 예약(회의실 등 — 저장 시 겹침 차단이라 자체 충돌은 없다)
+  // 1) 직접 예약(회의실 등 — 저장 시 겹침 차단이라 자체 충돌은 없다). 여러 날 예약은 그 달에 걸치면 포함.
   const resvRows = rowsToObjects(
     await db.exec(
       `SELECT r.*, a.name AS asset_name, a.kind AS asset_kind,
@@ -51,7 +53,8 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
          JOIN reservable_assets a ON a.asset_id = r.asset_id
          LEFT JOIN users u ON u.user_id = r.reserved_by
          LEFT JOIN employee_profiles ep ON ep.user_id = r.reserved_by
-        WHERE substr(r.reserved_on, 1, 7) = $1
+        WHERE substr(r.reserved_on, 1, 7) <= $1
+          AND substr(COALESCE(r.reserved_until, r.reserved_on), 1, 7) >= $1
         ORDER BY r.reserved_on, r.start_time NULLS FIRST`,
       [month]
     )
@@ -65,7 +68,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
       assetKind: (r.asset_kind === "vehicle" || r.asset_kind === "room" || r.asset_kind === "etc" ? r.asset_kind : null) as AssetKind | null,
       source: "reservation",
       startDate: date,
-      endDate: date,
+      endDate: r.reserved_until != null ? String(r.reserved_until) : date,
       startTime: r.start_time != null ? String(r.start_time) : null,
       endTime: r.end_time != null ? String(r.end_time) : null,
       userName: r.user_name != null ? String(r.user_name) : null,
@@ -141,7 +144,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
       const a = items[i];
       const b = items[j];
       if (assetKey(a) !== assetKey(b)) continue;
-      if (vehicleSlotsOverlap(slotOf.get(a) ?? a, slotOf.get(b) ?? b)) {
+      if (assetSlotsOverlap(slotOf.get(a) ?? a, slotOf.get(b) ?? b)) {
         a.conflict = true;
         b.conflict = true;
       }

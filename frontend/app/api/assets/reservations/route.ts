@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST : 직접 예약(회의실 등 — 결재 없이 즉시 등록). 겹침은 저장이 차단된다.
+// 법인차량은 하루 안의 시작·종료 시각이 필수이고 결재 중·승인된 출장 기간과 겹치면 막힌다(lib/assets/store.ts).
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireSession();

@@ -39,6 +39,7 @@ import {
   type LineStep,
 } from '@/lib/approval/form-types';
 import type { OvertimeConsent } from '@/lib/approval/overtime-consent';
+import { specialKindOf, specialRemainingDays, type SpecialLeaveBalance } from '@/lib/approval/special-leave';
 
 /**
  * 전자결재 기안 — 양식 선택 → 작성 → 결재선 → 상신.
@@ -214,10 +215,17 @@ export default function DraftScreen() {
     } | null;
   }>(otFrom ? `/api/approval/overtime/week-usage?date=${otFrom}` : '/api/approval/forms', { skip: !otFrom });
 
-  const leaveMine = useApi<{ granted?: number; used?: number; remaining?: number }>(
+  // 응답은 { summary: 연차 잔여, special: 특별휴가 잔여 }(웹 /api/approval/leave?me=1). 예전엔 최상위에서
+  // remaining 을 읽어 잔여 연차 안내가 늘 비어 있었다(2026-11-12 정정).
+  const leaveMineRes = useApi<{
+    summary?: { granted?: number; used?: number; remaining?: number } | null;
+    special?: SpecialLeaveBalance[];
+  }>(
     isLeave ? `/api/approval/leave?me=1&year=${new Date().getFullYear()}` : '/api/approval/forms',
     { skip: !isLeave }
   );
+  const leaveMine = { data: leaveMineRes.data?.summary ?? null };
+  const specialBalances = leaveMineRes.data?.special ?? [];
 
   // 휴가: 종류·시작일 → 종료일·사용일수 자동 부여(웹 DraftBoard :229-273 이식).
   // 고정 부여일수 종류(결혼 5일 등)는 종료일 = 시작일 + (days-1) "달력일", use_days = days.
@@ -279,6 +287,18 @@ export default function DraftScreen() {
       const cnt = workdayCount(period.from, period.to, leaveOffDays);
       if (cnt <= 0) return { text: '기간이 모두 주말·휴일입니다. 날짜를 확인하세요.', over: true };
       const skipped = dayCount(period.from, period.to) - cnt;
+      const specialKind = specialKindOf(leaveItem.key);
+      if (specialKind) {
+        // 특별휴가(363) — 연차가 아니라 특별휴가 잔여에서 차감한다.
+        const left = specialRemainingDays(specialBalances, specialKind);
+        const overSpecial = cnt > left;
+        return {
+          text: `사용 ${cnt}일${skipped > 0 ? ` (주말·휴일 ${skipped}일 제외)` : ''}${
+            overSpecial ? ` · ⚠ 잔여 ${leaveItem.label}(${left}일) 초과` : ` · ${leaveItem.label} 잔여 ${left}일에서 차감`
+          }`,
+          over: overSpecial,
+        };
+      }
       const remaining = leaveMine.data?.remaining;
       const over = !!leaveItem.deduct && typeof remaining === 'number' && cnt > remaining;
       return {
@@ -287,7 +307,7 @@ export default function DraftScreen() {
       };
     }
     return { text: `${leaveItem.label} — 시작·종료일을 지정하면 사용일수가 계산됩니다`, over: false };
-  }, [isLeave, leaveItem, leavePeriodKey, values, leaveMine.data, leaveOffDays]);
+  }, [isLeave, leaveItem, leavePeriodKey, values, leaveMine.data, leaveOffDays, specialBalances]);
 
   /** 직전 휴가 종류 — 종류가 바뀌었을 때만 기간·일수를 새 규정으로 재설정한다. */
   const prevLeaveTypeRef = useRef<string | null>(null);

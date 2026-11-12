@@ -1,5 +1,5 @@
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import type { LeaveTypeItem } from "@/lib/approval/leave-types";
+import { specialKindOf, type LeaveTypeItem } from "@/lib/approval/leave-types";
 
 /*
  * 휴가 종류 카탈로그 DB 접근(서버 전용) — 조회/저장. 타입·시드·순수 조회는 leave-types.ts.
@@ -41,13 +41,15 @@ export async function saveLeaveTypes(items: LeaveTypeItem[], _actorUserId: strin
   await withDbWrite(async (txn) => {
     for (let i = 0; i < valid.length; i++) {
       const it = valid[i];
+      // 특별휴가(363)는 원장 잔여에서 사용일수만큼 차감한다 — 고정 부여일수·연차 차감을 붙이면 이중 처리된다.
+      const special = specialKindOf(it.key.trim()) != null;
       await txn.run(
         `INSERT INTO leave_types (key, label, group_name, days, deduct, sort_order, active, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
          ON CONFLICT (key) DO UPDATE SET
            label = EXCLUDED.label, group_name = EXCLUDED.group_name, days = EXCLUDED.days,
            deduct = EXCLUDED.deduct, sort_order = EXCLUDED.sort_order, active = EXCLUDED.active, updated_at = EXCLUDED.updated_at`,
-        [it.key.trim(), it.label.trim(), it.group.trim(), it.days, it.deduct, i, it.active ? 1 : 0, now]
+        [it.key.trim(), it.label.trim(), it.group.trim(), special ? null : it.days, special ? null : it.deduct, i, it.active ? 1 : 0, now]
       );
     }
     await txn.run(`DELETE FROM leave_types WHERE key <> ALL($1::text[])`, [valid.map((it) => it.key.trim())]);

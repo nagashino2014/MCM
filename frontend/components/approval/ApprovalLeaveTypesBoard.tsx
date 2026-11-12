@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
-import { DEFAULT_LEAVE_TYPES, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import { DEFAULT_LEAVE_TYPES, specialKindOf, type LeaveTypeItem } from "@/lib/approval/leave-types";
 import "@/components/cdash/cdash.css";
 
 export function ApprovalLeaveTypesBoard() {
@@ -190,7 +190,7 @@ export function ApprovalLeaveTypesBoard() {
               </button>
             </div>
             <p className="text-[11px] cd-text-faint leading-relaxed px-0.5 mt-1">
-              차감: 연차·반차만 연차 대장에서 차감됩니다. 경조·출산·조의는 부여일수 고정, 공가·병가는 부여일수를 비워 실사용 기간만큼 처리됩니다.
+              차감: 연차·반차만 연차 대장에서 차감됩니다. 경조·출산·조의는 부여일수 고정, 공가·병가는 부여일수를 비워 실사용 기간만큼 처리됩니다. 특별휴가(장기근속·초과근무 대체)는 특별휴가 잔여에서 차감되며 잔여가 있는 직원에게만 보입니다.
             </p>
           </div>
 
@@ -243,21 +243,29 @@ export function ApprovalLeaveTypesBoard() {
                               style={{ width: 72 }}
                               inputMode="decimal"
                               placeholder="가변"
+                              disabled={!!specialKindOf(it.key)}
                               value={it.days ?? ""}
                               onChange={(e) => setItem(i, { days: e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d.]/g, "")) })}
                             />
                           </td>
                           <td className="py-1 pr-2">
-                            <select
-                              className="cd-select"
-                              style={{ width: 110 }}
-                              value={it.deduct ?? ""}
-                              onChange={(e) => setItem(i, { deduct: e.target.value === "" ? null : (e.target.value as "full" | "half") })}
-                            >
-                              <option value="">비차감</option>
-                              <option value="full">연차 1일</option>
-                              <option value="half">연차 0.5일</option>
-                            </select>
+                            {specialKindOf(it.key) ? (
+                              // 특별휴가(363) — 원장 잔여에서 차감, 잔여 있는 직원에게만 기안 선택지로 보인다.
+                              <span className="inline-block text-[12px] cd-text-faint" style={{ width: 110 }} title="잔여가 있는 직원에게만 기안 선택지로 보입니다.">
+                                특별휴가 잔여
+                              </span>
+                            ) : (
+                              <select
+                                className="cd-select"
+                                style={{ width: 110 }}
+                                value={it.deduct ?? ""}
+                                onChange={(e) => setItem(i, { deduct: e.target.value === "" ? null : (e.target.value as "full" | "half") })}
+                              >
+                                <option value="">비차감</option>
+                                <option value="full">연차 1일</option>
+                                <option value="half">연차 0.5일</option>
+                              </select>
+                            )}
                           </td>
                           <td className="py-1 pr-2 text-center">
                             <input type="checkbox" checked={it.active} onChange={(e) => setItem(i, { active: e.target.checked })} />

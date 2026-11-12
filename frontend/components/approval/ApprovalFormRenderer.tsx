@@ -26,7 +26,14 @@ import {
   type ApprovalFieldDef,
   type ApprovalTimeRange,
 } from "@/lib/approval/fields";
-import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import {
+  findInCatalog,
+  specialKindOf,
+  specialRemainingText,
+  visibleLeaveTypes,
+  type LeaveTypeItem,
+  type SpecialLeaveBalance,
+} from "@/lib/approval/leave-types";
 import { formatReceivers, parseReceivers } from "@/lib/approval/receiver-parse";
 
 type Values = Record<string, unknown>;
@@ -1112,6 +1119,10 @@ function ContactSelectInput({
  */
 function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v: unknown) => void; readOnly?: boolean }) {
   const [catalog, setCatalog] = useState<LeaveTypeItem[]>([]);
+  // 본인 특별휴가 잔여(363) — 장기근속·초과근무 대체휴가는 잔여가 있을 때만 선택지로 보인다.
+  // null = 아직 못 받음(잔여 없음 경고를 성급히 띄우지 않는다).
+  const [balanceRows, setBalances] = useState<SpecialLeaveBalance[] | null>(null);
+  const balances = balanceRows ?? [];
   useEffect(() => {
     let cancelled = false;
     fetch("/api/approval/leave-types", { cache: "no-store" })
@@ -1124,16 +1135,42 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
       cancelled = true;
     };
   }, []);
+  useEffect(() => {
+    if (readOnly) return; // 열람 화면은 저장된 값만 보이면 된다(보는 사람의 잔여와 무관)
+    let cancelled = false;
+    fetch(`/api/approval/leave?me=1&year=${new Date().getFullYear()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.special)) setBalances(d.special);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [readOnly]);
 
   const item = findInCatalog(catalog, value);
   const groups = useMemo(() => {
+    // 기안 중에는 잔여 없는 특별휴가를 숨긴다. 이미 저장된 값(임시저장·반려)은 잔여가 없어도 남긴다.
+    const shown = readOnly ? catalog : visibleLeaveTypes(catalog, balanceRows ?? [], item?.key ?? null);
     const map = new Map<string, LeaveTypeItem[]>();
-    for (const it of catalog) map.set(it.group, [...(map.get(it.group) ?? []), it]);
+    for (const it of shown) map.set(it.group, [...(map.get(it.group) ?? []), it]);
     return [...map.entries()];
-  }, [catalog]);
+  }, [catalog, balanceRows, readOnly, item?.key]);
 
   const badge = (() => {
     if (!item) return null;
+    const sk = specialKindOf(item.key);
+    if (sk) {
+      const left = specialRemainingText(balances, sk);
+      return readOnly
+        ? { text: "특별휴가 잔여 차감", tone: "primary" as const }
+        : left
+          ? { text: `특별휴가 ${left} · 사용일수만큼 차감`, tone: "primary" as const }
+          : balanceRows === null
+            ? { text: "특별휴가 잔여 확인 중", tone: "muted" as const }
+            : { text: "특별휴가 잔여 없음 — 다른 종류를 고르세요", tone: "error" as const };
+    }
     if (item.deduct === "full") return { text: "연차 1일 차감", tone: "primary" as const };
     if (item.deduct === "half") return { text: "연차 0.5일 차감", tone: "primary" as const };
     if (item.days != null) return { text: `부여 휴가 ${item.days}일`, tone: "ok" as const };
@@ -1152,11 +1189,15 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
         <option value="">선택</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={g}>
-            {items.map((it) => (
-              <option key={it.key} value={it.key}>
-                {it.label}
-              </option>
-            ))}
+            {items.map((it) => {
+              const sk = readOnly ? null : specialKindOf(it.key);
+              const left = sk ? specialRemainingText(balances, sk) : null;
+              return (
+                <option key={it.key} value={it.key}>
+                  {left ? `${it.label} (${left})` : it.label}
+                </option>
+              );
+            })}
           </optgroup>
         ))}
       </select>
@@ -1165,7 +1206,9 @@ function LeaveTypeInput({ value, onSet, readOnly }: { value: unknown; onSet: (v:
           className={`text-[12px] rounded-full px-2.5 py-1 shrink-0 ${
             badge.tone === "ok"
               ? "border border-[color:var(--cd-success)] text-[color:var(--cd-success)]"
-              : badge.tone === "primary"
+              : badge.tone === "error"
+                ? "border border-[color:var(--cd-error)] text-[color:var(--cd-error)]"
+                : badge.tone === "primary"
                 ? "cd-tint-primary"
                 : "border cd-border-c cd-text-faint"
           }`}

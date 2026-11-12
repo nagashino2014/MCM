@@ -9,6 +9,7 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getMyLeaveRemaining } from "@/lib/approval/leave";
+import { specialKindOf } from "@/lib/approval/leave-types";
 import { isUnusedVehicleField } from "@/lib/approval/trip";
 
 export type PrecheckLevel = "block" | "warn" | "info";
@@ -129,7 +130,8 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
   }
 
   // 규칙 2: 연차 잔여(휴가신청 양식) — 항상 검사(정책 있으면 severity 적용)
-  if (formId === "frm-leave-request" && drafterUserId) {
+  // 특별휴가 종류(363)는 연차가 아니라 특별휴가 잔여에서 차감한다 — 상신 때 submitDoc 이 그 잔여로 막는다.
+  if (formId === "frm-leave-request" && drafterUserId && !specialKindOf(String(values.leave_type ?? ""))) {
     const useDays = toNumber(values.use_days);
     if (useDays != null && useDays > 0) {
       const year = new Date().toISOString().slice(0, 4);

@@ -130,7 +130,8 @@ export const START_ARTICLES: ManualArticle[] = [
             "메뉴 옆 숫자는 안 읽은 메일, 내가 결재할 문서, 오늘·지연된 할 일 수입니다.",
             "메뉴는 묶음(협업·업무·사업 운영·관리) 이름 아래에 모든 메뉴가 늘 보입니다.",
             "지금 있는 화면의 메뉴가 강조되고, 그 메뉴의 하위 메뉴만 펼쳐집니다. 다른 화면으로 옮기면 다른 메뉴의 하위 메뉴는 다시 접힙니다.",
-            "하위 메뉴가 있는 다른 메뉴는 이름을 눌러 잠시 펼쳐 볼 수 있습니다.",
+            "하위 메뉴가 있는 메뉴 이름을 누르면 내가 열 수 있는 첫 하위 메뉴 화면으로 바로 이동하고, 그 메뉴의 하위 메뉴가 펼쳐집니다.",
+            "지금 있는 메뉴의 이름을 다시 누르면 화면은 그대로 두고 하위 메뉴만 접거나 펼칩니다.",
             "메뉴 위쪽 토글로 [[메뉴 자동 축소 — 마우스를 올릴 때만 펼침]]을 켜면 메뉴가 아이콘만 남아 본문이 넓어집니다.",
             "창이 좁으면 메뉴가 숨고, 왼쪽 위 ☰ 버튼으로 엽니다.",
           ] },
@@ -139,7 +140,7 @@ export const START_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["화면", "메뉴", "상단바", "검색", "내용 검색", "통합 검색", "새로 작성", "다크 모드", "알림", "단축키"],
     sources: ["components/layout/TopBar.tsx", "components/layout/Sidebar.tsx", "components/manual/ManualButton.tsx", "components/layout/GlobalSearch.tsx"],
-    reviewedAt: "2026-10-29",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "start.permissions",

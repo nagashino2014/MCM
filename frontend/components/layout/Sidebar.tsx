@@ -6,12 +6,13 @@
 //   마우스 오버·키보드 포커스 동안에만 248px 로 펼친다. 펼침은 본문 위에 겹치는 오버레이라
 //   본문 가로폭은 76px 기준으로 고정된다(4K 미만에서 카드 너비 확보 — 분석 요청 배경).
 // mode="drawer" 면 폭 강제 확장(오버레이 드로어 내부용).
+// 대메뉴 클릭은 권한상 보이는 첫 소메뉴로 이동하고 그 소메뉴를 펼친다(2026-11-12, 펼침·레일·드로어 공통).
 // 카테고리(협업·업무·사업 운영·관리)는 접지 않는다(2026-10-29 사용자 요청 — 10-28 그룹 접힘 철회).
 //   카테고리 라벨 아래 대메뉴는 항상 보이고, 접고 펼치는 것은 대메뉴의 소메뉴뿐이다.
 //   화면을 옮기면 현재 대메뉴의 소메뉴만 펼치고 다른 대메뉴의 소메뉴는 접는다(펼침 상태는 저장하지 않음).
 // 설계: docs/groupware-ux-overhaul-blueprint.md §2.1·§3.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -199,6 +200,7 @@ export function Sidebar({ perms, badges, mode = "auto", onNavigate }: SidebarPro
                     width={width}
                     open={openSections.includes(item.title)}
                     onToggle={() => toggleSection(item.title)}
+                    onOpen={() => setOpenSections([item.title])}
                     onNavigate={onNavigate}
                   />
                 ))}
@@ -235,6 +237,7 @@ function NavItem({
   width,
   open,
   onToggle,
+  onOpen,
   onNavigate,
 }: {
   item: MenuItem;
@@ -243,6 +246,8 @@ function NavItem({
   width: NavWidth;
   open: boolean;
   onToggle: () => void;
+  /** 이 대메뉴의 소메뉴만 펼친다 — 첫 소메뉴로 이동하는 동안 바로 펼쳐 보이게. */
+  onOpen: () => void;
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
@@ -305,10 +310,24 @@ function NavItem({
     );
   }
 
+  // 확장(펼침·드로어) 대메뉴 클릭(2026-11-12 직원 요청 4): 다른 대메뉴면 보이는 첫 소메뉴로 바로 이동하고
+  //   소메뉴를 펼친다(item.href = menuEntryHref). 지금 있는 대메뉴를 다시 누르면 이동 없이 소메뉴만 접고 펼친다.
+  //   Ctrl·Shift·가운데 클릭(새 탭·새 창)은 브라우저 기본 동작에 맡긴다.
+  const onParentClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (isActive) {
+      e.preventDefault();
+      onToggle();
+      return;
+    }
+    onOpen();
+    onNavigate?.();
+  };
+
   return (
     <div className="flex flex-col">
-      {/* 레일 모드: 클릭=대표 경로 이동 / 확장: 클릭=접기토글 */}
-      <button type="button" onClick={onToggle} aria-expanded={open} title={item.title} className={cn(rowCls, cls.expandOnly)}>
+      {/* 레일·확장 모두 클릭=첫 소메뉴로 이동 / 확장에서 현재 대메뉴 클릭=소메뉴 접기토글 */}
+      <Link href={item.href} onClick={onParentClick} aria-expanded={open} title={item.title} className={cn(rowCls, cls.expandOnly)}>
         <div className="flex items-center gap-2.5 min-w-0">
           {iconBlock}
           <span className={cn("truncate", cls.label)}>{item.title}</span>
@@ -317,7 +336,7 @@ function NavItem({
           {countBadge}
           {open ? <ChevronDown className="w-3.5 h-3.5 opacity-40" /> : <ChevronRight className="w-3.5 h-3.5 opacity-40" />}
         </span>
-      </button>
+      </Link>
       {showRail && (
         <Link href={item.href} title={item.title} className={cn(rowCls, cls.railOnly)} onClick={onNavigate}>
           {iconBlock}

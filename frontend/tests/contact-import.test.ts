@@ -180,3 +180,15 @@ test("아마란스10 내보내기 파일 읽기 — 머리글 2줄", () => {
   assert.equal(parsed.contacts[1].title, "과장");
   assert.throws(() => parseAmaranthContacts(workbook([["이름", "전화"], ["가", "1"]])), /아마란스10 연락처 내보내기 파일이 아닙니다/);
 });
+
+test("아마란스10 새 내보내기(1행 필드 키 없음) — 2행 한글 이름으로 읽는다", () => {
+  // 2026-11-12 내보내기: 1행에는 병합된 묶음 이름만 남고 필드 키 칸이 비어 있다.
+  const groupsOnly = KEYS.map((k) => (["기본정보", "회사정보", "추가기본정보"].includes(k) ? k : null));
+  const row = ["개인", "시험사람", null, "KIM@TEST.CO.KR", "010-1111-2222", "(주)시험", "환경팀", "팀장", null, null, "031-999-0000", null, null, "경기도 안산시 단원구 해봉로 1", "http://www.test.co.kr/", "031-111-2222", null, null];
+  const keyed = parseAmaranthContacts(workbook([KEYS, LABELS, row]));
+  const labelled = parseAmaranthContacts(workbook([groupsOnly, LABELS, row]));
+  assert.deepEqual(labelled, keyed);
+  assert.equal(labelled.contacts[0].faxNumber, "031-999-0000");
+  // 묶음 이름까지 없는 다른 엑셀은 한글 이름이 같아도 받지 않는다.
+  assert.throws(() => parseAmaranthContacts(workbook([[null], LABELS, row])), /아마란스10 연락처 내보내기 파일이 아닙니다/);
+});

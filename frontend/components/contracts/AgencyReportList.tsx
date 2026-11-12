@@ -453,7 +453,7 @@ function ReportForm({
     <div className="mb-2 grid gap-3 rounded-lg border cd-border-c p-3">
       <div className="grid grid-cols-1 md:grid-cols-[140px_180px_minmax(0,1fr)] gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">신고 구분</span>
+          <span className="cd-label-text">신고 구분</span>
           <select
             className="cd-input"
             value={form.reportKind}
@@ -467,11 +467,11 @@ function ReportForm({
           </select>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">신고일</span>
+          <span className="cd-label-text">신고일</span>
           <CdDateInput value={form.reportedOn} onChange={(v) => setForm({ ...form, reportedOn: v })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">접수번호 (선택)</span>
+          <span className="cd-label-text">접수번호 (선택)</span>
           <input
             type="text"
             className="cd-input"
@@ -483,7 +483,7 @@ function ReportForm({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_200px_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">비고 (선택)</span>
+          <span className="cd-label-text">비고 (선택)</span>
           <input
             type="text"
             className="cd-input"
@@ -492,7 +492,7 @@ function ReportForm({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">실무자 발송</span>
+          <span className="cd-label-text">실무자 발송</span>
           <select
             className="cd-input"
             value={form.deliveryMode}

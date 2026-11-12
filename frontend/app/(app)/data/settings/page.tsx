@@ -236,7 +236,7 @@ function SettingsPageInner() {
           ) : (
             <div className="flex flex-col gap-3">
               <div className="cd-card rounded-2xl p-4 flex items-center gap-3">
-                <label className="text-[11px] font-bold cd-text-faint uppercase tracking-wide whitespace-nowrap">
+                <label className="whitespace-nowrap cd-label-text">
                   옵션 이름
                 </label>
                 <input

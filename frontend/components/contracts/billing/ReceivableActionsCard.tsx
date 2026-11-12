@@ -521,14 +521,14 @@ export function ReceivableActionsCard({
                 }
               >
                 <label className="grid gap-1">
-                  <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+                  <span className="cd-label-text">
                     {meta.dateLabel}
                   </span>
                   <AutoDateInput className="cd-input" value={formDate} onChange={setFormDate} />
                 </label>
                 {meta.hasStageField && (
                   <label className="grid gap-1">
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+                    <span className="cd-label-text">
                       진행 단계
                     </span>
                     <input
@@ -542,7 +542,7 @@ export function ReceivableActionsCard({
                   </label>
                 )}
                 <label className="grid gap-1">
-                  <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+                  <span className="cd-label-text">
                     {meta.noteLabel}
                   </span>
                   <textarea
@@ -611,7 +611,7 @@ export function ReceivableActionsCard({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {DEBT_COLLECTION_STAGES.map((stage, idx) => (
                       <label key={stage} className="grid gap-1">
-                        <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+                        <span className="cd-label-text">
                           {stage}
                           {idx === 0 ? " (신청일)" : ""}
                         </span>
@@ -628,7 +628,7 @@ export function ReceivableActionsCard({
                   </div>
 
                   <label className="grid gap-1">
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+                    <span className="cd-label-text">
                       진행 경과
                     </span>
                     <textarea

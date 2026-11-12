@@ -257,12 +257,12 @@ export function AgreementTemplateBoard() {
                 </button>
               </div>
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] cd-text-faint">양식 이름</span>
+                <span className="cd-label-text">양식 이름</span>
                 <input className="cd-input text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 통합환경 도급계약서(표준)" />
               </label>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] cd-text-faint">다른 세분류 셋 복제:</span>
+                <span className="cd-label-text">다른 세분류 셋 복제:</span>
                 {serviceOptions.flatMap((o) =>
                   o.subtypes
                     .filter((s) => !(o.type === editing.serviceType && s === editing.serviceSubtype))
@@ -547,11 +547,11 @@ function CustomTemplateTab({ custom, onSaved }: { custom: CustomRow[]; onSaved: 
             <p className="text-[12px] rounded-lg cd-tint-primary px-3 py-2">AI 메모: {draft.note}</p>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">양식 이름</span>
+            <span className="cd-label-text">양식 이름</span>
             <input className="cd-input text-sm" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="flex flex-col gap-1 relative">
-            <span className="text-[11px] cd-text-faint">출처 발주처 — 작성 화면 자동 추천 기준(선택)</span>
+            <span><span className="cd-label-text">출처 발주처</span><span className="cd-hint ml-1.5">작성 화면 자동 추천 기준(선택)</span></span>
             {facility ? (
               <div className="flex items-center gap-2 rounded-lg border cd-border-c px-3 py-2">
                 <span className="text-[13px] cd-text flex-1">{facility.companyName}</span>
@@ -815,11 +815,11 @@ function ClauseLibraryTab() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <label className="flex flex-col gap-1 md:col-span-2">
-              <span className="text-[11px] cd-text-faint">조항 제목 (괄호 안 제목만)</span>
+              <span><span className="cd-label-text">조항 제목</span><span className="cd-hint ml-1.5">(괄호 안 제목만)</span></span>
               <input className="cd-input text-sm" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} placeholder="예: 지체상금" />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] cd-text-faint">분류</span>
+              <span className="cd-label-text">분류</span>
               <select className="cd-select" value={draftCat} onChange={(e) => setDraftCat(e.target.value)}>
                 {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -828,7 +828,7 @@ function ClauseLibraryTab() {
             </label>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">본문 — 항·호 포함. {"{{contract.title}}"} 등 토큰 사용 가능</span>
+            <span><span className="cd-label-text">본문</span><span className="cd-hint ml-1.5">항·호 포함. {"{{contract.title}}"} 등 토큰 사용 가능</span></span>
             <textarea className="cd-input text-[12px] min-h-[300px] leading-relaxed" value={draftBody} onChange={(e) => setDraftBody(e.target.value)} />
           </label>
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 self-end disabled:opacity-50" disabled={busy} onClick={save}>

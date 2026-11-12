@@ -65,9 +65,9 @@ export function PurchaseLeaseDetailFields({
 function Field({ label, children, hint, span }: { label: string; children: React.ReactNode; hint?: string; span?: boolean }) {
   return (
     <label className={"grid gap-1 text-sm content-start " + (span ? "col-span-2" : "")}>
-      <span className="font-semibold cd-text-muted">{label}</span>
+      <span className="cd-label-text">{label}</span>
       {children}
-      {hint && <span className="text-[11px] cd-text-faint">{hint}</span>}
+      {hint && <span className="cd-hint">{hint}</span>}
     </label>
   );
 }
@@ -105,8 +105,8 @@ function RealEstateFields({ value, onChange }: { value: RealEstateDetail; onChan
         <AmountInput className="cd-input tabular-nums text-right" value={numStr(value.deposit)} onChange={(v) => set({ deposit: toNum(v) })} />
       </Field>
       <div className="col-span-2 grid gap-1 text-sm">
-        <span className="font-semibold cd-text-muted">특약사항</span>
-        {terms.length === 0 && <span className="text-[11px] cd-text-faint">오른쪽 + 로 특약을 하나씩 추가합니다(최대 {LEASE_SPECIAL_TERMS_MAX}개).</span>}
+        <span className="cd-label-text">특약사항</span>
+        {terms.length === 0 && <span className="cd-hint">오른쪽 + 로 특약을 하나씩 추가합니다(최대 {LEASE_SPECIAL_TERMS_MAX}개).</span>}
         {terms.map((t, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="text-[11px] cd-text-faint w-5 shrink-0">{i + 1}.</span>
@@ -214,7 +214,7 @@ function VehicleFields({
         </Field>
       </div>
       <div className="grid gap-1 text-sm">
-        <span className="font-semibold cd-text-muted">차량 등록증 PDF</span>
+        <span className="cd-label-text">차량 등록증 PDF</span>
         {existingRegistration && (
           <a href={existingRegistration.path} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs cd-text-primary hover:underline">
             <FileText className="w-3.5 h-3.5" /> {existingRegistration.name}
@@ -224,7 +224,7 @@ function VehicleFields({
         {onRegistrationFile ? (
           <FileDropZone value={registrationFile} onChange={onRegistrationFile} hint="차량 등록증 PDF 1개 · 30MB 이하 (렌트 계약서는 계약서 PDF 탭)" />
         ) : (
-          <span className="text-[11px] cd-text-faint">등록증은 변경계약 입력에서 올립니다.</span>
+          <span className="cd-hint">등록증은 변경계약 입력에서 올립니다.</span>
         )}
       </div>
     </div>

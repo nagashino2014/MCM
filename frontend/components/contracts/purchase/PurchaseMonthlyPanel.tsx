@@ -77,7 +77,7 @@ export function PurchaseMonthlyPanel({
           {kind === "management_fee" && "월별 관리비 청구액입니다. 관리비 명세서 PDF 를 올리면 항목별로 읽어 채웁니다."}
         </div>
         <label className="inline-flex items-center gap-1.5 text-xs cd-text-muted shrink-0">
-          연도
+          <span className="cd-label-text">연도</span>
           <select className="cd-select text-xs" style={{ width: "10ch" }} value={year} onChange={(e) => onYearChange(Number(e.target.value))}>
             {yearOptions.map((y) => (
               <option key={y} value={y}>{y}년</option>

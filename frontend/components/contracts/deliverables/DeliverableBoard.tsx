@@ -822,7 +822,7 @@ export function DeliverableBoard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {(bindingsByGroup.get(tab) ?? []).map((key) => (
                   <label key={key} className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 cd-label-text">
                       {BINDING_LABEL[key] ?? key}
                       <button type="button" className="cd-text-faint hover:text-[color:var(--cd-primary)]" onClick={() => toggleLock(key)}>
                         {unlocked[key] ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
@@ -838,8 +838,9 @@ export function DeliverableBoard() {
                     (좌상단 '첨부자료' 표기 + 명칭 + 1x1 표 박스에 사진 fit) */}
                 {tab === "준공" && docTypes.includes("service_result_report") && (
                   <div className="md:col-span-2 flex flex-col gap-2 rounded-lg border cd-border-c p-3">
-                    <span className="text-[11px] font-semibold cd-text">
-                      성과품 사진 별첨 <span className="font-normal cd-text-faint">— 용역결과보고서 뒤에 사진 1장당 별첨 1페이지로 붙습니다</span>
+                    <span>
+                      <span className="cd-label-text">성과품 사진 별첨</span>
+                      <span className="cd-hint ml-1.5">용역결과보고서 뒤에 사진 1장당 별첨 1페이지로 붙습니다</span>
                     </span>
                     {photoRefs.map((ph, i) => (
                       <div key={ph.key} className="flex items-center gap-2">

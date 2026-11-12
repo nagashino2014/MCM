@@ -14,7 +14,7 @@ export function PurchaseDeleteModal({ contractTitle, onClose, onConfirm }: { con
           <b>{contractTitle}</b> 계약을 삭제합니다. 청구·지급 단계와 첨부 문서 기록이 함께 숨겨지며, 목록에서 바로 사라집니다.
         </p>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">삭제 사유</span>
+          <span className="cd-label-text">삭제 사유</span>
           <textarea className="cd-input min-h-[80px]" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="예: 중복 등록" />
         </label>
       </div>

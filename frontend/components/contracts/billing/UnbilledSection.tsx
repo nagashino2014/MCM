@@ -452,7 +452,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
       {/* 필터 바: 용역 선택 + 연도 선택 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="mr-1 cd-label-text">
             용역 선택
           </span>
           <button
@@ -481,7 +481,7 @@ export function UnbilledSection({ theme, scopeQuery = "", readOnly = false }: { 
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+          <span className="cd-label-text">
             기준 연도
           </span>
           <select

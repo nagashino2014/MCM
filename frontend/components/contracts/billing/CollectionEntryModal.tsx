@@ -156,11 +156,11 @@ export function CollectionEntryModal({
         {/* 입력 폼 */}
         <div className="grid grid-cols-2 gap-3">
           <label className="grid gap-1">
-            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>수금일</span>
+            <span className="cd-label-text">수금일</span>
             <AutoDateInput className="cd-input" value={collectedAt} onChange={setCollectedAt} />
           </label>
           <label className="grid gap-1">
-            <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>수금금액</span>
+            <span className="cd-label-text">수금금액</span>
             <input
               type="text"
               inputMode="numeric"
@@ -180,7 +180,7 @@ export function CollectionEntryModal({
           </label>
           {isPartial && (
             <label className="col-span-2 grid gap-1">
-              <span className="text-[11px] font-semibold" style={{ color: "var(--cd-muted)" }}>부분입금 사유</span>
+              <span className="cd-label-text">부분입금 사유</span>
               <textarea
                 className="cd-input min-h-[70px]"
                 placeholder="예: 업체 자금 사정으로 일부만 입금, 잔액 추후 입금 예정 등"

@@ -767,29 +767,29 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
 
         <div className="px-5 pt-3 grid gap-1 text-xs">
           <label className="grid gap-1">
-            <span className="font-semibold cd-text-faint">계약명</span>
+            <span className="cd-label-text">계약명</span>
             <input type="text" className="cd-input" value={contractTitle} onChange={(e) => setContractTitle(e.target.value)} />
           </label>
         </div>
 
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 text-xs">
           <label className="grid gap-1">
-            <span className="font-semibold cd-text-faint">계약일</span>
+            <span className="cd-label-text">계약일</span>
             <AutoDateInput value={contractDate} onChange={setContractDate} className="cd-input tabular-nums" />
           </label>
           <label className="grid gap-1">
-            <span className="font-semibold cd-text-faint">입력일</span>
+            <span className="cd-label-text">입력일</span>
             <AutoDateInput value={meta.enteredAt} onChange={(v) => setMeta({ ...meta, enteredAt: v })} className="cd-input tabular-nums" />
           </label>
           <label className="grid gap-1">
-            <span className="font-semibold cd-text-faint">변경일</span>
+            <span className="cd-label-text">변경일</span>
             <AutoDateInput value={meta.changedAt} onChange={(v) => setMeta({ ...meta, changedAt: v })} className="cd-input tabular-nums" />
           </label>
         </div>
 
         {/* 변경 구분(278) — 차수 = 변경계약서 단위. 정보 정정은 차수·대행 실적 변경 보고에 들어가지 않는다 */}
         <div className="px-5 pt-3 grid gap-1 text-xs">
-          <span className="font-semibold cd-text-faint flex items-center gap-1">
+          <span className="flex items-center gap-1 cd-label-text">
             변경 구분
             <CdHelp topic="contracts.change-mode" />
           </span>
@@ -901,12 +901,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "period" && (
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">기존 준공기한</span>
+                <span className="cd-label-text">기존 준공기한</span>
                 <AutoDateInput className="cd-input tabular-nums" value={servicePeriod.previous}
                   onChange={(v) => setServicePeriod({ ...servicePeriod, previous: v })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">변경 준공기한</span>
+                <span className="cd-label-text">변경 준공기한</span>
                 <AutoDateInput className="cd-input tabular-nums" value={servicePeriod.next}
                   onChange={(v) => setServicePeriod({ ...servicePeriod, next: v })} />
               </label>
@@ -963,7 +963,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
               <div className="grid grid-cols-2 gap-3">
                 {/* 발주처 변경(2026-08-24) — 임포트 오기재 정정. 검색해 선택한 경우에만 반영. */}
                 <div className="grid gap-1 text-sm col-span-2 relative">
-                  <span className="font-semibold cd-text-muted">발주처(계약상대 업체) 변경</span>
+                  <span className="cd-label-text">발주처(계약상대 업체) 변경</span>
                   <input
                     type="text"
                     className="cd-input"
@@ -1004,22 +1004,22 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   )}
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">기존 대분류</span>
+                  <span className="cd-label-text">기존 대분류</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60"
                     value={serviceCategory.previousType} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">기존 세분류</span>
+                  <span className="cd-label-text">기존 세분류</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60"
                     value={serviceCategory.previousSubtype} />
                 </label>
                 <label className="grid gap-1 text-sm col-span-2">
-                  <span className="font-semibold cd-text-muted">기존 업종</span>
+                  <span className="cd-label-text">기존 업종</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60"
                     value={serviceCategory.previousIndustry} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">변경 대분류</span>
+                  <span className="cd-label-text">변경 대분류</span>
                   {/* 자유 입력 → 목록 선택(2026-08-24) — 오타 값이 contracts.service_type 에 저장되던 문제 */}
                   <select
                     className="cd-select"
@@ -1043,7 +1043,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">변경 세분류</span>
+                  <span className="cd-label-text">변경 세분류</span>
                   <select
                     className="cd-select"
                     value={serviceCategory.nextSubtype}
@@ -1057,7 +1057,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   </select>
                 </label>
                 <div className="grid gap-1 text-sm col-span-2">
-                  <span className="font-semibold cd-text-muted">변경 업종</span>
+                  <span className="cd-label-text">변경 업종</span>
                   <div className="flex items-center gap-2">
                     <select className="cd-select min-w-0 flex-1"
                       value={serviceCategory.nextIndustry}
@@ -1071,11 +1071,11 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   </div>
                 </div>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">기존 대금 지급 방식</span>
+                  <span className="cd-label-text">기존 대금 지급 방식</span>
                   <input type="text" disabled className="cd-input disabled:opacity-60" value={serviceCategory.previousPaymentMethod} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">변경 대금 지급 방식</span>
+                  <span className="cd-label-text">변경 대금 지급 방식</span>
                   <select
                     className="cd-select"
                     value={serviceCategory.nextPaymentMethod}
@@ -1088,7 +1088,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">계약 종류</span>
+                  <span className="cd-label-text">계약 종류</span>
                   <select
                     className="cd-select"
                     value={contractKind}
@@ -1097,12 +1097,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                     <option value="standard">일반 계약</option>
                     <option value="unit_price">단가 계약</option>
                   </select>
-                  <span className="text-[11px] cd-text-faint">
+                  <span className="cd-hint">
                     단가 계약으로 바꾸면 상단에 &lsquo;단가 계약&rsquo; 탭이 나타나 단가표·차수를 입력할 수 있습니다.
                   </span>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">발주 주체 구분</span>
+                  <span className="cd-label-text">발주 주체 구분</span>
                   <select
                     className="cd-select"
                     value={serviceCategory.orderingSubjectType}
@@ -1114,10 +1114,10 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
-                  <span className="text-[11px] cd-text-faint">대상사업장 기준, 실제 계약 체결 주체와의 관계</span>
+                  <span className="cd-hint">대상사업장 기준, 실제 계약 체결 주체와의 관계</span>
                 </label>
                 <div className="grid gap-1 text-sm col-span-2 relative">
-                  <span className="font-semibold cd-text-muted">{`대상사업장(${props.initialServiceType || "용역"})`}</span>
+                  <span className="cd-label-text">{`대상사업장(${props.initialServiceType || "용역"})`}</span>
                   <input
                     className="cd-input disabled:opacity-60"
                     placeholder={
@@ -1176,17 +1176,17 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "outsourcing" && (
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm col-span-2">
-                <span className="font-semibold cd-text-muted">외주 계약명</span>
+                <span className="cd-label-text">외주 계약명</span>
                 <input className="cd-input" value={outsourcing.outsourcingTitle}
                   onChange={(e) => setOutsourcing({ ...outsourcing, outsourcingTitle: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm col-span-2">
-                <span className="font-semibold cd-text-muted">계약상대 업체</span>
+                <span className="cd-label-text">계약상대 업체</span>
                 <input className="cd-input" value={outsourcing.counterpartyName}
                   onChange={(e) => setOutsourcing({ ...outsourcing, counterpartyName: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">용역분류</span>
+                <span className="cd-label-text">용역분류</span>
                 <select className="cd-select max-w-[220px]" value={outsourcing.serviceType}
                   onChange={(e) => setOutsourcing({ ...outsourcing, serviceType: e.target.value })}>
                   {outsourcingTypes.map((type) => <option key={type} value={type}>{type}</option>)}
@@ -1213,27 +1213,27 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 </button>
               </div>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약금액</span>
+                <span className="cd-label-text">계약금액</span>
                 <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(outsourcing.amount)}
                   onChange={(e) => setOutsourcing({ ...outsourcing, amount: stripDigits(e.target.value) })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약일</span>
+                <span className="cd-label-text">계약일</span>
                 <AutoDateInput className="cd-input tabular-nums" value={outsourcing.contractDate}
                   onChange={(v) => setOutsourcing({ ...outsourcing, contractDate: v })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">준공일</span>
+                <span className="cd-label-text">준공일</span>
                 <AutoDateInput className="cd-input tabular-nums" value={outsourcing.endedAt}
                   onChange={(v) => setOutsourcing({ ...outsourcing, endedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm col-span-2">
-                <span className="font-semibold cd-text-muted">메모</span>
+                <span className="cd-label-text">메모</span>
                 <textarea className="cd-input min-h-[80px]" value={outsourcing.memo}
                   onChange={(e) => setOutsourcing({ ...outsourcing, memo: e.target.value })} />
               </label>
               <div className="grid gap-1 text-sm col-span-2">
-                <span className="font-semibold cd-text-muted">외주 계약서 PDF</span>
+                <span className="cd-label-text">외주 계약서 PDF</span>
                 {/* 끌어다 놓기·클릭 첨부(2026-11-02) — 파일은 ref 에 두고 이름 state 로 다시 그린다 */}
                 <FileDropZone
                   value={outsourcingFileName ? outsourcingFileRef.current : null}
@@ -1250,12 +1250,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
           {activeTab === "lifecycle" && (
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약해지일</span>
+                <span className="cd-label-text">계약해지일</span>
                 <AutoDateInput className="cd-input tabular-nums" value={lifecycle.terminatedAt}
                   onChange={(v) => setLifecycle({ ...lifecycle, terminatedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">해지 사유</span>
+                <span className="cd-label-text">해지 사유</span>
                 <select className="cd-select" value={lifecycle.terminationReason}
                   onChange={(e) => setLifecycle({ ...lifecycle, terminationReason: e.target.value })}>
                   {terminationReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
@@ -1269,12 +1269,12 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                 onValue={(terminationReason) => setLifecycle({ ...lifecycle, terminationReason })}
               />
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약중지일</span>
+                <span className="cd-label-text">계약중지일</span>
                 <AutoDateInput className="cd-input tabular-nums" value={lifecycle.suspendedAt}
                   onChange={(v) => setLifecycle({ ...lifecycle, suspendedAt: v })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약 중지 사유</span>
+                <span className="cd-label-text">계약 중지 사유</span>
                 <select className="cd-select" value={lifecycle.suspensionReason}
                   onChange={(e) => setLifecycle({ ...lifecycle, suspensionReason: e.target.value })}>
                   {suspensionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
@@ -1294,23 +1294,23 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
             <div className="grid gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">준공일</span>
+                  <span className="cd-label-text">준공일</span>
                   <AutoDateInput className="cd-input tabular-nums" value={closing.completionDate}
                     onChange={(v) => setClosing({ ...closing, completionDate: v })} />
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold cd-text-muted">허가 취득일</span>
+                  <span className="cd-label-text">허가 취득일</span>
                   <AutoDateInput className="cd-input tabular-nums" value={closing.permitAcquiredAt}
                     onChange={(v) => setClosing({ ...closing, permitAcquiredAt: v })} />
                 </label>
               </div>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">기타 변경사항</span>
+                <span className="cd-label-text">기타 변경사항</span>
                 <textarea className="cd-input min-h-[80px]"
                   value={closing.etc} onChange={(e) => setClosing({ ...closing, etc: e.target.value })} />
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="font-semibold cd-text-muted">계약서 PDF (선택)</span>
+                <span className="cd-label-text">계약서 PDF (선택)</span>
                 <div className="flex items-center gap-4">
                   {[
                     { value: "amendment" as const, label: "변경", hint: "변경 계약서" },
@@ -1333,7 +1333,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                   onChange={setAmendmentFile}
                   hint={amendmentDocType === "amendment" ? "변경계약서 PDF 1개 · 30MB 이하" : "원 계약서 PDF 1개 · 30MB 이하"}
                 />
-                <span className="text-[11px] cd-text-faint">
+                <span className="cd-hint">
                   업로드 시 원 계약 폴더에 동일 형식(
                   <code>
                     {amendmentDocType === "amendment"

@@ -1640,7 +1640,7 @@ function AgencyReportInfoSection({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">(변경)낙찰률(%)</span>
+          <span className="cd-label-text">(변경)낙찰률(%)</span>
           <input
             type="text"
             className="cd-input tabular-nums"
@@ -1651,7 +1651,7 @@ function AgencyReportInfoSection({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">사전협의 통보일자</span>
+          <span className="cd-label-text">사전협의 통보일자</span>
           <DateInput value={notifiedAt} onChange={setNotifiedAt} />
         </label>
         <span className="text-[11px] cd-text-faint md:pb-2.5">신고 대기열의 대행 실적 보고 항목에 자동 반영됩니다.</span>
@@ -1801,11 +1801,11 @@ function PermitInfoSection({
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[220px_220px_minmax(0,1fr)_auto_auto] gap-3 items-end">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">허가일</span>
+          <span className="cd-label-text">허가일</span>
           <DateInput value={issuedAt} onChange={setIssuedAt} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">허가번호</span>
+          <span className="cd-label-text">허가번호</span>
           <input
             type="text"
             className="cd-input disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1817,7 +1817,7 @@ function PermitInfoSection({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">비고</span>
+          <span className="cd-label-text">비고</span>
           <input
             type="text"
             className="cd-input"
@@ -1991,7 +1991,7 @@ function InvoiceUploadModal({
       <div className="p-5 grid gap-3 grid-cols-2">
         <div className="col-span-2 flex items-end gap-3 flex-wrap">
           <label className="grid gap-1 text-sm" style={{ width: 220 }}>
-            <span className="font-semibold cd-text-muted">계산서 발행일</span>
+            <span className="cd-label-text">계산서 발행일</span>
             <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
           </label>
           <label className="flex items-center gap-2 text-sm font-semibold cd-text-muted pb-2">
@@ -2012,7 +2012,7 @@ function InvoiceUploadModal({
           )}
         </div>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">발행금액</span>
+          <span className="cd-label-text">발행금액</span>
           <input
             type="text"
             inputMode="numeric"
@@ -2022,13 +2022,13 @@ function InvoiceUploadModal({
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
+          <span className="cd-label-text">대금 지급 조건</span>
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         {bulkMode && (
           <div className="col-span-2 grid gap-1 text-sm">
-            <span className="font-semibold cd-text-muted">복수 등록 대상 대금 지급 단계</span>
+            <span className="cd-label-text">복수 등록 대상 대금 지급 단계</span>
             <div className="rounded-lg border cd-border-c divide-y max-h-44 overflow-y-auto">
               <div className="flex items-center gap-2 px-3 py-2 text-xs cd-text-muted">
                 <input type="checkbox" checked readOnly />
@@ -2058,7 +2058,7 @@ function InvoiceUploadModal({
                 <div className="px-3 py-2 text-xs cd-text-faint">함께 등록할 다른 대금 지급 단계가 없습니다.</div>
               )}
             </div>
-            <span className="text-[11px] cd-text-faint">
+            <span className="cd-hint">
               이미 계산서가 등록된 단계를 고르면 기존 파일이 새 파일로 교체됩니다. 수금 정보는 대표 단계에만 반영됩니다.
             </span>
           </div>
@@ -2066,7 +2066,7 @@ function InvoiceUploadModal({
         {state.settlementEligible && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">실적 정산</span>
+              <span className="cd-label-text">실적 정산</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -2086,12 +2086,12 @@ function InvoiceUploadModal({
                   });
                 }}
               />
-              <span className="text-[11px] cd-text-faint">
+              <span className="cd-hint">
                 출장 경비·인쇄비 등 정산 반영 실제 청구액 (원 금액 {formatExactAmount(state.baseAmount)})
               </span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">차감액</span>
+              <span className="cd-label-text">차감액</span>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -2109,12 +2109,12 @@ function InvoiceUploadModal({
                     : "-"}
                 </span>
               </div>
-              <span className="text-[11px] cd-text-faint">단계 원 금액 대비 차감 비율</span>
+              <span className="cd-hint">단계 원 금액 대비 차감 비율</span>
             </label>
           </>
         )}
         <div className="grid gap-1 text-sm col-span-2">
-          <span className="font-semibold cd-text-muted">계산서 PDF 첨부</span>
+          <span className="cd-label-text">계산서 PDF 첨부</span>
           <input
             ref={fileInputRef}
             type="file"
@@ -2144,11 +2144,11 @@ function InvoiceUploadModal({
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">수금일</span>
+              <span className="cd-label-text">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">누적 수금금액</span>
+              <span className="cd-label-text">누적 수금금액</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -2167,7 +2167,7 @@ function InvoiceUploadModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">부분입금 사유</span>
+              <span className="cd-label-text">부분입금 사유</span>
               <textarea
                 className="cd-input min-h-[84px]"
                 placeholder="예: 업체 자금 사정으로 일부만 입금, 착오입금 후 잔액 추후 입금 예정 등"
@@ -2677,7 +2677,7 @@ function NewContractModal({
         {tab === "basic" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">계약명</span>
+              <span className="cd-label-text">계약명</span>
               <div className="flex items-center gap-2">
                 <input className="cd-input min-w-0 flex-1" value={state.contractTitle} onChange={(e) => onChange({ ...state, contractTitle: e.target.value })} />
                 <button
@@ -2692,7 +2692,7 @@ function NewContractModal({
               </div>
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-semibold cd-text-muted">계약상대 업체</span>
+              <span className="cd-label-text">계약상대 업체</span>
               <input
                 className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
@@ -2727,7 +2727,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm relative">
-              <span className="font-semibold cd-text-muted">{buildTargetFacilityLabel(state.serviceType)}</span>
+              <span className="cd-label-text">{buildTargetFacilityLabel(state.serviceType)}</span>
               <input
                 className="cd-input disabled:opacity-60"
                 placeholder={
@@ -2773,7 +2773,7 @@ function NewContractModal({
                     <Plus className="w-3.5 h-3.5" />
                     {quickRegistering ? "등록 중…" : `'${state.facilityQuery.trim()}' 이름만으로 등록`}
                   </button>
-                  <span className="text-[11px] cd-text-faint">
+                  <span className="cd-hint">
                     검색에 없는 신규 사업장이면 이름만 먼저 등록하고, 정보는 홈의 &lsquo;임시 등록 사업장 완성&rsquo;에서 보완하세요.
                   </span>
                 </div>
@@ -2798,7 +2798,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">발주 주체 구분</span>
+              <span className="cd-label-text">발주 주체 구분</span>
               <select
                 className="cd-select"
                 value={state.orderingSubjectType}
@@ -2808,12 +2808,12 @@ function NewContractModal({
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <span className="text-[11px] cd-text-faint">
+              <span className="cd-hint">
                 대상사업장 기준, 실제 계약 체결 주체와의 관계
               </span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">용역분류</span>
+              <span className="cd-label-text">용역분류</span>
               <select
                 className="cd-select"
                 value={state.serviceType}
@@ -2835,7 +2835,7 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">용역세분류</span>
+              <span className="cd-label-text">용역세분류</span>
               <select
                 className="cd-select"
                 value={state.serviceSubtype}
@@ -2847,14 +2847,14 @@ function NewContractModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약 종류</span>
+              <span className="cd-label-text">계약 종류</span>
               <select className="cd-select" value={state.contractKind} onChange={(e) => onChange({ ...state, contractKind: e.target.value as "standard" | "unit_price" })}>
                 <option value="standard">일반 계약</option>
                 <option value="unit_price">단가 계약</option>
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">대금 지급 방식</span>
+              <span className="cd-label-text">대금 지급 방식</span>
               <select className="cd-select" value={state.paymentMethod} onChange={(e) => onChange({ ...state, paymentMethod: e.target.value })}>
                 {PAYMENT_METHOD_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -2862,7 +2862,7 @@ function NewContractModal({
               </select>
             </label>
             <div className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">업종</span>
+              <span className="cd-label-text">업종</span>
               <div className="flex items-center gap-2">
                 <select className="cd-select min-w-0 flex-1" value={state.industryCategory} onChange={(e) => onChange({ ...state, industryCategory: e.target.value })}>
                   <option value="">업종 선택</option>
@@ -2880,7 +2880,7 @@ function NewContractModal({
               </div>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약금액</span>
+              <span className="cd-label-text">계약금액</span>
               {/* 청구·수금 단계 금액 합계가 자동 반영된다(이중 입력 제거, 2026-08-24) — 직접 입력 불가 */}
               <input
                 className="cd-input tabular-nums opacity-70 cursor-not-allowed"
@@ -2890,19 +2890,19 @@ function NewContractModal({
                 placeholder="청구·수금 단계 합계 자동 반영"
                 title="청구·수금 단계 탭의 금액 합계가 자동으로 채워집니다."
               />
-              <span className="text-[11px] cd-text-faint">청구·수금 단계 탭의 금액 합계가 자동 반영됩니다.</span>
+              <span className="cd-hint">청구·수금 단계 탭의 금액 합계가 자동 반영됩니다.</span>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약일</span>
+              <span className="cd-label-text">계약일</span>
               {/* 착수일은 화면에 칸이 없어 저장 시 계약일로 채운다 — 입력 중 부분 값("2")이 착수일에 굳어 등록이 거절되던 문제(2026-10-12) */}
               <DateInput value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">준공일</span>
+              <span className="cd-label-text">준공일</span>
               <DateInput value={state.endedAt} onChange={(endedAt) => onChange({ ...state, endedAt })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">메모</span>
+              <span className="cd-label-text">메모</span>
               <textarea className="cd-input min-h-[90px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
             </label>
           </div>
@@ -2944,7 +2944,7 @@ function NewContractModal({
               <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-lg border cd-border-c cd-surface-bg p-3">
                 <div className="text-xs cd-text-faint pb-2">{idx + 1}차</div>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">단계명</span>
+                  <span className="cd-label-text">단계명</span>
                   {state.contractKind === "unit_price" ? (
                     // 단가 계약 — 단계명은 단가 기준표 파생 옵션에서 고른다(직접 입력 대신, 2026-08-24).
                     // 선택하면 해당 소계(차수형은 선급/준공 분해액)가 청구금액으로 자동 적용된다.
@@ -2973,11 +2973,11 @@ function NewContractModal({
                   )}
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">청구금액</span>
+                  <span className="cd-label-text">청구금액</span>
                   <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(m.amount)} onChange={(e) => updateMilestone(m.id, { amount: stripDigits(e.target.value) })} />
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">대금 지급 조건</span>
+                  <span className="cd-label-text">대금 지급 조건</span>
                   <input className="cd-input" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 발행 후 30일 이내" />
                 </label>
                 <button type="button" className="rounded-lg p-2 cd-error-text hover:cd-error-bg" onClick={() => onChange({ ...state, milestones: state.milestones.filter((item) => item.id !== m.id) })}>
@@ -2999,7 +2999,7 @@ function NewContractModal({
         {tab === "outsourcing" && (
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">외주 계약명</span>
+              <span className="cd-label-text">외주 계약명</span>
               <input
                 className="cd-input"
                 value={state.outsourcing.outsourcingTitle}
@@ -3007,7 +3007,7 @@ function NewContractModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2 relative">
-              <span className="font-semibold cd-text-muted">계약상대 업체</span>
+              <span className="cd-label-text">계약상대 업체</span>
               <input
                 className="cd-input"
                 placeholder="업체명 또는 사업자번호 검색"
@@ -3050,7 +3050,7 @@ function NewContractModal({
               )}
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">용역분류</span>
+              <span className="cd-label-text">용역분류</span>
               <select
                 className="cd-select max-w-[220px]"
                 value={state.outsourcing.serviceType}
@@ -3088,7 +3088,7 @@ function NewContractModal({
               </button>
             </div>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약금액</span>
+              <span className="cd-label-text">계약금액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3097,15 +3097,15 @@ function NewContractModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약일</span>
+              <span className="cd-label-text">계약일</span>
               <DateInput value={state.outsourcing.contractDate} onChange={(contractDate) => onChange({ ...state, outsourcing: { ...state.outsourcing, contractDate } })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">준공일</span>
+              <span className="cd-label-text">준공일</span>
               <DateInput value={state.outsourcing.endedAt} onChange={(endedAt) => onChange({ ...state, outsourcing: { ...state.outsourcing, endedAt } })} />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">메모</span>
+              <span className="cd-label-text">메모</span>
               <textarea
                 className="cd-input min-h-[90px]"
                 value={state.outsourcing.memo}
@@ -3113,7 +3113,7 @@ function NewContractModal({
               />
             </label>
             <div className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">외주 계약서 PDF 첨부</span>
+              <span className="cd-label-text">외주 계약서 PDF 첨부</span>
               {/* 끌어다 놓기·클릭 첨부(2026-11-02) — 파일은 ref 에 두고 이름 state 로 다시 그린다 */}
               <FileDropZone
                 value={outsourcingFileName ? outsourcingFileRef.current : null}
@@ -3130,7 +3130,7 @@ function NewContractModal({
         {tab === "document" && (
           <div className="grid gap-4">
             <div className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약서 PDF 첨부</span>
+              <span className="cd-label-text">계약서 PDF 첨부</span>
               <FileDropZone
                 value={documentFileName ? documentFileRef.current : null}
                 onChange={(file) => {
@@ -3260,27 +3260,27 @@ function EditMilestoneModal({
     <ModalShell title={`${state.stageLabel} 단계 수정`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">단계명</span>
+          <span className="cd-label-text">단계명</span>
           <input className="cd-input" value={state.stageLabel} onChange={(e) => onChange({ ...state, stageLabel: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">청구금액</span>
+          <span className="cd-label-text">청구금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
+          <span className="cd-label-text">대금 지급 조건</span>
           <input className="cd-input" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">계산서 발행일</span>
+          <span className="cd-label-text">계산서 발행일</span>
           <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">계산서 발행금액</span>
+          <span className="cd-label-text">계산서 발행금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm col-span-2">
-          <span className="font-semibold cd-text-muted">세금계산서 교체 PDF</span>
+          <span className="cd-label-text">세금계산서 교체 PDF</span>
           <input
             type="file"
             accept="application/pdf,.pdf"
@@ -3292,7 +3292,7 @@ function EditMilestoneModal({
             }}
           />
           {invoiceFileName && <span className="text-xs cd-text-faint">선택됨: {invoiceFileName}</span>}
-          <span className="text-xs cd-text-faint">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
+          <span className="cd-hint">파일을 선택하면 새 계산서 PDF가 같은 단계의 최신 계산서로 추가 등록됩니다.</span>
         </label>
         {isNotePayment && (
           <div className="col-span-2 rounded-lg border cd-border-c p-3 grid gap-3 grid-cols-2">
@@ -3304,7 +3304,7 @@ function EditMilestoneModal({
               </span>
             </p>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">어음 종류</span>
+              <span className="cd-label-text">어음 종류</span>
               <input
                 className="cd-input"
                 placeholder="예: 전자어음 / 외담대 / 상생협력론"
@@ -3319,7 +3319,7 @@ function EditMilestoneModal({
               </datalist>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">어음 취급 은행</span>
+              <span className="cd-label-text">어음 취급 은행</span>
               <select className="cd-select" value={state.noteBank} onChange={(e) => onChange({ ...state, noteBank: e.target.value })}>
                 <option value="">선택</option>
                 {/* select 도입 전 자유 입력으로 저장된 값 — 목록에 없어도 값이 사라지지 않게 옵션으로 유지 */}
@@ -3332,15 +3332,15 @@ function EditMilestoneModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">어음 발행일</span>
+              <span className="cd-label-text">어음 발행일</span>
               <DateInput value={state.noteIssuedDate} onChange={(noteIssuedDate) => onChange({ ...state, noteIssuedDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">어음 만기일</span>
+              <span className="cd-label-text">어음 만기일</span>
               <DateInput value={state.noteMaturityDate} onChange={(noteMaturityDate) => onChange({ ...state, noteMaturityDate })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">어음 수수료</span>
+              <span className="cd-label-text">어음 수수료</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3349,7 +3349,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">담보 대출 이자율(%)</span>
+              <span className="cd-label-text">담보 대출 이자율(%)</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="decimal"
@@ -3359,7 +3359,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">담보 대출 이자액</span>
+              <span className="cd-label-text">담보 대출 이자액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3368,7 +3368,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">대출 실행일</span>
+              <span className="cd-label-text">대출 실행일</span>
               <DateInput value={state.noteLoanExecutedDate} onChange={(noteLoanExecutedDate) => onChange({ ...state, noteLoanExecutedDate })} />
             </label>
           </div>
@@ -3380,11 +3380,11 @@ function EditMilestoneModal({
         {state.paymentCollected && (
           <>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">수금일</span>
+              <span className="cd-label-text">수금일</span>
               <DateInput value={state.paymentCollectedAt} onChange={(paymentCollectedAt) => onChange({ ...state, paymentCollectedAt })} />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">수금금액</span>
+              <span className="cd-label-text">수금금액</span>
               <input
                 className="cd-input tabular-nums"
                 inputMode="numeric"
@@ -3399,7 +3399,7 @@ function EditMilestoneModal({
               />
             </label>
             <label className="grid gap-1 text-sm col-span-2">
-              <span className="font-semibold cd-text-muted">부분입금 사유</span>
+              <span className="cd-label-text">부분입금 사유</span>
               <textarea className="cd-input min-h-[84px]" value={state.partialPaymentMemo} onChange={(e) => onChange({ ...state, partialPaymentMemo: e.target.value })} />
             </label>
           </>
@@ -3484,7 +3484,7 @@ function NewStageModal({
     <ModalShell title="청구·수금 단계 추가" onClose={onClose}>
       <div className="p-5 grid gap-3">
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">단계명</span>
+          <span className="cd-label-text">단계명</span>
           {isUnitPrice ? (
             <>
               <select
@@ -3509,7 +3509,7 @@ function NewStageModal({
                 )}
               </select>
               {rateStageOptions.length === 0 && (
-                <span className="text-[11px] cd-text-faint">
+                <span className="cd-hint">
                   단가 기준표가 비어 있습니다. 변경계약 입력의 단가 계약 탭에서 먼저 작성하세요.
                 </span>
               )}
@@ -3520,11 +3520,11 @@ function NewStageModal({
           )}
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">청구금액</span>
+          <span className="cd-label-text">청구금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.amount)} onChange={(e) => onChange({ ...state, amount: stripDigits(e.target.value) })} />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
+          <span className="cd-label-text">대금 지급 조건</span>
           <input type="text" className="cd-input" placeholder="예: 세금계산서 발행 후 30일 이내 지급"
             value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
@@ -3557,7 +3557,7 @@ function ContractDeleteModal({
           <span className="cd-text">{contractTitle}</span> 계약을 휴지통으로 이동합니다. 계약 데이터는 목록에서 제외되며, admin만 휴지통에서 영구 삭제할 수 있습니다.
         </p>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">삭제 사유</span>
+          <span className="cd-label-text">삭제 사유</span>
           <select className="cd-select" value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}>
             <option value="중복 입력 삭제">중복 입력 삭제</option>
             <option value="계약 무산">계약 무산</option>

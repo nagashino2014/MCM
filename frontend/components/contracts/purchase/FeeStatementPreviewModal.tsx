@@ -165,7 +165,7 @@ export function FeeStatementPreviewModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-1 text-sm content-start">
-      <span className="font-semibold cd-text-muted text-xs">{label}</span>
+      <span className="cd-label-text">{label}</span>
       {children}
     </label>
   );

@@ -167,7 +167,7 @@ export function AssetBoard() {
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
           {/* 좌: 자산 종류 카드 */}
           <div className="lg:w-[345px] shrink-0 flex flex-col gap-2 lg:overflow-y-auto">
-            <p className="text-[11px] font-bold cd-text-faint px-0.5">자산 종류 선택</p>
+            <p className="px-0.5 cd-label-text">자산 종류 선택</p>
             <div className="grid grid-cols-2 gap-2">
               {KINDS.map((k) => {
                 const list = byKind(k);
@@ -590,9 +590,9 @@ function VehicleDetailModal({
 
   const field = (label: string, node: React.ReactNode, hint?: string) => (
     <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-      {label}
+      <span className="cd-label-text">{label}</span>
       {node}
-      {hint && <span className="text-[10px]">{hint}</span>}
+      {hint && <span className="cd-hint">{hint}</span>}
     </label>
   );
 
@@ -714,7 +714,7 @@ function VehicleDetailModal({
 
         {/* 서류 등록 — 계약서 / 차량 등록증 */}
         <div className="rounded-xl border border-dashed cd-border-c p-3 flex flex-col gap-2">
-          <span className="text-[11px] font-bold cd-text-faint">서류 등록 (PDF)</span>
+          <span className="cd-label-text">서류 등록 (PDF)</span>
           {isNew ? (
             <p className="text-[11.5px] cd-text-faint">차량을 먼저 등록(저장)한 뒤 서류를 업로드할 수 있습니다.</p>
           ) : (

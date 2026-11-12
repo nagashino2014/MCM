@@ -214,7 +214,7 @@ export function AssetCalendarBoard() {
       {formOpen && (
         <div className="rounded-2xl border cd-border-c p-3 flex items-end gap-2 flex-wrap">
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            자산
+            <span className="cd-label-text">자산</span>
             <select className="cd-select" style={{ width: 170 }} value={form.assetId} onChange={(e) => setForm((p) => ({ ...p, assetId: e.target.value }))}>
               <option value="">선택</option>
               {assets.map((a) => (
@@ -225,19 +225,19 @@ export function AssetCalendarBoard() {
             </select>
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            날짜
+            <span className="cd-label-text">날짜</span>
             <AutoDateInput className="cd-input" value={form.date} onChange={(date) => setForm((p) => ({ ...p, date }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            {formVehicle ? "시작(필수)" : "시작(비우면 종일)"}
+            <span className="cd-label-text">{formVehicle ? "시작(필수)" : "시작(비우면 종일)"}</span>
             <input type="time" className="cd-input" value={form.startTime} onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            {formVehicle ? "종료(필수)" : "종료"}
+            <span className="cd-label-text">{formVehicle ? "종료(필수)" : "종료"}</span>
             <input type="time" className="cd-input" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[160px]">
-            목적
+            <span className="cd-label-text">목적</span>
             <input className="cd-input w-full" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} placeholder={formVehicle ? "방문처·용도" : "회의명·용도"} />
           </label>
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving} onClick={create}>

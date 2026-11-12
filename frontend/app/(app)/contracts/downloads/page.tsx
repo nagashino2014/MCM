@@ -856,18 +856,18 @@ export default function ContractDownloadsPage() {
 
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">제출처</span>
+                    <span className="cd-label-text">제출처</span>
                     <input className="cd-input text-xs" value={submittedTo} onChange={(e) => setSubmittedTo(e.target.value)} placeholder="예: 신평택발전㈜" />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">증명서용도</span>
+                    <span className="cd-label-text">증명서용도</span>
                     <input className="cd-input text-xs" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="예: 입찰 참여용" />
                   </label>
                 </div>
 
                 {certEligibleIds.some((id) => contactsByContract[id]) && (
                   <div className="mt-3">
-                    <span className="text-[11px] cd-text-faint">발급기관 담당자 선택</span>
+                    <span className="cd-label-text">발급기관 담당자 선택</span>
                     <div className="mt-1 rounded-lg border cd-border-c divide-y cd-border-c max-h-[460px] overflow-y-auto scrollbar-hide">
                       {certEligibleIds.map((id) => {
                         const data = contactsByContract[id];

@@ -86,16 +86,16 @@ export function PurchaseStageModal({
       <div className="p-5 grid gap-4">
         <div className="grid grid-cols-[1fr_150px] gap-3">
           <label className="grid gap-1 text-sm">
-            <span className="font-semibold cd-text-muted">단계명</span>
+            <span className="cd-label-text">단계명</span>
             <input className="cd-input" value={stageLabel} onChange={(e) => setStageLabel(e.target.value)} placeholder="선급금 / 잔금 / 1월분" />
           </label>
           <label className="grid gap-1 text-sm">
-            <span className="font-semibold cd-text-muted">청구금액</span>
+            <span className="cd-label-text">청구금액</span>
             <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(amount)} onChange={(e) => setAmount(stripDigits(e.target.value))} />
           </label>
         </div>
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">대금 지급 조건</span>
+          <span className="cd-label-text">대금 지급 조건</span>
           <input className="cd-input" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="세금계산서 수취 후 30일 이내" />
         </label>
 
@@ -106,11 +106,11 @@ export function PurchaseStageModal({
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-xs">
-              <span className="cd-text-faint">수취일</span>
+              <span className="cd-label-text">수취일</span>
               <AutoDateInput className="cd-input tabular-nums" value={invoiceReceivedAt} onChange={setInvoiceReceivedAt} disabled={!invoiceReceived} />
             </label>
             <label className="grid gap-1 text-xs">
-              <span className="cd-text-faint">계산서 금액(합계)</span>
+              <span className="cd-label-text">계산서 금액(합계)</span>
               <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(invoiceAmount)} onChange={(e) => setInvoiceAmount(stripDigits(e.target.value))} disabled={!invoiceReceived} placeholder={amount ? formatAmount(Number(amount)) : ""} />
             </label>
           </div>
@@ -146,19 +146,19 @@ export function PurchaseStageModal({
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-xs">
-              <span className="cd-text-faint">지급일</span>
+              <span className="cd-label-text">지급일</span>
               <AutoDateInput className="cd-input tabular-nums" value={paymentPaidAt} onChange={setPaymentPaidAt} disabled={!paymentPaid} />
             </label>
             <label className="grid gap-1 text-xs">
-              <span className="cd-text-faint">지급액</span>
+              <span className="cd-label-text">지급액</span>
               <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(paidAmount)} onChange={(e) => setPaidAmount(stripDigits(e.target.value))} disabled={!paymentPaid} placeholder={amount ? formatAmount(Number(amount)) : ""} />
             </label>
           </div>
-          <span className="text-[11px] cd-text-faint">지급액을 비우면 청구금액 전액 지급으로 기록합니다.</span>
+          <span className="cd-hint">지급액을 비우면 청구금액 전액 지급으로 기록합니다.</span>
         </section>
 
         <label className="grid gap-1 text-sm">
-          <span className="font-semibold cd-text-muted">메모</span>
+          <span className="cd-label-text">메모</span>
           <textarea className="cd-input min-h-[60px]" value={memo} onChange={(e) => setMemo(e.target.value)} />
         </label>
       </div>

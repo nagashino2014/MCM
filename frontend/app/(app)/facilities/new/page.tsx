@@ -319,7 +319,7 @@ function Inner() {
           </label>
           {hasMultipleSites && (
             <div className="grid gap-2 rounded-lg border cd-border-c cd-surface-bg p-3">
-              <div className="text-[11px] font-semibold cd-text-faint">
+              <div className="cd-hint">
                 대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준으로 동작합니다.)
               </div>
               {additionalSiteAddresses.map((addr, index) => (
@@ -487,7 +487,7 @@ function Inner() {
             </div>
           )}
           <div className="md:col-span-2 grid gap-2">
-            <div className="text-[11px] font-semibold cd-text-faint">
+            <div className="cd-hint">
               사업자등록증의 업태·종목이 여러 행으로 기재된 경우 각각 행을 나눠 보정하세요.
             </div>
             {certificateBusinessKinds.map((row, index) => (
@@ -662,7 +662,7 @@ function Inner() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium cd-text-faint">
+      <span className="cd-label-text">
         {label}
       </span>
       {children}

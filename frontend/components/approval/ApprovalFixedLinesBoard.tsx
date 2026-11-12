@@ -6,7 +6,7 @@
 // 직원별 추가 결재자·참조·열람(353) — 직원 요청을 받아 그 직원이 기안하는 문서에만 결재자·참조·열람자를 덧붙인다.
 // 설계: docs/approval-fixed-line-plan-2026-11-03.md.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -141,6 +141,9 @@ export function ApprovalFixedLinesBoard() {
   const [execDept, setExecDept] = useState("");
   // 편집 중 템플릿(한 번에 하나)
   const [editing, setEditing] = useState<TemplateRow | null>(null);
+  // 위 줄 두 카드 높이 상한(2026-11-12 사용자 요청: 40% 줄이기) — xl 이상에서 두 카드 중 큰 내용 높이의 60%. 그 아래 폭은 상한 없음.
+  const topRowRef = useRef<HTMLDivElement>(null);
+  const [topCap, setTopCap] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [previewForm, setPreviewForm] = useState("");
   const [rule, setRule] = useState<RuleDraft>(EMPTY_RULE);
@@ -277,6 +280,25 @@ export function ApprovalFixedLinesBoard() {
     );
   };
 
+  // 위 줄 상한 재기 — 카드 높이를 고정해도 scrollHeight 는 내용 전체 높이라 상한이 스스로 바뀌지 않는다(되먹임 없음).
+  // 담당자·양식 목록이 바뀌거나 창 폭이 바뀌면(줄바꿈 변화) 다시 잰다. xl(1280px) 미만은 위아래로 쌓이므로 상한을 두지 않는다.
+  useLayoutEffect(() => {
+    const row = topRowRef.current;
+    if (!row) return;
+    const measure = () => {
+      if (!window.matchMedia("(min-width: 1280px)").matches) {
+        setTopCap(null);
+        return;
+      }
+      const natural = Math.max(0, ...Array.from(row.children).map((c) => (c as HTMLElement).scrollHeight));
+      const next = natural > 0 ? Math.round(natural * 0.6) : null;
+      setTopCap((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [data, loading]);
+
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg overflow-y-auto" data-theme={theme}>
       <CdPageHeader
@@ -294,9 +316,11 @@ export function ApprovalFixedLinesBoard() {
       {msg && <p className="text-[12px] cd-text">{msg}</p>}
       {error && <p className="text-[12px] cd-error-text">{error}</p>}
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      {/* 위 줄(역할 담당자·양식별 결재선) — 넓은 화면(xl)에서 두 카드 높이를 내용 높이의 60%로 줄이고 카드 안에서 스크롤한다
+          (2026-11-12 사용자 요청: 40% 줄이기). 내용이 바뀌면 다시 잰다. */}
+      <div ref={topRowRef} className="grid gap-5 xl:grid-cols-2">
         {/* 역할 담당자 */}
-        <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+        <div className="cd-card rounded-lg p-5 flex flex-col gap-3 xl:overflow-y-auto" style={topCap ? { height: topCap } : undefined}>
           <h2 className="text-[14px] font-semibold cd-text">역할 담당자</h2>
           <table className="w-full text-[13px]">
             <tbody>
@@ -422,7 +446,7 @@ export function ApprovalFixedLinesBoard() {
         </div>
 
         {/* 양식별 결재선 */}
-        <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+        <div className="cd-card rounded-lg p-5 flex flex-col gap-3 xl:overflow-y-auto" style={topCap ? { height: topCap } : undefined}>
           <h2 className="text-[14px] font-semibold cd-text">양식별 결재선</h2>
           {loading ? (
             <p className="text-sm cd-text-faint">불러오는 중입니다.</p>
@@ -472,11 +496,15 @@ export function ApprovalFixedLinesBoard() {
         </div>
       </div>
 
+      {/* 아래 줄(2026-11-12 사용자 요청) — 왼쪽 칸(역할 담당자와 같은 폭): 직원별 추가 결재선·참조·열람 + 결재선 편집,
+          오른쪽 칸: 직원별 결재선 미리보기. 미리보기는 내용 높이 그대로 두고, 직원별 추가 카드만 늘려 왼쪽 두 카드 합을 맞춘다. */}
+      <div className="grid gap-5 xl:grid-cols-2 items-stretch">
+      <div className="flex flex-col gap-5 min-w-0">
       {/* 직원별 추가 결재자·참조·열람(353) */}
-      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3 flex-1">
         <h2 className="text-[14px] font-semibold cd-text">직원별 추가 결재선·참조·열람</h2>
         <p className="text-[11px] cd-text-faint">
-          직원이 요청하면 그 직원이 기안하는 문서에만 결재자를 덧붙이거나 참조·열람자를 넣습니다. 양식별 고정 결재선은 그대로이고, 결재자 추가는 고정 결재선이 있는 양식에만 들어갑니다. 결과는 아래 미리보기에서 확인하세요.
+          직원이 요청하면 그 직원이 기안하는 문서에만 결재자를 덧붙이거나 참조·열람자를 넣습니다. 양식별 고정 결재선은 그대로이고, 결재자 추가는 고정 결재선이 있는 양식에만 들어갑니다. 결과는 미리보기에서 확인하세요.
         </p>
         {data && data.userRulesReady === false ? (
           <p className="text-[12px] cd-error-text">직원별 결재선 표(마이그레이션 353)가 아직 적용되지 않았습니다.</p>
@@ -768,9 +796,10 @@ export function ApprovalFixedLinesBoard() {
           </div>
         </div>
       )}
+      </div>
 
       {/* 해석 미리보기 */}
-      <div className="cd-card rounded-lg p-5 flex flex-col gap-3">
+      <div className="cd-card rounded-lg p-5 flex flex-col gap-3 min-w-0">
         <h2 className="text-[14px] font-semibold cd-text">직원별 결재선 미리보기</h2>
         <div className="max-w-sm">
           <CdSelect label="양식" value={previewFormId} onChange={(e) => setPreviewForm(e.target.value)}>
@@ -808,6 +837,7 @@ export function ApprovalFixedLinesBoard() {
             </table>
           </div>
         )}
+      </div>
       </div>
 
       <OrgPickerModal

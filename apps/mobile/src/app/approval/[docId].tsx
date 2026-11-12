@@ -36,6 +36,8 @@ interface DocDetail {
   fields: FieldDef[];
   fieldValues: Record<string, unknown>;
   steps: Step[];
+  /** 참조·열람자(웹 직원 요청 21) — fixed=고정·직원별 규칙으로 자동 추가. 관계자 외에는 서버가 비워 보낸다 */
+  watchers?: { userId: string; name: string | null; position: string | null; kind: string; fixed?: boolean }[];
   myStepId: string | null;
   aiSummary?: { lines: string[]; figures: { label: string; value: string }[] } | null;
 }
@@ -161,6 +163,25 @@ export default function ApprovalDocScreen() {
         <View className="gap-3 rounded-card border border-cd-border bg-cd-card p-4">
           <Text className="text-[13px] font-extrabold text-cd-muted">결재선</Text>
           <StepTimeline steps={doc.steps} />
+          {/* 참조·열람자 — 결재선 아래 구분별 한 줄(웹 결재 상세와 같은 표기) */}
+          {(['ref', 'view'] as const).map((kind) => {
+            const rows = (doc.watchers ?? []).filter((w) => (w.kind === 'view' ? 'view' : 'ref') === kind);
+            if (!rows.length) return null;
+            return (
+              <View key={kind} className="flex-row flex-wrap items-center gap-1.5 border-t border-cd-border pt-2.5">
+                <Text className="text-[12px] font-bold text-cd-muted">
+                  {kind === 'ref' ? '참조' : '열람'} {rows.length}
+                </Text>
+                {rows.map((w) => (
+                  <View key={w.userId} className="flex-row items-center gap-1 rounded-lg border border-cd-border px-2 py-0.5">
+                    <Text className="text-[12px] font-semibold text-cd-text">{w.name ?? w.userId}</Text>
+                    {w.position ? <Text className="text-[12px] text-cd-muted">{w.position}</Text> : null}
+                    {w.fixed ? <Text className="text-[12px] text-cd-faint">· 자동</Text> : null}
+                  </View>
+                ))}
+              </View>
+            );
+          })}
         </View>
 
         {/* 본문(양식 필드) */}

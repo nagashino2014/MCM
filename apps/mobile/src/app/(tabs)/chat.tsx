@@ -1,5 +1,5 @@
 import { TAB_BAR_INSET, useTabBarFabBottom } from '@/components/ui/GlassTabBar';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -94,6 +94,24 @@ export default function ChatScreen() {
       else router.push({ pathname: '/chat/[roomId]', params: name ? { roomId: String(roomId), name } : { roomId: String(roomId) } });
     },
     [wide]
+  );
+  // 목록 더블클릭 = 개별 대화창(2026-11-12 사용자 요청, PC 위젯·브라우저의 넓은 배치). RN-web Pressable 은 dblclick 을
+  // 넘기지 않으므로 같은 방을 400ms 안에 두 번 누르면 더블클릭으로 본다. 첫 클릭은 평소처럼 오른쪽 칸에 열고,
+  // 창이 열리면 오른쪽 칸은 첫 클릭 전 상태로 되돌린다(같은 방이 두 곳에 열리지 않게).
+  const lastTapRef = useRef<{ roomId: number; at: number; prev: { roomId: number; name?: string } | null } | null>(null);
+  const onRowPress = useCallback(
+    (roomId: number, name?: string) => {
+      const now = Date.now();
+      const last = lastTapRef.current;
+      if (wide && last && last.roomId === roomId && now - last.at < 400) {
+        lastTapRef.current = null;
+        if (openChatPopup(roomId, name)) setSelected(last.prev && last.prev.roomId !== roomId ? last.prev : null);
+        return;
+      }
+      lastTapRef.current = { roomId, at: now, prev: selected };
+      openRoom(roomId, name);
+    },
+    [wide, selected, openRoom]
   );
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,7 +299,7 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item }) => <RoomRow r={item} wide={wide} active={wide && selected?.roomId === item.roomId} onPress={() => openRoom(item.roomId, item.name)} />}
+          renderItem={({ item }) => <RoomRow r={item} wide={wide} active={wide && selected?.roomId === item.roomId} onPress={() => onRowPress(item.roomId, item.name)} />}
         />
       )}
 

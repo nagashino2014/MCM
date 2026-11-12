@@ -2064,14 +2064,16 @@ dependencies = [
 
 [[package]]
 name = "mcm-desktop"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "tauri-plugin-window-state",
+ "tauri-winrt-notification",
 ]
 
 [[package]]

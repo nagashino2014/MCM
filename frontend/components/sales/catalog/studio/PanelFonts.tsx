@@ -188,7 +188,7 @@ export function PanelFonts({
             <div className="flex flex-wrap items-center gap-2 text-sm">
               {(["a", "b"] as const).map((side) => (
                 <label key={side} className="flex items-center gap-1">
-                  {side === "a" ? "왼쪽" : "오른쪽"}
+                  <span className="cd-label-text">{side === "a" ? "왼쪽" : "오른쪽"}</span>
                   <select className="cd-select" style={{ width: 160 }} value={compare[side]} onChange={(e) => setCompare({ ...compare, [side]: e.target.value })}>
                     {choosable.map((f) => (
                       <option key={f.id} value={f.id}>
@@ -199,7 +199,7 @@ export function PanelFonts({
                 </label>
               ))}
               <label className="flex items-center gap-1 ml-auto">
-                쪽
+                <span className="cd-label-text">쪽</span>
                 <select className="cd-select" style={{ width: 170 }} value={compare.sample} onChange={(e) => setCompare({ ...compare, sample: Number(e.target.value) })}>
                   {samples.map((s, i) => (
                     <option key={s.key} value={i}>

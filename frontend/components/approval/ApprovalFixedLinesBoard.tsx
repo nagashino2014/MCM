@@ -385,7 +385,7 @@ export function ApprovalFixedLinesBoard() {
           ) : (
             (["ref", "view"] as const).map((k) => (
               <div key={k} className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[12px] cd-text font-semibold w-12">{k === "ref" ? "참조" : "열람"}</span>
+                <span className="w-12 cd-label-text">{k === "ref" ? "참조" : "열람"}</span>
                 {allFormWatchers
                   .filter((w) => w.kind === k)
                   .map((w) => (
@@ -640,7 +640,7 @@ export function ApprovalFixedLinesBoard() {
                   ))}
                 </select>
                 <label className="flex items-center gap-1 text-[12px] cd-text-faint">
-                  본인 기안 시
+                  <span className="cd-label-text">본인 기안 시</span>
                   <select
                     className="cd-select"
                     style={{ width: 130 }}
@@ -700,7 +700,7 @@ export function ApprovalFixedLinesBoard() {
             </CdButton>
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-[12px] font-semibold cd-text mb-1">강제 조건</legend>
+            <legend className="mb-1 cd-label-text">강제 조건</legend>
             <label className="flex items-center gap-2 text-[13px] cd-text">
               <input
                 type="checkbox"

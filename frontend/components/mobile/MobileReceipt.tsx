@@ -242,17 +242,17 @@ export function MobileReceipt() {
           </section>
 
           <section className="cd-card-bg border cd-border-c rounded-2xl p-3 flex flex-col gap-2">
-            <h3 className="cd-text-muted text-xs font-bold">지출 목적 *</h3>
-            <PurposeGroup label="출장 경비 — 출장보고서에 실립니다" options={TRIP_PURPOSES} value={purpose} onChange={setPurpose} />
-            <PurposeGroup label="그 밖의 경비 — 지출결의서에 실립니다" options={GENERAL_PURPOSES} value={purpose} onChange={setPurpose} />
+            <h3 className="cd-label-text">지출 목적 *</h3>
+            <PurposeGroup label="출장 경비" hint="출장보고서에 실립니다" options={TRIP_PURPOSES} value={purpose} onChange={setPurpose} />
+            <PurposeGroup label="그 밖의 경비" hint="지출결의서에 실립니다" options={GENERAL_PURPOSES} value={purpose} onChange={setPurpose} />
             {PURPOSE_HINTS[purpose] && (
-              <p className="flex items-start gap-1 cd-text-muted text-xs">
+              <p className="flex items-start gap-1 cd-hint">
                 <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
                 {PURPOSE_HINTS[purpose]}
               </p>
             )}
             <div className="flex items-center gap-2 mt-1">
-              <span className="cd-text-faint text-xs shrink-0" style={{ width: 64 }}>
+              <span className="cd-label-text shrink-0 whitespace-nowrap" style={{ width: 64 }}>
                 {purposeNeedsRelated(purpose) ? "연관 용역 *" : "연관 용역"}
               </span>
               <div className="flex-1 min-w-0">
@@ -296,16 +296,20 @@ export function MobileReceipt() {
 
 /** 지출 목적 칩 묶음 — 같은 칩을 다시 누르면 선택 해제 */
 function PurposeGroup({
-  label, options, value, onChange,
+  label, hint, options, value, onChange,
 }: {
   label: string;
+  hint?: string;
   options: readonly string[];
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="cd-text-faint text-[11px]">{label}</span>
+      <span>
+        <span className="cd-label-text">{label}</span>
+        {hint && <span className="cd-hint ml-1.5">{hint}</span>}
+      </span>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => (
           <button
@@ -335,7 +339,7 @@ function Field({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="cd-text-faint text-xs shrink-0" style={{ width: 64 }}>{label}</span>
+      <span className="cd-label-text shrink-0 whitespace-nowrap" style={{ width: 64 }}>{label}</span>
       <input className="cd-input flex-1" value={value} inputMode={inputMode} placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} />
     </div>

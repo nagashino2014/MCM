@@ -268,7 +268,7 @@ export function RateCardEditor({
           <div className="rounded-lg border cd-border-c p-2.5 grid gap-2">
             <div className="grid grid-cols-[minmax(0,1fr)_150px_28px] gap-2 items-end">
               <label className="grid gap-1 text-[11px]">
-                <span className="cd-text-faint font-semibold">차수명</span>
+                <span className="cd-label-text">차수명</span>
                 <input
                   className="cd-input"
                   value={activeRound.label}
@@ -277,7 +277,7 @@ export function RateCardEditor({
                 />
               </label>
               <label className="grid gap-1 text-[11px]">
-                <span className="cd-text-faint font-semibold">견적 기준일</span>
+                <span className="cd-label-text">견적 기준일</span>
                 <AutoDateInput
                   className="cd-input tabular-nums"
                   value={activeRound.date}
@@ -295,7 +295,7 @@ export function RateCardEditor({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] cd-text-faint font-semibold mr-0.5">지급 단위</span>
+              <span className="mr-0.5 cd-label-text">지급 단위</span>
               {activeRound.payments.map((p, idx) => (
                 <span key={idx} className="inline-flex items-center gap-1 rounded-lg border cd-border-c px-1.5 py-1">
                   <input
@@ -344,7 +344,7 @@ export function RateCardEditor({
                 <Plus className="w-3 h-3" />
                 지급 단위 추가
               </button>
-              <span className="text-[11px] cd-text-faint">
+              <span className="cd-hint">
                 마지막 단위 금액은 잔액으로 맞춰집니다. 모두 지우면 구분별 청구.
               </span>
             </div>

@@ -884,7 +884,7 @@ export function InternalRuleEditorBoard() {
               </div>
             )}
             {editable && !isNew && !effectiveDate && (
-              <div className="text-[11px] cd-text-faint">시행하려면 시행일을 입력하세요.</div>
+              <div className="cd-hint">시행하려면 시행일을 입력하세요.</div>
             )}
           </div>
 
@@ -944,7 +944,7 @@ export function InternalRuleEditorBoard() {
               {selected ? (
                 <div className="cd-card p-4 flex flex-col gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold cd-text-faint shrink-0">
+                    <span className="shrink-0 cd-label-text">
                       {sel?.part === "addendum" ? "부칙 " : ""}
                       {selected.no ? `제${selected.no}조` : "조 없음"}
                     </span>

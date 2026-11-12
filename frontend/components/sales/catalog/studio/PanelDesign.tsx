@@ -203,7 +203,7 @@ function PhotoVariant({
   const cur = variant[field] ?? values[0][0];
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-xs cd-text-muted">{label}</p>
+      <p className="cd-label-text">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {values.map(([v, l]) => (
           <Chip
@@ -254,7 +254,7 @@ function VariantChips({
   };
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-xs cd-text-muted">{f.label}</p>
+      <p className="cd-label-text">{f.label}</p>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label={f.label}>
         {f.values.map(([v, l]) => (
           <Chip key={v} active={cur === v} onClick={() => choose(v)}>
@@ -296,7 +296,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       <h3 className="text-sm font-semibold cd-text">고른 요소</h3>
       {n.origin === "add" && n.className?.includes("kc-x-shape") ? (
         <div className="flex flex-col gap-1">
-          <p className="text-xs cd-text-muted">도형 모양</p>
+          <p className="cd-label-text">도형 모양</p>
           <div className="flex flex-wrap gap-1.5">
             {(
               [
@@ -315,7 +315,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       ) : null}
       {caps.columns && cols != null ? (
         <label className="text-xs cd-text-muted flex items-center gap-2">
-          열 수
+          <span className="cd-label-text">열 수</span>
           <select className="cd-select" style={{ width: 80 }} value={cols} onChange={(e) => ops.patchStyle(sel.id, { gridTemplateColumns: `repeat(${e.target.value}, minmax(0, 1fr))` })}>
             {[1, 2, 3, 4, 5, 6].map((c) => (
               <option key={c} value={c}>
@@ -327,7 +327,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       ) : null}
       {caps.photoLayout ? (
         <div className="flex flex-col gap-1">
-          <p className="text-xs cd-text-muted">사진 비율</p>
+          <p className="cd-label-text">사진 비율</p>
           <div className="flex flex-wrap gap-1.5">
             {PHOTO_RATIOS.map((r) => {
               const target = frameOf() ?? n;
@@ -342,7 +342,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       ) : null}
       {caps.resize ? (
         <label className="text-xs cd-text-muted flex items-center gap-2">
-          폭(12열 기준)
+          <span className="cd-label-text">폭(12열 기준)</span>
           <select
             className="cd-select"
             style={{ width: 110 }}
@@ -360,7 +360,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       ) : null}
       {caps.typeStep ? (
         <label className="text-xs cd-text-muted flex items-center gap-2">
-          글자 크기
+          <span className="cd-label-text">글자 크기</span>
           <select className="cd-select flex-1" value={customPx ? "custom" : (currentStep ?? "")} onChange={(e) => e.target.value !== "custom" && ops.setType(sel.id, e.target.value || null)}>
             <option value="">원래 크기</option>
             {customPx ? <option value="custom">직접 지정 · {String(customPx).replace("px", "pt")}</option> : null}
@@ -374,7 +374,7 @@ function ElementDesign({ studio, composed, sel, caps, ops }: PanelProps & { sel:
       ) : null}
       {caps.color ? (
         <div className="flex flex-col gap-1">
-          <p className="text-xs cd-text-muted">{sel.kind === "text" || n.className?.includes("kc-x-text") ? "글자 색" : "면 색"}(디자인 시스템 색만)</p>
+          <p><span className="cd-label-text">{sel.kind === "text" || n.className?.includes("kc-x-text") ? "글자 색" : "면 색"}</span><span className="cd-hint ml-1.5">(디자인 시스템 색만)</span></p>
           <div className="flex flex-wrap gap-1">
             {(sel.kind === "text" || n.className?.includes("kc-x-text") ? TEXT_COLORS : FILL_COLORS).map((c) => {
               const key = sel.kind === "text" || n.className?.includes("kc-x-text") ? "color" : "background";
@@ -553,7 +553,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
       {/* hidden 속성은 .flex 에 덮이므로 그리지 않는 쪽으로 숨긴다 */}
       {spec.illust || original ? null : (
       <div className="flex flex-col gap-1">
-        <p className="text-xs cd-text-muted">변형</p>
+        <p className="cd-label-text">변형</p>
         <div className="flex flex-wrap gap-1.5">
           {meta.variants.map((v) => (
             <Chip key={v.id} active={(spec.variant ?? meta.variants[0].id) === v.id} onClick={() => ops.setInfo(sel.id, { type: spec.type, variant: v.id }, slot.slot)}>
@@ -561,7 +561,7 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
             </Chip>
           ))}
         </div>
-        <p className="text-xs cd-text-muted">색</p>
+        <p className="cd-label-text">색</p>
         <div className="flex flex-wrap gap-1.5">
           {(
             [

@@ -121,7 +121,7 @@ export function ShopReceiptPickerModal({
     >
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="cd-label text-xs">주문일</label>
+          <label className="cd-label">주문일</label>
           <DigitDateInput value={from} onChange={setFrom} className="cd-input text-center" style={{ width: 116 }} />
           <span className="cd-text-muted">~</span>
           <DigitDateInput value={to} onChange={setTo} className="cd-input text-center" style={{ width: 116 }} />

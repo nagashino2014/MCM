@@ -230,12 +230,12 @@ export function ScheduleModal({
               </>
             )}
 
-            <label className="cd-label">업무상세 <span className="cd-text-faint">({summary.length}/100)</span></label>
+            <label className="cd-label">업무상세 <span className="cd-hint">({summary.length}/100)</span></label>
             <textarea className="cd-textarea mb-3" rows={2} maxLength={100} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="100자 이내" />
 
             {showProgress && (
               <>
-                <label className="cd-label">경과 <span className="cd-text-faint">({progressNote.length}/200)</span></label>
+                <label className="cd-label">경과 <span className="cd-hint">({progressNote.length}/200)</span></label>
                 <textarea className="cd-textarea mb-3" rows={2} maxLength={200} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="진행상황·결과(200자 이내)" />
               </>
             )}

@@ -141,7 +141,7 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
           </p>
           {!added ? (
             <div className="flex flex-col gap-1">
-              <p className="text-xs cd-text-muted">크기</p>
+              <p className="cd-label-text">크기</p>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="일러스트 크기">
                 {(
                   [
@@ -154,11 +154,11 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
                   </button>
                 ))}
               </div>
-              {fit === "width" ? <p className="text-[11px] cd-text-faint">그림 높이가 늘어 아래 내용이 밀립니다. 쪽 아래 검사에서 넘침을 확인하세요.</p> : null}
+              {fit === "width" ? <p className="cd-hint">그림 높이가 늘어 아래 내용이 밀립니다. 쪽 아래 검사에서 넘침을 확인하세요.</p> : null}
             </div>
           ) : null}
           <div className="flex flex-col gap-1">
-            <p className="text-xs cd-text-muted">색</p>
+            <p className="cd-label-text">색</p>
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="일러스트 색">
               {ILLUST_COLOR_MODES.map((m) => (
                 <button
@@ -175,7 +175,7 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
             </div>
             {tints.length ? (
               <div className="flex flex-col gap-1 text-[11px] cd-text-muted">
-                <span>항목 색 — {colors.mode === "areas" ? "n번 항목 = n번 분야 색(표지 분야 원과 같은 색)" : "고른 항목만 그 색, 나머지는 위 색 모드"}</span>
+                <span><span className="cd-label-text">항목 색</span><span className="cd-hint ml-1.5">{colors.mode === "areas" ? "n번 항목 = n번 분야 색(표지 분야 원과 같은 색)" : "고른 항목만 그 색, 나머지는 위 색 모드"}</span></span>
                 {tints.map((t) => {
                   const it = spec.content.items[t.n - 1];
                   return (
@@ -225,7 +225,7 @@ export function IllustrationShapePicker({ studio, kit, item, sel, ops }: PanelPr
           </div>
           {numberItems.length ? (
             <div className="flex flex-col gap-1">
-              <p className="text-xs cd-text-muted">숫자 자리 — 지표에 묶으면 데이터가 바뀌어도 최신 값(지표 칩)</p>
+              <p><span className="cd-label-text">숫자 자리</span><span className="cd-hint ml-1.5">지표에 묶으면 데이터가 바뀌어도 최신 값(지표 칩)</span></p>
               {numberItems.map((n) => {
                 const it = spec.content.items[n - 1];
                 if (!it) return null;
@@ -362,7 +362,7 @@ export function IllustrationLibraryModal({ open, pageType, onClose, onPick }: { 
             <input type="checkbox" checked={onlyPage && pageHits > 0} disabled={!pageHits} onChange={(e) => setOnlyPage(e.target.checked)} /> 이 쪽({pageType}) 추천만 {pageHits ? `(${pageHits})` : "(없음)"}
           </label>
           <label className="cd-text-muted flex items-center gap-1.5">
-            유형
+            <span className="cd-label-text">유형</span>
             <select className="cd-select" style={{ width: 130 }} value={type} onChange={(e) => setType(e.target.value as InfoType | "")}>
               <option value="">전체</option>
               {INFO_TYPES.map((t) => (
@@ -373,7 +373,7 @@ export function IllustrationLibraryModal({ open, pageType, onClose, onPick }: { 
             </select>
           </label>
           <label className="cd-text-muted flex items-center gap-1.5">
-            항목 수
+            <span className="cd-label-text">항목 수</span>
             <select className="cd-select" style={{ width: 90 }} value={count} onChange={(e) => setCount(e.target.value ? Number(e.target.value) : "")}>
               <option value="">전체</option>
               {counts.map((n) => (

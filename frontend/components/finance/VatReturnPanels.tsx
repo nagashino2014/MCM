@@ -781,17 +781,17 @@ export function CardTaxReviewPanel({ from, to, onSaved, canManage: canManageProp
     {selected && <fieldset disabled={!canManage || busy} className="space-y-2 border-t cd-border-c pt-3">
       <p className="text-sm">검토 대상: {selected.cardTxnId} · {selected.storeName}</p>
       <div className="flex flex-wrap gap-2">
-        <label>공제 판정 <select className="cd-select" value={decision} onChange={e => setDecision(e.target.value)}><option value="">미판정</option><option value="1">공제</option><option value="0">불공제</option></select></label>
-        <label>판정 사유 <input className="cd-input" maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
-        <label>증빙 참조 <input className="cd-input" maxLength={1000} placeholder="영수증·검토 문서 번호 또는 보관 위치" value={evidence} onChange={e => setEvidence(e.target.value)} /></label>
+        <label><span className="cd-label-text">공제 판정</span> <select className="cd-select" value={decision} onChange={e => setDecision(e.target.value)}><option value="">미판정</option><option value="1">공제</option><option value="0">불공제</option></select></label>
+        <label><span className="cd-label-text">판정 사유</span> <input className="cd-input" maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
+        <label><span className="cd-label-text">증빙 참조</span> <input className="cd-input" maxLength={1000} placeholder="영수증·검토 문서 번호 또는 보관 위치" value={evidence} onChange={e => setEvidence(e.target.value)} /></label>
       </div>
       <div>
         <CdDateInput label="신고 귀속일" className="max-w-[200px]" value={taxDate} onChange={setTaxDate} disabled={!canManage || busy} />
-        <p className="text-xs cd-text-muted">승인은 거래일을 기본으로 표시합니다. 실제 공급 시기와 증빙을 확인하여 신고 귀속일을 정하세요. 취소의 귀속일은 자동으로 확정하지 않습니다.</p>
+        <p className="cd-hint">승인은 거래일을 기본으로 표시합니다. 실제 공급 시기와 증빙을 확인하여 신고 귀속일을 정하세요. 취소의 귀속일은 자동으로 확정하지 않습니다.</p>
       </div>
       {isReversal && <div className="flex flex-wrap gap-2">
-        <label>원승인 ID <input className="cd-input" value={original} onChange={e => setOriginal(e.target.value)} placeholder="다른 기수 원승인 ID도 입력 가능" /></label>
-        <label>취소 사유 <select className="cd-select" value={reversal} onChange={e => setReversal(e.target.value)}><option value="">선택</option><option value="return">반품</option><option value="contract_cancellation">계약 해제</option><option value="price_adjustment">금액 변경</option><option value="original_correction">당초 거래 정정</option></select></label>
+        <label><span className="cd-label-text">원승인 ID</span> <input className="cd-input" value={original} onChange={e => setOriginal(e.target.value)} placeholder="다른 기수 원승인 ID도 입력 가능" /></label>
+        <label><span className="cd-label-text">취소 사유</span> <select className="cd-select" value={reversal} onChange={e => setReversal(e.target.value)}><option value="">선택</option><option value="return">반품</option><option value="contract_cancellation">계약 해제</option><option value="price_adjustment">금액 변경</option><option value="original_correction">당초 거래 정정</option></select></label>
       </div>}
       <button className="cd-btn cd-btn-primary cd-btn-sm" disabled={busy || !canManage || (!!taxDate && !isValidDateString(taxDate)) || (decision !== "" && (!reason.trim() || !evidence.trim() || (isReversal && (!original.trim() || !taxDate || !reversal))))} onClick={() => void saveReview()}>검토 저장</button>
       <button className="cd-btn cd-btn-ghost cd-btn-sm ml-2" disabled={busy} onClick={() => setSelected(null)}>닫기</button>
@@ -1091,13 +1091,13 @@ export function VatReturnPanel({ requestedBasisSnapshotId = "" }: { requestedBas
       <div className="cd-card p-4 space-y-3">
         <div className="cd-card-title flex items-center gap-1">신고 근거 · 저장본 선택<CdHelp topic="finance.vat-stages" /></div>
         <div className="flex flex-wrap gap-3 items-end">
-          <label className="text-sm">새 계산의 봉인 근거
+          <label className="text-sm"><span className="cd-label-text">새 계산의 봉인 근거</span>
             <select className="cd-select block mt-1 max-w-full" aria-label="신고 근거 선택" value={savedId ? "" : basisId} disabled={uncertainRequest || busy || listsLoading} onChange={e => changeSelection(e.target.value, "")}>
               <option value="">봉인된 신고 근거를 선택하세요</option>
               {bases.map(item => <option key={item.basisSnapshotId} value={item.basisSnapshotId}>{item.label} · {item.mode === "notice" ? "예정고지" : "예정신고"} · {item.subjectId} · {item.dateFrom}~{item.dateTo}</option>)}
             </select>
           </label>
-          <label className="text-sm">저장본 보기
+          <label className="text-sm"><span className="cd-label-text">저장본 보기</span>
             <select className="cd-select block mt-1 max-w-full" aria-label="신고 저장본 선택" value={savedId} disabled={uncertainRequest || busy || listsLoading} onChange={e => changeSelection("", e.target.value)}>
               <option value="">저장본을 선택하세요</option>
               {saved.map(item => <option key={item.returnId} value={item.returnId}>{item.form?.period.label ?? `${item.periodYear}년 ${item.periodTerm}기`} · {item.origin === "legacy" ? "기존 형식" : `새 형식 ${item.revision ?? 1}판`} · {item.status === "confirmed" ? "내부 확정" : "초안"} · {item.returnId}</option>)}

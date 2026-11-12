@@ -20,7 +20,7 @@ export function DocStageSwitch({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1">
-        <span className="text-[13px] font-semibold cd-text">문서 단계</span>
+        <span className="cd-label-text">문서 단계</span>
         <CdHelp topic="doc.stage" />
       </div>
       <CdTabs<DocStage>
@@ -31,7 +31,7 @@ export function DocStageSwitch({
         active={stage}
         onChange={onChange}
       />
-      <p className="text-[11px] cd-text-faint">
+      <p className="cd-hint">
         {stage === "draft"
           ? "결재 없이 발주처에 송부합니다. 송부한 버전은 잠기고, 고칠 때는 새 버전을 만듭니다."
           : "결재선(부서장 → 임원 → 대표이사)으로 상신하고, 승인 후 발송합니다."}

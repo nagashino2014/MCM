@@ -303,7 +303,7 @@ export function ClosingPanel() {
       </div>
       {closed && (
         <label className="block text-sm mb-3">
-          마감 해제 사유
+          <span className="cd-label-text">마감 해제 사유</span>
           <input className="cd-input mt-1 w-full" value={reopenReason} maxLength={1000} onChange={(event) => setReopenReason(event.target.value)} placeholder="어떤 자료를 수정해야 하는지 입력하세요." disabled={busy} />
         </label>
       )}

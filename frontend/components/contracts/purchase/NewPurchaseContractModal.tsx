@@ -170,15 +170,15 @@ export function NewPurchaseContractModal({ onClose, onSaved }: { onClose: () => 
               <div key={m.id} className="grid grid-cols-[56px_1fr_150px_1.2fr_40px] gap-2 items-end rounded-lg border cd-border-c cd-surface-bg p-3">
                 <div className="text-xs cd-text-faint pb-2">{idx + 1}차</div>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">단계명</span>
+                  <span className="cd-label-text">단계명</span>
                   <input className="cd-input" value={m.stageLabel} onChange={(e) => updateMilestone(m.id, { stageLabel: e.target.value })} placeholder="선급금 / 중도금 / 잔금 / 1월분" />
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">청구금액</span>
+                  <span className="cd-label-text">청구금액</span>
                   <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(m.amount)} onChange={(e) => updateMilestone(m.id, { amount: stripDigits(e.target.value) })} />
                 </label>
                 <label className="grid gap-1 text-xs">
-                  <span className="cd-text-faint">대금 지급 조건</span>
+                  <span className="cd-label-text">대금 지급 조건</span>
                   <input className="cd-input" value={m.paymentTerms} onChange={(e) => updateMilestone(m.id, { paymentTerms: e.target.value })} placeholder="세금계산서 수취 후 30일 이내" />
                 </label>
                 <button type="button" className="rounded-lg p-2 cd-error-text hover:cd-error-bg" onClick={() => setMilestones((prev) => prev.filter((item) => item.id !== m.id))}>
@@ -230,7 +230,7 @@ export function NewPurchaseContractModal({ onClose, onSaved }: { onClose: () => 
         {tab === "document" && (
           <div className="grid gap-4">
             <div className="grid gap-1 text-sm">
-              <span className="font-semibold cd-text-muted">계약서 PDF 첨부</span>
+              <span className="cd-label-text">계약서 PDF 첨부</span>
               <FileDropZone value={documentFile} onChange={setDocumentFile} hint="매입 계약서 PDF 1개 · 30MB 이하" />
             </div>
             <p className="text-xs cd-text-faint">

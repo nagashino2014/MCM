@@ -95,7 +95,7 @@ export function BindPicker({
             />
           </label>
           <label className="flex items-center gap-1 text-xs cd-text-muted whitespace-nowrap">
-            소수 자리
+            <span className="cd-label-text">소수 자리</span>
             <select className="cd-select" style={{ width: 88 }} value={digits} onChange={(e) => setDigits(Number(e.target.value))}>
               <option value={0}>없음</option>
               <option value={1}>1자리</option>

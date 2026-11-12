@@ -313,12 +313,37 @@ html[data-theme="dark"] .cdash, html[data-theme="dark"] .cdash-vars,
 }
 
 /* ---------------- 폼 컨트롤 ---------------- */
+/* 항목 레이블·보조 텍스트 규격(2026-11-12 사용자 요청) — 레이블이 설명과 구별되도록
+ * 레이블은 13px·600·본문색, 보조 텍스트(설명·힌트·예시)는 12px·400·muted 로 통일한다.
+ * .cd-label = 블록(아래 여백 포함), .cd-label-text = 기존 배치를 그대로 둔 채 글자만 규격으로,
+ * .cd-hint = 입력란에 딸린 설명. 페이지 CSS 에서 이 토큰을 재정의하지 않는다. */
+.cdash,
+.cdash-vars {
+  --cd-label-size: 0.8125rem;
+  --cd-label-weight: 600;
+  --cd-label-color: var(--cd-text);
+  --cd-hint-size: 0.75rem;
+  --cd-hint-color: var(--cd-muted);
+}
+
 .cd-label {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--cd-muted);
+  font-size: var(--cd-label-size, 0.8125rem);
+  font-weight: var(--cd-label-weight, 600);
+  color: var(--cd-label-color, var(--cd-text));
   margin-bottom: 0.35rem;
+}
+
+.cd-label-text {
+  font-size: var(--cd-label-size, 0.8125rem);
+  font-weight: var(--cd-label-weight, 600);
+  color: var(--cd-label-color, var(--cd-text));
+}
+
+.cd-hint {
+  font-size: var(--cd-hint-size, 0.75rem);
+  font-weight: 400;
+  color: var(--cd-hint-color, var(--cd-muted));
 }
 
 .cd-input,

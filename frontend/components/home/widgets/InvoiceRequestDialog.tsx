@@ -176,7 +176,7 @@ export function InvoiceRequestDialog({
             <div className="grid grid-cols-2 gap-2">
               {CONTACT_FIELDS.map((f) => (
                 <label key={f.key} className={f.key === "email" ? "col-span-2" : undefined}>
-                  <span className="text-[11px] cd-text-faint">{f.label}</span>
+                  <span className="cd-label-text">{f.label}</span>
                   <input
                     className="cd-input mt-0.5"
                     type={f.type ?? "text"}
@@ -194,7 +194,7 @@ export function InvoiceRequestDialog({
         )}
 
         <label>
-          <span className="text-[11px] cd-text-faint">요청 메모 (선택)</span>
+          <span className="cd-label-text">요청 메모 (선택)</span>
           <textarea
             className="cd-input mt-0.5 min-h-[64px]"
             value={note}

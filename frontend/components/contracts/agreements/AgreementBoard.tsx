@@ -940,7 +940,7 @@ export function AgreementBoard() {
             onChange={setSendRecipients}
           />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] cd-text-faint">첨부 구성 — 초안 협의는 편집 가능한 HWPX 가 기본입니다</span>
+            <span><span className="cd-label-text">첨부 구성</span><span className="cd-hint ml-1.5">초안 협의는 편집 가능한 HWPX 가 기본입니다</span></span>
             <label className="flex items-center gap-2 text-[13px] cd-text">
               <input type="checkbox" checked={sendIncludeHwpx} onChange={(e) => setSendIncludeHwpx(e.target.checked)} />
               계약서 HWPX (한글 편집본 — 기본)
@@ -951,7 +951,7 @@ export function AgreementBoard() {
             </label>
           </div>
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">추가 안내 문구 (선택 — 메일 본문에 삽입)</span>
+            <span><span className="cd-label-text">추가 안내 문구</span><span className="cd-hint ml-1.5">(선택 — 메일 본문에 삽입)</span></span>
             <textarea className="cd-input text-[13px] min-h-[64px]" value={sendNote} onChange={(e) => setSendNote(e.target.value)} placeholder="예: 5조 지급 조건은 협의 결과를 반영했습니다. 확인 부탁드립니다." />
           </label>
           <p className="text-[11px] cd-text-faint">
@@ -1196,7 +1196,7 @@ export function AgreementBoard() {
                 {versionRoot && !locked && (
                   <div className="cd-card rounded-lg p-5 flex flex-col gap-1.5">
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">변경 메모 — v{currentVersion}에서 바뀐 점(발주처 검토 의견 반영 내용 등)</span>
+                      <span><span className="cd-label-text">변경 메모</span><span className="cd-hint ml-1.5">v{currentVersion}에서 바뀐 점(발주처 검토 의견 반영 내용 등)</span></span>
                       <input
                         className="cd-input text-sm"
                         value={revisionNote}
@@ -1220,7 +1220,7 @@ export function AgreementBoard() {
 
                   {/* 연동 선택 */}
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] cd-text-faint">연동 (선택) — 수주 견적·기존 계약에서 자동 채움</span>
+                    <span><span className="cd-label-text">연동 (선택)</span><span className="cd-hint ml-1.5">수주 견적·기존 계약에서 자동 채움</span></span>
                     {linkLabel ? (
                       <div className="flex items-center gap-2 rounded-lg border cd-border-c px-3 py-2">
                         <Link2 className="w-3.5 h-3.5 cd-text-primary" />
@@ -1267,12 +1267,12 @@ export function AgreementBoard() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">계약명 *</span>
+                      <span className="cd-label-text">계약명 *</span>
                       <input className="cd-input text-sm" value={subject} placeholder="예: ○○(주) ○○사업소 통합환경 허가재검토 용역" onChange={(e) => setSubject(e.target.value)} />
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">용역 대분류</span>
+                        <span className="cd-label-text">용역 대분류</span>
                         <select className="cd-select" value={serviceType} onChange={(e) => { setServiceType(e.target.value); setServiceSubtype(subtypesOf(serviceOptions, e.target.value)[0] ?? ""); }}>
                           {serviceOptions.map((o) => (
                             <option key={o.type} value={o.type}>{o.type}</option>
@@ -1280,7 +1280,7 @@ export function AgreementBoard() {
                         </select>
                       </label>
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">세분류</span>
+                        <span className="cd-label-text">세분류</span>
                         <select className="cd-select" value={serviceSubtype} onChange={(e) => setServiceSubtype(e.target.value)}>
                           {subtypeOptions.map((s) => (
                             <option key={s} value={s}>{s}</option>
@@ -1292,7 +1292,7 @@ export function AgreementBoard() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">계약서 양식 — 세분류의 표준 셋 자동 선택</span>
+                      <span><span className="cd-label-text">계약서 양식</span><span className="cd-hint ml-1.5">세분류의 표준 셋 자동 선택</span></span>
                       <div className="flex items-center gap-2">
                         <div className={`flex-1 rounded-lg border cd-border-c px-3 py-2 text-[13px] ${template ? "cd-text" : "text-[color:var(--cd-error)]"}`}>
                           {template ? (
@@ -1312,7 +1312,7 @@ export function AgreementBoard() {
                       </div>
                       {customTemplates.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                          <span className="text-[11px] cd-text-faint">이 발주처 자체양식:</span>
+                          <span className="cd-label-text">이 발주처 자체양식:</span>
                           {customTemplates.map((t) => (
                             <button
                               key={t.templateId}
@@ -1334,12 +1334,12 @@ export function AgreementBoard() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">체결일</span>
+                        <span className="cd-label-text">체결일</span>
                         <AutoDateInput className="cd-input text-sm" value={issueDate} onChange={setIssueDate} />
                       </label>
                       {hasClausePage && (
                         <label className="flex flex-col gap-1">
-                          <span className="text-[11px] cd-text-faint">첨부 표기</span>
+                          <span className="cd-label-text">첨부 표기</span>
                           <input className="cd-input text-sm" value={attachNote} onChange={(e) => setAttachNote(e.target.value)} />
                         </label>
                       )}
@@ -1356,23 +1356,23 @@ export function AgreementBoard() {
                   <FacilityRecipientPicker list={ordererList} onChange={onOrdererChange} onNewFacility={() => setFacilityModal(true)} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">상호(법인명) *</span>
+                      <span className="cd-label-text">상호(법인명) *</span>
                       <input className="cd-input text-sm" value={orderer.name} onChange={(e) => setOrderer((p) => ({ ...p, name: e.target.value }))} />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">대표자 — 날인란 표기(수동 입력)</span>
+                      <span><span className="cd-label-text">대표자</span><span className="cd-hint ml-1.5">날인란 표기(수동 입력)</span></span>
                       <input className="cd-input text-sm" value={orderer.ceo} placeholder="예: 홍길동" onChange={(e) => setOrderer((p) => ({ ...p, ceo: e.target.value }))} />
                     </label>
                     <label className="flex flex-col gap-1 md:col-span-2">
-                      <span className="text-[11px] cd-text-faint">주소</span>
+                      <span className="cd-label-text">주소</span>
                       <input className="cd-input text-sm" value={orderer.address} onChange={(e) => setOrderer((p) => ({ ...p, address: e.target.value }))} />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">사업자등록번호</span>
+                      <span className="cd-label-text">사업자등록번호</span>
                       <input className="cd-input text-sm" value={orderer.bizNo} onChange={(e) => setOrderer((p) => ({ ...p, bizNo: e.target.value }))} />
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-[11px] cd-text-faint">전화번호</span>
+                      <span className="cd-label-text">전화번호</span>
                       <input className="cd-input text-sm" value={orderer.phone} onChange={(e) => setOrderer((p) => ({ ...p, phone: e.target.value }))} />
                     </label>
                   </div>
@@ -1388,7 +1388,7 @@ export function AgreementBoard() {
                   <div className="flex flex-col md:flex-row gap-4 items-start">
                     <div className="w-full md:w-[280px] shrink-0 flex flex-col gap-2.5">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">공급가 (VAT 별도) *</span>
+                        <span className="cd-label-text">공급가 (VAT 별도) *</span>
                         <AmountInput
                           className="cd-input text-sm text-right"
                           value={amountSupply || ""}
@@ -1400,14 +1400,14 @@ export function AgreementBoard() {
                         />
                       </label>
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">세액 (10%)</span>
+                        <span className="cd-label-text">세액 (10%)</span>
                         <div className="cd-input text-sm text-right opacity-70">{won(amounts.vat)}</div>
                       </div>
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px] cd-text-faint">합계 (VAT 포함)</span>
+                        <span className="cd-label-text">합계 (VAT 포함)</span>
                         <div className="cd-input text-sm text-right opacity-70">{won(amounts.total)}</div>
                       </div>
-                      {amounts.supply > 0 && <p className="text-[11px] cd-text-faint">{amountLine(amounts.supply)}</p>}
+                      {amounts.supply > 0 && <p className="cd-hint">{amountLine(amounts.supply)}</p>}
                       <button
                         type="button"
                         className="cd-btn rounded-lg border border-dashed cd-border-c px-3 py-2 text-[12px] cd-text-faint"
@@ -1451,12 +1451,12 @@ export function AgreementBoard() {
                         return (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                             <label className="flex flex-col gap-1">
-                              <span className="text-[11px] cd-text-faint">단계 명칭</span>
+                              <span className="cd-label-text">단계 명칭</span>
                               <input className="cd-input text-sm" value={p.label} placeholder="착수금" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))} />
                             </label>
                             <div className="grid grid-cols-2 gap-2">
                               <label className="flex flex-col gap-1">
-                                <span className="text-[11px] cd-text-faint">비율 (%)</span>
+                                <span className="cd-label-text">비율 (%)</span>
                                 <input
                                   className="cd-input text-sm text-right"
                                   value={p.ratio != null ? String(p.ratio) : ""}
@@ -1468,7 +1468,7 @@ export function AgreementBoard() {
                                 />
                               </label>
                               <label className="flex flex-col gap-1">
-                                <span className="text-[11px] cd-text-faint">금액 (원)</span>
+                                <span className="cd-label-text">금액 (원)</span>
                                 <AmountInput
                                   className="cd-input text-sm text-right"
                                   value={p.amount || ""}
@@ -1477,7 +1477,7 @@ export function AgreementBoard() {
                               </label>
                             </div>
                             <label className="flex flex-col gap-1 md:col-span-2">
-                              <span className="text-[11px] cd-text-faint">지급 시점 문구</span>
+                              <span className="cd-label-text">지급 시점 문구</span>
                               <input className="cd-input text-sm" value={p.condition} placeholder="예: 계약 완료 후 현금 지급" onChange={(e) => setPayments((prev) => prev.map((x, xi) => (xi === i ? { ...x, condition: e.target.value } : x)))} />
                             </label>
                             <div className="md:col-span-2 flex justify-end">
@@ -1505,11 +1505,11 @@ export function AgreementBoard() {
                     <FileText className="w-4 h-4 cd-text-primary" /> 계약기간 · 용역범위
                   </h3>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">계약기간 문구</span>
+                    <span className="cd-label-text">계약기간 문구</span>
                     <input className="cd-input text-sm" value={periodText} onChange={(e) => setPeriodText(e.target.value)} />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[11px] cd-text-faint">용역범위(업무범위) — 갑지·「업무범위」 조문에 삽입됩니다</span>
+                    <span><span className="cd-label-text">용역범위(업무범위)</span><span className="cd-hint ml-1.5">갑지·「업무범위」 조문에 삽입됩니다</span></span>
                     <textarea className="cd-input text-[13px] min-h-[110px]" value={scopeText} placeholder={"예: 회로정면(S/E) 1기 등 인허가 대상설비 List 시설이 반영된 통합환경관리계획서 작성 및 통합환경 변경허가 취득"} onChange={(e) => setScopeText(e.target.value)} />
                   </label>
                 </div>
@@ -1628,7 +1628,7 @@ export function AgreementBoard() {
                 <>
                 {presets.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-[11px] cd-text-faint mr-0.5">불러오기</span>
+                    <span className="mr-0.5 cd-label-text">불러오기</span>
                     {presets.map((p) => (
                       <span key={p.presetId} className="cd-action inline-flex items-center rounded-full border cd-border-c overflow-hidden">
                         <button type="button" className="text-[11px] px-2 py-0.5 hover:cd-tint-primary" onClick={() => applyPreset(p)} title="이 결재선 불러오기">{p.name}</button>

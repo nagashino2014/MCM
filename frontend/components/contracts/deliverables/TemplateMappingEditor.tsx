@@ -439,7 +439,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                         </button>
                       </div>
                       <div className="flex items-center gap-2 text-[12px] cd-text-faint">
-                        <span className="shrink-0">문단 구간</span>
+                        <span className="shrink-0 cd-label-text">문단 구간</span>
                         <input
                           className="cd-input text-[12px]"
                           style={{ width: "4.5rem" }}
@@ -461,7 +461,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
                             updateDoc(d.docType, { paraTo: e.target.value === "" ? undefined : Number(e.target.value) })
                           }
                         />
-                        <span className="shrink-0">(끝 미포함 · 서식을 골라 뽑을 때 씀)</span>
+                        <span className="shrink-0 cd-hint">(끝 미포함 · 서식을 골라 뽑을 때 씀)</span>
                       </div>
                     </div>
 
@@ -566,7 +566,7 @@ export function TemplateMappingEditor({ templateId, name, kind, onClose }: Props
               })}
 
               <div className="pt-1">
-                <label className="text-[12px] cd-text-faint">메모(확인이 필요한 점)</label>
+                <label><span className="cd-label-text">메모</span><span className="cd-hint ml-1.5">(확인이 필요한 점)</span></label>
                 <textarea
                   className="cd-input text-[12px] mt-1"
                   rows={2}

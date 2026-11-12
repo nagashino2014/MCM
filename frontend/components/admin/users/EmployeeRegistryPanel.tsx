@@ -709,7 +709,7 @@ function EmployeePhotoField({ employeeId }: { employeeId?: string }) {
           <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => inputRef.current?.click()} disabled={uploading}>
             {uploading ? "업로드 중…" : "사진 업로드"}
           </button>
-          <p className="cd-text-faint text-[11px] mt-1">그룹웨어 메신저·영업 담당자 표시에 사용됩니다.</p>
+          <p className="cd-hint mt-1">그룹웨어 메신저·영업 담당자 표시에 사용됩니다.</p>
         </div>
       </div>
     </Field>

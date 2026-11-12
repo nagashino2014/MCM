@@ -305,7 +305,7 @@ export default function LaborContractBoard() {
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="text-xs cd-text-faint">
-                  {label}
+                  <span className="cd-label-text">{label}</span>
                   <input
                     className="cd-input text-sm w-full mt-0.5"
                     value={draft[key] ?? ""}
@@ -315,7 +315,7 @@ export default function LaborContractBoard() {
                 </label>
               ))}
               <label className="text-xs cd-text-faint">
-                월 임금 구성(JSON)
+                <span className="cd-label-text">월 임금 구성(JSON)</span>
                 <textarea
                   className="cd-input text-xs w-full mt-0.5 font-mono"
                   rows={4}
@@ -325,7 +325,7 @@ export default function LaborContractBoard() {
                 />
               </label>
               <label className="text-xs cd-text-faint">
-                태그
+                <span className="cd-label-text">태그</span>
                 <select
                   className="cd-select text-sm w-full mt-0.5"
                   value={draft.tag ?? "일반"}

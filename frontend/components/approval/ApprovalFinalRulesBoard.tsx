@@ -115,7 +115,7 @@ export function ApprovalFinalRulesBoard() {
           </CdSelect>
         </div>
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-[12px] font-semibold cd-text mb-1">전결할 수 있는 사람</legend>
+          <legend className="mb-1 cd-label-text">전결할 수 있는 사람</legend>
           <label className="flex items-center gap-2 text-[13px] cd-text">
             <input type="radio" name="final-target" checked={target === "user"} onChange={() => setTarget("user")} />
             지정 인원

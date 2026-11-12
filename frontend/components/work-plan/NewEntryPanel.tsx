@@ -59,7 +59,7 @@ export default function NewEntryPanel({
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-1 pb-1">
         {tab === "service" ? (
           <>
-            <p className="text-[11px] font-semibold cd-text-faint px-1 mb-2">용역 선택 (내 수행 용역)</p>
+            <p className="px-1 mb-2 cd-label-text">용역 선택 (내 수행 용역)</p>
             {groups.length === 0 ? (
               <div className="p-8 text-center text-xs cd-text-faint">
                 수행 중인 용역이 없습니다.<br />(로그인 계정이 직원과 연결돼 있어야 표시됩니다.)
@@ -104,7 +104,7 @@ export default function NewEntryPanel({
           </>
         ) : (
           <>
-            <p className="text-[11px] font-semibold cd-text-faint px-1 mb-2">업무분류 / 표준공정 선택</p>
+            <p className="px-1 mb-2 cd-label-text">업무분류 / 표준공정 선택</p>
             <div className="grid grid-cols-3 gap-2.5">
               {categories.map((c) => {
                 const active = c.categoryId === selectedCategoryId;

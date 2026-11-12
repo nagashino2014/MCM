@@ -97,21 +97,21 @@ export function CatalogRenderPanel({
       </div>
       <div className="flex items-end gap-3 flex-wrap">
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          판
+          <span className="cd-label-text">판</span>
           <select className="cd-select" style={{ width: "auto" }} value={edition} onChange={(e) => setEdition(e.target.value as EditionKind)} disabled={busy}>
             <option value="print">{EDITION_LABEL.print}</option>
             <option value="draft">{EDITION_LABEL.draft}</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          범위
+          <span className="cd-label-text">범위</span>
           <select className="cd-select" style={{ width: "auto" }} value={scope} onChange={(e) => setScope(e.target.value as ScopeMode)} disabled={busy}>
             <option value="full">{SCOPE_LABEL.full}</option>
             <option value="summary">{SCOPE_LABEL.summary}(부록 제외)</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          이름 표기
+          <span className="cd-label-text">이름 표기</span>
           <select className="cd-select" style={{ width: "auto" }} value={naming} onChange={(e) => setNaming(e.target.value as NamingMode)} disabled={busy}>
             <option value="masked">{NAMING_LABEL.masked}</option>
             <option value="real">{NAMING_LABEL.real}</option>

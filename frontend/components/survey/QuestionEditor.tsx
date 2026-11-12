@@ -150,7 +150,7 @@ export function QuestionEditor({ question, index, total, readOnly, onChange, onR
                   />
                   {question.qtype === "multi" && (
                     <label className="inline-flex items-center gap-2 text-sm cd-text-muted">
-                      최대 선택
+                      <span className="cd-label-text">최대 선택</span>
                       <input
                         type="number"
                         min={0}
@@ -161,7 +161,7 @@ export function QuestionEditor({ question, index, total, readOnly, onChange, onR
                           onChange({ config: { ...question.config, maxSelect: Number(e.target.value) || undefined } })
                         }
                       />
-                      <span className="cd-text-faint text-xs">0 = 제한 없음</span>
+                      <span className="cd-hint">0 = 제한 없음</span>
                     </label>
                   )}
                 </div>

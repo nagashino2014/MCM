@@ -370,7 +370,9 @@ export function BoardAutomationModal({ board, onClose }: { board: TodoBoard; onC
             </div>
             {draft.actionKind === "notify" && (
               <label>
-                <span className="cd-label">메시지 — {"{title} {status} {assignee} {board}"} 치환</span>
+                <span className="cd-label">
+                  메시지<span className="cd-hint ml-1.5">{"{title} {status} {assignee} {board}"} 치환</span>
+                </span>
                 <input className="cd-input" value={draft.message} onChange={(e) => set({ message: e.target.value })} maxLength={300} />
               </label>
             )}

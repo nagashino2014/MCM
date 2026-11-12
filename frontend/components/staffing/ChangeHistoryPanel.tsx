@@ -111,7 +111,7 @@ export default function ChangeHistoryPanel({ contractId }: { contractId: string 
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex items-center gap-2 text-xs cd-text-faint">발효일 <AutoDateInput className="cd-input text-sm flex-1" value={effectiveOn} onChange={setEffectiveOn} /></label>
+            <label className="flex items-center gap-2 text-xs cd-text-faint"><span className="cd-label-text">발효일</span> <AutoDateInput className="cd-input text-sm flex-1" value={effectiveOn} onChange={setEffectiveOn} /></label>
             {changeKind !== "leave" && (
               <select className="cd-select text-sm" value={roleAfter} onChange={(e) => setRoleAfter(e.target.value)}>
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{changeKind === "role_change" ? `변경 후: ${r}` : r}</option>)}

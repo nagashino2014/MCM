@@ -33,6 +33,12 @@
 
 **프로필 아이콘 후속 지시(2026-11-06 사용자 요청):** 사람을 나타내는 프로필 아이콘(직원 사진·이니셜·기본 실루엣, 그룹 대화방 아이콘 포함)은 원이 아니라 **모서리가 많이 둥근 사각형**이다. 반경은 한 변의 35%로, 웹은 `--cd-radius-avatar`(`frontend/components/cdash/cdash.css`)를 `rounded-[var(--cd-radius-avatar,35%)]`로, 앱은 `avatarRadius(px)`(`apps/mobile/src/components/ui/Avatar.tsx`)로 쓴다. 공용 컴포넌트(`CdAvatar`·`EmployeeAvatar`, 앱 `Avatar`·`MiniAvatar`)를 쓰고, 직접 그릴 때도 같은 값을 쓴다. 사람 이름 칩(pill)·상태 점·결재 승인 도장·종류 아이콘 원은 대상이 아니다.
 
+**항목 레이블·보조 텍스트 후속 지시(2026-11-12 사용자 요청):** 입력란·선택 상자·날짜·라디오/체크박스 묶음·첨부·본문 편집기의 이름표(항목 레이블)는 설명문과 한눈에 구별돼야 한다. 레이블은 **13px · 600 · `--cd-text`(본문색)**, 레이블에 딸린 보조 텍스트(설명·힌트·예시)는 **12px · 400 · `--cd-muted`** 다. 값은 `frontend/components/cdash/cdash.css`의 `--cd-label-size/-weight/-color`, `--cd-hint-size/-color` 한 곳에 두고 페이지 CSS에서 재정의하지 않는다.
+- 클래스: `.cd-label`(블록·아래 여백 포함, `CdInput`·`CdSelect`·`CdTextarea`·`CdDateInput`의 `label`), `.cd-label-text`(기존 배치를 그대로 둔 채 글자만 규격 — 직접 만든 레이블), `.cd-hint`(입력란에 딸린 설명, `CdField`의 `hint`). `text-xs cd-text-muted`·`text-[11px] cd-text-faint`로 레이블을 새로 만들지 않는다.
+- 입력을 품은 `<label>`은 클래스를 그대로 두고 레이블 글자만 `<span className="cd-label-text">`로 감싼다(감싸는 label에 굵기를 주면 Tailwind preflight 상속으로 입력값까지 굵어진다).
+- 레이블과 설명을 한 문자열로 붙이지 않는다. ‘수신처 — 업체/기관명 표기…’는 레이블 ‘수신처’ + 같은 줄의 `.cd-hint` 설명으로 나눈다. 단위 꼬리 ‘(원)’·‘(%)’·‘(선택)’은 레이블에 둘 수 있다.
+- 대상이 아닌 것: 표 머리·탭·버튼·배지/칩, 체크박스·라디오 하나의 옵션 문구(‘인감 날인’), 카드·섹션 제목, 목록 메타, 읽기 전용 상세의 키:값 표시(값이 주인공), 오류·성공 문구. 모바일 앱(`apps/mobile`)은 별도 기준을 따른다.
+
 글꼴은 **Pretendard Variable** 하나다(2026-10-27 KESI Precision 디자인 시스템 결정 — 종전 "폰트 다운로드 없음" 방침을 대체). `frontend/public/fonts/PretendardVariable.woff2`(v1.3.9, SIL OFL 1.1)를 `font-display: swap`으로 싣고, 스택은 `"Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif`. Inter·Noto Sans KR은 스택에서 뺀다. 주 버튼은 블루→바이올렛 그라데이션 대신 `--cd-primary-fill`(깊은 남색) + `--cd-primary-fill-edge` 1px 테두리다. 세부 규칙(닫힌 글자 스케일·굵기 600 상한·반경 10px/pill — 10-28 개정)과 모듈별 정리 순서는 [design-system-cleanup-2026-10-27.md](design-system-cleanup-2026-10-27.md).
 
 ## 2. 메뉴

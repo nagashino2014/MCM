@@ -191,7 +191,7 @@ export default function PaymentRequestModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-4 text-sm">
           {/* 계약 선택 */}
           <div className="relative">
-            <span className="text-[11px] cd-text-faint font-semibold">계약</span>
+            <span className="cd-label-text">계약</span>
             {contract ? (
               <div className="flex items-center gap-2 mt-1 rounded-lg border cd-border-c px-3 py-2">
                 <span className="cd-text font-medium truncate flex-1">{contract.title}</span>
@@ -244,8 +244,9 @@ export default function PaymentRequestModal({
           {contract && (
             <>
               <div className="grid gap-1">
-                <span className="text-[11px] cd-text-faint font-semibold">
-                  청구 단계 — 복수 선택 시 한 장으로 합산 청구되고 단계별 금액이 표에 표기됩니다
+                <span>
+                  <span className="cd-label-text">청구 단계</span>
+                  <span className="ml-1.5 cd-hint">복수 선택 시 한 장으로 합산 청구되고 단계별 금액이 표에 표기됩니다</span>
                 </span>
                 <div className="rounded-lg border cd-border-c max-h-44 overflow-y-auto">
                   {milestones.length === 0 && (
@@ -277,7 +278,7 @@ export default function PaymentRequestModal({
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1">
-                  <span className="text-[11px] cd-text-faint font-semibold">VAT 표기</span>
+                  <span className="cd-label-text">VAT 표기</span>
                   <select className="cd-select" value={vatNote} onChange={(e) => setVatNote(e.target.value)}>
                     <option value="VAT 별도">VAT 별도 (금액에 가산)</option>
                     <option value={SUPPLY_ONLY_VAT_NOTE}>VAT 별도 (금액에 미포함)</option>
@@ -285,7 +286,7 @@ export default function PaymentRequestModal({
                   </select>
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[11px] cd-text-faint font-semibold">법인통장 사본(별첨 병합)</span>
+                  <span className="cd-label-text">법인통장 사본(별첨 병합)</span>
                   <select className="cd-select" value={bankKey} onChange={(e) => setBankKey(e.target.value)}>
                     <option value="">통장 사본 선택 안 함</option>
                     {BANK_ACCOUNT_OPTIONS.map((b) => (
@@ -294,12 +295,12 @@ export default function PaymentRequestModal({
                   </select>
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[11px] cd-text-faint font-semibold">별첨 문구</span>
+                  <span className="cd-label-text">별첨 문구</span>
                   <input className="cd-input" value={attachNote} onChange={(e) => setAttachNote(e.target.value)} />
                 </label>
                 {/* 작성일 직접 지정(2026-09-11) — 발주처가 특정 일자를 요구하는 사례 */}
                 <label className="grid gap-1">
-                  <span className="text-[11px] cd-text-faint font-semibold">작성일</span>
+                  <span className="cd-label-text">작성일</span>
                   <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(오늘)" hint="비우면 생성 당일 날짜가 들어갑니다" />
                 </label>
               </div>

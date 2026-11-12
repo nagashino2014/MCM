@@ -491,7 +491,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
       {/* 필터 바 1행: 용역 선택 + 연도 선택 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="mr-1 cd-label-text">
             용역 선택
           </span>
           <button
@@ -520,7 +520,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+          <span className="cd-label-text">
             기준 연도
           </span>
           <select
@@ -541,7 +541,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
 
       {/* 필터 바 2행: 용역 세분류 (통합환경허가 선택 시에만 활성화) */}
       <div className="flex items-center gap-1.5 flex-wrap -mt-1.5">
-        <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
+        <span className="mr-1 cd-label-text">
           용역 세분류
         </span>
         {INTEGRATED_SUBTYPES.map((sub) => (
@@ -558,7 +558,7 @@ export function CompletionsSection({ theme }: { theme: CdTheme }) {
           </button>
         ))}
         {!subtypeEnabled && (
-          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+          <span className="cd-hint">
             — 통합환경허가 선택 시 활성화
           </span>
         )}

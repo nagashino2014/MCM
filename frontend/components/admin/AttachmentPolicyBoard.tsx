@@ -267,7 +267,7 @@ function GlobalTab({
             <input className="cd-input text-sm" style={{ width: 200, paddingLeft: 28 }} placeholder="확장자·설명 검색" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <span className="mx-1 h-5 border-l cd-border-c" />
-          <span className="text-xs cd-text-faint">확장자 추가</span>
+          <span className="cd-label-text">확장자 추가</span>
           <input className="cd-input text-sm" style={{ width: 90 }} placeholder="예: xyz" value={draft.ext} onChange={(e) => setDraft({ ...draft, ext: e.target.value })} />
           <input className="cd-input text-sm" style={{ width: 180 }} placeholder="설명" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
           <select className="cd-select text-sm" style={{ width: 100 }} value={draft.risk} onChange={(e) => setDraft({ ...draft, risk: e.target.value as "high" | "medium" })} aria-label="추가 위험도">
@@ -558,7 +558,7 @@ function UsersTab({
                 {multi && <span className="text-xs cd-text-faint">체크한 인원 전체에 같은 설정이 적용됩니다.</span>}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs cd-text-faint">모드</span>
+                <span className="cd-label-text">모드</span>
                 <CdHelp topic="admin.attach-user-mode" />
                 {(Object.keys(MODE_LABEL) as Mode[]).map((m) => {
                   const on = !multi && (checked.size ? users.find((u) => u.userId === [...checked][0]) : focus)?.mode === m;
@@ -578,7 +578,7 @@ function UsersTab({
                   );
                 })}
               </div>
-              {!multi && <p className="text-[11px] cd-text-faint">{MODE_HINT[(checked.size ? users.find((u) => u.userId === [...checked][0]) : focus)?.mode ?? "default"]}</p>}
+              {!multi && <p className="cd-hint">{MODE_HINT[(checked.size ? users.find((u) => u.userId === [...checked][0]) : focus)?.mode ?? "default"]}</p>}
               <div className="flex items-center gap-2 flex-wrap">
                 <select className="cd-select text-sm" style={{ width: 160 }} value={extCategory} onChange={(e) => setExtCategory(e.target.value)} aria-label="확장자 분류">
                   <option value="">모든 분류</option>

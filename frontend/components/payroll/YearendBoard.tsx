@@ -388,7 +388,7 @@ export default function YearendBoard() {
                         <div className="grid gap-x-4 gap-y-1.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
                           {INPUT_FIELDS.map((f) => (
                             <label key={f.key} className="flex items-center gap-2 text-xs">
-                              <span className="cd-text-muted flex-1 truncate" title={f.hint ?? f.label}>{f.label}</span>
+                              <span className="flex-1 truncate cd-label-text" title={f.hint ?? f.label}>{f.label}</span>
                               <input
                                 className="cd-input text-right"
                                 style={{ width: COUNT_KEYS.has(f.key) ? 56 : 110 }}
@@ -403,8 +403,8 @@ export default function YearendBoard() {
                         </div>
                         {Number(draft.otherIncomeDeduction ?? 0) > 0 && (
                           <fieldset disabled={busy || r.status === "confirmed"} className="border cd-border-c rounded p-3 mb-3 text-xs">
-                            <legend>기타 소득공제 근거</legend>
-                            <label className="block mb-2">공제 종류
+                            <legend className="cd-label-text">기타 소득공제 근거</legend>
+                            <label className="block mb-2"><span className="cd-label-text">공제 종류</span>
                               <select aria-label="기타 소득공제 종류" className="cd-select ml-2" value={otherIncomeType} onChange={(e) => setOtherIncomeType(e.target.value)}>
                                 <option value="">종류를 선택하세요</option>
                                 <option value="independent">표준세액공제와 병용 가능(그 밖의 소득공제)</option>
@@ -413,13 +413,13 @@ export default function YearendBoard() {
                             </label>
                             <textarea aria-label="기타 소득공제 근거" className="cd-input w-full" value={otherIncomeReason} maxLength={2000}
                               onChange={(e) => setOtherIncomeReason(e.target.value)} placeholder="법정 공제 항목·적격 요건·금액 근거를 5자 이상 입력하세요." />
-                            <p className="cd-text-muted mt-1">주택자금 대출 공제는 특별소득공제입니다. 주택마련저축 등 다른 항목과 구분하고 이미 입력한 공제를 중복 포함하지 마세요.</p>
+                            <p className="cd-hint mt-1">주택자금 대출 공제는 특별소득공제입니다. 주택마련저축 등 다른 항목과 구분하고 이미 입력한 공제를 중복 포함하지 마세요.</p>
                           </fieldset>
                         )}
                         {Number(draft.otherTaxCredit ?? 0) > 0 && (
                           <fieldset disabled={busy || r.status === "confirmed"} className="border cd-border-c rounded p-3 mb-3 text-xs">
-                            <legend>기타 공제세액 근거</legend>
-                            <label className="block mb-2">공제 종류
+                            <legend className="cd-label-text">기타 공제세액 근거</legend>
+                            <label className="block mb-2"><span className="cd-label-text">공제 종류</span>
                               <select aria-label="기타 세액공제 종류" className="cd-select ml-2" value={otherTaxType} onChange={(e) => setOtherTaxType(e.target.value)}>
                                 <option value="">종류를 선택하세요</option>
                                 <option value="politicalDonation">정치자금 기부금 공제세액</option>
@@ -431,7 +431,7 @@ export default function YearendBoard() {
                             </label>
                             <textarea aria-label="기타 세액공제 근거" className="cd-input w-full" value={otherTaxReason} maxLength={2000}
                               onChange={(e) => setOtherTaxReason(e.target.value)} placeholder="적용 연도·법정 항목·계산식·한도 확인 근거를 5자 이상 입력하세요." />
-                            <p className="cd-text-muted mt-1">지출액이 아닌 계산된 공제세액입니다. 정치자금·고향사랑·우리사주조합 기부금을 일반 기부금에도 중복 입력하지 마세요. 종류별 자격·한도 계산은 별도 확인이 필요합니다.</p>
+                            <p className="cd-hint mt-1">지출액이 아닌 계산된 공제세액입니다. 정치자금·고향사랑·우리사주조합 기부금을 일반 기부금에도 중복 입력하지 마세요. 종류별 자격·한도 계산은 별도 확인이 필요합니다.</p>
                           </fieldset>
                         )}
                         {r.result?.choice && (

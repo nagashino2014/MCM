@@ -245,7 +245,7 @@ export function QuickContactModal({
                 <>
                   {suggestions.length > 0 && (
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-xs cd-text-faint">메일 도메인으로 찾은 업체</span>
+                      <span className="cd-label-text">메일 도메인으로 찾은 업체</span>
                       <div className="flex flex-wrap gap-1.5">
                         {suggestions.map((s) => (
                           <button
@@ -314,7 +314,7 @@ export function QuickContactModal({
                     <CdInput label="주소" value={newCo.address} onChange={(e) => setNewCo({ ...newCo, address: e.target.value })} />
                     <CdInput label="홈페이지" value={newCo.homepage} onChange={(e) => setNewCo({ ...newCo, homepage: e.target.value })} />
                   </div>
-                  <p className="text-xs cd-text-faint">업체명만 있어도 됩니다. 사업자번호 등 상세 정보는 관리자가 확정할 때 넣습니다.</p>
+                  <p className="cd-hint">업체명만 있어도 됩니다. 사업자번호 등 상세 정보는 관리자가 확정할 때 넣습니다.</p>
                   <button type="button" className="cd-action self-start text-[12px] cd-text-primary" onClick={() => setMode("pick")}>
                     기존 업체에서 고르기
                   </button>

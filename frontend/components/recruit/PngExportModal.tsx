@@ -49,14 +49,14 @@ export function PngExportModal({
     >
       <div className="flex flex-col gap-3">
         <div>
-          <label className="block text-xs font-bold mb-1 cd-text-muted">가로 픽셀</label>
+          <label className="block mb-1 cd-label-text">가로 픽셀</label>
           <input
             className="cd-input w-full"
             inputMode="numeric"
             value={pngWidth}
             onChange={(e) => setPngWidth(e.target.value.replace(/[^0-9]/g, ""))}
           />
-          <p className="text-[11px] mt-1 cd-text-faint">
+          <p className="cd-hint mt-1">
             세로는 비율에 맞춰 자동:{" "}
             <b className="cd-text">{pngWidthNum >= 100 && pngHeightNum > 0 ? `${pngWidthNum} × ${pngHeightNum}px` : "-"}</b>
             {pngHeightNum > 9000 && (
@@ -84,7 +84,7 @@ export function PngExportModal({
           ))}
         </div>
         <div>
-          <label className="block text-xs font-bold mb-1 cd-text-muted">파일 형식</label>
+          <label className="block mb-1 cd-label-text">파일 형식</label>
           <div className="flex gap-2">
             {(
               [

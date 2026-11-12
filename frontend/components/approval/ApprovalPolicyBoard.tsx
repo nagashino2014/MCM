@@ -125,7 +125,7 @@ export function ApprovalPolicyBoard() {
       <div className="cd-card rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-[11px] cd-text-faint flex items-center gap-1.5 whitespace-nowrap">
-            양식
+            <span className="cd-label-text">양식</span>
             <select className="cd-select" value={formId} onChange={(e) => setFormId(e.target.value)} style={{ minWidth: 200 }}>
               {forms.map((f) => (
                 <option key={f.formId} value={f.formId}>
@@ -166,7 +166,7 @@ export function ApprovalPolicyBoard() {
 
                 {p.kind === "amount_limit" && (
                   <label className="text-[11px] cd-text-faint flex items-center gap-1">
-                    상한
+                    <span className="cd-label-text">상한</span>
                     <input
                       type="number"
                       className="cd-input"
@@ -187,7 +187,7 @@ export function ApprovalPolicyBoard() {
                 )}
 
                 <label className="text-[11px] cd-text-faint flex items-center gap-1 ml-auto">
-                  수준
+                  <span className="cd-label-text">수준</span>
                   <select className="cd-select" style={{ width: 90 }} value={p.severity} onChange={(e) => update(i, { severity: e.target.value })}>
                     <option value="warn">경고</option>
                     <option value="block">차단</option>

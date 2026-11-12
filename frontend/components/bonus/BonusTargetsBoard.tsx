@@ -187,7 +187,7 @@ export default function BonusTargetsBoard() {
         helpTopic="bonus.targets"
         actions={
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>
+            <span className="whitespace-nowrap cd-label-text">대상 :</span>
             <select className="cd-select text-sm" style={{ minWidth: 100 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}년</option>
@@ -227,7 +227,7 @@ export default function BonusTargetsBoard() {
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-2 flex flex-col gap-2.5">
             <h3 className="text-xs font-bold cd-text-faint">연관부서/인원 기여도</h3>
             <label className="flex items-center justify-between gap-2 text-sm cd-text">
-              <span>지원/영업</span>
+              <span className="cd-label-text">지원/영업</span>
               <span className="flex items-center gap-1">
                 <input
                   type="number" min={0} max={100} step={0.5}
@@ -240,7 +240,7 @@ export default function BonusTargetsBoard() {
               </span>
             </label>
             <label className="flex items-center justify-between gap-2 text-sm cd-text">
-              <span>임원</span>
+              <span className="cd-label-text">임원</span>
               <span className="flex items-center gap-1">
                 <input
                   type="number" min={0} max={100} step={0.5}
@@ -296,7 +296,7 @@ export default function BonusTargetsBoard() {
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-3 flex flex-col gap-2">
             <h3 className="text-xs font-bold cd-text-faint">매출액 중 적용 비율</h3>
             <label className="flex items-center justify-between gap-2 text-sm cd-text">
-              <span>적용 비율</span>
+              <span className="cd-label-text">적용 비율</span>
               <span className="flex items-center gap-1">
                 <input
                   type="number" min={0} max={100} step={0.1}

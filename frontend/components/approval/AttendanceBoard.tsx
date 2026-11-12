@@ -199,7 +199,7 @@ function WeeklyPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[12px] cd-text-faint">주 선택</span>
+        <span className="cd-label-text">주 선택</span>
         <select className="cd-select" style={{ width: 104 }} value={selYear ?? ""} onChange={(e) => jump(Number(e.target.value), selMonth)}>
           {years.map((y) => <option key={y} value={y}>{y}년</option>)}
         </select>
@@ -408,7 +408,7 @@ function MatchPanel() {
       </p>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[12px] cd-text-faint">귀속 월</span>
+        <span className="cd-label-text">귀속 월</span>
         <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
           {years.map((y) => <option key={y} value={y}>{y}년</option>)}
         </select>
@@ -613,7 +613,7 @@ function MealPanel() {
       </p>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[12px] cd-text-faint">귀속 월</span>
+        <span className="cd-label-text">귀속 월</span>
         <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
           {years.map((y) => <option key={y} value={y}>{y}년</option>)}
         </select>
@@ -905,9 +905,9 @@ function SettingsPanel() {
   const set = <K extends keyof AttendanceSettings>(k: K, v: AttendanceSettings[K]) => { setS({ ...s, [k]: v }); setSaved(false); };
   const numField = (k: keyof AttendanceSettings, label: string, hint?: string) => (
     <label className="flex flex-col gap-1">
-      <span className="text-[12px] font-semibold cd-text">{label}</span>
+      <span className="cd-label-text">{label}</span>
       <input className="cd-input" inputMode="numeric" value={String(s[k] as number)} onChange={(e) => set(k, Number(e.target.value.replace(/[^\d.]/g, "")) as never)} />
-      {hint && <span className="text-[11px] cd-text-faint">{hint}</span>}
+      {hint && <span className="cd-hint">{hint}</span>}
     </label>
   );
 
@@ -948,14 +948,14 @@ function SettingsPanel() {
         {numField("dailyStandardMinutes", "1일 소정(분)", "참고, 8h = 480")}
         {numField("breakMinutes", "휴게 공제(분)", "재실에서 차감")}
         <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-semibold cd-text">야간 시작 (HHMM)</span>
+          <span className="cd-label-text">야간 시작 (HHMM)</span>
           <input className="cd-input" value={s.nightStartHhmm} onChange={(e) => set("nightStartHhmm", e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <span className="text-[11px] cd-text-faint">2.0배 구간 시작</span>
+          <span className="cd-hint">2.0배 구간 시작</span>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[12px] font-semibold cd-text">야간 종료 (HHMM)</span>
+          <span className="cd-label-text">야간 종료 (HHMM)</span>
           <input className="cd-input" value={s.nightEndHhmm} onChange={(e) => set("nightEndHhmm", e.target.value.replace(/\D/g, "").slice(0, 4))} />
-          <span className="text-[11px] cd-text-faint">익일, 기본 0600</span>
+          <span className="cd-hint">익일, 기본 0600</span>
         </label>
         {numField("overtimeRateDay", "연장 배수(주간)", "기본 1.5")}
         {numField("overtimeRateNight", "연장 배수(야간)", "기본 2.0")}
@@ -963,7 +963,7 @@ function SettingsPanel() {
         {numField("roundUnitMinutes", "라운딩 단위(분)", "내림, 0=미적용")}
         {numField("minOvertimeMinutes", "연장 인정 최소(분)", "주 단위")}
         <label className="flex flex-col gap-1 justify-end">
-          <span className="text-[12px] font-semibold cd-text">휴가일 제외</span>
+          <span className="cd-label-text">휴가일 제외</span>
           <label className="inline-flex items-center gap-2 cd-text text-[13px] mt-1">
             <input type="checkbox" checked={s.excludeLeaveDays} onChange={(e) => set("excludeLeaveDays", e.target.checked)} />
             연장 산정에서 제외

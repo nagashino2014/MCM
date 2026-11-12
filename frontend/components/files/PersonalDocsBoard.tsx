@@ -539,7 +539,7 @@ function SendModal({ open, onClose, docs }: { open: boolean; onClose: () => void
                 메신저 (대화방으로 발송)
               </button>
             </div>
-            {targetKind === "contact" && <p className="text-[10.5px] cd-text-faint">거래처 담당자는 메일로만 전송할 수 있습니다.</p>}
+            {targetKind === "contact" && <p className="cd-hint">거래처 담당자는 메일로만 전송할 수 있습니다.</p>}
             {mailOverLimit && (
               <p className="text-[10.5px] text-[color:var(--cd-error)]">
                 메일 첨부 총량(25MB)을 초과합니다 — 메일 작성창에서 일부 파일이 제외될 수 있습니다.

@@ -798,7 +798,7 @@ function FacilityHistoryModal({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2 flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">
+                <span className="cd-label-text">
                   이력 유형 (복수 선택)
                 </span>
                 <div className="flex flex-wrap gap-2 rounded-lg border cd-border-c cd-surface-bg p-2">
@@ -829,7 +829,7 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 상호" value={previousCompanyName} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">변경 상호</span>
+                <span className="cd-label-text">변경 상호</span>
                 <input
                   className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newCompanyName}
@@ -841,7 +841,7 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 사업자번호" value={previousBusinessRegistrationNo} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">변경 사업자번호</span>
+                <span className="cd-label-text">변경 사업자번호</span>
                 <input
                   className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newBusinessRegistrationNo}
@@ -855,7 +855,7 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 계열/그룹" value={previousGroupName} emptyText="연결된 계열/그룹 없음" />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">변경 계열/그룹</span>
+                <span className="cd-label-text">변경 계열/그룹</span>
                 <button
                   type="button"
                   disabled={!hasType("group_change")}
@@ -874,7 +874,7 @@ function FacilityHistoryModal({
 
               <ReadonlyField label="이전 소재지" value={previousSiteAddress} />
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">변경 소재지</span>
+                <span className="cd-label-text">변경 소재지</span>
                 <input
                   className="cd-input disabled:bg-[color:var(--cd-surface)] disabled:text-[color:var(--cd-faint)]"
                   value={newSiteAddress}
@@ -885,7 +885,7 @@ function FacilityHistoryModal({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">인수 / 합병</span>
+                <span className="cd-label-text">인수 / 합병</span>
                 <div className="flex flex-col gap-2 rounded-lg border cd-border-c cd-surface-bg p-2.5">
                   <label className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted cursor-pointer select-none">
                     <input
@@ -910,7 +910,7 @@ function FacilityHistoryModal({
               <div className="flex flex-col gap-3">
                 {!hasType("acquisition") && !hasType("merger") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-medium cd-text-faint">
+                    <span className="cd-label-text">
                       인수 주체 / 합병 대상
                     </span>
                     <div className="cd-input cd-surface-bg cd-text-faint">인수 또는 합병 체크 시 입력</div>
@@ -918,7 +918,7 @@ function FacilityHistoryModal({
                 )}
                 {hasType("acquisition") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-medium cd-text-faint">인수 주체</span>
+                    <span className="cd-label-text">인수 주체</span>
                     <CompanyKeywordInput
                       value={acquirerCompanyName}
                       onChange={setAcquirerCompanyName}
@@ -928,7 +928,7 @@ function FacilityHistoryModal({
                 )}
                 {hasType("merger") && (
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-medium cd-text-faint">합병 대상</span>
+                    <span className="cd-label-text">합병 대상</span>
                     {mergerTargets.map((target, idx) => (
                       <div key={idx} className="grid grid-cols-[1fr_auto] gap-1.5 items-start">
                         <CompanyKeywordInput
@@ -967,7 +967,7 @@ function FacilityHistoryModal({
               </div>
 
               <div className="sm:col-span-2 flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium cd-text-faint">
+                <span className="cd-label-text">
                   메모
                 </span>
                 <textarea className="cd-textarea" value={memo} onChange={(e) => setMemo(e.target.value)} />
@@ -1126,7 +1126,7 @@ function ReadonlyField({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium cd-text-faint">{label}</span>
+      <span className="cd-label-text">{label}</span>
       <div className="cd-input cd-surface-bg/70 cd-text-muted truncate" title={value || emptyText}>
         {value || emptyText}
       </div>
@@ -1615,7 +1615,7 @@ function FacilityContactsModal({
             </p>
             {/* 연락처 구분 — 사업장 속성(주소록 분류). 담당자별로 따로 지정하지 않는다. */}
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs font-semibold cd-text-muted">연락처 구분</span>
+              <span className="cd-label-text">연락처 구분</span>
               <select
                 className="cd-select"
                 style={{ width: 150 }}
@@ -2006,7 +2006,7 @@ function PersonContactPane({
           <ContactInput label="담당자 성명" value={form.personName} onChange={(v) => onFormChange({ ...form, personName: v })} />
           <ContactInput label="직함" value={form.title} onChange={(v) => onFormChange({ ...form, title: v })} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium cd-text-faint">소속 부서</span>
+            <span className="cd-label-text">소속 부서</span>
             <select className="cd-select" value={form.departmentId} onChange={(e) => onFormChange({ ...form, departmentId: e.target.value })}>
               <option value="">미지정</option>
               {departments.map((department) => (
@@ -2021,7 +2021,7 @@ function PersonContactPane({
           <ContactInput label="부서 변경일" value={form.transferredAt} onChange={(v) => onFormChange({ ...form, transferredAt: v })} />
           <ContactInput label="퇴사일" value={form.resignedAt} onChange={(v) => onFormChange({ ...form, resignedAt: v })} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium cd-text-faint">상태</span>
+            <span className="cd-label-text">상태</span>
             <select className="cd-select" value={form.status} onChange={(e) => onFormChange({ ...form, status: e.target.value })}>
               <option value="active">재직</option>
               <option value="transferred">부서 변경</option>
@@ -2169,7 +2169,7 @@ function ContactEditActions({
 function ContactInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium cd-text-faint">{label}</span>
+      <span className="cd-label-text">{label}</span>
       <input className="cd-input" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
@@ -2178,7 +2178,7 @@ function ContactInput({ label, value, onChange }: { label: string; value: string
 function ContactTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium cd-text-faint">{label}</span>
+      <span className="cd-label-text">{label}</span>
       <textarea className="cd-textarea" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
@@ -2767,7 +2767,7 @@ function EditView({
         </label>
         {hasMultipleSites && (
           <div className="flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-lg p-3">
-            <div className="text-[11px] font-semibold cd-text-faint">
+            <div className="cd-hint">
               대표 소재지 외 추가 운영 소재지를 입력합니다. (지역·중복 검증·계약 매칭은 대표 소재지 기준)
             </div>
             {additionalSiteAddresses.map((addr, idx) => (
@@ -2812,7 +2812,7 @@ function EditView({
       <FieldInput label="전화번호" value={phoneNumber} onChange={setPhoneNumber} />
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium cd-text-faint">
+          <span className="cd-label-text">
             업종
           </span>
           <div className="flex items-center gap-1.5">
@@ -2903,7 +2903,7 @@ function EditView({
       </div>
       <div className="sm:col-span-2 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium cd-text-faint">
+          <span className="cd-label-text">
             사업자등록증 기반 업종
           </span>
           <button
@@ -3008,7 +3008,7 @@ function EditView({
 
       <div className="sm:col-span-2 flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-lg p-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium cd-text-faint flex items-center gap-1">
+          <span className="flex items-center gap-1 cd-label-text">
             <Tags className="w-3 h-3" /> 사업장 별칭
           </span>
           <button
@@ -3034,7 +3034,7 @@ function EditView({
       <div className="sm:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 cd-surface-bg border cd-border-c rounded-lg p-3">
         {!otherList && (
           <div className="flex flex-col gap-2">
-            <span className="text-[11px] font-medium cd-text-faint">계약 유형</span>
+            <span className="cd-label-text">계약 유형</span>
             <FacilityContractTypeFields
               serviceCategories={serviceCategories}
               onServiceCategoriesChange={setServiceCategories}
@@ -3044,7 +3044,7 @@ function EditView({
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium cd-text-faint">사업장 분류</span>
+          <span className="cd-label-text">사업장 분류</span>
           <select className="cd-select" value={companySize} onChange={(e) => setCompanySize(e.target.value as FacilityCompanySize | "")}>
             <option value="">미지정</option>
             {FACILITY_COMPANY_SIZE_ORDER.map((size) => (
@@ -3054,7 +3054,7 @@ function EditView({
         </div>
         {/* 거래 구분(331) — 매출처·매입처 복수 선택. 매출 계약 발주처는 마이그레이션이 매출처로 백필했다. */}
         <div className="flex flex-col gap-2 md:col-span-2">
-          <span className="text-[11px] font-medium cd-text-faint">거래 구분</span>
+          <span className="cd-label-text">거래 구분</span>
           <div className="flex flex-wrap gap-4">
             {FACILITY_TRADE_ROLE_ORDER.map((role) => (
               <label key={role} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
@@ -3070,7 +3070,7 @@ function EditView({
                 {FACILITY_TRADE_ROLE_LABELS[role]}
               </label>
             ))}
-            <span className="text-[11px] cd-text-faint font-normal">매입처로 표시한 업체는 매입 계약 입력에서 먼저 검색됩니다.</span>
+            <span className="cd-hint">매입처로 표시한 업체는 매입 계약 입력에서 먼저 검색됩니다.</span>
           </div>
         </div>
       </div>
@@ -3078,7 +3078,7 @@ function EditView({
       {!otherList && !hasIntegratedService && (
         <div className="sm:col-span-2 flex flex-col gap-2 cd-surface-bg border cd-border-c rounded-lg p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium cd-text-faint">수동 주요 생산품</span>
+            <span className="cd-label-text">수동 주요 생산품</span>
             <button type="button" onClick={() => setManualProducts((prev) => [...prev, { productName: "", amount: "", unit: "", note: "" }])} className="cd-btn cd-btn-ghost rounded-lg px-2 py-1 text-[11px] font-semibold cd-text-muted">
               생산품 추가
             </button>
@@ -3722,7 +3722,7 @@ export function GroupManagementModal({
               <div className="cd-surface-bg border cd-border-c rounded-lg p-3 flex md:row-span-2 min-h-[268px] flex-col gap-3">
                 <h4 className="text-sm font-semibold cd-text">그룹/부문 적용</h4>
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-semibold cd-text-faint">선택 그룹</span>
+                  <span className="cd-label-text">선택 그룹</span>
                   <input
                     className="cd-input h-9"
                     value={selectedGroup?.groupName ?? ""}
@@ -3731,7 +3731,7 @@ export function GroupManagementModal({
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <span className="text-[11px] font-semibold cd-text-faint">부문 선택</span>
+                  <span className="cd-label-text">부문 선택</span>
                   <select
                     className="cd-select min-h-[88px] flex-1"
                     size={Math.min(Math.max((selectedGroup?.divisions.length ?? 0) + 1, 3), 5)}
@@ -3867,7 +3867,7 @@ function FieldInput({
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", full && "sm:col-span-2")}>
-      <span className="text-[11px] font-medium cd-text-faint">
+      <span className="cd-label-text">
         {label}
       </span>
       {multiline ? (
@@ -4131,7 +4131,7 @@ function AnnualReportEditForm({
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium cd-text-faint">
+          <span className="cd-label-text">
             주요 생산품
           </span>
           <button
@@ -4442,7 +4442,7 @@ function PermitEditForm({
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium cd-text-faint">생산품</span>
+          <span className="cd-label-text">생산품</span>
           <button
             type="button"
             onClick={() => setProducts([...products, { productName: "", productionAmount: null, productionUnit: "", sourcePage: null, sourceText: null }])}

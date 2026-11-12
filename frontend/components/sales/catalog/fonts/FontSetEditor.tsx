@@ -107,7 +107,7 @@ export function FontSetEditor({
       <style>{`${css}\n${preview.css ?? ""}`}</style>
       <div className="p-4 flex flex-col gap-4 text-sm">
         <label className="flex items-center gap-2 text-xs">
-          세트 이름
+          <span className="cd-label-text">세트 이름</span>
           <input className="cd-input" style={{ maxWidth: 280 }} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="예: 나눔고딕 본문 + 명조 제목" />
         </label>
 

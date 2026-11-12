@@ -290,7 +290,7 @@ export function NoticeEditorBoard({ noticeId }: { noticeId: string }) {
                 }}
               />
             </div>
-            <p className="text-xs cd-text-faint -mt-2">
+            <p className="cd-hint -mt-2">
               배경이 투명한 PNG를 권장합니다. 업로드하면 CI 색상을 검출해 상단 띠에 적용합니다.
             </p>
 
@@ -374,7 +374,7 @@ export function NoticeEditorBoard({ noticeId }: { noticeId: string }) {
                 ))}
               </div>
               {detected !== null && detected.length > 0 && (
-                <p className="text-xs cd-text-faint">
+                <p className="cd-hint">
                   검출된 색: {detected.join(", ")} — 띠는 색 개수만큼 가로로 등분됩니다.
                 </p>
               )}

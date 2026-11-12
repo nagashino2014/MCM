@@ -93,7 +93,7 @@ export function CatalogIllustrationsBoard() {
             일러스트 <CdHelp topic="catalog.illustrations-use" />
           </h3>
           <label className="text-xs cd-text-muted flex items-center gap-1.5">
-            유형
+            <span className="cd-label-text">유형</span>
             <select className="cd-select" style={{ width: 130 }} value={type} onChange={(e) => setType(e.target.value as InfoType | "")}>
               <option value="">전체</option>
               {INFO_TYPES.map((t) => (
@@ -104,7 +104,7 @@ export function CatalogIllustrationsBoard() {
             </select>
           </label>
           <label className="text-xs cd-text-muted flex items-center gap-1.5">
-            항목 수
+            <span className="cd-label-text">항목 수</span>
             <select className="cd-select" style={{ width: 90 }} value={count} onChange={(e) => setCount(e.target.value ? Number(e.target.value) : "")}>
               <option value="">전체</option>
               {counts.map((n) => (

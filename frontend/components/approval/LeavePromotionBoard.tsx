@@ -452,7 +452,10 @@ function SecondNoticeModal({
                       </div>
 
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[11px] font-semibold cd-text-faint">회사 지정 사용일자 <span className="font-normal">(총 {total}일 · YYYYMMDD)</span></span>
+                        <span>
+                          <span className="cd-label-text">회사 지정 사용일자</span>
+                          <span className="ml-1.5 cd-hint">(총 {total}일 · YYYYMMDD)</span>
+                        </span>
                         <div className="grid grid-cols-4 xl:grid-cols-8 gap-1.5">
                           {Array.from({ length: total }).map((_, i) => (
                             <AutoDateInput
@@ -467,7 +470,7 @@ function SecondNoticeModal({
                         {rest <= 0 ? (
                           <span className="text-[11px] cd-text-primary font-semibold">지정 완료 — 잔여일수 0. 발송 대상입니다.</span>
                         ) : (
-                          <span className="text-[11px] cd-text-faint">남은 {rest}일의 사용일자를 지정하면 발송 대상이 됩니다.</span>
+                          <span className="cd-hint">남은 {rest}일의 사용일자를 지정하면 발송 대상이 됩니다.</span>
                         )}
                       </div>
                     </>
@@ -654,14 +657,14 @@ function BackfillModal({
           <div className="p-5 flex flex-col gap-4 overflow-y-auto">
             {/* 공통: 통지일 + 업로드 */}
             <div className="rounded-lg border cd-border-c p-4 flex items-center gap-3 flex-wrap">
-              <span className="text-[11px] font-semibold cd-text-faint">서면 통지일</span>
+              <span className="cd-label-text">서면 통지일</span>
               <AutoDateInput value={noticeDate} onChange={setNoticeDate} className="cd-input !w-40" placeholder="YYYYMMDD" />
-              <span className="text-[11px] font-semibold cd-text-faint ml-2">연차 사용계획서 업로드</span>
+              <span className="ml-2 cd-label-text">연차 사용계획서 업로드</span>
               <label className="cd-btn cd-btn-soft rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1.5">
                 <FileUp className="w-3.5 h-3.5" /> 업로드
                 <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
               </label>
-              <span className="text-[11px] cd-text-faint w-full">파일명에 포함된 성명으로 인원을 자동 매칭합니다(공통 통지일 적용).</span>
+              <span className="w-full cd-hint">파일명에 포함된 성명으로 인원을 자동 매칭합니다(공통 통지일 적용).</span>
             </div>
 
             {/* 준비된 인원 칩 */}
@@ -709,7 +712,10 @@ function BackfillModal({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-semibold cd-text-faint">사용 예정일 <span className="font-normal">(계획서 기재분)</span></span>
+                  <span>
+                    <span className="cd-label-text">사용 예정일</span>
+                    <span className="ml-1.5 cd-hint">(계획서 기재분)</span>
+                  </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {selEntry.dates.map((d, i) => (
                       <div key={i} className="flex items-center gap-1">
@@ -726,7 +732,7 @@ function BackfillModal({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-semibold cd-text-faint">사용계획서 스캔본</span>
+                  <span className="cd-label-text">사용계획서 스캔본</span>
                   {selEntry.files.length > 0 ? (
                     <div className="flex flex-col gap-1">
                       {selEntry.files.map((f, i) => (
@@ -866,7 +872,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
             {/* 편집 패널 */}
             <div className="overflow-y-auto p-5 flex flex-col gap-4 border-b lg:border-b-0 lg:border-r cd-border-c">
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold cd-text-faint">제목</span>
+                <span className="cd-label-text">제목</span>
                 <input className="cd-input" value={cur.title} onChange={(e) => setCur({ title: e.target.value })} />
               </label>
 
@@ -881,7 +887,7 @@ function TemplateEditor({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-semibold cd-text-faint">본문 문단</span>
+                <span className="cd-label-text">본문 문단</span>
                 {cur.body.map((p, i) => (
                   <div key={i} className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-1.5">
                     <textarea

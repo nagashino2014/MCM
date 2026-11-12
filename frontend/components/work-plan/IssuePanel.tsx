@@ -203,7 +203,7 @@ export default function IssuePanel({ contractId, taskId, canRespond }: { contrac
 
             {/* 우측 2/3 — 라벨 + 기호버튼 + 상세 서술(하단 정렬) */}
             <div className="md:col-span-2 flex flex-col gap-1.5 min-h-0">
-              <span className="text-[11px] font-semibold cd-text-faint">이슈 상세 서술</span>
+              <span className="cd-label-text">이슈 상세 서술</span>
               <StructuredNoteEditor value={description} onChange={setDescription} placeholder="이슈 상세 서술" fill />
             </div>
           </div>

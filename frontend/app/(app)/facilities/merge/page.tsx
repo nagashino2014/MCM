@@ -680,7 +680,7 @@ function Inner() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-semibold cd-text-muted">병합 이유</span>
+                <span className="cd-label-text">병합 이유</span>
                 <select
                   className="cd-select text-xs"
                   value={mergeReason}
@@ -707,7 +707,7 @@ function Inner() {
                     key={field.key}
                     className="flex items-center gap-3 cd-surface-bg border cd-border-c rounded-lg p-3"
                   >
-                    <span className="text-xs font-semibold cd-text-muted w-32 shrink-0">
+                    <span className="w-32 shrink-0 cd-label-text">
                       {field.label}
                     </span>
                     <select

@@ -155,7 +155,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
               />
               <span className="text-[11px] cd-text-faint font-medium">페이지</span>
               {extractionRange.mode === "partial" && (
-                <span className="text-[10px] cd-text-faint ml-auto">
+                <span className="cd-hint ml-auto">
                   카드 추출 범위 {extractionRange.startPage}~{extractionRange.endPage}p 이내
                 </span>
               )}
@@ -221,8 +221,8 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
 
           <div className="flex items-center justify-between cd-surface-bg border cd-border-c rounded-xl px-4 py-3">
             <div>
-              <div className="text-xs font-bold cd-text-muted">필수 항목</div>
-              <div className="text-[11px] cd-text-faint mt-0.5">
+              <div className="cd-label-text">필수 항목</div>
+              <div className="cd-hint mt-0.5">
                 활성 시 OCR 실패 항목을 검수 대기열에 자동 등록
               </div>
             </div>
@@ -291,7 +291,7 @@ export function RuleEditModal({ rule, extractionRange, onSave, onDelete, onClose
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
+      <span className="cd-label-text">
         {label}
       </span>
       {children}

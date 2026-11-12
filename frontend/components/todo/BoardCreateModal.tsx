@@ -242,7 +242,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
             <CdInput label="프로젝트명" required value={projectName} maxLength={120} onChange={(e) => setProjectName(e.target.value)} placeholder="예: 한빛제지 군산공장 통합허가 변경" error={projectName.trim() ? undefined : "프로젝트명을 입력하세요."} />
             <CdInput label="업체명(발주처)" value={clientName} maxLength={120} onChange={(e) => setClientName(e.target.value)} placeholder="선택 — 사업장 마스터에 없어도 됩니다" />
             <div className="todo-field relative">
-              <span className="todo-field-lb">사업장(선택)</span>
+              <span className="cd-label-text">사업장(선택)</span>
               {facility ? (
                 <span className="todo-chip self-start pl-2">
                   <Building2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -289,7 +289,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
                   )}
                 </>
               )}
-              <span className="todo-field-hint">사업장을 고르면 할 일 상세의 '관련'에 사업장 링크가 붙습니다.</span>
+              <span className="cd-hint">사업장을 고르면 할 일 상세의 '관련'에 사업장 링크가 붙습니다.</span>
             </div>
           </>
         )}
@@ -297,7 +297,7 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
         {mode === "internal" && <CdInput label="프로젝트명" required value={projectName} maxLength={120} onChange={(e) => setProjectName(e.target.value)} placeholder="예: 견적 요율표 2027 개정" hint="발주처가 없는 사내 프로젝트입니다." error={projectName.trim() ? undefined : "프로젝트명을 입력하세요."} />}
 
         <div className="todo-field">
-          <span className="todo-field-lb">보드 색</span>
+          <span className="cd-label-text">보드 색</span>
           <div className="todo-swatches" role="radiogroup" aria-label="보드 색">
             <button type="button" role="radio" aria-checked={color == null} aria-pressed={color == null} className="todo-swatch" data-auto="true" onClick={() => setColor(null)}>
               자동
@@ -308,11 +308,11 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
               </button>
             ))}
           </div>
-          <span className="todo-field-hint">자동이면 가장 적게 쓰인 파스텔 색이 배정됩니다. 색은 목록 행·카드의 좌측 띠와 맥락 점에 쓰입니다.</span>
+          <span className="cd-hint">자동이면 가장 적게 쓰인 파스텔 색이 배정됩니다. 색은 목록 행·카드의 좌측 띠와 맥락 점에 쓰입니다.</span>
         </div>
 
         <div className="todo-field">
-          <span className="todo-field-lb">보드 종류</span>
+          <span className="cd-label-text">보드 종류</span>
           <div className="todo-modal-seg overflow-hidden" role="radiogroup" aria-label="보드 종류">
             {(["project", "dept"] as const).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} className="cd-choice" data-active={kind === k ? "true" : undefined} onClick={() => setKind(k)}>
@@ -320,15 +320,15 @@ export function BoardCreateModal({ open, boards, onClose, onCreated, onOpenBoard
               </button>
             ))}
           </div>
-          <span className="todo-field-hint">{kind === "dept" ? "부서 보드는 부서장·임원·관리자만 만들 수 있습니다. 권한이 없으면 서버가 거절합니다." : "프로젝트 보드는 누구나 만들 수 있고, 멤버에게만 보입니다."}</span>
+          <span className="cd-hint">{kind === "dept" ? "부서 보드는 부서장·임원·관리자만 만들 수 있습니다. 권한이 없으면 서버가 거절합니다." : "프로젝트 보드는 누구나 만들 수 있고, 멤버에게만 보입니다."}</span>
         </div>
 
         <CdInput label="보드 이름(선택)" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder={mode === "contract" ? "비우면 용역명" : "비우면 프로젝트명"} />
 
         <div className="todo-field">
-          <span className="todo-field-lb">기본 완료 조건</span>
+          <span className="cd-label-text">기본 완료 조건</span>
           <CompleteRulesFields value={defaultRules} onChange={setDefaultRules} />
-          <span className="todo-field-hint">이 보드에서 만드는 할 일에 자동으로 붙는 완료 조건입니다. 완료 전에 확인 창이 떠 조건을 점검합니다(나중에 보드 ⋯ 메뉴에서 바꿀 수 있습니다).</span>
+          <span className="cd-hint">이 보드에서 만드는 할 일에 자동으로 붙는 완료 조건입니다. 완료 전에 확인 창이 떠 조건을 점검합니다(나중에 보드 ⋯ 메뉴에서 바꿀 수 있습니다).</span>
         </div>
       </div>
     </CdModal>

@@ -101,7 +101,7 @@ export default function PayrollRulesPanel() {
 
   const itemSelect = (value: string, onChange: (v: string) => void, width = 150) => (
     <label className="text-xs cd-text-faint">
-      항목
+      <span className="cd-label-text">항목</span>
       <select className="cd-select text-sm block mt-0.5" style={{ width }} value={value} onChange={(e) => onChange(e.target.value)}>
         {sortedItems.map((i) => (
           <option key={i.itemId} value={i.itemId}>
@@ -216,7 +216,7 @@ function EmployeeRulesTab({
       {/* 신규 규칙 입력 행 */}
       <div className="flex items-end gap-3 flex-wrap border cd-border-c rounded-2xl px-4 py-3">
         <label className="text-xs cd-text-faint">
-          직원
+          <span className="cd-label-text">직원</span>
           <select className="cd-select text-sm block mt-0.5" style={{ width: 120 }} value={draft.employeeId} onChange={(e) => setDraft((p) => ({ ...p, employeeId: e.target.value }))}>
             <option value="">선택</option>
             {employees.map((e) => (
@@ -400,7 +400,7 @@ function ItemRulesTab({
       <div className="flex items-end gap-3 flex-wrap border cd-border-c rounded-2xl px-4 py-3">
         {itemSelect(draft.itemId, (v) => setDraft((p) => ({ ...p, itemId: v })))}
         <div className="text-xs cd-text-faint flex flex-col gap-0.5" style={{ minWidth: 200, maxWidth: 420 }}>
-          <span>직원</span>
+          <span className="cd-label-text">직원</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button type="button" className="cd-btn rounded-xl px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1" onClick={() => openPicker({ mode: "new" })}>
               <UserPlus className="w-3.5 h-3.5" /> 대상자 선택{targets.length ? ` (${targets.length})` : ""}
@@ -515,25 +515,25 @@ function RuleFields({
   return (
     <>
       <label className="text-xs cd-text-faint">
-        월 금액(원)
+        <span className="cd-label-text">월 금액(원)</span>
         <input className="cd-input text-sm block mt-0.5 text-right" style={{ width: 120 }} inputMode="numeric"
           value={draft.amount ? Number(draft.amount).toLocaleString() : ""}
           onChange={(e) => setDraft({ amount: e.target.value.replace(/[^\d]/g, "") })} />
       </label>
       <label className="text-xs cd-text-faint">
-        시작(YYYY-MM)
+        <span className="cd-label-text">시작(YYYY-MM)</span>
         <input className="cd-input text-sm block mt-0.5" style={{ width: 100 }} placeholder="2026-01" value={draft.validFrom} onChange={(e) => setDraft({ validFrom: e.target.value })} />
       </label>
       <label className="text-xs cd-text-faint">
-        종료(YYYY-MM)
+        <span className="cd-label-text">종료(YYYY-MM)</span>
         <input className="cd-input text-sm block mt-0.5" style={{ width: 100 }} placeholder="비우면 계속" value={draft.validTo} onChange={(e) => setDraft({ validTo: e.target.value })} />
       </label>
       <label className="text-xs cd-text-faint">
-        지급월 제한
+        <span className="cd-label-text">지급월 제한</span>
         <input className="cd-input text-sm block mt-0.5" style={{ width: 90 }} placeholder="예: 1,9" title="특정 월만 지급 시 콤마 구분(비우면 매월)" value={draft.payMonths} onChange={(e) => setDraft({ payMonths: e.target.value })} />
       </label>
       <label className="text-xs cd-text-faint flex-1" style={{ minWidth: 140 }}>
-        비고
+        <span className="cd-label-text">비고</span>
         <input className="cd-input text-sm block mt-0.5 w-full" placeholder="자격증명·자녀명 등" value={draft.note} onChange={(e) => setDraft({ note: e.target.value })} />
       </label>
     </>

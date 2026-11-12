@@ -464,11 +464,11 @@ export default function ApprovalFormsBoard() {
               {/* 기본 속성 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                  양식 이름
+                  <span className="cd-label-text">양식 이름</span>
                   <input className="cd-input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
                 </label>
                 <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                  폴더
+                  <span className="cd-label-text">폴더</span>
                   <select
                     className="cd-select"
                     style={{ width: "100%" }}
@@ -484,7 +484,10 @@ export default function ApprovalFormsBoard() {
                   </select>
                 </label>
                 <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                  문서번호 약칭 (예: 출장신청-2026-0001)
+                  <span>
+                    <span className="cd-label-text">문서번호 약칭</span>
+                    <span className="ml-1.5 cd-hint">(예: 출장신청-2026-0001)</span>
+                  </span>
                   <input
                     className="cd-input"
                     value={draft.docNoRule ?? ""}
@@ -492,7 +495,7 @@ export default function ApprovalFormsBoard() {
                   />
                 </label>
                 <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                  보존연한(년) / 사용
+                  <span className="cd-label-text">보존연한(년) / 사용</span>
                   <span className="flex items-center gap-2">
                     <input
                       className="cd-input"
@@ -513,7 +516,8 @@ export default function ApprovalFormsBoard() {
                   title="지정하면 이 양식의 기안 화면 상단에 '선행 문서 선택' 버튼이 표시되고, 기안자가 자신이 기안한 선행 양식 문서를 골라 연관 관계를 설정할 수 있습니다(예: 출장보고서의 선행 양식 = 출장신청서)."
                 >
                   <span className="flex items-center gap-1">
-                    <Link2 className="w-3 h-3" /> 선행 양식(신청서→보고서 연관)
+                    <Link2 className="w-3 h-3" /> <span className="cd-label-text">선행 양식</span>
+                    <span className="cd-hint">(신청서→보고서 연관)</span>
                   </span>
                   <select
                     className="cd-select"
@@ -752,7 +756,7 @@ function FieldProps({
         </button>
       </div>
       <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-        종류
+        <span className="cd-label-text">종류</span>
         <select
           className="cd-select"
           style={{ width: "100%" }}
@@ -768,12 +772,15 @@ function FieldProps({
       </label>
       {f.type !== "static" && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-          라벨
+          <span className="cd-label-text">라벨</span>
           <input className="cd-input" value={f.label} onChange={(e) => onChange({ label: e.target.value })} />
         </label>
       )}
       <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-        필드 키 (구조화 저장 키 — 영문 소문자·숫자·_)
+        <span>
+          <span className="cd-label-text">필드 키</span>
+          <span className="ml-1.5 cd-hint">(구조화 저장 키 — 영문 소문자·숫자·_)</span>
+        </span>
         <input
           className={`cd-input font-mono ${dupKey ? "border-[color:var(--cd-error)]" : ""}`}
           value={f.key}
@@ -783,7 +790,7 @@ function FieldProps({
       </label>
       <div className="flex items-center gap-3">
         <label className="text-[11px] cd-text-faint flex items-center gap-1.5">
-          폭
+          <span className="cd-label-text">폭</span>
           <select className="cd-select" style={{ width: 60 }} value={f.span ?? 1} onChange={(e) => onChange({ span: Number(e.target.value) })}>
             {[1, 2, 3].map((s) => (
               <option key={s} value={s}>
@@ -791,7 +798,7 @@ function FieldProps({
               </option>
             ))}
           </select>
-          <span title="같은 행 항목들과의 폭 비중(1~3)">/ 행 내 비중</span>
+          <span className="cd-hint" title="같은 행 항목들과의 폭 비중(1~3)">/ 행 내 비중</span>
         </label>
         {f.type !== "static" && (
           <label className="flex items-center gap-1.5 text-[12px] cd-text cursor-pointer ml-auto">
@@ -801,7 +808,10 @@ function FieldProps({
       </div>
       {hasOptions && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-          옵션(콤마로 구분)
+          <span>
+            <span className="cd-label-text">옵션</span>
+            <span className="ml-1.5 cd-hint">(콤마로 구분)</span>
+          </span>
           <textarea
             className="cd-input text-[12px] min-h-[52px]"
             value={(f.options ?? []).join(", ")}
@@ -811,13 +821,13 @@ function FieldProps({
       )}
       {["text", "multitext", "number"].includes(f.type) && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-          입력 안내(placeholder)
+          <span className="cd-label-text">입력 안내(placeholder)</span>
           <input className="cd-input text-[12px]" value={f.placeholder ?? ""} onChange={(e) => onChange({ placeholder: e.target.value || undefined })} />
         </label>
       )}
       {f.type === "static" && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-          안내문 내용
+          <span className="cd-label-text">안내문 내용</span>
           <textarea className="cd-input text-[12px] min-h-[84px]" value={f.content ?? ""} onChange={(e) => onChange({ content: e.target.value })} />
         </label>
       )}
@@ -842,7 +852,7 @@ function FieldProps({
       )}
       {f.type === "asset_select" && (
         <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-          자산 종류
+          <span className="cd-label-text">자산 종류</span>
           <select
             className="cd-select"
             style={{ width: "100%" }}
@@ -854,7 +864,7 @@ function FieldProps({
             <option value="room">회의실</option>
             <option value="etc">기타</option>
           </select>
-          <span className="text-[11px]">선택지는 자산 관리 화면(/assets)의 활성 자산에서 자동 제공됩니다(옵션 편집 불필요).</span>
+          <span className="cd-hint">선택지는 자산 관리 화면(/assets)의 활성 자산에서 자동 제공됩니다(옵션 편집 불필요).</span>
         </label>
       )}
       {f.type === "table" && <TableColumnsEditor field={f} onChange={onChange} concepts={concepts} />}
@@ -898,7 +908,11 @@ function SemanticEditor({
   const current = f.semantic?.concept ?? "";
   return (
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint flex items-center gap-1">데이터 의미 — 분석 지표가 이 태그로 집계<CdHelp topic="approval-ops.field-meaning" /></span>
+      <span className="flex items-center gap-1">
+        <span className="cd-label-text">데이터 의미</span>
+        <span className="ml-0.5 cd-hint">분석 지표가 이 태그로 집계</span>
+        <CdHelp topic="approval-ops.field-meaning" />
+      </span>
       <select
         className="cd-select"
         style={{ width: "100%" }}
@@ -948,7 +962,11 @@ function FillMapEditor({
     onChange({ fillMap: rules.map((r, x) => (x === i ? { ...r, ...patch } : r)) });
   return (
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint flex items-center gap-1">자동 채움 — 선택 시 다른 필드에 값 주입<CdHelp topic="approval-ops.autofill" /></span>
+      <span className="flex items-center gap-1">
+        <span className="cd-label-text">자동 채움</span>
+        <span className="ml-0.5 cd-hint">선택 시 다른 필드에 값 주입</span>
+        <CdHelp topic="approval-ops.autofill" />
+      </span>
       {rules.map((r, i) => (
         <div key={i} className="flex items-center gap-1.5 min-w-0">
           <select className="cd-select shrink-0" style={{ width: 110 }} value={r.source} onChange={(e) => setRule(i, { source: e.target.value })}>
@@ -1009,9 +1027,9 @@ function TableColumnsEditor({
   return (
     <div className="rounded-lg border border-dashed cd-border-c p-2.5 flex flex-col gap-1.5">
       <div className="flex items-center gap-2 text-[11px] cd-text-faint">
-        표 하위 열
+        <span className="cd-label-text">표 하위 열</span>
         <span className="ml-auto flex items-center gap-1.5">
-          최소 행
+          <span className="cd-label-text">최소 행</span>
           <input
             className="cd-input"
             style={{ width: 44 }}
@@ -1056,7 +1074,7 @@ function TableColumnsEditor({
           )}
           {conceptsForType(concepts, c.type).length > 0 && (
             <label className="w-full flex items-center gap-1.5 text-[11px] cd-text-faint min-w-0">
-              의미
+              <span className="cd-label-text">의미</span>
               <select
                 className="cd-select flex-1"
                 style={{ width: 0, minWidth: 0 }}
@@ -1083,7 +1101,7 @@ function TableColumnsEditor({
           <Plus className="w-3.5 h-3.5" /> 열 추가
         </button>
         <label className="ml-auto text-[11px] cd-text-faint flex items-center gap-1.5">
-          합계 열
+          <span className="cd-label-text">합계 열</span>
           <select className="cd-select" style={{ width: 96 }} value={f.sumColumn ?? ""} onChange={(e) => onChange({ sumColumn: e.target.value || undefined })}>
             <option value="">없음</option>
             {cols.map((c) => (

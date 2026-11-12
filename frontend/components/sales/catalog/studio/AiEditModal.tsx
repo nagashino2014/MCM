@@ -140,7 +140,7 @@ export function AiEditModal({
               </label>
             </div>
             <label className="flex flex-col gap-1 text-xs cd-text-muted">
-              지시
+              <span className="cd-label-text">지시</span>
               <textarea
                 className="cd-input"
                 rows={3}

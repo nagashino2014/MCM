@@ -197,7 +197,7 @@ export function IllustrationImportModal({ mode, onClose, onDone }: { mode: "fold
                 <FolderUp className="w-4 h-4" /> 폴더 고르기
                 <input ref={dirRef} type="file" multiple className="sr-only" onChange={(e) => void pickFolder(e.target.files)} />
               </label>
-              <span className="text-xs cd-text-muted flex items-center gap-1">
+              <span className="cd-hint flex items-center gap-1">
                 관리자 PC 에서 <code>asset_matcher.py export --out &lt;폴더&gt;</code> 로 만든 폴더 <CdHelp topic="catalog.illustrations-import" />
               </span>
             </div>
@@ -286,15 +286,15 @@ export function IllustrationImportModal({ mode, onClose, onDone }: { mode: "fold
                 <FileUp className="w-4 h-4" /> SVG 고르기
                 <input type="file" accept=".svg,image/svg+xml" className="sr-only" onChange={(e) => setSvgFile(e.target.files?.[0] ?? null)} />
               </label>
-              <span className="text-xs cd-text-muted">{svgFile ? `${svgFile.name} · ${kb(svgFile.size)}` : "3MB 이하 · 글자는 지운 그림이 좋습니다(글은 앱이 얹습니다)"}</span>
+              <span className="cd-hint">{svgFile ? `${svgFile.name} · ${kb(svgFile.size)}` : "3MB 이하 · 글자는 지운 그림이 좋습니다(글은 앱이 얹습니다)"}</span>
             </div>
             <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                이름
+                <span className="cd-label-text">이름</span>
                 <input className="cd-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 5단계 화살 띠" />
               </label>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                유형(기본 인포그래픽과의 관계)
+                <span className="cd-label-text">유형(기본 인포그래픽과의 관계)</span>
                 <select className="cd-select" value={type} onChange={(e) => setType(e.target.value as InfoType)}>
                   {INFO_TYPES.map((t) => (
                     <option key={t.type} value={t.type}>
@@ -304,19 +304,19 @@ export function IllustrationImportModal({ mode, onClose, onDone }: { mode: "fold
                 </select>
               </label>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                항목 수(그림에 고정)
+                <span className="cd-label-text">항목 수(그림에 고정)</span>
                 <input className="cd-input" type="number" min={1} max={30} value={count} onChange={(e) => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))} />
               </label>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                출처
+                <span className="cd-label-text">출처</span>
                 <input className="cd-input" value={provider} onChange={(e) => setProvider(e.target.value)} />
               </label>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                스톡 번호
+                <span className="cd-label-text">스톡 번호</span>
                 <input className="cd-input" value={stockId} onChange={(e) => setStockId(e.target.value.replace(/[^\w-]/g, ""))} placeholder="예: 1998385985" />
               </label>
               <label className="text-xs cd-text-muted flex flex-col gap-1">
-                라이선스
+                <span className="cd-label-text">라이선스</span>
                 <select className="cd-select" value={licenseKind} onChange={(e) => setLicenseKind(e.target.value)}>
                   {LICENSE_KINDS.map((k) => (
                     <option key={k}>{k}</option>

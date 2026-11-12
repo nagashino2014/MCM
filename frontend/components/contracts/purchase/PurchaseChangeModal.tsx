@@ -134,9 +134,9 @@ export function PurchaseChangeModal({
         {tab === "basic" && (
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm max-w-[240px]">
-              <span className="font-semibold cd-text-muted">변경일</span>
+              <span className="cd-label-text">변경일</span>
               <AutoDateInput className="cd-input tabular-nums" value={changedAt} onChange={setChangedAt} />
-              <span className="text-[11px] cd-text-faint">변경계약서 파일명의 날짜로 쓰입니다. 변경 내용은 메모에 적어 두세요.</span>
+              <span className="cd-hint">변경계약서 파일명의 날짜로 쓰입니다. 변경 내용은 메모에 적어 두세요.</span>
             </label>
             <PurchaseContractForm state={form} onChange={setForm} amount={amount} />
           </div>
@@ -183,7 +183,7 @@ export function PurchaseChangeModal({
               ))}
             </div>
             <FileDropZone value={file} onChange={setFile} hint={docType === "amendment" ? "변경계약서 PDF 1개 · 30MB 이하" : "원 계약서 PDF 1개 · 30MB 이하"} />
-            <p className="text-[11px] cd-text-faint">
+            <p className="cd-hint">
               원 계약 폴더에 <code>{docType === "amendment" ? `(변경일)계약명 매입 변경계약서${amendmentCount > 0 ? `(${amendmentCount + 1})` : ""}.pdf` : "(계약일)계약명 매입계약서.pdf"}</code>
               로 저장됩니다. 계약 입력 때 못 받은 원 계약서를 뒤늦게 올리는 경우 <b>누락</b>을 고르세요.
             </p>

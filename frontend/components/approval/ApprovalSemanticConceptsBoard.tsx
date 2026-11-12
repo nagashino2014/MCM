@@ -243,7 +243,7 @@ export function ApprovalSemanticConceptsBoard() {
             ) : (
               <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-semibold cd-text-faint">그룹명</span>
+                  <span className="cd-label-text">그룹명</span>
                   <input
                     className="cd-input"
                     style={{ width: 200 }}

@@ -103,7 +103,7 @@ export function ImportPostingModal({ open, onClose }: { open: boolean; onClose: 
     >
       <div className="flex flex-col gap-4">
         <div>
-          <label className="block text-xs font-bold mb-1 cd-text-muted">채울 디자인 템플릿</label>
+          <label className="block mb-1 cd-label-text">채울 디자인 템플릿</label>
           {templates === null ? (
             <div className="flex items-center gap-2 text-sm cd-text-muted py-2">
               <Loader2 className="w-4 h-4 animate-spin" /> 템플릿 불러오는 중…

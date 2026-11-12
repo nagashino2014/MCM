@@ -187,11 +187,11 @@ export function TemplateUploadModal({
             />
             <div className="flex-1 flex flex-col gap-3 min-w-0">
               <div>
-                <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름</label>
+                <label className="block mb-1 cd-label-text">템플릿 이름</label>
                 <input className="cd-input w-full" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1 cd-text-muted">설명</label>
+                <label className="block mb-1 cd-label-text">설명</label>
                 <textarea
                   className="cd-input w-full resize-none"
                   rows={4}

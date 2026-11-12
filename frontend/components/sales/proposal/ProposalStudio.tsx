@@ -189,7 +189,7 @@ function Canvas({ doc, kit, frameRef, zoom, selSection, selBlock, scrollKey, hit
 }
 
 // ── 속성 편집 부품 ───────────────────────────────────────────────────────────
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => <label className="f">{label}{children}</label>;
+const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => <label className="f"><span><span className="cd-label-text">{label}</span>{hint ? <span className="cd-hint ml-1.5">{hint}</span> : null}</span>{children}</label>;
 const TA = ({ value, onChange, rows = 3, placeholder }: { value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) =>
   <textarea className="cd-input" rows={rows} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
 const IN = ({ value, onChange, placeholder, type = "text" }: { value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string }) =>
@@ -245,7 +245,7 @@ function TableEditor({ b, onChange }: { b: Extract<ProposalBlock, { kind: "table
       <button type="button" onClick={() => set({ columns: b.columns.filter((_, k) => k !== ci), rows: b.rows.map((r) => r.filter((_, k) => k !== ci)), widths: undefined })}>‘{c || ci + 1}’ 열 삭제</button>
       <button type="button" className="icon-btn" aria-label={`${ci + 1}열 오른쪽으로`} disabled={ci === b.columns.length - 1} onClick={() => onChange(moveTableColumn(b, ci, 1))}><ArrowRight size={12} /></button>
     </span>)}</div> : null}
-    <Field label="열 너비 비율(쉼표, 비우면 자동)"><IN value={b.widths?.join(", ") ?? ""} placeholder="예: 20, 50, 30" onChange={(v) => { const w = v.split(",").map((x) => Number(x.trim())).filter((x) => x > 0); set({ widths: w.length === b.columns.length ? w : undefined }); }} /></Field>
+    <Field label="열 너비 비율" hint="(쉼표, 비우면 자동)"><IN value={b.widths?.join(", ") ?? ""} placeholder="예: 20, 50, 30" onChange={(v) => { const w = v.split(",").map((x) => Number(x.trim())).filter((x) => x > 0); set({ widths: w.length === b.columns.length ? w : undefined }); }} /></Field>
     <Field label="표 아래 주석"><IN value={b.note ?? ""} placeholder="※ 출처·기준일" onChange={(v) => set({ note: v || undefined })} /></Field>
   </>;
 }
@@ -350,7 +350,7 @@ function BulletsEditor({ items, onChange }: { items: BulletItem[]; onChange: (it
 function BlockFields({ b, onChange, pal }: { b: ProposalBlock; onChange: (b: ProposalBlock) => void; pal: ThemePalette }) {
   switch (b.kind) {
     case "heading": return <><Field label="단계"><Chips value={b.level} options={[{ v: 1, label: "1. 절 제목" }, { v: 2, label: "1.1 항 제목" }, { v: 3, label: "□ 소제목" }]} onChange={(v) => onChange({ ...b, level: v as 1 | 2 | 3 })} /></Field><Field label="제목"><IN value={b.text} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
-    case "text": return <Field label="본문 — **굵게** 는 주색 굵은 글자"><TA value={b.text} rows={8} onChange={(v) => onChange({ ...b, text: v })} /></Field>;
+    case "text": return <Field label="본문" hint="**굵게** 는 주색 굵은 글자"><TA value={b.text} rows={8} onChange={(v) => onChange({ ...b, text: v })} /></Field>;
     case "bullets": return <BulletsEditor items={b.items} onChange={(items) => onChange({ ...b, items })} />;
     case "lead": return <><Field label="라벨(선택)"><IN value={b.label ?? ""} placeholder="예: 핵심" onChange={(v) => onChange({ ...b, label: v || undefined })} /></Field><Field label="핵심 메시지"><TA value={b.text} rows={3} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
     case "callout": return <><Field label="종류"><Chips value={b.variant} options={[{ v: "note", label: "참고 상자" }, { v: "point", label: "포인트 상자" }]} onChange={(v) => onChange({ ...b, variant: v, title: b.title || (v === "point" ? "POINT" : "참고") })} /></Field><Field label="머리"><IN value={b.title} onChange={(v) => onChange({ ...b, title: v })} /></Field><Field label="내용"><TA value={b.text} rows={5} onChange={(v) => onChange({ ...b, text: v })} /></Field></>;
@@ -713,7 +713,7 @@ export function ProposalStudio() {
         <Field label="절(머리말 오른쪽·목차)"><IN value={s.crumb ?? ""} onChange={(v) => setS({ crumb: v || undefined }, `s:${s.id}:cr`)} /></Field>
       </div>
       <datalist id="proposal-chapters">{chapters.map((c) => <option key={c.name} value={c.name} />)}</datalist>
-      <Field label="쪽 제목(핵심 문장형 제목, 비우면 이어지는 쪽)"><IN value={s.title} onChange={(v) => setS({ title: v }, `s:${s.id}:t`)} /></Field>
+      <Field label="쪽 제목" hint="(핵심 문장형 제목, 비우면 이어지는 쪽)"><IN value={s.title} onChange={(v) => setS({ title: v }, `s:${s.id}:t`)} /></Field>
       <Field label="요약(핵심 메시지 상자)"><TA value={s.summary ?? ""} rows={2} onChange={(v) => setS({ summary: v || undefined }, `s:${s.id}:s`)} /></Field>
       {overflow.includes(s.id) ? <div className="proposal-alert" role="alert"><span>이 쪽의 내용이 지면을 넘습니다.</span><button type="button" className="cd-btn" onClick={() => pushOverflow(s.id)}>다음 쪽으로 넘기기</button></div> : null}
       <div className="sec"><h3>이 쪽의 블록</h3><div className="blocklist">{s.blocks.map((b) => <button key={b.id} type="button" onClick={() => setSelBlock(b.id)}><span className="k">{BLOCK_LABEL[b.kind]}</span><span className="t">{blockSummary(b) || "—"}</span></button>)}</div></div>
@@ -728,12 +728,12 @@ export function ProposalStudio() {
       <div className="two"><Field label="발주처"><IN value={doc.client} onChange={(v) => setDoc({ client: v }, "d:client")} /></Field><Field label="제출일"><IN type="date" value={doc.submissionDate} onChange={(v) => setDoc({ submissionDate: v })} /></Field></div>
       {doc.variables ? (["siteName", "duration", "companyName"] as const).map((k) => <Field key={k} label={PROPOSAL_VARIABLE_LABELS[k]}><IN value={doc.variables![k]} onChange={(v) => setDoc({ variables: { ...doc.variables!, [k]: v } }, `d:${k}`)} /></Field>) : null}
       <p className="proposal-muted">본문의 {"{{siteName}}"}·{"{{client}}"}·{"{{duration}}"} 연결 표기에 위 값이 들어갑니다.</p>
-      {doc.variables ? <Field label="발주처 메모(AI 참고 — 발행본에는 들어가지 않음)"><TA value={doc.variables.clientNotes ?? ""} rows={3} placeholder="업종·주요 설비·쟁점·요구 톤 등" onChange={(v) => setDoc({ variables: { ...doc.variables!, clientNotes: v || undefined } }, "d:notes")} /></Field> : null}
+      {doc.variables ? <Field label="발주처 메모" hint="(AI 참고 — 발행본에는 들어가지 않음)"><TA value={doc.variables.clientNotes ?? ""} rows={3} placeholder="업종·주요 설비·쟁점·요구 톤 등" onChange={(v) => setDoc({ variables: { ...doc.variables!, clientNotes: v || undefined } }, "d:notes")} /></Field> : null}
       <div className="sec"><h3>디자인</h3>
         <Field label="색 테마"><div className="swatches">{Object.entries(PROPOSAL_THEMES).map(([k, t]) => <button key={k} type="button" title={t.label} aria-label={t.label} className={doc.theme === k ? "on" : ""} style={{ background: `linear-gradient(135deg, ${t.primary} 60%, ${t.accent} 60%)` }} onClick={() => setDoc({ theme: k as ProposalDocument["theme"] })} />)}</div></Field>
-        <Field label="발주처 주색(선택 — 테마 주색을 덮어씀)"><div className="two"><input className="cd-input" type="color" value={isHexColor(brand) ? brand : pal.primary} onChange={(e) => setOpts({ brandColor: e.target.value.toUpperCase() })} /><button type="button" className="cd-btn cd-btn-ghost" disabled={!brand} onClick={() => setOpts({ brandColor: undefined })}>테마 색으로</button></div></Field>
+        <Field label="발주처 주색" hint="(선택 — 테마 주색을 덮어씀)"><div className="two"><input className="cd-input" type="color" value={isHexColor(brand) ? brand : pal.primary} onChange={(e) => setOpts({ brandColor: e.target.value.toUpperCase() })} /><button type="button" className="cd-btn cd-btn-ghost" disabled={!brand} onClick={() => setOpts({ brandColor: undefined })}>테마 색으로</button></div></Field>
         {isHexColor(brand) && contrast(brand, "#FFFFFF") < 4.5 ? <p className="proposal-alert">흰 글자 대비가 4.5:1 미만이라 적용하지 않습니다. 더 짙은 색을 고르세요.</p> : null}
-        <Field label="도식 팔레트(도식·다색 카드·단계 흐름)"><div className="palette-pick">{(Object.keys(SERIES_LABEL) as SeriesPalette[]).map((k) => <button key={k} type="button" className={(opts!.palette ?? "calm") === k ? "on" : ""} onClick={() => setOpts({ palette: k === "calm" ? undefined : k })}>
+        <Field label="도식 팔레트" hint="(도식·다색 카드·단계 흐름)"><div className="palette-pick">{(Object.keys(SERIES_LABEL) as SeriesPalette[]).map((k) => <button key={k} type="button" className={(opts!.palette ?? "calm") === k ? "on" : ""} onClick={() => setOpts({ palette: k === "calm" ? undefined : k })}>
           <span className="strip">{seriesOf(doc.theme, k, pal.primary).map((c) => <i key={c} style={{ background: c }} />)}</span><span>{SERIES_LABEL[k]}</span></button>)}</div></Field>
         <Field label="표지"><Chips value={opts!.cover} options={[{ v: "modern", label: "모던(띠·원 장식)" }, { v: "classic", label: "클래식(가운데 정렬·테두리)" }]} onChange={(v) => setOpts({ cover: v })} /></Field>
         <label className="proposal-muted"><input type="checkbox" checked={opts!.toc} onChange={(e) => setOpts({ toc: e.target.checked })} /> 목차 쪽</label>

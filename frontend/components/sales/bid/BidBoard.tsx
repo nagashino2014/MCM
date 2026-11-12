@@ -992,13 +992,13 @@ export function BidBoard() {
         {showFilters && (
           <div className="flex items-center gap-3 flex-wrap mb-3 rounded-lg border cd-border-c px-3 py-2 text-[12px] cd-text-muted">
             <label className="flex items-center gap-1.5 whitespace-nowrap">
-              게시일
+              <span className="cd-label-text">게시일</span>
               <DigitDateInput className="cd-input text-[12px]" style={{ width: 112 }} value={postedFrom} onChange={setPostedFrom} />
               ~
               <DigitDateInput className="cd-input text-[12px]" style={{ width: 112 }} value={postedTo} onChange={setPostedTo} />
             </label>
             <label className="flex items-center gap-1.5 whitespace-nowrap">
-              예산
+              <span className="cd-label-text">예산</span>
               <input type="number" min={0} className="cd-input text-[12px]" style={{ width: 110 }} placeholder="최소(만원)" value={budgetMinMan} onChange={(e) => setBudgetMinMan(e.target.value)} />
               ~
               <input type="number" min={0} className="cd-input text-[12px]" style={{ width: 110 }} placeholder="최대(만원)" value={budgetMaxMan} onChange={(e) => setBudgetMaxMan(e.target.value)} />
@@ -1264,7 +1264,7 @@ export function BidBoard() {
 
             {/* 열 추가 */}
             <div className="border-t cd-border-c pt-3 flex flex-col gap-2">
-              <div className="text-[11px] font-bold cd-text-faint">열 추가</div>
+              <div className="cd-label-text">열 추가</div>
               <div className="flex items-center gap-2 flex-wrap">
                 <input className="cd-input text-[13px]" style={{ width: 140 }} placeholder="열 이름 (예: 발주시기)" value={ncLabel} onChange={(e) => setNcLabel(e.target.value)} />
                 <select className="cd-select text-[12px]" style={{ width: 220 }} value={ncPartSel} onChange={(e) => setNcPartSel(e.target.value)}>
@@ -1461,7 +1461,7 @@ export function BidBoard() {
                     {/* 예외 — 제외 그룹에서만. 제외어 판정 전에 사업명에서 이 문구를 가린다(부분문자열 오탐 방지). */}
                     {(g.op === "not" || g.op === "nor") && (
                       <div className="flex items-center gap-1.5 flex-wrap border-t cd-border-c pt-2">
-                        <span className="text-[11px] cd-text-faint whitespace-nowrap">예외</span>
+                        <span className="cd-label-text whitespace-nowrap">예외</span>
                         {(g.except ?? []).map((kw) => (
                           <span key={kw} className="cd-chip cd-chip-sm">
                             {kw}
@@ -1646,7 +1646,7 @@ export function BidBoard() {
                 </div>
                 {/* 발송 시각 — 최대 4개. 각 시각 10분 전에 대상 종류를 최신 수집한 뒤 발송한다(2026-08-20). */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[13px] cd-text whitespace-nowrap">발송 시각</span>
+                  <span className="cd-label-text whitespace-nowrap">발송 시각</span>
                   {sendTimesDraft.map((draft, ti) => (
                     // 제거 버튼은 입력 박스 위에 겹쳐 두고 마우스를 올렸을 때만 보인다
                     // (상시 노출하면 칩 폭이 늘어 4개가 다음 줄로 넘어간다).
@@ -1698,7 +1698,7 @@ export function BidBoard() {
               {/* 우측 — 발송 대상 종류 + 대상 용역 필터 */}
               <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 300 }}>
                 <span className="flex items-center gap-2 text-[13px] cd-text whitespace-nowrap">
-                  발송 대상
+                  <span className="cd-label-text">발송 대상</span>
                   <span className="ml-auto flex items-center gap-2">
                   {TABS.map((t) => (
                     <label key={t.key} className="flex items-center gap-1 text-[12px] cd-text-muted whitespace-nowrap">
@@ -1713,7 +1713,7 @@ export function BidBoard() {
                   </span>
                 </span>
                 <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] cd-text-faint whitespace-nowrap">용역 분류</span>
+                  <span className="cd-label-text whitespace-nowrap">용역 분류</span>
                   <span
                     className="cd-chip cd-chip-sm cursor-pointer"
                     data-active={notifyProfile.categoryIds.length === 0}
@@ -1734,7 +1734,7 @@ export function BidBoard() {
                 </div>
                 {/* 지역권 — 4열 격자로 고정해 2행이 열 단위로 정렬되게(경남권↔수도권, 전라권↔강원권 …). */}
                 <div className="rounded-lg border cd-border-c px-2 py-1.5 flex items-start gap-1.5">
-                  <span className="text-[11px] cd-text-faint whitespace-nowrap pt-1">지역권</span>
+                  <span className="cd-label-text whitespace-nowrap pt-1">지역권</span>
                   <span
                     className="cd-chip cd-chip-sm cursor-pointer"
                     data-active={notifyProfile.regionGroups.length === 0}

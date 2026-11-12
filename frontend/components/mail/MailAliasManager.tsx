@@ -221,7 +221,7 @@ function AliasEditModal({
         </CdSelect>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold cd-text">
+            <span className="cd-label-text">
               수신자 <span className="cd-text-primary">{targetIds.size}명</span>
             </span>
             <input

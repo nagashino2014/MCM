@@ -472,7 +472,7 @@ function StatementUploadCard({ onImported }: { onImported: () => void }) {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="cd-text-faint shrink-0">적재 대상</span>
+            <span className="shrink-0 cd-label-text">적재 대상</span>
             <select
               className="cd-select"
               style={{ width: "auto", minWidth: 200 }}
@@ -1304,7 +1304,7 @@ function BankLedgerPanel() {
             />
           </div>
           <div className="min-w-0 xl:col-span-7">
-            <div className="cd-label text-xs mb-2">등록 계좌</div>
+            <div className="cd-label mb-2">등록 계좌</div>
             {/* 미선택 테두리 선명화(cd-faint) — 사용자 확정 */}
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
               {bankAccounts.map((acc) => (
@@ -1562,7 +1562,7 @@ function CardLedgerPanel() {
             />
           </div>
           <div className="min-w-0 xl:col-span-7">
-            <div className="cd-label text-xs mb-2">등록 카드</div>
+            <div className="cd-label mb-2">등록 카드</div>
             {/* 카드사 5열·카드 7열이 같은 우측 칸을 공유 → 우측 끝 일치 */}
             <div>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mb-2">
@@ -1922,7 +1922,7 @@ function StoreRuleModal({
         </div>
 
         <div>
-          <div className="cd-label text-xs mb-1">적용 기준</div>
+          <div className="cd-label mb-1">적용 기준</div>
           <div className="space-y-1.5">
             <label className={`flex items-start gap-2 ${txn?.storeCorpNum ? "cursor-pointer" : "opacity-50"}`}>
               <input
@@ -1950,7 +1950,7 @@ function StoreRuleModal({
         </div>
 
         <div>
-          <div className="cd-label text-xs mb-1">계정과목</div>
+          <div className="cd-label mb-1">계정과목</div>
           <select className="cd-select" value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)}>
             <option value="">선택…</option>
             {categories.map((c) => (
@@ -2392,7 +2392,7 @@ function RejectReasonModal({
           )}
         </div>
         <div>
-          <div className="cd-label text-xs mb-1">입금 성격</div>
+          <div className="cd-label mb-1">입금 성격</div>
           <select className="cd-select" value={reason} onChange={(e) => setReason(e.target.value)}>
             {REJECT_REASONS.map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
@@ -2400,7 +2400,7 @@ function RejectReasonModal({
           </select>
         </div>
         <div>
-          <div className="cd-label text-xs mb-1">메모</div>
+          <div className="cd-label mb-1">메모</div>
           <input
             className="cd-input"
             value={note}
@@ -3170,13 +3170,13 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
           <div className="cd-text-muted">승인번호 {origin?.ntsSendKey} — 수정분은 이 승인번호에 연결되어 국세청에 전송됩니다.</div>
         </div>
         <div>
-          <div className="cd-label text-xs mb-1">수정 사유</div>
+          <div className="cd-label mb-1">수정 사유</div>
           <select className="cd-select" value={modifyCode} onChange={(e) => setModifyCode(e.target.value)}>
             {MODIFY_CODES.map((m) => (
               <option key={m.code} value={m.code}>{m.code}. {m.label}</option>
             ))}
           </select>
-          <p className="text-[11px] cd-text-faint mt-1">{meta.hint}</p>
+          <p className="cd-hint mt-1">{meta.hint}</p>
           {modifyCode === "2" && (
             <div className="flex items-center gap-4 mt-1.5 text-xs" role="radiogroup" aria-label="공급가액 변동 방향">
               <label className="inline-flex items-center gap-1">
@@ -3190,11 +3190,11 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
         </div>
         <div className="grid grid-cols-2 gap-2">
           <label>
-            <span className="text-[11px] cd-text-faint">작성일자</span>
+            <span className="cd-label-text">작성일자</span>
             <CdDateInput className="mt-0.5" value={writeDate} onChange={setWriteDate} aria-label="작성일자" />
           </label>
           <label>
-            <span className="text-[11px] cd-text-faint">공급가액{negative ? " (음수로 발행됩니다)" : ""}</span>
+            <span className="cd-label-text">공급가액</span>{negative && <span className="cd-hint ml-1.5">(음수로 발행됩니다)</span>}
             <input
               className="cd-input mt-0.5 text-right font-mono"
               inputMode="numeric"
@@ -3204,11 +3204,11 @@ function ModifyInvoiceModal({ origin, onClose, onIssued }: { origin: TaxInvoiceR
           </label>
         </div>
         <label className="block">
-          <span className="text-[11px] cd-text-faint">품목</span>
+          <span className="cd-label-text">품목</span>
           <input className="cd-input mt-0.5" value={itemName} onChange={(e) => setItemName(e.target.value)} />
         </label>
         <label className="block">
-          <span className="text-[11px] cd-text-faint">비고</span>
+          <span className="cd-label-text">비고</span>
           <input className="cd-input mt-0.5" value={remark1} onChange={(e) => setRemark1(e.target.value)} placeholder="선택" />
         </label>
         <div className="flex items-center gap-4 text-xs">

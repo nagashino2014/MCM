@@ -138,8 +138,11 @@ export function FacilityRecipientPicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1 text-[11px] cd-text-faint">
-        <span>수신처 <span className="cd-text-faint">— 업체/기관명 표기(공문 수신란). 실제 메일 발송은 참조 담당자에게 갑니다</span></span>
+      <span className="flex items-center gap-1">
+        <span>
+          <span className="cd-label-text">수신처</span>
+          <span className="cd-hint ml-1.5">업체/기관명 표기(공문 수신란). 실제 메일 발송은 참조 담당자에게 갑니다</span>
+        </span>
         {/* ? 버튼(32px)이 라벨 줄을 키우지 않게 — 옆 참조 담당자 칸과 입력 줄을 맞춘다 */}
         <span className="-my-2 inline-flex">
           <CdHelp topic="letter.recipients" />
@@ -248,15 +251,15 @@ export function QuickFacilityModal({ theme, onClose, onCreated }: { theme: strin
         {err && <div className="rounded-lg px-3 py-2 text-xs mb-3 border border-[color:var(--cd-error)] text-[color:var(--cd-error)]">{err}</div>}
         <p className="cd-text-faint text-[11px] mb-3">등록 즉시 수신처로 지정됩니다. 상세 정보는 사업장 메뉴에서 보강할 수 있습니다.</p>
         <label className="text-[11px] cd-text-faint flex flex-col gap-1 mb-2.5">
-          사업장명 *
+          <span className="cd-label-text">사업장명 *</span>
           <input className="cd-input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         </label>
         <label className="text-[11px] cd-text-faint flex flex-col gap-1 mb-2.5">
-          소재지 *
+          <span className="cd-label-text">소재지 *</span>
           <input className="cd-input" value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} />
         </label>
         <label className="text-[11px] cd-text-faint flex flex-col gap-1 mb-4">
-          사업자번호 *
+          <span className="cd-label-text">사업자번호 *</span>
           <input className="cd-input" value={brn} onChange={(e) => setBrn(e.target.value)} placeholder="000-00-00000" />
         </label>
         <div className="flex justify-end gap-2">
@@ -318,7 +321,10 @@ export function RecipientPicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] cd-text-faint">{label} <span className="cd-text-faint">— {hint}</span></span>
+      <span>
+        <span className="cd-label-text">{label}</span>
+        <span className="cd-hint ml-1.5">{hint}</span>
+      </span>
       {list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {list.map((r, i) => (
@@ -413,7 +419,7 @@ export function RecipientPicker({
 function ProofPartyInputs({ label, value, onChange }: { label: string; value: ProofParty; onChange: (v: ProofParty) => void }) {
   return (
     <div className="rounded-lg border cd-border-c p-3 flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold cd-text">{label}</span>
+      <span className="cd-label-text">{label}</span>
       <input className="cd-input" placeholder="주소" value={value.address} onChange={(e) => onChange({ ...value, address: e.target.value })} />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
         <input className="cd-input" placeholder="회사/기관명" value={value.company} onChange={(e) => onChange({ ...value, company: e.target.value })} />
@@ -1154,11 +1160,11 @@ export function ApprovalLetterBoard() {
               )}
               <CdHelp topic="letter.number" />
               {!docNo && !manualOn && (
-                <span className="text-[11px] cd-text-faint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>
+                <span className="cd-hint">채번 예정 — 상신 시 확정됩니다(먼저 상신되는 문서가 이 번호를 가져갈 수 있음)</span>
               )}
               {manualOn &&
                 (!manualNo ? (
-                  <span className="text-[11px] cd-text-faint">사용할 번호를 입력하세요(자동 채번 예정: {nextNo ?? "-"})</span>
+                  <span className="cd-hint">사용할 번호를 입력하세요(자동 채번 예정: {nextNo ?? "-"})</span>
                 ) : manualCheck == null ? (
                   <span className="text-[11px] cd-text-faint">중복 확인 중...</span>
                 ) : manualCheck.available ? (
@@ -1193,7 +1199,7 @@ export function ApprovalLetterBoard() {
             </div>
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-3">
-                <span className="text-[11px] cd-text-faint">공문 유형</span>
+                <span className="cd-label-text">공문 유형</span>
                 {(
                   [
                     ["general", "일반"],
@@ -1220,7 +1226,7 @@ export function ApprovalLetterBoard() {
                 className="flex items-center gap-1.5 text-[12px] cd-text"
                 title="공문 하단 '시행' 줄의 날짜입니다. 비워 두면 결재 완료일이 들어갑니다. 발주처가 특정 일자를 요구할 때만 지정하세요."
               >
-                시행일
+                <span className="cd-label-text">시행일</span>
                 <CdDateInput value={issueDate} onChange={setIssueDate} placeholder="자동(결재일)" style={{ width: 128 }} />
                 {issueDate && (
                   <button type="button" className="cd-btn cd-text-faint text-[11px] underline" onClick={() => setIssueDate("")}>
@@ -1259,13 +1265,16 @@ export function ApprovalLetterBoard() {
             )}
 
             <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-              제목
+              <span className="cd-label-text">제목</span>
               <input className="cd-input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="예: ○○ 용역 기성금 청구 관련" />
             </label>
 
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] cd-text-faint">본문 — A4 1장 기준으로 자동 조판됩니다(초과 시 폰트·간격 자동 축소, 그래도 넘치면 상신 불가)</span>
+                <span>
+                  <span className="cd-label-text">본문</span>
+                  <span className="cd-hint ml-1.5">A4 1장 기준으로 자동 조판됩니다(초과 시 폰트·간격 자동 축소, 그래도 넘치면 상신 불가)</span>
+                </span>
                 {/* 공문 관용구 빠른 삽입 — 정렬(아래=가운데·단위=오른쪽)이 규격대로 적용된 요소를 커서 위치에 넣는다 */}
                 <span className="ml-auto flex items-center gap-1.5">
                   <button
@@ -1293,7 +1302,10 @@ export function ApprovalLetterBoard() {
 
             {/* 붙임 목록 */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] cd-text-faint">붙임 (번호는 자동 부여·일렬종대 정렬)</span>
+              <span>
+                <span className="cd-label-text">붙임</span>
+                <span className="cd-hint ml-1.5">번호는 자동 부여·일렬종대 정렬</span>
+              </span>
               {attachItems.map((t, i) => (
                 <div key={i} className="flex items-center gap-1.5">
                   <span className="text-[11px] font-mono cd-text-faint w-5 text-right">{i + 1}.</span>
@@ -1315,12 +1327,12 @@ export function ApprovalLetterBoard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-                하단 전화 표기
+                <span className="cd-label-text">하단 전화 표기</span>
                 <input className="cd-input" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
               </label>
               <label className="text-[11px] cd-text-faint flex flex-col gap-1">
                 <span className="flex items-center gap-2">
-                  하단 메일 표기
+                  <span className="cd-label-text">하단 메일 표기</span>
                   <span className="flex items-center gap-1 cd-text cursor-pointer" title="기본은 접속 계정의 메일 주소입니다">
                     <input
                       type="checkbox"
@@ -1345,8 +1357,9 @@ export function ApprovalLetterBoard() {
             {/* 첨부서류 — 공문과 함께 참조자 메일로 순서대로 발송. 대금청구서는 여기서 바로 작성(2026-08-24). */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] cd-text-faint">
-                  첨부서류 — 공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 25MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)
+                <span>
+                  <span className="cd-label-text">첨부서류</span>
+                  <span className="cd-hint ml-1.5">공문 PDF 뒤에 첨부 순서대로 메일에 동봉됩니다. 총 25MB 까지 파일로 직접 첨부되고, 초과분은 다운로드 링크(7일 유효)로 전환됩니다 (총 200MB 까지)</span>
                 </span>
                 <button
                   type="button"
@@ -1357,7 +1370,7 @@ export function ApprovalLetterBoard() {
                   <FileText className="w-3.5 h-3.5" /> 대금청구서 작성
                 </button>
               </div>
-              <span className="text-[11px] cd-text-faint">
+              <span className="cd-hint">
                 결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -1524,7 +1537,7 @@ export function ApprovalLetterBoard() {
               {/* 참조 메일을 어느 주소로 받을지 — 앱 전사 배포 전에는 개인 메일이 기본(사용자 확정). */}
               {watchers.length > 0 && (
                 <label className="text-[11px] cd-text-faint flex flex-col gap-1 mt-0.5">
-                  참조 메일 받을 주소
+                  <span className="cd-label-text">참조 메일 받을 주소</span>
                   <select
                     className="cd-select"
                     value={internalCcTarget}
@@ -1591,7 +1604,10 @@ export function ApprovalLetterBoard() {
               <p className="text-[11px] cd-text-faint">조정하면 미리보기가 자동 갱신됩니다. 조정값은 문서에 저장되어 승인 후 발송본(PDF·HWPX)에 동일 적용됩니다.</p>
 
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold cd-text">인감 위치 (기준: 성명 오른쪽 끝)</span>
+                <span>
+                  <span className="cd-label-text">인감 위치</span>
+                  <span className="cd-hint ml-1.5">기준: 성명 오른쪽 끝</span>
+                </span>
                 <div className="grid grid-cols-3 gap-1 w-[132px] self-center">
                   <span />
                   <button type="button" className="cd-btn rounded-lg border cd-border-c py-1 text-[11px]" onClick={() => setOverrides((o) => ({ ...o, stampDy: (o.stampDy ?? 0) + 2 }))}>▲</button>
@@ -1610,7 +1626,7 @@ export function ApprovalLetterBoard() {
               </div>
 
               <label className="text-[11px] font-semibold cd-text flex flex-col gap-1">
-                본문 글자 크기
+                <span className="cd-label-text">본문 글자 크기</span>
                 <select
                   className="cd-select"
                   value={overrides.bodyFontPt ?? ""}
@@ -1624,7 +1640,7 @@ export function ApprovalLetterBoard() {
               </label>
 
               <label className="text-[11px] font-semibold cd-text flex flex-col gap-1">
-                본문 줄 간격
+                <span className="cd-label-text">본문 줄 간격</span>
                 <select
                   className="cd-select"
                   value={overrides.lineSpacingPct ?? ""}
@@ -1638,7 +1654,7 @@ export function ApprovalLetterBoard() {
               </label>
 
               <label className="text-[11px] font-semibold cd-text flex flex-col gap-1">
-                서명줄 높이
+                <span className="cd-label-text">서명줄 높이</span>
                 <select
                   className="cd-select"
                   value={overrides.gapLevel ?? ""}
@@ -1652,7 +1668,7 @@ export function ApprovalLetterBoard() {
               </label>
 
               <label className="text-[11px] font-semibold cd-text flex flex-col gap-1">
-                제목 글자 크기
+                <span className="cd-label-text">제목 글자 크기</span>
                 <select
                   className="cd-select"
                   value={overrides.subjectPt ?? ""}

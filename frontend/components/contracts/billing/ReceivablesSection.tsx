@@ -166,7 +166,7 @@ export function ReceivablesSection({ theme, scopeQuery = "", readOnly = false }:
     <div className="flex flex-col gap-4">
       {/* 필터 바: 용역 선택 */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
+        <span className="mr-1 cd-label-text">
           용역 선택
         </span>
         <button

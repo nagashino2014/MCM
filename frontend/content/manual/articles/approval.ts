@@ -341,7 +341,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송"],
     sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "approval.notice",

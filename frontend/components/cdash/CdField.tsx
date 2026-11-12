@@ -36,7 +36,7 @@ function FieldShell({ label, required, hint, error, className, children, labelEx
       {error ? (
         <span id={descriptionId} className="text-xs cd-error-text">{error}</span>
       ) : hint ? (
-        <span id={descriptionId} className="text-xs cd-text-faint">{hint}</span>
+        <span id={descriptionId} className="cd-hint">{hint}</span>
       ) : null}
     </div>
   );

@@ -506,7 +506,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
         {/* 우측 설정 패널 */}
         <aside className="w-72 shrink-0 rounded-2xl border cd-border-c cd-card-bg p-5 flex flex-col gap-5" style={{ boxShadow: "var(--cd-shadow)" }}>
           <div>
-            <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 제목(관리용)</label>
+            <label className="block mb-1.5 cd-label-text">공고 제목(관리용)</label>
             <input
               className="cd-input w-full"
               value={title}
@@ -518,12 +518,12 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           {/* 구분 메타 — 같은 유형의 공고를 목록에서 찾아 재활용하기 위한 태그. 프리셋 + 자유 입력 */}
           <div className="flex flex-col gap-3">
             <div>
-              <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고부문</label>
+              <label className="block mb-1.5 cd-label-text">공고부문</label>
               <PresetSelect presets={DIVISION_PRESETS} value={meta.division} onChange={(v) => setMeta((m) => ({ ...m, division: v }))} placeholder="예: 통합허가(울산)" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 구분</label>
+                <label className="block mb-1.5 cd-label-text">공고 구분</label>
                 <select
                   className="cd-select w-full"
                   value={meta.hireType ?? ""}
@@ -537,12 +537,12 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1.5 cd-text-muted">플랫폼</label>
+                <label className="block mb-1.5 cd-label-text">플랫폼</label>
                 <PresetSelect presets={PLATFORM_PRESETS} value={meta.platform} onChange={(v) => setMeta((m) => ({ ...m, platform: v }))} placeholder="예: 사람인" />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1.5 cd-text-muted">
+              <label className="block mb-1.5 cd-label-text">
                 공고기간
                 {periodState(meta) === "expired" && <CdBadge tone="error" className="ml-2">만료</CdBadge>}
                 {periodState(meta) === "open" && <CdBadge tone="success" className="ml-2">진행중</CdBadge>}
@@ -561,16 +561,16 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                   className="flex-1"
                 />
               </div>
-              <p className="text-[11px] cd-text-faint mt-1">종료일을 비우면 상시 채용으로 봅니다. 종료일이 지나면 목록에 만료로 표시됩니다.</p>
+              <p className="cd-hint mt-1">종료일을 비우면 상시 채용으로 봅니다. 종료일이 지나면 목록에 만료로 표시됩니다.</p>
             </div>
             {/* 근무지역·공고 주소(272) — 목록 요약 카드의 근무지역, [채용사이트 열기] 대상 */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-bold mb-1.5 cd-text-muted">근무지역</label>
+                <label className="block mb-1.5 cd-label-text">근무지역</label>
                 <PresetSelect presets={WORK_LOCATION_PRESETS} value={meta.workLocation} onChange={(v) => setMeta((m) => ({ ...m, workLocation: v }))} placeholder="예: 울산" />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1.5 cd-text-muted">공고 주소</label>
+                <label className="block mb-1.5 cd-label-text">공고 주소</label>
                 <input
                   className="cd-input w-full"
                   type="url"
@@ -587,7 +587,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold mb-1.5 cd-text-muted">상태</label>
+            <label className="block mb-1.5 cd-label-text">상태</label>
             <div className="flex gap-2">
               {(["draft", "final"] as const).map((s) => (
                 <button
@@ -611,7 +611,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
 
           {(accentSwatches.length > 0 || docTheme.accentColor) && (
             <div>
-              <label className="block text-xs font-bold mb-1.5 cd-text-muted">액센트 컬러</label>
+              <label className="block mb-1.5 cd-label-text">액센트 컬러</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {accentSwatches.map((hex) => (
                   <button
@@ -634,12 +634,12 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                   className="w-7 h-7 rounded cursor-pointer border cd-border-c bg-transparent"
                 />
               </div>
-              <p className="text-[11px] mt-1.5 cd-text-faint">색 하나로 헤더·배지·포인트가 함께 바뀝니다.</p>
+              <p className="cd-hint mt-1.5">색 하나로 헤더·배지·포인트가 함께 바뀝니다.</p>
             </div>
           )}
 
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold cd-text-muted">간격 축소(compact)</span>
+            <span className="cd-label-text">간격 축소(compact)</span>
             <button
               type="button"
               role="switch"
@@ -798,7 +798,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           {tplMode === "new" ? (
             <>
               <div>
-                <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름 (부문명)</label>
+                <label className="block mb-1 cd-label-text">템플릿 이름 (부문명)</label>
                 <input
                   className="cd-input w-full"
                   value={tplName}
@@ -807,7 +807,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1 cd-text-muted">설명 (선택)</label>
+                <label className="block mb-1 cd-label-text">설명 (선택)</label>
                 <textarea
                   className="cd-input w-full resize-none"
                   rows={3}
@@ -823,7 +823,7 @@ export function RecruitEditorBoard({ postingId }: { postingId: string }) {
           ) : (
             <>
               <div>
-                <label className="block text-xs font-bold mb-1 cd-text-muted">덮어쓸 템플릿</label>
+                <label className="block mb-1 cd-label-text">덮어쓸 템플릿</label>
                 {tplList === null ? (
                   <div className="flex items-center gap-2 text-sm cd-text-muted py-2">
                     <Loader2 className="w-4 h-4 animate-spin" /> 템플릿 불러오는 중…

@@ -125,7 +125,10 @@ export function LetterReviewModal({
           </p>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] cd-text-faint">검수자 — 조직도에서 선택(복수 가능)</span>
+            <span>
+              <span className="cd-label-text">검수자</span>
+              <span className="ml-1.5 cd-hint">조직도에서 선택(복수 가능)</span>
+            </span>
             {reviewers.length === 0 ? (
               <p className="text-[12px] cd-text-faint rounded-lg border border-dashed cd-border-c px-3 py-3 text-center">
                 아직 선택된 검수자가 없습니다.
@@ -160,7 +163,10 @@ export function LetterReviewModal({
           </div>
 
           <label className="flex flex-col gap-1 text-[11px] cd-text-faint">
-            요청 메모(선택) — 검수자에게 함께 전달됩니다
+            <span>
+              <span className="cd-label-text">요청 메모(선택)</span>
+              <span className="ml-1.5 cd-hint">검수자에게 함께 전달됩니다</span>
+            </span>
             <textarea
               className="cd-input text-[12px] min-h-[76px]"
               placeholder="예) 준공 기성금 금액과 대금청구서 계좌를 중점적으로 봐주세요."
@@ -170,7 +176,7 @@ export function LetterReviewModal({
           </label>
 
           <label className="flex flex-col gap-1 text-[11px] cd-text-faint">
-            검수 메일 받을 주소
+            <span className="cd-label-text">검수 메일 받을 주소</span>
             <select className="cd-select" value={target} onChange={(e) => setTarget(e.target.value as "personal" | "company")}>
               <option value="personal">개인 메일 주소</option>
               <option value="company">회사 메일</option>

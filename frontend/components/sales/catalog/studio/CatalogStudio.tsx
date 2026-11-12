@@ -136,7 +136,7 @@ function FontSizeControl({ value, disabled, onChange }: { value: number | null; 
   };
   return (
     <span className="flex items-center gap-0.5 whitespace-nowrap cd-text-muted" title="글자를 고른 뒤 크기를 바꿉니다 — 자유 배치(L3) 쪽에서만">
-      글자 크기
+      <span className="cd-label-text">글자 크기</span>
       <button type="button" className="cd-icon-button cd-icon-button-sm" aria-label="글자 크기 줄이기" disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={() => {
         const next = [...FONT_STEPS].reverse().find((s) => s < cur - 0.01);
         if (next) onChange(next);
@@ -767,7 +767,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
               />
               <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
                 <label className="flex items-center gap-1 cd-text-muted whitespace-nowrap">
-                  판
+                  <span className="cd-label-text">판</span>
                   <select
                     className="cd-select"
                     style={{ width: 118 }}
@@ -782,7 +782,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
                   </select>
                 </label>
                 <label className="flex items-center gap-1 cd-text-muted whitespace-nowrap">
-                  이름
+                  <span className="cd-label-text">이름</span>
                   <select className="cd-select" style={{ width: 96 }} value={studio.view.naming} onChange={(e) => void studio.changeView({ ...studio.view, naming: e.target.value as RenderOptions["naming"] })}>
                     {(["masked", "real"] as const).map((v) => (
                       <option key={v} value={v}>
@@ -1035,7 +1035,7 @@ function VersionsModal({
       <div className="p-4 flex flex-col gap-3">
         <div className="flex items-end gap-2">
           <label className="flex-1 text-xs cd-text-muted flex flex-col gap-1">
-            메모(선택)
+            <span className="cd-label-text">메모(선택)</span>
             <input className="cd-input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="예: 대표이사 검토 반영" />
           </label>
           <button type="button" className="cd-btn cd-btn-primary cd-btn-sm" onClick={snapshot} disabled={busy}>
@@ -1123,14 +1123,14 @@ function PdfModal({ open, onClose, view }: { open: boolean; onClose: () => void;
         <p className="text-xs cd-text-muted">지금 저장된 편집본(쪽 순서·숨김·편집)을 지금 데이터로 PDF(A4 가로)로 만듭니다. 30초 안팎 걸립니다.</p>
         <div className="flex flex-wrap gap-3">
           <label className="flex items-center gap-1">
-            판
+            <span className="cd-label-text">판</span>
             <select className="cd-select" style={{ width: 130 }} value={opts.edition} onChange={(e) => setOpts({ ...opts, edition: e.target.value as RenderOptions["edition"] })}>
               <option value="print">{EDITION_LABEL.print}</option>
               <option value="draft">{EDITION_LABEL.draft}</option>
             </select>
           </label>
           <label className="flex items-center gap-1">
-            이름
+            <span className="cd-label-text">이름</span>
             <select className="cd-select" style={{ width: 110 }} value={opts.naming} onChange={(e) => setOpts({ ...opts, naming: e.target.value as RenderOptions["naming"] })}>
               <option value="masked">{NAMING_LABEL.masked}</option>
               <option value="real">{NAMING_LABEL.real}</option>

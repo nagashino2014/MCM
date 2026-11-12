@@ -37,7 +37,7 @@ export function FacilityContractTypeFields({
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="w-14 shrink-0 text-[11px] font-medium cd-text-faint">매출 계약</span>
+        <span className="w-14 shrink-0 whitespace-nowrap cd-label-text">매출 계약</span>
         <div className="flex flex-wrap gap-2">
           {FACILITY_SERVICE_ORDER.map((category) => (
             <label key={category} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">
@@ -60,7 +60,7 @@ export function FacilityContractTypeFields({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="w-14 shrink-0 text-[11px] font-medium cd-text-faint">매입 계약</span>
+        <span className="w-14 shrink-0 whitespace-nowrap cd-label-text">매입 계약</span>
         <div className="flex flex-wrap gap-2">
           {PURCHASE_CONTRACT_TYPES.map((type) => (
             <label key={type.key} className="flex items-center gap-1.5 text-xs font-semibold cd-text-muted">

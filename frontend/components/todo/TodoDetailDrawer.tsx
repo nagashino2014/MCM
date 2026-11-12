@@ -1963,7 +1963,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
               <FoldSection label="부가 설정" col="side" summary={extraSummary} open={extraOpen} onToggle={() => setExtraOpen((v) => !v)}>
                 {/* 우선순위 */}
                 <div className="todo-pr">
-                  <span className="todo-pr-label">우선순위</span>
+                  <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">우선순위</span>
                   <div className="todo-seg" role="radiogroup" aria-label="우선순위">
                     {([0, 1, 2, 3] as TodoPriority[]).map((p) => (
                       <button key={p} type="button" role="radio" aria-checked={detail.priority === p} className="cd-choice" data-pri={p} data-active={detail.priority === p ? "true" : undefined} disabled={!canEdit} onClick={() => schedule({ priority: p }, true)}>
@@ -1975,7 +1975,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
                 {/* 알림 */}
                 <div className="todo-pr" data-top={editing === "remind" ? "true" : undefined}>
-                  <span className="todo-pr-label">알림</span>
+                  <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">알림</span>
                   {editing === "remind" ? (
                     <PropEditor onDone={() => setEditing(null)}>
                       <select
@@ -2041,7 +2041,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
                 {/* 반복 */}
                 <div className="todo-pr" data-top={editing === "recurrence" ? "true" : undefined}>
-                  <span className="todo-pr-label">반복</span>
+                  <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">반복</span>
                   {editing === "recurrence" ? (
                     <PropEditor onDone={() => setEditing(null)}>
                       <select className="cd-select todo-w-sel" aria-label="반복" value={recDraft.preset} onChange={(e) => applyRecurrence({ ...recDraft, preset: e.target.value })}>
@@ -2096,7 +2096,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
                 {/* 보드 · 열 */}
                 <div className="todo-pr" data-top={editing === "board" ? "true" : undefined}>
-                  <span className="todo-pr-label">보드</span>
+                  <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">보드</span>
                   {editing === "board" ? (
                     <PropEditor onDone={() => setEditing(null)}>
                       <select
@@ -2144,7 +2144,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 </div>
                 {(moveHint || otherSharedBoard) && (
                   <div className="todo-pr">
-                    <span className="todo-pr-label" />
+                    <span className="w-[72px] flex-none" />
                     <div className="todo-pr-val" data-static="true">
                       <span className="todo-mu">{moveHint ?? `${TODO_BOARD_KIND_LABELS[otherSharedBoard!.kind]} 보드로 이동하면 멤버 ${otherSharedBoard!.memberCount}명에게 보입니다`}</span>
                     </div>
@@ -2154,7 +2154,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
                 {/* 완료 조건(276) — 상위 작업만. 체크 즉시 저장. */}
                 {!detail.parentItemId && (
                   <div className="todo-pr" data-top="true">
-                    <span className="todo-pr-label">완료 조건</span>
+                    <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">완료 조건</span>
                     <div className="todo-pr-val" data-static="true">
                       <CompleteRulesFields value={detail.completeRules} disabled={!canEdit} hints onChange={(next) => schedule({ completeRules: next }, true)} />
                     </div>
@@ -2163,7 +2163,7 @@ export function TodoDetailDrawer({ mode = "drawer", itemId, boards, prefs, myUse
 
                 {/* 공유 */}
                 <div className="todo-pr">
-                  <span className="todo-pr-label">공유</span>
+                  <span className="w-[72px] flex-none whitespace-nowrap cd-label-text">공유</span>
                   <div className="todo-pr-val" data-static="true">
                     {isDraft && <span className="todo-mu">저장 후 추가할 수 있습니다</span>}
                     {!isDraft && shares.map((s) => (

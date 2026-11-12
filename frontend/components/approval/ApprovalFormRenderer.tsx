@@ -215,7 +215,7 @@ function FieldCell({
   const lockHint = readOnly ? null : contractLockHint(f, allFields, allValues);
   return (
     <div className="flex min-w-0 border-t md:border-t-0 md:border-l first:border-l-0 first:border-t-0 cd-border-c" style={{ flex: span }}>
-      <div className="w-32 shrink-0 px-2.5 py-2.5 text-[12px] font-semibold cd-surface-bg cd-text flex items-center">
+      <div className="w-32 shrink-0 px-2.5 py-2.5 cd-surface-bg flex items-center cd-label-text">
         <span>
           {f.required && <span className="text-[color:var(--cd-error)] mr-0.5">*</span>}
           {f.label}

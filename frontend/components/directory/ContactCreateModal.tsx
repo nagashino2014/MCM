@@ -173,7 +173,7 @@ export function ContactCreateModal({
           )}
         </div>
         {!facility && (
-          <p className="-mt-2 text-xs cd-text-faint">등록된 사업장에서 고릅니다. 목록에 없으면 사업장 관리 담당자에게 등록을 요청하세요.</p>
+          <p className="-mt-2 cd-hint">등록된 사업장에서 고릅니다. 목록에 없으면 사업장 관리 담당자에게 등록을 요청하세요.</p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />

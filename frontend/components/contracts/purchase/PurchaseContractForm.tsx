@@ -263,7 +263,7 @@ export function PurchaseContractForm({
   return (
     <div className="grid grid-cols-2 gap-3">
       <label className="grid gap-1 text-sm col-span-2">
-        <span className="font-semibold cd-text-muted">계약명</span>
+        <span className="cd-label-text">계약명</span>
         <input
           className="cd-input"
           value={state.contractTitle}
@@ -273,7 +273,7 @@ export function PurchaseContractForm({
       </label>
 
       <div className="grid gap-1 text-sm col-span-2 relative">
-        <span className="font-semibold cd-text-muted">계약상대 업체</span>
+        <span className="cd-label-text">계약상대 업체</span>
         <input
           className="cd-input"
           value={state.counterpartyQuery}
@@ -283,7 +283,7 @@ export function PurchaseContractForm({
           placeholder="업체명 두 글자 이상 입력"
         />
         {state.counterpartyFacilityId ? (
-          <span className="text-[11px] cd-text-faint flex items-center gap-1.5">
+          <span className="cd-hint flex items-center gap-1.5">
             선택됨: {state.counterpartyName}
             {state.counterpartyTradeRoles.map((r) => (
               <TradeRoleBadge key={r} role={r} />
@@ -291,7 +291,7 @@ export function PurchaseContractForm({
             {!state.counterpartyTradeRoles.includes("purchase") && <span>· 저장 시 매입처로 표시됩니다</span>}
           </span>
         ) : (
-          <span className="text-[11px] cd-text-faint">사업장 마스터에서 검색합니다. 매입처로 지정된 업체가 먼저 나옵니다.</span>
+          <span className="cd-hint">사업장 마스터에서 검색합니다. 매입처로 지정된 업체가 먼저 나옵니다.</span>
         )}
         {facilityOptions.length > 0 && (
           <ul className="absolute left-0 right-0 top-[66px] z-20 max-h-56 overflow-auto rounded-lg border cd-border-c cd-card-bg shadow-[var(--cd-shadow)] text-xs">
@@ -324,7 +324,7 @@ export function PurchaseContractForm({
       </div>
 
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">계약 유형</span>
+        <span className="cd-label-text">계약 유형</span>
         <select className="cd-select" value={state.contractType} onChange={(e) => setType(e.target.value)}>
           {PURCHASE_CONTRACT_TYPES.map((t) => (
             <option key={t.key} value={t.key}>{t.label}</option>
@@ -332,7 +332,7 @@ export function PurchaseContractForm({
         </select>
       </label>
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">계약 분류</span>
+        <span className="cd-label-text">계약 분류</span>
         <select className="cd-select" value={state.contractCategory} onChange={(e) => setCategory(e.target.value)}>
           {categories.map((c) => (
             <option key={c} value={c}>{c}</option>
@@ -342,7 +342,7 @@ export function PurchaseContractForm({
 
       {relatedMode !== "hidden" && (
         <div className="grid gap-1 text-sm col-span-2 relative">
-          <span className="font-semibold cd-text-muted">
+          <span className="cd-label-text">
             관련 매출 계약 {relatedMode === "required" ? <span className="cd-error-text">*</span> : <span className="cd-text-faint font-normal">(선택)</span>}
           </span>
           {canSearchSales ? (
@@ -353,7 +353,7 @@ export function PurchaseContractForm({
                 onChange={(e) => onChange({ ...state, relatedContractQuery: e.target.value, relatedContractId: "", relatedContractLabel: "" })}
                 placeholder="매출 계약명 또는 발주처 두 글자 이상"
               />
-              <span className="text-[11px] cd-text-faint">
+              <span className="cd-hint">
                 {state.relatedContractId ? `선택됨: ${state.relatedContractLabel}` : "이 외주 계약이 수행하는 매출 계약(용역)을 고릅니다."}
               </span>
               {relatedOptions.length > 0 && (
@@ -393,30 +393,30 @@ export function PurchaseContractForm({
 
       {/* 좌·우 칸은 content-start 로 위에 붙여 힌트 줄 유무와 관계없이 입력란 상단·높이를 맞춘다(2026-11-03 사용자 지적). */}
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">{amountLabel(state.contractType)}</span>
+        <span className="cd-label-text">{amountLabel(state.contractType)}</span>
         {mode === "manual" ? (
           <AmountInput className="cd-input tabular-nums" value={state.contractAmount} onChange={(contractAmount) => onChange({ ...state, contractAmount })} placeholder={amountHint(state.contractType)} />
         ) : (
           <input className="cd-input tabular-nums" value={mode === "milestone_sum" && amount > 0 ? formatAmount(amount) : ""} readOnly disabled={mode === "disabled"} placeholder={amountHint(state.contractType)} />
         )}
-        <span className="text-[11px] cd-text-faint">
+        <span className="cd-hint">
           {mode === "milestone_sum" && "청구·수금 단계에 등록한 대금 지급 조건 합계액이 표시됩니다."}
           {mode === "manual" && "1개월 기준 구독료를 적습니다. 추가 지출은 '추가 지출' 탭에서 월별로 기록합니다."}
           {mode === "disabled" && "임대·관리 계약은 분류 탭과 월별 표에서 금액을 다룹니다."}
         </span>
       </label>
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">{startDateLabel(state.contractType)}</span>
+        <span className="cd-label-text">{startDateLabel(state.contractType)}</span>
         <AutoDateInput className="cd-input tabular-nums" value={state.contractDate} onChange={(contractDate) => onChange({ ...state, contractDate })} />
       </label>
 
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">{endDateLabel(state.contractType)}</span>
+        <span className="cd-label-text">{endDateLabel(state.contractType)}</span>
         <AutoDateInput className="cd-input tabular-nums" value={state.completedAt} onChange={(completedAt) => onChange({ ...state, completedAt })} />
-        {state.contractType === "lease" && <span className="text-[11px] cd-text-faint">렌트·임대 계약 종료일이 정해져 있으면 적습니다.</span>}
+        {state.contractType === "lease" && <span className="cd-hint">렌트·임대 계약 종료일이 정해져 있으면 적습니다.</span>}
       </label>
       <div className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">계약 조건</span>
+        <span className="cd-label-text">계약 조건</span>
         {/* 단가 계약=외주 계약, 추가 지출=정기 구독, 종량제=복합기·비데·정수기 렌트·관리 계약(관리 계약은 고정). 체크 시 해당 탭이 열린다. */}
         <div className="flex flex-wrap items-center gap-4 min-h-[38px]">
           <FlagCheckbox label="단가 계약" checked={state.isUnitPrice} disabled={!avail.unitPrice} onChange={(isUnitPrice) => onChange({ ...state, isUnitPrice })} title="외주 계약에서만 선택할 수 있습니다" />
@@ -432,17 +432,17 @@ export function PurchaseContractForm({
       </div>
 
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">매입 계정과목</span>
+        <span className="cd-label-text">매입 계정과목</span>
         <select className="cd-select" value={state.accountCode} onChange={(e) => onChange({ ...state, accountCode: e.target.value })}>
           <option value="">미지정</option>
           {typeAccounts.map((a) => (
             <option key={a.accountCode} value={a.accountCode}>{a.accountCode} {a.name}</option>
           ))}
         </select>
-        <span className="text-[11px] cd-text-faint">이 계약 유형에 맞는 비용 계정만 보입니다. 분류를 고르면 기본 계정이 잡히고, 매입 계산서 분개의 참고 계정으로 씁니다.</span>
+        <span className="cd-hint">이 계약 유형에 맞는 비용 계정만 보입니다. 분류를 고르면 기본 계정이 잡히고, 매입 계산서 분개의 참고 계정으로 씁니다.</span>
       </label>
       <label className="grid gap-1 text-sm content-start">
-        <span className="font-semibold cd-text-muted">메모</span>
+        <span className="cd-label-text">메모</span>
         <textarea className="cd-input min-h-[70px]" value={state.memo} onChange={(e) => onChange({ ...state, memo: e.target.value })} />
       </label>
     </div>

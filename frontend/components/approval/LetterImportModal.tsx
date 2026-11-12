@@ -152,7 +152,7 @@ export function LetterImportModal({
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">공문번호 *</span>
+            <span className="cd-label-text">공문번호 *</span>
             <input className="cd-input font-mono" placeholder="2026-대외-01034" value={letterNo} onChange={(e) => setLetterNo(e.target.value)} />
             {letterNo.trim() && !LETTER_NO_RE.test(letterNo.trim()) ? (
               <span className="text-[11px] cd-error-text">형식: 2026-대외-01034</span>
@@ -163,19 +163,19 @@ export function LetterImportModal({
             )}
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">
-            <span className="text-[11px] cd-text-faint">제목 *</span>
+            <span className="cd-label-text">제목 *</span>
             <input className="cd-input" placeholder="공문 제목" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">시행일</span>
+            <span className="cd-label-text">시행일</span>
             <input className="cd-input font-mono" placeholder="2026-08-19" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] cd-text-faint">기안자</span>
+            <span className="cd-label-text">기안자</span>
             <input className="cd-input" placeholder="성명" value={drafterName} onChange={(e) => setDrafterName(e.target.value)} />
           </div>
           <div className="flex items-end gap-3 md:col-span-3">
-            <span className="text-[11px] cd-text-faint pb-2">유형</span>
+            <span className="pb-2 cd-label-text">유형</span>
             {(
               [
                 ["general", "일반"],
@@ -193,7 +193,7 @@ export function LetterImportModal({
         <RecipientEditGrid label="참조(담당자)" list={ccRefs} onChange={setCcRefs} />
 
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-semibold cd-text">원본 파일</span>
+          <span className="cd-label-text">원본 파일</span>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {(["pdf", "hwp", "hwpx"] as Slot[]).map((slot) => (
               <FileSlot key={slot} slot={slot} file={files[slot]} onPick={(f) => setFiles((prev) => ({ ...prev, [slot]: f }))} />

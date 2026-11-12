@@ -198,7 +198,7 @@ export function ActivityDetailSheet({
 
       {canReport ? (
         <div className="mt-3">
-          <h4 className="cd-text-muted text-xs font-bold mb-1.5">경과 입력</h4>
+          <h4 className="cd-label-text mb-1.5">경과 입력</h4>
           <textarea
             className="cd-textarea w-full"
             rows={4}

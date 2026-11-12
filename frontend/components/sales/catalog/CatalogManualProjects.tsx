@@ -217,20 +217,20 @@ export function ManualProjectModal({
         <div className="grid gap-3 text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">분류 *</span>
+              <span className="cd-label-text">분류 *</span>
               <select className="cd-select" value={d.category} onChange={(e) => set({ category: e.target.value })}>
                 {CATALOG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">세분류</span>
+              <span className="cd-label-text">세분류</span>
               <input className="cd-input" list="manual-subtypes" value={d.subtype} onChange={(e) => set({ subtype: e.target.value })} />
               <datalist id="manual-subtypes">
                 {["최초허가", "변경허가", "변경신고", "재검토", "사후관리"].map((x) => <option key={x} value={x} />)}
               </datalist>
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">상태</span>
+              <span className="cd-label-text">상태</span>
               <select className="cd-select" value={d.status} onChange={(e) => set({ status: e.target.value as ManualDraft["status"] })}>
                 <option value="completed">완료</option>
                 <option value="ongoing">수행 중</option>
@@ -238,49 +238,49 @@ export function ManualProjectModal({
             </label>
           </div>
           <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">실적 이름(내부용) *</span>
+            <span className="cd-label-text">실적 이름(내부용) *</span>
             <input className="cd-input" value={d.title} placeholder="예: 석문에너지 통합환경허가 취득 — 한국종합기술 위임" onChange={(e) => set({ title: e.target.value })} />
           </label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">사업장</span>
+              <span className="cd-label-text">사업장</span>
               <input className="cd-input" value={d.siteName} placeholder="예: 석문에너지" onChange={(e) => set({ siteName: e.target.value })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">발주·위임처</span>
+              <span className="cd-label-text">발주·위임처</span>
               <input className="cd-input" value={d.counterpartyName} placeholder="예: 한국종합기술" onChange={(e) => set({ counterpartyName: e.target.value })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">시도(권역 집계)</span>
+              <span className="cd-label-text">시도(권역 집계)</span>
               <input className="cd-input" value={d.regionSido} placeholder="예: 충청남도" onChange={(e) => set({ regionSido: e.target.value })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">업종</span>
+              <span className="cd-label-text">업종</span>
               <input className="cd-input" list="manual-industries" value={d.industry} placeholder="예: 발전" onChange={(e) => set({ industry: e.target.value })} />
               <datalist id="manual-industries">
                 {permitIndustries.map((i) => <option key={i.id} value={i.label} />)}
               </datalist>
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">수행 시작(YYYY-MM-DD)</span>
+              <span><span className="cd-label-text">수행 시작</span><span className="cd-hint ml-1.5">(YYYY-MM-DD)</span></span>
               <input className="cd-input tabular-nums" value={d.startedAt} placeholder="2019-06-01" onChange={(e) => set({ startedAt: e.target.value })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">수행 종료</span>
+              <span className="cd-label-text">수행 종료</span>
               <input className="cd-input tabular-nums" value={d.endedAt} placeholder="2020-12-03" onChange={(e) => set({ endedAt: e.target.value })} />
             </label>
             {isPermit && (
               <>
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">허가일</span>
+                  <span className="cd-label-text">허가일</span>
                   <input className="cd-input tabular-nums" value={d.permitIssuedAt} placeholder="2020-12-03" onChange={(e) => set({ permitIssuedAt: e.target.value })} />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">허가 결정번호</span>
+                  <span className="cd-label-text">허가 결정번호</span>
                   <input className="cd-input tabular-nums" value={d.permitNo} placeholder="0000-01" onChange={(e) => set({ permitNo: e.target.value })} />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">허가 사업장 수</span>
+                  <span className="cd-label-text">허가 사업장 수</span>
                   <input
                     className="cd-input tabular-nums"
                     inputMode="numeric"
@@ -292,11 +292,11 @@ export function ManualProjectModal({
               </>
             )}
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">수령액(만 원, 선택)</span>
+              <span className="cd-label-text">수령액(만 원, 선택)</span>
               <input className="cd-input tabular-nums text-right" inputMode="numeric" value={d.amountMan} onChange={(e) => set({ amountMan: e.target.value.replace(/[^\d]/g, "") })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">부록 표시</span>
+              <span className="cd-label-text">부록 표시</span>
               <select className="cd-select" value={d.displayOverride} onChange={(e) => set({ displayOverride: e.target.value as DisplayOverride })}>
                 <option value="auto">자동</option>
                 <option value="always">항상 표시</option>
@@ -305,12 +305,12 @@ export function ManualProjectModal({
             </label>
           </div>
           <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">대외 표기명</span>
+            <span className="cd-label-text">대외 표기명</span>
             <textarea className="cd-input" rows={2} value={d.displayTitle} placeholder={autoTitle} onChange={(e) => set({ displayTitle: e.target.value })} />
-            <span className="text-[11px] cd-text-faint">비워 두면 회색 글씨의 자동 표기를 씁니다.</span>
+            <span className="cd-hint">비워 두면 회색 글씨의 자동 표기를 씁니다.</span>
           </label>
           <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">계약이 없는 사유(내부용)</span>
+            <span className="cd-label-text">계약이 없는 사유(내부용)</span>
             <input className="cd-input" value={d.note} placeholder="예: 한국종합기술 사정으로 정식 계약 미체결, 대금만 수령" onChange={(e) => set({ note: e.target.value })} />
           </label>
           <div className="flex flex-wrap gap-4">

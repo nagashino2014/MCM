@@ -315,8 +315,8 @@ export function CollectionOptionsCard({
       <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <CalendarRange className="w-4 h-4 cd-text-faint" />
-          <span className="text-xs font-bold cd-text-muted">수집 범위</span>
-          <span className="text-[10px] cd-text-faint font-medium ml-auto">게재일 기준</span>
+          <span className="cd-label-text">수집 범위</span>
+          <span className="cd-hint ml-auto">게재일 기준</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {RANGE_PRESETS.map((p) => (
@@ -347,8 +347,8 @@ export function CollectionOptionsCard({
       <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 cd-text-faint" />
-          <span className="text-xs font-bold cd-text-muted">수집 필터</span>
-          <span className="text-[10px] cd-text-faint font-medium ml-auto">다중 선택</span>
+          <span className="cd-label-text">수집 필터</span>
+          <span className="cd-hint ml-auto">다중 선택</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {FILTER_OPTIONS.map((f) => (
@@ -393,7 +393,7 @@ export function CollectionOptionsCard({
       <div className="cd-surface-bg border cd-border-c rounded-2xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <ScanLine className="w-4 h-4 cd-text-faint" />
-          <span className="text-xs font-bold cd-text-muted">추출 설정</span>
+          <span className="cd-label-text">추출 설정</span>
           <span className="text-[10px] cd-text-faint font-medium ml-auto">
             활성 {activeIds.length} / {rules.length}
           </span>
@@ -596,8 +596,8 @@ function ExtractionRangeCard({
     >
       <div className="flex items-center gap-2">
         <FileSearch className="w-4 h-4 cd-text-faint" />
-        <span className="text-xs font-bold cd-text-muted">{title}</span>
-        <span className="text-[10px] cd-text-faint font-medium ml-auto">{subtitle}</span>
+        <span className="cd-label-text">{title}</span>
+        <span className="cd-hint ml-auto">{subtitle}</span>
       </div>
       <div className="range-toggle">
         <button

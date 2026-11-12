@@ -281,12 +281,12 @@ export function ApprovalContactRequestBoard() {
                   ["brn", "사업자등록번호"],
                 ] as [keyof CompanyInfo, string][]).map(([key, label]) => (
                   <label key={key} className="flex flex-col gap-1 text-[12px] cd-text-faint">
-                    {label}
+                    <span className="cd-label-text">{label}</span>
                     <input className="cd-input text-[13px]" value={company[key]} onChange={(e) => setCompany((prev) => ({ ...prev, [key]: e.target.value }))} />
                   </label>
                 ))}
               </div>
-              <p className="text-[12px] cd-text-faint">성명만 필수입니다. 아는 만큼 적으면 됩니다.</p>
+              <p className="cd-hint">성명만 필수입니다. 아는 만큼 적으면 됩니다.</p>
 
               <div className="flex justify-end">
                 <CdButton variant="primary" size="sm" loading={busy} onClick={() => void submit()}>

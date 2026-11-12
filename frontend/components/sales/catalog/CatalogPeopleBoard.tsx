@@ -634,32 +634,32 @@ export function CatalogPeopleBoard() {
             </div>
           )}
           <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">순서(작은 수가 앞, 비우면 직급순)</span>
+            <span><span className="cd-label-text">순서</span><span className="cd-hint ml-1.5">(작은 수가 앞, 비우면 직급순)</span></span>
             <input className="cd-input tabular-nums" style={{ width: 96 }} inputMode="numeric" value={personDraft.orderNo} onChange={(e) => setPersonDraft({ ...personDraft, orderNo: e.target.value.replace(/[^\d]/g, "") })} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs cd-text-muted">소개서 직함(비우면 인사 직위)</span>
+            <span><span className="cd-label-text">소개서 직함</span><span className="cd-hint ml-1.5">(비우면 인사 직위)</span></span>
             <input className="cd-input" value={personDraft.roleLabel} placeholder={editing?.positionName || "예: 대표이사 / 기술연구소장"} onChange={(e) => setPersonDraft({ ...personDraft, roleLabel: e.target.value })} />
           </label>
           {editing?.section === "exec" ? (
             <>
               <p className="text-xs cd-text-faint">아래 세 칸은 회사소개서 임원진 카드의 학력·자격·경력 줄에 그대로 실립니다. 비우면 인사 기록(학력·자격증·경력)으로 채웁니다.</p>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">학력</span>
+                <span className="cd-label-text">학력</span>
                 <input className="cd-input" value={personDraft.eduOverride} placeholder={leaderCards[editing.employeeId]?.eduAuto || "예: 강원대학교 환경공학 박사"} onChange={(e) => setPersonDraft({ ...personDraft, eduOverride: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">자격(쉼표로 구분)</span>
+                <span><span className="cd-label-text">자격</span><span className="cd-hint ml-1.5">(쉼표로 구분)</span></span>
                 <input className="cd-input" value={personDraft.certOverride} placeholder={leaderCards[editing.employeeId]?.certAuto || "예: 대기관리기술사, 수질환경기사"} onChange={(e) => setPersonDraft({ ...personDraft, certOverride: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">경력(맨 앞 'N년'이 경력 연수 — 임원 평균 경력에 셉니다)</span>
+                <span><span className="cd-label-text">경력</span><span className="cd-hint ml-1.5">(맨 앞 'N년'이 경력 연수 — 임원 평균 경력에 셉니다)</span></span>
                 <textarea className="cd-input" rows={4} value={personDraft.bioShort} placeholder={leaderCards[editing.employeeId]?.careerAuto || "예: 37년 · 前 환경부 대기환경과장"} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
               </label>
             </>
           ) : (
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분)</span>
+              <span><span className="cd-label-text">약력 요약</span><span className="cd-hint ml-1.5">(3~4줄, 줄바꿈으로 구분)</span></span>
               <textarea className="cd-input" rows={4} value={personDraft.bioShort} onChange={(e) => setPersonDraft({ ...personDraft, bioShort: e.target.value })} />
             </label>
           )}
@@ -708,16 +708,16 @@ export function CatalogPeopleBoard() {
               </div>
               <div className="grid gap-3 flex-1 min-w-0">
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">이름 *</span>
+                  <span className="cd-label-text">이름 *</span>
                   <input className="cd-input" value={extraDraft.name} onChange={(e) => setExtraDraft({ ...extraDraft, name: e.target.value })} />
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="grid gap-1">
-                    <span className="text-xs cd-text-muted">소개서 직함</span>
+                    <span className="cd-label-text">소개서 직함</span>
                     <input className="cd-input" value={extraDraft.roleLabel} placeholder="예: 고문" onChange={(e) => setExtraDraft({ ...extraDraft, roleLabel: e.target.value })} />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-xs cd-text-muted">계약 구분</span>
+                    <span className="cd-label-text">계약 구분</span>
                     <select className="cd-select" value={extraDraft.employmentType} onChange={(e) => setExtraDraft({ ...extraDraft, employmentType: e.target.value as CatalogExtraPerson["employmentType"] })}>
                       {EXTRA_EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -727,25 +727,25 @@ export function CatalogPeopleBoard() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">학력</span>
+                <span className="cd-label-text">학력</span>
                 <input className="cd-input" value={extraDraft.edu} placeholder="예: 강원대학교 환경공학 박사" onChange={(e) => setExtraDraft({ ...extraDraft, edu: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">자격(쉼표로 구분)</span>
+                <span><span className="cd-label-text">자격</span><span className="cd-hint ml-1.5">(쉼표로 구분)</span></span>
                 <input className="cd-input" value={extraDraft.cert} placeholder="예: 수질환경기사, 행정사" onChange={(e) => setExtraDraft({ ...extraDraft, cert: e.target.value })} />
               </label>
             </div>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">약력 요약(3~4줄, 줄바꿈으로 구분 · 맨 앞에 'N년'을 적으면 임원 평균 경력에 셉니다)</span>
+              <span><span className="cd-label-text">약력 요약</span><span className="cd-hint ml-1.5">(3~4줄, 줄바꿈으로 구분 · 맨 앞에 'N년'을 적으면 임원 평균 경력에 셉니다)</span></span>
               <textarea className="cd-input" rows={4} value={extraDraft.bioShort} onChange={(e) => setExtraDraft({ ...extraDraft, bioShort: e.target.value })} />
             </label>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">상세 경력(이력 쪽용, 선택)</span>
+              <span><span className="cd-label-text">상세 경력</span><span className="cd-hint ml-1.5">(이력 쪽용, 선택)</span></span>
               <textarea className="cd-input" rows={3} value={extraDraft.career} onChange={(e) => setExtraDraft({ ...extraDraft, career: e.target.value })} />
             </label>
             <div className="flex items-center gap-4 flex-wrap">
               <label className="inline-flex items-center gap-2">
-                순서
+                <span className="cd-label-text">순서</span>
                 <input
                   className="cd-input tabular-nums"
                   style={{ width: 72 }}
@@ -785,29 +785,29 @@ export function CatalogPeopleBoard() {
           <div className="grid gap-3 text-sm">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">이름 *</span>
+                <span className="cd-label-text">이름 *</span>
                 <input className="cd-input" value={advisorDraft.name} onChange={(e) => setAdvisorDraft({ ...advisorDraft, name: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">자문 분야</span>
+                <span className="cd-label-text">자문 분야</span>
                 <input className="cd-input" value={advisorDraft.field} placeholder="예: 대기 / 화학안전 / ESG" onChange={(e) => setAdvisorDraft({ ...advisorDraft, field: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">소속</span>
+                <span className="cd-label-text">소속</span>
                 <input className="cd-input" value={advisorDraft.org} onChange={(e) => setAdvisorDraft({ ...advisorDraft, org: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">직위</span>
+                <span className="cd-label-text">직위</span>
                 <input className="cd-input" value={advisorDraft.title} onChange={(e) => setAdvisorDraft({ ...advisorDraft, title: e.target.value })} />
               </label>
             </div>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">주요 경력(줄바꿈으로 구분)</span>
+              <span><span className="cd-label-text">주요 경력</span><span className="cd-hint ml-1.5">(줄바꿈으로 구분)</span></span>
               <textarea className="cd-input" rows={4} value={advisorDraft.career} onChange={(e) => setAdvisorDraft({ ...advisorDraft, career: e.target.value })} />
             </label>
             <div className="flex items-center gap-4">
               <label className="inline-flex items-center gap-2">
-                순서
+                <span className="cd-label-text">순서</span>
                 <input className="cd-input tabular-nums" style={{ width: 72 }} inputMode="numeric" value={advisorDraft.orderNo} onChange={(e) => setAdvisorDraft({ ...advisorDraft, orderNo: Number(e.target.value.replace(/[^\d]/g, "")) || 0 })} />
               </label>
               <label className="inline-flex items-center gap-2">

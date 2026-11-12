@@ -451,7 +451,7 @@ export default function TaxInvoiceIssueModal({
                   </div>
                   <div className="mt-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] cd-text-faint">발행 담당자 이메일(필수)</span>
+                      <span className="cd-label-text">발행 담당자 이메일(필수)</span>
                       <button
                         type="button"
                         className="rounded-lg border cd-border-c px-2 py-0.5 text-[11px] disabled:opacity-40"
@@ -501,11 +501,11 @@ export default function TaxInvoiceIssueModal({
                   <div className="text-xs font-semibold mb-2">공급받는자 (발주처)</div>
                   <div className="grid grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] gap-2">
                     <label className="col-span-3">
-                      <span className="text-[11px] cd-text-faint">상호</span>
+                      <span className="cd-label-text">상호</span>
                       <input className="cd-input mt-0.5" value={invoiceeCorpName} onChange={(e) => setInvoiceeCorpName(e.target.value)} />
                     </label>
                     <label>
-                      <span className="text-[11px] cd-text-faint">사업자번호</span>
+                      <span className="cd-label-text">사업자번호</span>
                       <input
                         className="cd-input mt-0.5"
                         value={fmtCorpNum(invoiceeCorpNum)}
@@ -515,7 +515,7 @@ export default function TaxInvoiceIssueModal({
                       />
                     </label>
                     <label>
-                      <span className="text-[11px] cd-text-faint">종사업장</span>
+                      <span className="cd-label-text">종사업장</span>
                       <input
                         className="cd-input mt-0.5 text-center font-mono"
                         value={invoiceeTaxRegId}
@@ -529,11 +529,11 @@ export default function TaxInvoiceIssueModal({
                       />
                     </label>
                     <label>
-                      <span className="text-[11px] cd-text-faint">대표자</span>
+                      <span className="cd-label-text">대표자</span>
                       <input className="cd-input mt-0.5" value={invoiceeCeo} onChange={(e) => setInvoiceeCeo(e.target.value)} />
                     </label>
                     <label className="col-span-3">
-                      <span className="text-[11px] cd-text-faint">주소</span>
+                      <span className="cd-label-text">주소</span>
                       <input className="cd-input mt-0.5" value={invoiceeAddr} onChange={(e) => setInvoiceeAddr(e.target.value)} />
                     </label>
                   </div>
@@ -607,15 +607,15 @@ export default function TaxInvoiceIssueModal({
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <label>
-                    <span className="text-[11px] cd-text-faint">담당자</span>
+                    <span className="cd-label-text">담당자</span>
                     <input className="cd-input mt-0.5" value={contactName} onChange={(e) => setContactName(e.target.value)} />
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">연락처</span>
+                    <span className="cd-label-text">연락처</span>
                     <input className="cd-input mt-0.5" value={contactTel} onChange={(e) => setContactTel(e.target.value)} />
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">이메일(필수) · 대표 수신처</span>
+                    <span className="cd-label-text">이메일(필수)</span><span className="cd-hint ml-1.5">대표 수신처</span>
                     <input className="cd-input mt-0.5" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </label>
                 </div>
@@ -623,7 +623,7 @@ export default function TaxInvoiceIssueModal({
                 {/* 추가 수신처 — 바로빌 메일은 대표 1명에게만 나가고, 이쪽은 발행 직후 앱이 안내 메일을 보낸다. */}
                 <div className="mt-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] cd-text-faint">추가 수신처</span>
+                    <span className="cd-label-text">추가 수신처</span>
                     {ccEmails.filter((e) => e !== email).map((address) => (
                       <span key={address} className="cd-action inline-flex items-center gap-1 rounded-full border cd-border-c px-2 py-0.5 text-[11px]">
                         {address}
@@ -661,7 +661,7 @@ export default function TaxInvoiceIssueModal({
                     </button>
                   </div>
                   {ccEmails.filter((e) => e !== email).length > 0 && (
-                    <p className="text-[11px] cd-text-faint mt-1">
+                    <p className="cd-hint mt-1">
                       계산서 원본 메일은 바로빌이 대표 수신처로 보내고, 추가 수신처에는 발행 직후 발행 안내 메일이 따로 나갑니다.
                     </p>
                   )}
@@ -673,11 +673,11 @@ export default function TaxInvoiceIssueModal({
                 <div className="text-xs font-semibold">발행 내용</div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <label>
-                    <span className="text-[11px] cd-text-faint">작성일자</span>
+                    <span className="cd-label-text">작성일자</span>
                     <CdDateInput className="mt-0.5" value={writeDate} onChange={setWriteDate} aria-label="작성일자" />
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">과세 구분</span>
+                    <span className="cd-label-text">과세 구분</span>
                     <select className="cd-input mt-0.5" value={taxType} onChange={(e) => setTaxType(Number(e.target.value))}>
                       <option value={1}>과세</option>
                       <option value={2}>영세</option>
@@ -685,14 +685,14 @@ export default function TaxInvoiceIssueModal({
                     </select>
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">영수/청구</span>
+                    <span className="cd-label-text">영수/청구</span>
                     <select className="cd-input mt-0.5" value={purposeType} onChange={(e) => setPurposeType(Number(e.target.value))}>
                       <option value={2}>청구</option>
                       <option value={1}>영수</option>
                     </select>
                   </label>
                   <label>
-                    <span className="text-[11px] cd-text-faint">입력 금액 기준</span>
+                    <span className="cd-label-text">입력 금액 기준</span>
                     <select className="cd-input mt-0.5" value={amountBase} onChange={(e) => setAmountBase(e.target.value as "supply" | "total")}>
                       <option value="supply">공급가액(부가세 별도)</option>
                       <option value="total">합계금액(부가세 포함)</option>
@@ -702,7 +702,7 @@ export default function TaxInvoiceIssueModal({
                 {/* 품목 — 보통 1행이면 충분하지만, 홈택스처럼 여러 줄로 나눠 발행할 수도 있다. */}
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] cd-text-faint">품목 (단계 금액 {fmt(prefill.stageAmount)}원)</span>
+                    <span><span className="cd-label-text">품목</span><span className="cd-hint ml-1.5">(단계 금액 {fmt(prefill.stageAmount)}원)</span></span>
                     <div className="flex items-center gap-1.5">
                       {/* 복수 청구 단계 묶음 발행(2026-08-24) — 미청구 단계를 골라 합산 발행 */}
                       <button
@@ -809,7 +809,7 @@ export default function TaxInvoiceIssueModal({
                     </div>
                   ))}
                   {lineItems.length > 1 && (
-                    <p className="text-[11px] cd-text-faint mt-1">
+                    <p className="cd-hint mt-1">
                       품목이 여러 줄이면 각 행의 금액을 합산해 발행합니다. 세액 반올림 잔차는 마지막 행에서 보정됩니다.
                     </p>
                   )}

@@ -492,7 +492,7 @@ export function FileLibraryBoard() {
         <div className="flex flex-col gap-3">
           {(Object.keys(TIER_LABEL) as Array<keyof RetentionPolicies>).map((tier) => (
             <div key={tier} className="flex items-center gap-3 flex-wrap">
-              <div className="w-32 text-sm font-medium">{TIER_LABEL[tier]}</div>
+              <div className="w-32 cd-label-text">{TIER_LABEL[tier]}</div>
               <div className="flex items-center gap-1">
                 {RETENTION_OPTIONS.map(([value, label]) => (
                   <button

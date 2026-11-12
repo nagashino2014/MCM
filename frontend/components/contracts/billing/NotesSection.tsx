@@ -137,7 +137,7 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
       {/* 필터 바: 연도 + 단위 + 세부 기간 */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-semibold" style={{ color: "var(--cd-faint)" }}>
+          <span className="cd-label-text">
             기준 연도
           </span>
           <select
@@ -154,7 +154,7 @@ export function NotesSection({ theme }: { theme: CdTheme }) {
           </select>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-semibold mr-1" style={{ color: "var(--cd-faint)" }}>
+          <span className="mr-1 cd-label-text">
             기간 단위
           </span>
           {NOTE_PERIOD_UNITS.map(({ unit: u, label }) => (

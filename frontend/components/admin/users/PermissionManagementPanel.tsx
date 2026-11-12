@@ -575,7 +575,7 @@ function CreateTemplateModal({
             <span className="cd-label">권한 선택</span>
             <CdHelp topic="admin.template-perms" />
           </div>
-          <p className="text-xs cd-text-muted mb-3">좌측 트리에서 세부 권한을 클릭하면 우측에 추가됩니다. 적용 범위는 권한별 지원 범위 내에서만 설정할 수 있습니다.</p>
+          <p className="cd-hint mb-3">좌측 트리에서 세부 권한을 클릭하면 우측에 추가됩니다. 적용 범위는 권한별 지원 범위 내에서만 설정할 수 있습니다.</p>
           <div className="grid md:grid-cols-2 gap-3">
             {/* 카테고리 트리 */}
             <div className="rounded-2xl cd-card-bg border cd-border-c p-3 max-h-[44vh] overflow-y-auto scrollbar-hide">
@@ -1006,7 +1006,7 @@ function AccountDetailPanel({
             </select>
           </label>
           {assignScope === "specific_dept" && (
-            <span className="text-xs cd-text-muted pb-2">
+            <span className="cd-hint pb-2">
               {selectedDept ? `${selectedDept.deptName} 기준` : "좌측에서 부서를 선택하세요"}
             </span>
           )}

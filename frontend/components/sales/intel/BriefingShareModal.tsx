@@ -94,7 +94,7 @@ export function BriefingShareModal({ briefingId, theme, onClose }: { briefingId:
         <p className="cd-text-muted text-xs">브리핑을 볼 수 있는 인원을 선택하세요. 선택한 인원의 공유받은 브리핑 목록에 항상 등록됩니다.</p>
         {error && <div role="alert" className="cd-error-bg cd-error-text rounded-[10px] px-3 py-2 text-xs">{error}</div>}
         {windowNotice && <p className="cd-text-muted text-xs">{windowNotice}</p>}
-        <fieldset disabled={locked} className="flex flex-col gap-2"><legend className="cd-text text-xs font-semibold mb-2">전달 방법</legend>
+        <fieldset disabled={locked} className="flex flex-col gap-2"><legend className="mb-2 cd-label-text">전달 방법</legend>
           <label className="flex items-center gap-2 cd-text text-xs"><input type="checkbox" checked disabled />RAG 공유 목록 (항상 등록)</label>
           {(["inbox", "push", "messenger"] as const).map(channel => <label key={channel} className="flex items-center gap-2 cd-text text-xs"><input type="checkbox" checked={channels.includes(channel)} onChange={event => { requestKey.current = null; setChannels(previous => event.target.checked ? [...previous, channel] : previous.filter(item => item !== channel)); }} />{CHANNEL[channel]}</label>)}
         </fieldset>

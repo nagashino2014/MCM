@@ -993,7 +993,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
           { kind: "table", head: ["판", "뜻"], rows: [
             ["풀버전", "본편과 부록(분야별 수행실적 목록)을 모두 담은 판"],
             ["요약본", "부록을 뺀 본편만의 짧은 판"],
-            ["마스킹판", "사람 이름 가운데 글자를 ○ 로 가리고 사람 사진을 뺀 홍보·공개용 판(대표이사는 실명·사진 그대로). 전 직원이 받을 수 있습니다"],
+            ["마스킹판", "사람 이름 가운데 글자를 ○ 로 가린 홍보·공개용 판. 사진은 대표이사와 사진 게재에 '동의'한 임원만 싣습니다(대표이사는 실명 그대로). 전 직원이 받을 수 있습니다"],
             ["실명판", "실명·사진이 실린 입찰 PQ·수의계약 제출용 판(풀버전에는 수행인력 상세 이력 포함). 관리·발행 담당만 받습니다"],
           ] },
           { kind: "list", items: [
@@ -1170,7 +1170,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/CatalogRenderPanel.tsx",
       "components/sales/catalog/CatalogReferencePanel.tsx",
     ],
-    reviewedAt: "2026-11-08",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "sales.catalog-studio",

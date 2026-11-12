@@ -395,9 +395,11 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   // ── 사람 ──
   const shownPeople = people.filter((p) => p.shown);
   const hr = await loadHrDetails(people.map((p) => p.employeeId));
-  // 마스킹판은 대표이사 말고는 사람 사진을 모두 뺀다(블루프린트 §6-6 — 이름 가리기와 함께 쪽마다 다르지 않게 일괄 적용, 사진 자리는 이니셜)
+  // 마스킹판 사진(블루프린트 §6-6 → 사용자 지시 2026-11-12) — 대표이사와, 사진 게재에 '동의'를 고른 임원만 싣는다.
+  //   직원·미확인 임원은 빼고 사진 자리는 이니셜. 실명판은 종전대로(임원은 거부가 아니면, 직원은 동의자만)
+  const maskedPhotoOk = (p: CatalogPerson) => p.positionName === "대표이사" || (p.section === "exec" && p.meta?.photoConsent === true);
   const photoKey = (p: CatalogPerson) =>
-    (masked && p.positionName !== "대표이사") || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
+    (masked && !maskedPhotoOk(p)) || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
   const ceoPerson = people.find((p) => p.positionName === "대표이사") ?? null;
   const toLeader = (p: CatalogPerson): LeaderCard => {
     const d = hr.get(p.employeeId);
@@ -430,8 +432,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         name: nm(x.name),
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
-        // 사진 — 마스킹판은 빼고, 사진 게재를 '거부'로 고른 사람도 뺀다(355)
-        photo: !masked && x.photoAssetId && x.photoConsent !== false ? `a/${x.photoAssetId}` : null,
+        // 사진 — 거부면 빼고(355), 마스킹판은 '동의'를 고른 사람만(사용자 지시 2026-11-12)
+        photo: x.photoAssetId && (masked ? x.photoConsent === true : x.photoConsent !== false) ? `a/${x.photoAssetId}` : null,
         edu: x.edu,
         cert: x.cert,
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),

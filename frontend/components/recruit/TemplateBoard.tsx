@@ -284,11 +284,11 @@ export function TemplateBoard() {
       >
         <div className="flex flex-col gap-3">
           <div>
-            <label className="block text-xs font-bold mb-1 cd-text-muted">템플릿 이름</label>
+            <label className="block mb-1 cd-label-text">템플릿 이름</label>
             <input className="cd-input w-full" value={renameName} onChange={(e) => setRenameName(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-bold mb-1 cd-text-muted">설명</label>
+            <label className="block mb-1 cd-label-text">설명</label>
             <textarea className="cd-input w-full resize-none" rows={3} value={renameDesc} onChange={(e) => setRenameDesc(e.target.value)} />
           </div>
         </div>
@@ -310,7 +310,7 @@ export function TemplateBoard() {
         }
       >
         <div className="flex flex-col gap-2">
-          <label className="block text-xs font-bold cd-text-muted">새 템플릿 이름</label>
+          <label className="block cd-label-text">새 템플릿 이름</label>
           <input
             className="cd-input w-full"
             value={dupName}

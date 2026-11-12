@@ -95,7 +95,7 @@ export function ReviewSidePanel({ row, onSave, onClose, canEdit = true }: Props)
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-[11px] font-bold cd-text-faint uppercase tracking-wide">
+        <label className="cd-label-text">
           검수 확정 값
         </label>
         <textarea

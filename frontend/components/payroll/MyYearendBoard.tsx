@@ -253,7 +253,7 @@ export function MyYearendBoard() {
                 </div>
                 {/* 기타 증빙 — 유형 목록 → 업로드(파일 선택) → 추가 / 삭제 */}
                 <div className="flex items-center gap-1.5 mt-2 shrink-0 flex-wrap">
-                  <span className="text-[11px] cd-text-faint whitespace-nowrap">기타 증빙</span>
+                  <span className="whitespace-nowrap cd-label-text">기타 증빙</span>
                   <select className="cd-select text-sm" style={{ width: 170 }} value={otherType} onChange={(e) => setOtherType(e.target.value)} aria-label="기타 증빙 유형">
                     {OTHER_TYPES.map((t) => (
                       <option key={t} value={t}>{t}</option>
@@ -417,7 +417,7 @@ export function MyYearendBoard() {
                 </div>
                 <div className="ml-auto flex items-center gap-1.5">
                   <label className="text-[11px] cd-text-faint">
-                    발급 희망 연도
+                    <span className="cd-label-text">발급 희망 연도</span>
                     <select className="cd-select text-sm block mt-0.5" value={issueYear ?? year ?? ""} onChange={(e) => setIssueYear(Number(e.target.value))}>
                       {yearOptions.map((y) => (
                         <option key={y} value={y}>귀속 {y}년</option>

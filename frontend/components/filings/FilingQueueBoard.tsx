@@ -466,7 +466,7 @@ function FilingDetailModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <CdDateInput label="제출일" value={submittedAt} onChange={setSubmittedAt} placeholder="비우면 오늘" />
             <label className="grid gap-1 text-sm">
-              <span className="text-xs font-semibold cd-text-muted">접수번호(선택)</span>
+              <span className="cd-label-text">접수번호(선택)</span>
               <input className="cd-input" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} />
             </label>
             {isAppoint && (
@@ -479,7 +479,7 @@ function FilingDetailModal({
             )}
           </div>
           <label className="grid gap-1 text-sm">
-            <span className="text-xs font-semibold cd-text-muted">메모(선택)</span>
+            <span className="cd-label-text">메모(선택)</span>
             <textarea className="cd-input min-h-[70px]" value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         </div>
@@ -489,7 +489,7 @@ function FilingDetailModal({
         <div className="grid gap-3">
           <p className="text-sm cd-text">신고 대상이 아니거나 이미 처리된 건이면 사유를 남기고 제외합니다.</p>
           <label className="grid gap-1 text-sm">
-            <span className="text-xs font-semibold cd-text-muted">제외 사유</span>
+            <span className="cd-label-text">제외 사유</span>
             <textarea className="cd-input min-h-[70px]" value={note} onChange={(e) => setNote(e.target.value)} placeholder="예: 이미 신고 완료 / 신고 대상 아님" />
           </label>
         </div>
@@ -592,7 +592,7 @@ function FilingSettingsModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {FILING_KINDS.map((k) => (
               <label key={k} className="grid gap-1 text-sm">
-                <span className="text-xs font-semibold cd-text-muted">{FILING_KIND_LABEL[k]} 기한(일)</span>
+                <span className="cd-label-text">{FILING_KIND_LABEL[k]} 기한(일)</span>
                 <input
                   className="cd-input tabular-nums"
                   inputMode="numeric"
@@ -603,7 +603,7 @@ function FilingSettingsModal({
             ))}
           </div>
           <label className="grid gap-1 text-sm md:w-1/2">
-            <span className="text-xs font-semibold cd-text-muted">대행 실적 보고서 실무자 발송 기본값</span>
+            <span className="cd-label-text">대행 실적 보고서 실무자 발송 기본값</span>
             <select
               className="cd-input"
               value={form.reportDelivery}
@@ -615,12 +615,12 @@ function FilingSettingsModal({
                 </option>
               ))}
             </select>
-            <span className="text-[11px] cd-text-faint">
+            <span className="cd-hint">
               실적 보고서 PDF 가 이력에 붙으면 수행인력의 실무(정)에게 보냅니다. 건마다 신고 보조 패널·계약 상세에서 바꿀 수 있습니다.
             </span>
           </label>
           <label className="grid gap-1 text-sm md:w-1/3">
-            <span className="text-xs font-semibold cd-text-muted">기한 임박 알림(일 전)</span>
+            <span className="cd-label-text">기한 임박 알림(일 전)</span>
             <input
               className="cd-input tabular-nums"
               inputMode="numeric"
@@ -629,7 +629,7 @@ function FilingSettingsModal({
             />
           </label>
           <div className="grid gap-1.5">
-            <span className="text-xs font-semibold cd-text-muted">기한 임박·초과 앱 푸시 수신자</span>
+            <span className="cd-label-text">기한 임박·초과 앱 푸시 수신자</span>
             <div className="flex flex-wrap gap-1.5">
               {users.map((u) => {
                 const on = form.notifyUserIds.includes(u.userId);
@@ -646,7 +646,7 @@ function FilingSettingsModal({
               })}
               {users.length === 0 && <span className="text-xs cd-text-faint">활성 사용자가 없습니다.</span>}
             </div>
-            <span className="text-[11px] cd-text-faint">매일 한 번, 기한이 임박했거나 지난 대기 건이 있으면 알립니다.</span>
+            <span className="cd-hint">매일 한 번, 기한이 임박했거나 지난 대기 건이 있으면 알립니다.</span>
           </div>
         </div>
       )}

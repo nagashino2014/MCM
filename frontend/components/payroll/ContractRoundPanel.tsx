@@ -200,19 +200,19 @@ export default function ContractRoundPanel({
         <div className="flex-1 min-h-0 flex flex-col gap-3">
           <div className="flex items-end gap-4 flex-wrap">
             <label className="text-xs cd-text-faint">
-              작성/갱신 기준일
+              <span className="cd-label-text">작성/갱신 기준일</span>
               <input className="cd-input text-sm block mt-0.5" style={{ width: 130 }} value={baseDate} onChange={(e) => setBaseDate(e.target.value)} />
             </label>
             <label className="text-xs cd-text-faint">
-              전년도 물가상승률(%)
+              <span className="cd-label-text">전년도 물가상승률(%)</span>
               <input className="cd-input text-sm block mt-0.5 text-right" style={{ width: 90 }} value={cpiRate} onChange={(e) => setCpiRate(e.target.value)} />
             </label>
             <label className="text-xs cd-text-faint">
-              추가 보정 비율(%)
+              <span className="cd-label-text">추가 보정 비율(%)</span>
               <input className="cd-input text-sm block mt-0.5 text-right" style={{ width: 90 }} value={extraRate} onChange={(e) => setExtraRate(e.target.value)} />
             </label>
             <div className="text-xs cd-text-faint">
-              작성/갱신 대상 범위
+              <span className="cd-label-text">작성/갱신 대상 범위</span>
               <div className="flex items-center gap-3 mt-0.5" style={{ height: 38 }}>
                 <label className="flex items-center gap-1 cd-text">
                   <input type="radio" checked={scope === "exclude_exec"} onChange={() => setScope("exclude_exec")} /> 임원 제외
@@ -382,11 +382,11 @@ export default function ContractRoundPanel({
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs cd-text-faint">
-                  작성/갱신 기준일
+                  <span className="cd-label-text">작성/갱신 기준일</span>
                   <input className="cd-input text-sm block mt-0.5" style={{ width: 140 }} value={promoDate} onChange={(e) => setPromoDate(e.target.value)} />
                 </label>
                 <label className="text-xs cd-text-faint">
-                  승진 직급 선택
+                  <span className="cd-label-text">승진 직급 선택</span>
                   <select className="cd-select text-sm block mt-0.5" style={{ width: 140 }} value={promoPosition} onChange={(e) => setPromoPosition(e.target.value)}>
                     {(promo?.candidates ?? []).map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -411,11 +411,11 @@ export default function ContractRoundPanel({
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs cd-text-faint">
-                  기존 급여액(월)
+                  <span className="cd-label-text">기존 급여액(월)</span>
                   <input className="cd-input text-sm block mt-0.5 text-right" style={{ width: 140 }} readOnly value={fmt(promo?.currentMonthly ?? null)} />
                 </label>
                 <label className="text-xs cd-text-faint">
-                  급여 승급액(월)
+                  <span className="cd-label-text">급여 승급액(월)</span>
                   <input
                     className="cd-input text-sm block mt-0.5 text-right"
                     style={{ width: 140 }}
@@ -610,7 +610,7 @@ export default function ContractRoundPanel({
             </p>
             {/* 적용 방식(좌: 라디오 1열 2행) ↔ 입력(우: 인상률/인상액 1열 2행) — 행 단위로 짝을 이룸 */}
             <div className="text-xs cd-text-faint">
-              인상 급여 적용 방식
+              <span className="cd-label-text">인상 급여 적용 방식</span>
               <div className="grid grid-cols-[1fr_150px] items-center gap-x-3 gap-y-2 mt-1">
                 <label className="flex items-center gap-1.5 cd-text text-sm">
                   <input type="radio" checked={ovDraft.mode === "rate"} onChange={() => setOvDraft((p) => ({ ...p, mode: "rate" }))} /> 급여인상률(%)
@@ -635,7 +635,7 @@ export default function ContractRoundPanel({
               </div>
             </div>
             <label className="text-xs cd-text-faint">
-              예외 적용 사유
+              <span className="cd-label-text">예외 적용 사유</span>
               <select
                 className="cd-select text-sm block w-full mt-0.5"
                 value={ovDraft.reason}
@@ -647,7 +647,7 @@ export default function ContractRoundPanel({
               </select>
             </label>
             <label className="text-xs cd-text-faint">
-              상세 사유
+              <span className="cd-label-text">상세 사유</span>
               <textarea
                 className="cd-input text-sm w-full mt-0.5"
                 rows={3}

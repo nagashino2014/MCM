@@ -626,7 +626,7 @@ export default function StaffingRecordsBoard() {
                 </div>
                 <div className="grid grid-cols-1 gap-5">
                   <fieldset>
-                    <legend className="text-xs font-semibold cd-text-muted mb-2">포함할 서류</legend>
+                    <legend className="mb-2 cd-label-text">포함할 서류</legend>
                     <div className="flex flex-col gap-2">
                       {INCLUDE_OPTIONS.map((o) => (
                         <label key={o.key} className="flex items-center gap-2 text-sm cd-text cursor-pointer">
@@ -639,12 +639,12 @@ export default function StaffingRecordsBoard() {
                         </label>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs cd-text-faint">
+                    <p className="mt-2 cd-hint">
                       이력사항에는 체크한 용역만 실립니다. 실적증명서는 직인 날인본이 첨부된 용역만 포함됩니다.
                     </p>
                   </fieldset>
                   <fieldset>
-                    <legend className="text-xs font-semibold cd-text-muted mb-2">파일 구성</legend>
+                    <legend className="mb-2 cd-label-text">파일 구성</legend>
                     <div className="flex flex-col gap-2">
                       {PACKAGING_OPTIONS.map((o) => (
                         <label key={o.key} className="flex items-start gap-2 text-sm cd-text cursor-pointer">

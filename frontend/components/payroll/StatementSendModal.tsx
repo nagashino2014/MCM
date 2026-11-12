@@ -191,7 +191,7 @@ export default function StatementSendModal({
           {/* 테스트 발송 — 전 인원 명세서를 지정 주소로만(PDF 첨부), 교부 이력 미기록 */}
           <div className="ml-auto flex items-end gap-1.5">
             <label className="text-[11px] cd-text-faint">
-              테스트 수신 메일
+              <span className="cd-label-text">테스트 수신 메일</span>
               <input
                 className="cd-input text-xs block mt-0.5"
                 style={{ width: 190 }}

@@ -492,7 +492,7 @@ export function JournalPanel() {
               </div>
             </div>
 
-            <div className="cd-label text-xs mt-3 mb-1.5">구분</div>
+            <div className="cd-label mt-3 mb-1.5">구분</div>
             {/* 3열 균등(컨셉 도면) — 전체 / 계좌(출금·입금) / 세금계산서(수기·자동) / 출장경비·지출결의(법인·개인) */}
             <div className="grid grid-cols-3 gap-1.5">
               {KIND_TAGS.map(([key, label]) => (
@@ -612,7 +612,7 @@ export function JournalPanel() {
           </div>
         </div>
 
-        <div className="cd-label text-xs mt-4 mb-1.5">
+        <div className="cd-label mt-4 mb-1.5">
           계정 과목
           {acctFilter.size > 0 && (
             <button type="button" className="ml-2 cd-text-muted underline text-[11px]" onClick={() => setAcctFilter(new Set())}>

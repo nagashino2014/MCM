@@ -58,7 +58,7 @@ function SourcePicker({ title, rows, selected, onSelect, disabled, blockLegacy }
   useEffect(() => setOffset(0), [rows, search]);
   return <section className="min-w-0 rounded-lg border border-[var(--cd-border)] p-3">
     <h3 className="font-semibold mb-2">{title}</h3>
-    <label className="block text-xs cd-text-muted mb-2">{title} 검색
+    <label className="block text-xs cd-text-muted mb-2"><span className="cd-label-text">{title} 검색</span>
       <input type="search" className="cd-input w-full mt-1" value={search} onChange={e => setSearch(e.target.value)} placeholder="거래처 · 날짜 · 금액" disabled={disabled}/>
     </label>
     <div className="overflow-x-auto">
@@ -215,7 +215,7 @@ export function TransactionLinkPanel() {
     {data && data.issues.length > 0 && <details className="cd-card p-3 text-sm"><summary>연결 자료 확인 필요 {data.issues.length}건</summary><ul className="list-disc pl-5 mt-2">{data.issues.map((i, idx) => <li key={idx}>{i.message}</li>)}</ul></details>}
 
     <section className="cd-card p-4 space-y-3">
-      <fieldset disabled={busy || allocations.length > 0} className="flex gap-2 flex-wrap"><legend className="text-sm font-semibold mb-2">연결 방식</legend>{modes.map(([key, label]) => <button key={key} type="button" className="cd-chip" aria-pressed={mode === key} data-active={mode === key || undefined} onClick={() => changeMode(key)}>{label}</button>)}</fieldset>
+      <fieldset disabled={busy || allocations.length > 0} className="flex gap-2 flex-wrap"><legend className="mb-2 cd-label-text">연결 방식</legend>{modes.map(([key, label]) => <button key={key} type="button" className="cd-chip" aria-pressed={mode === key} data-active={mode === key || undefined} onClick={() => changeMode(key)}>{label}</button>)}</fieldset>
       <p className="text-sm cd-text-muted">{modes.find(([key]) => key === mode)?.[2]}</p>
       {allocations.length > 0 && <p className="text-xs cd-text-muted">이 배부 목록은 같은 연결 방식으로 한 번에 저장됩니다. 다른 방식은 목록 저장 또는 제거 후 선택하세요.</p>}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -226,14 +226,14 @@ export function TransactionLinkPanel() {
       {left && right && <div className="rounded-lg border border-[var(--cd-border)] p-3 space-y-2">
         <p className="text-sm"><strong>연결할 거래:</strong> {nameOf(right)} <span className="cd-text-muted">/ 남음 {money(right.residual.total)}</span></p>
         {mode === "card_invoice" && <><p className="text-xs cd-text-muted">증빙에서 확인한 같은 공급의 금액만 원 단위 정수로 입력하세요. 세액은 비율로 자동 계산하지 않습니다. 양쪽 금액 성분이 모두 같으면 전체 연결 또는 별개 거래로 확인해야 합니다.</p><div className="flex gap-2 flex-wrap">
-          <label className="text-xs">배부 공급가액<input type="text" inputMode="numeric" className="cd-input block mt-1" value={supply} onChange={e => setSupply(e.target.value)} disabled={busy}/></label>
-          <label className="text-xs">배부 세액<input type="text" inputMode="numeric" className="cd-input block mt-1" value={tax} onChange={e => setTax(e.target.value)} disabled={busy}/></label>
-          <label className="text-xs">배부 합계<input type="text" inputMode="numeric" className="cd-input block mt-1" value={total} onChange={e => setTotal(e.target.value)} disabled={busy}/></label>
+          <label className="text-xs"><span className="cd-label-text">배부 공급가액</span><input type="text" inputMode="numeric" className="cd-input block mt-1" value={supply} onChange={e => setSupply(e.target.value)} disabled={busy}/></label>
+          <label className="text-xs"><span className="cd-label-text">배부 세액</span><input type="text" inputMode="numeric" className="cd-input block mt-1" value={tax} onChange={e => setTax(e.target.value)} disabled={busy}/></label>
+          <label className="text-xs"><span className="cd-label-text">배부 합계</span><input type="text" inputMode="numeric" className="cd-input block mt-1" value={total} onChange={e => setTotal(e.target.value)} disabled={busy}/></label>
         </div><p className="text-xs cd-text-muted">카드 남은 공급가액 {money(left.residual.supply)} / 세액 {money(left.residual.tax)} · 계산서 남은 공급가액 {money(right.residual.supply)} / 세액 {money(right.residual.tax)}</p></>}
-        {mode === "bank_invoice" && <label className="text-xs block">배부 결제금액<input type="text" inputMode="numeric" className="cd-input block mt-1" value={total} onChange={e => setTotal(e.target.value)} disabled={busy}/></label>}
+        {mode === "bank_invoice" && <label className="text-xs block"><span className="cd-label-text">배부 결제금액</span><input type="text" inputMode="numeric" className="cd-input block mt-1" value={total} onChange={e => setTotal(e.target.value)} disabled={busy}/></label>}
         {mode === "manual_invoice" && <p className="text-sm">전체 공급가액: 수기 매출 {money(left.supply)} / 대표 계산서 {money(right.supply)}. 대표 계산서 세액 {money(right.tax)}·합계 {money(right.total)}를 사용합니다.</p>}
         {mode === "distinct" && <p className="text-sm">두 거래가 별개라는 근거를 등록합니다. 금액을 배부하거나 원천을 제외하지 않습니다.</p>}
-        {isPurchase && <label className="text-xs block">매입 비용 계정<select aria-label="매입 비용 계정" className="cd-select block mt-1" value={expenseAccount} onChange={e => setExpenseAccount(e.target.value)} disabled={busy}><option value="">계정을 선택하세요</option>{data?.expenseAccounts.map(a => <option key={a.accountCode} value={a.accountCode}>{a.name}</option>)}</select></label>}
+        {isPurchase && <label className="text-xs block"><span className="cd-label-text">매입 비용 계정</span><select aria-label="매입 비용 계정" className="cd-select block mt-1" value={expenseAccount} onChange={e => setExpenseAccount(e.target.value)} disabled={busy}><option value="">계정을 선택하세요</option>{data?.expenseAccounts.map(a => <option key={a.accountCode} value={a.accountCode}>{a.name}</option>)}</select></label>}
         <button type="button" className="cd-btn cd-btn-ghost" disabled={busy || loading || !canWrite || !amountValid || isPurchase && !expenseAccount} onClick={addAllocation}>배부 목록에 추가</button>
       </div>}
 
@@ -241,19 +241,19 @@ export function TransactionLinkPanel() {
       {mode !== "distinct" && mode !== "manual_invoice" && stagedSources.length > 0 && <div className="text-xs cd-text-muted space-y-1" aria-label="배부 후 예상 잔액">{stagedSources.map(s => <p key={s.canonicalKey}>{s.name} · {s.date}: 이번 배부 {money(allocations.filter(a => [a.left.canonicalKey, a.right.canonicalKey].includes(s.canonicalKey)).reduce((sum, a) => sum + a.total, 0))} / 배부 후 남음 {money(s.residual.total - allocations.filter(a => [a.left.canonicalKey, a.right.canonicalKey].includes(s.canonicalKey)).reduce((sum, a) => sum + a.total, 0))}</p>)}</div>}
       {staleDraft && <p role="alert" className="text-sm cd-error-text">선택한 원천이 변경되었거나 조회 범위에 없습니다. 배부를 제거하고 최신 원천으로 다시 선택하세요.</p>}
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="text-sm">연결 사유<textarea aria-label="연결 사유" className="cd-input w-full mt-1" rows={2} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} disabled={busy} placeholder={mode === "distinct" ? "두 공급이 다른 거래인 이유" : "같은 공급 또는 지급·수금임을 확인한 내용"}/></label>
-        <label className="text-sm">증빙 참조<textarea aria-label="증빙 참조" className="cd-input w-full mt-1" rows={2} maxLength={2000} value={evidence} onChange={e => setEvidence(e.target.value)} disabled={busy} placeholder="계약·주문·정산서·영수증의 확인 위치"/></label>
+        <label className="text-sm"><span className="cd-label-text">연결 사유</span><textarea aria-label="연결 사유" className="cd-input w-full mt-1" rows={2} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} disabled={busy} placeholder={mode === "distinct" ? "두 공급이 다른 거래인 이유" : "같은 공급 또는 지급·수금임을 확인한 내용"}/></label>
+        <label className="text-sm"><span className="cd-label-text">증빙 참조</span><textarea aria-label="증빙 참조" className="cd-input w-full mt-1" rows={2} maxLength={2000} value={evidence} onChange={e => setEvidence(e.target.value)} disabled={busy} placeholder="계약·주문·정산서·영수증의 확인 위치"/></label>
       </div>
       <button type="button" className="cd-btn cd-btn-primary" disabled={busy || loading || !canWrite || !allocations.length || staleDraft || !reason.trim() || !evidence.trim()} onClick={save}>{busy ? "처리 중…" : mode === "distinct" ? "별개 거래 근거 저장" : "배부 목록 전체 저장"}</button>
     </section>
 
     <section className="cd-card p-4 space-y-3">
       <h2 className="cd-card-title">연결 이력</h2>
-      <label className="text-xs block">연결 이력 검색<input type="search" className="cd-input block w-full mt-1" value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="거래처 · 사유 · 증빙"/></label>
+      <label className="text-xs block"><span className="cd-label-text">연결 이력 검색</span><input type="search" className="cd-input block w-full mt-1" value={historySearch} onChange={e => setHistorySearch(e.target.value)} placeholder="거래처 · 사유 · 증빙"/></label>
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left cd-text-muted"><tr><th>선택</th><th>연결 거래</th><th>상태·사유</th><th className="text-right">배부금액</th></tr></thead><tbody>{history.slice(historyOffset, historyOffset + 10).map(link => <tr key={link.id} className="border-t border-[var(--cd-border)]"><td className="pr-2"><input type="checkbox" aria-label={`연결 취소 선택: ${nameOf(link.leftSnapshot)} → ${nameOf(link.rightSnapshot)}`} checked={cancelIds.includes(link.id)} disabled={busy || !canCancel(link)} onChange={e => setCancelIds(ids => e.target.checked ? [...ids, link.id] : ids.filter(id => id !== link.id))}/></td><td className="py-[11.5px] pr-2">{nameOf(link.leftSnapshot)}<br/><span className="cd-text-muted">→ {nameOf(link.rightSnapshot)}</span><div className="text-xs cd-text-muted">{modeLabel(link.relation)}</div></td><td className="pr-2"><strong className={link.state === "active" && !link.valid ? "cd-warn-text" : ""}>{link.state === "cancelled" ? "취소됨" : link.valid ? "연결됨" : "재검토 필요"}</strong><div>{link.reason}</div><div className="text-xs cd-text-muted">증빙: {link.evidence}</div>{link.cancelReason && <div className="text-xs">취소 사유: {link.cancelReason}</div>}{link.issues.map((i, idx) => <div key={idx} className="text-xs cd-warn-text">{i.message}</div>)}</td><td className="text-right whitespace-nowrap">{link.relation === "distinct" ? "배부 없음" : money(link.total)}</td></tr>)}</tbody></table></div>
       {!history.length && <p className="text-sm cd-text-muted">표시할 연결 이력이 없습니다.</p>}
       <PaginationControls total={history.length} limit={10} offset={historyOffset} loading={loading || busy} onPageChange={setHistoryOffset}/>
-      <label className="text-sm block">취소 사유<textarea aria-label="취소 사유" className="cd-input block w-full mt-1" rows={2} maxLength={2000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} disabled={busy} placeholder="연결을 취소하는 이유를 기록하세요"/></label>
+      <label className="text-sm block"><span className="cd-label-text">취소 사유</span><textarea aria-label="취소 사유" className="cd-input block w-full mt-1" rows={2} maxLength={2000} value={cancelReason} onChange={e => setCancelReason(e.target.value)} disabled={busy} placeholder="연결을 취소하는 이유를 기록하세요"/></label>
       <button type="button" className="cd-btn cd-btn-ghost" disabled={busy || loading || !cancelIds.length || !cancelReason.trim() || cancelIds.some(id => !data?.links.some(l => l.id === id && canCancel(l)))} onClick={() => void post({ action: "cancel", linkIds: cancelIds, reason: cancelReason.trim() }, "선택한 연결을 취소했습니다. 관련 자료를 다시 대사하세요.")}>선택한 연결 {cancelIds.length}건 취소</button>
     </section>
     <div><button type="button" className="cd-btn cd-btn-ghost" aria-expanded={recognitionReviewOpen} aria-controls="recognition-review-section" disabled={busy} onClick={() => setRecognitionReviewOpen(open => !open)}>{recognitionReviewOpen ? "매입 인식 재검토 닫기" : "매입 인식 재검토 열기"}</button></div>

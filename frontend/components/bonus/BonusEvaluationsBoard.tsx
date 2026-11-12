@@ -294,7 +294,7 @@ export default function BonusEvaluationsBoard() {
         helpTopic="bonus.evaluations"
         actions={
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>
+            <span className="whitespace-nowrap cd-label-text">대상 :</span>
             <select className="cd-select text-sm" style={{ minWidth: 100 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}년</option>
@@ -368,7 +368,7 @@ export default function BonusEvaluationsBoard() {
               return (
                 <div key={g} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-2 text-sm cd-text">
-                    <span>평점 : {g}</span>
+                    <span className="cd-label-text">평점 : {g}</span>
                     <span className="flex items-center gap-1">
                       <input
                         type="number" min={0} max={100}

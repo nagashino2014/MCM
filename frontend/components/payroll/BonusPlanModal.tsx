@@ -119,7 +119,7 @@ export default function BonusPlanModal({ open, onClose }: { open: boolean; onClo
         </p>
         <div className="flex items-end gap-3 flex-wrap">
           <label className="text-xs cd-text-faint">
-            지급 사유
+            <span className="cd-label-text">지급 사유</span>
             <select className="cd-select text-sm block mt-0.5" value={reason} onChange={(e) => setReason(e.target.value)}>
               {REASONS.map((r) => (
                 <option key={r} value={r}>{r}</option>
@@ -127,11 +127,11 @@ export default function BonusPlanModal({ open, onClose }: { open: boolean; onClo
             </select>
           </label>
           <label className="text-xs cd-text-faint">
-            지급 귀속월(YYYY-MM)
+            <span className="cd-label-text">지급 귀속월(YYYY-MM)</span>
             <input className="cd-input text-sm block mt-0.5" style={{ width: 110 }} value={payMonth} onChange={(e) => setPayMonth(e.target.value.trim())} />
           </label>
           <div className="text-xs cd-text-faint">
-            적용 방식
+            <span className="cd-label-text">적용 방식</span>
             <div className="flex rounded-xl border cd-border-c overflow-hidden text-sm font-semibold mt-0.5">
               {(["uniform", "individual"] as const).map((k) => (
                 <button key={k} type="button" data-active={mode === k} aria-pressed={mode === k} onClick={() => setMode(k)}
@@ -143,18 +143,18 @@ export default function BonusPlanModal({ open, onClose }: { open: boolean; onClo
           </div>
           {mode === "uniform" && (
             <label className="text-xs cd-text-faint">
-              일괄 지급액(원)
+              <span className="cd-label-text">일괄 지급액(원)</span>
               <input className="cd-input text-sm block mt-0.5 text-right" style={{ width: 130 }} inputMode="numeric" value={uniformAmount ? fmt(Number(uniformAmount)) : ""} onChange={(e) => setUniformAmount(digits(e.target.value))} />
             </label>
           )}
           <label className="text-xs cd-text-faint flex-1" style={{ minWidth: 160 }}>
-            비고
+            <span className="cd-label-text">비고</span>
             <input className="cd-input text-sm block mt-0.5 w-full" value={note} onChange={(e) => setNote(e.target.value)} placeholder="지급 근거·특이사항" />
           </label>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold cd-text">대상자(재직자)</span>
+          <span className="cd-label-text">대상자(재직자)</span>
           <button type="button" className="cd-btn rounded-lg px-2 py-1 text-[11px] font-semibold" onClick={() => setSelected(new Set(candidates.map((c) => c.employeeId)))}>전체 선택</button>
           <button type="button" className="cd-btn rounded-lg px-2 py-1 text-[11px] font-semibold" onClick={() => setSelected(new Set())}>전체 해제</button>
         </div>

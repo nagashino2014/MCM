@@ -136,7 +136,7 @@ export default function StaffingPanel({
         <div className="flex flex-col gap-3 min-w-0">
           {onChangeDept && (
             <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold cd-text-faint">수행 부서</span>
+              <span className="cd-label-text">수행 부서</span>
               <select className="cd-select text-sm w-full" value={deptId} onChange={(e) => onChangeDept(e.target.value)}>
                 <option value="">미지정</option>
                 {departments.map((d) => (

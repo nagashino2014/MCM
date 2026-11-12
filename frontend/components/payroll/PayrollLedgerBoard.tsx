@@ -896,9 +896,9 @@ export default function PayrollLedgerBoard() {
                 </p>
                 <p className="text-xs cd-text-faint">표 범위 밖에서는 기존 세액을 보존합니다. 현재 지급액을 기준으로 두 세액과 근거를 확인하세요. 0원 적용도 근거가 필요합니다.</p>
                 <button type="button" disabled={entrySaving} className="cd-btn rounded-xl px-3 py-2 text-sm" onClick={() => resolveTaxes(false)}>현재 지급액으로 세액 재계산</button>
-                <label className="text-xs cd-text">소득세(원)<input aria-label="검토 소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualIncome} onChange={(e) => setManualIncome(e.target.value)} /></label>
-                <label className="text-xs cd-text">지방소득세(원)<input aria-label="검토 지방소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualLocal} onChange={(e) => setManualLocal(e.target.value)} /></label>
-                <label className="text-xs cd-text">계산·0원 적용 근거<textarea aria-label="세액 검토 근거" className="cd-input text-sm w-full" maxLength={2000} value={taxReviewReason} onChange={(e) => setTaxReviewReason(e.target.value)} placeholder="계산식, 원본 자료·귀속기간 또는 0원 적용 사유" /></label>
+                <label className="text-xs cd-text"><span className="cd-label-text">소득세(원)</span><input aria-label="검토 소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualIncome} onChange={(e) => setManualIncome(e.target.value)} /></label>
+                <label className="text-xs cd-text"><span className="cd-label-text">지방소득세(원)</span><input aria-label="검토 지방소득세" className="cd-input text-sm w-full" type="number" step="1" value={manualLocal} onChange={(e) => setManualLocal(e.target.value)} /></label>
+                <label className="text-xs cd-text"><span className="cd-label-text">계산·0원 적용 근거</span><textarea aria-label="세액 검토 근거" className="cd-input text-sm w-full" maxLength={2000} value={taxReviewReason} onChange={(e) => setTaxReviewReason(e.target.value)} placeholder="계산식, 원본 자료·귀속기간 또는 0원 적용 사유" /></label>
                 {selected.taxReview?.status === "manual" && <p className="text-xs cd-text-faint">최근 확인: {selected.taxReview.reviewedAt?.slice(0, 10)} · {selected.taxReview.reason}</p>}
                 <button type="button" disabled={entrySaving || taxReviewReason.trim().length < 5 || manualIncome === "" || manualLocal === ""} className="cd-fill-primary text-white rounded-xl px-3 py-2 text-sm font-bold disabled:opacity-50" onClick={() => resolveTaxes(true)}>두 세액 저장 및 근거 확인 완료</button>
               </section>

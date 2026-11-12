@@ -248,7 +248,7 @@ export function CardPickerModal({
     >
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="cd-label text-xs">{lockedPeriod ? "출장기간" : "기간"}</label>
+          <label className="cd-label">{lockedPeriod ? "출장기간" : "기간"}</label>
           {lockedPeriod ? (
             // 출장보고서 — 문서의 출장기간으로 고정(기간 밖 지출은 담을 수 없다)
             <span className="text-[13px] cd-text font-medium whitespace-nowrap" title="출장보고서의 출장기간 내 지출만 표시합니다">

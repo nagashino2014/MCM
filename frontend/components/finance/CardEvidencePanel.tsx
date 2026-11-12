@@ -209,11 +209,11 @@ export function CardEvidencePanel() {
       <div className="cd-card rounded-lg p-4">
         <div className="flex items-end gap-3 flex-wrap">
           <label className="flex w-36 flex-col gap-1 text-[12px] cd-text-faint">
-            시작일
+            <span className="cd-label-text">시작일</span>
             <CdDateInput value={range.from} onChange={(v) => setRange((p) => ({ ...p, from: v }))} aria-label="시작일" />
           </label>
           <label className="flex w-36 flex-col gap-1 text-[12px] cd-text-faint">
-            종료일
+            <span className="cd-label-text">종료일</span>
             <CdDateInput value={range.to} onChange={(v) => setRange((p) => ({ ...p, to: v }))} aria-label="종료일" />
           </label>
           <CdButton variant="primary" size="sm" loading={loading} onClick={() => void analyze()}>

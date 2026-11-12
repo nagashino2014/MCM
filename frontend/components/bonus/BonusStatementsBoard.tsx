@@ -335,7 +335,7 @@ export default function BonusStatementsBoard() {
         helpTopic="bonus.statements"
         actions={
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs cd-text-faint whitespace-nowrap">대상 :</span>
+            <span className="whitespace-nowrap cd-label-text">대상 :</span>
             <select className="cd-select text-sm" style={{ minWidth: 100 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}년</option>
@@ -457,7 +457,7 @@ export default function BonusStatementsBoard() {
           <section className="cd-card rounded-3xl p-4 cd-reveal delay-3 flex flex-col gap-2 grow">
             <h3 className="text-xs font-bold cd-text-faint">비율 조정</h3>
             <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
-              <span className="text-xs">인건비 반영 시 매출액 중 적용 비율</span>
+              <span className="cd-label-text">인건비 반영 시 매출액 중 적용 비율</span>
               <span className="flex items-center gap-1">
                 <input
                   type="number"
@@ -473,9 +473,9 @@ export default function BonusStatementsBoard() {
               </span>
             </label>
             <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
-              <span className="text-xs">
+              <span className="cd-label-text">
                 인건비 차감 배수
-                <span className="block text-[10px]">반기 인건비 × 배수를 차감 (1.0 / 1.5)</span>
+                <span className="block cd-hint">반기 인건비 × 배수를 차감 (1.0 / 1.5)</span>
               </span>
               <span className="flex items-center gap-1">
                 <input
@@ -491,7 +491,7 @@ export default function BonusStatementsBoard() {
               </span>
             </label>
             <label className="flex items-center justify-between gap-2 text-sm cd-text-faint">
-              <span className="text-xs">영업이익 기반 산정 시 적용 비율</span>
+              <span className="cd-label-text">영업이익 기반 산정 시 적용 비율</span>
               <span className="flex items-center gap-1">
                 <input type="number" disabled className="cd-input text-sm text-right" style={{ width: 64 }} value="" readOnly />
                 <span className="text-xs">%</span>

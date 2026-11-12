@@ -148,7 +148,7 @@ export default function LedgerCreateModal({
 
         <div className="flex items-end gap-3 flex-wrap">
           <label className="text-xs cd-text-faint">
-            귀속 연도
+            <span className="cd-label-text">귀속 연도</span>
             <select className="cd-select text-sm block mt-0.5" style={{ width: 92 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {[now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1].map((y) => (
                 <option key={y} value={y}>{y}년</option>
@@ -156,7 +156,7 @@ export default function LedgerCreateModal({
             </select>
           </label>
           <label className="text-xs cd-text-faint">
-            월
+            <span className="cd-label-text">월</span>
             <select className="cd-select text-sm block mt-0.5" style={{ width: 76 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{m}월</option>

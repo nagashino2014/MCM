@@ -6,6 +6,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { getMailboxByUser, getSystemFolderId } from "@/lib/mail/mailbox";
 import { cleanSnippet } from "@/lib/mail/mime";
 import { getVerifiedMailBriefingLink, type MailBriefingLink } from "@/lib/intel/briefing-share-mail";
+import { resolveMailAddressBook, type MailAddressBookEntry } from "@/lib/mail/address-book";
 
 export interface MailListItem {
   messageId: string;
@@ -437,6 +438,8 @@ export interface MailMessageDetail {
   references: string[];
   /** 카테고리 라벨(사용자 폴더 id, G2-12). */
   categoryId: string | null;
+  /** 머리글 주소(보낸사람·받는사람·참조·숨은 참조) 중 앱 주소록에 있는 사람의 성명·직함(키 = 소문자 주소, 2026-11-12). */
+  addressBook?: Record<string, MailAddressBookEntry>;
 }
 
 /** 메시지 상세(소유권 검증 = 이 유저의 mailbox 여야 함). 없거나 남의 것이면 null. 조회 시 읽음 처리. */
@@ -531,6 +534,12 @@ export async function getMessageDetail(
       }
       return [];
     })(),
+    addressBook: await resolveMailAddressBook(db, mailbox.mailboxId, [
+      r.from_addr != null ? String(r.from_addr) : null,
+      ...parseAddrs(r.to_addrs).map((a) => a.address),
+      ...parseAddrs(r.cc_addrs).map((a) => a.address),
+      ...(String(r.direction) === "out" ? parseAddrs(r.bcc_addrs).map((a) => a.address) : []),
+    ]),
   };
 }
 
@@ -542,7 +551,7 @@ export async function getMessageDetail(
 export async function listMessageAttachmentsForUser(
   userId: string,
   messageId: string
-): Promise<{ subject: string; files: { filename: string; contentType: string | null; s3Key: string; sizeBytes: number | null }[] } | null> {
+): Promise<{ subject: string; files: { attachmentId: string; filename: string; contentType: string | null; s3Key: string; sizeBytes: number | null }[] } | null> {
   const mailbox = await getMailboxByUser(userId);
   if (!mailbox) return null;
   const db = await getDb();
@@ -552,7 +561,7 @@ export async function listMessageAttachmentsForUser(
   if (!msg.length) return null;
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT filename, content_type, s3_key, size_bytes FROM mail_attachments
+      `SELECT attachment_id, filename, content_type, s3_key, size_bytes FROM mail_attachments
         WHERE message_id = $1 AND COALESCE(content_id, '') = '' ORDER BY created_at`,
       [messageId]
     )
@@ -560,6 +569,7 @@ export async function listMessageAttachmentsForUser(
   return {
     subject: msg[0].subject != null ? String(msg[0].subject) : "",
     files: rows.map((r) => ({
+      attachmentId: String(r.attachment_id),
       filename: String(r.filename),
       contentType: r.content_type != null ? String(r.content_type) : null,
       s3Key: String(r.s3_key),

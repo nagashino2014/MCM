@@ -3,6 +3,7 @@
 // 메일 3-pane 좌측 — 폴더 트리 + 안읽음 카운트 + 내 주소(G2-2/12).
 // 받은편지함: 클릭 시 하단에 카테고리 드롭다운 리스트(필터·관리). 보관함: 하위에 카테고리 폴더(연동).
 // 하단: 수신 확인 · 메일 설정 + 메일함 용량 게이지·전체/안읽음 건수(10-21).
+// 받은편지함 카테고리·보관함 카테고리 폴더 글자색은 본문색 65%·흐린 회색 35% 섞은 색으로 조금 더 선명하게(2026-11-12 사용자 요청 — 흐려서 눈에 안 띔).
 
 import { useState } from "react";
 import { Archive, ChevronDown, ChevronRight, Inbox, MailCheck, PencilLine, Plus, Send, Settings2, ShieldAlert, Trash2, X } from "lucide-react";
@@ -106,7 +107,7 @@ export function MailFolderPane({
                     onClick={() => onSelectCategory("")}
                     className={cn(
                       "text-left px-2 py-1.5 rounded-md text-xs transition-colors",
-                      active === "inbox" && !activeCategory ? "cd-glass-active font-bold" : "cd-text-faint hover:text-[color:var(--cd-text)]"
+                      active === "inbox" && !activeCategory ? "cd-glass-active font-bold" : "text-[color:color-mix(in_srgb,var(--cd-text)_65%,var(--cd-muted))] hover:text-[color:var(--cd-text)]"
                     )}
                   >
                     전체
@@ -119,7 +120,7 @@ export function MailFolderPane({
                           "flex-1 text-left px-2 py-1.5 rounded-md text-xs truncate transition-colors",
                           active === "inbox" && activeCategory === c.folderId
                             ? "cd-glass-active font-bold"
-                            : "cd-text-faint hover:text-[color:var(--cd-text)]"
+                            : "text-[color:color-mix(in_srgb,var(--cd-text)_65%,var(--cd-muted))] hover:text-[color:var(--cd-text)]"
                         )}
                       >
                         {c.name}
@@ -147,7 +148,7 @@ export function MailFolderPane({
                 <>
                   <button
                     onClick={() => setArchiveOpen((v) => !v)}
-                    className="ml-5 text-left px-2 py-0.5 text-[10px] cd-text-faint flex items-center gap-1"
+                    className="ml-5 text-left px-2 py-0.5 text-[10px] text-[color:color-mix(in_srgb,var(--cd-text)_65%,var(--cd-muted))] flex items-center gap-1"
                   >
                     {archiveOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} 카테고리 폴더
                   </button>
@@ -160,7 +161,7 @@ export function MailFolderPane({
                           onClick={() => onSelect(key)}
                           className={cn(
                             "ml-5 flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-xs border-l cd-hairline-c pl-2 transition-colors",
-                            active === key ? "cd-glass-active font-bold" : "cd-text-faint hover:text-[color:var(--cd-text)]"
+                            active === key ? "cd-glass-active font-bold" : "text-[color:color-mix(in_srgb,var(--cd-text)_65%,var(--cd-muted))] hover:text-[color:var(--cd-text)]"
                           )}
                         >
                           <span className="truncate">{c.name}</span>

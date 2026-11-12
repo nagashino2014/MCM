@@ -171,8 +171,9 @@ export function MailViewerPane({
           답장
         </CdButton>
         {canReplyAll && (
-          <CdButton size="sm" icon={<ReplyAll className="w-3.5 h-3.5" />} onClick={onReplyAll}>
-            전체답장
+          // 좁은 화면은 아이콘만 — 다시보내기와 함께 보이면 오른쪽 ⋯ 메뉴가 화면 밖으로 밀린다.
+          <CdButton size="sm" icon={<ReplyAll className="w-3.5 h-3.5" />} onClick={onReplyAll} title="전체답장" aria-label="전체답장">
+            <span className="hidden sm:inline">전체답장</span>
           </CdButton>
         )}
         <CdButton size="sm" icon={<CornerUpRight className="w-3.5 h-3.5" />} onClick={onForward}>

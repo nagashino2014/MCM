@@ -26,8 +26,6 @@ export const MANUAL_CHANGELOG: ChangelogEntry[] = [
     articles: ["assets.reservations"],
   },
   {
-  },
-  {
     date: "2026-11-12", kind: "개선", title: "메일 — 여러 통 고르기·한 화면 스크롤·전체답장 버튼·첨부 전체 저장",
     body: "메일 목록에서 Shift+클릭으로 범위를, Ctrl(⌘)+클릭으로 하나씩 고르고, 체크박스를 누른 채 끌어 여러 통을 한꺼번에 고릅니다. 메일을 열면 보낸 사람·첨부와 본문이 함께 스크롤돼 본문을 넓게 봅니다. [전체답장]이 ⋯ 메뉴에서 답장 옆 버튼으로 나왔고, 첨부가 2개 이상이면 [전체 저장(ZIP)]으로 한 번에 내려받습니다.",
     articles: ["mail.box"],

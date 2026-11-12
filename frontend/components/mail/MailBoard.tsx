@@ -41,7 +41,8 @@ export function MailBoard() {
   const [senderRules, setSenderRules] = useState<Record<string, string>>({});
   // 주소록 간이 등록(2026-11-12) — 주소 메뉴의 [주소록 추가]가 연다.
   const [quickContact, setQuickContact] = useState<{ address: string; name: string | null } | null>(null);
-  const [folder, setFolder] = useState("inbox");
+  // 폴더·연 메일은 주소(?folder=&id=)가 기준이다(2026-11-12) — 첫 화면도 주소에서 읽는다(답장 쓰기에서 뒤로 오면 그대로 복원).
+  const [folder, setFolder] = useState(() => searchParams.get("folder") || "inbox");
   const [activeCategory, setActiveCategory] = useState(""); // 받은편지함 카테고리 필터
   const [items, setItems] = useState<MailListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -190,11 +191,71 @@ export function MailBoard() {
     if (composeParamHandled.current) return;
     composeParamHandled.current = true;
     if (searchParams.get("compose") === "1") router.replace("/mail/compose");
-    // §26-1 할 일 "관련"에서 메일로 — /mail?id=<messageId> 를 열어 준다.
-    const id = searchParams.get("id");
-    if (id) void openMessage(id);
+    // §26-1 할 일 "관련"에서 메일로 — /mail?id=<messageId> 는 아래 주소 동기화가 열어 준다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── 주소 ↔ 화면 동기화(2026-11-12 사용자 요청) ──────────────
+  // 예전에는 폴더 전환·메일 열기가 화면 상태만 바꿔 브라우저 [뒤로]가 메일 메뉴에 들어오기 전 화면으로 가 버렸다.
+  // 이제 메일을 열면 주소에 ?id= 를 쌓고(push), 폴더를 바꾸면 ?folder= 를 쌓는다. [뒤로]는 그 메일함 목록으로 돌아온다.
+  // 주소 쓰기는 window.history — Next 15 가 useSearchParams 와 맞춰 주므로, 아래 effect 가 주소를 화면 상태로 옮긴다.
+  const urlFolder = searchParams.get("folder") || "inbox";
+  const urlId = searchParams.get("id");
+  const folderRef = useRef(folder);
+  folderRef.current = folder;
+  /** 지금 열려 있거나 여는 중인 메일 id — 같은 id 로 다시 부르지 않게. */
+  const openedIdRef = useRef<string | null>(null);
+  /** 우리가 push 로 쌓은 메일 항목 — [목록] 단추는 이때 history.back() 으로 그 항목을 걷어 낸다. */
+  const pushedIdRef = useRef<string | null>(null);
+  const navTo = useCallback((next: { folder?: string; id?: string | null }, mode: "push" | "replace") => {
+    const cur = new URLSearchParams(window.location.search);
+    const f = next.folder ?? (cur.get("folder") || "inbox");
+    const id = next.id === undefined ? cur.get("id") : next.id;
+    const out = new URLSearchParams();
+    if (f !== "inbox") out.set("folder", f);
+    if (id) out.set("id", id);
+    const qs = out.toString();
+    const url = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+    if (url === `${window.location.pathname}${window.location.search}`) return;
+    if (mode === "push") pushedIdRef.current = id || null;
+    // 우리가 쌓은 항목을 바꿔 쓰면(분할 보기에서 다른 메일) 그 항목은 여전히 우리 것이다.
+    else if (pushedIdRef.current && pushedIdRef.current === cur.get("id")) pushedIdRef.current = id || null;
+    if (mode === "push") window.history.pushState(null, "", url);
+    else window.history.replaceState(null, "", url);
+  }, []);
+  useEffect(() => {
+    if (folderRef.current === urlFolder) return;
+    setFolder(urlFolder);
+    setQ("");
+    if (urlFolder !== "inbox") setActiveCategory("");
+  }, [urlFolder]);
+  useEffect(() => {
+    if (urlId) {
+      setMobileView("viewer");
+      if (openedIdRef.current !== urlId) void openMessage(urlId);
+    } else {
+      openedIdRef.current = null;
+      pushedIdRef.current = null;
+      setDetail(null);
+      setMobileView("list");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlId]);
+  /** 목록에서 메일 열기 — 목록에서 처음 열면 기록을 쌓고(뒤로=목록), 분할 보기에서 다른 메일로 옮기면 바꿔 쓴다. */
+  const openFromList = (id: string) => navTo({ id }, urlId ? "replace" : "push");
+  /** [목록] 단추 — 우리가 쌓은 항목이면 브라우저 뒤로와 같게, 아니면(링크로 바로 연 메일 등) 주소에서 id 만 뺀다. */
+  const closeViewer = () => {
+    if (urlId && pushedIdRef.current === urlId) window.history.back();
+    else navTo({ id: null }, "replace");
+  };
+  /** 보던 메일이 목록에서 빠질 때(삭제·이동·차단 등) — 기록을 늘리지 않고 주소에서 id 를 뺀다. */
+  const dropViewer = () => {
+    setDetail(null);
+    setMobileView("list");
+    navTo({ id: null }, "replace");
+  };
+  /** 폴더 바꾸기 — 다른 폴더거나 메일을 보던 중이면 기록을 쌓아 [뒤로]로 돌아올 수 있게 한다. */
+  const goFolder = (k: string) => navTo({ folder: k, id: null }, k !== urlFolder || urlId ? "push" : "replace");
 
   const refreshAll = useCallback(() => {
     loadList(folder, q, activeCategory, pageSize, offset);
@@ -242,7 +303,10 @@ export function MailBoard() {
     const r = await fetch(`/api/mail/categories?${params.toString()}`, { method: "DELETE" });
     if (r.ok) {
       if (activeCategory === cat.folderId) setActiveCategory("");
-      if (folder === `user:${cat.folderId}`) setFolder("archive");
+      if (folder === `user:${cat.folderId}`) {
+        setFolder("archive");
+        navTo({ folder: "archive", id: null }, "replace");
+      }
       toast("카테고리를 삭제했습니다.", "success");
       refreshAll();
     } else toast("삭제에 실패했습니다.", "error");
@@ -282,6 +346,7 @@ export function MailBoard() {
   };
 
   const openMessage = async (id: string) => {
+    openedIdRef.current = id;
     setLoadingDetail(true);
     setMobileView("viewer");
     try {
@@ -310,8 +375,7 @@ export function MailBoard() {
         return;
       }
       if (detail && ids.includes(detail.messageId) && ["trash", "delete", "move"].includes(act.action)) {
-        setDetail(null);
-        setMobileView("list"); // 보던 메일이 목록에서 빠지면 목록으로 돌아간다
+        dropViewer(); // 보던 메일이 목록에서 빠지면 목록으로 돌아간다
       }
       refreshAll();
     } catch {
@@ -344,10 +408,7 @@ export function MailBoard() {
     if (r.ok) {
       const d = await r.json().catch(() => ({}));
       toast(`차단했습니다. 기존 메일 ${Number(d.moved ?? 0)}건을 스팸함으로 옮겼습니다.`, "success");
-      if (detail && detail.fromAddr?.toLowerCase() === addr.toLowerCase()) {
-        setDetail(null);
-        setMobileView("list");
-      }
+      if (detail && detail.fromAddr?.toLowerCase() === addr.toLowerCase()) dropViewer();
       refreshAll();
     } else toast("차단하지 못했습니다.", "error");
   };
@@ -454,7 +515,7 @@ export function MailBoard() {
       q={q}
       onSearch={setQ}
       onRefresh={refreshAll}
-      onOpen={openMessage}
+      onOpen={openFromList}
       onOpenDraft={openDraft}
       onDeleteDraft={deleteDraft}
       onBulk={runBulk}
@@ -499,12 +560,14 @@ export function MailBoard() {
                   setDetail(null);
                   setMobileView("list");
                   if (k !== "inbox") setActiveCategory("");
+                  goFolder(k);
                 }}
                 onSelectCategory={(id) => {
                   setFolder("inbox");
                   setActiveCategory(id);
                   setDetail(null);
                   setMobileView("list");
+                  goFolder("inbox");
                 }}
                 onCreateCategory={createCategory}
                 onDeleteCategory={deleteCategory}
@@ -520,7 +583,7 @@ export function MailBoard() {
                 mobileView === "viewer" ? (
                   <div className="flex flex-col h-full min-h-0">
                     <div className="px-2 py-1.5 border-b cd-border-c">
-                      <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={() => setMobileView("list")}>
+                      <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={closeViewer}>
                         목록
                       </CdButton>
                     </div>
@@ -558,6 +621,7 @@ export function MailBoard() {
                       setFolder(k);
                       setQ("");
                       setDetail(null);
+                      goFolder(k);
                     }}
                   />
                 </div>
@@ -568,7 +632,7 @@ export function MailBoard() {
             ) : (
               <>
                 <div className="px-2 py-1.5 border-b cd-border-c">
-                  <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={() => setMobileView("list")}>
+                  <CdButton size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={closeViewer}>
                     목록
                   </CdButton>
                 </div>
@@ -589,8 +653,7 @@ export function MailBoard() {
         onBlock={(addr) => void blockSenderAddr(addr)}
         onSearch={(addr) => {
           setQ(addr);
-          setDetail(null);
-          setMobileView("list");
+          dropViewer();
         }}
         onAssignCategory={(addr, id) => void assignSenderCategory(addr, id)}
       />

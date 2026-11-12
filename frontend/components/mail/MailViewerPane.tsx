@@ -3,13 +3,14 @@
 // 메일 3-pane 우측 — 본문 뷰어(G2-2/4): 헤더·첨부·본문(sandbox iframe)·답장/전달/삭제.
 // 외부 발신 HTML 은 XSS 방지를 위해 sandbox iframe(스크립트 차단)으로 렌더한다.
 
-import { useEffect, useRef, useState } from "react";
-import { Archive, CornerUpRight, Download, ExternalLink, FileArchive, ListChecks, Loader2, Repeat, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Archive, CornerUpRight, ExternalLink, ListChecks, Loader2, Repeat, Reply, ReplyAll, RotateCcw, ShieldAlert, Tag, Trash2 } from "lucide-react";
 import { CdButton } from "@/components/cdash/CdButton";
 import { CdDropdown } from "@/components/cdash/CdDropdown";
 import { CdEmptyState } from "@/components/cdash/CdEmptyState";
 import { CdAvatar } from "@/components/cdash/CdAvatar";
-import { MailAddressLink, splitMailAddress } from "@/components/mail/MailAddressLink";
+import { MailAddressTag, splitMailAddress, type MailAddressTagEntry } from "@/components/mail/MailAddressLink";
+import { MailAttachmentList } from "@/components/mail/MailAttachmentList";
 import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 
@@ -20,8 +21,33 @@ function fmtFull(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function fmtKB(n: number | null): string {
-  return n == null ? "" : `${Math.ceil(n / 1024)} KB`;
+/** 머리글 한 줄 — 이름표(보낸사람·받는사람 등) + 주소 태그들. */
+function AddressRow({
+  label,
+  addrs,
+  book,
+  onOpen,
+  suffix,
+}: {
+  label: string;
+  addrs: { name?: string | null; address: string }[];
+  book: Record<string, MailAddressTagEntry>;
+  onOpen?: (address: string, name: string | null, rect: DOMRect) => void;
+  suffix?: ReactNode;
+}) {
+  return (
+    <>
+      <dt className="text-xs font-semibold cd-text-muted leading-6 whitespace-nowrap">{label}</dt>
+      <dd className="min-w-0 flex flex-wrap items-center gap-1">
+        {addrs.length
+          ? addrs.map((a, i) => (
+              <MailAddressTag key={`${a.address}-${i}`} address={a.address} entry={book[a.address.toLowerCase()] ?? null} onOpen={onOpen} />
+            ))
+          : <span className="text-xs cd-text-faint leading-6">-</span>}
+        {suffix}
+      </dd>
+    </>
+  );
 }
 
 /**
@@ -145,7 +171,10 @@ export function MailViewerPane({
   }
 
   const inTrash = folder === "trash";
-  const fromName = detail.fromAddr?.split("@")[0] ?? "-";
+  const book = detail.addressBook ?? {};
+  const fromAddr = detail.fromAddr ? splitMailAddress(detail.fromAddr) : null;
+  // 아바타 글자 — 주소록 이름이 있으면 그 이름, 없으면 주소 앞부분.
+  const fromName = (fromAddr && book[fromAddr.address.toLowerCase()]?.name) || fromAddr?.address.split("@")[0] || "-";
   // 메일 본문에서 주소를 추출하지 않는다. 서버가 공유 원장과 현재 문서 권한으로 확인한 내부 링크만 연다.
   const briefingLink = detail.briefingLink
     && /^[a-zA-Z0-9_-]{1,128}$/.test(detail.briefingLink.briefingId)
@@ -241,88 +270,36 @@ export function MailViewerPane({
       {/* 헤더 */}
       <div className="px-4 py-3 border-b cd-hairline-c flex flex-col gap-2">
         <h2 className="text-base font-bold cd-text break-words">{detail.subject || "(제목 없음)"}</h2>
-        <div className="flex items-center gap-2.5">
+        {/* 보낸사람·받는사람·참조·숨은참조 — 주소를 태그로 하나씩 보인다(2026-11-12 사용자 요청).
+            앱 주소록에 있는 사람은 성명·직함을 태그 앞에 붙인다(detail.addressBook, 서버에서 조회).
+            줄을 나눠 전부 보이는 것은 참조가 가려졌던 지적(직원 요청 15) 때문이고,
+            태그를 누르거나 우클릭하면 주소 메뉴(주소록 추가 등)가 열린다(직원 요청 20). */}
+        <div className="flex items-start gap-2.5">
           <CdAvatar name={fromName} size="sm" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold cd-text truncate">
-              {detail.fromAddr ? (
-                <MailAddressLink {...splitMailAddress(detail.fromAddr)} label={detail.fromAddr} onOpen={onAddressClick} />
-              ) : (
-                "-"
-              )}
-            </p>
-            {/* 받는 사람·참조·숨은 참조는 줄을 나눠 전부 보인다 — 한 줄 말줄임에 참조가 가려져
-                "보낸메일에서 참조자가 안 보인다"는 지적(2026-11-12 직원 요청 15)이 있었다.
-                각 주소는 누르거나 우클릭하면 주소 메뉴(주소록 추가 등)를 연다(직원 요청 20). */}
-            <p className="text-xs cd-text-faint break-all">
-              받는 사람:{" "}
-              {detail.toAddrs.length
-                ? detail.toAddrs.map((a, i) => (
-                    <span key={`to-${i}`}>
-                      {i > 0 && ", "}
-                      <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
-                    </span>
-                  ))
-                : "-"}
-              {detail.sendIndividual && " (개인별 보내기)"}
-            </p>
-            {detail.ccAddrs.length > 0 && (
-              <p className="text-xs cd-text-faint break-all">
-                참조:{" "}
-                {detail.ccAddrs.map((a, i) => (
-                  <span key={`cc-${i}`}>
-                    {i > 0 && ", "}
-                    <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
-                  </span>
-                ))}
-              </p>
-            )}
-            {(detail.bccAddrs?.length ?? 0) > 0 && (
-              <p className="text-xs cd-text-faint break-all">
-                숨은 참조:{" "}
-                {detail.bccAddrs.map((a, i) => (
-                  <span key={`bcc-${i}`}>
-                    {i > 0 && ", "}
-                    <MailAddressLink address={a.address} name={a.name} onOpen={onAddressClick} />
-                  </span>
-                ))}
-              </p>
-            )}
-          </div>
-          <span className="text-xs cd-text-faint shrink-0">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>
+          <dl className="min-w-0 flex-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+            <AddressRow label="보낸사람" addrs={fromAddr ? [fromAddr] : []} book={book} onOpen={onAddressClick} />
+            <AddressRow
+              label="받는사람"
+              addrs={detail.toAddrs}
+              book={book}
+              onOpen={onAddressClick}
+              suffix={detail.sendIndividual ? <span className="text-xs cd-text-faint leading-6">(개인별 보내기)</span> : null}
+            />
+            {detail.ccAddrs.length > 0 && <AddressRow label="참조" addrs={detail.ccAddrs} book={book} onOpen={onAddressClick} />}
+            {(detail.bccAddrs?.length ?? 0) > 0 && <AddressRow label="숨은참조" addrs={detail.bccAddrs} book={book} onOpen={onAddressClick} />}
+          </dl>
+          <span className="hidden sm:inline text-xs cd-text-faint shrink-0 leading-6">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</span>
         </div>
+        {/* 좁은 화면은 날짜를 아래 줄로 — 오른쪽에 두면 주소 태그가 잘린다. */}
+        <p className="sm:hidden text-xs cd-text-faint">{fmtFull(detail.receivedAt ?? detail.sentAt ?? detail.createdAt)}</p>
         {briefingLink && (
           <a href={briefingLink.href} target="_blank" rel="noopener noreferrer" className="cd-btn cd-btn-soft cd-btn-sm inline-flex items-center justify-center gap-1.5 self-start">
             <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
             브리핑 보고서 열기
           </a>
         )}
-        {/* 첨부 칩 — 인라인 이미지(cid, 서명 명함 등)는 본문에 이미 그려지므로 목록에서 뺀다 */}
-        {files.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {files.map((a) => (
-              <a
-                key={a.attachmentId}
-                href={`/api/mail/attachments?id=${encodeURIComponent(a.attachmentId)}`}
-                className="cd-chip cd-chip-sm inline-flex items-center gap-1.5"
-              >
-                <Download className="w-3 h-3" />
-                {a.filename}
-                <span className="cd-text-faint">{fmtKB(a.sizeBytes)}</span>
-              </a>
-            ))}
-            {files.length > 1 && (
-              <a
-                href={`/api/mail/attachments/zip?messageId=${encodeURIComponent(detail.messageId)}`}
-                className="cd-btn cd-btn-ghost cd-btn-sm inline-flex items-center gap-1.5"
-                title={`첨부 ${files.length}개를 ZIP 파일 하나로 내려받습니다.`}
-              >
-                <FileArchive className="w-3.5 h-3.5" aria-hidden="true" />
-                전체 저장(ZIP)
-              </a>
-            )}
-          </div>
-        )}
+        {/* 첨부 — 세로 목록·형식 아이콘·개인문서함 저장(2026-11-12). 인라인 이미지(cid, 서명 명함 등)는 본문에 이미 그려지므로 뺀다. */}
+        <MailAttachmentList messageId={detail.messageId} files={files} />
       </div>
 
       {/* 본문 — 흰 배경 고정(메일 본문은 발신자 서식 기준).

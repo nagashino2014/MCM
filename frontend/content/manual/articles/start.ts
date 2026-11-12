@@ -312,6 +312,12 @@ export const START_ARTICLES: ManualArticle[] = [
             "카드가 ‘알림 받는 중’으로 바뀌면 끝입니다. 아래 스위치로 받을 알림을 고릅니다.",
           ] },
           { kind: "tip", text: "켜기에 실패하면 실패한 단계(권한 확인·기기 토큰 발급·서버 등록)와 사유가 함께 표시됩니다. 그 문구를 그대로 관리자에게 알려 주세요. 안드로이드는 2026-11-10 이후 스토어에서 받은 새 버전부터 알림을 켤 수 있습니다." },
+          { kind: "list", items: [
+            "메신저 새 메시지는 내가 보낸 메시지를 빼고 옵니다. 지금 앱에서 그 대화방을 보고 있으면 알림을 띄우지 않습니다. 알림을 누르면 그 대화방이 열립니다.",
+            "새 메일은 받은메일함에 들어온 메일만 알립니다. 스팸함으로 간 메일, 보낸 사람 자동 분류가 붙은 메일, 뉴스레터·메일링 리스트·자동 회신·반송 통지는 알리지 않습니다. 짧은 사이에 여러 통이 오면 ‘새 메일 N통’ 한 번으로 묶이고, 1분 안에 또 오면 알림 없이 숫자만 오릅니다. 한 통짜리 알림을 누르면 그 메일이 열립니다.",
+            "알림 설정의 ‘메신저 새 메시지’·‘새 메일’ 스위치로 종류별로 끌 수 있고, 방해금지 시간대에는 오지 않습니다.",
+            "하단 탭과 앱 아이콘의 붉은 숫자는 안읽은 메일·결재 대기·안읽은 대화의 합입니다. 대화방이나 메일을 열어 읽으면 바로 줄고, 알림 센터에 남은 그 알림도 지워집니다.",
+          ] },
         ],
       },
       {
@@ -327,8 +333,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부", "앱 알림", "푸시", "알림 켜기"],
-    sources: ["components/mobile/MobileHome.tsx", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx", "../apps/mobile/src/app/notification-settings.tsx"],
-    reviewedAt: "2026-11-10",
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부", "앱 알림", "푸시", "알림 켜기", "메일 알림", "메신저 알림", "알림 숫자", "배지"],
+    sources: ["components/mobile/MobileHome.tsx", "lib/mail/inbound-push.ts", "../apps/mobile/src/lib/use-nav-badges.ts", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx", "../apps/mobile/src/app/notification-settings.tsx"],
+    reviewedAt: "2026-11-12",
   },
 ];

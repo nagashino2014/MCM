@@ -29,6 +29,7 @@ import { MentionSuggestions, type MentionCandidate } from '@/components/chat/Men
 import { PersonalDocPickerSheet, type PersonalDoc } from '@/components/chat/PersonalDocPickerSheet';
 import { SharePickerSheet } from '@/components/chat/SharePickerSheet';
 import { OrgPickerSheet, type OrgEmployee } from '@/components/pickers/OrgPickerSheet';
+import { clearActiveChatRoom, setActiveChatRoom } from '@/lib/active-chat';
 import { apiFetch, apiJson } from '@/lib/api';
 import { applyMention, mentionQueryAtEnd, splitMentions } from '@/lib/chat-mentions';
 import { closeChatPopup } from '@/lib/chat-popup';
@@ -38,11 +39,13 @@ import { API_BASE_URL } from '@/lib/config';
 import { fmtTime } from '@/lib/format';
 import { routeForLink } from '@/lib/deeplink';
 import { openAttachment } from '@/lib/open-attachment';
+import { dismissChatNotifications } from '@/lib/notification-tray';
 import { IS_CHAT_POPUP, IS_DESKTOP_WEB } from '@/lib/platform';
 import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
+import { refreshNavBadges } from '@/lib/use-nav-badges';
 import { useWideLayout } from '@/lib/use-wide-layout';
 import { useTheme } from '@/theme/useTheme';
 
@@ -220,6 +223,8 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
   const polling = useRef(false);
 
   // 읽음 커서 — 최신 메시지를 화면에 띄운 시점에 전진(중복 전송 방지).
+  // 서버 기록이 끝나면 하단 탭 배지·앱 아이콘 숫자를 다시 받고, 이 방의 알림을 알림 센터에서 지운다(2026-11-12 —
+  // 예전에는 배지를 앱 시작·포그라운드 복귀 때만 받아, 방에서 읽어도 붉은 숫자가 남았다).
   const markRead = useCallback(
     (latestId: number) => {
       if (!latestId || latestId <= lastReadSent.current) return;
@@ -228,6 +233,9 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageId: latestId }),
+      }).then(() => {
+        void refreshNavBadges();
+        void dismissChatNotifications(roomId);
       }).catch(() => {
         // 읽음 실패는 다음 폴링 때 재시도된다 — 조용히.
         lastReadSent.current = 0;
@@ -291,8 +299,13 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
   useFocusEffect(
     useCallback(() => {
       const t = setInterval(() => void poll(), POLL_MS);
-      return () => clearInterval(t);
-    }, [poll])
+      // 보고 있는 방 — 이 방의 새 메시지 푸시는 앱이 켜져 있는 동안 배너를 띄우지 않는다(lib/push.ts).
+      setActiveChatRoom(roomId);
+      return () => {
+        clearInterval(t);
+        clearActiveChatRoom(roomId);
+      };
+    }, [poll, roomId])
   );
 
   const loadOlder = useCallback(async () => {

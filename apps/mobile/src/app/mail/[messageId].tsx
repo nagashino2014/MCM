@@ -16,6 +16,8 @@ import {
   useToast,
 } from '@/components/ui';
 import { useApi } from '@/lib/use-api';
+import { dismissMailNotifications } from '@/lib/notification-tray';
+import { refreshNavBadges } from '@/lib/use-nav-badges';
 import { downloadAndShare, downloadAsDataUrl } from '@/lib/download';
 import { displayFrom, mailDate } from '@/app/(tabs)/mail';
 import { useTheme } from '@/theme/useTheme';
@@ -59,6 +61,13 @@ export default function MailViewerScreen() {
   const { c } = useTheme();
 
   const { data, loading, error } = useApi<MailDetail>(`/api/mail/messages/${messageId}`);
+  // 상세 조회가 서버에서 읽음 처리까지 한다 — 받은 뒤 탭 배지·앱 아이콘 숫자를 다시 받고 이 메일 알림을 지운다(2026-11-12).
+  const loaded = !!data;
+  useEffect(() => {
+    if (!loaded || !messageId) return;
+    void refreshNavBadges();
+    void dismissMailNotifications(String(messageId));
+  }, [loaded, messageId]);
   const [showTo, setShowTo] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   /** cid → data URL (WebView 는 Bearer 를 못 붙여 앱이 미리 받아 심는다). */

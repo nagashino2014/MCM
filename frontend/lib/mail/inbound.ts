@@ -22,6 +22,7 @@ import { ensureMailbox, getSystemFolderId, listMailDomains, MAIL_DOMAIN, resolve
 import { cleanSnippet, htmlToPlainText } from "@/lib/mail/mime";
 import { isSpamFor } from "@/lib/mail/spam";
 import { applySenderRuleToNewMail, senderCategoryFor } from "@/lib/mail/sender-rules";
+import { mailPushSkipReason, notifyNewInboxMails, type InboxMailForPush } from "@/lib/mail/inbound-push";
 
 let sqs: InstanceType<typeof SQSClient> | null = null;
 let cachedQueueUrl: string | null = null;
@@ -208,11 +209,15 @@ async function resolveRecipients(destinations: string[]): Promise<TargetMailbox[
   return [...result.values()];
 }
 
-/** 파싱된 메일을 한 mailbox 의 받은편지함에 적재(멱등). 새로 적재하면 true. */
+/**
+ * 파싱된 메일을 한 mailbox 의 받은편지함에 적재(멱등). 새로 적재하면 true.
+ * 새로 적재한 메일이 푸시 기준(inbound-push.ts)을 통과하면 pushOut 에 담는다 — 발송은 배치 끝에 묶어서.
+ */
 async function storeForMailbox(
   target: TargetMailbox,
   parsed: ParsedMail,
-  notif: SesNotification
+  notif: SesNotification,
+  pushOut?: InboxMailForPush[]
 ): Promise<boolean> {
   const rfcMessageId =
     (parsed.messageId && String(parsed.messageId)) ||
@@ -308,6 +313,22 @@ async function storeForMailbox(
   });
   // 규칙이 붙인 라벨 기록(337) — [자동 분류 해제] 때 미분류로 되돌린다.
   if (categoryId) await applySenderRuleToNewMail(target.mailboxId, msgId, from[0]?.address ?? null);
+  const skip = mailPushSkipReason({
+    spam,
+    categoryId,
+    headers: parsed.headers as Map<string, unknown>,
+    fromAddress: from[0]?.address ?? null,
+    mailboxAddress: target.address,
+  });
+  if (!skip) {
+    pushOut?.push({
+      mailboxId: target.mailboxId,
+      messageId: msgId,
+      fromName: from[0]?.name ?? null,
+      fromAddress: from[0]?.address ?? null,
+      subject: parsed.subject ?? "",
+    });
+  }
   return true;
 }
 
@@ -337,6 +358,7 @@ export async function processInboundBatch(): Promise<InboundTickResult> {
   if (!messages.length) return { polled: 0, stored: 0 };
 
   let stored = 0;
+  const pushQueue: InboxMailForPush[] = [];
   for (const m of messages) {
     try {
       const notif = parseNotification(m.Body ?? "");
@@ -355,7 +377,7 @@ export async function processInboundBatch(): Promise<InboundTickResult> {
       const raw = await fetchRawMime(notif.bucketName, notif.objectKey);
       const parsed = await simpleParser(raw);
       for (const t of targets) {
-        if (await storeForMailbox(t, parsed, notif)) stored++;
+        if (await storeForMailbox(t, parsed, notif, pushQueue)) stored++;
       }
       await deleteMsg(queueUrl, m.ReceiptHandle);
     } catch (err) {
@@ -363,6 +385,8 @@ export async function processInboundBatch(): Promise<InboundTickResult> {
       console.error("[mail-inbound] 메시지 처리 실패(재시도 예정)", err);
     }
   }
+  // 새 메일 푸시 — 적재가 끝난 뒤 fire-and-forget(발송 실패·지연이 수신 처리를 막지 않는다).
+  if (pushQueue.length) void notifyNewInboxMails(pushQueue);
   return { polled: messages.length, stored };
 }
 

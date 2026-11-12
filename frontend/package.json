@@ -28,6 +28,7 @@
     "test:contact-quick": "node scripts/test-contact-quick.mjs",
     "test:mail-gateway": "node scripts/test-mail-gateway.mjs",
     "test:mail-sender-rules": "node scripts/test-mail-sender-rules.mjs",
+    "test:push-notify": "node scripts/test-push-notify.mjs",
     "test:mail-compose": "node scripts/test-mail-compose.mjs",
     "test:catalog-studio": "node scripts/test-catalog-studio.mjs",
     "test:sales-board": "node scripts/test-sales-board.mjs",

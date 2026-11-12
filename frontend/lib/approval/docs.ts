@@ -3,7 +3,7 @@ import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { missingTableRequirements, parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { checkExpenseRowSources } from "@/lib/approval/expense-sources-check";
 import { getForm } from "@/lib/approval/forms";
-import { recordLeaveUsageOnApproval } from "@/lib/approval/leave";
+import { checkSpecialLeaveOnSubmit, deleteLeaveUsageForDoc, LEAVE_FORM_ID, recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 import { assessOverLimitOnSubmit } from "@/lib/approval/overtime";
 import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
@@ -537,6 +537,7 @@ export async function deleteDoc(docId: string): Promise<{ docNo: string | null; 
     docNo = rows[0].doc_no != null ? String(rows[0].doc_no) : null;
     title = String(rows[0].title ?? "");
     await txn.run(`DELETE FROM annual_leave_ledger WHERE doc_id = $1`, [docId]);
+    await deleteLeaveUsageForDoc(txn, docId); // 특별휴가 원장 use(363)도 함께 회수
     await txn.run(`UPDATE approval_docs SET ref_doc_id = NULL WHERE ref_doc_id = $1`, [docId]);
     // 개인 영수증·법인카드 내역 귀속 해제(2026-08-26) — doc_id 는 FK 가 아니라 함께 풀지 않으면
     // 영수증이 '사용됨'으로 남아 다른 기안에서 다시 불러올 수 없다. 미정산 경비 목록은 승인 문서
@@ -923,6 +924,15 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
       db: txn,
     });
     if (sourceIssues.length) throw new Error(`지출 내역은 불러오기로만 담을 수 있습니다 — ${sourceIssues.join(" / ")}`);
+    // 휴가신청 특별휴가(363) — 잔여가 없거나 잔여를 넘는 신청은 상신을 막는다(화면은 선택지를 숨긴다).
+    if (String(doc.form_id) === LEAVE_FORM_ID) {
+      const specialError = await checkSpecialLeaveOnSubmit(txn, {
+        docId,
+        drafterUserId: actorUserId,
+        fieldValues: (doc.field_values as Record<string, unknown> | null) ?? {},
+      });
+      if (specialError) throw userError(specialError);
+    }
 
     const now = new Date().toISOString();
     const year = now.slice(0, 4);

@@ -10,6 +10,12 @@ import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
 import { formatReceivers, parseReceivers } from '@/lib/approval/receiver-parse';
+import {
+  specialKindOf,
+  specialRemainingText,
+  visibleLeaveTypes,
+  type SpecialLeaveBalance,
+} from '@/lib/approval/special-leave';
 
 /**
  * 기안 폼의 필드 하나 — 웹 `ApprovalFormRenderer` 의 필드 렌더를 모바일로 옮긴 것.
@@ -710,8 +716,12 @@ function LeaveTypeField({
     '/api/approval/leave-types',
     { cache: true }
   );
-  const types = data?.types ?? [];
-  const cur = types.find((t) => t.key === str(value));
+  // 본인 특별휴가 잔여(363) — 장기근속·초과근무 대체휴가는 잔여가 있을 때만 선택지로 보인다(웹과 같은 규칙).
+  const mine = useApi<{ special?: SpecialLeaveBalance[] }>(`/api/approval/leave?me=1&year=${new Date().getFullYear()}`);
+  const balances = mine.data?.special ?? [];
+  const all = data?.types ?? [];
+  const cur = all.find((t) => t.key === str(value));
+  const types = visibleLeaveTypes(all, balances, cur?.key ?? null);
 
   return (
     <>
@@ -740,7 +750,9 @@ function LeaveTypeField({
                 {t.label}
               </Text>
               {/* 웹 렌더러와 동일 표기 — 경조사류(부여 N일)가 "차감 없음"으로만 보이던 것 정정. */}
-              {t.deduct === 'full' ? (
+              {specialKindOf(t.key) ? (
+                <Badge label={specialRemainingText(balances, specialKindOf(t.key)!) ?? '잔여 없음'} tone="neutral" />
+              ) : t.deduct === 'full' ? (
                 <Badge label="연차 차감" tone="neutral" />
               ) : t.deduct === 'half' ? (
                 <Badge label="0.5일 차감" tone="neutral" />

@@ -18,7 +18,7 @@ import { parseFields } from "@/lib/approval/fields";
 import { adminEditableFields, normalizeAdminEditValue, sameAdminValue } from "@/lib/approval/admin-edit-rules";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
 import { releaseDocNo } from "@/lib/approval/docs";
-import { LEAVE_FORM_ID, recordLeaveUsageOnApproval } from "@/lib/approval/leave";
+import { deleteLeaveUsageForDoc, LEAVE_FORM_ID, recordLeaveUsageOnApproval } from "@/lib/approval/leave";
 
 function userError(message: string, status = 400): Error {
   return Object.assign(new Error(message), { status });
@@ -162,12 +162,9 @@ export async function adminCancelDoc(params: {
     // 문서 채번에서 빼기 — 번호를 반납해 다음 상신이 이어받는다
     if (oldNo && (await releaseDocNo(txn, oldNo))) releasedDocNo = oldNo;
 
-    // 휴가 문서면 이 문서로 적재된 연차 대장 use 행을 회수한다(doc_id 기준 — 자연 멱등)
+    // 휴가 문서면 이 문서로 적재된 연차 대장·특별휴가 원장(363) use 행을 회수한다(doc_id 기준 — 자연 멱등)
     if (formId === LEAVE_FORM_ID) {
-      const del = rowsToObjects(
-        await txn.exec(`DELETE FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use' RETURNING entry_id`, [params.docId])
-      );
-      ledgerReversed = del.length > 0;
+      ledgerReversed = (await deleteLeaveUsageForDoc(txn, params.docId)) > 0;
     }
     // 증빙 귀속 해제 — 문서 삭제(deleteDoc)와 같은 이유: 남겨 두면 다른 기안에서 다시 불러올 수 없다
     await txn.run(`UPDATE personal_receipts SET doc_id = NULL, doc_form_id = NULL, updated_at = $2 WHERE doc_id = $1`, [params.docId, now]);
@@ -235,11 +232,9 @@ export async function adminEditDocField(params: {
     ]);
     // 휴가 문서 — 기간·사용일수가 바뀌었을 수 있으므로 연차 대장 사용분을 지우고 승인 때와 같은 규칙으로 다시 적재한다
     if (String(doc.form_id) === LEAVE_FORM_ID) {
-      const del = rowsToObjects(
-        await txn.exec(`DELETE FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use' RETURNING entry_id`, [params.docId])
-      );
+      const removed = await deleteLeaveUsageForDoc(txn, params.docId); // 특별휴가 원장 use(363) 포함
       await recordLeaveUsageOnApproval(txn, params.docId);
-      ledgerResynced = del.length > 0;
+      ledgerResynced = removed > 0;
     }
     const name = await actorName(txn, params.actorUserId);
     const editId = "aded-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14);

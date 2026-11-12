@@ -21,7 +21,7 @@ import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldD
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { isUnusedVehicleField } from "@/lib/approval/trip";
 import { countWorkdays } from "@/lib/approval/leave-dates";
-import { findInCatalog, type LeaveTypeItem } from "@/lib/approval/leave-types";
+import { findInCatalog, specialKindOf, specialRemainingDays, type LeaveTypeItem, type SpecialLeaveBalance } from "@/lib/approval/leave-types";
 import { OvertimeConsentModal } from "@/components/approval/OvertimeConsentModal";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
@@ -199,6 +199,8 @@ export function ApprovalDraftBoard() {
   // 휴가신청 양식이면 본인 잔여 연차 배지 + 휴가 종류 카탈로그(기간 자동화)
   const [leaveRemaining, setLeaveRemaining] = useState<{ granted: number; used: number; remaining: number } | null>(null);
   const [leaveCatalog, setLeaveCatalog] = useState<LeaveTypeItem[]>([]);
+  // 본인 특별휴가 잔여(363) — 장기근속·초과근무 대체휴가 선택 시 잔여 초과 안내용.
+  const [specialBalances, setSpecialBalances] = useState<SpecialLeaveBalance[]>([]);
   const [leaveHint, setLeaveHint] = useState<string | null>(null);
   const isLeaveForm = form?.formId === "frm-leave-request";
   // 결근사유서(FRM-P1) — 내 열린 제출 요청 배너 + 결근 기간 자동 채움.
@@ -642,6 +644,7 @@ export function ApprovalDraftBoard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!cancelled && d?.summary) setLeaveRemaining(d.summary);
+        if (!cancelled && Array.isArray(d?.special)) setSpecialBalances(d.special);
       })
       .catch(() => {});
     fetch("/api/approval/leave-types", { cache: "no-store" })
@@ -793,7 +796,14 @@ export function ApprovalDraftBoard() {
     const period = (values.leave_period ?? {}) as { from?: string; to?: string };
     const from = period.from;
     if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-      setLeaveHint(item.days != null ? `${item.label} — 부여 ${item.days}일 (시작일을 입력하면 종료일이 자동 설정됩니다)` : null);
+      const sk = specialKindOf(item.key);
+      setLeaveHint(
+        item.days != null
+          ? `${item.label} — 부여 ${item.days}일 (시작일을 입력하면 종료일이 자동 설정됩니다)`
+          : sk
+            ? `${item.label} — 잔여 ${specialRemainingDays(specialBalances, sk)}일 (시작·종료일을 입력하면 사용일수가 계산됩니다)`
+            : null
+      );
       return;
     }
     if (item.deduct === "half") {
@@ -826,8 +836,13 @@ export function ApprovalDraftBoard() {
           return;
         }
         if (String(values.use_days ?? "") !== String(cnt)) setValues((prev) => ({ ...prev, use_days: String(cnt) }));
-        const over =
-          item.deduct && leaveRemaining && cnt > leaveRemaining.remaining
+        const specialKind = specialKindOf(item.key);
+        const specialLeft = specialKind ? specialRemainingDays(specialBalances, specialKind) : 0;
+        const over = specialKind
+          ? cnt > specialLeft
+            ? ` · ⚠ 잔여 ${item.label}(${specialLeft}일) 초과`
+            : ` · ${item.label} 잔여 ${specialLeft}일에서 차감`
+          : item.deduct && leaveRemaining && cnt > leaveRemaining.remaining
             ? ` · ⚠ 잔여 연차(${leaveRemaining.remaining}일) 초과`
             : "";
         const skipped = span - cnt;
@@ -837,7 +852,7 @@ export function ApprovalDraftBoard() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLeaveForm, leaveCatalog, values.leave_type, values.leave_period, leaveRemaining, leaveOffDays]);
+  }, [isLeaveForm, leaveCatalog, values.leave_type, values.leave_period, leaveRemaining, leaveOffDays, specialBalances]);
 
   useEffect(() => {
     let cancelled = false;

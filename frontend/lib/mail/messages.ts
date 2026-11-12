@@ -420,6 +420,10 @@ export interface MailMessageDetail {
   fromAddr: string | null;
   toAddrs: { name?: string; address: string }[];
   ccAddrs: { name?: string; address: string }[];
+  /** 숨은 참조 — 보낸 메일(direction=out)에만 채운다(받은 메일은 빈 배열). 보낸메일 뷰어·[다시보내기]용. */
+  bccAddrs: { name?: string; address: string }[];
+  /** 개인별 보내기로 보낸 메일(366) — 열이 없으면 false. */
+  sendIndividual: boolean;
   bodyHtml: string | null;
   bodyText: string | null;
   /** 실제 공유 전달 기록과 소유권·현재 문서 접근권한이 확인된 보고서 링크. */
@@ -446,7 +450,7 @@ export async function getMessageDetail(
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT message_id, direction, subject, from_addr, to_addrs, cc_addrs, body_html, body_text,
+      `SELECT message_id, direction, subject, from_addr, to_addrs, cc_addrs, bcc_addrs, body_html, body_text,
               sent_at, received_at, created_at, rfc_message_id, references_json
          FROM mail_messages WHERE message_id = $1 AND mailbox_id = $2`,
       [messageId, mailbox.mailboxId]
@@ -469,6 +473,17 @@ export async function getMessageDetail(
     ])
   );
 
+  // 개인별 보내기 표시(366) — 별도 조회로 둬 열이 없는 DB(366 미적용)에서도 상세 조회가 깨지지 않게 한다.
+  let sendIndividual = false;
+  if (String(r.direction) === "out") {
+    try {
+      const fl = rowsToObjects(await db.exec(`SELECT send_individual FROM mail_messages WHERE message_id = $1`, [messageId]));
+      sendIndividual = Number(fl[0]?.send_individual ?? 0) === 1;
+    } catch {
+      sendIndividual = false;
+    }
+  }
+
   // 읽음 처리(이 유저 mailbox 의 해당 메시지 상태 전부). 목록의 미리보기(peek)는 읽음 상태를 바꾸지 않는다.
   if (!opts?.peek) {
     await withDbWrite(async (wdb) => {
@@ -486,6 +501,8 @@ export async function getMessageDetail(
     fromAddr: r.from_addr != null ? String(r.from_addr) : null,
     toAddrs: parseAddrs(r.to_addrs),
     ccAddrs: parseAddrs(r.cc_addrs),
+    bccAddrs: String(r.direction) === "out" ? parseAddrs(r.bcc_addrs) : [],
+    sendIndividual,
     bodyHtml: r.body_html != null ? String(r.body_html) : null,
     bodyText: r.body_text != null ? String(r.body_text) : null,
     briefingLink: await getVerifiedMailBriefingLink(db, messageId, mailbox.mailboxId, userId),
@@ -518,6 +535,39 @@ export async function getMessageDetail(
 }
 
 /** 첨부 1건 메타 + 소유권 검증(userId 의 mailbox 메시지에 속한 첨부여야 함). S3 키 반환. */
+/**
+ * 한 메일의 일반 첨부 목록(전체 저장 ZIP 용, 11-12). getAttachmentForUser 와 같은 소유권 검증 — 이 유저 mailbox 의 메시지만.
+ * 인라인(cid) 이미지는 본문에 그려지는 것이라 뺀다(뷰어의 첨부 칩과 같은 기준). 메시지가 없거나 남의 것이면 null.
+ */
+export async function listMessageAttachmentsForUser(
+  userId: string,
+  messageId: string
+): Promise<{ subject: string; files: { filename: string; contentType: string | null; s3Key: string; sizeBytes: number | null }[] } | null> {
+  const mailbox = await getMailboxByUser(userId);
+  if (!mailbox) return null;
+  const db = await getDb();
+  const msg = rowsToObjects(
+    await db.exec(`SELECT subject FROM mail_messages WHERE message_id = $1 AND mailbox_id = $2 LIMIT 1`, [messageId, mailbox.mailboxId])
+  );
+  if (!msg.length) return null;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT filename, content_type, s3_key, size_bytes FROM mail_attachments
+        WHERE message_id = $1 AND COALESCE(content_id, '') = '' ORDER BY created_at`,
+      [messageId]
+    )
+  );
+  return {
+    subject: msg[0].subject != null ? String(msg[0].subject) : "",
+    files: rows.map((r) => ({
+      filename: String(r.filename),
+      contentType: r.content_type != null ? String(r.content_type) : null,
+      s3Key: String(r.s3_key),
+      sizeBytes: r.size_bytes != null ? Number(r.size_bytes) : null,
+    })),
+  };
+}
+
 export async function getAttachmentForUser(
   userId: string,
   attachmentId: string

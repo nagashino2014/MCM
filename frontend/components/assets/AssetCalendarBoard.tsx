@@ -1,13 +1,15 @@
 "use client";
 
 // 자산 이용 현황(/assets/reservations) — 자산별 예약·이용을 월 캘린더로 표시.
-// 데이터원 2종: 출장신청서 상신 건의 법인차량(자동, 취소는 결재 문서에서) + 직접 예약(회의실 등).
-// 캘린더는 일정 메뉴의 ScheduleCalendar 를 재사용한다 — 색은 차량(주황)/직접 예약(보라) 2계열,
-// 이중 배정(차량)은 ⚠ 로 경고만 한다(결재 흐름을 자산 가용성으로 막지 않는다).
+// 데이터원 2종: 출장신청서 상신 건의 법인차량(자동, 결재 중=가예약·승인=확정, 취소는 결재 문서에서)
+// + 직접 예약(회의실 등, 법인차량은 하루 안의 짧은 사용만 — 2026-11-12).
+// 캘린더는 일정 메뉴의 ScheduleCalendar 를 재사용한다 — 색은 차량(주황)/직접 예약(보라) 2계열.
+// 차량 겹침은 출장 상신·직접 예약 저장에서 막고, 그 전에 생긴 겹침은 ⚠ 로 경고한다.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Car, FileText, Plus, Trash2 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -16,6 +18,7 @@ import { ScheduleCalendar } from "@/components/calendar/ScheduleCalendar";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { TAG_COLOR_STRONG, type CalendarEvent } from "@/lib/calendar/types";
 import { ASSET_KIND_LABELS, type ReservableAsset } from "@/lib/assets/types";
+import { TRIP_DRAFT_HREF, TRIP_VEHICLE_GUIDE, vehicleReservationTimeError } from "@/lib/assets/vehicle-booking-rules";
 import "@/components/cdash/cdash.css";
 
 interface UsageItem {
@@ -31,6 +34,8 @@ interface UsageItem {
   userName: string | null;
   purpose: string | null;
   docId: string | null;
+  docNo: string | null;
+  docStatus: "in_progress" | "approved" | null;
   conflict: boolean;
   mine: boolean;
 }
@@ -100,15 +105,25 @@ export function AssetCalendarBoard() {
         people: [],
         summary: u.purpose,
         docId: u.docId,
-        status: null,
+        status: u.docStatus,
       })),
     [filtered]
   );
+
+  const formVehicle = assets.find((a) => a.assetId === form.assetId)?.kind === "vehicle";
 
   const create = async () => {
     if (!form.assetId || !form.date) {
       alert("자산과 날짜를 선택하세요.");
       return;
+    }
+    // 법인차량은 하루 안의 짧은 사용만(서버도 같은 규칙으로 막는다)
+    if (formVehicle) {
+      const timeError = vehicleReservationTimeError(form.startTime, form.endTime);
+      if (timeError) {
+        alert(timeError);
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -184,7 +199,18 @@ export function AssetCalendarBoard() {
       />
       {error && <p className="text-sm cd-error-text">{error}</p>}
 
-      {/* 직접 예약 폼 — 회의실 등. 법인차량은 출장신청서 상신으로 자동 반영된다. */}
+      {/* 법인차량 예약 규칙 안내 — 직접 예약은 짧은 일시 사용, 출장은 출장신청서로 기간 전체를 잡는다. */}
+      <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text-muted">
+        <span className="flex items-start gap-1.5 min-w-0">
+          <Car className="w-3.5 h-3.5 shrink-0 mt-[2px]" style={{ color: TAG_COLOR_STRONG.vehicle }} />
+          <span>법인차량 직접 예약은 우체국 방문처럼 하루 안의 짧은 사용만 받습니다. {TRIP_VEHICLE_GUIDE}.</span>
+        </span>
+        <Link href={TRIP_DRAFT_HREF} className="cd-action cd-btn cd-btn-sm cd-btn-soft inline-flex items-center gap-1 !text-[12px]">
+          <FileText className="w-3.5 h-3.5" /> 출장신청서 작성
+        </Link>
+      </div>
+
+      {/* 직접 예약 폼 — 회의실 등 + 법인차량 짧은 사용. 출장 차량은 출장신청서 상신으로 자동 반영된다. */}
       {formOpen && (
         <div className="rounded-2xl border cd-border-c p-3 flex items-end gap-2 flex-wrap">
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
@@ -203,16 +229,16 @@ export function AssetCalendarBoard() {
             <AutoDateInput className="cd-input" value={form.date} onChange={(date) => setForm((p) => ({ ...p, date }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            시작(비우면 종일)
+            {formVehicle ? "시작(필수)" : "시작(비우면 종일)"}
             <input type="time" className="cd-input" value={form.startTime} onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1">
-            종료
+            {formVehicle ? "종료(필수)" : "종료"}
             <input type="time" className="cd-input" value={form.endTime} onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))} />
           </label>
           <label className="text-[11px] cd-text-faint flex flex-col gap-1 flex-1 min-w-[160px]">
             목적
-            <input className="cd-input w-full" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} placeholder="회의명·용도" />
+            <input className="cd-input w-full" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} placeholder={formVehicle ? "방문처·용도" : "회의명·용도"} />
           </label>
           <button type="button" className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-50" disabled={saving} onClick={create}>
             {saving ? "등록 중..." : "예약 등록"}
@@ -254,8 +280,24 @@ export function AssetCalendarBoard() {
                 <span className="text-[12px] cd-text-muted truncate flex-1 min-w-0">
                   {u.userName ?? "-"}
                   {u.purpose && <span className="cd-text-faint"> · {u.purpose}</span>}
-                  {u.source === "trip" && <span className="cd-text-faint"> · 출장신청 연동</span>}
                 </span>
+                {u.source === "trip" && (
+                  <>
+                    <span className={`cd-pill shrink-0 !text-[11px] ${u.docStatus === "approved" ? "cd-pill-success" : "cd-pill-warn"}`}>
+                      {u.docStatus === "approved" ? "확정" : "가예약 · 결재 중"}
+                    </span>
+                    {u.docId && (
+                      <Link
+                        href={`/approval?docId=${encodeURIComponent(u.docId)}`}
+                        className="cd-action shrink-0 inline-flex items-center gap-1 text-[12px] cd-text-primary whitespace-nowrap"
+                        title={`출장신청서${u.docNo ? ` ${u.docNo}` : ""} 열기(차량 변경·취소는 결재 문서에서)`}
+                      >
+                        <FileText className="w-3.5 h-3.5" /> 출장신청서
+                        {u.docNo && <span className="hidden md:inline">{u.docNo}</span>}
+                      </Link>
+                    )}
+                  </>
+                )}
                 {u.conflict && <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--cd-warning)" }} />}
                 {(u.mine || canManage) && u.source === "reservation" && (
                   <button type="button" className="shrink-0 p-1 rounded-md cd-text-faint hover:cd-error-text" title="예약 취소" onClick={() => remove(u)}>

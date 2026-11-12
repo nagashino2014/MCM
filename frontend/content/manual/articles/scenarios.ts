@@ -43,7 +43,7 @@ export const SCENARIO_ARTICLES: ManualArticle[] = [
     requires: [],
     audience: ["staff", "head", "exec", "admin"],
     summary: [
-      "출장신청서로 신청하면 법인차량 이용이 자산 예약 현황에 표시됩니다.",
+      "출장신청서에 법인차량을 고르면 출장 기간 전체가 그 차량의 예약으로 잡힙니다(상신=가예약, 승인=확정). 같은 차량의 다른 예약과 겹치면 상신이 막힙니다.",
       "다녀온 뒤 출장보고서에 신청서를 선행 문서로 연결하고 카드·영수증 내역을 불러옵니다.",
       "숙박 출장이면 승인 후 숙박출장수당이 급여에 반영됩니다.",
     ],
@@ -68,7 +68,7 @@ export const SCENARIO_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["출장", "출장 신청", "출장보고서", "법인차량", "영수증", "경비 정산", "숙박"],
     sources: ["components/calendar/DayActionModal.tsx", "components/approval/ApprovalDraftBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "scenario.letter",

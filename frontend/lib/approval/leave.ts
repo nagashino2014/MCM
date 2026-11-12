@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
-import { findInCatalog } from "@/lib/approval/leave-types";
+import {
+  findInCatalog,
+  specialKindOf,
+  specialLeaveSubmitError,
+  specialLeaveUseAmount,
+  specialRemainingDays,
+  type SpecialLeaveKind,
+} from "@/lib/approval/leave-types";
 import { listLeaveTypes } from "@/lib/approval/leave-types-store";
 import { computeAccrual, type AccrualBasis } from "@/lib/approval/leave-accrual";
 import { countWorkdays, leaveDates, periodEndFromNote } from "@/lib/approval/leave-dates";
@@ -118,11 +125,79 @@ export async function recordLeaveUsageOnApproval(txn: PgDatabase, docId: string)
     else days = 1;
   }
   const year = (from || new Date().toISOString()).slice(0, 4);
+  const note = `${item.label} ${from}${to && to !== from ? `~${to}` : ""}${rows[0].doc_no ? ` (${rows[0].doc_no})` : ""}`;
+  const now = new Date().toISOString();
   await txn.run(
     `INSERT INTO annual_leave_ledger (entry_id, employee_id, year, entry_type, days, used_on, leave_type_key, doc_id, note, created_by, created_at)
      VALUES ($1, $2, $3, 'use', $4, $5, $6, $7, $8, NULL, $9)`,
-    [id(), employeeId, year, days, from || null, item.key, docId, `${item.label} ${from}${to && to !== from ? `~${to}` : ""}${rows[0].doc_no ? ` (${rows[0].doc_no})` : ""}`, new Date().toISOString()]
+    [id(), employeeId, year, days, from || null, item.key, docId, note, now]
   );
+  // 특별휴가(363) — 연차 대장에는 '연차 외 사용'으로 남기고(사용 내역·캘린더), 잔여 차감은 특별휴가 원장에 적재한다.
+  const kind = specialKindOf(item.key);
+  if (kind && (await specialLedgerReady(txn))) {
+    const dupSpecial = rowsToObjects(await txn.exec(`SELECT 1 FROM special_leave_ledger WHERE doc_id = $1 AND entry_type = 'use'`, [docId]));
+    if (!dupSpecial.length) {
+      const use = specialLeaveUseAmount(kind, days);
+      await txn.run(
+        `INSERT INTO special_leave_ledger (entry_id, employee_id, kind, entry_type, days, unit, effective_on, doc_id, note, created_at)
+         VALUES ($1, $2, $3, 'use', $4, $5, $6, $7, $8, $9)`,
+        [slvId(), employeeId, kind, use.amount, use.unit, from || null, docId, `휴가신청 승인 — ${note}`, now]
+      );
+    }
+  }
+}
+
+/** 특별휴가 원장(133) 존재 여부 — 미적용 환경에서 결재 트랜잭션이 SQL 오류로 통째 롤백되지 않게 먼저 본다. */
+async function specialLedgerReady(db: PgDatabase): Promise<boolean> {
+  const r = rowsToObjects(await db.exec(`SELECT to_regclass('special_leave_ledger') IS NOT NULL AS ok`));
+  return r[0]?.ok === true || r[0]?.ok === "t";
+}
+
+/**
+ * 휴가 문서의 사용 적재 회수(관리자 결재 취소·값 수정·문서 삭제 공용) — 연차 대장 use 와
+ * 특별휴가 원장 use(363) 를 doc_id 로 함께 지운다. 반환: 연차 대장에서 지운 행 수.
+ */
+export async function deleteLeaveUsageForDoc(txn: PgDatabase, docId: string): Promise<number> {
+  const del = rowsToObjects(
+    await txn.exec(`DELETE FROM annual_leave_ledger WHERE doc_id = $1 AND entry_type = 'use' RETURNING entry_id`, [docId])
+  );
+  if (await specialLedgerReady(txn)) {
+    await txn.run(`DELETE FROM special_leave_ledger WHERE doc_id = $1 AND entry_type = 'use'`, [docId]);
+  }
+  return del.length;
+}
+
+/**
+ * 휴가신청 상신 검증(363) — 특별휴가 종류면 기안자 본인 잔여(결재 중인 다른 같은 종류 신청분 제외)를
+ * 넘지 않는지 본다. 기안 화면이 선택지를 숨겨도 API 직접 호출·모바일 구버전으로 들어올 수 있어 서버에서 막는다.
+ * 반환: 거부 안내 문구, 통과면 null.
+ */
+export async function checkSpecialLeaveOnSubmit(
+  txn: PgDatabase,
+  params: { docId: string; drafterUserId: string; fieldValues: Record<string, unknown> }
+): Promise<string | null> {
+  const raw = String(params.fieldValues.leave_type ?? "").trim();
+  if (!raw) return null;
+  const catalog = await listLeaveTypes();
+  const item = findInCatalog(catalog, raw);
+  const kind = item ? specialKindOf(item.key) : null;
+  if (!item || !kind) return null;
+  const useDays = Number(String(params.fieldValues.use_days ?? "").replace(/[^\d.]/g, "")) || 0;
+  if (!(await specialLedgerReady(txn))) return `${item.label}을(를) 아직 신청할 수 없습니다 — 특별휴가 원장이 준비되지 않았습니다.`;
+  const balances = await specialBalancesForUser(txn, params.drafterUserId);
+  const remainingDays = specialRemainingDays(balances, kind);
+  const keys = catalog.filter((c) => specialKindOf(c.key) === kind).map((c) => c.key);
+  const pendingRows = rowsToObjects(
+    await txn.exec(
+      `SELECT COALESCE(SUM(NULLIF(regexp_replace(COALESCE(field_values->>'use_days', ''), '[^0-9.]', '', 'g'), '')::numeric), 0) AS d
+         FROM approval_docs
+        WHERE drafter_user_id = $1 AND form_id = $2 AND status = 'in_progress' AND doc_id <> $3
+          AND field_values->>'leave_type' = ANY($4::text[])`,
+      [params.drafterUserId, LEAVE_FORM_ID, params.docId, keys.length ? keys : [item.key]]
+    )
+  );
+  const pendingDays = Number(pendingRows[0]?.d ?? 0);
+  return specialLeaveSubmitError({ label: item.label, useDays, remainingDays, pendingDays });
 }
 
 /* ---------- 집계 ---------- */
@@ -319,7 +394,7 @@ export async function deleteLeaveEntry(entryId: string): Promise<void> {
 /** 특별휴가 잔여(홈 카드) — kind·unit 별 Σ(grant+adjust) − Σ(use). 소멸일 지난 부여분은 제외.
  *  unit: 'day'(장기근속 등) | 'hour'(초과근무 대체 — 근태 대조 자동 산정, 134). */
 export interface SpecialLeaveRemaining {
-  kind: "longevity" | "overtime_comp";
+  kind: SpecialLeaveKind;
   label: string;
   remaining: number;
   unit: "day" | "hour";
@@ -434,7 +509,11 @@ export async function deleteSpecialLeaveEntry(entryId: string): Promise<void> {
 }
 
 export async function getMySpecialLeaveRemaining(userId: string): Promise<SpecialLeaveRemaining[]> {
-  const db = await getDb();
+  return specialBalancesForUser(await getDb(), userId);
+}
+
+/** 사용자(users.user_id) 본인의 특별휴가 잔여 — kind·unit별 잔여(>0만). 상신 검증은 트랜잭션 안에서 부른다. */
+async function specialBalancesForUser(db: PgDatabase, userId: string): Promise<SpecialLeaveRemaining[]> {
   const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const rows = rowsToObjects(
     await db.exec(

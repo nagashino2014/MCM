@@ -238,6 +238,20 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     reviewedAt: "2026-10-21",
   },
   {
+    id: "mail.individual-send",
+    label: "개인별 보내기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "받는 사람마다 따로 한 통씩 보냅니다. 받는 쪽에는 자기 주소만 보입니다.",
+        "켜 두면 참조·숨은 참조로는 보내지 않습니다.",
+        "보낸편지함에는 한 통(받는 사람 전원)으로 남고, 수신 확인은 사람별로 집계됩니다.",
+      ] },
+    ],
+    more: { article: "mail.compose", section: "individual" },
+    sources: ["components/mail/MailComposePage.tsx"],
+    reviewedAt: "2026-11-12",
+  },
+  {
     id: "mail.draft-save",
     label: "메일 임시 저장 도움말",
     blocks: [
@@ -260,6 +274,21 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     more: { article: "mail.box", section: "external-client" },
     sources: ["components/mail/MailExternalClientSection.tsx"],
     reviewedAt: "2026-10-21",
+  },
+  {
+    id: "mail.desktop-notify",
+    label: "PC 알림 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "켜면 이 앱이 열린 브라우저 탭이 있을 때 새 메일의 보낸 사람·제목이 PC 알림으로 뜹니다. 알림을 누르면 그 메일이 열립니다.",
+        "처음 켤 때 브라우저가 알림 허용을 묻습니다. [허용]을 눌러야 합니다.",
+        "브라우저마다 따로 켭니다. 다른 PC·브라우저에서도 받으려면 거기서도 켜 주세요.",
+        "탭을 모두 닫으면 알림이 오지 않습니다. 탭이 여러 개여도 알림은 한 번만 뜹니다.",
+      ] },
+    ],
+    more: { article: "mail.box", section: "desktop-notify" },
+    sources: ["components/mail/MailDesktopNotifySection.tsx"],
+    reviewedAt: "2026-11-12",
   },
   // ── 할 일·일정 ──
   {

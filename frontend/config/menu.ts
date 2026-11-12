@@ -254,6 +254,8 @@ export const MENU_ITEMS: MenuItem[] = [
     submenu: [
       { title: "목록", href: "/external-parties" },
       { title: "연락처 가져오기", href: "/external-parties/import" },
+      // 메일 주소에서 '주소록 추가'로 만든 간이 업체·담당자(357, 2026-11-12). 관리자는 확정·상세정보 요청, 직원은 보완.
+      { title: "간이 등록", href: "/external-parties/quick" },
     ],
   },
   {
@@ -437,10 +439,12 @@ export function isMenuVisible(item: MenuItem, perms: readonly string[]): boolean
 }
 
 /**
- * 상위 메뉴의 대표 이동 경로 — 레일 클릭·전역 검색이 쓴다. 상위 href 를 열 권한이 없으면
- * 보이는 첫 서브메뉴로 보낸다(예: 파일함(files.manage) 없는 직원의 "파일 · 문서함" → 문서함).
+ * 상위 메뉴의 대표 이동 경로 — 사이드바 대메뉴 클릭(펼침·레일·드로어)·전역 검색이 쓴다.
+ * 서브메뉴가 있으면 권한상 보이는 첫 서브메뉴로 보낸다(2026-11-12 직원 요청 4 — 대메뉴를 누르면 첫 소메뉴가 바로 열림).
+ * 예: 파일함(files.manage) 없는 직원의 "파일 · 문서함" → 문서함, 재무 → 연결 관리(/finance?tab=connections).
+ * 대메뉴 href 는 모두 첫 서브메뉴와 같은 화면이라(재무 /finance 도 기본 탭이 연결 관리) 잃는 화면은 없다.
  */
 export function menuEntryHref(item: MenuItem, perms: readonly string[]): string {
-  if (!item.submenu?.length || hasAnyPerm(perms, menuRequiredKeys(item))) return item.href;
+  if (!item.submenu?.length) return item.href;
   return visibleSubmenu(item, perms)[0]?.href ?? item.href;
 }

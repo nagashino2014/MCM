@@ -16,6 +16,8 @@ const MENU_W = 300;
 
 export interface MailSenderMenuState {
   address: string;
+  /** 메일 머리글의 표시 이름 — [주소록 추가] 양식의 이름 칸에 미리 넣는다(2026-11-12). */
+  name?: string | null;
   /** 누른 요소의 화면 좌표 — 그 아래에 연다. */
   anchor: { left: number; top: number; bottom: number };
 }

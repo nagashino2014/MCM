@@ -9,6 +9,7 @@ import { CdCheckbox, CdInput, CdSelect } from "@/components/cdash/CdField";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailAddressManager } from "@/components/mail/MailAddressManager";
 import { MailAliasManager } from "@/components/mail/MailAliasManager";
+import { MailDesktopNotifySection } from "@/components/mail/MailDesktopNotifySection";
 import { MailExternalClientSection } from "@/components/mail/MailExternalClientSection";
 import { MailImportManager } from "@/components/mail/MailImportManager";
 import { MailQuotaModal } from "@/components/mail/MailQuotaModal";
@@ -114,6 +115,9 @@ export function MailSettingsPane() {
       {/* 넓은 화면(2xl+)의 관리자: 왼쪽 = 개인·관리 설정, 오른쪽 = 회사 주소(직원별 카드). 좁으면 위아래로 쌓는다. */}
       <div className={adminList ? "grid gap-4 items-start 2xl:grid-cols-[minmax(0,34rem)_minmax(0,1fr)]" : ""}>
       <div className="flex flex-col gap-4 min-w-0 max-w-3xl">
+
+      {/* 새 메일 PC 알림(직원 개선 요청 11) — 이 브라우저 단위, 바로 적용(아래 [설정 저장]과 무관) */}
+      <MailDesktopNotifySection />
 
       {/* 스팸 설정 */}
       <section className="rounded-xl border cd-border-c p-4 flex flex-col gap-3">

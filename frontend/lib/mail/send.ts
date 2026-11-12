@@ -18,6 +18,7 @@ import {
   splitAddress,
 } from "@/lib/mail/mailbox";
 import { encodeRecipient } from "@/lib/mail/receipts";
+import { recipientHeaders } from "@/lib/mail/compose-layout";
 
 export interface SendAttachmentInput {
   filename: string;
@@ -39,6 +40,11 @@ export interface SendMailInput {
   references?: string[];
   /** 더블클릭/재시도 중복 억제용. 미지정 시 Message-ID 로 dedup(= 사실상 항상 신규). */
   idempotencyKey?: string;
+  /**
+   * 개인별 보내기(2026-11-12 직원 요청) — 받는 사람마다 To 헤더에 그 사람 주소만 넣어 따로 보낸다(네이버 메일 방식).
+   * 참조·숨은참조와 함께 쓸 수 없다(받는 사람끼리 서로 모르게 보내는 뜻과 어긋남). 보낸메일함에는 한 건(받는 사람 전원)으로 남긴다.
+   */
+  individual?: boolean;
 }
 
 export interface SendMailResult {
@@ -113,6 +119,8 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   if (!to.length) return { ok: false, error: "받는 사람이 필요합니다." };
   const cc = (input.cc ?? []).filter((a) => a.address && /.+@.+\..+/.test(a.address));
   const bcc = (input.bcc ?? []).filter((a) => a.address && /.+@.+\..+/.test(a.address));
+  const individual = !!input.individual;
+  if (individual && (cc.length || bcc.length)) return { ok: false, error: "개인별 보내기에서는 참조·숨은참조를 쓸 수 없습니다." };
 
   const mailbox = await ensureMailbox(input.userId);
   if (mailbox.status !== "active") return { ok: false, error: "발송이 정지된 메일함입니다." };
@@ -154,6 +162,8 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
 
   // 수신자별 개별 발송: 헤더(To/Cc)는 전체 그대로 두고 SES Destinations 만 1명씩 지정 —
   // 각 수신자에게 자기 전용 추적 픽셀이 든 사본이 전달된다(그룹웨어 수신확인 표준 방식).
+  // 개인별 보내기는 To 헤더도 그 수신자 한 명으로 바꾼다(다른 받는 사람이 보이지 않게). Message-ID 는 같게 둬
+  // 답장이 보낸메일함의 한 건과 같은 대화로 묶인다.
   const allRecipients = [...to, ...cc, ...bcc];
   // 사내 수신자 단락(280) — 외부 MX 도메인(koensain.com=아마란스)의 우리 메일함 주소는 헤더는 그대로 두고
   // 봉투(SES Destination)만 그 메일함의 SES 수신 주소(.app)로 보내 앱에 바로 배달한다.
@@ -165,8 +175,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     const pixel = `<img src="${trackBase}/api/mail/track?m=${msgId}&r=${encodeRecipient(r.address)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;overflow:hidden">`;
     const raw = buildMimeMessage({
       from,
-      to,
-      cc,
+      ...recipientHeaders(individual, r, to, cc),
       subject: input.subject ?? "",
       text,
       html: html + pixel,
@@ -269,6 +278,12 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       [sendId, msgId, sesMessageId ?? null, allRecipients.length]
     );
   });
+  // 개인별 보내기 표시(366) — 별도 문장으로 둬 366 적용 전에도 발송 기록은 남는다(실패는 기록만).
+  if (individual) {
+    await withDbWrite(async (db) => {
+      await db.run(`UPDATE mail_messages SET send_individual = 1 WHERE message_id = $1`, [msgId]);
+    }).catch((e) => console.warn("[mail-send] 개인별 보내기 표시 실패(366 미적용?)", (e as Error).message));
+  }
 
   return { ok: true, messageId: msgId, sesMessageId };
 }

@@ -22,7 +22,7 @@ const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finan
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 29);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 86);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 87);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [
@@ -191,4 +191,26 @@ test("브리핑 전용 권한은 해당 하위 메뉴와 진입 경로만 개방
   assert.equal(menuEntryHref(item,permissions),"/sales/rag");
   assert.deepEqual(requiredPermissionsForPath("/sales/rag"),["intel.briefing.view","sales.view"]);
   assert.deepEqual(requiredPermissionsForPath("/sales/projects"),["sales.view"]);
+});
+
+// 2026-11-12 직원 요청 4: 대메뉴를 누르면 권한상 보이는 첫 소메뉴로 바로 이동한다(펼침·레일·드로어·전역 검색 공통).
+test("대메뉴 진입 경로는 보이는 첫 소메뉴이고, 대메뉴 href 는 첫 소메뉴와 같은 화면이다", () => {
+  const all = [...new Set([...STAFF_PERMS, ...LEAD_PERMS, ...EXEC_PERMS, ...SALES_STAFF_PERMS, ...CEO_PERMS,
+    "files.manage@all", "finance.view@all", "survey.manage@all", "approval.manage@all"])];
+  for (const perms of [STAFF_PERMS, LEAD_PERMS, EXEC_PERMS, SALES_STAFF_PERMS, CEO_PERMS, all]) {
+    for (const item of MENU_ITEMS.filter((m) => m.submenu?.length && isMenuVisible(m, perms))) {
+      assert.equal(menuEntryHref(item, perms), visibleSubmenu(item, perms)[0].href, `${item.title}`);
+    }
+  }
+  // 대메뉴 href 가 첫 소메뉴와 다른 고유 화면이면 이 규칙으로 그 화면에 갈 길이 사라진다 — 새 메뉴가 깨면 여기서 막는다.
+  for (const item of MENU_ITEMS.filter((m) => m.submenu?.length)) {
+    const url = new URL(item.href, "https://mcm.local");
+    assert.deepEqual(resolveMenuRoute(MENU_ITEMS, url.pathname, url.search),
+      { parentTitle: item.title, href: item.submenu![0].href }, item.title);
+  }
+  const finance = MENU_ITEMS.find((item) => item.title === "재무")!;
+  assert.equal(menuEntryHref(finance, CEO_PERMS), "/finance?tab=connections");
+  // 서브메뉴가 없는 메뉴는 자기 href 그대로
+  const home = MENU_ITEMS.find((item) => item.title === "홈")!;
+  assert.equal(menuEntryHref(home, STAFF_PERMS), "/home");
 });

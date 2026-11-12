@@ -6,7 +6,8 @@
  */
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 
-export type TodoNotifyEvent = "todo.assigned" | "todo.comment" | "todo.status" | "todo.remind" | "todo.digest" | "todo.weekly";
+// contact.detail_request — 주소록 간이 등록 담당자 상세정보 요청(357). 같은 알림함(종)을 쓴다.
+export type TodoNotifyEvent = "todo.assigned" | "todo.comment" | "todo.status" | "todo.remind" | "todo.digest" | "todo.weekly" | "contact.detail_request";
 
 export interface TodoNotification {
   notifId: string;

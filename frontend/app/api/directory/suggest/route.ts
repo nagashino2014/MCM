@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
     const personal: RecipientSuggestion[] = mine
       .filter((c) => !seen.has(c.address))
       .map((c) => ({ name: c.name ?? c.address, address: c.address, kind: "contact", detail: "내 주소록", title: null }));
-    return NextResponse.json({ suggestions: [...shared, ...personal].slice(0, 15) });
+    // 공유 결과(최대 12)가 많아도 내 주소록 항목이 잘리지 않게 자리를 먼저 남긴다(요청 9, 2026-11-12).
+    return NextResponse.json({ suggestions: [...shared.slice(0, 15 - personal.length), ...personal] });
   } catch (err) {
     return authErrorToResponse(err);
   }

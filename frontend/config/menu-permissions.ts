@@ -90,6 +90,7 @@ export const ROUTE_PERMISSIONS: readonly RoutePermission[] = [
   // 기타 업체·기관(342) — 담당자 연락처처럼 전 직원이 본다(contact.view).
   { path: "/external-parties", keys: ["contact.view"] },
   { path: "/external-parties/import", keys: ["contact.edit"] },
+  { path: "/external-parties/quick", keys: ["contact.edit"] },
   { path: "/contracts", keys: ["contract.view"] },
   // 매입 계약 관리(331) — 회계·총무 성격이라 contract.view 와 분리한 purchase.view. 관리자·대표이사만(345).
   { path: "/contracts/purchase", keys: ["purchase.view"] },

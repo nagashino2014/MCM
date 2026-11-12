@@ -3,7 +3,7 @@
 // 메일 목록(G2-2/3): 검색·체크 일괄작업·별표·안읽음 강조. 좌우 분할(stack)·목록형(row, 10-16) 두 가지 행 모양.
 // 폴더별 가용 액션이 다르다(inbox=보관/스팸/휴지통, trash=복원/영구삭제 …).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
   Inbox,
@@ -83,6 +83,8 @@ export function MailListPane({
   onToggleStar: (id: string, star: boolean) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 범위 선택 기준 — 마지막으로 선택을 바꾼 메일. */
+  const anchorRef = useRef<string | null>(null);
   const [qInput, setQInput] = useState(q);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const isDrafts = folder === "drafts";
@@ -97,12 +99,14 @@ export function MailListPane({
   // 폴더 전환 시 선택 리셋 — 이전 폴더의 체크가 남아 "N건" 오표시되던 버그 수정(G2-13).
   useEffect(() => {
     setSelected(new Set());
+    anchorRef.current = null;
   }, [folder]);
 
   const toggleAll = () => {
     setSelected((prev) => (prev.size === items.length && items.length > 0 ? new Set() : new Set(items.map((m) => m.messageId))));
   };
   const toggleOne = (id: string) => {
+    anchorRef.current = id;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -110,6 +114,79 @@ export function MailListPane({
       return next;
     });
   };
+
+  // 여러 개 고르기(직원 요청 3, 11-12) — Shift+클릭 범위, Ctrl/⌘+클릭 개별, 체크박스 열 끌기.
+  // 범위는 마지막으로 누른 메일(anchor)부터 지금 누른 메일까지이고, 누른 메일이 바뀔 상태(선택/해제)로 맞춘다.
+  const selectRange = (id: string) => {
+    const to = items.findIndex((m) => m.messageId === id);
+    const from = anchorRef.current ? items.findIndex((m) => m.messageId === anchorRef.current) : -1;
+    if (to < 0) return;
+    if (from < 0) return toggleOne(id);
+    const [a, b] = from < to ? [from, to] : [to, from];
+    setSelected((prev) => {
+      const on = !prev.has(id);
+      const next = new Set(prev);
+      for (const m of items.slice(a, b + 1)) {
+        if (on) next.add(m.messageId);
+        else next.delete(m.messageId);
+      }
+      return next;
+    });
+    anchorRef.current = id;
+  };
+  // 행 어디를 눌러도 Shift·Ctrl/⌘ 가 눌려 있으면 메일을 열지 않고 선택만 바꾼다(체크박스 포함, capture 단계).
+  const onRowClickCapture = (e: React.MouseEvent, id: string) => {
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) return;
+    // preventDefault 는 하지 않는다 — 체크박스에서 취소하면 브라우저가 체크 표시를 되돌려 상태와 어긋난다.
+    // 행 안 버튼은 기본 동작이 없고, 체크박스는 누른 칸이 바뀔 상태와 같은 방향으로 토글된다.
+    e.stopPropagation();
+    if (e.shiftKey) selectRange(id);
+    else toggleOne(id);
+  };
+  // Shift+클릭 때 브라우저가 글자를 범위 선택하지 않게 막는다.
+  const onRowMouseDown = (e: React.MouseEvent) => {
+    if (e.shiftKey) e.preventDefault();
+  };
+  // 체크박스 열 끌기: 누른 칸에서 다른 행으로 넘어가는 순간 시작하고, 시작 칸이 바뀔 상태로 지나간 범위를 맞춘다.
+  // 같은 칸에서 떼면 평소 클릭(토글)으로 끝난다. 마우스만 — 터치는 스크롤과 겹친다.
+  const dragRef = useRef<{ startId: string; base: Set<string>; on: boolean; active: boolean } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const onCheckPointerDown = (e: React.PointerEvent, id: string) => {
+    if (e.pointerType !== "mouse" || e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    dragRef.current = { startId: id, base: new Set(selected), on: !selected.has(id), active: false };
+  };
+  const onRowPointerEnter = (id: string) => {
+    const d = dragRef.current;
+    if (!d || (!d.active && id === d.startId)) return;
+    const a0 = items.findIndex((m) => m.messageId === d.startId);
+    const b0 = items.findIndex((m) => m.messageId === id);
+    if (a0 < 0 || b0 < 0) return;
+    if (!d.active) {
+      d.active = true;
+      setDragging(true);
+    }
+    const [a, b] = a0 < b0 ? [a0, b0] : [b0, a0];
+    const next = new Set(d.base);
+    for (const m of items.slice(a, b + 1)) {
+      if (d.on) next.add(m.messageId);
+      else next.delete(m.messageId);
+    }
+    setSelected(next);
+    anchorRef.current = id;
+  };
+  useEffect(() => {
+    const end = () => {
+      if (dragRef.current?.active) window.getSelection()?.removeAllRanges();
+      dragRef.current = null;
+      setDragging(false);
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, []);
   const runBulk = (act: BulkAction) => {
     if (!selected.size) return;
     onBulk([...selected], act);
@@ -259,20 +336,24 @@ export function MailListPane({
         ) : layout === "row" ? (
           // 목록형(네이버·지메일식): 한 줄 = 안읽음 점 · 선택 · 별표 · 보낸 사람 · 제목 · 미리보기(돋보기) · 첨부 · 날짜.
           // 본문 미리보기 글은 제목 뒤에 붙이지 않고 돋보기 팝업으로 본다(10-16, 가독성).
-          <ul>
+          <ul className={cn(dragging && "select-none")}>
             {items.map((m) => {
               const unread = !m.isRead && folder !== "sent";
               const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
               const active = activeId === m.messageId;
               return (
-                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
-                  <div className={cn("flex items-center gap-2.5 px-3 py-[15.5px]", active ? "cd-glass-active" : "cd-row-hover")}>
+                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0" onPointerEnter={() => onRowPointerEnter(m.messageId)}>
+                  <div
+                    onClickCapture={(e) => onRowClickCapture(e, m.messageId)}
+                    onMouseDown={onRowMouseDown}
+                    className={cn("flex items-center gap-2.5 px-3 py-[15.5px]", active ? "cd-glass-active" : "cd-row-hover")}
+                  >
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
                       aria-hidden
                     />
-                    <span onClick={(e) => e.stopPropagation()}>
+                    <span className="select-none" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => onCheckPointerDown(e, m.messageId)}>
                       <CdCheckbox checked={selected.has(m.messageId)} onChange={() => toggleOne(m.messageId)} aria-label="선택" />
                     </span>
                     <button
@@ -331,20 +412,24 @@ export function MailListPane({
         ) : (
           // 행 3층(Soft Glass Ink): 안읽음 점 + 아바타 → 발신자/시간 → 제목 → 스니펫.
           // 선택 행은 흰 글라스 필, 안읽음은 굵기 + 좌측 6px 점으로 시선 앵커를 만든다.
-          <ul>
+          <ul className={cn(dragging && "select-none")}>
             {items.map((m) => {
               const unread = !m.isRead && folder !== "sent";
               const who = folder === "sent" ? m.toAddrs.map((a) => a.name || a.address).join(", ") : m.fromAddr ?? "-";
               const active = activeId === m.messageId;
               return (
-                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0">
-                  <div className={cn("flex items-start gap-2.5 px-3 py-[16.5px]", active ? "cd-glass-active" : "cd-row-hover")}>
+                <li key={m.messageId} className="border-b cd-hairline-row-c last:border-b-0" onPointerEnter={() => onRowPointerEnter(m.messageId)}>
+                  <div
+                    onClickCapture={(e) => onRowClickCapture(e, m.messageId)}
+                    onMouseDown={onRowMouseDown}
+                    className={cn("flex items-start gap-2.5 px-3 py-[16.5px]", active ? "cd-glass-active" : "cd-row-hover")}
+                  >
                     <span
                       className="w-1.5 h-1.5 rounded-full mt-3 shrink-0"
                       style={{ background: "var(--cd-primary)", opacity: unread ? 1 : 0 }}
                       aria-hidden
                     />
-                    <span className="pt-1.5" onClick={(e) => e.stopPropagation()}>
+                    <span className="pt-1.5 select-none" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => onCheckPointerDown(e, m.messageId)}>
                       <CdCheckbox checked={selected.has(m.messageId)} onChange={() => toggleOne(m.messageId)} aria-label="선택" />
                     </span>
                     <CdAvatar name={who} size="sm" className="mt-0.5 w-[30px] h-[30px] text-[11px]" />

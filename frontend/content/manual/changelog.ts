@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-12", kind: "개선", title: "고정 결재선 — 카드 배치 정리",
+    body: "넓은 화면에서 역할 담당자·양식별 결재선 카드 높이를 줄이고 카드 안에서 스크롤합니다. 직원별 추가 결재선·참조·열람과 결재선 편집은 왼쪽 칸에, 직원별 결재선 미리보기는 오른쪽 칸에 나란히 놓여 규칙을 고치면서 바로 결과를 봅니다.",
+    articles: ["approval-ops.fixed-lines"],
+  },
+  {
     date: "2026-11-12", kind: "수정", title: "고정 결재선 — 직원별 추가 결재자 ‘최종 결재자 바로 앞’ 순서",
     body: "직원별 추가 결재자를 ‘맨 뒤(최종 결재)’와 ‘최종 결재자 바로 앞’에 함께 넣으면 바로 앞 결재자가 고정 결재선의 마지막(부서장 등) 앞에 서던 것을, 맨 뒤 결재자 바로 앞에 서도록 고쳤습니다. 예: 부서장 → 바로 앞 결재자 → 맨 뒤 결재자. 이미 저장된 문서는 다시 저장·상신할 때 새 순서로 바뀝니다.",
     articles: ["approval-ops.fixed-lines", "approval.draft"],

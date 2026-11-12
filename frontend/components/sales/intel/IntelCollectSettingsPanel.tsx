@@ -177,8 +177,8 @@ function FieldRow({ label, children, hint }: { label: string; children: React.Re
   return (
     <div className="flex items-start gap-3 py-2">
       <div className="shrink-0 pt-1" style={{ width: 150 }}>
-        <span className="text-[12px] font-bold" style={{ color: "var(--cd-muted)" }}>{label}</span>
-        {hint && <p className="text-[10px] mt-0.5 leading-snug" style={{ color: "var(--cd-faint)" }}>{hint}</p>}
+        <span className="cd-label-text">{label}</span>
+        {hint && <p className="cd-hint mt-0.5 leading-snug">{hint}</p>}
       </div>
       <div className="flex-1 min-w-0">{children}</div>
     </div>

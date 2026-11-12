@@ -168,15 +168,15 @@ export function AiAreaPanel({ studio, kit, docId, onDone }: { studio: Studio; ki
           분야 상세(C09)와 같은 틀로 새 쪽을 만듭니다. 숫자는 고른 계약 분류의 지표로, 대표 실적은 그 분류의 실제 계약에서만 고릅니다.
         </p>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          분야 이름(소개서 표기)
+          <span className="cd-label-text">분야 이름(소개서 표기)</span>
           <input className="cd-input" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="예: 토양·지하수 조사" />
         </label>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          설명 메모(하는 일·대상·특징 — 자유롭게)
+          <span><span className="cd-label-text">설명 메모</span><span className="cd-hint ml-1.5">(하는 일·대상·특징 — 자유롭게)</span></span>
           <textarea className="cd-input" rows={4} maxLength={1500} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 토양오염도 조사, 정화 계획 수립, 지하수 영향 조사…" />
         </label>
         <fieldset className="flex flex-col gap-1 border-0 p-0 m-0">
-          <legend className="text-xs cd-text-muted mb-1">관련 계약 분류(지표·대표 실적 후보의 범위)</legend>
+          <legend className="mb-1"><span className="cd-label-text">관련 계약 분류</span><span className="cd-hint ml-1.5">(지표·대표 실적 후보의 범위)</span></legend>
           <div className="flex flex-wrap gap-1.5">
             {CATALOG_CATEGORIES.map((c) => (
               <button
@@ -234,7 +234,7 @@ export function AiAreaPanel({ studio, kit, docId, onDone }: { studio: Studio; ki
           </div>
         </figure>
         <fieldset className="flex flex-col gap-2 border-0 p-0 m-0 min-w-0">
-          <legend className="text-xs cd-text-muted mb-1">부분마다 AI 제안을 쓸지 고릅니다(끄면 규칙 초안)</legend>
+          <legend className="mb-1"><span className="cd-label-text">부분마다 AI 제안을 쓸지 고릅니다</span><span className="cd-hint ml-1.5">(끄면 규칙 초안)</span></legend>
           {p.parts.map((part) => {
             const lines = ai && part.key !== "featured" && part.key !== "kpis" ? linesOf(ai, part.key, p) : part.ai;
             return (

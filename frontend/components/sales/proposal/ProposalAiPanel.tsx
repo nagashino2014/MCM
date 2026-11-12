@@ -153,7 +153,7 @@ export function ProposalAiPanel({ target, doc, kit, previewing, onPreview, onAcc
     <div className="proposal-ai">
       <div className="chips" role="group" aria-label="지시">{AI_ACTIONS.map((a) => <button key={a.id} type="button" className={action === a.id ? "on" : ""} disabled={busy}
         onClick={() => { setAction(a.id); setInstruction(a.instruction); }}>{a.label}</button>)}</div>
-      <label className="f">지시(고쳐 써도 됩니다)
+      <label className="f"><span><span className="cd-label-text">지시</span><span className="cd-hint ml-1.5">(고쳐 써도 됩니다)</span></span>
         <textarea className="cd-input" rows={2} value={instruction} disabled={busy} maxLength={1000} onChange={(e) => { setInstruction(e.target.value); if (!AI_ACTIONS.some((a) => a.instruction === e.target.value)) setAction("free"); }} /></label>
       <p className="proposal-muted">회사 수치는 원장 값만 쓰고, 모르는 사실은 [작성 필요]로 남깁니다. [작성 필요] 칸·성명 표·적용 예시 쪽은 고치지 않습니다.</p>
       {status ? <p role="status" className="proposal-muted"><Loader2 size={13} className="spin" /> {status}</p> : null}

@@ -235,7 +235,7 @@ export function IllustrationDetailDrawer({
           {selSlot ? (
             <div className="flex flex-wrap items-end gap-2 text-xs">
               <label className="cd-text-muted flex flex-col gap-1">
-                역할
+                <span className="cd-label-text">역할</span>
                 <select className="cd-select" style={{ width: 110 }} value={selSlot.role} onChange={(e) => patchSlot(selSlot.id, { role: e.target.value as IllustSlotRole, ...(["center", "heading"].includes(e.target.value) ? { item: 0 } : {}) })}>
                   {ILLUST_SLOT_ROLES.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -245,7 +245,7 @@ export function IllustrationDetailDrawer({
                 </select>
               </label>
               <label className="cd-text-muted flex flex-col gap-1">
-                항목 번호
+                <span className="cd-label-text">항목 번호</span>
                 <select className="cd-select" style={{ width: 90 }} value={selSlot.item} onChange={(e) => patchSlot(selSlot.id, { item: Number(e.target.value) })} disabled={selSlot.role === "center" || selSlot.role === "heading"}>
                   <option value={0}>없음</option>
                   {Array.from({ length: itemMax }, (_, i) => i + 1).map((n) => (
@@ -256,7 +256,7 @@ export function IllustrationDetailDrawer({
                 </select>
               </label>
               <label className="cd-text-muted flex flex-col gap-1">
-                내용(얹을 칸)
+                <span className="cd-label-text">내용(얹을 칸)</span>
                 <select
                   className="cd-select"
                   style={{ width: 130 }}
@@ -275,11 +275,11 @@ export function IllustrationDetailDrawer({
                 </select>
               </label>
               <label className="cd-text-muted flex flex-col gap-1">
-                줄 수
+                <span className="cd-label-text">줄 수</span>
                 <input className="cd-input" style={{ width: 64 }} type="number" min={1} max={12} value={selSlot.lines} onChange={(e) => patchSlot(selSlot.id, { lines: clamp(Number(e.target.value) || 1, 1, 12) })} />
               </label>
               <label className="cd-text-muted flex flex-col gap-1">
-                정렬
+                <span className="cd-label-text">정렬</span>
                 <select className="cd-select" style={{ width: 90 }} value={selSlot.align} onChange={(e) => patchSlot(selSlot.id, { align: e.target.value as IllustSlot["align"] })}>
                   <option value="left">왼쪽</option>
                   <option value="center">가운데</option>
@@ -287,7 +287,7 @@ export function IllustrationDetailDrawer({
                 </select>
               </label>
               <label className="cd-text-muted flex flex-col gap-1">
-                글자 크기(그림 폭 ‰)
+                <span className="cd-label-text">글자 크기(그림 폭 ‰)</span>
                 <input
                   className="cd-input"
                   style={{ width: 90 }}
@@ -353,11 +353,11 @@ export function IllustrationDetailDrawer({
 
         <section className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
           <label className="text-xs cd-text-muted flex flex-col gap-1">
-            이름
+            <span className="cd-label-text">이름</span>
             <input className="cd-input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label className="text-xs cd-text-muted flex flex-col gap-1">
-            유형(기본 인포그래픽 16종 중)
+            <span className="cd-label-text">유형(기본 인포그래픽 16종 중)</span>
             <select className="cd-select" value={type} onChange={(e) => setType(e.target.value as InfoType)}>
               {INFO_TYPES.map((t) => (
                 <option key={t.type} value={t.type}>
@@ -367,11 +367,11 @@ export function IllustrationDetailDrawer({
             </select>
           </label>
           <label className="text-xs cd-text-muted flex flex-col gap-1">
-            항목 수(그림에 고정)
+            <span className="cd-label-text">항목 수(그림에 고정)</span>
             <input className="cd-input" type="number" min={1} max={30} value={count} onChange={(e) => setCount(clamp(Number(e.target.value) || 1, 1, 30))} />
           </label>
           <label className="text-xs cd-text-muted flex flex-col gap-1">
-            품질(1~5)
+            <span className="cd-label-text">품질(1~5)</span>
             <select className="cd-select" value={quality ?? ""} onChange={(e) => setQuality(e.target.value ? Number(e.target.value) : null)}>
               <option value="">—</option>
               {[1, 2, 3, 4, 5].map((q) => (
@@ -385,7 +385,7 @@ export function IllustrationDetailDrawer({
             <input type="checkbox" checked={center} onChange={(e) => setCenter(e.target.checked)} /> 중심 요소 있음
           </label>
           <label className="text-xs cd-text-muted flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-            메모
+            <span className="cd-label-text">메모</span>
             <input className="cd-input" value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
         </section>
@@ -396,15 +396,15 @@ export function IllustrationDetailDrawer({
           </h3>
           <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
             <label className="text-xs cd-text-muted flex flex-col gap-1">
-              출처
+              <span className="cd-label-text">출처</span>
               <input className="cd-input" value={license.provider} onChange={(e) => setLicense({ ...license, provider: e.target.value })} />
             </label>
             <label className="text-xs cd-text-muted flex flex-col gap-1">
-              스톡 번호
+              <span className="cd-label-text">스톡 번호</span>
               <input className="cd-input" value={license.stockId ?? ""} onChange={(e) => setLicense({ ...license, stockId: e.target.value })} />
             </label>
             <label className="text-xs cd-text-muted flex flex-col gap-1">
-              라이선스 종류
+              <span className="cd-label-text">라이선스 종류</span>
               <select className="cd-select" value={license.license ?? ""} onChange={(e) => setLicense({ ...license, license: e.target.value })}>
                 <option value="">—</option>
                 {[...new Set([...LICENSE_KINDS, license.license ?? ""])].filter(Boolean).map((k) => (
@@ -413,11 +413,11 @@ export function IllustrationDetailDrawer({
               </select>
             </label>
             <label className="text-xs cd-text-muted flex flex-col gap-1">
-              구입일
+              <span className="cd-label-text">구입일</span>
               <input className="cd-input" placeholder="YYYY-MM-DD" value={license.purchasedAt ?? ""} onChange={(e) => setLicense({ ...license, purchasedAt: e.target.value })} />
             </label>
             <label className="text-xs cd-text-muted flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              원본 주소
+              <span className="cd-label-text">원본 주소</span>
               <input className="cd-input" value={license.url ?? ""} onChange={(e) => setLicense({ ...license, url: e.target.value })} />
             </label>
           </div>

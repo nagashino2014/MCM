@@ -225,7 +225,7 @@ export function EndpointConfigBuilder({
     <div className="flex flex-col gap-4">
       {/* 엔드포인트 선택 */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">본문(수집) 엔드포인트</label>
+        <label className="cd-label-text">본문(수집) 엔드포인트</label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {profileEndpoints.map((e, i) => (
             <button
@@ -251,8 +251,8 @@ export function EndpointConfigBuilder({
       <div className="grid grid-cols-1 xl:grid-cols-[3fr_1.8fr_1.2fr] gap-4 items-start">
         {/* 요청 파라미터 취사선택 — 항목이 많으면 3열로 촘촘하게(스크롤 절감) */}
         <div className="flex flex-col gap-1.5 min-w-0">
-          <label className="text-[11px] font-bold cd-text-faint">
-            요청 파라미터 — 사용할 항목을 체크하고 값을 입력 (인증키·페이지 파라미터는 자동 처리)
+          <label>
+            <span className="cd-label-text">요청 파라미터</span><span className="cd-hint ml-1.5">사용할 항목을 체크하고 값을 입력 (인증키·페이지 파라미터는 자동 처리)</span>
           </label>
           <div className={"grid grid-cols-1 gap-2 " + (params.length > 12 ? "md:grid-cols-3" : "md:grid-cols-2")}>
             {params.map((r) => (
@@ -286,8 +286,8 @@ export function EndpointConfigBuilder({
 
         {/* 날짜 필터 */}
         <div className="flex flex-col gap-1.5 min-w-0">
-          <label className="text-[11px] font-bold cd-text-faint">
-            조회기간(날짜) 파라미터 — 매 실행 시 최근 N일 자동 계산 (시작=N일 전, 종료=오늘)
+          <label>
+            <span className="cd-label-text">조회기간(날짜) 파라미터</span><span className="cd-hint ml-1.5">매 실행 시 최근 N일 자동 계산 (시작=N일 전, 종료=오늘)</span>
           </label>
           {dfs.map((d, i) => (
             <div key={i} className="rounded-lg border cd-border-c p-2 grid grid-cols-2 gap-1.5 items-center">
@@ -337,7 +337,7 @@ export function EndpointConfigBuilder({
         <div className="flex flex-col gap-1.5 min-w-0">
           <label className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint cursor-pointer">
             <input type="checkbox" checked={pg.enabled} onChange={(e) => setPg((p) => ({ ...p, enabled: e.target.checked }))} />
-            페이지네이션
+            <span className="cd-label-text">페이지네이션</span>
           </label>
           {pg.enabled && (
             <div className="rounded-lg border cd-border-c p-2 flex flex-col gap-1.5 text-[12px] cd-text-muted">
@@ -348,11 +348,11 @@ export function EndpointConfigBuilder({
               <input className="cd-input text-[12px] w-full font-mono" placeholder="페이지 파라미터" title="페이지 파라미터" value={pg.param_name} onChange={(e) => setPg((p) => ({ ...p, param_name: e.target.value }))} />
               <input className="cd-input text-[12px] w-full font-mono" placeholder="건수 파라미터" title="건수 파라미터" value={pg.size_param} onChange={(e) => setPg((p) => ({ ...p, size_param: e.target.value }))} />
               <label className="flex items-center gap-1 whitespace-nowrap">
-                <span className="shrink-0">페이지당</span>
+                <span className="shrink-0 cd-label-text">페이지당</span>
                 <input type="number" min={1} className="cd-input text-[12px] w-full min-w-0" value={pg.page_size} onChange={(e) => setPg((p) => ({ ...p, page_size: Number(e.target.value) }))} />
               </label>
               <label className="flex items-center gap-1 whitespace-nowrap">
-                <span className="shrink-0">최대</span>
+                <span className="shrink-0 cd-label-text">최대</span>
                 <input type="number" min={1} max={200} className="cd-input text-[12px] w-full min-w-0" value={pg.max_pages} onChange={(e) => setPg((p) => ({ ...p, max_pages: Number(e.target.value) }))} />
                 <span className="shrink-0">p</span>
               </label>
@@ -364,8 +364,8 @@ export function EndpointConfigBuilder({
       {/* 응답 필드 취사선택 — bid 는 raw 원문 보존이 필수(첨부·연계·커스텀 열)라 슬림화 미지원 */}
       {purpose !== "bid" && (
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">
-          응답 필드 — 남길 필드만 선택(미선택 시 전체 유지). 표준필드 매핑과는 별개입니다.
+        <label>
+          <span className="cd-label-text">응답 필드</span><span className="cd-hint ml-1.5">남길 필드만 선택(미선택 시 전체 유지). 표준필드 매핑과는 별개입니다.</span>
         </label>
         <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-8 gap-1.5 max-h-64 overflow-y-auto">
           {respFields.map((f) => {
@@ -399,13 +399,13 @@ export function EndpointConfigBuilder({
 
       {/* 표준필드 매핑 (sink 적재용) */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-bold cd-text-faint">
-          표준필드 매핑 — 적재 테이블 컬럼 ← 응답 필드 (응답에 없는 값은 &quot;=고정값&quot; — 예: 용역 전용 조회의 업무구분에 =용역)
+        <label>
+          <span className="cd-label-text">표준필드 매핑</span><span className="cd-hint ml-1.5">적재 테이블 컬럼 ← 응답 필드 (응답에 없는 값은 &quot;=고정값&quot; — 예: 용역 전용 조회의 업무구분에 =용역)</span>
         </label>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {stdKeys.map((k) => (
             <div key={k} className="flex items-center gap-1.5">
-              <span className="text-[11px] cd-text-muted w-24 shrink-0">{KEY_LABELS[k] ?? k}</span>
+              <span className="w-24 shrink-0 cd-label-text">{KEY_LABELS[k] ?? k}</span>
               <input
                 className="cd-input text-[12px] flex-1 font-mono"
                 placeholder="응답 필드명"
@@ -425,19 +425,19 @@ export function EndpointConfigBuilder({
       <div className="flex flex-col gap-1.5">
         <label className="flex items-center gap-1.5 text-[11px] font-bold cd-text-faint cursor-pointer">
           <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} />
-          2단계 호출 — 목록 API로 키를 뽑아 위 본문 엔드포인트를 반복 조회
+          <span className="cd-label-text">2단계 호출</span><span className="cd-hint ml-1.5">목록 API로 키를 뽑아 위 본문 엔드포인트를 반복 조회</span>
         </label>
         {tpEnabled && (
           <div className="flex flex-col gap-2 rounded-lg border cd-border-c p-3">
             <div className="flex items-center gap-2 flex-wrap text-[12px] cd-text-muted">
-              <span>목록 엔드포인트</span>
+              <span className="cd-label-text">목록 엔드포인트</span>
               <select className="cd-select text-[12px]" value={tpListIdx} onChange={(e) => setTpListIdx(Number(e.target.value))}>
                 <option value={-1}>선택…</option>
                 {profileEndpoints.map((e, i) => (
                   <option key={`${e.path}-${i}`} value={i} disabled={i === epIdx}>{e.name}</option>
                 ))}
               </select>
-              <label className="flex items-center gap-1">본문 최대
+              <label className="flex items-center gap-1"><span className="cd-label-text">본문 최대</span>
                 <input type="number" min={1} max={1000} className="cd-input text-[12px] !w-20" value={tpMax} onChange={(e) => setTpMax(Number(e.target.value))} />
                 건
               </label>

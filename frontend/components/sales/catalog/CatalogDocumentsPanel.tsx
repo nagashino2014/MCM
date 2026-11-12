@@ -177,7 +177,7 @@ function NewDocumentModal({ open, onClose, onCreated }: { open: boolean; onClose
           })}
         </div>
         <label className="flex flex-col gap-1 text-xs cd-text-muted">
-          문서 제목
+          <span className="cd-label-text">문서 제목</span>
           <input
             className="cd-input"
             value={effectiveTitle}

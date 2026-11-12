@@ -485,7 +485,7 @@ export function IntelBoard() {
             </div>
             {/* 상세 이유(선택) — 사유 코드의 과일반화 방지: 배제의 정확한 조건을 분류기에 전달 */}
             <div className="mt-3">
-              <label className="cd-label">상세 이유 (선택 — 수집 로직이 더 정확히 배웁니다)</label>
+              <label className="cd-label">상세 이유<span className="cd-hint ml-1.5">(선택 — 수집 로직이 더 정확히 배웁니다)</span></label>
               <input
                 className="cd-input w-full"
                 maxLength={200}

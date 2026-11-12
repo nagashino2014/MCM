@@ -810,7 +810,7 @@ function TagFilterPanel({
   ) => (
     <div className="flex flex-col gap-1 flex-1 min-w-0">
       <div className="flex items-center justify-between px-1" style={{ height: 18 }}>
-        <span className="cd-text-faint text-[11px] font-bold">
+        <span className="cd-label-text">
           {title}
           {selected.length > 0 && <span className="cd-text-primary"> {selected.length}</span>}
         </span>

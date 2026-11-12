@@ -280,7 +280,7 @@ function FacilitySpecTab({ facilityId, canEdit }: { facilityId: string; canEdit:
             <div className="grid grid-cols-3 gap-x-4 gap-y-3">
               {SPEC_FIELDS.map((f) => (
                 <div key={f.k} className="flex items-center gap-2">
-                  <label className="cd-label font-normal shrink-0 mb-0" style={{ width: 64 }}>{f.l}</label>
+                  <label className="cd-label shrink-0 mb-0 whitespace-nowrap" style={{ width: 64 }}>{f.l}</label>
                   <input className="cd-input" style={{ width: 80 }} inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
                 </div>
               ))}
@@ -291,7 +291,7 @@ function FacilitySpecTab({ facilityId, canEdit }: { facilityId: string; canEdit:
             <div className="grid grid-cols-3 gap-x-4 gap-y-3">
               {AREA_FIELDS.map((f) => (
                 <div key={f.k} className="flex items-center gap-2">
-                  <label className="cd-label font-normal shrink-0 mb-0" style={{ width: 64 }}>{f.l}</label>
+                  <label className="cd-label shrink-0 mb-0 whitespace-nowrap" style={{ width: 64 }}>{f.l}</label>
                   <input className="cd-input" style={{ width: 80 }} inputMode="numeric" disabled={!canEdit} value={form[f.k] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [f.k]: e.target.value }))} />
                 </div>
               ))}
@@ -409,21 +409,21 @@ function OrderInfoTab({ facilityId, canEdit }: { facilityId: string; canEdit: bo
       {/* 발주구분 · 발주일시 · 투찰기간 — 한 행 */}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <div>
-          <label className="cd-label font-normal">발주구분</label>
+          <label className="cd-label">발주구분</label>
           <select className="cd-select" style={{ width: FIELD_W }} disabled={!canEdit} value={orderType} onChange={(e) => setOrderType(e.target.value)}>
             <option value="">선택</option>
             {ORDER_TYPE_OPTS.map((o) => <option key={o.k} value={o.k}>{o.l}</option>)}
           </select>
         </div>
         <div>
-          <label className="cd-label font-normal">발주일시</label>
+          <label className="cd-label">발주일시</label>
           <div className="flex gap-2">
             <AutoDateInput className="cd-input tabular-nums" style={{ width: 111 }} disabled={!canEdit} value={orderDate} onChange={setOrderDate} />
             <AutoTimeInput className="cd-input tabular-nums" style={{ width: 75 }} disabled={!canEdit} value={orderTime} onChange={setOrderTime} />
           </div>
         </div>
         <div>
-          <label className="cd-label font-normal">투찰기간{negotiated && <span className="cd-text-faint text-[11px] ml-1">(수의계약 — 해당 없음)</span>}</label>
+          <label className="cd-label">투찰기간{negotiated && <span className="cd-hint ml-1">(수의계약 — 해당 없음)</span>}</label>
           <div className="flex items-center gap-2">
             <AutoDateInput className="cd-input tabular-nums" style={{ width: 111 }} disabled={!canEdit || negotiated} value={bidStartDate} onChange={setBidStartDate} />
             <AutoTimeInput className="cd-input tabular-nums" style={{ width: 75 }} disabled={!canEdit || negotiated} value={bidStartTime} onChange={setBidStartTime} />
@@ -438,16 +438,16 @@ function OrderInfoTab({ facilityId, canEdit }: { facilityId: string; canEdit: bo
       <div className="flex flex-col md:flex-row gap-4">
         <div className="shrink-0 flex flex-col gap-3" style={{ width: FIELD_W }}>
           <div>
-            <label className="cd-label font-normal">예정가격 (원)</label>
+            <label className="cd-label">예정가격 (원)</label>
             <input className="cd-input tabular-nums" inputMode="numeric" disabled={!canEdit} value={estimatedPrice ? Number(estimatedPrice).toLocaleString() : ""} onChange={(e) => setEstimatedPrice(e.target.value.replace(/[^\d]/g, ""))} placeholder="사업장 제시 시" />
           </div>
           <div>
-            <label className="cd-label font-normal">낙찰하한율 (%)</label>
+            <label className="cd-label">낙찰하한율 (%)</label>
             <input className="cd-input" inputMode="decimal" disabled={!canEdit} value={minBidRate} onChange={(e) => setMinBidRate(e.target.value)} />
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <label className="cd-label font-normal">참여업체</label>
+          <label className="cd-label">참여업체</label>
           <div className="flex flex-col gap-2">
             {rows.map((row, ri) => {
               const isLast = ri === rows.length - 1;

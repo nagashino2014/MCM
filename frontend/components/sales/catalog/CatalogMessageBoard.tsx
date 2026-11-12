@@ -178,24 +178,24 @@ export function CatalogMessageBoard() {
               </div>
               <div className="grid gap-3 flex-1 min-w-[260px] text-sm">
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">제목</span>
+                  <span className="cd-label-text">제목</span>
                   <input className="cd-input" value={draft.title} placeholder="인사말" onChange={(e) => set({ title: e.target.value })} />
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="grid gap-1">
-                    <span className="text-xs cd-text-muted">서명 직함</span>
+                    <span className="cd-label-text">서명 직함</span>
                     <input className="cd-input" value={draft.signTitle} placeholder="대표이사" onChange={(e) => set({ signTitle: e.target.value })} />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-xs cd-text-muted">서명 이름</span>
+                    <span className="cd-label-text">서명 이름</span>
                     <input className="cd-input" value={draft.signName} onChange={(e) => set({ signName: e.target.value })} />
                   </label>
                 </div>
               </div>
             </div>
             <label className="grid gap-1 mt-4 text-sm">
-              <span className="text-xs cd-text-muted flex items-center gap-1">
-                본문 — 빈 줄로 문단을 나눕니다 <span className="cd-text-faint">({draft.body.length.toLocaleString("ko-KR")}자 · {paragraphs.length}문단)</span>
+              <span className="flex items-center gap-1">
+                <span className="cd-label-text">본문</span><span className="cd-hint ml-1">빈 줄로 문단을 나눕니다</span> <span className="cd-hint">({draft.body.length.toLocaleString("ko-KR")}자 · {paragraphs.length}문단)</span>
               </span>
               <textarea className="cd-input" rows={16} value={draft.body} onChange={(e) => set({ body: e.target.value })} />
             </label>

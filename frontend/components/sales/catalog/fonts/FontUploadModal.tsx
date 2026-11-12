@@ -206,10 +206,10 @@ export function FontUploadModal({ open, onClose, onDone }: { open: boolean; onCl
                 }}
               />
             </label>
-            <span className="text-xs cd-text-muted">TTF·OTF·WOFF·WOFF2 · 굵기별 파일을 한 번에 여러 개 · 파일당 20MB</span>
+            <span className="cd-hint">TTF·OTF·WOFF·WOFF2 · 굵기별 파일을 한 번에 여러 개 · 파일당 20MB</span>
             <CdHelp topic="catalog.fonts-upload" />
             <label className="flex items-center gap-1 text-xs ml-auto">
-              분류
+              <span className="cd-label-text">분류</span>
               <select className="cd-select" style={{ width: 130 }} value={classification} onChange={(e) => setClassification(e.target.value as "" | FontClass)} aria-label="서체 분류">
                 <option value="">자동 판별</option>
                 {(Object.keys(FONT_CLASS_LABEL) as FontClass[]).map((c) => (
@@ -319,7 +319,7 @@ export function FontUploadModal({ open, onClose, onDone }: { open: boolean; onCl
                 ))}
                 {families.length === 1 ? (
                   <label className="flex items-center gap-2 text-xs">
-                    표시 이름
+                    <span className="cd-label-text">표시 이름</span>
                     <input className="cd-input" style={{ maxWidth: 260 }} value={displayName} maxLength={60} onChange={(e) => setDisplayName(e.target.value)} />
                   </label>
                 ) : (
@@ -338,7 +338,7 @@ export function FontUploadModal({ open, onClose, onDone }: { open: boolean; onCl
                 ) : null}
                 <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
                   <label className="flex flex-col gap-1 text-xs">
-                    종류
+                    <span className="cd-label-text">종류</span>
                     <select className="cd-select" value={licType} onChange={(e) => setLicType(e.target.value)}>
                       <option value="">고르세요</option>
                       {LICENSE_TYPES.map((t) => (
@@ -349,13 +349,13 @@ export function FontUploadModal({ open, onClose, onDone }: { open: boolean; onCl
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-xs">
-                    출처(내려받은 곳·구입처)
+                    <span className="cd-label-text">출처(내려받은 곳·구입처)</span>
                     <input className="cd-input" value={licSource} maxLength={300} onChange={(e) => setLicSource(e.target.value)} placeholder="https://… 또는 구입처" />
                   </label>
                 </div>
                 <fieldset className="flex items-center gap-3 flex-wrap text-xs">
                   <legend className="sr-only">허용 범위</legend>
-                  <span className="cd-text-muted">허용 범위</span>
+                  <span className="cd-label-text">허용 범위</span>
                   {LICENSE_SCOPES.map((sc) => (
                     <label key={sc.id} className="inline-flex items-center gap-1.5">
                       <input
@@ -369,7 +369,7 @@ export function FontUploadModal({ open, onClose, onDone }: { open: boolean; onCl
                   ))}
                 </fieldset>
                 <label className="flex flex-col gap-1 text-xs">
-                  증빙 메모{licType === "purchased" ? "(구매 서체는 필수 — 구입처·계약 번호·허용 범위)" : ""}
+                  <span><span className="cd-label-text">증빙 메모</span>{licType === "purchased" ? <span className="cd-hint ml-1.5">(구매 서체는 필수 — 구입처·계약 번호·허용 범위)</span> : null}</span>
                   <textarea className="cd-textarea" rows={2} value={licNote} maxLength={1000} onChange={(e) => setLicNote(e.target.value)} />
                 </label>
                 <p className="text-xs cd-text-muted">CFF(OTF) 서체는 PDF 부분 포함을 위해 TrueType 윤곽으로 바꿔 저장합니다. 라이선스가 형식 변환을 허용하는지도 확인하세요.</p>

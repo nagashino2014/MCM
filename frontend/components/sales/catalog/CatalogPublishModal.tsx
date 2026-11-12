@@ -138,7 +138,7 @@ export function CatalogPublishModal({
             ) : (
               <>
                 <fieldset className="flex flex-col gap-1.5" disabled={busy}>
-                  <legend className="text-xs cd-text-muted mb-1">범위</legend>
+                  <legend className="mb-1 cd-label-text">범위</legend>
                   {(["full", "summary"] as const).map((v) => (
                     <label key={v} className="flex items-start gap-2 cursor-pointer">
                       <input type="radio" name="catalog-publish-scope" value={v} checked={scope === v} onChange={() => setScope(v)} className="mt-1" />
@@ -150,7 +150,7 @@ export function CatalogPublishModal({
                   ))}
                 </fieldset>
                 <fieldset className="flex flex-col gap-1.5" disabled={busy}>
-                  <legend className="text-xs cd-text-muted mb-1">이름 표기</legend>
+                  <legend className="mb-1 cd-label-text">이름 표기</legend>
                   {(["masked", "real"] as const).map((v) => (
                     <label key={v} className="flex items-start gap-2 cursor-pointer">
                       <input type="radio" name="catalog-publish-naming" value={v} checked={naming === v} onChange={() => setNaming(v)} className="mt-1" />
@@ -164,7 +164,7 @@ export function CatalogPublishModal({
               </>
             )}
             <fieldset className="flex flex-col gap-2" disabled={busy}>
-              <legend className="text-xs cd-text-muted mb-1">배포처(선택) — 누구에게 내는지 바로 기록</legend>
+              <legend className="mb-1"><span className="cd-label-text">배포처(선택)</span><span className="cd-hint ml-1.5">누구에게 내는지 바로 기록</span></legend>
               <input className="cd-input" placeholder="받는 곳(기관·회사·담당자)" value={recipient} onChange={(e) => setRecipient(e.target.value)} aria-label="받는 곳" />
               {recipient.trim() && (
                 <div className="flex flex-wrap gap-2">

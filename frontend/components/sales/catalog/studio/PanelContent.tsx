@@ -350,7 +350,7 @@ function InfoContentEditor({ sel, ops }: { sel: Selection; ops: PanelProps["ops"
       </div>
       {content.title != null || content.center ? (
         <label className="text-xs cd-text-muted flex flex-col gap-0.5">
-          가운데 글(허브·순환)
+          <span className="cd-label-text">가운데 글(허브·순환)</span>
           <input className="cd-input" value={content.center?.label ?? content.title ?? ""} onChange={(e) => save({ ...content, center: { ...(content.center ?? {}), label: e.target.value } })} />
         </label>
       ) : null}

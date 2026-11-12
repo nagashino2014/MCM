@@ -500,7 +500,7 @@ export function CatalogProjectsBoard() {
               {editing.category} · {editing.year || "연도 미상"} · {periodLabel(editing) || "기간 미상"} · 계약명 {editing.contractTitle}
             </div>
             <label className="grid gap-1">
-              <span className="text-xs cd-text-muted">대외 표기명</span>
+              <span className="cd-label-text">대외 표기명</span>
               <textarea
                 className="cd-input"
                 rows={2}
@@ -508,30 +508,30 @@ export function CatalogProjectsBoard() {
                 placeholder={buildDisplayTitle({ ...editing, meta: editing.meta ? { ...editing.meta, isPublic: draft.isPublic } : null }, { anonymize: !draft.isPublic })}
                 onChange={(e) => setDraft({ ...draft, displayTitle: e.target.value })}
               />
-              <span className="text-[11px] cd-text-faint">비워 두면 회색 글씨의 자동 표기를 씁니다(계약·허가 정보가 바뀌면 자동으로 따라갑니다).</span>
+              <span className="cd-hint">비워 두면 회색 글씨의 자동 표기를 씁니다(계약·허가 정보가 바뀌면 자동으로 따라갑니다).</span>
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">업종 표기</span>
+                <span className="cd-label-text">업종 표기</span>
                 <input className="cd-input" value={draft.displayIndustry} placeholder={buildDisplayIndustry(editing) || "업종"} onChange={(e) => setDraft({ ...draft, displayIndustry: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">부록 표시</span>
+                <span className="cd-label-text">부록 표시</span>
                 <select className="cd-select" value={draft.displayOverride} onChange={(e) => setDraft({ ...draft, displayOverride: e.target.value as DisplayOverride })}>
                   {(Object.keys(OVERRIDE_LABEL) as DisplayOverride[]).map((k) => <option key={k} value={k}>{OVERRIDE_LABEL[k]}</option>)}
                 </select>
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">묶음 행 이름(같은 이름끼리 한 줄)</span>
+                <span><span className="cd-label-text">묶음 행 이름</span><span className="cd-hint ml-1.5">(같은 이름끼리 한 줄)</span></span>
                 <input className="cd-input" list="catalog-group-keys" value={draft.groupKey} placeholder="예: 비산배출시설 신고 및 정기점검 대행" onChange={(e) => setDraft({ ...draft, groupKey: e.target.value })} />
               </label>
               <label className="grid gap-1">
-                <span className="text-xs cd-text-muted">메모(내부용)</span>
+                <span className="cd-label-text">메모(내부용)</span>
                 <input className="cd-input" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
               </label>
               {editing.category === "통합환경허가" && (
                 <label className="grid gap-1">
-                  <span className="text-xs cd-text-muted">허가 사업장 수(여러 사업장이 묶인 용역은 2 이상, 최초허가 집계에서 뺄 계약은 0)</span>
+                  <span><span className="cd-label-text">허가 사업장 수</span><span className="cd-hint ml-1.5">(여러 사업장이 묶인 용역은 2 이상, 최초허가 집계에서 뺄 계약은 0)</span></span>
                   <input
                     className="cd-input tabular-nums"
                     style={{ width: 120 }}
@@ -584,9 +584,9 @@ export function CatalogProjectsBoard() {
         }
       >
         <label className="grid gap-1 text-sm">
-          <span className="text-xs cd-text-muted">선택한 {selected.size}건에 붙일 묶음 행 이름(비우면 묶음 해제)</span>
+          <span><span className="cd-label-text">선택한 {selected.size}건에 붙일 묶음 행 이름</span><span className="cd-hint ml-1.5">(비우면 묶음 해제)</span></span>
           <input className="cd-input" list="catalog-group-keys" value={groupPrompt ?? ""} onChange={(e) => setGroupPrompt(e.target.value)} placeholder="예: 비산배출시설 신고 및 정기점검 대행" />
-          <span className="text-[11px] cd-text-faint">같은 분류·같은 수주 연도 안에서 이름이 같은 계약이 부록에서 한 줄로 합쳐지고, 고객사 이름이 나열됩니다.</span>
+          <span className="cd-hint">같은 분류·같은 수주 연도 안에서 이름이 같은 계약이 부록에서 한 줄로 합쳐지고, 고객사 이름이 나열됩니다.</span>
         </label>
       </CdModal>
       <CatalogLabelSuggest
@@ -635,11 +635,11 @@ function RulesPanel({
         </h3>
         <div className="grid gap-4 text-sm">
           <div>
-            <p className="text-xs cd-text-muted mb-2">분류별 금액 기준 — 이 금액 이하 계약은 부록 목록에서 뺍니다(0 = 전부 표시). 변경계약 반영 금액 기준.</p>
+            <p className="mb-2"><span className="cd-label-text">분류별 금액 기준</span><span className="cd-hint ml-1.5">이 금액 이하 계약은 부록 목록에서 뺍니다(0 = 전부 표시). 변경계약 반영 금액 기준.</span></p>
             <div className="grid gap-2">
               {CATALOG_CATEGORIES.map((c) => (
                 <label key={c} className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 cd-text">{c}</span>
+                  <span className="w-28 shrink-0 cd-label-text">{c}</span>
                   <input
                     className="cd-input text-right tabular-nums"
                     style={{ width: 120 }}
@@ -651,13 +651,13 @@ function RulesPanel({
                     }}
                     aria-label={`${c} 금액 기준(만 원)`}
                   />
-                  <span className="text-xs cd-text-faint">만 원 이하 미표시</span>
+                  <span className="cd-hint">만 원 이하 미표시</span>
                 </label>
               ))}
             </div>
           </div>
           <fieldset className="grid gap-2">
-            <legend className="text-xs cd-text-muted mb-1">기간</legend>
+            <legend className="mb-1 cd-label-text">기간</legend>
             <label className="inline-flex items-center gap-2">
               <input type="radio" name="period" checked={draft.periodMode === "all"} onChange={() => set({ periodMode: "all" })} /> 전체
             </label>
@@ -685,7 +685,7 @@ function RulesPanel({
             </label>
           </div>
           <fieldset className="grid gap-2">
-            <legend className="text-xs cd-text-muted mb-1">총괄표·본편 숫자 집계</legend>
+            <legend className="mb-1 cd-label-text">총괄표·본편 숫자 집계</legend>
             <label className="inline-flex items-center gap-2">
               <input type="radio" name="basis" checked={draft.summaryBasis === "all"} onChange={() => set({ summaryBasis: "all" })} /> 전체 실적(표시 범위와 무관)
             </label>
@@ -694,7 +694,7 @@ function RulesPanel({
             </label>
           </fieldset>
           <fieldset className="grid gap-2">
-            <legend className="text-xs cd-text-muted mb-1">묶음 행 금액 기준</legend>
+            <legend className="mb-1 cd-label-text">묶음 행 금액 기준</legend>
             <label className="inline-flex items-center gap-2">
               <input type="radio" name="groupBasis" checked={draft.groupAmountBasis === "item"} onChange={() => set({ groupAmountBasis: "item" })} /> 계약별로 거른 뒤 묶기
             </label>
@@ -755,7 +755,7 @@ function RulesPanel({
             .join(" · ") || "없음"}
         </p>
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs cd-text-muted">부록 목록 보기</span>
+          <span className="cd-label-text">부록 목록 보기</span>
           <select className="cd-select" style={{ width: "auto" }} value={previewCategory} onChange={(e) => setPreviewCategory(e.target.value)} aria-label="미리볼 분류">
             {CATALOG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>

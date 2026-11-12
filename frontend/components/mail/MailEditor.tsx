@@ -497,6 +497,28 @@ function setTableAlign(table: HTMLTableElement, align: BlockAlign, indentPx = 0)
   else table.removeAttribute("align");
 }
 
+/** 스페이스바 한 번에 표를 띄우는 폭(px) — 글자 한두 칸 정도. 표 도구 단추는 20px 단위. */
+const TABLE_SPACE_STEP = 10;
+
+/**
+ * 커서가 표 첫 칸의 맨 앞(앞에 글자·그림이 없음)에 있으면 그 표를 돌려준다(2026-11-12 사용자 요청 —
+ * 한글처럼 표 앞에서 스페이스바로 띄우기). 선택 영역이 있거나 다른 칸이면 null.
+ */
+function tableAtFirstCellStart(root: HTMLElement | null): HTMLTableElement | null {
+  const sel = window.getSelection();
+  if (!root || !sel || sel.rangeCount === 0 || !sel.isCollapsed || !sel.anchorNode) return null;
+  const node = sel.anchorNode;
+  const el = node instanceof HTMLElement ? node : node.parentElement;
+  const cell = el?.closest("td,th") as HTMLTableCellElement | null;
+  const table = cell?.closest("table") as HTMLTableElement | null;
+  if (!cell || !table || !root.contains(table) || table.rows[0]?.cells[0] !== cell) return null;
+  const before = document.createRange();
+  before.setStart(cell, 0);
+  before.setEnd(node, sel.anchorOffset);
+  if (before.toString().length > 0 || before.cloneContents().querySelector("img,table")) return null;
+  return table;
+}
+
 /** 표의 현재 너비 %(미지정이면 100). */
 function tableWidthPct(table: HTMLTableElement): number {
   const raw = Number(table.dataset.w);
@@ -1450,6 +1472,19 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // 셀 다중 선택 중 키 입력 — 하이라이트 속성이 저장 HTML 에 남지 않게 먼저 해제.
     if (cellSelRef.current && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt") clearCellSelection();
     if ((e.nativeEvent as KeyboardEvent).isComposing) return;
+    // 표 첫 칸 맨 앞에서 스페이스바 = 표 앞 띄우기, Backspace = 줄이기(2026-11-12 사용자 요청 — 한글처럼).
+    // 메일 쓰기(tableAlign)만. 가운데·오른쪽 표는 왼쪽으로 옮기며 띄운다. 첫 칸 맨 앞에 공백을 칠 일은 드물어 이 자리만 가로챈다.
+    if (tableAlign && (e.key === " " || e.key === "Backspace") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      const t = tableAtFirstCellStart(innerRef.current);
+      const left = t ? tableAlignOf(t) === "left" : false;
+      if (t && (e.key === " " || (left && tableIndentPx(t) > 0))) {
+        e.preventDefault();
+        const base = left ? tableIndentPx(t) : 0;
+        setTableAlign(t, "left", Math.max(0, base + (e.key === " " ? TABLE_SPACE_STEP : -TABLE_SPACE_STEP)));
+        onInput();
+        return;
+      }
+    }
     // 목록 항목 맨 앞에서 Backspace = 글번호 제거(2026-08-24) — 기본 동작(이전 항목과 병합,
     // 번호는 그대로 남음) 대신 그 항목을 목록에서 빼 일반 문단으로 되돌린다.
     if (e.key === "Backspace") {

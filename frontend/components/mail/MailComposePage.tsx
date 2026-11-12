@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, FolderOpen, HardDrive, Mail, Paperclip, PenLine, Save, Send, Settings2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, FolderOpen, HardDrive, Paperclip, PenLine, Save, Send, Settings2, UploadCloud, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -123,6 +123,23 @@ export function MailComposePage() {
   const [showBcc, setShowBcc] = useState(false);
   // 개인별 보내기(2026-11-12 직원 요청 2) — 받는 사람마다 따로 발송(각자 자기 주소만 보임). 참조·숨은참조는 쓰지 않는다.
   const [individual, setIndividual] = useState(false);
+  // 파일첨부 끌어 놓기 칸 접기(2026-11-12 사용자 요청) — 이 브라우저에 기억한다(저장소가 막혀도 기본은 펼침).
+  const [attachOpen, setAttachOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("mail-compose-attach-open") === "0") setAttachOpen(false);
+    } catch {
+      /* 무시 */
+    }
+  }, []);
+  const changeAttachOpen = (open: boolean) => {
+    setAttachOpen(open);
+    try {
+      window.localStorage.setItem("mail-compose-attach-open", open ? "1" : "0");
+    } catch {
+      /* 무시 */
+    }
+  };
   const [subject, setSubject] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   // 대용량 첨부 업로드 캐시(File → uploadId) — 발송 실패 후 재시도 시 같은 파일을 다시 올리지 않는다.
@@ -671,11 +688,9 @@ export function MailComposePage() {
       className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl overflow-y-auto"
       data-theme={theme}
     >
+      {/* 머리는 제목 한 줄 + 단추만(2026-11-12 사용자 요청 — 경로·보낸 사람 줄이 본문 높이를 잡아먹었다). */}
       <CdPageHeader
-        icon={<Mail className="w-5 h-5" />}
-        breadcrumbs={[{ label: "메일", href: "/mail" }, { label: "메일 쓰기" }]}
         title="메일 쓰기"
-        subtitle={myAddress ? `보낸 사람: ${displayName ? `${displayName} <${myAddress}>` : myAddress}` : undefined}
         actions={
           <div className="flex items-center gap-2">
             <CdHelp topic="mail.draft-save" />
@@ -750,7 +765,7 @@ export function MailComposePage() {
             labelExtra={
               <span className="flex items-center gap-3">
                 {/* 개인별 보내기(요청 2) — 받는 사람마다 따로 보내 각자 자기 주소만 보인다. 참조·숨은 참조 칸은 숨긴다. */}
-                <label className="inline-flex items-center gap-1 text-[11px] cd-text-muted cursor-pointer select-none">
+                <label className="inline-flex items-center gap-1 text-[11px] cd-text-muted cursor-pointer select-none" title="개인별 보내기 — 받는 사람마다 따로 보냅니다">
                   <input
                     type="checkbox"
                     className="w-3.5 h-3.5 accent-[var(--cd-primary)]"
@@ -764,7 +779,7 @@ export function MailComposePage() {
                       scheduleDraftSave();
                     }}
                   />
-                  개인별 보내기
+                  개인별
                 </label>
                 <CdHelp topic="mail.individual-send" />
                 {!showCc && !individual && (
@@ -852,9 +867,19 @@ export function MailComposePage() {
 
           {/* 파일첨부 — 내 PC / 문서함 버튼 + 상시 드롭존(네이버 메일식).
               드롭존·버튼은 불투명 흰 배경 + 윤곽선으로 페이지 배경과 구분. */}
-          <div className="flex flex-col gap-1.5">
-            <span className="cd-label flex items-center gap-2">
-              <span>파일첨부</span>
+          <div className="flex flex-col gap-1.5" onDragEnter={() => !attachOpen && changeAttachOpen(true)}>
+            <span className="cd-label !flex items-center gap-2">
+              {/* 끌어 놓기 칸 접기·펼치기(2026-11-12 사용자 요청) — 접어도 파일을 끌어오면 다시 펼친다. 상태는 이 브라우저에 기억. */}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 cd-text hover:text-[color:var(--cd-primary)]"
+                aria-expanded={attachOpen}
+                title={attachOpen ? "끌어 놓기 칸 접기" : "끌어 놓기 칸 펼치기"}
+                onClick={() => changeAttachOpen(!attachOpen)}
+              >
+                <span>파일첨부{!attachOpen && files.length > 0 ? ` ${files.length}개` : ""}</span>
+                {attachOpen ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
+              </button>
               <span className="mr-3 inline-flex">
                 <CdHelp topic="mail.attach" />
               </span>
@@ -876,9 +901,10 @@ export function MailComposePage() {
                 </span>
               )}
             </span>
-            {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. */}
+            {/* 상시 드롭존 — 첨부 순서대로 위→아래 목록 표시. 드래그 중에는 테두리만 실선 강조. 높이 7rem → 4.5rem(11-12). */}
+            {attachOpen && (
             <div
-              className="cd-solid-bg rounded-xl border px-3 py-2.5 flex flex-col gap-1 min-h-[7rem] transition-colors"
+              className="cd-solid-bg rounded-xl border px-3 py-2 flex flex-col gap-1 min-h-[4.5rem] transition-colors"
               style={{
                 borderColor: dragging ? "var(--cd-primary)" : "var(--cd-border)",
                 borderStyle: dragging ? "solid" : "dashed",
@@ -928,6 +954,7 @@ export function MailComposePage() {
                 </>
               )}
             </div>
+            )}
           </div>
 
           <MailEditor

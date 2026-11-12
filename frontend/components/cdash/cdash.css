@@ -738,6 +738,9 @@ html[data-theme="dark"] .cdash .cd-doc-surface, html[data-theme="dark"] .cdash-v
 .cd-mail-editor li { display: list-item; }
 .cd-mail-editor hr { border: none; border-top: 1px solid #c8c8cc; margin: 12px 0; }
 .cd-mail-editor img { max-width: 100%; }
+/* 메일 쓰기(2026-11-12 직원 요청 13) — 받는 쪽 메일 프로그램처럼 그림을 글줄 안에 둔다. Tailwind 기본(img display:block)이면
+   그림 앞 공백·문단 정렬이 편집기에서 안 보여 "그림이 늘 왼쪽에 붙는다"로 보였다. */
+.cd-mail-editor.cd-mail-compose img { display: inline; vertical-align: baseline; }
 .cd-mail-editor table { border-collapse: collapse; }
 /* 셀 다중 선택 하이라이트(병합용, 2026-08-24) — data 속성은 선택 해제·병합 시 제거되어 저장 HTML 에 남지 않는다 */
 .cd-mail-editor td[data-cell-sel], .cd-mail-editor th[data-cell-sel] {

@@ -222,6 +222,53 @@ test("기안자별 추가 결재자 — 자리·중복·본인 제외", () => {
   assert.equal(describeFixedLine(insertDrafterExtras(base([HDG]), [{ person: JOH, position: "first" }], STAFF.userId)), "조옥환(추가 결재) → 한도경(부서장)");
 });
 
+// 2026-11-12 사용자 제보 — '최종 결재자 바로 앞'은 '맨 뒤' 추가분까지 붙인 뒤의 최종 결재자 앞에 들어간다
+test("기안자별 추가 결재자 — 바로 앞은 맨 뒤 추가분을 붙인 최종 결재자 기준", () => {
+  const nm = (steps: FixedLineStep[]) => steps.map((s) => s.name).join("→");
+  // 이도희 휴가신청서: 고정 결재선 = 부서장 이재영 하나, 규칙 ① 이유억 맨 뒤 ② 정득종 최종 결재자 바로 앞
+  const leaveLine: FixedLineStep[] = [{ ...LJY, role: "dept_head", proxies: [] }];
+  const ldhRules = [
+    { person: CEO, position: "last" as const },
+    { person: JDJ, position: "before_last" as const },
+  ];
+  const got = insertDrafterExtras(leaveLine, ldhRules, LDH.userId);
+  assert.equal(nm(got), "이재영→정득종→이유억");
+  assert.deepEqual(got.map((s) => s.role), ["dept_head", "extra", "extra"]);
+  // 등록 순서가 바뀌어도 같다
+  assert.equal(nm(insertDrafterExtras(leaveLine, [...ldhRules].reverse(), LDH.userId)), "이재영→정득종→이유억");
+  // 맨 뒤가 여럿이면 마지막으로 등록된 사람이 최종, 바로 앞 추가분은 그 앞(등록 순서대로)
+  assert.equal(
+    nm(
+      insertDrafterExtras(
+        leaveLine,
+        [
+          { person: HDG, position: "last" },
+          { person: JDJ, position: "before_last" },
+          { person: CEO, position: "last" },
+          { person: JOH, position: "before_last" },
+        ],
+        LDH.userId
+      )
+    ),
+    "이재영→한도경→정득종→조옥환→이유억"
+  );
+  // 세 자리 모두
+  assert.equal(
+    nm(
+      insertDrafterExtras(
+        leaveLine,
+        [
+          { person: CEO, position: "last" },
+          { person: JDJ, position: "before_last" },
+          { person: HDG, position: "first" },
+        ],
+        LDH.userId
+      )
+    ),
+    "한도경→이재영→정득종→이유억"
+  );
+});
+
 test("기안자별 규칙 — 양식 행이 모든 양식 행을 덮어씀", () => {
   const rules = [
     { formId: "*", kind: "approve" as const, targetUserId: "u-a", position: "first" as const },

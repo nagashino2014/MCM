@@ -15,12 +15,14 @@ export async function GET() {
     const ctx = await requireSession();
     const db = await getDb();
     let mailUnread = 0;
+    // 받은편지함 안읽음 중 가장 늦게 들어온 시각(서버 시계) — 새 메일 PC 알림의 변화 신호(lib/mail/desktop-notify.ts).
+    let mailArrivedAt: string | null = null;
     let approvalPending = 0;
     let chatUnread = 0;
     try {
       const mailRows = rowsToObjects(
         await db.exec(
-          `SELECT COUNT(*)::int AS n
+          `SELECT COUNT(*)::int AS n, MAX(s.created_at) AS arrived
              FROM mail_message_state s
              JOIN mail_folders f ON f.folder_id = s.folder_id
              JOIN mailboxes mb ON mb.mailbox_id = s.mailbox_id
@@ -29,6 +31,7 @@ export async function GET() {
         )
       );
       mailUnread = mailRows.length ? Number(mailRows[0].n) : 0;
+      mailArrivedAt = mailRows.length && mailRows[0].arrived != null ? String(mailRows[0].arrived) : null;
     } catch {
       /* mail 테이블 미존재 등 — 0 유지 */
     }
@@ -69,7 +72,7 @@ export async function GET() {
       /* todo 테이블 미존재 등 — 0 유지 */
     }
     // 메뉴 노출 판정은 세션의 권한 요약(session.user.perms)이 담당한다(role 일원화 WP5) — 여기서는 뱃지만 내린다.
-    return NextResponse.json({ mailUnread, approvalPending, chatUnread, todoDue });
+    return NextResponse.json({ mailUnread, mailArrivedAt, approvalPending, chatUnread, todoDue });
   } catch (err) {
     return authErrorToResponse(err);
   }

@@ -26,7 +26,7 @@ interface AppShellProps {
 
 export function AppShell({ perms, userName, userEmail, children }: AppShellProps) {
   const { theme, toggleTheme } = useCdashTheme();
-  const badges = useNavBadges();
+  const badges = useNavBadges({ mailNotify: true });
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
 
   return (

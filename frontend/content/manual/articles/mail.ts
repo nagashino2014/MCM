@@ -82,6 +82,25 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "desktop-notify",
+        title: "새 메일 PC 알림",
+        blocks: [
+          { kind: "p", text: "[[메일 설정]]의 PC 알림 칸에서 ‘새 메일이 오면 이 PC에 알림 띄우기’를 켜면, 새 메일이 받은편지함에 들어올 때 화면 오른쪽 아래에 보낸 사람과 제목이 알림으로 뜹니다. 알림을 누르면 그 메일이 열립니다." },
+          { kind: "steps", items: [
+            "[[메일 설정]]에서 ‘새 메일이 오면 이 PC에 알림 띄우기’를 켭니다.",
+            "브라우저가 알림을 보내도 되는지 물으면 [허용]을 누릅니다.",
+            "[[시험 알림]]을 눌러 알림이 뜨는지 확인합니다.",
+          ] },
+          { kind: "list", items: [
+            "켜기·끄기는 브라우저마다 따로입니다. 사무실 PC와 노트북에서 모두 받으려면 각각 켜 주세요.",
+            "앱 탭이 하나라도 열려 있어야 합니다(최소화·다른 탭으로 가려진 상태 포함). 새 메일은 보통 1~2분 안에 알림으로 뜹니다.",
+            "탭을 여러 개 열어 두어도 같은 메일 알림은 한 번만 뜹니다. 새 메일이 4통 이상이면 ‘새 메일 N통’ 한 장으로 묶습니다.",
+            "켜기 전에 이미 와 있던 메일, 스팸함으로 분류된 메일, 메일 가져오기로 옮긴 예전 메일은 알리지 않습니다. 메일 화면을 보고 있는 중에도 알리지 않습니다.",
+          ] },
+          { kind: "tip", text: "알림이 뜨지 않으면 브라우저 주소창 왼쪽 자물쇠 아이콘에서 알림이 허용인지, 윈도우 설정 > 시스템 > 알림에서 브라우저 알림이 켜져 있는지, 방해 금지(집중 지원)가 꺼져 있는지 확인하세요." },
+        ],
+      },
+      {
         id: "external-client",
         title: "아웃룩·휴대폰 메일 앱으로 쓰기",
         blocks: [
@@ -102,9 +121,9 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램"],
-    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx"],
-    reviewedAt: "2026-11-03",
+    keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램", "알림", "PC 알림", "새 메일 알림"],
+    sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/mail/MailDesktopNotifySection.tsx"],
+    reviewedAt: "2026-11-12",
   },
   {
     id: "mail.compose",

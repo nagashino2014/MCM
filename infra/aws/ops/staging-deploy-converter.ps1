@@ -43,6 +43,7 @@ $repoRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 
 function Log($m)  { Write-Host "[deploy] $m" }
 function Fail($m) { Write-Host "[deploy] 실패: $m" -ForegroundColor Red; exit 1 }
+. (Join-Path $PSScriptRoot "ecr-docker-config.ps1")
 
 if (-not $Tag) { $Tag = "deploy-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
 $image = "${registry}/${repo}:${Tag}"
@@ -78,7 +79,9 @@ if (-not $SkipBuild) {
   if ($LASTEXITCODE -ne 0 -or -not $pw) { Fail "ECR 토큰 발급 실패 — aws sso login --profile $AwsProfile 먼저" }
   # 주의: PS 5.1 에서 `$pw | docker login --password-stdin` 은 파이프 인코딩 탓에 토큰이 깨져
   #   400 Bad Request 로 떨어진다(2026-10-23 실측, next 스크립트와 같은 문제). --password 로 직접 넘긴다.
-  docker login --username AWS --password ($pw.Trim()) $registry
+  # ECR 토큰이 Windows 자격증명 관리자 한도를 넘어 저장되지 않는다(2026-11-01·11-12) — ECR 전용 설정 폴더를 쓴다.
+  $ecrDockerConfig = Initialize-EcrDockerConfig
+  docker --config $ecrDockerConfig login --username AWS --password ($pw.Trim()) $registry
   if ($LASTEXITCODE -ne 0) { Fail "docker login" }
 
   Log "이미지 빌드 (linux/amd64) — 수 분 걸린다"
@@ -86,9 +89,9 @@ if (-not $SkipBuild) {
   if ($LASTEXITCODE -ne 0) { Fail "docker build" }
 
   Log "ECR 푸시: $Tag"
-  docker push $image
+  docker --config $ecrDockerConfig push $image
   if ($LASTEXITCODE -ne 0) { Fail "docker push($Tag)" }
-  docker push "${registry}/${repo}:latest"
+  docker --config $ecrDockerConfig push "${registry}/${repo}:latest"
   if ($LASTEXITCODE -ne 0) { Fail "docker push(latest)" }
 } else {
   Log "빌드 건너뜀 (-SkipBuild) — 태그 $Tag 가 ECR 에 이미 있어야 한다"

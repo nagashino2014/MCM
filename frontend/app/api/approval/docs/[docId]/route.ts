@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     const doc = await getDoc(docId);
     if (!doc) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 });
     // 접근 범위 판정은 첨부 미리보기와 공용(lib/approval/access.ts).
-    const { allowed, isWatcher, isManager } = await resolveDocAccess(doc, ctx.userId);
+    const { allowed, isWatcher, isManager, canSeeWatchers } = await resolveDocAccess(doc, ctx.userId);
     if (!allowed) {
       return NextResponse.json({ error: "이 문서를 열람할 권한이 없습니다." }, { status: 403 });
     }
@@ -64,6 +64,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     return NextResponse.json({
       doc: {
         ...doc,
+        // 참조·열람자 목록(직원 요청 21) — 문서함 공개·부서장 열람으로만 여는 사람에게는 비워 보낸다
+        watchers: canSeeWatchers ? doc.watchers : [],
         myStepId: myStep?.stepId ?? null,
         canFinal,
         cancelRequest,

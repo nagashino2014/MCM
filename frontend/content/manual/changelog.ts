@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-12", kind: "개선", title: "결재 문서 — 참조·열람자 확인",
+    body: "진행 중인 결재 문서를 열면 결재선 아래 줄에 참조자·열람자가 이름·직급으로 보입니다. 관리자 규칙으로 자동으로 들어간 사람은 ‘자동’으로 표시해 기안자가 직접 넣은 사람과 구분합니다. 앱 결재 문서 화면에도 결재선 아래에 같은 내용이 보입니다.",
+    articles: ["approval.home"],
+  },
+  {
     date: "2026-11-12", kind: "수정", title: "결재 문서 — 신청란 직급 표시·AI 요약 직급",
     body: "결재 문서 위쪽 신청란 머리에 ‘기안’ 대신 기안자의 직급을 표시합니다. AI 요약이 기안자 직급을 틀리게 적던 것(예: 대리를 ‘사원’으로)을 고쳐, 문서에 저장된 직급을 그대로 씁니다. 이미 만들어진 요약은 다시 상신할 때 새로 만들어집니다.",
     articles: ["approval.home"],

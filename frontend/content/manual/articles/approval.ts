@@ -92,6 +92,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
           },
           { kind: "warn", text: "기안자는 작성중·반려 상태의 문서만 삭제할 수 있습니다. 삭제하면 결재선·참조 기록도 함께 지워지고 되돌릴 수 없습니다. 휴가 문서였다면 차감됐던 연차가 복원되고, 문서번호는 다음 문서가 이어받습니다." },
           { kind: "p", text: "모든 결재 문서에는 관리자가 정해 둔 고정 참조·열람자가 자동으로 들어갑니다. 기안 화면 참조·열람 칸 아래에 이름이 보이며 뺄 수 없습니다." },
+          { kind: "p", text: "문서를 열면 결재선 바로 아래 줄에 그 문서의 참조자·열람자가 이름·직급으로 보입니다. 관리자 규칙(고정 참조·열람, 직원별 참조·열람)으로 자동으로 들어간 사람은 이름 뒤에 ‘자동’이 붙고, 붙지 않은 사람은 기안자가 직접 넣은 사람입니다. 이 줄은 기안자·결재자·참조·열람자 본인에게 보이고, 문서함 공개나 부서장 열람으로 문서를 여는 사람에게는 보이지 않습니다. 앱 결재 문서 화면에서는 결재선 아래에 같은 내용이 보입니다." },
         ],
       },
       {
@@ -132,7 +133,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["결재", "승인", "반려", "결재함", "기안함", "참조", "열람", "결재 대기", "결재 예정", "재상신", "반려 요청", "결재 취소", "전결", "회수", "관리자 수정", "값 수정", "고정 참조"],
+    keywords: ["결재", "승인", "반려", "결재함", "기안함", "참조", "열람", "결재 대기", "결재 예정", "재상신", "반려 요청", "결재 취소", "전결", "회수", "관리자 수정", "값 수정", "고정 참조", "참조자 확인", "열람자 확인"],
     sources: ["components/approval/ApprovalHomeBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx", "components/approval/ApprovalDocAdminPanel.tsx"],
     reviewedAt: "2026-11-12",
   },

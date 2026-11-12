@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-12", kind: "신규", title: "메일 읽기 — 첨부 미리보기",
+    body: "받은·보낸 메일의 첨부 목록에서 눈 아이콘을 누르면 내려받지 않고 창으로 봅니다. 그림·PDF는 그대로, 한글·워드·엑셀·파워포인트는 PDF로 바꿔, txt·csv·html은 글자로 보여 줍니다. 압축 파일·도면 등은 지금처럼 내려받아 확인합니다.",
+    articles: ["mail.box"],
+  },
+  {
     date: "2026-11-12", kind: "수정", title: "결재 문서 — 신청란 직급 표시·AI 요약 직급",
     body: "결재 문서 위쪽 신청란 머리에 ‘기안’ 대신 기안자의 직급을 표시합니다. AI 요약이 기안자 직급을 틀리게 적던 것(예: 대리를 ‘사원’으로)을 고쳐, 문서에 저장된 직급을 그대로 씁니다. 이미 만들어진 요약은 다시 상신할 때 새로 만들어집니다.",
     articles: ["approval.home"],

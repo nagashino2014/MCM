@@ -116,6 +116,8 @@ export interface LeaderCard {
 export interface StaffRow {
   key: string;
   name: string;
+  /** 임원진 카드에도 실리는 사람 — 연구 용역판처럼 임원·직원을 이어 싣는 표는 중복을 뺀다 */
+  exec?: boolean;
   position: string;
   dept: string;
   edu: string;
@@ -134,6 +136,8 @@ export interface StaffStats {
   /** 경력 분포 20년+ · 10–19 · 5–9 · 1–4 */
   careerBuckets: [number, number, number, number];
   population: number;
+  /** 기술인력 인원에는 들지만 명단에 싣지 않고 임원진 쪽에 남긴 임원 수(356) */
+  execTechnical?: number;
 }
 
 export interface PersonCv {

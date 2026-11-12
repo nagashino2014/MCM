@@ -142,7 +142,7 @@ export const METRIC_DEFS: MetricDef[] = [
     id: "staff.technical",
     label: "기술인력",
     unit: "명",
-    footnote: "재직자 중 통합허가 대행업 기술인력 등급(고급·일반)이 있는 인원.",
+    footnote: "재직자 중 통합허가 대행업 기술인력 등급(고급·일반)이 있는 인원과 인물 노출 관리에서 기술인력 명단에 넣은 인원(뺀 인원 제외). 임원진 쪽에 남긴 임원 기술인력도 셈.",
   },
   {
     id: "advisors.total",
@@ -259,18 +259,13 @@ export async function computeCatalogMetrics(pre?: {
 }): Promise<MetricsBundle> {
   const db = await getDb();
   const projects = pre?.projects ?? (await listCatalogProjects());
-  const [staffRow, people, extraPeople, advisorRow, profileRow, figureRow] = await Promise.all([
-    db.exec(
-      `SELECT COUNT(*) FILTER (WHERE TRIM(COALESCE(env_grade, '')) IN ('고급인력', '일반인력')) AS technical
-         FROM employee_profiles WHERE COALESCE(status, 'active') <> 'inactive'`
-    ),
+  const [people, extraPeople, advisorRow, profileRow, figureRow] = await Promise.all([
     pre?.people ?? listCatalogPeople(),
     pre?.extraPeople ?? listExtraPeople(),
     db.exec("SELECT COUNT(*) AS n FROM catalog_advisors WHERE is_public = 1"),
     db.exec("SELECT founded_ym FROM company_profile WHERE profile_id = 'default'"),
     db.exec("SELECT value, as_of, source FROM catalog_external_figures WHERE figure_key = 'permit.sites.total'"),
   ]);
-  const staff = rowsToObjects(staffRow)[0] ?? {};
   const advisors = Number(rowsToObjects(advisorRow)[0]?.n ?? 0);
   const foundedYm = String(rowsToObjects(profileRow)[0]?.founded_ym ?? "");
   const figure = rowsToObjects(figureRow)[0];
@@ -311,7 +306,8 @@ export async function computeCatalogMetrics(pre?: {
     "staff.total": { value: people.length + extraPeople.filter((x) => x.countInTotal).length },
     "staff.exec": { value: people.filter((p) => p.section === "exec").length + extraPeople.filter((x) => x.countInTotal).length },
     "staff.employee": { value: people.filter((p) => p.section === "staff").length },
-    "staff.technical": { value: Number(staff.technical ?? 0) },
+    // 등급 기준 + 인물 노출 관리의 넣기·빼기(356, 사용자 지시 2026-11-12) — 명단(C15) + 임원진 쪽에 남긴 임원 기술인력
+    "staff.technical": { value: people.filter((p) => p.isTechnical).length },
     "advisors.total": { value: advisors },
     "company.years": years == null ? { value: null, missing: "회사 프로필에 설립년월이 없습니다." } : { value: years },
     "market.permit.share":

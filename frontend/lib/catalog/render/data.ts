@@ -111,8 +111,9 @@ function certRank(name: string): number {
   return i < 0 ? CERT_ORDER.length : i;
 }
 
-/** 직원 기술인력 명단 소속 순서(사용자 지시 2026-11-11) — 통합1본부·통합2본부·화학안전본부·연구소·울산지사, 같은 소속 안은 직급순 */
-const STAFF_DEPT_ORDER = [/통합\D*1/, /통합\D*2/, /화학/, /연구소/, /지사/];
+/** 기술인력 명단 소속 순서(사용자 지시 2026-11-11) — 통합1본부·통합2본부·화학안전본부·연구소·울산지사, 같은 소속 안은 직급순.
+ *  명단에 임원 구획 기술인력도 싣게 되어(2026-11-12) 총괄(경영진)을 맨 앞에 둔다. 목록 밖 소속은 맨 뒤 */
+const STAFF_DEPT_ORDER = [/총괄/, /통합\D*1/, /통합\D*2/, /화학/, /연구소/, /지사/];
 function deptRank(dept: string): number {
   const i = STAFF_DEPT_ORDER.findIndex((re) => re.test(dept));
   return i < 0 ? STAFF_DEPT_ORDER.length : i;
@@ -446,7 +447,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   const leaderYears = leaders.map((l) => l.careerYears).filter((v): v is number => v != null);
   const leaderAvgCareer = leaderYears.length ? Math.round(leaderYears.reduce((a, b) => a + b, 0) / leaderYears.length) : null;
 
-  // 기술인력 현황 — 모집단 = 사용자관리 재직자(촉탁 제외)
+  // 기술인력 현황 — 모집단 = 사용자관리 재직자. 학위 구성·기술사·박사에는 인원 수에 넣는 촉탁 임원도 셈(사용자 지시 2026-11-12, 심무경 고문 박사)
   const certCount = new Map<string, number>();
   const degrees = { doctor: 0, master: 0, bachelor: 0, other: 0 };
   const buckets: [number, number, number, number] = [0, 0, 0, 0];
@@ -470,6 +471,19 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       buckets[y >= 20 ? 0 : y >= 10 ? 1 : y >= 5 ? 2 : 3] += 1;
     }
   }
+  const degreeOfText = (edu: string): "doctor" | "master" | "bachelor" | "" =>
+    /박사/.test(edu) ? "doctor" : /석사/.test(edu) ? "master" : /학사/.test(edu) ? "bachelor" : "";
+  let extraPopulation = 0;
+  for (const x of extras.filter((e) => e.isPublic && e.countInTotal)) {
+    extraPopulation += 1;
+    const lvl = degreeOfText(x.edu);
+    if (lvl) degrees[lvl] += 1;
+    else degrees.other += 1;
+    const isPro = /기술사/.test(x.cert);
+    if (isPro) pro += 1;
+    if (lvl === "doctor") doctors += 1;
+    if (isPro || lvl === "doctor") experts += 1;
+  }
   const staffStats: StaffStats = {
     technical: Number(metrics["staff.technical"]?.value ?? 0),
     experts,
@@ -481,16 +495,20 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       .map(([name, count]) => ({ name, count })),
     degrees,
     careerBuckets: buckets,
-    population: people.length,
+    population: people.length + extraPopulation,
+    execTechnical: people.filter((p) => p.isTechnical && !p.inTechList).length,
   };
-  const staffRows: StaffRow[] = shownPeople
-    .filter((p) => p.section === "staff")
+  // 기술인력 명단 — 기술인력 구획 등급 보유자 + 명단에 넣기로 정한 사람(임원 구획이어도, 사용자 지시 2026-11-12).
+  // 자동인 임원 구획 기술인력은 임원진 쪽에 남고 인원(staff.technical)에만 센다 → 명단 각주에 따로 적는다
+  const staffRows: StaffRow[] = people
+    .filter((p) => p.inTechList)
     .sort((a, b) => deptRank(a.deptName) - deptRank(b.deptName) || (b.rankOrder ?? 0) - (a.rankOrder ?? 0) || a.hiredAt.localeCompare(b.hiredAt))
     .map((p) => {
       const d = hr.get(p.employeeId);
       return {
         key: p.employeeId,
         name: nm(p.name),
+        exec: p.section === "exec" && p.shown,
         position: p.positionName,
         dept: p.deptName,
         edu: highestEdu(d).text,

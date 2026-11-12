@@ -260,8 +260,8 @@ export function CatalogPeopleBoard() {
         <section className="cd-card p-4">
           <div className="text-xs cd-text-muted mb-3 flex items-center gap-1">
             {tab === "exec"
-              ? "사용자관리에 등록된 재직자 중 직급이 부장보다 높은 사람이 자동으로 들어옵니다. 사진은 거부하지 않으면 싣습니다."
-              : "부장 이하 직급의 재직자입니다. 대행업·엔지니어링 등급이 있으면 자동으로 싣고, 사진은 동의한 사람만 싣습니다."}
+              ? "사용자관리에 등록된 재직자 중 직급이 부장보다 높은 사람이 자동으로 들어옵니다. 사진은 거부하지 않으면 싣습니다. 기술인력 명단·인원은 등급 칸에서 정합니다."
+              : "부장 이하 직급의 재직자입니다. 대행업·엔지니어링 등급이 있으면 자동으로 싣고, 사진은 동의한 사람만 싣습니다. 기술인력 명단·인원은 등급 칸에서 정합니다."}
             <CdHelp topic="catalog.people-rules" />
           </div>
           {loading ? (
@@ -292,7 +292,27 @@ export function CatalogPeopleBoard() {
                         {p.name}
                       </td>
                       <td className="cd-text-muted whitespace-nowrap">{[p.deptName, p.positionName].filter(Boolean).join(" · ") || "—"}</td>
-                      <td className="cd-text-muted whitespace-nowrap">{[p.envGrade && `대행업 ${p.envGrade}`, p.engGrade && `엔지니어링 ${p.engGrade}`].filter(Boolean).join(" · ") || "—"}</td>
+                      <td className="cd-text-muted whitespace-nowrap">
+                        <div>{[p.envGrade && `대행업 ${p.envGrade}`, p.engGrade && `엔지니어링 ${p.engGrade}`].filter(Boolean).join(" · ") || "—"}</div>
+                        {/* 기술인력 명단·인원(356) — 자동은 대행업 고급·일반 등급, 구획과 무관(사용자 지시 2026-11-12) */}
+                        <div className="flex items-center gap-1 mt-1">
+                          <select
+                            className="cd-select"
+                            style={{ width: 168 }}
+                            value={p.meta?.techOverride == null ? "" : p.meta.techOverride ? "1" : "0"}
+                            disabled={busy}
+                            onChange={(e) => patchPerson(p.employeeId, { techOverride: e.target.value === "" ? null : e.target.value === "1" })}
+                            aria-label={`${p.name} 기술인력 명단`}
+                          >
+                            <option value="">자동({!p.isTechnicalByGrade ? "기술인력 아님" : p.section === "exec" ? "임원진·인원만" : "명단"})</option>
+                            <option value="1">명단에 넣기</option>
+                            <option value="0">기술인력 빼기</option>
+                          </select>
+                          <span className={`cd-pill ${p.isTechnical ? "cd-pill-info" : "cd-pill-idle"}`}>
+                            {p.inTechList ? "명단" : p.isTechnical ? "인원만" : "명단 밖"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="tabular-nums whitespace-nowrap">{p.hiredAt.slice(0, 10) || "—"}</td>
                       <td>
                         <select

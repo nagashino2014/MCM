@@ -322,10 +322,10 @@ export function BudgetsTab({ data, canManage, onChanged }: Props) {
                   <option key={k} value={k}>{ACTION_LABEL[k]}</option>
                 ))}
               </select>
-              <span className="text-[11px] cd-text-faint">차단 정책은 한도 100% 도달 시 호출을 막습니다(기능은 기존 폴백으로 동작). 기본은 경고만.</span>
+              <span className="cd-hint">차단 정책은 한도 100% 도달 시 호출을 막습니다(기능은 기존 폴백으로 동작). 기본은 경고만.</span>
             </label>
             <div className="col-span-2 flex flex-col gap-1.5">
-              <span className="cd-label">수신자 (비우면 시스템 관리자 템플릿 배정자)</span>
+              <span className="cd-label">수신자<span className="cd-hint ml-1.5">(비우면 시스템 관리자 템플릿 배정자)</span></span>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {editing.recipients.map((id) => (
                   <span key={id} className="cd-chip cd-chip-sm inline-flex items-center gap-1">

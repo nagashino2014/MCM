@@ -240,7 +240,7 @@ export function MobileCard() {
         <div className="flex flex-col gap-3">
           {/* 사업장 선택 */}
           <section className="cd-card-bg border cd-border-c rounded-2xl p-3">
-            <h3 className="cd-text-muted text-xs font-bold mb-2">사업장 선택 *</h3>
+            <h3 className="cd-label-text mb-2">사업장 선택 *</h3>
             {facility ? (
               <div className="cd-tint-primary rounded-xl px-3 py-2.5 flex items-center gap-2">
                 <Check className="w-4 h-4 cd-text-primary shrink-0" />
@@ -311,7 +311,7 @@ export function MobileCard() {
             <Field label="직급" value={form.title ?? ""} onChange={(v) => setForm((s) => ({ ...s, title: v }))} />
             <Field label="부서" value={form.departmentName ?? ""} onChange={(v) => setForm((s) => ({ ...s, departmentName: v }))} />
             <div className="flex items-center gap-2">
-              <span className="cd-text-faint text-xs shrink-0" style={{ width: 64 }}>부서유형</span>
+              <span className="cd-label-text shrink-0 whitespace-nowrap" style={{ width: 64 }}>부서유형</span>
               <select className="cd-select flex-1" value={form.deptType ?? ""} onChange={(e) => setForm((s) => ({ ...s, deptType: e.target.value }))}>
                 <option value="">미지정</option>
                 <option value="contract">계약</option>
@@ -361,7 +361,7 @@ function Field({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="cd-text-faint text-xs shrink-0" style={{ width: 64 }}>{label}</span>
+      <span className="cd-label-text shrink-0 whitespace-nowrap" style={{ width: 64 }}>{label}</span>
       <input className="cd-input flex-1" value={value} inputMode={inputMode} onChange={(e) => onChange(e.target.value)} />
     </div>
   );

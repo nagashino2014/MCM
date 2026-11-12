@@ -199,7 +199,7 @@ export function MailQuotaModal({ open, onClose, onSaved }: { open: boolean; onCl
                   <Stepper label="메일" value={mailGb} onChange={setMailGb} disabled={!selectedMailbox} />
                   <Stepper label="개인 문서함" value={docGb} onChange={setDocGb} disabled={!selectedMailbox} />
                 </div>
-                <p className="text-[10px] cd-text-faint">개인 문서함 할당량은 파일 · 문서함 &gt; 개인문서함 화면의 업로드 한도로 적용됩니다.</p>
+                <p className="cd-hint">개인 문서함 할당량은 파일 · 문서함 &gt; 개인문서함 화면의 업로드 한도로 적용됩니다.</p>
               </>
             ) : (
               <p className="text-sm cd-text-faint m-auto text-center">조직도에서 인원을 선택하세요.</p>

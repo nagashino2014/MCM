@@ -126,14 +126,14 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
       <div className="cd-card rounded-3xl p-5 flex flex-col gap-4">
         <h3 className="cd-card-title">표시·예측</h3>
         <label className="flex flex-col gap-1.5">
-          <span className="cd-label">USD → KRW 환율 (참고 병기, 수동)</span>
+          <span className="cd-label">USD → KRW 환율<span className="cd-hint ml-1.5">(참고 병기, 수동)</span></span>
           <div className="flex items-center gap-2">
             <input className="cd-input" style={{ width: 140 }} inputMode="decimal" placeholder="예: 1380" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.]/g, ""))} disabled={!canManage} />
             <CdButton size="sm" variant="soft" disabled={!canManage || saving === "rate"} onClick={() => save({ usdKrwRate: rate ? Number(rate) : null }, "rate")} icon={saving === "rate" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}>
               저장
             </CdButton>
           </div>
-          <span className="text-[11px] cd-text-faint">비우면 KRW 병기를 끕니다. 예산·집계는 USD 기준입니다.</span>
+          <span className="cd-hint">비우면 KRW 병기를 끕니다. 예산·집계는 USD 기준입니다.</span>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="cd-label">월 예상 계산 창 (기준일 전후, 일)</span>
@@ -143,7 +143,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
               저장
             </CdButton>
           </div>
-          <span className="text-[11px] cd-text-faint">기본 7일 = 기준일 −3 ~ +3. 미래 구간은 자동으로 잘립니다.</span>
+          <span className="cd-hint">기본 7일 = 기준일 −3 ~ +3. 미래 구간은 자동으로 잘립니다.</span>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="cd-label">단건 고비용 경고 임계 (USD, 호출 1건)</span>
@@ -153,7 +153,7 @@ export function SettingsTab({ data, canManage, onChanged }: Props) {
               저장
             </CdButton>
           </div>
-          <span className="text-[11px] cd-text-faint">이 금액 이상인 호출 1건마다 홈 알림벨·푸시·메일로 알립니다. 비우면 끕니다.</span>
+          <span className="cd-hint">이 금액 이상인 호출 1건마다 홈 알림벨·푸시·메일로 알립니다. 비우면 끕니다.</span>
         </label>
         {msg && <div className="text-xs cd-text-muted">{msg}</div>}
       </div>

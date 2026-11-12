@@ -25,6 +25,7 @@
     "test:contact-import": "node scripts/test-contact-import.mjs",
     "test:mail-gateway": "node scripts/test-mail-gateway.mjs",
     "test:mail-sender-rules": "node scripts/test-mail-sender-rules.mjs",
+    "test:mail-compose": "node scripts/test-mail-compose.mjs",
     "test:catalog-studio": "node scripts/test-catalog-studio.mjs",
     "test:sales-board": "node scripts/test-sales-board.mjs",
     "test:intel-projects": "node scripts/test-project-intelligence.mjs",

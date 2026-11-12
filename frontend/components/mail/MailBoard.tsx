@@ -402,6 +402,7 @@ export function MailBoard() {
       onReply={() => openReply(false)}
       onReplyAll={() => openReply(true)}
       onForward={openForward}
+      onResend={() => detail && router.push(`/mail/compose?mode=resend&id=${encodeURIComponent(detail.messageId)}`)}
       onTrash={() => detail && runBulk([detail.messageId], { action: "trash" })}
       onRestore={() => detail && runBulk([detail.messageId], { action: "restore" })}
       onDelete={() => detail && runBulk([detail.messageId], { action: "delete" })}

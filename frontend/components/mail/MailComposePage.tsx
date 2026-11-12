@@ -1,7 +1,8 @@
 "use client";
 
 // 메일 쓰기 — 별도 페이지(G2-8, 모달 폐지: 편집 도구가 많아 전용 페이지가 적합 · 네이버 메일 방식).
-// 진입: /mail/compose (새 메일) · ?mode=reply|replyall|forward&id=<messageId> (인용) · ?draft=<draftId> (이어쓰기).
+// 진입: /mail/compose (새 메일) · ?mode=reply|replyall|forward&id=<messageId> (인용) · ?draft=<draftId> (이어쓰기)
+//   · ?mode=resend&id=<messageId> (보낸메일 다시보내기 — 받는 사람·참조·숨은참조·제목·본문·첨부를 그대로 채움, 2026-11-12).
 // 첨부: [내 PC](탐색기) + [문서함](개인문서함 파일 선택 창, F-13 2026-10-21) + 상시 드래그 앤 드롭 존.
 //   드래그 앤 드롭은 파일당 30MB, 탐색기 선택은 파일당 2GB(2026-09-17 사용자 요청).
 //   일반 첨부(메일 원문)는 총 25MB 까지 — 넘치는 파일은 대용량 첨부(S3 업로드 + 본문 다운로드 링크, 30일)로 보낸다.
@@ -23,6 +24,7 @@ import { MailSignatureManager } from "@/components/mail/MailSignatureManager";
 import { RecipientInput } from "@/components/mail/RecipientInput";
 import type { MailMessageDetail } from "@/lib/mail/messages";
 import type { MailSignature } from "@/lib/mail/signatures";
+import { resendSeed } from "@/lib/mail/compose-layout";
 import "@/components/cdash/cdash.css";
 
 /** 일반 첨부(메일 원문) 총량 — SES·수신 측 한도(api/mail/send 와 동일). */
@@ -119,6 +121,8 @@ export function MailComposePage() {
   const [showCc, setShowCc] = useState(false);
   const [bcc, setBcc] = useState("");
   const [showBcc, setShowBcc] = useState(false);
+  // 개인별 보내기(2026-11-12 직원 요청 2) — 받는 사람마다 따로 발송(각자 자기 주소만 보임). 참조·숨은참조는 쓰지 않는다.
+  const [individual, setIndividual] = useState(false);
   const [subject, setSubject] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   // 대용량 첨부 업로드 캐시(File → uploadId) — 발송 실패 후 재시도 시 같은 파일을 다시 올리지 않는다.
@@ -191,7 +195,8 @@ export function MailComposePage() {
         } catch {
           /* noop */
         }
-        const sig = signature ? `<br><br><div>--<br>${signature}</div>` : "";
+        // 서명 앞 "--" 구분선은 넣지 않는다(2026-11-12 직원 요청 7 — 입력하지 않은 글자로 보임. 서명 드롭다운·모바일 앱 경로와 같게).
+        const sig = signature ? `<br><br><div>${signature}</div>` : "";
 
         const prefillHtml = bodyParam
           ? `<div>${bodyParam.slice(0, 4000).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string).replace(/\n/g, "<br>")}</div>`
@@ -215,6 +220,49 @@ export function MailComposePage() {
               threadRef.current.inReplyTo = found.inReplyTo ?? null;
               initialHtml = String(found.bodyHtml ?? initialHtml);
             }
+          }
+        } else if (id && mode === "resend") {
+          // 다시보내기 — 보낸 메일 그대로(제목 접두어·서명 추가 없음). 첨부·본문 그림은 원본을 내려받아 다시 싣는다.
+          const r = await fetch(`/api/mail/messages/${encodeURIComponent(id)}?peek=1`);
+          if (r.ok) {
+            const d = (await r.json()) as MailMessageDetail;
+            const seed = resendSeed(d);
+            // 끝에 ", " 를 붙여 마지막 주소까지 확정 칩으로 보이게 한다(입력 중 글자로 남지 않게).
+            const chips = (v: string) => (v ? `${v}, ` : "");
+            setTo(chips(seed.to));
+            setCc(chips(seed.cc));
+            setShowCc(!!seed.cc);
+            setBcc(chips(seed.bcc));
+            setShowBcc(!!seed.bcc);
+            setSubject(seed.subject);
+            setIndividual(seed.individual);
+            let html = seed.bodyHtml;
+            const cidDomain = myAddrs[0]?.split("@")[1] || "koensain.app";
+            const reattached: File[] = [];
+            let failed = 0;
+            for (const a of d.attachments) {
+              const inline = !!a.contentId && html.includes(`cid:${a.contentId}`);
+              if (a.contentId && !inline) continue; // 본문에서 쓰지 않는 인라인 조각은 다시 싣지 않는다
+              try {
+                const res = await fetch(`/api/mail/attachments?id=${encodeURIComponent(a.attachmentId)}`, { cache: "no-store" });
+                if (!res.ok) throw new Error(String(res.status));
+                const blob = await res.blob();
+                const file = new File([blob], a.filename, { type: a.contentType || blob.type || "application/octet-stream" });
+                if (inline) {
+                  const cid = `${globalThis.crypto?.randomUUID?.() ?? Date.now()}@${cidDomain}`;
+                  const blobUrl = URL.createObjectURL(file);
+                  inlineImages.current.push({ cid, file, blobUrl });
+                  html = html.split(`cid:${a.contentId}`).join(blobUrl);
+                } else {
+                  reattached.push(file);
+                }
+              } catch {
+                failed += 1;
+              }
+            }
+            if (reattached.length) setFiles(reattached);
+            if (failed) toast(`원본 첨부 ${failed}개를 불러오지 못했습니다. 다시 첨부해 주세요.`, "warn");
+            initialHtml = html;
           }
         } else if (id && (mode === "reply" || mode === "replyall" || mode === "forward")) {
           const r = await fetch(`/api/mail/messages/${id}`);
@@ -241,7 +289,7 @@ export function MailComposePage() {
           }
         }
         // 기본 서명에 사명 표시가 있으면 제목에도 반영(임시보관 복원은 저장된 제목을 그대로 둔다).
-        if (!draftParam && defaultPrefix) setSubject((prev) => applySubjectPrefix(prev, defaultPrefix));
+        if (!draftParam && mode !== "resend" && defaultPrefix) setSubject((prev) => applySubjectPrefix(prev, defaultPrefix));
         setTimeout(() => {
           if (editorRef.current) editorRef.current.innerHTML = initialHtml;
         }, 30);
@@ -480,7 +528,9 @@ export function MailComposePage() {
       const blobUrl = URL.createObjectURL(f);
       inlineImages.current.push({ cid, file: f, blobUrl });
       editorRef.current?.focus();
-      document.execCommand("insertHTML", false, `<img src="${blobUrl}" data-cid="${cid}" style="max-width:100%"><div><br></div>`);
+      // 그림은 제 문단(div)에 담는다(2026-11-12 직원 요청 13) — 그림 앞에 커서를 두고 띄어 쓰거나 들여 쓸 수 있고,
+      // 그림 도구의 정렬·앞 띄우기가 이 문단의 text-align·margin-left 인라인 스타일로 걸린다.
+      document.execCommand("insertHTML", false, `<div><img src="${blobUrl}" data-cid="${cid}" style="max-width:100%"></div><div><br></div>`);
     }
     scheduleDraftSave();
   };
@@ -582,8 +632,11 @@ export function MailComposePage() {
       setUploadNote(null);
       if (largeIds.length) fd.append("largeUploadIds", JSON.stringify(largeIds));
       fd.append("to", to);
-      if (showCc && cc.trim()) fd.append("cc", cc);
-      if (showBcc && bcc.trim()) fd.append("bcc", bcc);
+      if (individual) fd.append("individual", "1");
+      else {
+        if (showCc && cc.trim()) fd.append("cc", cc);
+        if (showBcc && bcc.trim()) fd.append("bcc", bcc);
+      }
       fd.append("subject", subject);
       fd.append("bodyHtml", html);
       fd.append("idempotencyKey", idemRef.current);
@@ -695,12 +748,33 @@ export function MailComposePage() {
             label="받는 사람"
             required
             labelExtra={
-              !showCc ? (
-                <button onClick={() => setShowCc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
-                  + 참조(CC)
-                </button>
-              ) : undefined
+              <span className="flex items-center gap-3">
+                {/* 개인별 보내기(요청 2) — 받는 사람마다 따로 보내 각자 자기 주소만 보인다. 참조·숨은 참조 칸은 숨긴다. */}
+                <label className="inline-flex items-center gap-1 text-[11px] cd-text-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 accent-[var(--cd-primary)]"
+                    checked={individual}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setIndividual(on);
+                      if (on && ((showCc && cc.trim()) || (showBcc && bcc.trim()))) {
+                        toast("개인별 보내기에서는 참조·숨은 참조로 보내지 않습니다. 끄면 다시 보입니다.", "info");
+                      }
+                      scheduleDraftSave();
+                    }}
+                  />
+                  개인별 보내기
+                </label>
+                <CdHelp topic="mail.individual-send" />
+                {!showCc && !individual && (
+                  <button onClick={() => setShowCc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
+                    + 참조(CC)
+                  </button>
+                )}
+              </span>
             }
+            hint={individual ? "받는 사람마다 따로 보냅니다. 받는 사람 칸에는 각자 자기 주소만 보입니다." : undefined}
             value={to}
             onChange={(next) => {
               setTo(next);
@@ -708,7 +782,7 @@ export function MailComposePage() {
             }}
             placeholder="이름·주소를 입력하면 주소록에서 찾아줍니다"
           />
-          {showCc && (
+          {showCc && !individual && (
             <RecipientInput
               label="참조(CC)"
               labelExtra={
@@ -740,7 +814,7 @@ export function MailComposePage() {
               placeholder="참조 수신자"
             />
           )}
-          {showBcc && (
+          {showBcc && !individual && (
             <RecipientInput
               label="숨은 참조(BCC)"
               hint="숨은 참조 수신자는 다른 수신자에게 표시되지 않습니다."
@@ -859,6 +933,7 @@ export function MailComposePage() {
           <MailEditor
             ref={editorRef}
             onInput={scheduleDraftSave}
+            mailCompose
             onPickImage={() => imageInputRef.current?.click()}
             onPasteImageFailed={(reasons) =>
               toast(

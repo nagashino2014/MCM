@@ -15,11 +15,12 @@ import {
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart,
   Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand,
   Image as ImageIcon, Indent, Italic, Link2, ListOrdered, Minus as MinusIcon,
-  Omega, Outdent, Paintbrush, Plus, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
+  Omega, Outdent, Paintbrush, Plus, IndentIncrease, IndentDecrease, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
   TableCellsMerge, TableCellsSplit, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
 import { CdIconButton } from "@/components/cdash/CdButton";
+import { tableMarginCss, tableOpenTag, type BlockAlign } from "@/lib/mail/compose-layout";
 import { BODY_TD_STYLE, HEADER_TD_STYLE, cleanForeignTree } from "@/lib/pasted-html";
 import {
   LIST_LEVEL_MAX,
@@ -35,7 +36,7 @@ const TABLE_MAX_ROWS = 6;
 const TABLE_MAX_COLS = 8;
 const HR_HTML = `<hr style="border:none;border-top:1px solid #c8c8cc;margin:12px 0">`;
 
-function buildTableHtml(rows: number, cols: number): string {
+function buildTableHtml(rows: number, cols: number, align?: BlockAlign): string {
   // table-layout:fixed(2026-08-24) — auto 레이아웃은 텍스트를 입력할 때마다 그 열이
   // 계속 넓어진다. 고정 레이아웃 + 열 균등 폭으로 만들고, 넘치는 텍스트는 줄바꿈한다.
   const w = `width:${(100 / cols).toFixed(3)}%;`;
@@ -44,6 +45,8 @@ function buildTableHtml(rows: number, cols: number): string {
   const tr = (header: boolean) => `<tr>${Array.from({ length: cols }, () => td(header)).join("")}</tr>`;
   const body = Array.from({ length: rows }, (_, i) => tr(i === 0)).join("");
   // 표 폭 92% + 가운데 정렬(2026-08-24 사용자 확정) — 본문 양끝에 붙지 않게 좌우 여백을 둔다.
+  // 메일 쓰기는 왼쪽이 기본(2026-11-12 직원 요청 14 — 표 툴바에서 가운데·오른쪽·앞 띄우기로 바꾼다).
+  if (align) return `${tableOpenTag(align)}<tbody>${body}</tbody></table><div><br></div>`;
   return `<table style="border-collapse:collapse;margin:8px auto;width:92%;table-layout:fixed"><tbody>${body}</tbody></table><div><br></div>`;
 }
 
@@ -442,8 +445,15 @@ function equalizeRows(cell: HTMLTableCellElement, sel: HTMLTableCellElement[] = 
  * 종전에는 표가 늘 본문 폭에 꽉 차 열이 적은 표도 억지로 늘어났다(사용자 지적).
  * 값은 data-w 에 남겨 파서(html-parse)가 읽고, PDF·HWPX 가 같은 비율로 그린다.
  */
-function setTableWidthPct(table: HTMLTableElement, pct: number): void {
+function setTableWidthPct(table: HTMLTableElement, pct: number, keepAlign = false): void {
   const next = Math.min(100, Math.max(30, Math.round(pct)));
+  // 표 정렬 도구가 있는 편집기(메일 쓰기)는 사용자가 고른 정렬을 지킨다 — 가운데 표만 종전처럼 여백을 맞춘다.
+  if (keepAlign && tableAlignOf(table) !== "center") {
+    table.dataset.w = String(next);
+    table.style.width = `${next}%`;
+    table.style.tableLayout = "fixed";
+    return;
+  }
   table.dataset.w = String(next);
   table.style.width = `${next}%`;
   // 열 px 는 fixed 레이아웃에서 비율처럼 동작하므로 그대로 둔다(열 간 비율 유지).
@@ -451,6 +461,40 @@ function setTableWidthPct(table: HTMLTableElement, pct: number): void {
   // 100% 미만이면 가운데로 — 좌측에 붙어 있으면 여백이 한쪽에만 생겨 어색하다.
   table.style.marginLeft = next >= 100 ? "" : "auto";
   table.style.marginRight = next >= 100 ? "" : "auto";
+}
+
+/** 표 정렬 판정 — 좌우 여백이 모두 auto 면 가운데, 왼쪽만 auto 면 오른쪽, 그 밖은 왼쪽. */
+function tableAlignOf(table: HTMLTableElement): BlockAlign {
+  const l = table.style.marginLeft;
+  const r = table.style.marginRight;
+  if (l === "auto" && r === "auto") return "center";
+  if (l === "auto") return "right";
+  return "left";
+}
+
+/** 표 왼쪽 앞 띄우기 px(왼쪽 정렬일 때만 의미). */
+function tableIndentPx(table: HTMLTableElement): number {
+  const m = /^(\d+(?:\.\d+)?)px$/.exec(table.style.marginLeft || "");
+  return m ? Number(m[1]) : 0;
+}
+
+/**
+ * 표 정렬·앞 띄우기(2026-11-12 직원 요청 14) — 받는 쪽 호환을 위해 margin 인라인 스타일로 건다.
+ * 가운데는 Outlook(auto 여백 무시)을 위해 align="center" 를 함께 단다. 왼쪽·오른쪽 align 속성은 표를 띄워
+ * 뒤 문단이 옆으로 흘러들므로 쓰지 않는다. indentPx 는 왼쪽 정렬에서만 쓴다(최대 400px).
+ */
+function setTableAlign(table: HTMLTableElement, align: BlockAlign, indentPx = 0): void {
+  const style = tableMarginCss(align, Math.min(400, indentPx));
+  const m = /^margin:(.+)$/.exec(style);
+  const parts = (m ? m[1] : "8px auto").trim().split(/\s+/);
+  const [top, right, bottom, left] =
+    parts.length === 4 ? parts : parts.length === 2 ? [parts[0], parts[1], parts[0], parts[1]] : [parts[0], parts[0], parts[0], parts[0]];
+  table.style.marginTop = top;
+  table.style.marginRight = right;
+  table.style.marginBottom = bottom;
+  table.style.marginLeft = left;
+  if (align === "center") table.setAttribute("align", "center");
+  else table.removeAttribute("align");
 }
 
 /** 표의 현재 너비 %(미지정이면 100). */
@@ -596,6 +640,51 @@ function selectionRect(
   return { r1, c1, r2, c2, cells };
 }
 
+// ── 그림 정렬·앞 띄우기(2026-11-12 직원 요청 13) ──
+// 그림은 감싼 문단(div)의 text-align·margin-left 인라인 스타일로 배치한다(Outlook·Gmail·네이버 모두 유지).
+const BLOCK_TAGS = new Set(["DIV", "P", "TD", "TH", "LI", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+
+/** 그림을 담은 가장 가까운 문단 — 에디터 바로 아래 인라인이면 div 로 감싸 만든다. */
+function imageBlock(img: HTMLImageElement, editor: HTMLElement): HTMLElement | null {
+  if (!editor.contains(img)) return null;
+  let node: HTMLElement = img;
+  while (node.parentElement && node.parentElement !== editor && !BLOCK_TAGS.has(node.parentElement.tagName)) node = node.parentElement;
+  if (!node.parentElement) return null;
+  if (node.parentElement !== editor) return node.parentElement;
+  const wrap = document.createElement("div");
+  node.before(wrap);
+  wrap.appendChild(node);
+  return wrap;
+}
+
+/** 그림(또는 그림을 감싼 링크) — 공백을 넣을 때 기준 노드. */
+function imageAnchorNode(img: HTMLImageElement): Node {
+  let node: HTMLElement = img;
+  while (node.parentElement && node.parentElement.tagName === "A") node = node.parentElement;
+  return node;
+}
+
+const NBSP = String.fromCharCode(0xa0);
+
+/** 그림 앞에 공백 한 칸(nbsp — 받는 쪽에서 접히지 않게). 앞이 글자 노드면 그 끝에 붙인다. */
+function insertSpaceBeforeImage(img: HTMLImageElement): void {
+  const anchor = imageAnchorNode(img);
+  const prev = anchor.previousSibling;
+  if (prev && prev.nodeType === Node.TEXT_NODE) (prev as Text).data += NBSP;
+  else anchor.parentNode?.insertBefore(document.createTextNode(NBSP), anchor);
+}
+
+/** 그림 앞 공백 한 칸 지우기 — 지웠으면 true. */
+function removeSpaceBeforeImage(img: HTMLImageElement): boolean {
+  const prev = imageAnchorNode(img).previousSibling;
+  if (!prev || prev.nodeType !== Node.TEXT_NODE) return false;
+  const t = prev as Text;
+  if (!/\s$/.test(t.data) && !t.data.endsWith(NBSP)) return false;
+  t.data = t.data.slice(0, -1);
+  if (!t.data) t.remove();
+  return true;
+}
+
 const EDGE = 5;
 
 export interface MailEditorProps {
@@ -607,12 +696,21 @@ export interface MailEditorProps {
   minHeightPx?: number;
   /** 붙여넣은 외부 이미지를 가져오지 못했을 때(권한 필요 URL 등) 사유 목록 — 사용자 안내용. */
   onPasteImageFailed?: (reasons: string[]) => void;
+  /**
+   * 메일 쓰기 전용 동작(2026-11-12 직원 요청 13·14·17). 미지정이면 다른 편집기(공문·게시판·결재)는 종전 그대로.
+   * - 본문이 입력량만큼 늘어나고 페이지 전체가 스크롤된다(편집 도구 줄은 위에 붙어 따라온다). 종전: 본문 창 75vh 안 스크롤.
+   * - 새 표는 왼쪽에 놓이고, 표 도구에 표 정렬·앞 띄우기가 생긴다.
+   * - 그림을 받는 쪽과 같이 글줄 안(inline)에 그린다 — Tailwind 기본값(img display:block) 때문에 그림 앞 공백·정렬이 안 먹혔다.
+   */
+  mailCompose?: boolean;
 }
 
 export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function MailEditor(
-  { onInput, statusText, onPickImage, minHeightPx, onPasteImageFailed },
+  { onInput, statusText, onPickImage, minHeightPx, onPasteImageFailed, mailCompose },
   ref
 ) {
+  const growWithPage = !!mailCompose;
+  const tableAlign: BlockAlign | undefined = mailCompose ? "left" : undefined;
   const innerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLDivElement);
 
@@ -1314,6 +1412,27 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     // 셀 블록을 지정한 상태면 **방향키 단독**으로도 조절한다(2026-09-11, 아래아한글 동작).
     //   · Alt 조합은 크롬에서 Alt+←/→ 가 뒤로/앞으로 가기라 눌러도 반응이 없어 보였다.
     //   · 블록 선택 중에는 캐럿 이동이 의미 없으므로 방향키를 크기 조절로 쓴다.
+    // 그림을 고른 상태(2026-11-12 직원 요청 13): 스페이스바 = 그림 앞 한 칸 띄우기, Backspace = 그 공백 지우기.
+    // 그 밖의 키는 그림 선택을 풀고 평소대로 처리한다.
+    if (selectedImg && !(e.nativeEvent as KeyboardEvent).isComposing) {
+      const img = selectedImg;
+      if (img.isConnected && innerRef.current?.contains(img) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === " ") {
+          e.preventDefault();
+          insertSpaceBeforeImage(img);
+          requestAnimationFrame(syncImgBox);
+          onInput();
+          return;
+        }
+        if (e.key === "Backspace" && removeSpaceBeforeImage(img)) {
+          e.preventDefault();
+          requestAnimationFrame(syncImgBox);
+          onInput();
+          return;
+        }
+      }
+      if (e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt" && e.key !== "Meta") setSelectedImg(null);
+    }
     const arrowKey = e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown";
     const blockSelected = (cellSelRef.current?.cells.length ?? 0) > 0;
     if (arrowKey && (e.altKey || blockSelected)) {
@@ -1437,6 +1556,42 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     onInput();
   };
 
+  /** 고른 그림이 든 문단에 정렬·앞 띄우기를 건다(2026-11-12 직원 요청 13). */
+  const imageAct = (fn: (block: HTMLElement, img: HTMLImageElement) => void) => {
+    const editor = innerRef.current;
+    const img = selectedImg;
+    if (!editor || !img || !img.isConnected) return;
+    const block = imageBlock(img, editor);
+    if (!block) return;
+    fn(block, img);
+    requestAnimationFrame(syncImgBox);
+    onInput();
+  };
+  const alignImage = (align: BlockAlign) => imageAct((block) => (block.style.textAlign = align));
+  /** 앞 띄우기 — 문단 margin-left 를 20px 단위로(최대 400px). 표 칸·목록 안의 그림은 공백 4칸 단위로 띄운다. */
+  const indentImage = (dir: 1 | -1) =>
+    imageAct((block, img) => {
+      if (block.tagName === "TD" || block.tagName === "TH" || block.tagName === "LI") {
+        for (let i = 0; i < 4; i++) {
+          if (dir > 0) insertSpaceBeforeImage(img);
+          else removeSpaceBeforeImage(img);
+        }
+        return;
+      }
+      const cur = parseFloat(block.style.marginLeft) || 0;
+      const next = Math.max(0, Math.min(400, cur + dir * 20));
+      block.style.marginLeft = next ? `${next}px` : "";
+    });
+
+  /** 커서가 든 표의 정렬·앞 띄우기(2026-11-12 직원 요청 14). */
+  const tableAlignAct = (align: BlockAlign, indentDelta = 0) =>
+    tableAct((c) => {
+      const t = c.closest("table") as HTMLTableElement | null;
+      if (!t) return;
+      const base = indentDelta && tableAlignOf(t) === "left" ? tableIndentPx(t) : 0;
+      setTableAlign(t, align, Math.max(0, base + indentDelta));
+    });
+
   const tableAct = (fn: (cell: HTMLTableCellElement, sel: HTMLTableCellElement[]) => void) => {
     if (!activeCell) return;
     // ⚠ 선택 셀 목록을 **해제 전에** 캡처한다 — 종전에는 clearCellSelection() 이 먼저라
@@ -1455,6 +1610,9 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
 
   return (
     <div className="flex flex-col">
+      {/* 편집 도구 줄(서식·표·그림) — growWithPage 면 페이지를 내려도 위에 붙어 따라온다(2026-11-12 직원 요청 17). */}
+      {/* -top-4/-top-5 = 메일 쓰기 페이지 안쪽 여백(p-4 md:p-5) — 여백만큼 올려 붙여야 도구 줄 위로 본문이 비치지 않는다. */}
+      <div className={growWithPage ? "sticky -top-4 md:-top-5 z-20" : undefined}>
       {/* 툴바(1줄 통합 — 좁은 폭에서만 자동 줄바꿈. 본문 면과 같은 바탕 + 윤곽선, G2-9/10 · 다크 2026-10-21) */}
       <div className="cd-doc-surface flex items-center gap-0.5 border cd-border-c rounded-t-lg px-1.5 py-1 flex-wrap">
         <select
@@ -1525,8 +1683,10 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
             <Baseline className="w-3.5 h-3.5" />
           </EBtn>
           {toolPopover === "textcolor" && (
-            <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2" style={{ boxShadow: "var(--cd-shadow)" }}>
-              <div className="grid grid-cols-6 gap-1">
+            // 견본 크기·간격 고정(2026-11-12 직원 요청 12) — 종전 grid-cols-6(minmax(0,1fr))은 팝오버가 버튼 폭에 묶여
+            // 열이 0 으로 줄고 견본이 포개졌다. w-max + 고정 열 폭으로 한 칸씩 또렷이 누르게 한다.
+            <div className="absolute top-full left-0 mt-1 z-50 w-max rounded-xl border cd-border-c cd-card-bg p-2" style={{ boxShadow: "var(--cd-shadow)" }}>
+              <div className="grid grid-cols-[repeat(6,1.75rem)] gap-1.5">
                 {TEXT_COLORS.map((c) => (
                   <button
                     key={c}
@@ -1536,9 +1696,10 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
                       exec("foreColor", c);
                       setToolPopover(null);
                     }}
-                    className="w-5 h-5 rounded border cd-border-c"
+                    className="w-7 h-7 rounded-md border cd-border-c hover:scale-110 transition-transform"
                     style={{ background: c }}
                     title={c}
+                    aria-label={`글자색 ${c}`}
                   />
                 ))}
               </div>
@@ -1678,7 +1839,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
                           onMouseDown={(e) => e.preventDefault()}
                           onMouseEnter={() => setTableHover({ r: r + 1, c: c + 1 })}
                           onClick={() => {
-                            insertHtml(buildTableHtml(r + 1, c + 1));
+                            insertHtml(buildTableHtml(r + 1, c + 1, tableAlign));
                             setToolPopover(null);
                             setTableHover({ r: 0, c: 0 });
                           }}
@@ -1769,7 +1930,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
             onClick={() =>
               tableAct((c) => {
                 const t = c.closest("table") as HTMLTableElement | null;
-                if (t) setTableWidthPct(t, tableWidthPct(t) - 5);
+                if (t) setTableWidthPct(t, tableWidthPct(t) - 5, !!tableAlign);
               })
             }
           />
@@ -1779,10 +1940,21 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
             onClick={() =>
               tableAct((c) => {
                 const t = c.closest("table") as HTMLTableElement | null;
-                if (t) setTableWidthPct(t, tableWidthPct(t) + 5);
+                if (t) setTableWidthPct(t, tableWidthPct(t) + 5, !!tableAlign);
               })
             }
           />
+          {/* 표 정렬·앞 띄우기(2026-11-12 직원 요청 14) — 메일 쓰기만. margin 인라인 스타일이라 받는 쪽에서도 유지된다. */}
+          {tableAlign && (
+            <>
+              {divider}
+              <TableBtn label="표 왼쪽" icon={<AlignLeft className="w-3 h-3" />} onClick={() => tableAlignAct("left")} />
+              <TableBtn label="표 가운데" icon={<AlignCenter className="w-3 h-3" />} onClick={() => tableAlignAct("center")} />
+              <TableBtn label="표 오른쪽" icon={<AlignRight className="w-3 h-3" />} onClick={() => tableAlignAct("right")} />
+              <TableBtn label="표 앞 띄우기" icon={<IndentIncrease className="w-3 h-3" />} onClick={() => tableAlignAct("left", 20)} />
+              <TableBtn label="표 앞 줄이기" icon={<IndentDecrease className="w-3 h-3" />} onClick={() => tableAlignAct("left", -20)} />
+            </>
+          )}
           {divider}
           {/* 셀 병합(2026-08-24) — 셀에서 드래그해 여러 셀을 선택한 뒤 누른다. */}
           <TableBtn
@@ -1800,8 +1972,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           <span className="relative inline-flex" data-tool-popover>
             <TableBtn label="셀 배경색" icon={<Paintbrush className="w-3 h-3" />} onClick={() => setToolPopover((v) => (v === "cellcolor" ? null : "cellcolor"))} />
             {toolPopover === "cellcolor" && (
-              <div className="absolute top-full left-0 mt-1 z-50 rounded-xl border cd-border-c cd-card-bg p-2" style={{ boxShadow: "var(--cd-shadow)" }}>
-                <div className="grid grid-cols-3 gap-1">
+              <div className="absolute top-full left-0 mt-1 z-50 w-max rounded-xl border cd-border-c cd-card-bg p-2" style={{ boxShadow: "var(--cd-shadow)" }}>
+                <div className="grid grid-cols-[repeat(3,max-content)] gap-1">
                   {CELL_COLORS.map((c) => (
                     <button
                       key={c.label}
@@ -1835,6 +2007,34 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
         </div>
       )}
 
+      {/* 그림 도구 — 그림을 클릭해 골랐을 때만(2026-11-12 직원 요청 13). 문단 text-align·margin-left 인라인 스타일로 건다. */}
+      {selectedImg && imgBox && (
+        <div className="flex items-center gap-0.5 border-x cd-border-c px-1.5 py-1 flex-wrap text-[11px] cd-tint-primary">
+          <span className="font-bold mr-1 flex items-center gap-1" style={{ color: "var(--cd-primary)" }}>
+            <ImageIcon className="w-3.5 h-3.5" /> 그림
+          </span>
+          <TableBtn label="왼쪽" icon={<AlignLeft className="w-3 h-3" />} onClick={() => alignImage("left")} />
+          <TableBtn label="가운데" icon={<AlignCenter className="w-3 h-3" />} onClick={() => alignImage("center")} />
+          <TableBtn label="오른쪽" icon={<AlignRight className="w-3 h-3" />} onClick={() => alignImage("right")} />
+          {divider}
+          <TableBtn label="앞 띄우기" icon={<IndentIncrease className="w-3 h-3" />} onClick={() => indentImage(1)} />
+          <TableBtn label="앞 줄이기" icon={<IndentDecrease className="w-3 h-3" />} onClick={() => indentImage(-1)} />
+          {divider}
+          <TableBtn
+            label="그림 삭제"
+            icon={<Trash2 className="w-3 h-3" />}
+            danger
+            onClick={() => {
+              selectedImg.remove();
+              setSelectedImg(null);
+              onInput();
+            }}
+          />
+          <span className="ml-auto cd-text-faint hidden md:inline">스페이스바 = 그림 앞 한 칸 띄우기 · 모서리 드래그 = 크기 조절</span>
+        </div>
+      )}
+      </div>
+
       {/* 본문 에디터 — 라이트는 흰 배경, 다크는 어두운 면(cd-doc-surface — 저장 HTML 은 그대로). cd-mail-editor 로 목록 마커/HR 스타일 복원 */}
       <div className="relative">
         <div
@@ -1845,7 +2045,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           onKeyDown={onEditorKeyDown}
           onMouseMove={onEditorMouseMove}
           onMouseDown={onEditorMouseDown}
-          className="cd-mail-editor cd-doc-surface max-h-[75vh] overflow-y-auto border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm outline-none focus:border-[color:var(--cd-primary)]"
+          className={`cd-mail-editor cd-doc-surface ${growWithPage ? "cd-mail-compose " : "max-h-[75vh] overflow-y-auto "}border cd-border-c border-t-0 rounded-b-lg px-3 py-2 text-sm outline-none focus:border-[color:var(--cd-primary)]`}
           style={{ lineHeight: 1.6, minHeight: minHeightPx ?? 634 }}
         />
         {/* 이미지 선택 표시 + 우하단 크기 조절 핸들(드래그하면 비율 유지하며 확대·축소) */}

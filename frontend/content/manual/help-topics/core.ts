@@ -238,6 +238,20 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     reviewedAt: "2026-10-21",
   },
   {
+    id: "mail.individual-send",
+    label: "개인별 보내기 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "받는 사람마다 따로 한 통씩 보냅니다. 받는 쪽에는 자기 주소만 보입니다.",
+        "켜 두면 참조·숨은 참조로는 보내지 않습니다.",
+        "보낸편지함에는 한 통(받는 사람 전원)으로 남고, 수신 확인은 사람별로 집계됩니다.",
+      ] },
+    ],
+    more: { article: "mail.compose", section: "individual" },
+    sources: ["components/mail/MailComposePage.tsx"],
+    reviewedAt: "2026-11-12",
+  },
+  {
     id: "mail.draft-save",
     label: "메일 임시 저장 도움말",
     blocks: [

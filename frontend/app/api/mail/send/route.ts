@@ -60,12 +60,17 @@ export async function POST(req: NextRequest) {
           })
         : String(form.get("bodyHtml") ?? "");
     const idempotencyKey = (form.get("idempotencyKey") as string | null) ?? undefined;
+    // 개인별 보내기(366) — 받는 사람마다 따로 발송. 참조·숨은참조와 함께 쓸 수 없다.
+    const individual = form.get("individual") === "1";
     const draftId = (form.get("draftId") as string | null) ?? null;
     const inReplyTo = (form.get("inReplyTo") as string | null) || null;
     const referencesRaw = (form.get("references") as string | null) ?? "";
     const references = referencesRaw ? referencesRaw.split(/\s+/).filter(Boolean) : [];
 
     if (!to.length) return NextResponse.json({ error: "받는 사람이 필요합니다." }, { status: 400 });
+    if (individual && (cc.length || bcc.length)) {
+      return NextResponse.json({ error: "개인별 보내기에서는 참조·숨은참조를 쓸 수 없습니다." }, { status: 400 });
+    }
 
     const attachments: SendAttachmentInput[] = [];
     let totalBytes = 0;
@@ -122,7 +127,7 @@ export async function POST(req: NextRequest) {
     ]);
     const finalBodyHtml = largeRows.length ? buildLargeAttachmentBlock(largeRows) + bodyHtml : bodyHtml;
 
-    const result = await sendMail({ userId: ctx.userId, to, cc, bcc, subject, bodyHtml: finalBodyHtml, attachments, idempotencyKey, inReplyTo, references });
+    const result = await sendMail({ userId: ctx.userId, to, cc, bcc, subject, bodyHtml: finalBodyHtml, attachments, idempotencyKey, inReplyTo, references, individual });
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? "발송에 실패했습니다." }, { status: 502 });
     }
@@ -148,7 +153,7 @@ export async function POST(req: NextRequest) {
       action: "mail_send",
       targetTable: "mail_messages",
       targetId: result.messageId ?? "",
-      after: { to: to.map((a) => a.address), subject, sesMessageId: result.sesMessageId, attachments: attachments.length, largeAttachments: largeRows.length },
+      after: { to: to.map((a) => a.address), cc: cc.map((a) => a.address), individual, subject, sesMessageId: result.sesMessageId, attachments: attachments.length, largeAttachments: largeRows.length },
     });
 
     return NextResponse.json({ ok: true, messageId: result.messageId, sesMessageId: result.sesMessageId });

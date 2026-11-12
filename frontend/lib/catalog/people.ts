@@ -27,6 +27,8 @@ export interface CatalogPersonMeta {
   certOverride: string;
   /** null 미확인 · true 동의 · false 거부 */
   photoConsent: boolean | null;
+  /** 기술인력(356) — null 자동(등급 보유자 = 인원에 셈, 명단엔 기술인력 구획만) · true 명단에 넣기 · false 기술인력 빼기 */
+  techOverride: boolean | null;
   /** 소개서 전용 사진(catalog_assets). null = 인사 사진 사용 */
   photoAssetId: string | null;
 }
@@ -53,6 +55,13 @@ export interface CatalogPerson {
   shown: boolean;
   /** 사진을 싣는지 */
   photoShown: boolean;
+  /** 등급 기준 기술인력인지(수동 지정과 무관) */
+  isTechnicalByGrade: boolean;
+  /** 기술인력 인원(staff.technical)에 드는지 — 수동 지정(356)이 등급보다 우선 */
+  isTechnical: boolean;
+  /** 기술인력 명단(C15)에 싣는지 — 넣기로 정했거나, 자동이면서 등급 보유·기술인력 구획.
+   *  자동인 임원 구획 등급 보유자(예: 총괄본부장·부사장)는 임원진 쪽에 남고 인원에만 센다(사용자 지시 2026-11-12) */
+  inTechList: boolean;
   meta: CatalogPersonMeta | null;
 }
 
@@ -68,6 +77,12 @@ export function isTechnicalStaff(envGrade: string, engGrade: string): boolean {
   return Boolean(envGrade.trim() || engGrade.trim());
 }
 
+/** 기술인력 명단·인원(staff.technical) 등급 기준 — 통합허가 대행업 기술인력 등급(고급·일반)이 있는 재직자 */
+export const TECHNICAL_ENV_GRADES = ["고급인력", "일반인력"];
+export function isTechnicalByGrade(envGrade: string): boolean {
+  return TECHNICAL_ENV_GRADES.includes(envGrade.trim());
+}
+
 export async function listCatalogPeople(): Promise<CatalogPerson[]> {
   const db = await getDb();
   const rows = rowsToObjects(
@@ -76,7 +91,7 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
               COALESCE(e.env_grade, '') AS env_grade, COALESCE(e.eng_grade, '') AS eng_grade,
               COALESCE(e.hired_at, '') AS hired_at, e.photo_public_path,
               (m.employee_id IS NOT NULL) AS has_meta,
-              m.display_override, m.section_override, m.order_no, m.role_label, m.bio_short, m.edu_override, m.cert_override, m.photo_consent, m.photo_asset_id,
+              m.display_override, m.section_override, m.order_no, m.role_label, m.bio_short, m.edu_override, m.cert_override, m.photo_consent, m.photo_asset_id, m.tech_override,
               (SELECT MAX(rank_order) FROM positions WHERE position_name = $1) AS manager_rank
          FROM employee_profiles e
          LEFT JOIN departments d ON d.dept_id = e.dept_id
@@ -103,6 +118,7 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
           certOverride: s(r.cert_override),
           photoConsent: r.photo_consent == null ? null : Number(r.photo_consent) === 1,
           photoAssetId: r.photo_asset_id != null ? String(r.photo_asset_id) : null,
+          techOverride: r.tech_override == null ? null : Number(r.tech_override) === 1,
         }
       : null;
     const managerRank = r.manager_rank != null ? Number(r.manager_rank) : MANAGER_RANK_FALLBACK;
@@ -111,12 +127,14 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
     const envGrade = s(r.env_grade);
     const engGrade = s(r.eng_grade);
     const override = meta?.displayOverride ?? "auto";
-    const autoShown = section === "exec" ? true : isTechnicalStaff(envGrade, engGrade);
+    // 직원 자동 게재 — 등급 보유, 또는 기술인력 명단 넣기·빼기(356)를 정했으면 그것을 따른다
+    const autoShown = section === "exec" ? true : meta?.techOverride ?? isTechnicalStaff(envGrade, engGrade);
     const shown = override === "always" ? true : override === "never" ? false : autoShown;
     const photoPath = s(r.photo_public_path) || null;
     const hasPhoto = Boolean(meta?.photoAssetId || photoPath);
     const consent = meta?.photoConsent ?? null;
     const photoShown = shown && hasPhoto && (section === "exec" ? consent !== false : consent === true);
+    const techByGrade = isTechnicalByGrade(envGrade);
     return {
       employeeId: s(r.employee_id),
       name: s(r.name),
@@ -133,6 +151,9 @@ export async function listCatalogPeople(): Promise<CatalogPerson[]> {
       section,
       shown,
       photoShown,
+      isTechnicalByGrade: techByGrade,
+      isTechnical: meta?.techOverride ?? techByGrade,
+      inTechList: meta?.techOverride ?? (techByGrade && section === "staff"),
       meta,
     };
   });
@@ -149,6 +170,8 @@ export interface PersonMetaPatch {
   photoConsent?: boolean | null;
   /** 소개서 전용 사진(catalog_assets id). null = 지우고 인사 사진 사용 */
   photoAssetId?: string | null;
+  /** 기술인력 — null 자동 · true 명단에 넣기 · false 기술인력 빼기(356) */
+  techOverride?: boolean | null;
 }
 
 export async function savePersonMeta(employeeId: string, patch: PersonMetaPatch, actorUserId: string | null): Promise<void> {
@@ -171,6 +194,7 @@ export async function savePersonMeta(employeeId: string, patch: PersonMetaPatch,
   if (patch.eduOverride !== undefined) push("edu_override", s(patch.eduOverride).slice(0, 200) || null);
   if (patch.certOverride !== undefined) push("cert_override", s(patch.certOverride).slice(0, 300) || null);
   if (patch.photoConsent !== undefined) push("photo_consent", patch.photoConsent == null ? null : patch.photoConsent ? 1 : 0);
+  if (patch.techOverride !== undefined) push("tech_override", patch.techOverride == null ? null : patch.techOverride ? 1 : 0);
   if (patch.photoAssetId !== undefined) {
     // 없는 자산 id 는 연결하지 않는다
     params.push(s(patch.photoAssetId) || null);

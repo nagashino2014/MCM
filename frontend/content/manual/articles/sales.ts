@@ -993,7 +993,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
           { kind: "table", head: ["판", "뜻"], rows: [
             ["풀버전", "본편과 부록(분야별 수행실적 목록)을 모두 담은 판"],
             ["요약본", "부록을 뺀 본편만의 짧은 판"],
-            ["마스킹판", "사람 이름 가운데 글자를 ○ 로 가리고 사람 사진을 뺀 홍보·공개용 판(대표이사는 실명·사진 그대로). 전 직원이 받을 수 있습니다"],
+            ["마스킹판", "사람 이름 가운데 글자를 ○ 로 가린 홍보·공개용 판. 사진은 대표이사와 사진 게재에 '동의'한 임원만 싣습니다(대표이사는 실명 그대로). 전 직원이 받을 수 있습니다"],
             ["실명판", "실명·사진이 실린 입찰 PQ·수의계약 제출용 판(풀버전에는 수행인력 상세 이력 포함). 관리·발행 담당만 받습니다"],
           ] },
           { kind: "list", items: [
@@ -1170,7 +1170,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/CatalogRenderPanel.tsx",
       "components/sales/catalog/CatalogReferencePanel.tsx",
     ],
-    reviewedAt: "2026-11-08",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "sales.catalog-studio",
@@ -1671,6 +1671,13 @@ export const SALES_ARTICLES: ManualArticle[] = [
             "[[기술인력]]: 부장 이하 직급 중 대행업·엔지니어링 등급이 있는 사람. 사진은 [[동의]]한 사람만 싣습니다.",
           ] },
           { kind: "p", text: "구획 칸에서 자동 대신 임원진·기술인력을 직접 고를 수 있고, 게재 칸에서 [[항상 싣기]]·[[빼기]]로 개별 고정합니다. 바꾸는 즉시 저장됩니다." },
+          { kind: "table", head: ["등급 칸 아래 선택", "기술인력 인원", "기술인력 명단"], rows: [
+            ["자동(등급 보유·기술인력 구획)", "셈", "실음"],
+            ["자동(등급 보유·임원 구획)", "셈", "안 실음(임원진 쪽, 명단 각주에 인원만)"],
+            ["[[명단에 넣기]]", "셈", "실음(임원이거나 등급이 없어도)"],
+            ["[[기술인력 빼기]]", "안 셈", "안 실음"],
+          ] },
+          { kind: "tip", text: "자동의 등급은 대행업 고급인력·일반인력입니다. 새로 입사한 직원은 사용자관리에서 대행업 등급을 넣거나 여기서 [[명단에 넣기]]를 골라야 기술인력에 들어갑니다." },
           { kind: "tip", text: "연필 아이콘으로 순서·소개서 직함·약력 요약(3~4줄)을 적습니다. 직함을 비우면 인사 직위를 씁니다." },
           { kind: "table", head: ["편집 창 칸(임원)", "임원진 카드에서"], rows: [
             ["소개서 직함", "이름 옆 직위(예: 경영이사). 비우면 인사 직위"],
@@ -1718,7 +1725,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["임원", "임원진", "기술인력", "자문위원", "사진 동의", "약력", "인력 현황", "고문", "촉탁", "직원 수"],
     sources: ["components/sales/catalog/CatalogPeopleBoard.tsx"],
-    reviewedAt: "2026-11-11",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "sales.catalog-org",

@@ -337,7 +337,7 @@ export function buildPagePlan(
     add("c23-4", "C23", "ESG 경영보고서 작성", "R6", <ReportWritingPage ctx={ctx} data={data} />);
     // VII 전문인력 — 섹션 첫 쪽(앵커)은 있는 쪽 중 맨 앞(임원 이력 → 내부 → 외부 → 수행 조직)
     const cvParts = chunk(data.leaders, RS_LEADERS_PER_PAGE);
-    const staffCount = data.leaders.length + data.staffRows.length;
+    const staffCount = data.leaders.length + data.staffRows.filter((r) => !r.exec).length;
     cvParts.forEach((ps, i) =>
       add(
         `c13-${i + 1}`,

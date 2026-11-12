@@ -268,7 +268,7 @@ export function StaffPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderDa
           />
         </section>
       </div>
-      <Foot items={[`* ${asOfNote(data)}. 사용자관리에 등록된 재직자(촉탁 제외)의 인사 기록(학력·자격·경력)을 자동 집계합니다. 기술인력 = 통합허가 대행업 기술인력 등급(고급·일반)이 있는 인원.`]} />
+      <Foot items={[`* ${asOfNote(data)}. 임직원 인사 기록(학력·자격·경력)을 자동 집계합니다. 기술인력은 통합허가 대행업 기술인력 등급(고급·일반) 보유자를 중심으로 집계합니다.`]} />
     </Sheet>
   );
 }
@@ -354,7 +354,7 @@ export function StaffListPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
       anchor="c15-staff"
       sub="기술인력 명단"
       eyebrow="기술인력 명단"
-      title={`직원 기술인력 ${fmt(data.staffRows.length)}명`}
+      title={`기술인력 ${fmt(data.staffRows.length)}명`}
       caption="학력·자격·경력은 인사 기록에서 자동으로 채웁니다."
       columns={[
         { head: "성명", width: 50 },
@@ -372,7 +372,9 @@ export function StaffListPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
         { text: r.certs || "-" },
         { text: r.years != null ? `${r.years}년` : "-", cls: "n" },
       ])}
-      footnote={`* ${asOfNote(data)}. 경력은 이전 직장 경력을 포함합니다.${masked ? " 이름 가운데 글자를 ○ 로 가렸습니다." : ""}`}
+      footnote={`* ${asOfNote(data)}. 경력은 이전 직장 경력을 포함합니다.${
+        data.staffStats.execTechnical ? ` 기술인력 ${fmt(data.staffRows.length + data.staffStats.execTechnical)}명 중 임원 ${fmt(data.staffStats.execTechnical)}명은 임원진에 실었습니다.` : ""
+      }${masked ? " 이름 가운데 글자를 ○ 로 가렸습니다." : ""}`}
     />
   );
 }

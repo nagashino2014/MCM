@@ -35,6 +35,9 @@ ${BODY} .kc-photo--frame, ${BODY} .kc-nophoto.kc-photo--frame { border-radius: 1
 ${BODY} .kc-kpi, ${BODY} .kc-card, ${BODY} .kc-strengths__method, ${BODY} .kc-fx > div { border-radius: 10px; }
 ${BODY} .kc-strengths__hero { border-radius: 14px; }
 ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
+/* 인물 사진(2026-11-12 사용자 지시) — 증명사진 파일의 흰 테두리가 틀 안에 남아 사진이 이니셜 상자보다 작고 모서리가 각져 보였다.
+   틀(이니셜 상자와 같은 크기·둥근 모서리) 안에서 사진을 조금 키워 가장자리 여백을 잘라 낸다 */
+.pk-sheet .kc-person__photo > img { transform: scale(1.14); transform-origin: 50% 45%; }
 
 /* 응용소프트웨어 쪽 제품 카드 5장(2026-11-09) — 한 줄에 다 놓도록 안쪽 여백·글자를 한 단계 줄인다 */
 .kc-sw--compact { gap: 10px; }

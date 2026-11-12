@@ -1051,7 +1051,7 @@ export function ResearchStaffPage({ ctx, data, first }: { ctx: RenderCtx; data: 
   const masked = ctx.opts.naming === "masked";
   const rows = [
     ...data.leaders.map((l) => [l.role, l.name, l.edu || "-", l.careerYears != null ? `${l.careerYears}년` : "-", l.dept || "-"]),
-    ...data.staffRows.map((r) => [r.position, r.name, r.edu || "-", r.years != null ? `${r.years}년` : "-", r.dept || "-"]),
+    ...data.staffRows.filter((r) => !r.exec).map((r) => [r.position, r.name, r.edu || "-", r.years != null ? `${r.years}년` : "-", r.dept || "-"]),
   ].map(([role, name, edu, years, dept]) => [{ text: role }, { text: name, cls: masked ? "kc-mask" : undefined }, { text: edu }, { text: years, cls: "n" }, { text: dept }]);
   return (
     <RsTablePage

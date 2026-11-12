@@ -111,8 +111,9 @@ function certRank(name: string): number {
   return i < 0 ? CERT_ORDER.length : i;
 }
 
-/** 직원 기술인력 명단 소속 순서(사용자 지시 2026-11-11) — 통합1본부·통합2본부·화학안전본부·연구소·울산지사, 같은 소속 안은 직급순 */
-const STAFF_DEPT_ORDER = [/통합\D*1/, /통합\D*2/, /화학/, /연구소/, /지사/];
+/** 기술인력 명단 소속 순서(사용자 지시 2026-11-11) — 통합1본부·통합2본부·화학안전본부·연구소·울산지사, 같은 소속 안은 직급순.
+ *  명단에 임원 구획 기술인력도 싣게 되어(2026-11-12) 총괄(경영진)을 맨 앞에 둔다. 목록 밖 소속은 맨 뒤 */
+const STAFF_DEPT_ORDER = [/총괄/, /통합\D*1/, /통합\D*2/, /화학/, /연구소/, /지사/];
 function deptRank(dept: string): number {
   const i = STAFF_DEPT_ORDER.findIndex((re) => re.test(dept));
   return i < 0 ? STAFF_DEPT_ORDER.length : i;
@@ -394,9 +395,11 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   // ── 사람 ──
   const shownPeople = people.filter((p) => p.shown);
   const hr = await loadHrDetails(people.map((p) => p.employeeId));
-  // 마스킹판은 대표이사 말고는 사람 사진을 모두 뺀다(블루프린트 §6-6 — 이름 가리기와 함께 쪽마다 다르지 않게 일괄 적용, 사진 자리는 이니셜)
+  // 마스킹판 사진(블루프린트 §6-6 → 사용자 지시 2026-11-12) — 대표이사와, 사진 게재에 '동의'를 고른 임원만 싣는다.
+  //   직원·미확인 임원은 빼고 사진 자리는 이니셜. 실명판은 종전대로(임원은 거부가 아니면, 직원은 동의자만)
+  const maskedPhotoOk = (p: CatalogPerson) => p.positionName === "대표이사" || (p.section === "exec" && p.meta?.photoConsent === true);
   const photoKey = (p: CatalogPerson) =>
-    (masked && p.positionName !== "대표이사") || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
+    (masked && !maskedPhotoOk(p)) || !p.photoShown ? null : p.meta?.photoAssetId ? `a/${p.meta.photoAssetId}` : p.photoPath ? `e/${p.employeeId}` : null;
   const ceoPerson = people.find((p) => p.positionName === "대표이사") ?? null;
   const toLeader = (p: CatalogPerson): LeaderCard => {
     const d = hr.get(p.employeeId);
@@ -429,8 +432,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
         name: nm(x.name),
         initial: initialOf(x.name),
         role: x.roleLabel || x.employmentType,
-        // 사진 — 마스킹판은 빼고, 사진 게재를 '거부'로 고른 사람도 뺀다(355)
-        photo: !masked && x.photoAssetId && x.photoConsent !== false ? `a/${x.photoAssetId}` : null,
+        // 사진 — 거부면 빼고(355), 마스킹판은 '동의'를 고른 사람만(사용자 지시 2026-11-12)
+        photo: x.photoAssetId && (masked ? x.photoConsent === true : x.photoConsent !== false) ? `a/${x.photoAssetId}` : null,
         edu: x.edu,
         cert: x.cert,
         career: [x.career, x.bioShort].filter(Boolean).join(" · "),
@@ -446,7 +449,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
   const leaderYears = leaders.map((l) => l.careerYears).filter((v): v is number => v != null);
   const leaderAvgCareer = leaderYears.length ? Math.round(leaderYears.reduce((a, b) => a + b, 0) / leaderYears.length) : null;
 
-  // 기술인력 현황 — 모집단 = 사용자관리 재직자(촉탁 제외)
+  // 기술인력 현황 — 모집단 = 사용자관리 재직자. 학위 구성·기술사·박사에는 인원 수에 넣는 촉탁 임원도 셈(사용자 지시 2026-11-12, 심무경 고문 박사)
   const certCount = new Map<string, number>();
   const degrees = { doctor: 0, master: 0, bachelor: 0, other: 0 };
   const buckets: [number, number, number, number] = [0, 0, 0, 0];
@@ -470,6 +473,19 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       buckets[y >= 20 ? 0 : y >= 10 ? 1 : y >= 5 ? 2 : 3] += 1;
     }
   }
+  const degreeOfText = (edu: string): "doctor" | "master" | "bachelor" | "" =>
+    /박사/.test(edu) ? "doctor" : /석사/.test(edu) ? "master" : /학사/.test(edu) ? "bachelor" : "";
+  let extraPopulation = 0;
+  for (const x of extras.filter((e) => e.isPublic && e.countInTotal)) {
+    extraPopulation += 1;
+    const lvl = degreeOfText(x.edu);
+    if (lvl) degrees[lvl] += 1;
+    else degrees.other += 1;
+    const isPro = /기술사/.test(x.cert);
+    if (isPro) pro += 1;
+    if (lvl === "doctor") doctors += 1;
+    if (isPro || lvl === "doctor") experts += 1;
+  }
   const staffStats: StaffStats = {
     technical: Number(metrics["staff.technical"]?.value ?? 0),
     experts,
@@ -481,16 +497,20 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       .map(([name, count]) => ({ name, count })),
     degrees,
     careerBuckets: buckets,
-    population: people.length,
+    population: people.length + extraPopulation,
+    execTechnical: people.filter((p) => p.isTechnical && !p.inTechList).length,
   };
-  const staffRows: StaffRow[] = shownPeople
-    .filter((p) => p.section === "staff")
+  // 기술인력 명단 — 기술인력 구획 등급 보유자 + 명단에 넣기로 정한 사람(임원 구획이어도, 사용자 지시 2026-11-12).
+  // 자동인 임원 구획 기술인력은 임원진 쪽에 남고 인원(staff.technical)에만 센다 → 명단 각주에 따로 적는다
+  const staffRows: StaffRow[] = people
+    .filter((p) => p.inTechList)
     .sort((a, b) => deptRank(a.deptName) - deptRank(b.deptName) || (b.rankOrder ?? 0) - (a.rankOrder ?? 0) || a.hiredAt.localeCompare(b.hiredAt))
     .map((p) => {
       const d = hr.get(p.employeeId);
       return {
         key: p.employeeId,
         name: nm(p.name),
+        exec: p.section === "exec" && p.shown,
         position: p.positionName,
         dept: p.deptName,
         edu: highestEdu(d).text,

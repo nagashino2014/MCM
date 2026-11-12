@@ -13,13 +13,13 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
   AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart,
-  Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand,
+  Baseline, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Expand, Grid3x3,
   Image as ImageIcon, Indent, Italic, Link2, ListOrdered, Minus as MinusIcon,
-  Omega, Outdent, Paintbrush, Plus, IndentIncrease, IndentDecrease, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
+  Omega, Outdent, Paintbrush, Plus, IndentIncrease, IndentDecrease, Ruler, SeparatorHorizontal, Shrink, Strikethrough, Subscript, Superscript, Table2,
   TableCellsMerge, TableCellsSplit, Trash2,
   Underline as UnderlineIcon, UnfoldHorizontal, UnfoldVertical,
 } from "lucide-react";
-import { CdIconButton } from "@/components/cdash/CdButton";
+import { CdButton, CdIconButton } from "@/components/cdash/CdButton";
 import { tableMarginCss, tableOpenTag, type BlockAlign } from "@/lib/mail/compose-layout";
 import { BODY_TD_STYLE, HEADER_TD_STYLE, cleanForeignTree } from "@/lib/pasted-html";
 import {
@@ -67,6 +67,32 @@ const FONTS: { label: string; value: string }[] = [
 ];
 
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28];
+
+/** 글꼴 목록 대조 키 — 첫 글꼴 이름(따옴표 제거·소문자). */
+function fontFamilyKey(v: string): string {
+  return (v.split(",")[0] ?? "").replace(/["']/g, "").trim().toLowerCase();
+}
+
+/**
+ * 커서(선택 시작) 위치의 글꼴·글자 크기(2026-11-12 직원 요청 22) — 도구 줄 선택 상자에 보여 준다.
+ * 종전에는 선택 상자가 고른 뒤 늘 첫 항목으로 돌아가 '기본 글꼴'·'크기'로만 보였다.
+ * 글꼴은 직접 지정한 조상(font face·style)만 본다 — 없으면 '' = 기본 글꼴. 크기는 실제 계산값(px).
+ */
+function readTextStyle(node: Node, editor: HTMLElement): { font: string; size: string } {
+  const el = node instanceof HTMLElement ? node : node.parentElement;
+  let face = "";
+  for (let cur = el; cur && cur !== editor && editor.contains(cur); cur = cur.parentElement) {
+    const f = cur.style.fontFamily || (cur.tagName === "FONT" ? (cur.getAttribute("face") ?? "") : "");
+    if (f) {
+      face = f;
+      break;
+    }
+  }
+  const key = fontFamilyKey(face);
+  const hit = key ? FONTS.find((f) => f.value && fontFamilyKey(f.value) === key) : undefined;
+  const px = el ? Math.round(parseFloat(getComputedStyle(el).fontSize)) : NaN;
+  return { font: hit ? hit.value : face, size: Number.isFinite(px) && px > 0 ? String(px) : "" };
+}
 const LINE_HEIGHTS = [50, 80, 100, 120, 150, 180]; // % — 네이버 메일 옵션과 동일
 
 // 글자색 팔레트.
@@ -589,6 +615,48 @@ function resizeCells(targets: HTMLTableCellElement[], axis: "col" | "row", delta
   }
 }
 
+/** 그리드 열 c 에서 시작하는 단일 폭 셀들 — 열 너비는 여기에만 건다(병합 셀은 span 이 배분한다). */
+function colStartCells(grid: (HTMLTableCellElement | undefined)[][], c: number): HTMLTableCellElement[] {
+  const out: HTMLTableCellElement[] = [];
+  for (let r = 0; r < grid.length; r++) {
+    const td = grid[r]?.[c];
+    if (!td || td.colSpan > 1 || out.includes(td)) continue;
+    if (cellPos(grid, td)?.c === c) out.push(td);
+  }
+  return out;
+}
+
+/**
+ * 셀 크기 지정(2026-11-12 직원 요청 14 후속) — 대상 셀이 걸친 열 너비(col)·행 높이(row)를 px 로 한 번에 맞춘다.
+ * [표 전체 선택] 뒤에 쓰면 모든 열·행이 같은 크기가 된다. td 인라인 style 이라 받는 쪽 메일 프로그램에서도 유지된다.
+ */
+function setCellSize(targets: HTMLTableCellElement[], axis: "col" | "row", px: number): void {
+  const table = targets[0]?.closest("table") as HTMLTableElement | null;
+  if (!table || !Number.isFinite(px) || px <= 0) return;
+  if (axis === "col") {
+    const w = Math.max(36, Math.min(1200, Math.round(px)));
+    freezeTableWidths(table);
+    const grid = buildGrid(table);
+    const picked = new Set<number>();
+    for (const cell of targets) {
+      const p = cellPos(grid, cell);
+      if (p) for (let c = p.c; c < p.c + cell.colSpan; c++) picked.add(c);
+    }
+    for (const c of picked) for (const td of colStartCells(grid, c)) td.style.width = `${w}px`;
+    // 표 폭 = 열 px 합(종전 %폭 표도 고정 폭으로 바뀐다 — 너비 같게와 같은 방식).
+    table.style.tableLayout = "fixed";
+    table.style.width = "auto";
+    return;
+  }
+  const h = Math.max(24, Math.min(600, Math.round(px)));
+  const rows = new Set<HTMLTableRowElement>();
+  for (const cell of targets) {
+    const tr = cell.closest("tr") as HTMLTableRowElement | null;
+    if (tr) rows.add(tr);
+  }
+  for (const tr of rows) for (const td of Array.from(tr.cells)) td.style.height = `${h}px`;
+}
+
 // ── 셀 다중 선택·병합(2026-08-24) ────────────────────────────────
 /** 표를 (행, 열) 그리드로 펼친다 — rowSpan/colSpan 셀은 걸치는 모든 위치에 참조가 들어간다. */
 function buildGrid(table: HTMLTableElement): (HTMLTableCellElement | undefined)[][] {
@@ -736,11 +804,16 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
   const innerRef = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLDivElement);
 
-  const [toolPopover, setToolPopover] = useState<"symbol" | "table" | "cellcolor" | "textcolor" | "lineheight" | "list" | null>(null);
+  const [toolPopover, setToolPopover] = useState<"symbol" | "table" | "cellcolor" | "cellsize" | "textcolor" | "lineheight" | "list" | null>(null);
   const [tableHover, setTableHover] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [activeCell, setActiveCell] = useState<HTMLTableCellElement | null>(null);
   const [supActive, setSupActive] = useState(false); // 위 첨자 토글 상태(G2-14)
   const [subActive, setSubActive] = useState(false); // 아래 첨자 토글 상태
+  // 커서 위치의 글꼴·크기 — 도구 줄 선택 상자 표시(2026-11-12 직원 요청 22).
+  const [curFont, setCurFont] = useState("");
+  const [curSize, setCurSize] = useState("");
+  // 셀 크기 지정 입력값(px, 2026-11-12 직원 요청 14 후속).
+  const [cellSizeIn, setCellSizeIn] = useState<{ w: string; h: string }>({ w: "", h: "" });
   const dragRef = useRef<{ kind: "col" | "row"; cells: HTMLTableCellElement[]; startPos: number; startSize: number } | null>(null);
   // 셀 다중 선택(병합용, 2026-08-24) — 드래그 중 상태와 확정된 선택 사각형.
   const cellDragRef = useRef<{ anchor: HTMLTableCellElement; table: HTMLTableElement; multi: boolean } | null>(null);
@@ -1041,12 +1114,45 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     if (!editor) return;
     editor.focus();
     document.execCommand("fontSize", false, "7");
-    for (const font of Array.from(editor.querySelectorAll('font[size="7"]'))) {
+    // 노드를 옮기면 선택 영역이 접힌다 — 경계를 적어 두었다가 다시 건다(이어서 색·굵게를 같은 글자에 걸 수 있게).
+    const sel = window.getSelection();
+    const r0 = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    const saved = r0 ? { sc: r0.startContainer, so: r0.startOffset, ec: r0.endContainer, eo: r0.endOffset } : null;
+    const swapped = new Map<Node, Node>();
+    for (const font of Array.from(editor.querySelectorAll<HTMLElement>('font[size="7"]'))) {
+      // ⚠ 크롬은 글자색·글꼴을 입힌 <font color|face> 에 size 를 덧붙인다 — 종전에는 span 으로 바꾸며 그 속성을 버려
+      //   파란 글자가 검정으로 돌아갔다(2026-11-12 직원 요청 22). color·face·style 을 span 으로 옮긴다.
       const span = document.createElement("span");
+      const style = font.getAttribute("style");
+      if (style) span.setAttribute("style", style);
+      const color = font.getAttribute("color");
+      if (color && !span.style.color) span.style.color = color;
+      const face = font.getAttribute("face");
+      if (face && !span.style.fontFamily) span.style.fontFamily = face;
       span.style.fontSize = `${px}px`;
-      span.innerHTML = (font as HTMLElement).innerHTML;
+      // 안쪽에 남은 옛 크기는 지워야 새 크기가 보인다(색·글꼴은 그대로).
+      for (const inner of Array.from(font.querySelectorAll<HTMLElement>("font[size],[style*='font-size']"))) {
+        inner.removeAttribute("size");
+        inner.style.fontSize = "";
+        if (!inner.getAttribute("style")) inner.removeAttribute("style");
+      }
+      // 노드를 옮겨 담는다(종전 innerHTML 복사는 글자 노드가 새로 만들어져 선택 영역을 되살릴 수 없었다).
+      span.append(...Array.from(font.childNodes));
       font.replaceWith(span);
+      swapped.set(font, span);
     }
+    if (saved && sel) {
+      try {
+        const r = document.createRange();
+        r.setStart(swapped.get(saved.sc) ?? saved.sc, saved.so);
+        r.setEnd(swapped.get(saved.ec) ?? saved.ec, saved.eo);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } catch {
+        /* 경계 노드가 사라졌으면 캐럿 위치 그대로 둔다 */
+      }
+    }
+    setCurSize(String(px));
     onInput();
   };
 
@@ -1080,6 +1186,8 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
     const onSel = () => {
       // 셀 다중 선택 중에는 브라우저 selection 이 비어 있다 — 활성 셀(anchor)을 유지한다.
       if (cellSelRef.current || cellDragRef.current?.multi) return;
+      // 도구 팝오버의 입력칸(셀 크기)에 들어가면 선택이 에디터 밖으로 옮겨진다 — 표 툴바가 닫히지 않게 무시.
+      if ((document.activeElement as HTMLElement | null)?.closest?.("[data-tool-popover]")) return;
       const sel = window.getSelection();
       const node = sel?.anchorNode;
       const el = node instanceof HTMLElement ? node : (node?.parentElement ?? null);
@@ -1093,6 +1201,13 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       }
       // 위/아래 첨자 토글 활성 표시 — 커서가 에디터 안에 있을 때만 판독.
       if (node && innerRef.current?.contains(node instanceof HTMLElement ? node : node.parentElement)) {
+        // 글꼴·크기 선택 상자 — 선택 시작 위치 기준(뒤에서 앞으로 끌어 선택해도 앞쪽 글자를 본다).
+        const range = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+        let start: Node = range?.startContainer ?? node;
+        if (range && start instanceof HTMLElement && start.childNodes[range.startOffset]) start = start.childNodes[range.startOffset];
+        const cur = readTextStyle(start, innerRef.current);
+        setCurFont(cur.font);
+        setCurSize(cur.size);
         try {
           setSupActive(document.queryCommandState("superscript"));
           setSubActive(document.queryCommandState("subscript"));
@@ -1627,6 +1742,43 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       setTableAlign(t, align, Math.max(0, base + indentDelta));
     });
 
+  /** 표 전체 선택(2026-11-12 직원 요청 14 후속) — 커서가 든 표의 모든 셀을 셀 블록으로 잡는다(드래그 선택과 같은 상태). */
+  const selectWholeTable = () => {
+    const table = activeCell?.closest("table") as HTMLTableElement | null;
+    if (!table || !innerRef.current?.contains(table)) return;
+    const grid = buildGrid(table);
+    const first = grid[0]?.find(Boolean);
+    let last: HTMLTableCellElement | undefined;
+    for (let r = grid.length - 1; r >= 0 && !last; r--) last = [...(grid[r] ?? [])].reverse().find(Boolean);
+    if (!first || !last) return;
+    window.getSelection()?.removeAllRanges();
+    applyCellSelection(first, last);
+  };
+
+  /** 셀 크기 대상 — 셀 블록(표 전체 선택 포함)이 있으면 그 셀들, 없으면 커서 칸. */
+  const cellSizeTargets = (): HTMLTableCellElement[] =>
+    cellSelRef.current?.cells.length ? cellSelRef.current.cells.slice() : activeCell ? [activeCell] : [];
+
+  /** [셀 크기] 창 열기 — 입력칸에 대상 첫 칸의 현재 너비·높이를 채운다. */
+  const openCellSize = () => {
+    if (toolPopover === "cellsize") {
+      setToolPopover(null);
+      return;
+    }
+    const t = cellSizeTargets()[0];
+    setCellSizeIn({ w: t ? String(t.offsetWidth) : "", h: t ? String(t.offsetHeight) : "" });
+    setToolPopover("cellsize");
+  };
+
+  /** 셀 크기 적용 — 선택은 유지해 너비·높이를 이어서 맞출 수 있게 한다. */
+  const applyCellSize = (axis: "col" | "row") => {
+    const targets = cellSizeTargets();
+    const px = Number(axis === "col" ? cellSizeIn.w : cellSizeIn.h);
+    if (!targets.length || !Number.isFinite(px) || px <= 0) return;
+    setCellSize(targets, axis, px);
+    onInput();
+  };
+
   const tableAct = (fn: (cell: HTMLTableCellElement, sel: HTMLTableCellElement[]) => void) => {
     if (!activeCell) return;
     // ⚠ 선택 셀 목록을 **해제 전에** 캡처한다 — 종전에는 clearCellSelection() 이 먼저라
@@ -1650,31 +1802,37 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
       <div className={growWithPage ? "sticky -top-4 md:-top-5 z-20" : undefined}>
       {/* 툴바(1줄 통합 — 좁은 폭에서만 자동 줄바꿈. 본문 면과 같은 바탕 + 윤곽선, G2-9/10 · 다크 2026-10-21) */}
       <div className="cd-doc-surface flex items-center gap-0.5 border cd-border-c rounded-t-lg px-1.5 py-1 flex-wrap">
+        {/* 글꼴·크기 — 커서 위치의 실제 값을 보여 준다(2026-11-12 직원 요청 22). 목록 밖 값(붙여넣은 글 등)은 한 줄 덧붙여 보인다. */}
         <select
           onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => {
-            if (e.target.value) exec("fontName", e.target.value);
-            e.target.selectedIndex = 0;
+            const v = e.target.value;
+            // '기본 글꼴'은 종전처럼 지정 해제를 하지 않는다 — 표시는 다음 커서 이동 때 실제 값으로 돌아온다.
+            if (!v) return;
+            exec("fontName", v);
+            setCurFont(v);
           }}
           className="text-xs cd-text bg-transparent border cd-border-c rounded-md px-1 py-0.5 max-w-[7.5rem]"
           title="글꼴"
-          defaultValue=""
+          value={curFont}
         >
           {FONTS.map((f) => (
             <option key={f.label} value={f.value}>
               {f.label}
             </option>
           ))}
+          {curFont && !FONTS.some((f) => f.value === curFont) && (
+            <option value={curFont}>{curFont.split(",")[0].replace(/["']/g, "").trim()}</option>
+          )}
         </select>
         <select
           onChange={(e) => {
             const px = Number(e.target.value);
             if (px) applyFontSize(px);
-            e.target.selectedIndex = 0;
           }}
           className="text-xs cd-text bg-transparent border cd-border-c rounded-md px-1 py-0.5"
           title="글자 크기"
-          defaultValue=""
+          value={curSize}
         >
           <option value="">크기</option>
           {FONT_SIZES.map((s) => (
@@ -1682,6 +1840,7 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
               {s}px
             </option>
           ))}
+          {curSize && !FONT_SIZES.includes(Number(curSize)) && <option value={curSize}>{curSize}px</option>}
         </select>
         {divider}
         <EBtn label="굵게" onClick={() => exec("bold")}><Bold className="w-3.5 h-3.5" /></EBtn>
@@ -1906,6 +2065,9 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           <span className="font-bold mr-1 flex items-center gap-1" style={{ color: "var(--cd-primary)" }}>
             <Table2 className="w-3.5 h-3.5" /> 표
           </span>
+          {/* 표 전체 선택(2026-11-12 직원 요청 14 후속) — 모든 셀을 블록으로 잡아 너비·높이 같게·셀 크기·배경색을 한 번에 건다. */}
+          <TableBtn label="표 전체 선택" icon={<Grid3x3 className="w-3 h-3" />} onClick={selectWholeTable} />
+          {divider}
           <TableBtn label="위에 행" icon={<><Plus className="w-3 h-3" /><ArrowUp className="w-3 h-3" /></>} onClick={() => tableAct((c) => insertRow(c, "above"))} />
           <TableBtn label="아래 행" icon={<><Plus className="w-3 h-3" /><ArrowDown className="w-3 h-3" /></>} onClick={() => tableAct((c) => insertRow(c, "below"))} />
           <TableBtn label="행 삭제" icon={<><MinusIcon className="w-3 h-3" /><ArrowDown className="w-3 h-3 rotate-90" /></>} onClick={() => tableAct(deleteRow)} danger />
@@ -1916,6 +2078,48 @@ export const MailEditor = forwardRef<HTMLDivElement, MailEditorProps>(function M
           {divider}
           <TableBtn label="너비 같게" icon={<UnfoldHorizontal className="w-3 h-3" />} onClick={() => tableAct(equalizeCols)} />
           <TableBtn label="높이 같게" icon={<UnfoldVertical className="w-3 h-3" />} onClick={() => tableAct(equalizeRows)} />
+          {/* 셀 크기 지정(px) — 셀 블록(없으면 커서 칸)이 걸친 열 너비·행 높이를 한 번에 맞춘다. td 인라인 style 로 저장. */}
+          <span className="relative inline-flex" data-tool-popover>
+            <TableBtn label="셀 크기" icon={<Ruler className="w-3 h-3" />} onClick={openCellSize} />
+            {toolPopover === "cellsize" && (
+              <div className="absolute top-full left-0 mt-1 z-50 w-max rounded-xl border cd-border-c cd-card-bg p-2.5" style={{ boxShadow: "var(--cd-shadow)" }}>
+                <div className="grid grid-cols-[auto_5.5rem_auto] items-center gap-x-2 gap-y-1.5">
+                  {([
+                    ["col", "열 너비", "w"],
+                    ["row", "행 높이", "h"],
+                  ] as const).map(([axis, label, key]) => (
+                    <div key={axis} className="contents">
+                      <label htmlFor={`cd-cellsize-${key}`} className="cd-label-text whitespace-nowrap">
+                        {label}
+                      </label>
+                      <span className="relative block">
+                        <input
+                          id={`cd-cellsize-${key}`}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={cellSizeIn[key]}
+                          onChange={(e) => setCellSizeIn((v) => ({ ...v, [key]: e.target.value.replace(/\D/g, "") }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              applyCellSize(axis);
+                            }
+                          }}
+                          className="cd-input pr-7 tabular-nums"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] cd-text-faint pointer-events-none">px</span>
+                      </span>
+                      <CdButton size="sm" variant="soft" onMouseDown={(e) => e.preventDefault()} onClick={() => applyCellSize(axis)}>
+                        적용
+                      </CdButton>
+                    </div>
+                  ))}
+                </div>
+                <p className="cd-hint mt-1.5">{selCellCount > 1 ? `선택한 ${selCellCount}칸의 열·행에 적용` : "커서 칸의 열·행에 적용"}</p>
+              </div>
+            )}
+          </span>
           {divider}
           {/* 셀 세로 정렬(2026-09-11) — 행 높이가 내용보다 클 때 값이 위쪽에 붙어 보이던 문제.
               선택된 셀들(없으면 커서 셀)에 vertical-align 을 직접 건다 — 파서가 td 스타일을 읽는다. */}

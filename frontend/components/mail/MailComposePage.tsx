@@ -9,7 +9,7 @@
 // 인라인 이미지: blob 미리보기 → 발송 시 cid: 첨부(MIME inline)로 치환 — 외부 수신측에서도 표시.
 // 서명 자동삽입·드래프트 3초 자동저장. 발송 성공 시 /mail 복귀.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronDown, ChevronUp, FolderOpen, HardDrive, Paperclip, PenLine, Save, Send, Settings2, UploadCloud, X } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -153,6 +153,12 @@ export function MailComposePage() {
   const [signatures, setSignatures] = useState<MailSignature[]>([]);
   const dragDepth = useRef(0);
   const editorRef = useRef<HTMLDivElement>(null);
+  // 본문 창 기본 높이(2026-11-12 사용자 요청) — 위쪽을 줄여 확보한 높이를 본문에 준다. 본문 창 아래 끝을 화면(=좌측 메뉴)
+  // 아래 끝에 맞추는 최소 높이를 잰다. 셸이 h-dvh 라 이 화면의 보이는 아래 끝이 좌측 메뉴 아래 끝과 같다.
+  // 내용이 많으면 종전처럼 더 늘어난다(최소 높이일 뿐). 위쪽 칸(받는 사람 칩 줄바꿈·참조·첨부 접기)이 바뀌면 다시 잰다.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const [editorMinPx, setEditorMinPx] = useState<number | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const idemRef = useRef("");
@@ -682,8 +688,33 @@ export function MailComposePage() {
   const attachPlan = planAttachments(files, inlineImages.current.reduce((s, i) => s + i.file.size, 0));
   const largeCount = attachPlan.filter((p) => p === "large").length;
 
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const form = formRef.current;
+    if (!root || !form) return;
+    const measure = () => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      const rr = root.getBoundingClientRect();
+      // 스크롤 맨 위 기준 편집 창 위 끝 → 이 화면의 보이는 아래 끝(=좌측 메뉴 아래 끝)까지 남은 높이(테두리 포함, border-box).
+      const topAtScroll0 = ed.getBoundingClientRect().top + root.scrollTop;
+      const next = Math.max(320, Math.round(rr.bottom - topAtScroll0));
+      setEditorMinPx((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    for (const el of Array.from(form.children)) if (el instanceof HTMLElement && !el.contains(editorRef.current)) ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [loadingSeed, attachOpen, showCc, showBcc, individual]);
+
   return (
     <div
+      ref={rootRef}
       className="cdash cd-fields-white cd-mail-surface flex h-full min-h-0 flex-col p-4 md:p-5 rounded-3xl overflow-y-auto"
       data-theme={theme}
     >
@@ -758,8 +789,9 @@ export function MailComposePage() {
       ) : (
         // 폭: 고정 max-w 없이 브라우저 폭 추종(네이버 메일 방식 — 셸의 울트라와이드 상한만 적용됨).
         // 가로 배치(2026-11-12 사용자 요청): sm 이상에서 받는 사람·참조·제목·파일첨부를 "왼쪽 이름표 | 오른쪽 입력란" 한 줄로.
-        // 이름표 칸 폭은 --mail-row-label 하나로 맞춘다(RecipientInput inline 도 같은 변수를 쓴다).
-        <div className="relative flex flex-col gap-2.5 w-full [--mail-row-label:12rem]">
+        // 이름표 칸 폭은 --mail-row-label 하나로 맞춘다(RecipientInput inline 도 같은 변수를 쓴다). 12rem → 7.5rem(11-12, ? 아이콘을 빼고
+        // 입력란을 왼쪽으로 넓힘 — 받는 사람의 [개인별]·[+ 참조]는 이름 아래 줄로 내려간다).
+        <div ref={formRef} className="relative flex flex-col gap-2.5 w-full [--mail-row-label:7.5rem]">
           <RecipientInput
             inline
             label="받는 사람"
@@ -783,7 +815,6 @@ export function MailComposePage() {
                   />
                   개인별
                 </label>
-                <CdHelp topic="mail.individual-send" />
                 {!showCc && !individual && (
                   <button onClick={() => setShowCc(true)} className="text-[11px]" style={{ color: "var(--cd-primary)" }} type="button">
                     + 참조(CC)
@@ -893,9 +924,6 @@ export function MailComposePage() {
                 <span>파일첨부{!attachOpen && files.length > 0 ? ` ${files.length}개` : ""}</span>
                 {attachOpen ? <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />}
               </button>
-              <span className="inline-flex">
-                <CdHelp topic="mail.attach" />
-              </span>
             </span>
             <div className="flex flex-col gap-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -978,6 +1006,7 @@ export function MailComposePage() {
             ref={editorRef}
             onInput={scheduleDraftSave}
             mailCompose
+            minHeightPx={editorMinPx}
             onPickImage={() => imageInputRef.current?.click()}
             onPasteImageFailed={(reasons) =>
               toast(

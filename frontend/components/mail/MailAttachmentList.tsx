@@ -5,11 +5,14 @@
 // 줄: 형식 아이콘 + 파일명(확장자는 잘리지 않게) + 크기 + 저장 버튼.
 // '개인문서함으로 저장'을 켜면 저장 버튼이 내 PC 다운로드 대신 앱 개인문서함 복사(/api/mail/attachments/to-personal)가 된다.
 // 체크 상태는 이 브라우저에 기억한다(다음 메일에서도 유지, 화면에 늘 보이므로 헷갈리지 않는다).
+// 미리보기(직원 요청 23): 볼 수 있는 형식(이미지·PDF·한글·오피스·글자·html)은 저장 버튼 앞 눈 아이콘으로 내려받지 않고 연다.
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Download, FileArchive, FolderInput, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Eye, FileArchive, FolderInput, Loader2 } from "lucide-react";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { FileTypeIcon } from "@/components/mail/FileTypeIcon";
+import { MailAttachmentPreviewModal } from "@/components/mail/MailAttachmentPreviewModal";
+import { mailAttachmentPreviewKind } from "@/lib/mail/attachment-preview-kind";
 
 export interface MailAttachmentItem {
   attachmentId: string;
@@ -37,6 +40,8 @@ export function MailAttachmentList({ messageId, files }: { messageId: string; fi
   const [toPersonal, setToPersonal] = useState(false);
   /** 저장 중인 대상 — "__all" 은 전체 저장. */
   const [busy, setBusy] = useState<string | null>(null);
+  /** 미리보기 중인 첨부 */
+  const [previewing, setPreviewing] = useState<MailAttachmentItem | null>(null);
 
   // localStorage 는 브라우저에만 있으므로 마운트 뒤에 읽는다(사생활 모드 등에서 막혀도 기본값으로 동작).
   useEffect(() => {
@@ -168,6 +173,17 @@ export function MailAttachmentList({ messageId, files }: { messageId: string; fi
                   </a>
                 )}
                 <span className="shrink-0 text-xs cd-text-faint tabular-nums">{fmtSize(f.sizeBytes)}</span>
+                {mailAttachmentPreviewKind(f.filename) !== "none" && (
+                  <button
+                    type="button"
+                    className="cd-btn cd-btn-ghost cd-btn-sm !px-2 shrink-0"
+                    onClick={() => setPreviewing(f)}
+                    title="미리보기"
+                    aria-label={`${f.filename} 미리보기`}
+                  >
+                    <Eye className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                )}
                 {toPersonal ? (
                   <button
                     type="button"
@@ -194,6 +210,7 @@ export function MailAttachmentList({ messageId, files }: { messageId: string; fi
           })}
         </ul>
       )}
+      <MailAttachmentPreviewModal file={previewing} onClose={() => setPreviewing(null)} />
     </section>
   );
 }

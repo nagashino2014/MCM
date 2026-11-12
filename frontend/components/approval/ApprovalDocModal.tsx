@@ -81,6 +81,16 @@ export interface DocDetailData {
   canDelete?: boolean;
   /** 이어 작성·재기안 권한 — 기안자 본인의 작성중·반려 문서. */
   canEdit?: boolean;
+  /** 참조·열람자(직원 요청 21) — fixed=고정·직원별 규칙(346·353)으로 자동 추가. 관계자 외 열람자에게는 서버가 비워 보낸다 */
+  watchers?: DocWatcherRow[];
+}
+
+export interface DocWatcherRow {
+  userId: string;
+  name: string | null;
+  position: string | null;
+  kind: string;
+  fixed?: boolean;
 }
 
 export const DOC_STATUS_LABEL: Record<string, string> = {
@@ -98,6 +108,36 @@ const STEP_STATUS_LABEL: Record<string, string> = {
   skipped: "생략",
 };
 const short = (s: string | null) => (s ? s.slice(0, 16).replace("T", " ") : "-");
+
+/** 참조·열람자 한 줄 — 구분별(참조→열람) 이름·직급 칩, 자동 추가는 '자동' 표기. */
+function DocWatchersLine({ watchers }: { watchers: DocWatcherRow[] }) {
+  const groups = (["ref", "view"] as const)
+    .map((kind) => ({ kind, label: kind === "ref" ? "참조" : "열람", rows: watchers.filter((w) => (w.kind === "view" ? "view" : "ref") === kind) }))
+    .filter((g) => g.rows.length > 0);
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pb-3 border-b cd-hairline-c">
+      {groups.map((g) => (
+        <div key={g.kind} className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold cd-text-muted mr-0.5">
+            {g.label} {g.rows.length}
+          </span>
+          {g.rows.map((w) => (
+            <span
+              key={`${w.kind}:${w.userId}`}
+              className="inline-flex items-center gap-1 h-[22px] px-2 rounded-[var(--mcm-action-radius,10px)] text-[11px] border cd-hairline-c"
+              style={{ background: "var(--cd-surface)" }}
+              title={w.fixed ? "고정 결재선·직원별 규칙으로 자동 추가" : "기안자가 지정"}
+            >
+              <span className="font-semibold cd-text">{w.name ?? w.userId}</span>
+              {w.position && <span className="cd-text-muted">{w.position}</span>}
+              {w.fixed && <span className="cd-text-faint">· 자동</span>}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * 문서 상세 뷰어(본체) — 로드·결재선·AI 요약·렌더러·승인/반려까지 포함.
@@ -500,6 +540,10 @@ export function ApprovalDocViewer({
                 );
               })}
             </div>
+
+            {/* 참조·열람자(직원 요청 21) — 진행 중에도 누구에게 공유됐는지 결재선 아래 한 줄로 보인다.
+                규칙으로 자동 추가된 사람은 '자동' 표기로 기안자가 직접 넣은 사람과 구분한다. */}
+            {(detail.watchers?.length ?? 0) > 0 && <DocWatchersLine watchers={detail.watchers ?? []} />}
 
             {/* 반려 문서 — 사유를 상단에 고정 노출한다(하단 '결재 의견'은 이력 성격이라 눈에 띄지 않음).
                 기안자에게는 이어지는 처리(수정 후 재상신 / 삭제)를 함께 안내한다. */}

@@ -13,6 +13,8 @@ export interface DocAccess {
   isWatcher: boolean;
   /** 결재 운영 권한(approval.manage) */
   isManager: boolean;
+  /** 참조·열람자 목록을 볼 수 있는가 — 기안자·결재선 관계자·참조/열람자·전 문서 열람자(문서함 공개·부서장 열람은 제외) */
+  canSeeWatchers: boolean;
 }
 
 export async function resolveDocAccess(doc: ApprovalDocDetail, userId: string): Promise<DocAccess> {
@@ -29,5 +31,5 @@ export async function resolveDocAccess(doc: ApprovalDocDetail, userId: string): 
     // 문서 부서의 부서장(부서장 보직, 겸직 부서장 포함 — 300)만. 부서원은 다른 직원 문서를 보지 않는다(2026-10-21)
     if (await isDeptHeadOf(userId, doc.deptId)) allowed = true;
   }
-  return { allowed, isWatcher, isManager };
+  return { allowed, isWatcher, isManager, canSeeWatchers: involved || isWatcher || isReader };
 }

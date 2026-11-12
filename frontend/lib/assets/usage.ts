@@ -1,12 +1,14 @@
 /*
  * 자산 이용 현황(월 단위) — 직접 예약(asset_reservations) ∪ 출장 유래 차량(출장신청서 상신 건).
  * 자산 캘린더(/assets/reservations)와 홈 캘린더 vehicle 태그가 공유하는 단일 소스.
- * 차량은 결재 문서에서 파생되므로 이중 배정을 막지 않고 경고 플래그(conflict)만 세운다
- * (자산 가용성이 결재 흐름을 차단하면 안 된다). 직접 예약은 저장 시점에 겹침이 차단된다.
+ * 출장 차량은 결재 문서 상태에서 파생된다 — 진행 중=가예약, 승인=확정, 반려·취소=목록에서 빠짐(해제).
+ * 2026-11-12부터 같은 차량의 겹침은 출장 상신과 직접 예약 저장 양쪽에서 막는다(lib/assets/vehicle-booking.ts).
+ * 그 전에 생긴 겹침이 남아 있을 수 있어 경고 플래그(conflict)는 그대로 세운다.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
 import { TRIP_FORM_ID, extractVehicleUse } from "@/lib/approval/trip";
 import type { AssetKind } from "@/lib/assets/types";
+import { tripVehicleSlot, vehicleSlotsOverlap, type VehicleSlot } from "@/lib/assets/vehicle-booking-rules";
 
 export interface AssetUsageItem {
   /** "resv:{reservationId}" | "doc:{docId}" */
@@ -25,25 +27,20 @@ export interface AssetUsageItem {
   reservedBy: string | null;
   purpose: string | null;
   docId: string | null;
+  /** 출장신청서 문서번호(출장만) */
+  docNo: string | null;
+  /** 출장 문서 상태 — in_progress(가예약) | approved(확정). 직접 예약은 null */
+  docStatus: "in_progress" | "approved" | null;
   /** 같은 자산·같은 날짜에 다른 이용과 겹침(차량 이중 배정 경고) */
   conflict: boolean;
-}
-
-function overlaps(a: AssetUsageItem, b: AssetUsageItem): boolean {
-  if (a.startDate > b.endDate || a.endDate < b.startDate) return false;
-  // 같은 날짜라도 시간대가 명확히 갈리면 겹침이 아니다(종일=NULL 은 항상 겹침).
-  if (a.startDate === a.endDate && b.startDate === b.endDate && a.startDate === b.startDate) {
-    if (a.startTime && a.endTime && b.startTime && b.endTime) {
-      return a.startTime < b.endTime && b.startTime < a.endTime;
-    }
-  }
-  return true;
 }
 
 /** month = YYYY-MM. 자산별 이용 목록(직접 예약 + 출장 차량) + 겹침 플래그. */
 export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
   const db = await getDb();
   const items: AssetUsageItem[] = [];
+  // 겹침 비교용 구간 — 하루 출장의 오전·오후는 반나절로 본다(표시용 startTime 은 비워 둔다).
+  const slotOf = new Map<AssetUsageItem, VehicleSlot>();
 
   // 1) 직접 예약(회의실 등 — 저장 시 겹침 차단이라 자체 충돌은 없다)
   const resvRows = rowsToObjects(
@@ -75,6 +72,8 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
       reservedBy: r.reserved_by != null ? String(r.reserved_by) : null,
       purpose: r.purpose != null ? String(r.purpose) : null,
       docId: null,
+      docNo: null,
+      docStatus: null,
       conflict: false,
     });
   }
@@ -88,7 +87,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
   })();
   const tripRows = rowsToObjects(
     await db.exec(
-      `SELECT d.doc_id, d.field_values, COALESCE(ep.name, d.drafter_name) AS user_name
+      `SELECT d.doc_id, d.doc_no, d.status, d.field_values, COALESCE(ep.name, d.drafter_name) AS user_name
          FROM approval_docs d
          LEFT JOIN employee_profiles ep ON ep.employee_id = d.drafter_employee_id
         WHERE d.form_id = $1
@@ -113,7 +112,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
     if (!use) continue;
     const matched = use.assetId ? null : assetByName.get(use.assetName);
     const destination = String(values.destination ?? "").trim();
-    items.push({
+    const item: AssetUsageItem = {
       id: `doc:${r.doc_id}`,
       assetId: use.assetId ?? matched?.id ?? null,
       assetName: use.assetName,
@@ -127,8 +126,12 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
       reservedBy: null,
       purpose: [destination || null, use.carTime ? `이용시간 ${use.carTime}` : null].filter(Boolean).join(" · ") || null,
       docId: String(r.doc_id),
+      docNo: r.doc_no != null ? String(r.doc_no) : null,
+      docStatus: String(r.status) === "approved" ? "approved" : "in_progress",
       conflict: false,
-    });
+    };
+    slotOf.set(item, tripVehicleSlot(use));
+    items.push(item);
   }
 
   // 3) 겹침 플래그 — 같은 자산끼리 비교(assetId 없으면 이름으로). 차량 이중 배정 경고용.
@@ -138,7 +141,7 @@ export async function listAssetUsage(month: string): Promise<AssetUsageItem[]> {
       const a = items[i];
       const b = items[j];
       if (assetKey(a) !== assetKey(b)) continue;
-      if (overlaps(a, b)) {
+      if (vehicleSlotsOverlap(slotOf.get(a) ?? a, slotOf.get(b) ?? b)) {
         a.conflict = true;
         b.conflict = true;
       }

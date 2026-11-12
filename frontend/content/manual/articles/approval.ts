@@ -218,7 +218,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "초과근무 신청으로 그 주 연장근로가 한도(기본 주 12시간)를 넘게 되면 [[연장근로(주 12시간 초과) 및 보상휴가 전환 동의서]]가 뜹니다. [[동의 및 전자서명]]을 해야 상신되고, 동의는 주 단위라 다른 주로 다시 올리면 새로 동의합니다.",
             "휴가 종류에 따라 시작일만 넣으면 종료일이 자동으로 정해지기도 합니다. 반차는 0.5일 차감입니다.",
             "연차처럼 기간으로 쓰는 휴가는 주말과 공휴일·회사 휴무일을 빼고 사용일수를 셉니다. 빠진 날 수는 화면 위 안내에 함께 나옵니다.",
-            "출장신청서는 교통편에서 법인차량을 고른 경우에만 이용차량·이용시간을 입력합니다.",
+            "출장신청서는 교통편에서 법인차량을 고른 경우에만 이용차량·이용시간을 입력합니다. 상신하면 출장 기간 전체가 그 차량의 예약으로 잡히고, 같은 차량의 다른 출장이나 자산 이용 현황의 예약과 겹치면 상신이 막힙니다.",
             "출장·휴가·교육 신청은 일정 메뉴에서 날짜를 눌러 시작해도 이 화면으로 날짜가 채워져 열립니다.",
           ] },
         ],
@@ -269,7 +269,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["기안", "상신", "결재선", "고정 결재선", "결재선 잠금", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
     sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx", "components/approval/ApprovalFormRenderer.tsx", "components/approval/FixedLineList.tsx"],
-    reviewedAt: "2026-11-11",
+    reviewedAt: "2026-11-12",
   },
   {
     id: "approval.letter",

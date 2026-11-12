@@ -1,12 +1,15 @@
 /**
  * 예약 자산 관리 — 법인차량·회의실 등 예약 가능 자산 마스터 + 직접 예약.
- * 차량 이용은 출장신청서 상신에서 자동 파생되므로(lib/approval/trip.ts) 여기서는
+ * 출장 차량 이용은 출장신청서 상신에서 자동 파생되므로(lib/approval/trip.ts) 여기서는
  * 자산 마스터 CRUD와 직접 예약(회의실 등, 결재 없는 즉시 예약)만 담당한다.
+ * 법인차량 직접 예약은 하루 안의 짧은 사용만 받는다(lib/assets/vehicle-booking-rules.ts).
  * 저장 테이블: reservable_assets / asset_reservations (infra/aws/121_reservable_assets.sql)
  */
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
+import { describeVehicleConflict, findVehicleBookingConflicts } from "@/lib/assets/vehicle-booking";
+import { TRIP_VEHICLE_GUIDE, vehicleReservationTimeError } from "@/lib/assets/vehicle-booking-rules";
 
 export type { AssetKind, AssetReservation, ReservableAsset, VehicleOwnership } from "@/lib/assets/types";
 
@@ -272,10 +275,26 @@ export async function createReservation(input: {
 
   await withDbWrite(async (db) => {
     const asset = rowsToObjects(
-      await db.exec(`SELECT active FROM reservable_assets WHERE asset_id = $1`, [input.assetId])
+      await db.exec(`SELECT active, kind, name FROM reservable_assets WHERE asset_id = $1`, [input.assetId])
     );
     if (!asset.length) throw new Error("자산을 찾을 수 없습니다.");
     if (Number(asset[0].active ?? 0) !== 1) throw new Error("비활성화된 자산입니다.");
+
+    // 법인차량(2026-11-12) — 하루 안의 짧은 사용만 직접 예약한다. 출장은 출장신청서로만 잡고,
+    // 결재 중·승인된 출장 기간과 겹치는 직접 예약은 막는다.
+    if (String(asset[0].kind) === "vehicle") {
+      const timeError = vehicleReservationTimeError(start, end);
+      if (timeError) throw new Error(timeError);
+      const conflicts = await findVehicleBookingConflicts(db, {
+        assetId: input.assetId,
+        assetName: String(asset[0].name ?? ""),
+        slot: { startDate: input.reservedOn, endDate: input.reservedOn, startTime: start, endTime: end },
+      });
+      const trips = conflicts.filter((c) => c.kind === "trip");
+      if (trips.length) {
+        throw new Error(`이 차량은 출장으로 예약돼 있습니다 — ${trips.map(describeVehicleConflict).join(", ")}. ${TRIP_VEHICLE_GUIDE}.`);
+      }
+    }
 
     // 겹침 검사 — 종일 예약(NULL 시간)은 그날 모든 예약과 겹친다.
     const conflicts = rowsToObjects(

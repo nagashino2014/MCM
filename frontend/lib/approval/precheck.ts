@@ -1,6 +1,7 @@
 /**
  * 상신 전 사전검토 — 결정적 규칙 엔진(AX-P3, 서버). LLM 없이 확실히 잡을 수 있는 것은 여기서.
- * 규칙: 본인 결재(self_approval)·연차 잔여(leave_balance)·예산(budget_limit)·금액 상한(amount_limit)·필수 필드(required_field).
+ * 규칙: 본인 결재(self_approval)·연차 잔여(leave_balance)·예산(budget_limit)·출장 법인차량 겹침(vehicle_booking)·
+ *       금액 상한(amount_limit)·필수 필드(required_field).
  * 결과 level: block(상신 불가)·warn(경고 후 상신 허용)·info(참고). 기본 warn, 정책에서 block 승격(§8-3).
  * overtime_limit 규칙은 AX-P4(근태 연동)에서 값 계산을 연결한다(여기서는 미평가).
  * 설계: docs/e-approval-differentiation-blueprint.md §9-4.
@@ -9,7 +10,9 @@ import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { getMyLeaveRemaining } from "@/lib/approval/leave";
-import { isUnusedVehicleField } from "@/lib/approval/trip";
+import { TRIP_FORM_ID, extractVehicleUse, isUnusedVehicleField } from "@/lib/approval/trip";
+import { describeVehicleConflict, findVehicleBookingConflicts } from "@/lib/assets/vehicle-booking";
+import { tripVehicleSlot } from "@/lib/assets/vehicle-booking-rules";
 
 export type PrecheckLevel = "block" | "warn" | "info";
 export interface PrecheckFinding {
@@ -166,6 +169,27 @@ export async function runRuleChecks(docId: string): Promise<PrecheckFinding[]> {
       }
     } catch {
       // 예산 테이블 미적용(마이그 전) 등 — 사전검토는 조용히 통과
+    }
+  }
+
+  // 규칙 4: 출장 법인차량 예약 겹침(2026-11-12) — 상신=가예약이므로 같은 차량의 직접 예약·다른 출장과
+  // 겹치면 항상 상신을 막는다(정책 없이 block). 출장 기간 전체가 그 차량의 예약이 된다.
+  if (formId === TRIP_FORM_ID) {
+    const use = extractVehicleUse(values);
+    if (use) {
+      const conflicts = await findVehicleBookingConflicts(db, {
+        assetId: use.assetId,
+        assetName: use.assetName,
+        slot: tripVehicleSlot(use),
+        excludeDocId: docId,
+      });
+      if (conflicts.length) {
+        findings.push({
+          level: "block",
+          message: `법인차량(${use.assetName})은 이미 예약돼 있습니다 — ${conflicts.map(describeVehicleConflict).join(", ")}. 다른 차량을 고르거나 일정을 조정하세요.`,
+          source: "vehicle_booking",
+        });
+      }
     }
   }
 

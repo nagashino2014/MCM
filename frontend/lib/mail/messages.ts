@@ -518,6 +518,39 @@ export async function getMessageDetail(
 }
 
 /** 첨부 1건 메타 + 소유권 검증(userId 의 mailbox 메시지에 속한 첨부여야 함). S3 키 반환. */
+/**
+ * 한 메일의 일반 첨부 목록(전체 저장 ZIP 용, 11-12). getAttachmentForUser 와 같은 소유권 검증 — 이 유저 mailbox 의 메시지만.
+ * 인라인(cid) 이미지는 본문에 그려지는 것이라 뺀다(뷰어의 첨부 칩과 같은 기준). 메시지가 없거나 남의 것이면 null.
+ */
+export async function listMessageAttachmentsForUser(
+  userId: string,
+  messageId: string
+): Promise<{ subject: string; files: { filename: string; contentType: string | null; s3Key: string; sizeBytes: number | null }[] } | null> {
+  const mailbox = await getMailboxByUser(userId);
+  if (!mailbox) return null;
+  const db = await getDb();
+  const msg = rowsToObjects(
+    await db.exec(`SELECT subject FROM mail_messages WHERE message_id = $1 AND mailbox_id = $2 LIMIT 1`, [messageId, mailbox.mailboxId])
+  );
+  if (!msg.length) return null;
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT filename, content_type, s3_key, size_bytes FROM mail_attachments
+        WHERE message_id = $1 AND COALESCE(content_id, '') = '' ORDER BY created_at`,
+      [messageId]
+    )
+  );
+  return {
+    subject: msg[0].subject != null ? String(msg[0].subject) : "",
+    files: rows.map((r) => ({
+      filename: String(r.filename),
+      contentType: r.content_type != null ? String(r.content_type) : null,
+      s3Key: String(r.s3_key),
+      sizeBytes: r.size_bytes != null ? Number(r.size_bytes) : null,
+    })),
+  };
+}
+
 export async function getAttachmentForUser(
   userId: string,
   attachmentId: string

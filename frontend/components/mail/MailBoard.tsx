@@ -398,6 +398,7 @@ export function MailBoard() {
       loading={loadingDetail}
       folder={folder}
       categories={categories}
+      myAddress={address}
       onReply={() => openReply(false)}
       onReplyAll={() => openReply(true)}
       onForward={openForward}

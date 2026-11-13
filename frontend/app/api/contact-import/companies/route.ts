@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
-import { COMPANY_STAGE_SQL, COMPANY_STAGES, decideCompany, type CompanyStage, type DecisionItem } from "@/lib/contact-import/store";
+import { autoAssignCompanySites, COMPANY_STAGE_SQL, COMPANY_STAGES, decideCompany, type CompanyStage, type DecisionItem } from "@/lib/contact-import/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DECISIONS = ["link", "partner", "other", "exclude", "reopen"];
+// sites = 분류한 회사의 담당자를 추천 산하 사업장으로 자동 배속(분류는 바꾸지 않는다).
+const DECISIONS = ["link", "partner", "other", "exclude", "reopen", "sites"];
 
 /** 회사 단위 검토 목록. 담당자 개인정보는 싣지 않고 수만 준다(상세는 [id]). */
 export async function GET(req: NextRequest) {
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const actor = await requirePermission("facility.edit");
-    const body = (await req.json().catch(() => ({}))) as { items?: DecisionItem[] };
+    const body = (await req.json().catch(() => ({}))) as { items?: (Omit<DecisionItem, "action"> & { action: DecisionItem["action"] | "sites" })[] };
     const items = Array.isArray(body.items) ? body.items.slice(0, 200) : [];
     if (!items.length) return NextResponse.json({ error: "분류할 회사를 고르세요." }, { status: 400 });
     if (items.some((item) => !item.companyId || !DECISIONS.includes(item.action))) {
@@ -74,7 +75,9 @@ export async function POST(req: NextRequest) {
     }
     const results = [];
     for (const item of items) {
-      const result = await withDbWrite((db) => decideCompany(db, item, actor.userId));
+      const result = await withDbWrite((db) => item.action === "sites"
+        ? autoAssignCompanySites(db, item.companyId, actor.userId)
+        : decideCompany(db, item as DecisionItem, actor.userId));
       results.push({ companyId: item.companyId, ...result });
     }
     return NextResponse.json({ results });

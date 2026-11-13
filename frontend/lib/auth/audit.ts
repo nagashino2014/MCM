@@ -24,6 +24,8 @@ export type AuditAction =
   | "contact_import_upload"
   | "contact_import_batch_delete"
   | "contact_import_decide"
+  | "contact_import_person_site" // 연락처 가져오기 — 분류 전 담당자별 배속 사업장(369)
+  | "contact_import_person_move" // 연락처 가져오기 — 옮긴 담당자를 다른 사업장으로(369)
   | "facility_quick_create" // 주소록 간이 등록(357) — 업체
   | "facility_contact_person_quick_create" // 주소록 간이 등록(357) — 담당자
   | "contact_quick_confirm"

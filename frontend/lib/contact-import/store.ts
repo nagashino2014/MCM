@@ -14,6 +14,7 @@ import {
   type FacilityRef, type MatchCandidate,
 } from "@scraper/lib/contact-import/rules";
 import type { ImportedContact, ParsedContactFile } from "./amaranth-xlsx";
+import { suggestPersonSite, type SiteKind, type SiteRef } from "./person-site";
 
 export const TRADE_ROLES = ["sales", "purchase"] as const;
 export type TradeRole = (typeof TRADE_ROLES)[number];
@@ -102,8 +103,8 @@ export async function ingestContactFile(
       const dedupeKey = contactDedupeKey(key, contact.personName, contact.mobilePhone, contact.email);
       const inserted = rowsToObjects(await db.exec(
         `INSERT INTO contact_import_rows
-           (batch_id, company_id, dedupe_key, person_name, title, department, office_phone, mobile_phone, fax_number, email, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+           (batch_id, company_id, dedupe_key, person_name, title, department, office_phone, mobile_phone, fax_number, email, address, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$12,$11,$11)
          ON CONFLICT (dedupe_key) DO UPDATE SET
            title = COALESCE(contact_import_rows.title, EXCLUDED.title),
            department = COALESCE(contact_import_rows.department, EXCLUDED.department),
@@ -111,10 +112,11 @@ export async function ingestContactFile(
            mobile_phone = COALESCE(contact_import_rows.mobile_phone, EXCLUDED.mobile_phone),
            fax_number = COALESCE(contact_import_rows.fax_number, EXCLUDED.fax_number),
            email = COALESCE(contact_import_rows.email, EXCLUDED.email),
+           address = COALESCE(contact_import_rows.address, EXCLUDED.address),
            updated_at = EXCLUDED.updated_at
          RETURNING id, status, (xmax = 0) AS is_new`,
         [batchId, companyId, dedupeKey, contact.personName, contact.title, contact.department,
-          contact.officePhone, contact.mobilePhone, contact.faxNumber, contact.email, now]
+          contact.officePhone, contact.mobilePhone, contact.faxNumber, contact.email, now, contact.address]
       ));
       if (inserted[0]?.is_new === true || inserted[0]?.is_new === "t") newCount += 1;
       else {
@@ -159,26 +161,8 @@ export async function addFacilityContact(db: PgDatabase, facilityId: string, c: 
   const name = String(c.person_name);
   const department = toText(c.department);
   const mobile = toText(c.mobile_phone);
-  let departmentId: number | null = null;
-  if (department) {
-    const found = await first(db, `SELECT id FROM facility_contact_departments WHERE facility_id = $1 AND department_name = $2 LIMIT 1`, [facilityId, department]);
-    if (found) departmentId = Number(found.id);
-    else if (!opts.fillOnly) {
-      const created = await first(db,
-        `INSERT INTO facility_contact_departments (facility_id, department_name, fax_number, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $4) RETURNING id`, [facilityId, department, toText(c.fax_number), now]);
-      departmentId = Number(created?.id ?? 0) || null;
-    }
-  }
-  const existing = rowsToObjects(await db.exec(
-    `SELECT id, mobile_phone FROM facility_contact_people WHERE facility_id = $1 AND person_name = $2 AND status <> 'inactive' ORDER BY id ASC`,
-    [facilityId, name]
-  ));
-  const digits = digitsOf(mobile);
-  const match = existing.find((p) => {
-    const old = digitsOf(p.mobile_phone);
-    return !old || !digits || old === digits;
-  });
+  const departmentId = await facilityDepartmentId(db, facilityId, department, toText(c.fax_number), now, !opts.fillOnly);
+  const match = await findFacilityPerson(db, facilityId, name, mobile);
   if (match) {
     // 사람이 고친 값을 덮지 않도록 빈 칸만 채운다.
     await db.run(
@@ -198,43 +182,286 @@ export async function addFacilityContact(db: PgDatabase, facilityId: string, c: 
   );
 }
 
-/** 분류가 끝난 회사의 대기 담당자를 대상 사업장으로 옮긴다. 사업장이 삭제됐으면 다시 분류하도록 되돌린다. */
-async function moveCompanyContacts(db: PgDatabase, companyId: string, now: string): Promise<number> {
-  const company = await first(db, `SELECT decision, decided_facility_id FROM contact_import_companies WHERE company_id = $1`, [companyId]);
-  if (!company?.decision || company.decision === "exclude") return 0;
+/** 사업장의 담당자 부서. 같은 이름이 없으면 create 일 때만 만든다. */
+async function facilityDepartmentId(db: PgDatabase, facilityId: string, department: string | null, fax: string | null, now: string, create: boolean): Promise<number | null> {
+  if (!department) return null;
+  const found = await first(db, `SELECT id FROM facility_contact_departments WHERE facility_id = $1 AND department_name = $2 LIMIT 1`, [facilityId, department]);
+  if (found) return Number(found.id);
+  if (!create) return null;
+  const created = await first(db,
+    `INSERT INTO facility_contact_departments (facility_id, department_name, fax_number, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $4) RETURNING id`, [facilityId, department, fax, now]);
+  return Number(created?.id ?? 0) || null;
+}
+
+/** 사업장 담당자 중 같은 사람(이름 + 휴대폰, 한쪽 휴대폰이 비었으면 이름만). 명함 등록과 같은 기준. */
+async function findFacilityPerson(db: PgDatabase, facilityId: string, name: string, mobile: string | null): Promise<Record<string, unknown> | undefined> {
+  const existing = rowsToObjects(await db.exec(
+    `SELECT * FROM facility_contact_people WHERE facility_id = $1 AND person_name = $2 AND status <> 'inactive' ORDER BY id ASC`,
+    [facilityId, name]
+  ));
+  const digits = digitsOf(mobile);
+  return existing.find((p) => {
+    const old = digitsOf(p.mobile_phone);
+    return !old || !digits || old === digits;
+  });
+}
+
+async function aliveFacilityIds(db: PgDatabase, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  return new Set(rowsToObjects(await db.exec(`SELECT facility_id FROM facilities WHERE facility_id = ANY($1::text[]) AND deleted_at IS NULL`, [ids])).map((r) => String(r.facility_id)));
+}
+
+export interface CompanySite extends SiteRef { kind: SiteKind; brn: string | null }
+
+/** 회사 후보 중 다른 기관일 수 있는 것(앞부분·주소만 일치)은 담당자 배속 후보에서 뺀다. 직접 검색으로는 고를 수 있다. */
+const SAME_COMPANY_MATCH_KINDS = new Set(["brn", "name_region", "name"]);
+
+/**
+ * 같은 회사의 사업장(산하 사업장) 후보. 근거는 강한 순서로
+ * 회사에 고른 사업장 → 기존 사업장 후보(번호·이름 일치) → 법인등록번호 같음 → 사업자번호 같음 → 이름이 회사명으로 시작.
+ * 이름 근거는 계열사(포스코 ↔ 포스코이앤씨)도 잡으므로 표시만 하고 지역만으로는 추천하지 않는다(person-site.ts).
+ * extraIds 는 담당자가 이미 배속된 사업장 — 근거와 무관하게 목록에 남겨 이름을 보인다.
+ */
+export async function loadCompanySites(db: PgDatabase, company: Record<string, unknown>, extraIds: string[] = []): Promise<CompanySite[]> {
+  const decided = toText(company.decided_facility_id);
+  const candidateIds = ((company.match_candidates ?? []) as MatchCandidate[])
+    .filter((c) => SAME_COMPANY_MATCH_KINDS.has(c.kind)).map((c) => c.facilityId);
+  const seedIds = [...new Set([decided, ...candidateIds].filter((id): id is string => !!id))];
+  const seeds = seedIds.length
+    ? rowsToObjects(await db.exec(`SELECT business_registration_no, corporate_registration_no FROM facilities WHERE facility_id = ANY($1::text[]) AND deleted_at IS NULL`, [seedIds]))
+    : [];
+  // 번호는 하이픈 유무가 섞여 저장돼 있을 수 있어 숫자만 비교한다.
+  const crns = [...new Set([...seeds.map((s) => digitsOf(s.corporate_registration_no)), digitsOf(company.found_crn)].filter((v) => v.length >= 10))];
+  const brns = [...new Set([...seeds.map((s) => digitsOf(s.business_registration_no)), digitsOf(company.found_brn)].filter((v) => v.length >= 10))];
+  const key = companyKey(String(company.display_name ?? ""));
+  const rows = rowsToObjects(await db.exec(
+    `SELECT facility_id, company_name, site_address, business_registration_no, corporate_registration_no
+       FROM facilities
+      WHERE deleted_at IS NULL
+        AND (facility_id = ANY($1::text[])
+             OR regexp_replace(COALESCE(corporate_registration_no, ''), '[^0-9]', '', 'g') = ANY($2::text[])
+             OR regexp_replace(COALESCE(business_registration_no, ''), '[^0-9]', '', 'g') = ANY($3::text[])
+             OR (length($4) >= 2 AND replace(lower(company_name), ' ', '') LIKE '%' || $4 || '%'))
+      LIMIT 300`,
+    [[...seedIds, ...extraIds], crns, brns, key]
+  ));
+  const order: SiteKind[] = ["decided", "candidate", "crn", "brn", "name", "chosen"];
+  const sites: CompanySite[] = [];
+  for (const r of rows) {
+    const facilityId = String(r.facility_id);
+    const kind: SiteKind | null = facilityId === decided ? "decided"
+      : candidateIds.includes(facilityId) ? "candidate"
+      : crns.includes(digitsOf(r.corporate_registration_no)) ? "crn"
+      : brns.includes(digitsOf(r.business_registration_no)) ? "brn"
+      : key.length >= 2 && companyKey(String(r.company_name)).startsWith(key) ? "name"
+      : extraIds.includes(facilityId) ? "chosen"
+      : null;
+    if (!kind) continue;
+    sites.push({ facilityId, companyName: String(r.company_name), address: toText(r.site_address), brn: toText(r.business_registration_no), kind });
+  }
+  return sites
+    .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.companyName.localeCompare(b.companyName, "ko"))
+    .slice(0, 60);
+}
+
+interface PendingRow extends ContactFields { id: unknown; address: unknown; facility_id: unknown }
+
+/**
+ * 분류가 끝난 회사의 대기 담당자를 사업장으로 옮긴다. 사업장이 삭제됐으면 다시 분류하도록 되돌린다.
+ * 담당자별로 고른 사업장이 있으면 그곳으로, 없으면 부서명·주소로 산하 사업장 추천이 나올 때 그곳으로(자동 배속),
+ * 둘 다 없으면 회사에 고른 사업장으로 넣는다. 고르거나 추천으로 정한 사업장은 행의 facility_id 에 남기고,
+ * 회사 분류대로 들어간 사람은 NULL 로 둔다 — 나중에 [산하 사업장 자동 배속]은 NULL 인 사람만 옮긴다.
+ */
+async function moveCompanyContacts(db: PgDatabase, companyId: string, now: string): Promise<{ moved: number; autoAssigned: number }> {
+  const company = await first(db, `SELECT * FROM contact_import_companies WHERE company_id = $1`, [companyId]);
+  if (!company?.decision || company.decision === "exclude") return { moved: 0, autoAssigned: 0 };
   const facilityId = String(company.decided_facility_id);
   const alive = await first(db, `SELECT facility_id FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`, [facilityId]);
   if (!alive) {
     await db.run(`UPDATE contact_import_companies SET decision = NULL, decided_facility_id = NULL, created_facility = false, decided_by = NULL, decided_at = NULL, updated_at = $2 WHERE company_id = $1`, [companyId, now]);
-    return 0;
+    return { moved: 0, autoAssigned: 0 };
   }
   const pending = rowsToObjects(await db.exec(
-    `SELECT id, person_name, title, department, office_phone, mobile_phone, fax_number, email
+    `SELECT id, person_name, title, department, office_phone, mobile_phone, fax_number, email, address, facility_id
        FROM contact_import_rows WHERE company_id = $1 AND status = 'pending' ORDER BY id`, [companyId]
-  ));
+  )) as unknown as PendingRow[];
+  if (!pending.length) return { moved: 0, autoAssigned: 0 };
+  const chosenAlive = await aliveFacilityIds(db, [...new Set(pending.map((r) => toText(r.facility_id)).filter((v): v is string => !!v))]);
+  const sites = await loadCompanySites(db, company);
+  let autoAssigned = 0;
   for (const row of pending) {
-    await addFacilityContact(db, facilityId, row as unknown as ContactFields, now);
-    await db.run(`UPDATE contact_import_rows SET status = 'imported', updated_at = $2 WHERE id = $1`, [Number(row.id), now]);
+    const chosen = toText(row.facility_id);
+    let placed: string | null = null;
+    if (chosen && chosenAlive.has(chosen)) placed = chosen;
+    else {
+      const suggestion = suggestPersonSite({ department: toText(row.department), address: toText(row.address) }, sites, String(company.display_name));
+      if (suggestion && suggestion.facilityId !== facilityId) {
+        placed = suggestion.facilityId;
+        autoAssigned += 1;
+      }
+    }
+    await addFacilityContact(db, placed ?? facilityId, row, now);
+    await db.run(`UPDATE contact_import_rows SET status = 'imported', facility_id = $3, updated_at = $2 WHERE id = $1`, [Number(row.id), now, placed]);
   }
-  return pending.length;
+  return { moved: pending.length, autoAssigned };
 }
 
-/** 이미 옮긴 담당자 행이 다시 올라와 빈 칸이 채워졌으면, 사업장 담당자의 빈 칸에도 반영한다. */
+/** 이미 옮긴 담당자 행이 다시 올라와 빈 칸이 채워졌으면, 그 사람이 있는 사업장 담당자의 빈 칸에도 반영한다. */
 async function refillImportedContacts(db: PgDatabase, companyId: string, rowIds: number[], now: string): Promise<void> {
   if (!rowIds.length) return;
   const company = await first(db, `SELECT decision, decided_facility_id FROM contact_import_companies WHERE company_id = $1`, [companyId]);
   if (!company?.decision || company.decision === "exclude" || !company.decided_facility_id) return;
-  const facilityId = String(company.decided_facility_id);
   const rows = rowsToObjects(await db.exec(
-    `SELECT id, person_name, title, department, office_phone, mobile_phone, fax_number, email
-       FROM contact_import_rows WHERE id = ANY($1::bigint[]) AND status = 'imported'`, [rowIds]
+    `SELECT id, person_name, title, department, office_phone, mobile_phone, fax_number, email, COALESCE(facility_id, $2) AS target_facility_id
+       FROM contact_import_rows WHERE id = ANY($1::bigint[]) AND status = 'imported'`, [rowIds, String(company.decided_facility_id)]
   ));
-  for (const row of rows) await addFacilityContact(db, facilityId, row as unknown as ContactFields, now, { fillOnly: true });
+  for (const row of rows) await addFacilityContact(db, String(row.target_facility_id), row as unknown as ContactFields, now, { fillOnly: true });
+}
+
+/**
+ * 담당자 한 명을 다른 사업장으로 옮긴다. 원래 사업장에서는 그 사람 행만 빠진다.
+ * 대상 사업장에 같은 사람이 이미 있으면 빈 칸만 채우고 합쳐 중복 등록하지 않는다. 연락 기록도 함께 옮긴다.
+ * 원래 사업장에서 사람이 이미 지워졌으면 가져온 값으로 대상 사업장에 새로 넣는다.
+ */
+async function transferFacilityPerson(db: PgDatabase, from: string, to: string, row: ContactFields, now: string): Promise<{ merged: boolean; recreated: boolean }> {
+  const source = await findFacilityPerson(db, from, String(row.person_name), toText(row.mobile_phone));
+  if (!source) {
+    await addFacilityContact(db, to, row, now);
+    return { merged: false, recreated: true };
+  }
+  const sourceId = Number(source.id);
+  const sourceDept = source.department_id != null
+    ? await first(db, `SELECT department_name, fax_number FROM facility_contact_departments WHERE id = $1`, [Number(source.department_id)])
+    : undefined;
+  const departmentId = await facilityDepartmentId(db, to, toText(sourceDept?.department_name) ?? toText(row.department), toText(sourceDept?.fax_number) ?? toText(row.fax_number), now, true);
+  const target = await findFacilityPerson(db, to, String(source.person_name), toText(source.mobile_phone));
+  if (target) {
+    const targetId = Number(target.id);
+    await db.run(
+      `UPDATE facility_contact_people d SET
+         title = COALESCE(d.title, s.title), department_id = COALESCE(d.department_id, $3), office_phone = COALESCE(d.office_phone, s.office_phone),
+         mobile_phone = COALESCE(d.mobile_phone, s.mobile_phone), email = COALESCE(d.email, s.email), duties = COALESCE(d.duties, s.duties),
+         card_storage_provider = CASE WHEN d.card_storage_key IS NULL THEN s.card_storage_provider ELSE d.card_storage_provider END,
+         card_storage_bucket = CASE WHEN d.card_storage_key IS NULL THEN s.card_storage_bucket ELSE d.card_storage_bucket END,
+         card_public_path = CASE WHEN d.card_storage_key IS NULL THEN s.card_public_path ELSE d.card_public_path END,
+         card_ocr_text = CASE WHEN d.card_storage_key IS NULL THEN s.card_ocr_text ELSE d.card_ocr_text END,
+         card_parsed_json = CASE WHEN d.card_storage_key IS NULL THEN s.card_parsed_json ELSE d.card_parsed_json END,
+         card_captured_at = CASE WHEN d.card_storage_key IS NULL THEN s.card_captured_at ELSE d.card_captured_at END,
+         card_storage_key = COALESCE(d.card_storage_key, s.card_storage_key),
+         updated_at = $4
+         FROM facility_contact_people s WHERE d.id = $1 AND s.id = $2`,
+      [targetId, sourceId, departmentId, now]
+    );
+    await db.run(`UPDATE facility_contact_logs SET facility_id = $3, person_id = $4, department_id = $5 WHERE person_id = $1 AND facility_id = $2`, [sourceId, from, to, targetId, departmentId]);
+    await db.run(`DELETE FROM facility_contact_people WHERE id = $1`, [sourceId]);
+    return { merged: true, recreated: false };
+  }
+  await db.run(`UPDATE facility_contact_people SET facility_id = $2, department_id = $3, updated_at = $4 WHERE id = $1`, [sourceId, to, departmentId, now]);
+  await db.run(`UPDATE facility_contact_logs SET facility_id = $3, department_id = $4 WHERE person_id = $1 AND facility_id = $2`, [sourceId, from, to, departmentId]);
+  return { merged: false, recreated: false };
+}
+
+/**
+ * 담당자 한 명의 배속 사업장을 바꾼다. facilityId 가 null 이면 회사 분류대로.
+ * 분류 전이면 고른 값만 저장해 분류 때 반영하고, 이미 옮긴 담당자면 사업장 담당자 행을 옮긴다.
+ * 옮긴 담당자는 회사 사업장으로 되돌려도 직접 고른 것으로 기록해(facility_id = 회사 사업장) 자동 배속이 다시 옮기지 않는다.
+ */
+export async function assignContactSite(
+  db: PgDatabase, companyId: string, rowId: number, facilityId: string | null, userId: string, opts: { auto?: boolean; reason?: string } = {}
+): Promise<{ status: "ok" | "skipped"; reason?: string; changed?: boolean }> {
+  const now = new Date().toISOString();
+  const row = await first(db,
+    `SELECT r.*, c.decision, c.decided_facility_id FROM contact_import_rows r JOIN contact_import_companies c ON c.company_id = r.company_id
+      WHERE r.id = $1 AND r.company_id = $2 FOR UPDATE OF r`, [rowId, companyId]);
+  if (!row) return { status: "skipped", reason: "담당자를 찾을 수 없습니다" };
+  if (row.decision === "exclude") return { status: "skipped", reason: "제외한 회사의 담당자입니다. 분류를 되돌린 뒤 고르세요" };
+  const wanted = toText(facilityId);
+  if (wanted && !(await aliveFacilityIds(db, [wanted])).has(wanted)) return { status: "skipped", reason: "사업장을 찾을 수 없습니다" };
+  const decided = toText(row.decided_facility_id);
+  if (row.status !== "imported") {
+    if (toText(row.facility_id) === wanted) return { status: "ok", changed: false };
+    await db.run(`UPDATE contact_import_rows SET facility_id = $2, updated_at = $3 WHERE id = $1`, [rowId, wanted, now]);
+    await recordAuditLogInline(db, {
+      actorUserId: userId, action: "contact_import_person_site", targetTable: "contact_import_rows", targetId: String(rowId),
+      before: { facilityId: toText(row.facility_id) }, after: { facilityId: wanted, companyId, auto: !!opts.auto, reason: opts.reason ?? null },
+    });
+    return { status: "ok", changed: true };
+  }
+  const from = toText(row.facility_id) ?? decided;
+  const to = wanted ?? decided;
+  if (!from || !to) return { status: "skipped", reason: "회사에 고른 사업장이 없습니다" };
+  if (from === to) {
+    if (!opts.auto && toText(row.facility_id) !== to) await db.run(`UPDATE contact_import_rows SET facility_id = $2, updated_at = $3 WHERE id = $1`, [rowId, to, now]);
+    return { status: "ok", changed: false };
+  }
+  const result = await transferFacilityPerson(db, from, to, row as unknown as ContactFields, now);
+  await db.run(`UPDATE contact_import_rows SET facility_id = $2, updated_at = $3 WHERE id = $1`, [rowId, to, now]);
+  await recordAuditLogInline(db, {
+    actorUserId: userId, action: "contact_import_person_move", targetTable: "contact_import_rows", targetId: String(rowId),
+    before: { facilityId: from }, after: { facilityId: to, companyId, personName: row.person_name, ...result, auto: !!opts.auto, reason: opts.reason ?? null },
+  });
+  return { status: "ok", changed: true };
+}
+
+/**
+ * 분류가 끝난 회사의 담당자 중 회사 분류대로 들어간 사람(facility_id NULL)을 추천 산하 사업장으로 옮긴다(자동 배속).
+ * 직접 고른 사람(회사 사업장을 고른 경우 포함)과 이미 자동 배속된 사람은 건드리지 않는다.
+ */
+export async function autoAssignCompanySites(db: PgDatabase, companyId: string, userId: string): Promise<{ status: "ok" | "skipped"; reason?: string; moved?: number }> {
+  const company = await first(db, `SELECT * FROM contact_import_companies WHERE company_id = $1`, [companyId]);
+  if (!company) return { status: "skipped", reason: "회사를 찾을 수 없습니다" };
+  if (!company.decision || company.decision === "exclude" || !company.decided_facility_id) {
+    return { status: "skipped", reason: "분류한 회사만 자동 배속합니다(분류할 때는 자동으로 배속됩니다)" };
+  }
+  const decided = String(company.decided_facility_id);
+  const rows = rowsToObjects(await db.exec(
+    `SELECT id, department, address FROM contact_import_rows
+      WHERE company_id = $1 AND status = 'imported' AND facility_id IS NULL ORDER BY id`, [companyId]));
+  if (!rows.length) return { status: "ok", moved: 0 };
+  const sites = await loadCompanySites(db, company);
+  let moved = 0;
+  for (const row of rows) {
+    const suggestion = suggestPersonSite({ department: toText(row.department), address: toText(row.address) }, sites, String(company.display_name));
+    if (!suggestion || suggestion.facilityId === decided) continue;
+    const result = await assignContactSite(db, companyId, Number(row.id), suggestion.facilityId, userId, { auto: true, reason: suggestion.reason });
+    if (result.changed) moved += 1;
+  }
+  return { status: "ok", moved };
+}
+
+/**
+ * 자동 배속할 산하 사업장이 마스터에 없을 때 연락처 가져오기 화면에서 바로 등록한다.
+ * 기준 사업장(회사에 고른 사업장 또는 고른 후보)의 법인등록번호·기관 구분·목록 구분을 물려받아
+ * 같은 회사의 산하 사업장 후보(법인등록번호 같음)로 곧바로 잡힌다. 상호·소재지가 같은 사업장이 있으면 그곳을 쓴다.
+ */
+export async function registerSubSite(
+  db: PgDatabase,
+  companyId: string,
+  input: { companyName: string; address: string | null; brn: string | null; baseFacilityId: string | null },
+  userId: string
+): Promise<{ facilityId: string; created: boolean }> {
+  const company = await first(db, `SELECT company_id, decided_facility_id FROM contact_import_companies WHERE company_id = $1`, [companyId]);
+  if (!company) throw Object.assign(new Error("회사를 찾을 수 없습니다."), { status: 404 });
+  const name = input.companyName.trim();
+  if (!name) throw Object.assign(new Error("사업장 이름을 적어 주세요."), { status: 400 });
+  const baseId = toText(company.decided_facility_id) ?? toText(input.baseFacilityId);
+  const base = baseId
+    ? await first(db, `SELECT corporate_registration_no, org_category, listing FROM facilities WHERE facility_id = $1 AND deleted_at IS NULL`, [baseId])
+    : undefined;
+  const listing = base?.listing === "master" || base?.listing === "other" ? (base.listing as "master" | "other") : null;
+  return registerImportedFacility(db, {
+    companyName: name, brn: toText(input.brn), crn: toText(base?.corporate_registration_no), address: toText(input.address),
+    phone: null, homepage: null, orgCategory: toText(base?.org_category), tradeRoles: [], listing, userId, now: new Date().toISOString(),
+    sameBrnAllowed: true,
+  });
 }
 
 interface RegisterInput {
   companyName: string; brn: string | null; crn?: string | null; address: string | null; phone: string | null; homepage: string | null;
   orgCategory: string | null; tradeRoles: TradeRole[]; listing: "master" | "other" | null; userId: string; now: string;
+  /** 산하 사업장 등록 — 본사와 사업자번호가 같은 공장도 있으므로 번호가 아니라 상호·소재지로만 같은 곳을 찾는다. */
+  sameBrnAllowed?: boolean;
 }
 
 /**
@@ -248,7 +475,7 @@ export async function registerImportedFacility(db: PgDatabase, input: RegisterIn
   const siteAddress = normalizeInput("site_address", input.address);
   const normAddress = siteAddress?.replace(/\s+/g, " ").trim() ?? normalizeAddress(input.address);
   const brn = normalizeInput("business_registration_no", input.brn);
-  const existing = brn
+  const existing = brn && !input.sameBrnAllowed
     ? await first(db, `SELECT facility_id FROM facilities WHERE business_registration_no = $1 AND deleted_at IS NULL LIMIT 1`, [brn])
     : normAddress
       ? await first(db, `SELECT facility_id FROM facilities WHERE normalized_company_name = $1 AND normalized_address = $2 AND deleted_at IS NULL LIMIT 1`, [normCompany, normAddress])
@@ -274,7 +501,7 @@ export async function registerImportedFacility(db: PgDatabase, input: RegisterIn
     action: "facility_manual_create",
     targetTable: "facilities",
     targetId: facilityId,
-    after: { companyName, businessRegistrationNo: brn, siteAddress: input.address, source: "contact-import", tradeRoles: input.tradeRoles, listing: input.listing },
+    after: { companyName, businessRegistrationNo: brn, siteAddress: input.address, source: "contact-import", tradeRoles: input.tradeRoles, listing: input.listing, subSite: !!input.sameBrnAllowed },
   });
   return { facilityId, created: true };
 }
@@ -345,7 +572,7 @@ export interface DecisionItem {
  * 관리자 분류 한 건. link 는 후보가 하나로 정해질 때만 facilityId 없이 쓸 수 있다.
  * reopen 은 제외·기타 목록만 되돌린다. 거래처로 넣은 것은 사업장 화면에서 고친다.
  */
-export async function decideCompany(db: PgDatabase, item: DecisionItem, userId: string): Promise<{ status: "ok" | "skipped"; reason?: string; moved?: number }> {
+export async function decideCompany(db: PgDatabase, item: DecisionItem, userId: string): Promise<{ status: "ok" | "skipped"; reason?: string; moved?: number; autoAssigned?: number }> {
   const now = new Date().toISOString();
   const company = await first(db, `SELECT * FROM contact_import_companies WHERE company_id = $1 FOR UPDATE`, [item.companyId]);
   if (!company) return { status: "skipped", reason: "회사를 찾을 수 없습니다" };
@@ -358,7 +585,11 @@ export async function decideCompany(db: PgDatabase, item: DecisionItem, userId: 
         return { status: "skipped", reason: "이미 거래처가 된 곳입니다" };
       }
       if (facility) {
-        for (const row of rowsToObjects(await db.exec(`SELECT person_name, mobile_phone FROM contact_import_rows WHERE company_id = $1 AND status = 'imported'`, [item.companyId]))) {
+        // 산하 사업장으로 따로 옮긴 담당자는 그 사업장에 그대로 둔다(다시 분류하면 같은 곳으로 간다).
+        for (const row of rowsToObjects(await db.exec(
+          `SELECT person_name, mobile_phone FROM contact_import_rows WHERE company_id = $1 AND status = 'imported' AND COALESCE(facility_id, $2) = $2`,
+          [item.companyId, facilityId]
+        ))) {
           await db.run(
             `DELETE FROM facility_contact_people WHERE facility_id = $1 AND person_name = $2 AND regexp_replace(COALESCE(mobile_phone, ''), '[^0-9]', '', 'g') = $3`,
             [facilityId, row.person_name, digitsOf(row.mobile_phone)]
@@ -370,7 +601,10 @@ export async function decideCompany(db: PgDatabase, item: DecisionItem, userId: 
         }
       }
     }
-    await db.run(`UPDATE contact_import_rows SET status = 'pending', updated_at = $2 WHERE company_id = $1`, [item.companyId, now]);
+    await db.run(
+      `UPDATE contact_import_rows SET status = 'pending', facility_id = CASE WHEN facility_id = $3 THEN NULL ELSE facility_id END, updated_at = $2 WHERE company_id = $1`,
+      [item.companyId, now, toText(company.decided_facility_id)]
+    );
     await db.run(`UPDATE contact_import_companies SET decision = NULL, decided_facility_id = NULL, created_facility = false, decided_by = NULL, decided_at = NULL, updated_at = $2 WHERE company_id = $1`, [item.companyId, now]);
     return { status: "ok" };
   }
@@ -401,15 +635,15 @@ export async function decideCompany(db: PgDatabase, item: DecisionItem, userId: 
     `UPDATE contact_import_companies SET decision = $2, decided_facility_id = $3, created_facility = $4, decided_by = $5, decided_at = $6, updated_at = $6 WHERE company_id = $1`,
     [item.companyId, item.action, facilityId, created, userId, now]
   );
-  const moved = await moveCompanyContacts(db, item.companyId, now);
+  const { moved, autoAssigned } = await moveCompanyContacts(db, item.companyId, now);
   await recordAuditLogInline(db, {
     actorUserId: userId,
     action: "contact_import_decide",
     targetTable: "contact_import_companies",
     targetId: item.companyId,
-    after: { decision: item.action, facilityId, created, tradeRoles: roles, moved },
+    after: { decision: item.action, facilityId, created, tradeRoles: roles, moved, autoAssigned },
   });
-  return { status: "ok", moved };
+  return { status: "ok", moved, autoAssigned };
 }
 
 export const COMPANY_STAGE_SQL = `CASE

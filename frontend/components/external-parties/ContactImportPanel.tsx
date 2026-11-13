@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, RefreshCw, Search, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, Upload } from "lucide-react";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -25,6 +25,11 @@ const KIND_LABELS: Record<string, string> = {
 };
 const SOURCE_LABELS: Record<string, string> = { dart: "DART", fsc: "금융위원회", naver: "네이버 기업정보", bizno: "비즈노" };
 const DECISION_LABELS: Record<string, string> = { link: "사업장 연결", partner: "거래처 등록", other: "기타 목록", exclude: "제외" };
+// 담당자별 산하 사업장 후보의 근거(lib/contact-import/person-site.ts SiteKind).
+const SITE_KIND_LABELS: Record<string, string> = {
+  decided: "회사에 고른 사업장", candidate: "기존 사업장 후보", crn: "법인등록번호 같음", brn: "사업자번호 같음",
+  name: "이름이 회사명으로 시작", chosen: "배속된 사업장", search: "검색", registered: "새로 등록",
+};
 
 interface MatchCandidate { facilityId: string; companyName: string; address: string | null; kind: string }
 interface SearchCandidate { source: string; name: string; brn: string | null; address: string | null; url: string | null; sameRegion: boolean; sameDomain: boolean }
@@ -34,7 +39,12 @@ interface Company {
   searchCandidates: SearchCandidate[]; searchVerdict: string | null; foundBrn: string | null; searchNote: string | null;
   decision: string | null; decidedName: string | null; contactCount: number;
 }
-interface Contact { id: number; personName: string; title: string | null; department: string | null; officePhone: string | null; mobilePhone: string | null; email: string | null; status: string }
+interface Contact {
+  id: number; personName: string; title: string | null; department: string | null; officePhone: string | null; mobilePhone: string | null; email: string | null;
+  address: string | null; status: string; siteId: string; suggestion: { facilityId: string; reason: string } | null;
+}
+interface Site { facilityId: string; companyName: string; address: string | null; kind: string }
+interface SubSiteForm { companyName: string; address: string; brn: string }
 interface Progress {
   remaining: number; finished: number; total: number; paused: number; active: boolean; perMinute: number; etaMinutes: number | null;
   lastFinishedAt: string | null; sources: { source: string; used: number; limit: number }[]; resetAt: string | null;
@@ -76,6 +86,11 @@ export function ContactImportPanel() {
   const [roles, setRoles] = useState<string[]>(["sales"]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [decidedFacilityId, setDecidedFacilityId] = useState<string | null>(null);
+  const [extraSites, setExtraSites] = useState<Site[]>([]);
+  const [siteQuery, setSiteQuery] = useState("");
+  const [subSite, setSubSite] = useState<SubSiteForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -177,13 +192,18 @@ export function ContactImportPanel() {
           orgCategory: categories[companyId] ?? company?.suggestedCategory ?? null,
         };
       });
-      const { results } = await api<{ results: { companyId: string; status: string; reason?: string }[] }>("/api/contact-import/companies", {
+      const { results } = await api<{ results: { companyId: string; status: string; reason?: string; autoAssigned?: number; moved?: number }[] }>("/api/contact-import/companies", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }),
       });
       const done = results.filter((r) => r.status === "ok").length;
       const skipped = results.filter((r) => r.status !== "ok");
-      setMessage(`${done}곳을 처리했습니다.` + (skipped.length ? ` ${skipped.length}곳은 건너뛰었습니다: ${[...new Set(skipped.map((r) => r.reason))].join(", ")}` : ""));
+      // 분류 때 자동 배속한 수(autoAssigned), 산하 사업장 자동 배속으로 옮긴 수(moved).
+      const assigned = results.reduce((n, r) => n + (action === "sites" ? r.moved ?? 0 : r.autoAssigned ?? 0), 0);
+      setMessage(`${done}곳을 처리했습니다.`
+        + (assigned ? ` 담당자 ${assigned}명은 부서명·주소에 맞춰 산하 사업장에 배속했습니다.` : action === "sites" ? " 새로 배속할 담당자가 없습니다." : "")
+        + (skipped.length ? ` ${skipped.length}곳은 건너뛰었습니다: ${[...new Set(skipped.map((r) => r.reason))].join(", ")}` : ""));
       setSelected(new Set());
+      if (openId) await loadDetail(openId);
       await loadCompanies();
       await loadBatches();
     });
@@ -196,6 +216,13 @@ export function ContactImportPanel() {
     await loadProgress();
   });
 
+  const loadDetail = async (companyId: string) => {
+    const r = await api<{ contacts: Contact[]; sites: Site[]; decidedFacilityId: string | null }>(`/api/contact-import/companies/${encodeURIComponent(companyId)}`);
+    setContacts(r.contacts);
+    setSites(r.sites);
+    setDecidedFacilityId(r.decidedFacilityId);
+  };
+
   const toggleOpen = (companyId: string) => {
     if (openId === companyId) {
       setOpenId(null);
@@ -203,11 +230,70 @@ export function ContactImportPanel() {
     }
     setOpenId(companyId);
     setContacts([]);
-    api<{ contacts: Contact[] }>(`/api/contact-import/companies/${encodeURIComponent(companyId)}`)
-      .then((r) => setContacts(r.contacts))
-      .catch((e) => setError((e as Error).message));
+    setSites([]);
+    setExtraSites([]);
+    setSiteQuery("");
+    setSubSite(null);
+    loadDetail(companyId).catch((e) => setError((e as Error).message));
   };
 
+  // 배속할 사업장 직접 검색 — 결과는 펼친 회사의 담당자 선택 칸에 더해진다.
+  useEffect(() => {
+    const term = siteQuery.trim();
+    if (!openId || term.length < 2) return;
+    const timer = setTimeout(() => {
+      api<{ items: Omit<Site, "kind">[] }>(`/api/contact-import/companies/${encodeURIComponent(openId)}?q=${encodeURIComponent(term)}`)
+        .then((r) => setExtraSites((prev) => [...prev.filter((s) => s.kind !== "search"), ...r.items.map((s) => ({ ...s, kind: "search" }))]))
+        .catch((e) => setError((e as Error).message));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [openId, siteQuery]);
+
+  const assignSite = (companyId: string, contact: Contact, facilityId: string, siteName: string | null) => void act(async () => {
+    await api(`/api/contact-import/companies/${encodeURIComponent(companyId)}`, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rowId: contact.id, facilityId: facilityId || null }),
+    });
+    const where = siteName ?? "회사 분류대로";
+    setMessage(contact.status === "imported"
+      ? `${contact.personName} 님을 ${where}(으)로 옮겼습니다.`
+      : `${contact.personName} 님의 배속 사업장을 ${where}(으)로 정했습니다. 분류할 때 반영됩니다.`);
+    await loadDetail(companyId);
+  });
+
+  const applySuggestions = (companyId: string) => void act(async () => {
+    const targets = contacts.filter((p) => p.suggestion);
+    for (const p of targets) {
+      await api(`/api/contact-import/companies/${encodeURIComponent(companyId)}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rowId: p.id, facilityId: p.suggestion!.facilityId === decidedFacilityId ? null : p.suggestion!.facilityId }),
+      });
+    }
+    setMessage(`담당자 ${targets.length}명을 추천 사업장에 배속했습니다.`);
+    await loadDetail(companyId);
+  });
+
+  const registerSubSite = (companyId: string) => {
+    if (!subSite) return;
+    const form = subSite;
+    void act(async () => {
+      const r = await api<{ facilityId: string; created: boolean }>(`/api/contact-import/companies/${encodeURIComponent(companyId)}`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...form, baseFacilityId: picks[companyId] ?? null }),
+      });
+      setExtraSites((prev) => [...prev.filter((s) => s.facilityId !== r.facilityId),
+        { facilityId: r.facilityId, companyName: form.companyName.trim(), address: form.address.trim() || null, kind: "registered" }]);
+      setMessage(r.created
+        ? `${form.companyName.trim()} 을(를) 사업장으로 등록했습니다. 담당자 선택 칸에서 고르세요.`
+        : "상호·소재지가 같은 사업장이 이미 있어 그 사업장을 선택 칸에 넣었습니다.");
+      setSubSite(null);
+      await loadDetail(companyId);
+    });
+  };
+
+  // 담당자 선택 칸의 사업장 — 같은 회사 후보 + 직접 검색·새로 등록. 회사에 고른 사업장은 "회사 분류대로" 한 칸으로 보인다.
+  const siteOptions = [...sites, ...extraSites.filter((s) => !sites.some((t) => t.facilityId === s.facilityId))]
+    .filter((s) => s.facilityId !== decidedFacilityId);
+  const siteName = (id: string) => (id ? siteOptions.find((s) => s.facilityId === id)?.companyName ?? null : null);
   const allSelected = companies.length > 0 && companies.every((c) => selected.has(c.companyId));
   const decided = stage === "done" || stage === "excluded";
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(companies.map((c) => c.companyId)));
@@ -326,7 +412,10 @@ export function ContactImportPanel() {
             <div className="cd-card p-3 !flex-row flex-wrap items-center gap-2 text-sm cd-text sticky top-0 z-10" role="group" aria-label="선택한 회사 분류">
               <b>{selected.size}곳 선택</b>
               {decided ? (
-                <button type="button" disabled={busy} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => decide("reopen")}>분류 되돌리기</button>
+                <>
+                  <button type="button" disabled={busy} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => decide("reopen")}>분류 되돌리기</button>
+                  {stage === "done" && <button type="button" disabled={busy} className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => decide("sites")}>산하 사업장 자동 배속</button>}
+                </>
               ) : (
                 <>
                   <button type="button" disabled={busy} className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => decide("link")}>사업장에 연결</button>
@@ -394,15 +483,70 @@ export function ContactImportPanel() {
                         <td colSpan={7} className="p-3">
                           <div className="grid gap-3 lg:grid-cols-2 text-sm cd-text">
                             <div>
-                              <h3 className="font-semibold mb-1">담당자</h3>
-                              <ul className="flex flex-col gap-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <h3 className="font-semibold">담당자</h3>
+                                {c.decision !== "exclude" && contacts.some((p) => p.suggestion) && (
+                                  <button type="button" disabled={busy} className="cd-btn cd-btn-soft cd-btn-sm" onClick={() => applySuggestions(c.companyId)}>
+                                    추천대로 배속 {contacts.filter((p) => p.suggestion).length}명
+                                  </button>
+                                )}
+                              </div>
+                              <ul className="flex flex-col gap-2">
                                 {contacts.map((p) => (
-                                  <li key={p.id}>
-                                    {p.personName}{p.title ? ` ${p.title}` : ""}{p.department ? ` · ${p.department}` : ""}
-                                    <span className="cd-text-faint"> {[p.mobilePhone, p.officePhone, p.email].filter(Boolean).join(" · ")}</span>
+                                  <li key={p.id} className="flex flex-col gap-1">
+                                    <div>
+                                      {p.personName}{p.title ? ` ${p.title}` : ""}{p.department ? ` · ${p.department}` : ""}
+                                      <span className="cd-text-faint"> {[p.mobilePhone, p.officePhone, p.email].filter(Boolean).join(" · ")}</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <select aria-label={`${p.personName} 배속 사업장`} className="cd-input !w-auto max-w-[320px]" disabled={busy || c.decision === "exclude"}
+                                        value={p.siteId} onChange={(e) => assignSite(c.companyId, p, e.target.value, siteName(e.target.value))}>
+                                        <option value="">{c.decidedName ? `회사 분류대로 (${c.decidedName})` : "회사 분류대로"}</option>
+                                        {siteOptions.map((s) => <option key={s.facilityId} value={s.facilityId}>{s.companyName} — {SITE_KIND_LABELS[s.kind] ?? s.kind}</option>)}
+                                      </select>
+                                      {p.suggestion && (
+                                        <span className="text-xs cd-text-muted">
+                                          추천: {p.suggestion.facilityId === decidedFacilityId ? c.decidedName ?? "회사에 고른 사업장" : siteName(p.suggestion.facilityId) ?? "산하 사업장"} · {p.suggestion.reason}
+                                        </span>
+                                      )}
+                                      {p.suggestion && (
+                                        <button type="button" disabled={busy || c.decision === "exclude"} className="cd-btn cd-btn-ghost cd-btn-sm"
+                                          onClick={() => {
+                                            const target = p.suggestion!.facilityId === decidedFacilityId ? "" : p.suggestion!.facilityId;
+                                            assignSite(c.companyId, p, target, siteName(target));
+                                          }}>추천 적용</button>
+                                      )}
+                                    </div>
                                   </li>
                                 ))}
                               </ul>
+                              {c.decision !== "exclude" && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <label className="relative">
+                                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 cd-text-faint" aria-hidden />
+                                    <input aria-label="배속할 사업장 검색" placeholder="사업장 검색(2자 이상)" className="cd-input !w-52 !pl-8" value={siteQuery} onChange={(e) => setSiteQuery(e.target.value)} />
+                                  </label>
+                                  <button type="button" disabled={busy} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setSubSite(subSite ? null : { companyName: `${c.displayName} `, address: "", brn: "" })}>
+                                    <Plus className="w-3.5 h-3.5" /> 산하 사업장 등록
+                                  </button>
+                                  {extraSites.some((s) => s.kind === "search") && <span className="text-xs cd-text-faint">검색한 사업장을 선택 칸에 넣었습니다.</span>}
+                                </div>
+                              )}
+                              {subSite && (
+                                <div className="mt-2 cd-card p-3 flex flex-col gap-2" role="group" aria-label="산하 사업장 등록">
+                                  <label className="flex flex-col gap-1"><span className="cd-label-text">사업장 이름</span>
+                                    <input className="cd-input" value={subSite.companyName} placeholder="예: 하이트진로 홍천공장" onChange={(e) => setSubSite({ ...subSite, companyName: e.target.value })} /></label>
+                                  <label className="flex flex-col gap-1"><span className="cd-label-text">소재지</span>
+                                    <input className="cd-input" value={subSite.address} onChange={(e) => setSubSite({ ...subSite, address: e.target.value })} /></label>
+                                  <label className="flex flex-col gap-1"><span className="cd-label-text">사업자번호(선택)</span>
+                                    <input className="cd-input" inputMode="numeric" value={subSite.brn} onChange={(e) => setSubSite({ ...subSite, brn: e.target.value })} /></label>
+                                  <span className="cd-hint">회사에 고른 사업장의 법인등록번호·기관 구분을 물려받습니다. 나머지 정보는 사업장 상세에서 채웁니다.</span>
+                                  <div className="flex gap-2">
+                                    <button type="button" disabled={busy || !subSite.companyName.trim()} className="cd-btn cd-btn-primary cd-btn-sm" onClick={() => registerSubSite(c.companyId)}>사업장 등록</button>
+                                    <button type="button" disabled={busy} className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => setSubSite(null)}>취소</button>
+                                  </div>
+                                </div>
+                              )}
                               {c.address && <p className="mt-2 text-xs cd-text-faint">명함 주소: {c.address}</p>}
                             </div>
                             <div>

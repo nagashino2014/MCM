@@ -209,7 +209,9 @@ resource "aws_ecs_task_definition" "next" {
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 512
-  memory                   = 1024
+  # 2026-11-17 1024 → 2048: 회사소개서 PPT 받기(PDF 쪽 그림)가 약 350MB 를 더 써 1GB 작업이 메모리 부족으로 죽었다(502).
+  #   운영에는 리비전 833 을 CLI 로 등록·적용(서비스는 task_definition ignore_changes, 배포 스크립트가 지금 리비전을 복사하므로 유지된다).
+  memory                   = 2048
   execution_role_arn       = aws_iam_role.ecs_task_execution_next.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 

@@ -720,3 +720,38 @@ test("대표 실적 직접 입력 — 쪽 편집층(cases)이 자동 선별을 �
   assert.equal(setCases(edits, null).cases, undefined);
   assert.equal(withCaseEdits(data, [{ key: "area-1", order: null, hidden: false, edits: setCases(edits, null) }]), data);
 });
+
+test("여러 요소 정렬 — 맞춤·간격 같게·격자 맞춤(표지 분야 2줄×3칸)", async () => {
+  const { alignDeltas } = await import("@/lib/catalog/studio/align");
+  const r = (x: number, y: number, w = 80, h = 14) => ({ x, y, w, h });
+  // 맞춤 — 감싸는 상자 기준
+  assert.deepEqual(alignDeltas([r(10, 0), r(30, 20, 40)], "left"), [{ dx: 0, dy: 0 }, { dx: -20, dy: 0 }]);
+  assert.deepEqual(alignDeltas([r(10, 0), r(30, 20, 40)], "right"), [{ dx: 0, dy: 0 }, { dx: 20, dy: 0 }]);
+  assert.deepEqual(alignDeltas([r(0, 10, 10, 10), r(0, 30, 10, 30)], "vmiddle"), [{ dx: 0, dy: 20 }, { dx: 0, dy: -10 }]);
+  // 하나만 고르면 그대로
+  assert.deepEqual(alignDeltas([r(10, 0)], "left"), [{ dx: 0, dy: 0 }]);
+  // 간격 같게 — 양 끝 그대로, 사이 틈 같게(3개 이상)
+  assert.deepEqual(alignDeltas([r(0, 0, 10), r(100, 0, 10), r(20, 0, 10)], "spaceX"), [{ dx: 0, dy: 0 }, { dx: 0, dy: 0 }, { dx: 30, dy: 0 }]);
+  assert.deepEqual(alignDeltas([r(0, 0), r(50, 0)], "spaceX"), [{ dx: 0, dy: 0 }, { dx: 0, dy: 0 }]);
+  // 격자 — 사용자 표지 화면처럼 흐트러진 2줄×3칸(아래 줄 셋째 칸이 71pt 오른쪽, 줄 높이도 제각각)
+  const cover = [
+    r(95, 910, 160, 26), // 통합환경허가
+    r(293, 912, 170, 26), // ESG·탄소중립
+    r(498, 909, 240, 26), // 환경 인허가·연구·교육
+    r(95, 955, 160, 26), // 화학물질관리
+    r(297, 954, 195, 26), // HAPs(비산배출)
+    r(569, 957, 180, 26), // 응용소프트웨어
+  ];
+  const d = alignDeltas(cover, "grid");
+  const after = cover.map((b, i) => ({ x: b.x + d[i].dx, y: b.y + d[i].dy }));
+  // 칸: 위·아래 짝의 시작 위치가 같다
+  assert.equal(after[0].x, after[3].x);
+  assert.equal(after[1].x, after[4].x);
+  assert.equal(after[2].x, after[5].x);
+  assert.equal(after[5].x, 498);
+  // 줄: 같은 줄의 세로 위치가 같다
+  assert.equal(new Set([after[0].y, after[1].y, after[2].y]).size, 1);
+  assert.equal(new Set([after[3].y, after[4].y, after[5].y]).size, 1);
+  assert.equal(after[0].y, 909);
+  assert.equal(after[3].y, 954);
+});

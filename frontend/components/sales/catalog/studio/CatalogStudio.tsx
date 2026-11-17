@@ -435,6 +435,11 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
       dropOrphans: () => composed && pe((e) => dropOrphanEdits(e, composed.base)),
       setShape: (id, shape) =>
         pe((e) => ({ ...e, added: (e.added ?? []).map((a) => (a.id === id ? { ...a, className: `kc-x-shape kc-x-shape--${shape}` } : a)) })),
+      align: (mode) => {
+        const n = canvasHandle.current?.align(mode) ?? -1;
+        if (n < 0) toast(mode === "spaceX" || mode === "spaceY" ? "간격 같게는 옮길 수 있는 요소를 3개 이상 고르세요." : "옮길 수 있는 요소를 2개 이상 고르세요.", "error");
+        else if (n === 0) toast("이미 맞춰져 있습니다.", "success");
+      },
     };
   }, [tree, pe, composed, itemKey, itemLevel, setBindTarget, setSelectedId, toggleSelect, toast]);
 

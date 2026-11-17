@@ -3,6 +3,7 @@
 // 스튜디오 오른쪽 패널 공용 형식 — 지금 쪽·선택·편집 조작.
 
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
+import type { AlignMode } from "@/lib/catalog/studio/align";
 import type { ComposedPage } from "@/lib/catalog/studio/compose";
 import type { CasesEdit, InfoOverride, ListOp } from "@/lib/catalog/studio/edits";
 import type { CNode, ImageRef } from "@/lib/catalog/studio/nodes";
@@ -53,6 +54,8 @@ export interface StudioOps {
   dropOrphans: () => void;
   /** 추가한 도형 모양 */
   setShape: (id: string, shape: "rect" | "round" | "circle" | "line") => void;
+  /** 여러 개 고른 요소 맞추기·간격 같게·격자 맞춤(실행 취소 한 단계) */
+  align: (mode: AlignMode) => void;
 }
 
 export interface PanelProps {

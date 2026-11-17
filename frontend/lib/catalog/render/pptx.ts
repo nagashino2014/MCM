@@ -6,6 +6,7 @@
  *   표지는 지금 데이터·지금 편집본으로 다시 그리므로 오래된 발행본이면 글이 PDF 와 다를 수 있다(받기 창에 안내).
  * 잰 글자 줄 → 글상자 계산은 pptx-layout.ts(순수 함수).
  */
+import { readFile } from "node:fs/promises";
 import { MASTER_DOC_ID } from "@/lib/catalog/projects";
 import { loadStudioDoc } from "@/lib/catalog/studio/store";
 import { PRINT_ORIGIN, renderHtmlPdf, type PrintAsset } from "@/lib/print-kit/converter";
@@ -104,9 +105,39 @@ export async function buildCatalogPptx(summary: CatalogEditionSummary, pdf: Buff
   return { data, fileName, slides: slides.length, coverNotice };
 }
 
-/** 생성본·발행본 id → PPTX(없으면 null) */
+// ── 메모리 안전장치(2026-11-17 next 작업 1GB 가 PPT 만들기 중 메모리 부족으로 죽어 502) ──
+//   쪽 그림은 캔버스 하나를 다시 써도 pdfjs 캐시·글꼴 경로로 약 350MB 를 더 쓴다(54쪽 실측). 평소 next 는 1GB 의 55~60% 를 쓴다.
+//   모자라면 작업을 죽이지 않고 503 으로 돌려보내고, 한 번에 하나만 만든다.
+/** PPT 만들기에 더 쓰는 메모리 — 실측 고점 약 350MB + 표지 바탕·PPTX 묶기 여유 */
+export const PPTX_MEMORY_NEED = 450 * 1024 * 1024;
+let pptxRunning = false;
+
+/** 작업(컨테이너) 메모리 한도 — cgroup v2·v1 순. 읽지 못하면 null(검사 생략) */
+async function containerMemoryLimit(): Promise<number | null> {
+  for (const path of ["/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"]) {
+    try {
+      const v = Number((await readFile(path, "utf8")).trim());
+      if (Number.isFinite(v) && v > 0 && v < 2 ** 50) return v;
+    } catch {
+      // 없는 경로·"max" → 다음 후보
+    }
+  }
+  return null;
+}
+
+/** 생성본·발행본 id → PPTX(없으면 null). 다른 PPT 를 만드는 중이면 429, 메모리가 모자라면 503 */
 export async function buildCatalogPptxForEdition(editionId: string): Promise<(CatalogPptx & { summary: CatalogEditionSummary }) | null> {
-  const hit = await getCatalogEditionFile(editionId);
-  if (!hit) return null;
-  return { ...(await buildCatalogPptx(hit.summary, hit.pdf)), summary: hit.summary };
+  if (pptxRunning) throw Object.assign(new Error("다른 PPT 를 만드는 중입니다. 1분쯤 뒤에 다시 받으세요."), { status: 429 });
+  const limit = await containerMemoryLimit();
+  if (limit && process.memoryUsage().rss + PPTX_MEMORY_NEED > limit * 0.95) {
+    throw Object.assign(new Error("서버 메모리가 모자라 지금은 PPT 를 만들 수 없습니다. 잠시 뒤 다시 받거나 PDF 를 받으세요(관리자: next 작업 메모리 확인)."), { status: 503 });
+  }
+  pptxRunning = true;
+  try {
+    const hit = await getCatalogEditionFile(editionId);
+    if (!hit) return null;
+    return { ...(await buildCatalogPptx(hit.summary, hit.pdf)), summary: hit.summary };
+  } finally {
+    pptxRunning = false;
+  }
 }

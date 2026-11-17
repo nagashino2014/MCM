@@ -73,16 +73,31 @@ export async function rasterizePdf(bytes: Uint8Array, opts: RasterOptions = {}):
   } as Parameters<typeof getDocument>[0]).promise;
   try {
     const out: RasterPage[] = [];
+    // 캔버스 하나를 모든 쪽에 다시 쓴다 — 쪽마다 새로 만들면 네이티브 메모리(쪽당 약 12MB)가 GC 전에 쌓여
+    // next 작업(1GB)이 메모리 부족으로 죽었다(2026-11-17 502). 쪽 크기가 다를 때만 크기를 바꾼다.
+    let image: import("@napi-rs/canvas").Canvas | null = null;
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale });
-      const image = canvas.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const context = image.getContext("2d");
-      await page.render({ canvas: image as never, canvasContext: context as never, viewport, background: "rgb(255,255,255)" } as never).promise;
-      const data = format === "png" ? image.toBuffer("image/png") : image.toBuffer("image/jpeg", quality);
+      const w = Math.ceil(viewport.width);
+      const h = Math.ceil(viewport.height);
+      if (!image) image = canvas.createCanvas(w, h);
+      else if (image.width !== w || image.height !== h) {
+        image.width = w;
+        image.height = h;
+      }
+      const img = image;
+      const context = img.getContext("2d");
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, w, h);
+      await page.render({ canvas: img as never, canvasContext: context as never, viewport, background: "rgb(255,255,255)" } as never).promise;
+      const data = format === "png" ? img.toBuffer("image/png") : img.toBuffer("image/jpeg", quality);
       out.push({ pageNumber: i, width: base.width, height: base.height, data, type: format });
       page.cleanup();
+      // 쪽 그림(이미지 해독본)·글꼴 캐시를 8쪽마다 비운다 — 쪽마다 비우면 글꼴을 다시 읽느라 고점이 오히려 오른다(실측 357MB → 609MB)
+      if (i % 8 === 0) await pdf.cleanup();
       opts.onPage?.(i, pdf.numPages);
     }
     return out;

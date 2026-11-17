@@ -5,7 +5,7 @@
 // 관리·발행 담당은 행을 펼쳐 배포 기록(누구에게 냈는지)을 남긴다. docs/company-catalog-blueprint.md §6-1·§6-6
 
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Eye, Library, Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eye, Library, Loader2, Lock, Plus, Presentation, Trash2 } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdDateInput, isValidDateString } from "@/components/cdash/CdField";
 import type { CatalogDistribution, CatalogEditionSummary } from "@/lib/catalog/render/editions";
@@ -100,6 +100,9 @@ export function CatalogEditionsPanel({
                             </button>
                             <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action ml-1" href={`/api/catalog/editions/${e.editionId}/pdf?download=1`}>
                               <Download className="w-3.5 h-3.5" /> 받기
+                            </a>
+                            <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action ml-1" href={`/api/catalog/editions/${e.editionId}/pptx`} title="PowerPoint(PPTX) 받기 — 첫 장 표지는 글상자로 고칠 수 있고, 나머지는 쪽 그림">
+                              <Presentation className="w-3.5 h-3.5" /> PPT
                             </a>
                           </>
                         )}

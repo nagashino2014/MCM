@@ -4,7 +4,7 @@
 // 만든 PDF 는 검토용 생성본으로 이력(catalog_editions)에 남는다. 발행 담당은 검토한 인쇄·배포본 생성본을 그대로 [발행]할 수 있다(P7).
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Eye, FileText, Loader2, MonitorPlay, Send, Trash2 } from "lucide-react";
+import { Download, Eye, FileText, Loader2, MonitorPlay, Presentation, Send, Trash2 } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import type { CatalogEditionSummary } from "@/lib/catalog/render/editions";
 import { EDITION_LABEL, NAMING_LABEL, SCOPE_LABEL, type EditionKind, type NamingMode, type ScopeMode } from "@/lib/catalog/render/types";
@@ -199,6 +199,9 @@ export function CatalogRenderPanel({
                     </button>
                     <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action ml-1" href={`/api/catalog/editions/${e.editionId}/pdf?download=1`}>
                       <Download className="w-3.5 h-3.5" /> 받기
+                    </a>
+                    <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action ml-1" href={`/api/catalog/editions/${e.editionId}/pptx`} title="PowerPoint(PPTX) 받기 — 첫 장 표지는 글상자로 고칠 수 있고, 나머지는 쪽 그림">
+                      <Presentation className="w-3.5 h-3.5" /> PPT
                     </a>
                     {canPublish && onPublish && e.edition === "print" && (
                       <button type="button" className="cd-btn cd-btn-soft cd-btn-sm ml-1" onClick={() => onPublish(e)} title="이 PDF 를 그대로 발행본으로 확정">

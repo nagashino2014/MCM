@@ -755,3 +755,61 @@ test("여러 요소 정렬 — 맞춤·간격 같게·격자 맞춤(표지 분�
   assert.equal(after[0].y, 909);
   assert.equal(after[3].y, 954);
 });
+
+test("PPT 받기 — 표지 글자 줄 → 글상자(서체 이름·굵게·색·자간·정렬·여러 줄), PPTX 부품", async () => {
+  const { cssColor, measuredToTextBoxes, pptFont, PPT_BASELINE_EM } = await import("@/lib/catalog/render/pptx-layout");
+  const { buildPptx } = await import("@/lib/print-kit/pptx");
+  const JSZip = (await import("jszip")).default;
+  // 서체 — 400·700 은 가족 이름(700 은 굵게), 나머지는 Windows 정적 서체 이름
+  assert.deepEqual(pptFont("Pretendard", 700), { font: "Pretendard", bold: true });
+  assert.deepEqual(pptFont("Pretendard", 600), { font: "Pretendard SemiBold", bold: false });
+  assert.deepEqual(pptFont("Noto Sans KR", 400), { font: "Noto Sans KR", bold: false });
+  assert.deepEqual(cssColor("rgb(58, 118, 20)"), { hex: "3A7614", alpha: 1 });
+  assert.deepEqual(cssColor("rgba(0, 0, 0, 0.5)"), { hex: "000000", alpha: 0.5 });
+  const line = (o: Partial<import("@/lib/catalog/render/pptx-measure").MeasuredLine>) => ({
+    node: 0, text: "가", left: 56, right: 100, top: 0, baseline: 100, height: 14, family: "Pretendard", weight: 400, size: 10, italic: false,
+    color: "rgb(20, 26, 35)", spacing: 0, align: "left" as const, lineHeight: 14, ...o,
+  });
+  const boxes = measuredToTextBoxes(
+    {
+      width: 842,
+      height: 595,
+      lines: [
+        line({ node: 0, text: "회사소개서", size: 52, weight: 700, baseline: 248, right: 288 }),
+        line({ node: 1, text: "COMPANY PROFILE", size: 12, weight: 600, spacing: 1.6, baseline: 277 }),
+        line({ node: 2, text: "첫 줄", baseline: 332 }),
+        line({ node: 2, text: "둘째 줄", baseline: 350 }),
+        line({ node: 3, text: "본사 사옥", align: "right", left: 675, right: 786, baseline: 572 }),
+      ],
+    },
+    842,
+    595
+  );
+  assert.equal(boxes.length, 4);
+  const [title, en, multi, caption] = boxes;
+  assert.equal(title.paragraphs[0].runs[0].bold, true);
+  assert.equal(title.paragraphs[0].runs[0].font, "Pretendard");
+  assert.ok(Math.abs(title.y - (248 - 52 * PPT_BASELINE_EM)) < 0.01, "한 줄은 기준선 - 0.96em");
+  assert.equal(en.paragraphs[0].runs[0].font, "Pretendard SemiBold");
+  assert.equal(en.paragraphs[0].runs[0].spacing, 1.6);
+  assert.equal(multi.paragraphs.length, 2, "같은 글 노드의 줄은 한 글상자의 문단들");
+  assert.equal(multi.paragraphs[0].lineSpacingPt, 18);
+  assert.equal(caption.paragraphs[0].align, "r");
+  assert.ok(Math.abs(caption.x + caption.w - 786) < 0.01, "오른쪽 정렬은 오른쪽 끝을 맞춘다");
+  // PPTX — 부품·숨긴 슬라이드·그림 형식
+  const png = Buffer.from("89504e470d0a1a0a", "hex");
+  const pptx = await buildPptx({ width: 842, height: 595, title: "시험", slides: [{ texts: boxes, pictures: [{ x: 0, y: 0, w: 842, h: 595, data: png, type: "png", locked: true }] }, { hidden: true, pictures: [{ x: 0, y: 0, w: 842, h: 595, data: png, type: "jpeg" }] }] });
+  const zip = await JSZip.loadAsync(pptx);
+  for (const part of ["[Content_Types].xml", "ppt/presentation.xml", "ppt/slides/slide1.xml", "ppt/slides/slide2.xml", "ppt/slideMasters/slideMaster1.xml", "ppt/theme/theme1.xml", "ppt/media/image1.png", "ppt/media/image2.jpeg"]) {
+    assert.ok(zip.file(part), `부품 ${part}`);
+  }
+  const types = await zip.file("[Content_Types].xml")!.async("string");
+  assert.match(types, /Extension="png"/);
+  assert.match(types, /Extension="jpeg"/);
+  assert.match(await zip.file("ppt/slides/slide2.xml")!.async("string"), /<p:sld [^>]*show="0"/);
+  const s1 = await zip.file("ppt/slides/slide1.xml")!.async("string");
+  assert.match(s1, /<a:t>회사소개서<\/a:t>/);
+  assert.match(s1, /typeface="Pretendard SemiBold"/);
+  assert.match(s1, /spc="160"/);
+  assert.match(await zip.file("ppt/presentation.xml")!.async("string"), /<p:sldSz cx="10693400" cy="7556500"\/>/);
+});

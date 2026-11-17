@@ -990,6 +990,8 @@ export const SALES_ARTICLES: ManualArticle[] = [
         title: "발행본 받기",
         blocks: [
           { kind: "p", text: "[[발행본]] 표는 대외 배포용으로 확정한 회사소개서 목록입니다. 맨 위가 최신 판입니다. [[미리보기]]는 화면 안에서 열고, [[받기]]는 파일로 내려받습니다. 받은 파일을 그대로 고객·기관에 보내면 됩니다." },
+          { kind: "tip", text: "[[PPT]]는 같은 판을 PowerPoint(PPTX)로 받습니다. 첫 장 표지는 바탕 그림 위에 글상자·로고를 따로 올려 PowerPoint 에서 제목·회사명·분야·날짜를 고치고 로고를 바꿀 수 있습니다(물방울 틀 사진·장식은 바탕). 나머지 쪽은 PDF 와 똑같은 그림이라 고칠 수 없습니다. PDF 표지 그림은 둘째 장에 숨긴 슬라이드로 들어 있습니다." },
+          { kind: "warn", text: "PPT 표지 글자는 Pretendard 등 회사소개서 서체로 지정됩니다. 받는 PC 에 그 서체가 없으면 PowerPoint 가 다른 글꼴로 바꿔 보여 줍니다. 표지는 받을 때의 데이터·편집본으로 다시 그리므로 오래된 발행본이면 날짜 등이 PDF 와 다를 수 있습니다." },
           { kind: "table", head: ["판", "뜻"], rows: [
             ["풀버전", "본편과 부록(분야별 수행실적 목록)을 모두 담은 판"],
             ["요약본", "부록을 뺀 본편만의 짧은 판"],
@@ -1170,7 +1172,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/CatalogRenderPanel.tsx",
       "components/sales/catalog/CatalogReferencePanel.tsx",
     ],
-    reviewedAt: "2026-11-12",
+    reviewedAt: "2026-11-17",
   },
   {
     id: "sales.catalog-studio",
@@ -1381,6 +1383,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
             "다른 사람이 같은 문서를 먼저 고쳤으면 저장이 멈추고 [[새로 불러오기]]가 나옵니다.",
           ] },
           { kind: "p", text: "[[미리보기]]는 PDF 와 같은 조판(자동 분쪽 포함)으로 문서 전체를 봅니다. [[PDF 받기]]는 지금 저장된 편집본으로 PDF 를 만들고 쪽 수·넘침 수를 보여 준 뒤 내려받게 합니다. 첫 화면에서 만드는 PDF 에도 같은 편집이 들어갑니다." },
+          { kind: "p", text: "PDF 를 만든 뒤 [[PPT 받기]]를 누르면 같은 판을 PowerPoint(PPTX)로 받습니다. 첫 장 표지는 글상자·로고가 따로 올라가 PowerPoint 에서 고칠 수 있고, 나머지 쪽은 그림입니다(1분 안팎)." },
           { kind: "tip", text: "숫자·목록을 고치지 않고 두면 계약이 늘거나 직원이 바뀔 때 PDF 에 바로 반영됩니다. 꼭 필요한 문장만 고치는 것이 관리하기 쉽습니다." },
         ],
       },

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, Minus, PenTool, Plus, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, Grid3x3, Hash, History, Loader2, Minus, PenTool, Plus, Presentation, Redo2, RefreshCw, Send, Sparkles, Undo2 } from "lucide-react";
 import { CdModal } from "@/components/cdash/CdModal";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdTabs } from "@/components/cdash/CdTabs";
@@ -1162,9 +1162,15 @@ function PdfModal({ open, onClose, view }: { open: boolean; onClose: () => void;
                 {t}
               </span>
             ))}
-            <a className="cd-btn cd-btn-soft cd-btn-sm cd-action self-start" href={`/api/catalog/editions/${result.editionId}/pdf`}>
-              <Download className="w-3.5 h-3.5" /> {result.fileName} 받기
-            </a>
+            <div className="flex flex-wrap gap-1.5">
+              <a className="cd-btn cd-btn-soft cd-btn-sm cd-action" href={`/api/catalog/editions/${result.editionId}/pdf`}>
+                <Download className="w-3.5 h-3.5" /> {result.fileName} 받기
+              </a>
+              <a className="cd-btn cd-btn-ghost cd-btn-sm cd-action" href={`/api/catalog/editions/${result.editionId}/pptx`} title="PowerPoint(PPTX) 받기 — 첫 장 표지는 글상자로 고칠 수 있고, 나머지는 쪽 그림">
+                <Presentation className="w-3.5 h-3.5" /> PPT 받기
+              </a>
+            </div>
+            <p className="text-xs cd-text-faint">PPT 는 첫 장 표지를 글상자·로고로 나눠 PowerPoint 에서 고칠 수 있고, 나머지 쪽은 그림으로 넣습니다(1분 안팎).</p>
           </div>
         ) : null}
       </div>

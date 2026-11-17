@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-17", kind: "신규", title: "회사소개서 — PPT(PowerPoint) 받기",
+    body: "회사소개서 생성본·발행본을 PowerPoint(PPTX)로 받을 수 있습니다. 첫 장 표지는 바탕 그림 위에 글상자·로고를 따로 올려 PowerPoint 에서 제목·회사명·분야·날짜를 고치고 로고를 바꿀 수 있고, 나머지 쪽은 PDF 와 같은 그림으로 들어갑니다. 스튜디오 PDF 받기 창과 PDF 목록·발행본 목록의 [PPT] 단추에서 받습니다.",
+    articles: ["sales.catalog", "sales.catalog-studio"],
+  },
+  {
     date: "2026-11-17", kind: "신규", title: "회사소개서 스튜디오 — 여러 요소 정렬·격자 맞춤",
     body: "스튜디오에서 요소를 여러 개 고르면 내용 탭에 정렬 단추가 나옵니다. 왼쪽·가운데·오른쪽, 위·가운데·아래 맞춤과 가로·세로 간격 같게, 그리고 줄마다 위 끝·칸마다 왼쪽 끝을 한 번에 맞추는 격자 맞춤이 있습니다(실행 취소 한 단계).",
     articles: ["sales.catalog-studio"],

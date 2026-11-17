@@ -9,6 +9,8 @@ const nextConfig = {
   serverExternalPackages: ["sql.js", "@napi-rs/canvas", "unpdf", "pdfjs-dist", "imapflow"],
   outputFileTracingIncludes: {
     "/api/finance/supply-group-evidence": ["./node_modules/pdfjs-dist/standard_fonts/**/*", "./node_modules/pdfjs-dist/cmaps/**/*"],
+    // 회사소개서 PPT 받기 — PDF 쪽 그림(lib/print-kit/pdf-raster.ts)도 같은 pdfjs 자산을 fs 로 읽는다
+    "/api/catalog/editions/[editionId]/pptx": ["./node_modules/pdfjs-dist/standard_fonts/**/*", "./node_modules/pdfjs-dist/cmaps/**/*"],
   },
   experimental: {
     // 미들웨어(middleware.ts)를 거치는 요청 본문은 기본 10MB 까지만 라우트로 넘어간다 — 초과분이 잘려

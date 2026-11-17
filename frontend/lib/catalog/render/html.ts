@@ -125,7 +125,14 @@ export async function loadImageKey(key: ImageKey): Promise<{ data: Buffer; conte
  */
 export async function buildCatalogHtml(
   data: CatalogRenderData,
-  opts: RenderOptions & { target: RenderTarget; pages?: StudioPageState[] }
+  opts: RenderOptions & {
+    target: RenderTarget;
+    pages?: StudioPageState[];
+    /** 이 쪽 유형만 그린다(예: ["C01"] = 표지만 — 갑지 편집형 PPT) */
+    onlyTypes?: string[];
+    /** paginate.js 앞에 붙일 스크립트(예: 표지 글자 재기 — pptx-measure.ts) */
+    extraScript?: string;
+  }
 ): Promise<BuiltCatalogHtml> {
   const notices = [...data.notices];
   const cover = await chooseCover(data, notices);
@@ -134,7 +141,8 @@ export async function buildCatalogHtml(
   if (notice) notices.push(notice);
   const ctx: RenderCtx = { url, opts, docLabel: data.docLabel, fontSet: set.id, concept: data.theme.concept, template: data.theme.template, motif: data.theme.motif };
   await registerUsedIllustrations(opts.pages ?? []);
-  const pages = composeDocument(ctx, data, cover, opts.pages ?? []);
+  const composedAll = composeDocument(ctx, data, cover, opts.pages ?? []);
+  const pages = opts.onlyTypes ? composedAll.filter((p) => opts.onlyTypes!.includes(p.item.type)) : composedAll;
   const drawn = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
   const body = opts.naming === "masked" ? maskNamesInHtml(drawn, data.maskNames ?? []) : drawn;
   // 실제로 그린 이미지만 converter 에 보낸다(숨긴 쪽·숨긴 요소·바꾼 사진의 원래 그림은 빼고)
@@ -170,7 +178,9 @@ export async function buildCatalogHtml(
     styles: [sheetCss, tokensCss, catalogCss, ...(set.css ? [set.css] : []), PRINT_OVERRIDES, STUDIO_PRINT_CSS],
     fonts,
     body,
-    script,
+    script: opts.extraScript ? `${opts.extraScript}
+;
+${script}` : script,
     config: { folioDigits: 2, continuedLabel: " (계속)" },
     meta: { author: data.company.name, description: `${data.company.name} 회사소개서(${data.asOfLabel} 기준, 자동 생성)` },
   });

@@ -4,10 +4,31 @@
 //   여러 개 고르면(Shift·Ctrl+클릭) 고른 목록과 함께 하는 일(복제·숨기기·지우기)만 보인다.
 
 import { useMemo } from "react";
-import { ArrowDown, ArrowUp, Copy, CornerLeftUp, EyeOff, ImagePlus, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalSpaceAround,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalSpaceAround,
+  ArrowDown,
+  ArrowUp,
+  Copy,
+  CornerLeftUp,
+  EyeOff,
+  ImagePlus,
+  LayoutGrid,
+  RotateCcw,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { INFO_TYPE_META, type InfoContent, type InfoItem, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
+import type { AlignMode } from "@/lib/catalog/studio/align";
 import { editsWithin } from "@/lib/catalog/studio/edits";
 import { findNode, newUserId, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { capabilities, describe, isTextBlock, parentSelection, type Selection } from "@/lib/catalog/studio/select";
@@ -182,6 +203,18 @@ export function PanelContent({ studio, item, composed, sel, caps, multi, ops }: 
   );
 }
 
+/** 여러 요소 정렬 단추(사용자 요청 2026-11-17) — 맞춤 6종·간격 2종. 격자 맞춤은 글 단추로 따로 */
+const ALIGN_BUTTONS: Array<{ mode: AlignMode; label: string; Icon: LucideIcon }> = [
+  { mode: "left", label: "왼쪽 맞춤", Icon: AlignStartVertical },
+  { mode: "hcenter", label: "가로 가운데 맞춤", Icon: AlignCenterVertical },
+  { mode: "right", label: "오른쪽 맞춤", Icon: AlignEndVertical },
+  { mode: "top", label: "위쪽 맞춤", Icon: AlignStartHorizontal },
+  { mode: "vmiddle", label: "세로 가운데 맞춤", Icon: AlignCenterHorizontal },
+  { mode: "bottom", label: "아래쪽 맞춤", Icon: AlignEndHorizontal },
+  { mode: "spaceX", label: "가로 간격 같게", Icon: AlignHorizontalSpaceAround },
+  { mode: "spaceY", label: "세로 간격 같게", Icon: AlignVerticalSpaceAround },
+];
+
 /** 여러 개 고른 경우 — 고른 목록(누르면 빼기)과 함께 하는 일 */
 function MultiControls({ multi, item, ops }: { multi: Selection[]; item: PanelProps["item"]; ops: PanelProps["ops"] }) {
   const capsOf = (s: Selection) => capabilities(s, item.maxLevel);
@@ -215,6 +248,26 @@ function MultiControls({ multi, item, ops }: { multi: Selection[]; item: PanelPr
         ) : null}
       </div>
       <p className="text-[11px] cd-text-faint">원래 요소는 숨기고(숨긴 요소에서 되살림) 직접 넣은 요소는 지웁니다. 복제한 사본은 직접 넣은 요소가 되어 자동 갱신에서 빠집니다.</p>
+      {canMove ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1">
+            <span className="text-xs cd-text-muted">정렬</span>
+            <CdHelp topic="catalog.studio-align" />
+          </div>
+          <div className="flex flex-wrap items-center gap-0.5">
+            {ALIGN_BUTTONS.map(({ mode, label, Icon }) => (
+              <button key={mode} type="button" className="cd-icon-button cd-icon-button-sm" aria-label={label} title={label} onClick={() => ops.align(mode)}>
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            ))}
+          </div>
+          <div>
+            <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" onClick={() => ops.align("grid")} title="줄마다 위 끝을, 칸마다 왼쪽 끝을 맞춥니다">
+              <LayoutGrid className="w-3.5 h-3.5" /> 격자 맞춤
+            </button>
+          </div>
+        </div>
+      ) : null}
       <ul className="flex flex-col gap-0.5">
         {multi.map((s) => (
           <li key={s.id} className="flex items-center gap-1 text-xs">

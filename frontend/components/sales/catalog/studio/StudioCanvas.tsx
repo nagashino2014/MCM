@@ -32,6 +32,7 @@ import {
   type ReactNode,
 } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ALIGN_MIN, alignDeltas, type AlignMode } from "@/lib/catalog/studio/align";
 import { COL_STEP, COL_W, COLOR_TOKENS, COLUMNS, CONTENT_W, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_X, PAGE_H, PAGE_W, TEXT_COLORS, resizeBox, snapX, snapY, type Box, type ResizeHandle } from "@/lib/catalog/studio/design-system";
 import { CARET_ID, appendCaret, caretNode, collectChips, fromEditableDom, toEditableHtml } from "@/lib/catalog/studio/inline";
 import { stripDerived, type DuplicateAt } from "@/lib/catalog/studio/edits";
@@ -56,6 +57,8 @@ export interface CanvasHandle {
   geometry: (id: string) => (Rect & { fontPx: number; lineRatio: number }) | null;
   /** 복제·복사 자리와 원본의 지금 모양 */
   copyInfo: (id: string) => DuplicateAt | null;
+  /** 고른 여러 요소 맞추기·간격 같게·격자 맞춤(실행 취소 한 단계) — 옮긴 요소 수, 고른 수가 모자라면 -1 */
+  align: (mode: AlignMode) => number;
 }
 
 /** 지표 넣기 대상 — 글 블록 id 와 표식(caret)이 든 자식 */
@@ -658,6 +661,19 @@ export function StudioCanvas({
         const fontPx = parseFloat(cs.fontSize) || 0;
         return { ...r, fontPx, lineRatio: fontPx ? lineRatioOf(cs) : 1.4 };
       },
+      align: (mode) => {
+        // 정렬은 안내선 맞춤 없이 잰 상자 그대로(묶음 옮기기와 같은 스타일 덧씌우기, 한 번에 적용 → 실행 취소 한 단계)
+        if (!multi) return -1;
+        const items = groupItems();
+        if (items.length < ALIGN_MIN[mode]) return -1;
+        const deltas = alignDeltas(items.map((it) => it.rect), mode);
+        const list = items.flatMap((it, i) => {
+          const patch = movePatch(it.rect, it.cs, deltas[i].dx, deltas[i].dy);
+          return patch ? [{ id: it.id, patch }] : [];
+        });
+        if (list.length) onPatchStyles(withPhotoReset(list));
+        return list.length;
+      },
       copyInfo: (id) => {
         const box = elOf(layoutId(id));
         const r = rectOf(box);
@@ -696,7 +712,7 @@ export function StudioCanvas({
         s?.addRange(r);
       },
     };
-  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt, multi, groupItems, commitGroup, layoutId, snapOn]);
+  }, [handleRef, frame, selectedId, selCaps, elOf, rectOf, commitMove, textBlocks, tree, captureAt, multi, groupItems, commitGroup, layoutId, snapOn, onPatchStyles, withPhotoReset]);
 
   // iframe 안의 단축키 → 화면 쪽 처리기
   useEffect(() => {

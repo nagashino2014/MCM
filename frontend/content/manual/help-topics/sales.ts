@@ -308,6 +308,21 @@ export const SALES_HELP: HelpTopic[] = [
     reviewedAt: "2026-11-09",
   },
   {
+    id: "catalog.studio-align",
+    label: "여러 요소 정렬 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "[[왼쪽 맞춤]] 등 맞춤 단추는 고른 요소 전체를 감싸는 상자의 끝·가운데에 맞춥니다.",
+        "[[가로 간격 같게]]·[[세로 간격 같게]]는 3개 이상일 때 양 끝을 두고 사이 틈을 같게 합니다.",
+        "[[격자 맞춤]]은 줄마다 위 끝을, 칸마다 왼쪽 끝을 맞춥니다(예: 표지 분야 2줄×3칸).",
+        "한 번에 실행 취소(Ctrl+Z)됩니다. 안내선 맞춤과 상관없이 잰 위치 그대로 맞춥니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "multi" },
+    sources: ["components/sales/catalog/studio/PanelContent.tsx"],
+    reviewedAt: "2026-11-17",
+  },
+  {
     id: "catalog.studio-infographic",
     label: "인포그래픽 유형 도움말",
     blocks: [

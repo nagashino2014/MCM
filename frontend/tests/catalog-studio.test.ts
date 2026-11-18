@@ -5,6 +5,7 @@ import { parseDocument } from "htmlparser2";
 import { Fragment, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildPagePlan } from "@/lib/catalog/render/components/plan";
+import { chipRows } from "@/lib/catalog/render/components/pages-business";
 import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
 import type { CatalogRenderData, RenderCtx, RenderOptions } from "@/lib/catalog/render/types";
 import { matchInfographic } from "@/lib/catalog/render/infographic/match";
@@ -866,4 +867,36 @@ test("연혁 숫자 띠 — 특허·수상 숫자·설명을 칸별로 고칠 �
   assert.equal(capabilities(sel, 3).editText, true);
   const note = findBy(patent, hasClass("kc-kpi__note"))!;
   assert.equal(resolveSelection(derived, note.id)!.kind, "text");
+});
+
+test("사업 분야 쪽 문구(2026-11-18) — 수행 업종 3줄, ESG 순위·수상, 핵심 역량 방법 3단", () => {
+  const fx = makeFixture();
+  const plan = buildPagePlan(ctxOf(), fx, COVER);
+  const html = (key: string) => renderToStaticMarkup(plan.find((p) => p.key === key)!.element);
+  // 태그 줄 나누기 — 순서 유지, 3줄, 줄 폭이 고르게
+  const labels = ["폐기물처리", "발전", "섬유·염색", "비철", "유기화학", "전자부품", "철강", "증기열공급", "무기화학", "자동차부품", "반도체", "알콜음료", "가나다", "종이·펄프", "기타화학", "플라스틱"];
+  const rows = chipRows(labels, 3);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.flat(), labels);
+  const widths = rows.map((r) => r.reduce((s, l) => s + [...l].length + 2, 0));
+  assert.ok(Math.max(...widths) - Math.min(...widths) <= 8, `줄 폭 ${widths}`);
+  assert.deepEqual(chipRows(["a", "b"], 3), [["a"], ["b"]]);
+  assert.deepEqual(chipRows([], 3), []);
+  const permit = html("area-1");
+  assert.equal((permit.match(/class="kc-chiprow"/g) ?? []).length, Math.min(3, fx.permitIndustries.length));
+  // ESG — 큰 숫자 아래 순위, 대표 성과 아래 수상(각주에서 옮김)
+  const esg = html("area-4");
+  assert.match(esg, /58\.4<\/span><small[^>]*>\(상위 69%\)<\/small>/);
+  assert.match(esg, /\(상위 3%\)/);
+  assert.match(esg, /2025 한국ESG경영대상 THE BEST ESG 최우수상\(2025\.08\.\) 수상/);
+  assert.equal((esg.match(/한국ESG경영대상/g) ?? []).length, 1, "각주에는 없음");
+  // 핵심 역량 — 제목·근거 두 줄·협의 항목·사후관리 설명, 세 단 모두 근거 줄(구분선)
+  const st = html("c10");
+  assert.match(st, /자체 진단 매뉴얼·플랫폼 활용/);
+  assert.match(st, /<span>자체 개발 진단 매뉴얼<\/span><span>통합허가계획서 플랫폼<\/span>/);
+  assert.match(st, /방지시설 추가 설치 완화/);
+  assert.match(st, /최적 배출기준 협의/);
+  assert.doesNotMatch(st, /SCR 설치 면제/);
+  assert.match(st, /연간보고서 작성 대행까지/);
+  assert.equal((st.match(/class="kc-card__proof"/g) ?? []).length, 3);
 });

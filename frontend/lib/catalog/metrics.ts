@@ -67,6 +67,12 @@ export interface MetricValue extends MetricDef {
   missing?: string;
 }
 
+/**
+ * 통합허가 수행 업종 보충(사용자 지시 2026-11-18) — 수행했지만 계약·사업장 업종 분류로 아직 잡히지 않은 대상 업종.
+ * 계약 자료에서 이미 잡히면 겹치지 않는다(업종 수·소개서 수행 업종 태그 모두 합집합). 대상 업종 이름(관리 › 통합허가 업종)과 같아야 센다.
+ */
+export const EXTRA_PERMIT_INDUSTRIES: readonly string[] = ["종이·펄프", "기타화학", "플라스틱"];
+
 export const METRIC_DEFS: MetricDef[] = [
   {
     id: "permit.initial.completed",
@@ -90,7 +96,7 @@ export const METRIC_DEFS: MetricDef[] = [
     id: "permit.industries",
     label: "통합허가 수행 업종",
     unit: "개",
-    footnote: "통합환경허가 용역을 수행한 통합허가 대상 업종 수(관리 › 통합허가 업종 기준, 사업장 업종 기준).",
+    footnote: "통합환경허가 용역을 수행한 통합허가 대상 업종 수(관리 › 통합허가 업종 기준, 사업장 업종 기준). 계약 자료로 아직 잡히지 않은 수행 업종(종이·펄프·기타화학·플라스틱)을 더해 셉니다.",
   },
   // 사업 분야별 누적 계약 수 — 분야 번호는 디자인 시스템 분야 색 area-1..6 과 같다(lib/catalog/areas.ts)
   ...CATALOG_CATEGORIES.map((category, i) => ({
@@ -276,7 +282,7 @@ export async function computeCatalogMetrics(pre?: {
   const clients = new Set(projects.map((p) => p.counterpartyName.trim()).filter(Boolean)).size;
   // 통합허가 수행 업종 — 대상 업종 이름으로 판정된 것만 센다(listCatalogProjects 가 갱신한 목록)
   const permitLabels = new Set(activePermitIndustries(permitIndustriesSnapshot()).map((i) => i.label));
-  const permitIndustries = new Set(permitRows.map((p) => buildDisplayIndustry(p)).filter((l) => permitLabels.has(l))).size;
+  const permitIndustries = new Set([...permitRows.map((p) => buildDisplayIndustry(p)), ...EXTRA_PERMIT_INDUSTRIES].filter((l) => permitLabels.has(l))).size;
   const areaCounts = Object.fromEntries(
     CATALOG_CATEGORIES.map((c, i) => [`projects.area.${i + 1}`, { value: projects.filter((p) => p.category === c).length }])
   ) as Record<`projects.area.${1 | 2 | 3 | 4 | 5 | 6}`, { value: number }>;

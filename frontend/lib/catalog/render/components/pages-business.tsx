@@ -2,6 +2,7 @@
  * 회사소개서 사업·역량 쪽 유형 — C08 사업 분야 개관 · C09 사업 분야 상세(5분야 공용) · C09 응용소프트웨어 2쪽 · C10 핵심 역량 · C11 대표 성공 사례.
  * 마크업은 P2 쪽 유형 목업과 같다. 분야 상세의 히어로는 사진 없는 변형(분야 누적 실적 숫자)을 쓴다 — 분야 사진 자산이 아직 없다.
  */
+import { Fragment } from "react";
 import { orderAreas } from "@/lib/catalog/areas";
 import type { MetricId } from "@/lib/catalog/metrics";
 import { REGION_GROUPS } from "@/lib/catalog/regions";
@@ -32,6 +33,41 @@ const ORBIT_POS = [
 ];
 
 /** 이름을 두 개씩 ' · ' 로 묶은 줄 */
+/**
+ * 태그를 순서를 지킨 채 rows 줄로 나눈다 — 줄마다 글자 폭(글자 수 + 안쪽 여백) 합이 고르게(가장 긴 줄이 가장 짧게).
+ * 각 줄은 태그가 늘어나 폭을 채운다(kc-chiprow, print-overrides) — 수행 업종 3줄 배치(사용자 지시 2026-11-18)
+ */
+export function chipRows(labels: string[], rows: number): string[][] {
+  const n = labels.length;
+  const k = Math.max(1, Math.min(rows, n));
+  if (n === 0) return [];
+  const w = labels.map((l) => [...l].length + 2);
+  const pre = [0];
+  for (const x of w) pre.push(pre[pre.length - 1] + x);
+  // best[j][i] = 앞 i개를 j줄로 나눴을 때 가장 긴 줄의 최소값
+  const best: number[][] = Array.from({ length: k + 1 }, () => new Array<number>(n + 1).fill(Infinity));
+  const cut: number[][] = Array.from({ length: k + 1 }, () => new Array<number>(n + 1).fill(0));
+  best[0][0] = 0;
+  for (let j = 1; j <= k; j++) {
+    for (let i = j; i <= n; i++) {
+      for (let s = j - 1; s < i; s++) {
+        const v = Math.max(best[j - 1][s], pre[i] - pre[s]);
+        if (v < best[j][i]) {
+          best[j][i] = v;
+          cut[j][i] = s;
+        }
+      }
+    }
+  }
+  const out: string[][] = [];
+  for (let j = k, i = n; j > 0; j--) {
+    const s = cut[j][i];
+    out.unshift(labels.slice(s, i));
+    i = s;
+  }
+  return out;
+}
+
 function pairNames(names: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < names.length; i += 2) out.push(names.slice(i, i + 2).join(" · "));
@@ -212,10 +248,28 @@ export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; d
                     <span className="kc-caption" style={{ color: "var(--ink)" }}>
                       {c.heroCaption}
                     </span>
-                    <span className="kc-ig__fig" style={{ fontSize: 40, lineHeight: "46px", letterSpacing: -1 }}>
-                      {c.heroFigure.value}
-                      <small style={{ fontSize: 14, marginLeft: 2 }}>{c.heroFigure.unit}</small>
-                    </span>
+                    {c.heroFigure.steps?.length ? (
+                      // 전후 숫자마다 아래에 보조 글(평가 순위) — 단위는 마지막 숫자 오른쪽에 붙여 보조 글이 숫자 가운데 오게
+                      <span className="kc-ig__fig" style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 40, lineHeight: "46px", letterSpacing: -1 }}>
+                        {c.heroFigure.steps.map((st, i, all) => (
+                          <Fragment key={i}>
+                            {i > 0 ? <span aria-hidden="true">→</span> : null}
+                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
+                              <span style={{ position: "relative" }}>
+                                {st.value}
+                                {i === all.length - 1 ? <small style={{ position: "absolute", left: "100%", bottom: 0, fontSize: 14, lineHeight: "30px", marginLeft: 2 }}>{c.heroFigure!.unit}</small> : null}
+                              </span>
+                              {st.note ? <small style={{ fontSize: 11, lineHeight: "15px", fontWeight: 600, letterSpacing: 0 }}>{st.note}</small> : null}
+                            </span>
+                          </Fragment>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="kc-ig__fig" style={{ fontSize: 40, lineHeight: "46px", letterSpacing: -1 }}>
+                        {c.heroFigure.value}
+                        <small style={{ fontSize: 14, marginLeft: 2 }}>{c.heroFigure.unit}</small>
+                      </span>
+                    )}
                   </>
                 ) : (
                   <>
@@ -247,11 +301,16 @@ export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; d
           {isPermit && data.permitIndustries.length ? (
             <div>
               <p className="kc-blockhead">수행 업종</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }} data-widget="chips">
-                {data.permitIndustries.slice(0, 12).map((l) => (
-                  <span key={l} className="kc-badge kc-badge--soft">
-                    {l}
-                  </span>
+              {/* 수행 업종 전부를 3줄로 — 줄마다 태그가 늘어나 빈틈없이 채운다(사용자 지시 2026-11-18) */}
+              <div className="kc-chiprows" data-widget="chips">
+                {chipRows(data.permitIndustries.slice(0, 24), 3).map((row, r) => (
+                  <div key={r} className="kc-chiprow">
+                    {row.map((l) => (
+                      <span key={l} className="kc-badge kc-badge--soft">
+                        {l}
+                      </span>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
@@ -263,6 +322,15 @@ export function AreaPage({ ctx, data, area, variant, note }: { ctx: RenderCtx; d
                 <span className="kc-blockhead__aside">{c.compare.aside}</span>
               </p>
               <InfoSlot slot={`area-${area.index}.compare`} spec={compareSpec(c.compare.rows)} box={{ w: 233, h: 80 }} area={area.index} />
+            </div>
+          ) : null}
+          {isEsg && c.award ? (
+            <div>
+              <p className="kc-blockhead">{c.award.title}</p>
+              <p style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 10, lineHeight: "15px", fontWeight: 600, color: "var(--ink)" }}>
+                <Icon name="award" cls="kc-icon" style={{ flex: "none", width: 14, height: 14, color: "var(--area)" }} />
+                <span>{c.award.text}</span>
+              </p>
             </div>
           ) : null}
           {regions.length ? (
@@ -700,7 +768,10 @@ export function StrengthsPage({ ctx, data, variant, sectionStart }: { ctx: Rende
                 ) : (
                   <p className="kc-card__desc">{"desc" in st ? st.desc : ""}</p>
                 )}
-                {"proof" in st && st.proof ? <span className="kc-card__proof">{st.proof}</span> : null}
+                {/* 근거 줄 — 세 단 모두 맨 아래 같은 자리에 구분선(체크 목록 단은 빈 줄, 사용자 지시 2026-11-18). 줄바꿈(\n)은 줄마다 */}
+                <span className="kc-card__proof" aria-hidden={"proof" in st && st.proof ? undefined : true}>
+                  {"proof" in st && st.proof ? st.proof.split("\n").map((ln, i) => <span key={i}>{ln}</span>) : "\u00a0"}
+                </span>
               </li>
             ))}
           </ol>

@@ -58,6 +58,18 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
    판 크기를 스튜디오에서 바꿔도 로고가 판을 넘지 않는다(인라인 크기는 스튜디오가 틀 크기 변경 때 지우므로 클래스로 둔다) */
 .kc-logo-plate > .kc-logo-plate__img { position: absolute; left: 15%; top: 4%; width: 70%; height: 92%; object-fit: contain; display: block; }
 
+/* 통합환경허가 쪽 수행 업종 태그 3줄(사용자 지시 2026-11-18) — 줄마다 태그가 늘어나 단 폭을 빈틈없이 채운다(글자는 가운데).
+   18개 안팎이면 한 줄 6개라 글자·안쪽 여백을 한 단계 줄인다 */
+.kc-chiprows { display: flex; flex-direction: column; gap: 4px; }
+.kc-chiprow { display: flex; gap: 4px; }
+.kc-chiprow > .kc-badge { flex: 1 1 auto; justify-content: center; padding: 1px 3px; font-size: 8px; line-height: 14px; letter-spacing: -0.2px; }
+
+/* 핵심 역량 방법 3단(사용자 지시 2026-11-18) — 제목을 한 단계 줄여('자체 진단 매뉴얼·플랫폼 활용'이 한 줄에), 체크 목록은 제목 바로 아래(위 구분선 없음),
+   근거 줄은 두 줄 높이로 맞춰 세 단의 구분선이 맨 아래 같은 자리에 오게 한다. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-strengths__flow .kc-card__title { font-size: 11px; line-height: 16px; letter-spacing: -0.2px; }
+.kc-strengths__flow .kc-strengths__checks { margin-top: 0; padding-top: 1px; border-top: 0; }
+.kc-strengths__flow .kc-card__proof { flex-direction: column; align-items: flex-start; gap: 0; min-height: 31px; } /* 두 줄 24 + 위 여백 6 + 선(border-box) */
+
 /* 사업 분야 쪽 라벨(주요 서비스·수행 업종·수행 절차·대표 실적)과 그 아래 요소 사이(사용자 지시 2026-11-05) — 0 → 6px.
    늘어난 높이는 오른쪽 단 블록 사이(14 → 10px, pages-business.tsx)에서 받아 쪽 넘침을 막는다 */
 .kc-areapage .kc-blockhead { margin-bottom: 6px; }

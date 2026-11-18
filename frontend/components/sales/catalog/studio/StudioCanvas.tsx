@@ -293,13 +293,19 @@ export function StudioCanvas({
       },
       override: (n: CNode): ReactNode | undefined => {
         // 일러스트 글자 자리 — 바로 눌러 고친다(평문, 지표에 묶은 숫자는 칩이라 고치지 않음)
-        if (onCommitSlot && maxLevel >= 2 && n.attrs && "data-ill-slot" in n.attrs && !(function hasBind(x: CNode): boolean { return Boolean(x.bind) || (x.children ?? []).some(hasBind); })(n)) {
+        //   이름 뒤에 지표 건수가 붙은 자리(분야명 + '233건', kc-ill__fig)는 이름 부분만 고치고 건수 칩은 그대로 둔다(사용자 지시 2026-11-18)
+        if (onCommitSlot && maxLevel >= 2 && n.attrs && "data-ill-slot" in n.attrs) {
+          const hasBind = (x: CNode): boolean => Boolean(x.bind) || (x.children ?? []).some(hasBind);
+          const isFig = (x: CNode) => /\bkc-ill__fig\b/.test(x.className ?? "");
+          const wrap = hasBind(n) ? n.children?.find((c) => /\bkc-ill__text\b/.test(c.className ?? "")) : undefined;
+          const figs = wrap?.children?.filter(isFig) ?? [];
+          const rest = wrap?.children?.filter((c) => !isFig(c)) ?? [];
+          const labelOnly = Boolean(wrap && figs.length && !rest.some(hasBind));
+          if (hasBind(n) && !labelOnly) return undefined;
           const role = String(n.attrs["data-ill-role"] ?? "");
           const multi = role === "desc" || role === "center";
-          const text = textOf(n);
-          return createElement(n.tag, {
-            ...nodeProps(n, env),
-            "data-cn": n.id,
+          const text = labelOnly ? rest.map(textOf).join("") : textOf(n);
+          const editProps = {
             "data-st-edit": "1",
             contentEditable: true,
             suppressContentEditableWarning: true,
@@ -323,7 +329,15 @@ export function StudioCanvas({
               const next = e.currentTarget.innerText;
               if (next.trim() !== text.trim()) onCommitSlot(n.id, next);
             },
-          });
+          };
+          if (labelOnly && wrap) {
+            return createElement(
+              n.tag,
+              { ...nodeProps(n, env), "data-cn": n.id },
+              createElement(wrap.tag, nodeProps(wrap, env), createElement("span", { key: "label", ...editProps }), ...figs.map((f) => renderNode(f, env)))
+            );
+          }
+          return createElement(n.tag, { ...nodeProps(n, env), "data-cn": n.id, ...editProps });
         }
         if (n.attrs && "data-folio" in n.attrs && !textBlocks.has(n.id)) {
           return createElement(n.tag, { ...nodeProps(n, env), "data-cn": n.id }, pad2(folio));

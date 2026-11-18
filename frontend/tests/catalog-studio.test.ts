@@ -813,3 +813,57 @@ test("PPT 받기 — 표지 글자 줄 → 글상자(서체 이름·굵게·색�
   assert.match(s1, /spc="160"/);
   assert.match(await zip.file("ppt/presentation.xml")!.async("string"), /<p:sldSz cx="10693400" cy="7556500"\/>/);
 });
+
+test("숫자 쪽(C04) 카드 설명 — 도식 안이어도 글 블록으로 고르고 고친 글이 남는다, 다시 그린 도식은 통째로(2026-11-18)", () => {
+  const base = pageTree(makeFixture(), "c04");
+  let edits: PageEdits = { v: 1 };
+  let derived = applyEdits(base, edits);
+  const widget = findBy(derived, (n) => n.widget === "infographic")!;
+  const notes: CNode[] = [];
+  walk(widget, (n) => {
+    if (hasClass("kc-kpi__note")(n)) notes.push(n);
+  });
+  assert.ok(notes.length >= 6, "카드 설명 칸");
+  const note = notes[1];
+  const sel = resolveSelection(derived, note.id)!;
+  assert.equal(sel.id, note.id);
+  assert.equal(sel.kind, "text");
+  const caps = capabilities(sel, 3);
+  assert.equal(caps.editText, true);
+  assert.equal(caps.move, false, "자리는 도식이 정한다");
+  assert.equal(caps.duplicate, false);
+  // 카드 이름·숫자는 여전히 도식 통째로
+  const label = findBy(widget, hasClass("kc-kpi__label"))!;
+  assert.equal(resolveSelection(derived, label.id)!.id, widget.id);
+  // 고친 설명이 그려진다
+  edits = setNodeContent(edits, derived, note.id, [{ id: "udddddddd", tag: "#text", text: "고친 설명 문구" }]);
+  edits = sanitizePageEdits(JSON.parse(JSON.stringify(edits)));
+  derived = applyEdits(base, edits);
+  assert.equal(textOf(findNode(derived, note.id)!), "고친 설명 문구");
+  // 유형을 바꿔 spec 으로 다시 그리면 설명 칸도 도식 통째로
+  const drawn = applyEdits(base, setInfo(edits, widget.id, { type: "cards" }, base));
+  const w2 = findBy(drawn, (n) => n.widget === "infographic")!;
+  const inner = findBy(w2, (n) => n !== w2 && n.tag !== "#text")!;
+  assert.equal(resolveSelection(drawn, inner.id)!.id, w2.id);
+  // 2번째 카드 이름 — 재검토까지 센다
+  assert.match(textOf(widget), /통합변경허가·신고·재검토/);
+});
+
+test("연혁 숫자 띠 — 특허·수상 숫자·설명을 칸별로 고칠 수 있다(2026-11-18)", () => {
+  const fx = makeFixture();
+  const lastHistory = buildPagePlan(ctxOf(), fx, COVER).filter((p) => p.key.startsWith("c06-")).pop()!.key;
+  const base = pageTree(fx, lastHistory);
+  const derived = applyEdits(base, { v: 1 });
+  const cards: CNode[] = [];
+  walk(derived, (n) => {
+    if (hasClass("kc-kpi")(n)) cards.push(n);
+  });
+  const patent = cards.find((c) => textOf(c).startsWith("특허·수상"))!;
+  assert.ok(patent, "특허·수상 카드");
+  const value = findBy(patent, hasClass("kc-kpi__value"))!;
+  const sel = resolveSelection(derived, value.id)!;
+  assert.equal(sel.id, value.id, "숫자 칸만 고른다");
+  assert.equal(capabilities(sel, 3).editText, true);
+  const note = findBy(patent, hasClass("kc-kpi__note"))!;
+  assert.equal(resolveSelection(derived, note.id)!.kind, "text");
+});

@@ -103,6 +103,8 @@ export function sanitizeInfoIllust(input: unknown): InfoIllust | undefined {
 export interface InfoBox {
   w: number;
   h: number;
+  /** "height" = 일러스트가 자리 폭에 막혀 자리보다 낮을 때 그림을 키워 자리 높이를 채운다(illustration.tsx spreadIllustration) */
+  fill?: "height";
 }
 
 export interface InfoTypeMeta {

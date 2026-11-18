@@ -39,7 +39,7 @@ import { stripDerived, type DuplicateAt } from "@/lib/catalog/studio/edits";
 import { findNode, findPath, isChip, textOf, type CNode } from "@/lib/catalog/studio/nodes";
 import { boundsOf, findOverlaps, movedNodes, textBoxNodes, type OverlapBox, type OverlapNode } from "@/lib/catalog/studio/overlap";
 import { nodeProps, renderNode, resolvedChildren, type TreeEnv } from "@/lib/catalog/studio/render-tree";
-import { capabilities, describe, isTextBlock, outermost, photoFrameImage, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
+import { capabilities, describe, isSourceText, isTextBlock, outermost, photoFrameImage, resolveSelection, type EditLevel } from "@/lib/catalog/studio/select";
 import type { DomLike } from "@/lib/doc-tree/inline-core";
 import { checkOverlaps, checkSheet, measureRects, type CheckItem } from "./checks";
 import { PortalFrame } from "./Frames";
@@ -214,18 +214,18 @@ export function StudioCanvas({
     [tree]
   );
 
-  // 글 블록(고칠 수 있는 노드) — 위젯 안은 빼고
+  // 글 블록(고칠 수 있는 노드) — 위젯 안은 빼고(쪽 고유 도식 안의 숫자 카드 설명은 넣는다, select.ts isSourceText)
   const textBlocks = useMemo(() => {
     const set = new Set<string>();
-    const walk = (n: CNode, parent: CNode | null, inWidget: boolean) => {
-      const w = inWidget || Boolean(n.widget);
-      if (!w && isTextBlock(n, parent)) {
+    const walk = (n: CNode, parent: CNode | null, widget: CNode | null) => {
+      const w = widget ?? (n.widget ? n : null);
+      if (w ? w !== n && isSourceText(n, parent, w) : isTextBlock(n, parent)) {
         set.add(n.id);
         return;
       }
       n.children?.forEach((c) => walk(c, n, w));
     };
-    walk(tree, null, false);
+    walk(tree, null, null);
     return set;
   }, [tree]);
 

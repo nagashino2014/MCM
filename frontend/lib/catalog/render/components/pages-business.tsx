@@ -144,7 +144,7 @@ export function areaKpis(data: CatalogRenderData, area: AreaInfo) {
   return isPermit
     ? [
         <Kpi key="a" label="최초허가" value={<M data={data} id="permit.initial.completed" />} unit="건" />,
-        <Kpi key="b" label="변경허가·신고" value={<M data={data} id="permit.change.completed" />} unit="건" />,
+        <Kpi key="b" label="변경허가·신고·재검토" value={<M data={data} id="permit.change.completed" />} unit="건" />,
         <Kpi key="c" label="수행 업종" value={<M data={data} id="permit.industries" />} unit="개" />,
         share != null ? (
           <Kpi key="d" label="허가 사업장 대비" value={<M data={data} id="market.permit.share" />} unit="%" />
@@ -620,7 +620,7 @@ export function StrengthsPage({ ctx, data, variant, sectionStart }: { ctx: Rende
               {fmt(mval(data, "permit.change.completed"))}
               <small>건</small>
             </b>
-            <span>변경허가·변경신고</span>
+            <span>통합변경허가·신고·재검토</span>
           </div>
           <div className="kc-strengths__chips">
             <p>{c.results.chipsLabel}</p>

@@ -46,9 +46,17 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 .kc-sw--compact .kc-sw__pitch { font-size: 9px; line-height: 14px; }
 .kc-sw--compact .kc-sw__list li { font-size: 8.5px; line-height: 13px; }
 
-/* 쪽 눈썹 글(제목 위 '숫자로 보는 KESI'·'비전'·'연혁'·'사업 분야 01' 등) — 9 → 12px(대표이사 지시 2026-11-08: 너무 작다).
+/* 쪽 눈썹 글(제목 위 '숫자로 보는 KESI'·'비전'·'연혁'·'사업 분야 01' 등) — 9 → 12px(대표이사 지시 2026-11-08: 너무 작다) → 16px(2026-11-18: 4pt 더 키움).
+   그 아래 쪽 제목은 한 단계 줄인다(같은 지시) — .kc-page-title 24 → 22px, 숫자 쪽 문장(.kc-statement) 36 → 33px.
+   쪽에서 글자 크기를 직접 준 작은 제목(부록·이어지는 쪽 20~21px, 회사 개요 비전 문장)은 그 자리에서 정한다.
    연구소·ESG 제안형(.kc-tpl--research .kc-eyebrow 14px)은 그대로. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
-.pk-sheet .kc-eyebrow { font-size: 12px; line-height: 16px; letter-spacing: 0.3px; }
+.pk-sheet:not(.kc-tpl--research) .kc-eyebrow { font-size: 16px; line-height: 21px; letter-spacing: 0.2px; }
+.pk-sheet:not(.kc-tpl--research) .kc-page-title { font-size: 22px; line-height: 30px; }
+.pk-sheet:not(.kc-tpl--research) .kc-statement { font-size: 33px; line-height: 42px; }
+
+/* 회사 개요 로고 판(2026-11-18) — 로고는 판 가운데 안쪽 상자(가로 70%·세로 92%, PNG 에 투명 여백이 있음)에 비율대로 맞춘다.
+   판 크기를 스튜디오에서 바꿔도 로고가 판을 넘지 않는다(인라인 크기는 스튜디오가 틀 크기 변경 때 지우므로 클래스로 둔다) */
+.kc-logo-plate > .kc-logo-plate__img { position: absolute; left: 15%; top: 4%; width: 70%; height: 92%; object-fit: contain; display: block; }
 
 /* 사업 분야 쪽 라벨(주요 서비스·수행 업종·수행 절차·대표 실적)과 그 아래 요소 사이(사용자 지시 2026-11-05) — 0 → 6px.
    늘어난 높이는 오른쪽 단 블록 사이(14 → 10px, pages-business.tsx)에서 받아 쪽 넘침을 막는다 */

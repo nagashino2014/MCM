@@ -3,11 +3,12 @@
 // 오른쪽 패널 · 디자인 탭 — L2 구조(쪽 변형·인포그래픽 유형·열 수·사진 배치·색 컨셉)와 L3 자유 배치(크기·글자 크기·토큰 색·요소 추가).
 // 자유도는 디자인 시스템 안: 색 = 토큰 팔레트, 글자 크기 = 타입 스케일 단계, 폭 = 12열 묶음, 위치 = 그리드·4pt 맞춤.
 
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ImagePlus, Loader2, PenTool, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
+import { ArrowDown, ArrowUp, ImagePlus, Loader2, PenTool, RotateCcw, Shapes, Sparkles, Square, Trash2, Type } from "lucide-react";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { COLOR_CONCEPTS, COVER_DESIGNS } from "@/lib/catalog/document-theme";
+import { AREA_NAME_MAX, DEFAULT_AREA_ORDER, orderAreas } from "@/lib/catalog/areas";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
 import { matchInfographic } from "@/lib/catalog/render/infographic/match";
 import { INFO_TYPE_META, type InfoColorMode, type InfoSpec, type InfoType } from "@/lib/catalog/render/infographic/types";
@@ -139,6 +140,8 @@ export function PanelDesign(props: PanelProps) {
           <p className="text-[11px] cd-text-faint">고른 분야마다 분야 1장 요약 쪽이 하나씩 생깁니다. 1~3개를 권장하고, 하나는 남겨야 합니다.</p>
         </section>
       ) : null}
+
+      <AreaOrderSection studio={studio} />
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold cd-text flex items-center gap-1">
@@ -600,5 +603,95 @@ function InfoTypePicker({ studio, kit, item, sel, ops, onAiShrink }: PanelProps 
         <Shapes className="w-3 h-3 inline" aria-hidden /> 고른 유형은 이 자리의 선택 기록으로 남아 다음 추천에서 앞에 옵니다.
       </p>
     </section>
+  );
+}
+
+/**
+ * 사업 분야 순서·이름(문서 전체, 사용자 요청 2026-11-18) — 표지·목차·간지·사업 분야 개관·분야 쪽이 이 순서·이름을 따른다.
+ * 분야 번호(색·지표·쪽 키)는 그대로라 쪽 편집층은 분야를 따라간다. 저장값이 없으면 기본 순서(DEFAULT_AREA_ORDER)·기본 표기명.
+ */
+function AreaOrderSection({ studio }: { studio: PanelProps["studio"] }) {
+  const theme = studio.state?.theme;
+  const areas = studio.data?.areas ?? [];
+  if (!theme || !areas.length) return null;
+  const ordered = orderAreas(areas, theme.areaOrder);
+  const isDefault = ordered.every((a, i) => a.index === DEFAULT_AREA_ORDER[i]);
+  const names = theme.areaNames ?? {};
+  const renamed = Object.keys(names).length > 0;
+  const move = (i: number, d: -1 | 1) => {
+    const next = ordered.map((a) => a.index);
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    studio.setTheme({ areaOrder: next });
+  };
+  // 빈 이름·기본 표기명과 같은 이름은 저장하지 않는다(= 기본 표기명을 따라감)
+  const rename = (index: number, base: string, value: string) => {
+    const v = value.replace(/\s+/g, " ").trim().slice(0, AREA_NAME_MAX);
+    const next = { ...names };
+    if (!v || v === base) delete next[String(index)];
+    else next[String(index)] = v;
+    if ((names[String(index)] ?? "") !== (next[String(index)] ?? "")) studio.setTheme({ areaNames: next });
+  };
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold cd-text flex items-center gap-1">
+        사업 분야 순서·이름(문서 전체) <CdHelp topic="catalog.studio-area-order" />
+      </h3>
+      <ol className="flex flex-col gap-1" aria-label="사업 분야 순서·이름">
+        {ordered.map((a, i) => {
+          const base = a.baseName ?? a.name;
+          return (
+            <li key={a.index} className="flex items-center gap-1.5 text-xs cd-text">
+              <span className="w-4 text-right cd-text-faint tabular-nums">{i + 1}</span>
+              <span aria-hidden className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: swatch(`area-${a.index}`, theme.concept) }} />
+              <AreaNameInput key={`${a.index}:${names[String(a.index)] ?? ""}`} value={names[String(a.index)] ?? ""} base={base} onCommit={(v) => rename(a.index, base, v)} />
+              <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" aria-label={`${a.name} 위로`} disabled={i === 0} onClick={() => move(i, -1)}>
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm shrink-0" aria-label={`${a.name} 아래로`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)}>
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="cd-hint">이름 칸을 비우면 기본 이름(흐린 글자)을 씁니다. Enter 또는 칸을 벗어나면 적용됩니다.</p>
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={isDefault} onClick={() => studio.setTheme({ areaOrder: [...DEFAULT_AREA_ORDER] })}>
+          <RotateCcw className="w-3.5 h-3.5" /> 기본 순서로
+        </button>
+        <button type="button" className="cd-btn cd-btn-ghost cd-btn-sm" disabled={!renamed} onClick={() => studio.setTheme({ areaNames: {} })}>
+          <RotateCcw className="w-3.5 h-3.5" /> 기본 이름으로
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** 분야 이름 칸 — 입력 중에는 미리보기를 다시 그리지 않고, Enter·칸 벗어남에 한 번 적용(실행 취소 한 단계) */
+function AreaNameInput({ value, base, onCommit }: { value: string; base: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const cancelled = useRef(false);
+  return (
+    <input
+      className="cd-input flex-1 min-w-0"
+      style={{ height: 28, fontSize: 12 }}
+      value={draft}
+      placeholder={base}
+      maxLength={AREA_NAME_MAX}
+      aria-label={`${base} 분야 이름`}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (cancelled.current) cancelled.current = false;
+        else onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          cancelled.current = true;
+          setDraft(value);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+    />
   );
 }

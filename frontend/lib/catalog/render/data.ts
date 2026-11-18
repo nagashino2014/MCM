@@ -7,7 +7,7 @@ import {
   isCompleted,
   type CatalogProjectRow,
 } from "@/lib/catalog/appendix";
-import { CATALOG_CATEGORIES, SOFTWARE_CATEGORY, areaIndex } from "@/lib/catalog/areas";
+import { CATALOG_CATEGORIES, SOFTWARE_CATEGORY, areaIndex, withAreaNames } from "@/lib/catalog/areas";
 import { getPublishedContent } from "@/lib/catalog/contents";
 import { listCustomAreas } from "@/lib/catalog/custom-areas";
 import type { OrgChartDoc, OrgNode } from "@/lib/catalog/content-types";
@@ -327,6 +327,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       index: i + 1,
       category,
       name: names[category] ?? category,
+      baseName: names[category] ?? category,
       count: list.length,
       completed: list.filter(isCompleted).length,
       recent3: list.filter((p) => Number(p.year) >= nowYear - 2).length,
@@ -644,7 +645,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     .map((c) => (c.credentialNo ? `${c.name} ${c.credentialNo}` : c.name));
   const asOfLabel = `${asOf.slice(0, 4)}. ${Number(asOf.slice(5, 7))}`;
 
-  return {
+  // 문서별 분야 이름(theme.areaNames)을 분야 목록·총괄표 분류에 입힌다 — 스튜디오도 같은 함수로 즉시 미리보기
+  return withAreaNames({
     asOf,
     asOfLabel,
     docLabel: `회사소개서 ${asOf.slice(0, 4)}.${Number(asOf.slice(5, 7))}`,
@@ -693,7 +695,7 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     people: cvs,
     maskNames: maskList([...people.map((p) => p.name), ...extras.map((x) => x.name), ...advisors.map((a) => a.name)]),
     notices: [...new Set(notices)],
-  };
+  });
 }
 
 export { SOFTWARE_CATEGORY };

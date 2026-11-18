@@ -15,6 +15,7 @@
  * 섹션 번호(쪽 머리·목차·북마크)는 쪽 컴포넌트가 원래 번호를 쓰고 parts.secNum 이 쪽 계획 종류에 맞춰 바꾼다. 목차·북마크·쪽 번호는 자동 경로 그대로.
  */
 import type { ReactElement } from "react";
+import { orderAreas } from "@/lib/catalog/areas";
 import { fallbackNote, resolveVariant, templateOf, type CatalogTemplate } from "@/lib/catalog/templates";
 import type { CatalogRenderData, HistoryYear, LeaderCard, RenderCtx } from "../types";
 import { DIVIDER_CONTENT, SECTIONS } from "../master-content";
@@ -144,8 +145,8 @@ export function buildPagePlan(
   template: CatalogTemplate = templateOf(ctx.template)
 ): PagePlanItem[] {
   const kind = template.plan;
-  const consulting = data.areas.filter((a) => a.index <= 5);
-  const software = data.areas.find((a) => a.index === 6)!;
+  // 분야는 문서 순서(theme.areaOrder, 없으면 기본 순서)로 늘어놓는다 — 쪽 키·색은 분야 번호(index) 그대로
+  const areasInOrder = orderAreas(data.areas, data.theme?.areaOrder);
   const appendixSections = data.appendix.sections
     .map((sec) => ({ sec, area: data.areas.find((a) => a.category === sec.category)! }))
     .filter((x) => x.sec.shownRows > 0);
@@ -226,7 +227,7 @@ export function buildPagePlan(
         variant={r.variant}
         note={r.note}
         items={[
-          ...data.areas.map((a) => ({ label: a.name, area: a.index, ref: `area-${a.index}` })),
+          ...areasInOrder.map((a) => ({ label: a.name, area: a.index, ref: `area-${a.index}` })),
           ...(data.customAreas ?? []).map((a) => ({ label: a.name, area: a.slot, ref: a.key })),
         ]}
       />,
@@ -235,14 +236,18 @@ export function buildPagePlan(
   };
   const business = () => {
     add("c08", "C08", "사업 분야 개관", "02", <BusinessMapPage ctx={ctx} data={data} />);
-    consulting.forEach((a) => {
+    // 응용소프트웨어(6)는 제품 쪽 + 통합허가 플랫폼 쪽, 새 사업 분야(P6)는 응용소프트웨어 바로 앞(순서를 바꿔도 같은 자리)
+    areasInOrder.forEach((a) => {
+      if (a.index === 6) {
+        (data.customAreas ?? []).forEach((c) => add(c.key, "C09", c.name, "02", <CustomAreaPage ctx={ctx} data={data} area={c} />));
+        add("c09-software", "C09", a.name, "02", <SoftwarePage ctx={ctx} data={data} area={a} />);
+        add("c09-platform", "C09", "통합허가 플랫폼", "02", <PlatformPage ctx={ctx} data={data} />);
+        return;
+      }
       const key = `area-${a.index}`;
       const r = rv(key, "C09");
       add(key, "C09", a.name, "02", <AreaPage ctx={ctx} data={data} area={a} variant={r.variant} note={r.note} />, r);
     });
-    (data.customAreas ?? []).forEach((a) => add(a.key, "C09", a.name, "02", <CustomAreaPage ctx={ctx} data={data} area={a} />));
-    add("c09-software", "C09", software.name, "02", <SoftwarePage ctx={ctx} data={data} area={software} />);
-    add("c09-platform", "C09", "통합허가 플랫폼", "02", <PlatformPage ctx={ctx} data={data} />);
   };
   const divider03 = () => {
     const r = rv("c07-03", "C07");
@@ -363,7 +368,7 @@ export function buildPagePlan(
     coverPage();
     figures(true);
     add("c08", "C08", "사업 분야 개관", "02", <BusinessMapPage ctx={ctx} data={data} sectionStart linked={picked} />);
-    data.areas
+    areasInOrder
       .filter((a) => picked.includes(a.index))
       .forEach((a, i) => add(`brief-${a.index}`, "C20", `${a.name} 분야 요약`, "02", <BriefPage ctx={ctx} data={data} area={a} seq={i + 1} />));
     strengths(true);

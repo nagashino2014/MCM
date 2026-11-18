@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18", kind: "신규", title: "회사소개서 스튜디오 — 사업 분야 순서·이름 바꾸기",
+    body: "스튜디오 디자인 탭에서 사업 분야 순서와 이름을 문서마다 바꿉니다. 표지·목차·간지·사업 분야 개관·분야 쪽(부록 총괄표 분류 이름 포함)이 함께 바뀝니다. 기본 순서는 통합환경허가·ESG·탄소중립·환경 인허가·연구·교육·화학물질관리·HAPs(비산배출)·응용소프트웨어이고, 소개서의 '장외·화관법' 분야 이름은 '화학물질관리'로 바꿨습니다.",
+    articles: ["sales.catalog-studio"],
+  },
+  {
     date: "2026-11-17", kind: "신규", title: "회사소개서 — PPT(PowerPoint) 받기",
     body: "회사소개서 생성본·발행본을 PowerPoint(PPTX)로 받을 수 있습니다. 첫 장 표지는 바탕 그림 위에 글상자·로고를 따로 올려 PowerPoint 에서 제목·회사명·분야·날짜를 고치고 로고를 바꿀 수 있고, 나머지 쪽은 PDF 와 같은 그림으로 들어갑니다. 스튜디오 PDF 받기 창과 PDF 목록·발행본 목록의 [PPT] 단추에서 받습니다.",
     articles: ["sales.catalog", "sales.catalog-studio"],

@@ -70,8 +70,10 @@ export interface AreaInfo {
   index: number;
   /** 계약 관리 분류명(categoryCaseSql) — 응용소프트웨어는 소개서 전용 */
   category: string;
-  /** 소개서 표기명(catalog_business_areas.display_name, 없으면 기본 표기) */
+  /** 소개서 표기명 — 문서별 이름(theme.areaNames)이 있으면 그 이름 */
   name: string;
+  /** 문서별 이름을 입히기 전 표기명(catalog_business_areas.display_name, 없으면 기본 표기) */
+  baseName?: string;
   count: number;
   completed: number;
   /** 최근 3년 계약 수 */

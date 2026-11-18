@@ -66,7 +66,7 @@ export function SummaryPage({ ctx, data, inBody, sectionStart }: { ctx: RenderCt
         </div>
         <div className="kc-span-4 kc-area-1" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p className="kc-blockhead" style={{ marginBottom: 0 }}>
-            {data.areas[0].name} 권역별 분포<span className="kc-blockhead__aside">{fmt(permitTotal)}건</span>
+            {data.areas.find((a) => a.index === 1)?.name} 권역별 분포<span className="kc-blockhead__aside">{fmt(permitTotal)}건</span>
           </p>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
             <KoreaMap mode="regions" area={1} values={data.permitByRegion} zoom={0.6} frame={{ width: 100, height: 179 }} root={{ "data-widget": "map" }} />

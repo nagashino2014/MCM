@@ -323,6 +323,21 @@ export const SALES_HELP: HelpTopic[] = [
     reviewedAt: "2026-11-17",
   },
   {
+    id: "catalog.studio-area-order",
+    label: "사업 분야 순서·이름 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "표지·목차·간지·사업 분야 개관·분야 쪽 차례가 이 순서·이름을 따릅니다(문서마다 저장).",
+        "이름 칸은 Enter·칸 벗어남에 적용, 비우면 기본 이름입니다. [[기본 이름으로]]로 모두 되돌립니다.",
+        "분야 색·지표·분야 쪽에서 고친 내용은 분야를 따라갑니다. [[기본 순서로]]는 통합환경허가·ESG·환경 인허가 / 화학물질관리·HAPs·응용소프트웨어 순서입니다.",
+        "표지 분야 이름을 손으로 옮겨 두었다면 순서를 바꾼 뒤 [[격자 맞춤]]으로 다시 맞춥니다.",
+      ] },
+    ],
+    more: { article: "sales.catalog-studio", section: "area-order" },
+    sources: ["components/sales/catalog/studio/PanelDesign.tsx", "components/sales/catalog/studio/PanelContent.tsx"],
+    reviewedAt: "2026-11-18",
+  },
+  {
     id: "catalog.studio-infographic",
     label: "인포그래픽 유형 도움말",
     blocks: [

@@ -2,6 +2,7 @@
  * 회사소개서 앞부분 쪽 유형 — C01 표지 · C02 목차 · C03 인사말 · C04 숫자로 보는 KESI · C05 회사 개요 · C06 연혁 · C07 간지.
  * 마크업은 P2 쪽 유형 목업(.dc.html)과 같다. 목업의 사진 자리 표시(kc-photo__label)는 발행본에 넣지 않고 사진 없는 변형을 쓴다.
  */
+import { orderAreas } from "@/lib/catalog/areas";
 import type { CoverDesign } from "@/lib/catalog/document-theme";
 import type { CSSProperties, ReactNode } from "react";
 import { COVER_CONTENT, DIVIDER_CONTENT, VISION_CONTENT } from "../master-content";
@@ -29,7 +30,7 @@ export interface CoverChoice {
 export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: CatalogRenderData; choice: CoverChoice }) {
   const areaList = (style: CSSProperties) => (
     <ul className="kc-front__areas" style={{ position: "absolute", ...style }}>
-      {data.areas.map((a) => (
+      {orderAreas(data.areas, data.theme?.areaOrder).map((a) => (
         <li key={a.index} className={`kc-area-${a.index}`}>
           {a.name}
         </li>
@@ -87,7 +88,7 @@ export function CoverPage({ ctx, data, choice }: { ctx: RenderCtx; data: Catalog
         <div className="kc-front__orbit">
           <Drop mods="kc-front__orbit-drop" />
           <Drop mods="kc-drop--line kc-drop--tl kc-front__orbit-drop kc-front__orbit-drop--line" />
-          {data.areas.map((a) => (
+          {orderAreas(data.areas, data.theme?.areaOrder).map((a) => (
             <span key={a.index} className={`kc-front__orbit-node kc-area-${a.index}`} aria-hidden="true"></span>
           ))}
         </div>
@@ -242,7 +243,7 @@ export function ContentsPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRende
             <p className="kc-section-title">사업 분야 바로 가기</p>
             <p className="kc-small kc-muted">환경 컨설팅 5분야(계약 관리 분류)와 응용소프트웨어입니다. 분야를 누르면 해당 쪽으로 이동합니다.</p>
             <ol className="kc-toc" style={{ borderTopWidth: 0.5, borderTopColor: "var(--rule)" }}>
-              {data.areas.map((a) => (
+              {orderAreas(data.areas, data.theme?.areaOrder).map((a) => (
                 <li key={a.index} className={`kc-area-${a.index}`}>
                   <AreaTag name={a.name} style={{ gridColumn: "1 / 3", fontSize: 10.5 }} />
                   <a className="kc-toc__folio" href="#" data-ref={`area-${a.index}`} data-ref-fmt="folio">
@@ -323,8 +324,8 @@ export function MessagePage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
 // ── C04 숫자로 보는 KESI ──
 /** C04 큰 숫자 8개의 내용 — 스튜디오에서 유형을 바꾸거나 일러스트로 그릴 때 라벨·지표·단위가 그대로 간다 */
 function figuresSpec(data: CatalogRenderData): InfoSpec {
-  const area = (i: number) => data.areas[i - 1];
-  const sw = data.areas[5];
+  const area = (i: number) => data.areas.find((a) => a.index === i)!;
+  const sw = area(6);
   const hasAdv = (mval(data, "advisors.total") ?? 0) > 0;
   const items: InfoItem[] = [
     { id: "initial", label: "통합환경허가 최초허가", metric: "permit.initial.completed", unit: "건", icon: "factory" },
@@ -356,8 +357,8 @@ export function FiguresPage({
   const layout = variant?.layout === "band" && variant.photo ? "band" : variant?.layout === "cards8" ? "cards8" : "grid";
   const share = mval(data, "market.permit.share");
   const denom = data.figures["permit.sites.total"];
-  const area = (i: number) => data.areas[i - 1];
-  const sw = data.areas[5];
+  const area = (i: number) => data.areas.find((a) => a.index === i)!;
+  const sw = area(6);
   const initial = mval(data, "permit.initial.completed");
   return (
     <Sheet ctx={ctx} anchors={sectionStart ? ["sec-01", "c04"] : ["c04"]} section={sectionStart ? "01 회사 소개" : undefined} outline="숫자로 보는 KESI" note={note}>

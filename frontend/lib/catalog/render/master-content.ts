@@ -20,11 +20,13 @@ export interface AreaContent {
   /** 사진 없는 변형의 큰 숫자 설명 */
   heroCaption: string;
   /** 사진 없는 변형의 큰 숫자를 지표 대신 작성 수치로(근거가 있는 사례 수치) */
-  heroFigure?: { value: string; unit: string };
+  heroFigure?: { value: string; unit: string; steps?: Array<{ value: string; note?: string }> };
   /** 목업 없이 쓴 초안 */
   draft?: boolean;
   /** 대표 성과(전후 비교) — ESG */
   compare?: { title: string; aside: string; rows: Array<{ label: string; before: string; after: string; beforePct: number; afterPct: number }> };
+  /** 대표 성과 아래 수상 항목 — ESG(사용자 지시 2026-11-18) */
+  award?: { title: string; text: string };
   /** 분야 KPI 중 지표가 없는 작성 수치(근거가 있는 것만) */
   extraKpis?: Array<{ label: string; value: string; unit: string }>;
   footnote?: string;
@@ -123,7 +125,8 @@ export const AREA_CONTENT: Record<string, AreaContent> = {
     overview: ["ESG 경영보고서·공급망 실사·CBAM 대응", "온실가스 산정·감축사업 발굴·배출권 인증", "탄소중립 시나리오·로드맵 연구"],
     casesAside: "발주 기관 · 수행 기간",
     heroCaption: "공급망 ESG 평가 총점(고객사, 2023 → 2024)",
-    heroFigure: { value: "58.4 → 87.0", unit: "점" },
+    // 큰 숫자 아래 평가 순위(사용자 지시 2026-11-18) — 58.4 아래 '(상위 69%)', 87.0 아래 '(상위 3%)'
+    heroFigure: { value: "58.4 → 87.0", unit: "점", steps: [{ value: "58.4", note: "(상위 69%)" }, { value: "87.0", note: "(상위 3%)" }] },
     compare: {
       title: "대표 성과",
       aside: "자동차부품 중견기업 S·P사",
@@ -136,7 +139,9 @@ export const AREA_CONTENT: Record<string, AreaContent> = {
       { label: "S·G 분야 전문가", value: "6", unit: "명" },
       { label: "감축 활용 특허", value: "1", unit: "건" },
     ],
-    footnote: "2025 한국ESG경영대상 'THE BEST ESG' 최우수상(2025.08). 고객사 이름은 공개 동의를 받은 경우에만 실명으로 표기합니다.",
+    // 수상은 각주에서 대표 성과 아래 항목으로 옮김(사용자 지시 2026-11-18)
+    award: { title: "수상", text: "2025 한국ESG경영대상 THE BEST ESG 최우수상(2025.08.) 수상" },
+    footnote: "고객사 이름은 공개 동의를 받은 경우에만 실명으로 표기합니다.",
   },
   "기타 용역": {
     icon: "graduation-cap",
@@ -385,9 +390,11 @@ export const STRENGTHS_CONTENT = {
   method: {
     head: "방법 · 진단에서 사후관리까지 한 흐름으로",
     steps: [
-      { tag: "진단", icon: "search-check", title: "자체 진단 매뉴얼", desc: "환경 현황과 공정·물질수지를 매뉴얼에 따라 정확히 파악해 허가를 신속하게 진행합니다.", proof: "자체 개발 진단 매뉴얼" },
-      { tag: "협의", icon: "scale", title: "사업장 여건에 맞춘 허가조건", checks: ["SCR 설치 면제", "배출기준 완화", "자가측정 주기 완화"] },
-      { tag: "사후관리", icon: "refresh-cw", title: "허가 이후까지 함께", desc: "연간 가이드북과 사후관리 교육, 정기검사 대응과 현장 진단을 이어 갑니다.", proof: "정기검사 대응 4개 사업장" },
+      // 문구(사용자 지시 2026-11-18) — 진단 제목에 '·플랫폼 활용', 근거 둘째 줄 '통합허가계획서 플랫폼'(proof 의 \n = 줄바꿈),
+      // 협의 항목 'SCR 설치 면제'·'배출기준 완화' → '방지시설 추가 설치 완화'·'최적 배출기준 협의', 사후관리 설명에 연간보고서 작성 대행
+      { tag: "진단", icon: "search-check", title: "자체 진단 매뉴얼·플랫폼 활용", desc: "환경 현황과 공정·물질수지를 매뉴얼에 따라 정확히 파악해 허가를 신속하게 진행합니다.", proof: "자체 개발 진단 매뉴얼\n통합허가계획서 플랫폼" },
+      { tag: "협의", icon: "scale", title: "사업장 여건에 맞춘 허가조건", checks: ["방지시설 추가 설치 완화", "최적 배출기준 협의", "자가측정 주기 완화"] },
+      { tag: "사후관리", icon: "refresh-cw", title: "허가 이후까지 함께", desc: "연간 가이드북과 사후관리 교육, 정기검사 대응과 현장 진단, 연간보고서 작성 대행까지", proof: "정기검사 대응 4개 사업장" },
     ],
     loop: "허가 재검토 때는 다시 진단부터",
   },

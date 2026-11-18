@@ -12,7 +12,7 @@ import { getPublishedContent } from "@/lib/catalog/contents";
 import { listCustomAreas } from "@/lib/catalog/custom-areas";
 import type { OrgChartDoc, OrgNode } from "@/lib/catalog/content-types";
 import { listClients } from "@/lib/catalog/clients";
-import { computeCatalogMetrics, type MetricId, type MetricValue } from "@/lib/catalog/metrics";
+import { EXTRA_PERMIT_INDUSTRIES, computeCatalogMetrics, type MetricId, type MetricValue } from "@/lib/catalog/metrics";
 import { buildOrgChartFromMaster } from "@/lib/catalog/org-chart";
 import { listAdvisors, listCatalogPeople, listExtraPeople, type CatalogPerson } from "@/lib/catalog/people";
 import { MASTER_DOC_ID, getAppendixRules, getDocumentTheme, listCatalogProjects } from "@/lib/catalog/projects";
@@ -361,6 +361,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
     if (labelSet.has(l)) industryCount.set(l, (industryCount.get(l) ?? 0) + 1);
   }
   const permitIndustries = [...industryCount.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => l);
+  // 계약 자료로 아직 잡히지 않은 수행 업종(사용자 지시 2026-11-18)은 끝에 더한다 — 업종 수 지표(metrics.ts)와 같은 합집합
+  for (const l of EXTRA_PERMIT_INDUSTRIES) if (labelSet.has(l) && !permitIndustries.includes(l)) permitIndustries.push(l);
 
   // ── 연혁 ──
   const historyYears = new Map<string, HistoryYear>();

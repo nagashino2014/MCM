@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { facilityContractRefs, facilityDeleteBlockedMessage } from "@/lib/facilities/contract-refs";
-import { resolveSiteDirectTarget, siteDirectMissMessage } from "@/lib/ieps/ordering-subject";
+import { ORDERING_SUBJECT_PARENT_CORP, resolveSiteDirectTarget, siteDirectMissMessage, validateOrderingTargetFacility } from "@/lib/ieps/ordering-subject";
 
 /** db.exec 흉내 — 한 행짜리 결과 */
 const fakeDb = (row: Record<string, unknown>) => ({
@@ -67,4 +67,25 @@ test("대상사업장 본인 — 계약상대가 지워졌으면 사업자번호
   assert.equal(got!.counterpartyDeleted, true);
   assert.match(siteDirectMissMessage(true), /삭제돼/);
   assert.match(siteDirectMissMessage(false), /사업자번호/);
+});
+
+test("소속 법인·모회사 — 연결 법인 또는 같은 그룹의 대표·본사 회사면 통과(2026-11-18 이웰·웰크론한텍)", () => {
+  const ewell = {
+    groupInfo: {
+      company: { businessRegistrationNo: "607-86-06323" },
+      parentCompanies: [{ businessRegistrationNo: "126-81-23094" }],
+    },
+  };
+  // 그룹 대표 ㈜웰크론한텍이 계열사 ㈜이웰 사업장을 발주
+  assert.deepEqual(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, ewell, "1268123094"), { ok: true });
+  // 연결 법인 자신
+  assert.deepEqual(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, ewell, "607-86-06323"), { ok: true });
+  // 같은 그룹이 아니거나 대표·본사가 아닌 회사
+  const r = validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, ewell, "111-11-11111");
+  assert.equal(r.ok, false);
+  assert.match(r.message!, /대표·본사/);
+  // 예전 데이터(대표 목록 없음)는 연결 법인만
+  assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, { groupInfo: { company: { businessRegistrationNo: "607-86-06323" } } }, "1268123094").ok, false);
+  // 그룹 정보 없음
+  assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, { groupInfo: null }, "1268123094").ok, false);
 });

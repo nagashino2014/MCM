@@ -124,7 +124,10 @@ export function siteDirectMissMessage(counterpartyDeleted: boolean): string {
 }
 
 interface OrderingValidationFacility {
-  groupInfo?: { company?: { businessRegistrationNo?: string | null } | null } | null;
+  groupInfo?: {
+    company?: { businessRegistrationNo?: string | null } | null;
+    parentCompanies?: Array<{ businessRegistrationNo?: string | null }> | null;
+  } | null;
   operatingEntityInfo?: {
     entity?: { businessRegistrationNo?: string | null } | null;
     relation?: { relationType?: string | null } | null;
@@ -133,7 +136,8 @@ interface OrderingValidationFacility {
 
 /**
  * 발주 주체 구분에 따라 대상사업장으로 선택하려는 사업장이 유효한지 검증한다.
- * - 소속 법인·모회사: 대상사업장의 그룹 연결 법인 사업자번호가 계약상대 업체와 일치해야 함
+ * - 소속 법인·모회사: 계약상대 업체가 대상사업장의 그룹 연결 법인이거나, 같은 그룹의 대표·본사 회사(모회사)여야 함
+ *   (2026-11-18 — 예전에는 연결 법인만 받아 계열사 ㈜이웰 사업장을 그룹 대표 ㈜웰크론한텍이 발주한 계약을 거부했다)
  * - 위탁운영사: 대상사업장의 운영 주체(운영 관계)가 계약상대 업체와 일치해야 함
  * - 그 외(EPC사/협력사/기타/대상사업장 본인): 제약 없음
  */
@@ -149,13 +153,13 @@ export function validateOrderingTargetFacility(
       return { ok: false, message: "계약상대 업체의 사업자등록번호가 없어 소속 법인·모회사 여부를 검증할 수 없습니다." };
     }
     const groupBrn = normalizeBrn(facility.groupInfo?.company?.businessRegistrationNo);
-    if (!groupBrn || groupBrn !== cp) {
-      return {
-        ok: false,
-        message: "계약상대 업체와의 관계 법인이 아닙니다. 대상사업장의 그룹 연결 법인이 계약상대 업체와 일치해야 합니다.",
-      };
-    }
-    return { ok: true };
+    const parentBrns = (facility.groupInfo?.parentCompanies ?? []).map((c) => normalizeBrn(c.businessRegistrationNo)).filter(Boolean);
+    if (groupBrn === cp || parentBrns.includes(cp)) return { ok: true };
+    return {
+      ok: false,
+      message:
+        "계약상대 업체와의 관계 법인이 아닙니다. 계약상대 업체가 대상사업장의 그룹 연결 법인이거나 같은 그룹의 대표·본사 회사여야 합니다(사업장 그룹 정보에서 확인).",
+    };
   }
 
   if (orderingSubjectType === ORDERING_SUBJECT_CONSIGNED_OPERATOR) {

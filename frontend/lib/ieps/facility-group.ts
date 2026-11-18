@@ -54,6 +54,11 @@ export interface FacilityGroupInfo {
   division: FacilityGroupDivision | null;
   company: FacilityGroupCompany;
   membership: FacilityGroupMembership;
+  /**
+   * 같은 그룹의 대표·본사 회사(group_representative 또는 is_headquarters) — 발주 주체 '소속 법인·모회사' 검증에서
+   * 계열사 사업장을 그룹 대표 회사가 발주한 경우를 받아 준다(2026-11-18 이웰·웰크론한텍). 소속 회사 자신이 대표면 함께 들어간다.
+   */
+  parentCompanies?: Array<{ companyName: string; businessRegistrationNo: string | null }>;
 }
 
 export interface FacilityGroupTree extends FacilityGroup {

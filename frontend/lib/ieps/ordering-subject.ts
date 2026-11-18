@@ -84,6 +84,45 @@ export async function findFacilityByBusinessRegistrationNo(
   return null;
 }
 
+/**
+ * 발주 주체 '대상사업장 본인'의 대상사업장 = 계약상대 사업장 자신(사용자 지시 2026-11-18).
+ * 사업자번호 검색은 같은 번호를 쓰는 여러 사업장·지워진 중복 사업장 때문에 빗나갈 수 있어(씨제이제일제당 진천공장 —
+ * 계약상대가 지워진 중복 레코드라 번호가 다른 마스터를 못 찾았다), 계약상대 사업장이 살아 있으면 그대로 쓴다.
+ * 계약상대 ID 가 없거나 지워졌으면 예전처럼 사업자번호로 찾는다. counterpartyDeleted = 계약상대 사업장이 지워져 있음(안내용).
+ */
+export async function resolveSiteDirectTarget(
+  counterpartyFacilityId: string | null | undefined,
+  businessRegistrationNo: string | null | undefined,
+  companyName: string | null | undefined,
+  signal?: AbortSignal
+): Promise<{ match: OrderingTargetFacilitySearchItem | null; counterpartyDeleted: boolean }> {
+  const id = (counterpartyFacilityId ?? "").trim();
+  let counterpartyDeleted = false;
+  if (id) {
+    const res = await fetch(`/api/facilities/${encodeURIComponent(id)}`, { cache: "no-store", signal });
+    if (res.ok) {
+      const d = (await res.json()) as { facilityId?: string; companyName?: string; businessRegistrationNo?: string | null; siteAddress?: string | null };
+      if (d.facilityId) {
+        return {
+          match: { facilityId: d.facilityId, companyName: d.companyName ?? "", businessRegistrationNo: d.businessRegistrationNo ?? null, siteAddress: d.siteAddress ?? null },
+          counterpartyDeleted: false,
+        };
+      }
+    } else if (res.status === 404) {
+      counterpartyDeleted = true;
+    }
+  }
+  const match = await findFacilityByBusinessRegistrationNo(businessRegistrationNo, signal, { facilityId: id || null, companyName });
+  return { match, counterpartyDeleted };
+}
+
+/** 대상사업장을 못 찾았을 때 안내 */
+export function siteDirectMissMessage(counterpartyDeleted: boolean): string {
+  return counterpartyDeleted
+    ? "계약상대 사업장이 삭제돼 있어 대상사업장을 정할 수 없습니다. 이 창의 계약상대 변경에서 사업장 마스터의 사업장을 고르세요."
+    : "계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.";
+}
+
 interface OrderingValidationFacility {
   groupInfo?: { company?: { businessRegistrationNo?: string | null } | null } | null;
   operatingEntityInfo?: {

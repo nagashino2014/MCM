@@ -9,6 +9,7 @@ import { normalizeBusinessRegistrationNo, normalizeCompanyName } from "@/lib/iep
 import { normalizeFacilityCompanySize, type FacilityCompanySize } from "@/lib/ieps/facility-service";
 import { normalizeInput } from "@scraper/lib/facility-quality/rules";
 import { markReviewedWrite } from "@/lib/ieps/facility-update";
+import { facilityContractRefs, facilityDeleteBlockedMessage } from "@/lib/facilities/contract-refs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -197,7 +198,12 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     if (!before) return NextResponse.json({ error: "not found" }, { status: 404 });
     const now = new Date().toISOString();
 
+    // 계약이 걸린 사업장은 지우지 않는다(사용자 지시 2026-11-18 — 지운 중복 사업장을 계약 20건이 계속 가리켜
+    // 대상사업장 자동 매칭이 실패했다, 372). 같은 트랜잭션 안에서 확인해 확인과 삭제 사이에 계약이 붙는 경우도 막는다.
+    let blocked: string | null = null;
     await withDbWrite(async (db) => {
+      blocked = facilityDeleteBlockedMessage(await facilityContractRefs(db, id));
+      if (blocked) return;
       await db.run(
         `INSERT INTO trash_items
           (trash_id, item_type, item_id, item_title, reason, before_json, deleted_by, deleted_at)
@@ -225,6 +231,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
         [now, actor.userId, deleteReason, id]
       );
     });
+    if (blocked) return NextResponse.json({ error: blocked, code: "facility_in_use" }, { status: 409 });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

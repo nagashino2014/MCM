@@ -58,7 +58,8 @@ import {
   ORDERING_SUBJECT_PARENT_CORP,
   ORDERING_SUBJECT_CONSIGNED_OPERATOR,
   ORDERING_SUBJECT_EPC,
-  findFacilityByBusinessRegistrationNo,
+  resolveSiteDirectTarget,
+  siteDirectMissMessage,
   getOrderingSubjectLabel,
   validateOrderingTargetFacility,
 } from "@/lib/ieps/ordering-subject";
@@ -808,6 +809,7 @@ function ContractsInner() {
               ? String(detail.contract.counterparty_business_registration_no)
               : null
           }
+          counterpartyFacilityId={detail.contract.counterparty_facility_id != null ? String(detail.contract.counterparty_facility_id) : null}
           contractDate={selected.contractDate}
           contractKind={String(detail.contract.contract_kind ?? "standard")}
           initialMilestones={detail.milestones.map((m) => ({
@@ -2368,32 +2370,30 @@ function NewContractModal({
     }
   };
 
-  // 발주 주체 = 대상사업장 본인: 계약상대 업체의 사업자등록번호와 일치하는
-  // 사업장을 자동으로 찾아 대상사업장으로 채운다. 매칭 실패 시 경고만 표시한다.
+  // 발주 주체 = 대상사업장 본인: 대상사업장 = 계약상대 사업장 자신(resolveSiteDirectTarget, 2026-11-18 —
+  // 예전 사업자번호 검색은 같은 번호의 다른 사업장이 잡힐 수 있었다). 계약상대가 없으면 비운다.
   useEffect(() => {
     if (state.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
-    const brn = (state.counterpartyBusinessRegistrationNo ?? "").replace(/[^0-9]/g, "");
-    if (!state.counterpartyFacilityId || !brn) {
+    if (!state.counterpartyFacilityId) {
       if (state.selectedFacilities.length > 0) onChange({ ...state, selectedFacilities: [] });
       return;
     }
-    const alreadyMatched =
-      state.selectedFacilities.length === 1 &&
-      (state.selectedFacilities[0].businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn;
+    const alreadyMatched = state.selectedFacilities.length === 1 && state.selectedFacilities[0].facilityId === state.counterpartyFacilityId;
     if (alreadyMatched) return;
     const controller = new AbortController();
     (async () => {
       try {
-        const match = await findFacilityByBusinessRegistrationNo(
+        const { match, counterpartyDeleted } = await resolveSiteDirectTarget(
+          state.counterpartyFacilityId,
           state.counterpartyBusinessRegistrationNo,
-          controller.signal,
-          { facilityId: state.counterpartyFacilityId, companyName: state.counterpartyName }
+          state.counterpartyName,
+          controller.signal
         );
         if (match) {
           onChange({ ...state, selectedFacilities: [match], facilityQuery: "" });
         } else {
           onChange({ ...state, selectedFacilities: [] });
-          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 대상사업장을 직접 확인하세요.", "error");
+          toast.show(siteDirectMissMessage(counterpartyDeleted), "error");
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -2526,12 +2526,13 @@ function NewContractModal({
     }
     let selectedFacilities = state.selectedFacilities;
     if (state.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT && selectedFacilities.length === 0) {
-      const match = await findFacilityByBusinessRegistrationNo(state.counterpartyBusinessRegistrationNo, undefined, {
-        facilityId: state.counterpartyFacilityId,
-        companyName: state.counterpartyName,
-      });
+      const { match, counterpartyDeleted } = await resolveSiteDirectTarget(
+        state.counterpartyFacilityId,
+        state.counterpartyBusinessRegistrationNo,
+        state.counterpartyName
+      );
       if (!match) {
-        toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
+        toast.show(siteDirectMissMessage(counterpartyDeleted), "error");
         setTab("basic");
         return;
       }

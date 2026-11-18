@@ -22,7 +22,8 @@ import {
   ORDERING_SUBJECT_SITE_DIRECT,
   ORDERING_SUBJECT_PARENT_CORP,
   ORDERING_SUBJECT_CONSIGNED_OPERATOR,
-  findFacilityByBusinessRegistrationNo,
+  resolveSiteDirectTarget,
+  siteDirectMissMessage,
   validateOrderingTargetFacility,
 } from "@/lib/ieps/ordering-subject";
 
@@ -55,6 +56,8 @@ interface ContractChangeModalProps {
   contractTitle: string;
   counterpartyName: string;
   counterpartyBusinessRegistrationNo?: string | null;
+  /** 계약상대 사업장 ID — '대상사업장 본인'이면 이 사업장을 그대로 대상사업장으로 쓴다(2026-11-18) */
+  counterpartyFacilityId?: string | null;
   contractDate: string | null;
   initialMilestones: Array<{ milestoneId?: string; stageLabel: string; amount: number; paymentTerms: string }>;
   initialServiceType: string;
@@ -443,29 +446,32 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     };
   }, [facilityQuery]);
 
-  // 발주 주체 = 대상사업장 본인: 계약상대 업체 사업자번호와 일치하는 사업장을
-  // 자동으로 찾아 대상사업장으로 채운다. (신규 계약 입력 모달과 동일 동작)
+  // 발주 주체 = 대상사업장 본인: 대상사업장 = 계약상대 사업장 자신. 계약상대를 이 창에서 바꿨으면 새 계약상대를 쓴다.
+  // 계약상대 사업장이 없거나 지워졌으면 사업자번호로 찾는다(resolveSiteDirectTarget, 2026-11-18 — 지워진 중복 사업장 때문에
+  // 번호 검색이 빗나간 씨제이제일제당 진천공장 사례).
+  const siteDirectFacilityId = counterpartyChange?.facilityId ?? props.counterpartyFacilityId ?? null;
+  const siteDirectBrn = counterpartyChange ? null : props.counterpartyBusinessRegistrationNo;
+  const siteDirectName = counterpartyChange?.name ?? props.counterpartyName;
   useEffect(() => {
     if (serviceCategory.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
-    const brn = (props.counterpartyBusinessRegistrationNo ?? "").replace(/[^0-9]/g, "");
-    if (!brn) return;
-    const alreadyMatched =
-      serviceCategory.targetFacilities.length === 1 &&
-      (serviceCategory.targetFacilities[0].businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn;
+    const brn = (siteDirectBrn ?? "").replace(/[^0-9]/g, "");
+    if (!siteDirectFacilityId && !brn) return;
+    const current = serviceCategory.targetFacilities.length === 1 ? serviceCategory.targetFacilities[0] : null;
+    const alreadyMatched = current
+      ? siteDirectFacilityId
+        ? current.facilityId === siteDirectFacilityId
+        : (current.businessRegistrationNo ?? "").replace(/[^0-9]/g, "") === brn
+      : false;
     if (alreadyMatched) return;
     const controller = new AbortController();
     (async () => {
       try {
-        const match = await findFacilityByBusinessRegistrationNo(
-          props.counterpartyBusinessRegistrationNo,
-          controller.signal,
-          { companyName: props.counterpartyName }
-        );
+        const { match, counterpartyDeleted } = await resolveSiteDirectTarget(siteDirectFacilityId, siteDirectBrn, siteDirectName, controller.signal);
         if (match) {
           setServiceCategory((prev) => ({ ...prev, targetFacilities: [match] }));
         } else {
           setServiceCategory((prev) => ({ ...prev, targetFacilities: [] }));
-          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 대상사업장을 직접 확인하세요.", "error");
+          toast.show(siteDirectMissMessage(counterpartyDeleted), "error");
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -475,7 +481,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
     })();
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceCategory.orderingSubjectType, props.counterpartyBusinessRegistrationNo]);
+  }, [serviceCategory.orderingSubjectType, siteDirectFacilityId, siteDirectBrn]);
 
   // 발주 주체 구분별 대상사업장 추가(소속 법인·모회사 / 위탁운영사는 검증 후 추가).
   const addTargetFacility = async (facility: FacilitySearchItem) => {
@@ -522,11 +528,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         serviceCategory.orderingSubjectType === ORDERING_SUBJECT_SITE_DIRECT &&
         serviceCategory.targetFacilities.length === 0
       ) {
-        const match = await findFacilityByBusinessRegistrationNo(props.counterpartyBusinessRegistrationNo, undefined, {
-          companyName: props.counterpartyName,
-        });
+        const { match, counterpartyDeleted } = await resolveSiteDirectTarget(siteDirectFacilityId, siteDirectBrn, siteDirectName);
         if (!match) {
-          toast.show("계약상대 업체와 일치하는 사업장을 찾지 못했습니다. 사업장 마스터의 사업자번호를 확인하세요.", "error");
+          toast.show(siteDirectMissMessage(counterpartyDeleted), "error");
           setSaving(false);
           return;
         }

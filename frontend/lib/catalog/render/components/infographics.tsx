@@ -308,6 +308,14 @@ const orgWeight = (n: OrgNode): number => (n.children.some((c) => c.children.len
  * 깊은 조직도(5단 — 대표이사 → 부사장 → 이사 → 본부 → 팀, 회사 조직도 2026.11 PPT 3쪽, 사용자 지시 2026-11-18)의 나무 배치.
  * 한 상자 아래가 하위 조직이면 가로로 펼치고(폭 = 아래 칸 수), 팀(잎)만 있으면 세로 목록으로 쌓는다. 대표이사 바깥 가지(고문·자문)는 기존 배치와 같다.
  */
+/**
+ * 나무 배치 상자 폭(pt, 사용자 지시 2026-11-18) — 부사장 상자와 하위 조직을 거느린 상자(기술총괄 이사)는 같은 폭으로 가운데에,
+ * 대표이사 옆 가지(외부자문위원·고문)도 서로 같은 폭·높이로 가운데 세로줄 가까이(연결선 ORG_TREE_SIDE_GAP) 둔다.
+ */
+const ORG_TREE_HEAD_W = 100;
+const ORG_TREE_SIDE_W = 92;
+const ORG_TREE_SIDE_GAP = 56;
+
 function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisorsLabel?: string; advisorsSub?: string }) {
   const asides = root.children.filter((c) => c.badge);
   const rest = root.children.filter((c) => !c.badge);
@@ -338,7 +346,8 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
     const nested = n.children.some((c) => c.children.length);
     return (
       <div className={cx("kc-org__unit", area ? `kc-area-${area}` : null)} key={n.id}>
-        <span className="kc-org__box">
+        {/* 하위 조직을 거느린 상자는 칸 폭으로 늘이지 않고 부사장 상자와 같은 폭으로 가운데에 */}
+        <span className="kc-org__box" style={nested ? { alignSelf: "center", width: ORG_TREE_HEAD_W, boxSizing: "border-box" } : undefined}>
           {n.label}
           {n.sub ? <small>{n.sub}</small> : null}
         </span>
@@ -353,19 +362,21 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
       </div>
     );
   }
+  // 옆 가지 — 쪽 끝까지 뻗지 않고 가운데 세로줄에서 ORG_TREE_SIDE_GAP 만큼(양쪽 같은 폭·높이)
+  const sideBox: CSSProperties = { width: ORG_TREE_SIDE_W, minHeight: 36, boxSizing: "border-box", justifyContent: "center" };
   const far = (nodes: ReactNode[], side: "left" | "right") =>
     nodes.length ? (
-      <div className={cx("kc-org__aside", "kc-org__aside--far", side === "left" && "kc-org__aside--left")}>
-        {side === "right" ? <span className="kc-org__hline"></span> : null}
+      <div className={cx("kc-org__aside", side === "left" && "kc-org__aside--left")}>
+        {side === "right" ? <span className="kc-org__hline" style={{ width: ORG_TREE_SIDE_GAP }}></span> : null}
         {nodes}
-        {side === "left" ? <span className="kc-org__hline"></span> : null}
+        {side === "left" ? <span className="kc-org__hline" style={{ width: ORG_TREE_SIDE_GAP }}></span> : null}
       </div>
     ) : (
       <span></span>
     );
   const farLeft = showAdvisors
     ? [
-        <span key="adv" className="kc-org__box kc-org__box--soft">
+        <span key="adv" className="kc-org__box kc-org__box--soft" style={sideBox}>
           {advisorsLabel}
           {advisorsSub ? <small>{advisorsSub}</small> : null}
         </span>,
@@ -374,7 +385,7 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
   const farRight: ReactNode[] = [];
   asides.forEach((n, i) => {
     if (i > 0) farRight.push(<span key={`h${i}`} className="kc-org__hline kc-org__hline--s"></span>);
-    farRight.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" />);
+    farRight.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" style={sideBox} />);
   });
   return (
     <div className="kc-org kc-org--tree kc-ig" style={{ flex: 1, minHeight: 0, justifyContent: "center" }} data-widget="org">
@@ -400,7 +411,7 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
       ) : null}
       {deputy ? (
         <>
-          <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 28px" }}>
+          <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 12px", width: ORG_TREE_HEAD_W, boxSizing: "border-box" }}>
             {deputy.label}
             {deputy.sub ? <small>{deputy.sub}</small> : null}
           </span>

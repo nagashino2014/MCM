@@ -917,6 +917,11 @@ test("성공 사례·조직도·임원진·뒤표지·부록 각주(2026-11-18)"
   for (const l of ["부사장", "경영·관리 이사", "기술총괄 이사", "통합환경1본부", "기후대기본부", "울산지사", "탄소중립 미래연구소", "ISO인증 컨설팅팀", "HAPs 관리·지원팀"]) assert.ok(orgHtml.includes(l), l);
   assert.match(orgHtml, /4개 본부와 연구소·지사로 일합니다/);
   assert.match(orgHtml, /grid-template-columns:minmax\(0, 1fr\) minmax\(0, 5fr\) minmax\(0, 1fr\)/, "이사 단 폭 = 아래 칸 수");
+  // 부사장·기술총괄 이사 상자 같은 폭, 외부자문위원·고문 같은 폭·가운데 가까이(2026-11-18)
+  assert.match(orgHtml, /width:100px[^>]*>부사장/);
+  assert.match(orgHtml, /width:100px[^>]*>기술총괄 이사/);
+  assert.equal((orgHtml.match(/width:92px;min-height:36px/g) ?? []).length, 2, "옆 가지 두 상자");
+  assert.doesNotMatch(orgHtml, /kc-org__aside--far/);
   // 4단 조직도는 예전 배치 그대로
   assert.doesNotMatch(renderToStaticMarkup(buildPagePlan(ctxOf(), makeFixture(), COVER).find((p) => p.key === "c12")!.element), /kc-org--tree/);
   // 성공 사례 — 번호 없음, 사후관리 사진 2장·요약, 지도·6선 없음

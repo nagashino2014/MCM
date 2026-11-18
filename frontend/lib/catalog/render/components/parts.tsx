@@ -291,7 +291,8 @@ export function Kpi({
         </span>
         {unit ? <span className="kc-kpi__unit">{unit}</span> : null}
       </span>
-      {note ? <span className="kc-kpi__note">{note}</span> : null}
+      {/* 설명은 블록(div) — 카드 전체가 한 글 블록이 아니라 이름·숫자·설명을 칸별로 고치게(스튜디오, 사용자 지시 2026-11-18) */}
+      {note ? <div className="kc-kpi__note">{note}</div> : null}
     </div>
   );
 }

@@ -21,7 +21,7 @@ import {
   textWidthEm,
   type IllustrationInfo,
 } from "@/lib/catalog/illustration-types";
-import { IllustrationFigure, registerIllustrations } from "@/lib/catalog/render/infographic/illustration";
+import { IllustrationFigure, registerIllustrations, spreadIllustration } from "@/lib/catalog/render/infographic/illustration";
 import { renderInfographic } from "@/lib/catalog/render/infographic/render";
 import { sanitizeInfoSpec, type InfoContent, type InfoSpec } from "@/lib/catalog/render/infographic/types";
 import { buildPagePlan } from "@/lib/catalog/render/components/plan";
@@ -381,4 +381,27 @@ test("쪽 고유 도식(InfoSource) — 원래 마크업 그대로, 내용 spec 
   assert.equal(c04.content.items[0].value, 40);
   const c04b = (findBy(tree(makeFixture({ extraContract: true }), "c04"), (n) => (n.props as { slot?: string } | undefined)?.slot === "c04.figures")!.props as unknown as InfoSlotProps).spec;
   assert.equal(c04b.content.items[0].value, 41);
+});
+
+test("일러스트 자리 높이 채우기(fill: height) — 그림 비율 유지, 가운데 기준으로 키우고 옆 글자 칸은 안쪽 끝만 밀린다(경영철학 2026-11-18)", () => {
+  const i = info(); // 300×100
+  // 폭 300 에 막혀 높이 100 → 자리 120 이면 1.2배
+  const { info: s, k } = spreadIllustration(i, { w: 300, h: 120, fill: "height" }, 300);
+  assert.ok(Math.abs(k - 1.2) < 1e-9);
+  assert.deepEqual(s.view, [300, 120]);
+  const t1 = i.slots.find((x) => x.id === "s1")!; // x 0.05~0.30
+  const m1 = s.slots.find((x) => x.id === "s1")!;
+  assert.equal(m1.x, 0, "바깥 끝은 자리 안으로");
+  assert.ok(Math.abs(m1.x + m1.w - (0.5 + (0.3 - 0.5) * 1.2)) < 1e-9, "그림 쪽 끝은 1.2배로 밀림");
+  assert.equal(m1.y, t1.y, "세로 비율 좌표는 그대로(그림과 함께 늘어남)");
+  // 배율 상한 1.3, 지정 없으면 그대로
+  assert.equal(spreadIllustration(i, { w: 300, h: 500, fill: "height" }, 300).k, 1.3);
+  assert.equal(spreadIllustration(i, { w: 300, h: 120 }, 300).k, 1);
+  assert.equal(spreadIllustration(i, { w: 300, h: 90, fill: "height" }, 270).k, 1, "자리 높이에 맞춘 그림은 그대로");
+  // 그리기 — 자리 비율이 늘고 그림은 좌우로 10%씩 나간다
+  registerIllustrations([{ info: i, svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100"><path d="M0 0"/></svg>' }]);
+  const spec: InfoSpec = { type: "process", content: CONTENT, illust: { asset: i.assetId } };
+  const html = renderToStaticMarkup(<IllustrationFigure spec={spec} box={{ w: 300, h: 120, fill: "height" }} root={{}} />);
+  assert.match(html, /aspect-ratio:300 \/ 120/);
+  assert.match(html, /class="kc-ill__art"[^>]*style="left:-10\.00%;right:-10\.00%"/);
 });

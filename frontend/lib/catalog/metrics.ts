@@ -76,9 +76,9 @@ export const METRIC_DEFS: MetricDef[] = [
   },
   {
     id: "permit.change.completed",
-    label: "통합환경 변경허가·변경신고",
+    label: "통합변경허가·신고·재검토",
     unit: "건",
-    footnote: "통합환경 변경허가·변경신고 용역 중 완료한 계약 수(허가일 또는 최종 대금 계산서 발행일 기준).",
+    footnote: "통합환경 변경허가·변경신고·허가 재검토 용역 중 완료한 계약 수(허가일 또는 최종 대금 계산서 발행일 기준).",
   },
   {
     id: "permit.contracts.total",

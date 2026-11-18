@@ -57,6 +57,30 @@ export function illustWidth(view: [number, number], box: InfoBox, fit?: string):
   return box.h > 0 && fit !== "width" ? Math.min(box.w, box.h * aspect) : box.w;
 }
 
+/** 높이 채우기 최대 배율 — 그 이상은 그림 옆 글자 칸이 너무 좁아진다 */
+const SPREAD_MAX = 1.3;
+
+/**
+ * 자리 높이 채우기(box.fill = "height", 경영철학 사용자 지시 2026-11-18) — 그림이 자리 폭에 막혀 자리 높이보다 낮게 그려질 때
+ * 그림을 가운데 기준으로 k 배(최대 1.3) 키워 높이를 채운다. 그림의 가로·세로 비율은 그대로다.
+ * 글자 칸: 세로 위치·높이는 그림과 함께 늘고(비율 좌표 그대로), 가로는 같은 배율로 가운데에서 밀어 낸 뒤 자리 안으로 자른다 —
+ * 그림 옆 글은 그림 쪽 끝만 밀려 폭이 줄고 바깥 끝은 그대로다. 가운데 그림 + 양옆 글 일러스트에 맞춘 규칙이라 자리에서 고른 경우만 쓴다.
+ * 돌려주는 info 는 늘린 화면(view 높이 × k)·옮긴 글자 칸 — 글자 맞춤·넘침 계산도 이 값으로 한다.
+ */
+export function spreadIllustration(info: IllustrationRender["info"], box: InfoBox, width: number): { info: IllustrationRender["info"]; k: number } {
+  if (box.fill !== "height" || !(box.h > 0) || !(width > 0)) return { info, k: 1 };
+  const natural = (width * info.view[1]) / info.view[0];
+  const k = Math.min(SPREAD_MAX, box.h / natural);
+  if (!(k > 1.01)) return { info, k: 1 };
+  const mapX = (x: number) => Math.min(1, Math.max(0, 0.5 + (x - 0.5) * k));
+  const slots = info.slots.map((s) => {
+    const x0 = mapX(s.x);
+    const x1 = mapX(s.x + s.w);
+    return { ...s, x: x0, w: Math.max(x1 - x0, s.w * 0.5) };
+  });
+  return { info: { ...info, view: [info.view[0], info.view[1] * k], slots }, k };
+}
+
 /** 글자 자리 상자(최소 글자 크기·줄 수 적용)가 그림 위·아래로 나가는 길이(pt) — 그린 폭 width 기준 근사 */
 /** 글이 원래 자리보다 길 때 위로 늘리는지 — 아래 빈 공간으로 모자라고 위 공간이 더 넉넉할 때(화살·띠 위에 놓인 설명 등) */
 export function growsUp(s: IllustSlot, needH: number, H: number): boolean {
@@ -91,11 +115,12 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
       </div>
     );
   }
-  const { info } = r;
   const colors = sanitizeIllustColors(ref.colors);
   const tints = tintsOf(r);
-  const vars = illustColorVars(info.palette, colors, tints);
-  const width = illustWidth(info.view, box, ref.fit);
+  const vars = illustColorVars(r.info.palette, colors, tints);
+  const width = illustWidth(r.info.view, box, ref.fit);
+  // 자리 높이 채우기 — info 는 늘린 화면·옮긴 글자 칸(k = 1 이면 원래 그대로)
+  const { info, k } = spreadIllustration(r.info, box, width);
   const texts = illustSlotTexts(info, spec.content, width).filter((t) => t.text);
   const reserve = slotOverhang(texts.map((t) => t.slot), info.view, width, Object.fromEntries(texts.map((t) => [t.slot.id, { font: t.font, lines: t.lines }])));
   const style = {
@@ -110,7 +135,14 @@ export function IllustrationFigure({ spec, box, root, area }: { spec: InfoSpec; 
   } as CSSProperties;
   return (
     <div {...root} className="kc-ig kc-ill" data-illust={info.assetId} style={style}>
-      <div className="kc-ill__art" data-illust-art={info.assetId} aria-hidden="true" dangerouslySetInnerHTML={{ __html: r.svg }} />
+      <div
+        className="kc-ill__art"
+        data-illust-art={info.assetId}
+        aria-hidden="true"
+        // 키운 그림은 가운데 기준으로 좌우가 자리 밖으로 나간다(SVG 의 빈 옆자리) — 높이는 자리와 같다
+        style={k > 1 ? { left: `${((1 - k) * 50).toFixed(2)}%`, right: `${((1 - k) * 50).toFixed(2)}%` } : undefined}
+        dangerouslySetInnerHTML={{ __html: r.svg }}
+      />
       {texts.map(({ slot, text, metric, suffix, font, shrunk, lines: nLines, width: wFrac }) => {
         const H = (width * info.view[1]) / info.view[0];
         // 글이 길면 자리에 맞게 줄인 크기(최소 크기까지), 아니면 그림 폭 비율

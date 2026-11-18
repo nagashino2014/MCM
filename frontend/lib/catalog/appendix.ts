@@ -98,7 +98,8 @@ const PERMIT_CATEGORY = DASHBOARD_SERVICE_CATEGORIES[0]; // 통합환경허가
  * (엔에스티·진주산업 2개소 최초 작성). 영업부 최초허가 완료현황(2026.05.15. 기준, 99개소)이 시범사업 2개소를 포함한다.
  */
 export const INITIAL_PERMIT_SUBTYPES = ["최초허가", "통합허가", "시범사업"];
-export const CHANGE_PERMIT_SUBTYPES = ["변경허가", "변경신고"];
+/** 통합변경허가·신고·재검토로 세는 세분류(사용자 지시 2026-11-18: 재검토 용역도 함께 센다) */
+export const CHANGE_PERMIT_SUBTYPES = ["변경허가", "변경신고", "재검토"];
 
 const normName = (v: string) => v.replace(/\(주\)|㈜|주식회사|\s+/g, "").toLowerCase();
 

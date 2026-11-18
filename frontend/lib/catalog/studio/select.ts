@@ -30,6 +30,23 @@ const LIST_TAGS = new Set(["ul", "ol"]);
 export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|front__full|divider__full|rs-biz__wheel|rs-clover|rs-effects__arc|rs-foot)\b/;
 
 /**
+ * 쪽 고유 도식(InfoSource) 안에서도 고칠 수 있는 글 — C04 숫자 카드 아래 설명(사용자 지시 2026-11-18).
+ * 도식은 통째로 고르지만 이 칸은 글 블록으로 고른다. 유형·일러스트를 바꿔 spec 으로 다시 그린(drawn) 도식은 해당 없음.
+ */
+export const SOURCE_TEXT_RE = /\bkc-kpi__note\b/;
+
+/** 안의 SOURCE_TEXT_RE 칸을 글로 고칠 수 있는 위젯인가(원래 마크업 그대로인 쪽 고유 도식) */
+export function opensSourceText(w: CNode): boolean {
+  const p = w.props as { source?: unknown; drawn?: unknown } | undefined;
+  return w.widget === "infographic" && p?.source === true && !p.drawn;
+}
+
+/** 위젯 안 글 블록 중 고칠 수 있는 칸인가 — widget = 가장 가까운 위젯 */
+export function isSourceText(n: CNode, parent: CNode | null, widget: CNode): boolean {
+  return opensSourceText(widget) && SOURCE_TEXT_RE.test(n.className ?? "") && isTextBlock(n, parent);
+}
+
+/**
  * 사진 틀 — 사진(img)과 그 모양을 잡는 틀은 한 요소로 고른다(사용자 지시 2026-11-05: 둘을 따로 옮기고 키우는 이중 작업 제거).
  * 사진 교체·초점은 사진에, 옮기기·크기·숨기기는 틀에 적용하고, 사진은 CSS(폭·높이 100%)로 틀을 따라온다.
  */
@@ -58,7 +75,12 @@ export function resolveSelection(root: CNode, hitId: string): Selection | null {
   if (!path) return null;
   // 위젯 안이면 가장 가까운 위젯
   for (let i = path.length - 1; i >= 1; i--) {
-    if (path[i].widget) return describe(path.slice(0, i + 1));
+    if (!path[i].widget) continue;
+    // 쪽 고유 도식 안의 고칠 수 있는 칸(숫자 카드 설명)이면 그 글 블록
+    for (let j = i + 1; j < path.length; j++) {
+      if (isSourceText(path[j], path[j - 1], path[i])) return describe(path.slice(0, j + 1));
+    }
+    return describe(path.slice(0, i + 1));
   }
   // 모티프 장식 묶음 안이면 묶음 통째로
   for (let i = 1; i < path.length; i++) {
@@ -144,6 +166,8 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
   const inWidget = sel.kind === "widget" || sel.kind === "infographic";
   const isRoot = sel.path.length <= 1;
   const added = sel.kind === "added" || n.origin === "add";
+  // 도식 안의 고칠 수 있는 칸(숫자 카드 설명) — 글 고치기·글자 크기·색만(자리는 도식이 정한다)
+  const inSource = sel.path.slice(0, -1).some((a) => a.widget);
   const caps: Capabilities = {
     editText: (sel.kind === "text" || sel.kind === "item") && isTextBlock(n, sel.parent) || (added && n.className?.includes("kc-x-text") === true),
     image: sel.kind === "image" || (added && n.className?.includes("kc-x-image") === true),
@@ -152,12 +176,12 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     infographic: maxLevel >= 2 && sel.kind === "infographic",
     columns: maxLevel >= 2 && !inWidget && gridColumnsOf(n) != null,
     photoLayout: maxLevel >= 2 && sel.kind === "image",
-    move: maxLevel >= 3 && !isRoot,
-    resize: maxLevel >= 3 && !isRoot && n.tag !== "#text",
+    move: maxLevel >= 3 && !isRoot && !inSource,
+    resize: maxLevel >= 3 && !isRoot && n.tag !== "#text" && !inSource,
     // 넣은 일러스트는 글자 크기·색을 일러스트 패널(그림 비율·색 모드)로 고친다
     typeStep: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "item" || added) && !n.widget,
     color: maxLevel >= 3 && (sel.kind === "text" || sel.kind === "box" || added) && !n.widget,
-    duplicate: maxLevel >= 3 && !isRoot && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset || n.attrs?.src))),
+    duplicate: maxLevel >= 3 && !isRoot && !inSource && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset || n.attrs?.src))),
   };
   if (sel.kind === "widget") caps.locked = "데이터에서 자동으로 채우는 영역입니다. 행·항목은 데이터 화면에서 고칩니다.";
   else if (maxLevel === 1) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";

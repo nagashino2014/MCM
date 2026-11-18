@@ -329,7 +329,7 @@ function figuresSpec(data: CatalogRenderData): InfoSpec {
   const hasAdv = (mval(data, "advisors.total") ?? 0) > 0;
   const items: InfoItem[] = [
     { id: "initial", label: "통합환경허가 최초허가", metric: "permit.initial.completed", unit: "건", icon: "factory" },
-    { id: "change", label: "변경허가·변경신고", metric: "permit.change.completed", unit: "건", icon: "file-check" },
+    { id: "change", label: "통합변경허가·신고·재검토", metric: "permit.change.completed", unit: "건", icon: "file-check" },
     { id: "haps", label: "HAPs 신고·점검보고", metric: "projects.area.3", unit: "건", icon: "wind" },
     { id: "chem", label: "화학사고 예방·영업허가 등", metric: "projects.area.2", unit: "건", icon: "flask-conical" },
     { id: "esg", label: "ESG·탄소중립 용역", metric: "projects.area.4", unit: "건", icon: "leaf" },
@@ -384,7 +384,7 @@ export function FiguresPage({
         ) : null}
         <Kpi size="xl" area={1} icon="factory" label="통합환경허가 최초허가" value={fmt(initial)} unit="건" metric="permit.initial.completed"
           note={share != null && denom ? `허가 사업장 ${fmt(denom)}개소 중 ${fmt(share)}%` : undefined} />
-        <Kpi size="xl" area={1} icon="file-check" label="변경허가·변경신고" value={<M data={data} id="permit.change.completed" />} unit="건"
+        <Kpi size="xl" area={1} icon="file-check" label="통합변경허가·신고·재검토" value={<M data={data} id="permit.change.completed" />} unit="건"
           note={`통합환경허가 분야 누적 ${fmt(mval(data, "permit.contracts.total"))}건`} />
         <Kpi size="xl" area={3} icon="wind" label="HAPs 신고·점검보고" value={<M data={data} id="projects.area.3" />} unit="건" note={area(3).firstYear ? `${area(3).firstYear}년부터 누적` : undefined} />
         <Kpi size="xl" area={2} icon="flask-conical" label="화학사고 예방·영업허가 등" value={<M data={data} id="projects.area.2" />} unit="건" note="예방관리계획서·영업허가·설치·정기검사" />
@@ -436,7 +436,7 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
         <div className="kc-span-7" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="kc-titleblock" style={{ gap: 8 }}>
             <p className="kc-eyebrow">비전</p>
-            <p className="kc-statement" style={{ fontSize: 32, lineHeight: "42px" }}>
+            <p className="kc-statement" style={{ fontSize: 29, lineHeight: "38px" }}>
               {statement.map((line, i) => (
                 <span key={i}>
                   {i > 0 ? <br /> : null}
@@ -450,7 +450,8 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
             <p className="kc-blockhead">
               경영철학<span className="kc-blockhead__aside">네 가지 원칙</span>
             </p>
-            <InfoSlot slot="c05.philosophy" spec={cardsSpec(VISION_CONTENT.philosophy)} box={{ w: 425, h: 150 }} />
+            {/* 일러스트로 그리면 단 폭에 막혀 위가 비어 보였다 → 자리 높이 150 → 175pt 를 그림을 키워 채운다(사용자 지시 2026-11-18, 그림 비율 유지) */}
+            <InfoSlot slot="c05.philosophy" spec={cardsSpec(VISION_CONTENT.philosophy)} box={{ w: 425, h: 175, fill: "height" }} />
           </div>
         </div>
         <div className="kc-span-5" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -460,9 +461,11 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
                 <img src={ctx.url(visualPhoto)} alt={`${c.name} 사진`} />
               </div>
             ) : (
-              // 로고 판은 사진 띠(2.4:1)보다 낮게(3:1) — 아래 '일반현황' 라벨 자리를 낸다(사용자 지시 2026-11-08)
-              <div className="kc-photo--frame" style={{ position: "relative", display: "grid", placeItems: "center", overflow: "hidden", aspectRatio: "3", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
-                <img src={ctx.url("k/assets/kesi-ko-horizontal-gradient.png")} alt="KESI ㈜한국환경안전연구원 국문 좌우조합(그라데이션)" style={{ display: "block", width: "70%", height: "auto" }} />
+              // 로고 판은 사진 띠(2.4:1)보다 낮게(3:1) — 아래 '일반현황' 라벨 자리를 낸다(사용자 지시 2026-11-08) → 3.6:1 로 한 번 더 낮춤(2026-11-18).
+              // 로고 크기는 클래스(kc-logo-plate__img, print-overrides)로 판 안에 맞춘다 — 스튜디오는 틀 크기를 바꿀 때 사진의 인라인 width·height 를
+              // 지우므로(StudioCanvas withPhotoReset), 예전 인라인 width 70% 는 지워져 원본 PNG 크기(1000px)로 그려졌다
+              <div className="kc-photo--frame kc-logo-plate" style={{ position: "relative", overflow: "hidden", aspectRatio: "3.6", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--rule)" }}>
+                <img className="kc-logo-plate__img" src={ctx.url("k/assets/kesi-ko-horizontal-gradient.png")} alt="KESI ㈜한국환경안전연구원 국문 좌우조합(그라데이션)" />
               </div>
             )}
           </figure>
@@ -533,7 +536,8 @@ function HistoryFigures({ data }: { data: CatalogRenderData }) {
     { label: "업력", value: <M data={data} id="company.years" />, unit: "년", note: data.company.foundedYear ? `${data.company.foundedYear}년 설립` : undefined },
     { label: "등록", value: fmt(count(["등록"])), unit: "건", note: "대행업·컨설팅업·엔지니어링 등" },
     { label: "인증", value: fmt(count(["인증"])), unit: "건", note: "벤처기업·기술혁신형 중소기업 등" },
-    { label: "특허·수상", value: fmt(count(["특허", "수상"])), unit: "건", note: undefined },
+    // 특허증이 아직 없어 회사 프로필에 못 올린 것은 스튜디오에서 숫자·설명을 직접 고친다(사용자 지시 2026-11-18)
+    { label: "특허·수상", value: fmt(count(["특허", "수상"])), unit: "건", note: "특허 등록·수상 실적" },
   ];
   return (
     <div className="kc-kpis" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>

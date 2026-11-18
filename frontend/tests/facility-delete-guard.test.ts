@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { facilityContractRefs, facilityDeleteBlockedMessage } from "@/lib/facilities/contract-refs";
-import { ORDERING_SUBJECT_PARENT_CORP, resolveSiteDirectTarget, siteDirectMissMessage, validateOrderingTargetFacility } from "@/lib/ieps/ordering-subject";
+import { ORDERING_SUBJECT_CONSIGNED_OPERATOR, ORDERING_SUBJECT_PARENT_CORP, resolveSiteDirectTarget, siteDirectMissMessage, validateOrderingTargetFacility } from "@/lib/ieps/ordering-subject";
+import type { FacilityOperatingEntityInfo } from "@/lib/ieps/facility-operating-entity";
 
 /** db.exec 흉내 — 한 행짜리 결과 */
 const fakeDb = (row: Record<string, unknown>) => ({
@@ -88,4 +89,18 @@ test("소속 법인·모회사 — 연결 법인 또는 같은 그룹의 대표�
   assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, { groupInfo: { company: { businessRegistrationNo: "607-86-06323" } } }, "1268123094").ok, false);
   // 그룹 정보 없음
   assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_PARENT_CORP, { groupInfo: null }, "1268123094").ok, false);
+});
+
+test("위탁운영사 — 사업장 상세의 운영 주체(counterparty) 번호로 판정(2026-11-18 한솔제지·평택에코센터)", () => {
+  // getFacilityDetail 이 돌려주는 모양 그대로(예전 검증은 없는 entity 키를 읽어 늘 실패했다)
+  const op = (relationType: FacilityOperatingEntityInfo["relation"]["relationType"]): { operatingEntityInfo: FacilityOperatingEntityInfo } => ({
+    operatingEntityInfo: {
+      counterparty: { facilityId: "facm_aec9d2e21425ca", companyName: "한솔제지㈜", businessRegistrationNo: "104-86-58322", siteAddress: null, phoneNumber: null, memo: null, createdAt: "", updatedAt: "" },
+      relation: { id: 1, facilityId: "35028-00", relatedFacilityId: "facm_aec9d2e21425ca", relationType, startedAt: null, endedAt: null, isPrimary: true, memo: null, createdAt: "", updatedAt: "" },
+    },
+  });
+  assert.deepEqual(validateOrderingTargetFacility(ORDERING_SUBJECT_CONSIGNED_OPERATOR, op("operating_entity"), "1048658322"), { ok: true });
+  assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_CONSIGNED_OPERATOR, op("operating_entity"), "111-11-11111").ok, false, "다른 회사");
+  assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_CONSIGNED_OPERATOR, op("owner_entity"), "1048658322").ok, false, "소유 주체는 위탁운영이 아님");
+  assert.equal(validateOrderingTargetFacility(ORDERING_SUBJECT_CONSIGNED_OPERATOR, { operatingEntityInfo: null }, "1048658322").ok, false, "운영 관계 없음");
 });

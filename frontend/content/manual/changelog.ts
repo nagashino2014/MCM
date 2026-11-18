@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18", kind: "수정", title: "계약 — 발주 주체 '위탁운영사'로 대상사업장을 고를 수 없던 문제",
+    body: "사업장에 운영 주체(위탁 운영사)를 등록해 두어도 발주 주체 ‘위탁운영사’에서 “위탁 운영 설정이 없는 사업장입니다”가 뜨며 대상사업장을 고를 수 없던 문제를 고쳤습니다. 운영 주체가 계약상대 업체와 같으면 고를 수 있습니다.",
+    articles: ["contracts.manage"],
+  },
+  {
     date: "2026-11-18", kind: "개선", title: "계약 — 발주 주체 '소속 법인·모회사'에 그룹 대표 회사 발주 허용",
     body: "발주 주체가 ‘소속 법인·모회사’일 때, 계약상대 업체가 대상사업장의 연결 법인이 아니어도 같은 그룹의 그룹 대표·본사 회사이면 대상사업장으로 고를 수 있습니다(계열사 사업장을 그룹 대표 회사가 발주한 계약).",
     articles: ["contracts.manage"],

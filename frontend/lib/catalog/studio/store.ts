@@ -166,6 +166,8 @@ export const KIT_IMAGES: StudioImageAsset[] = [
   { key: "k/assets/hq-building-3.webp", label: "사옥 사진(서울 본사)", kind: "kit", createdAt: "" },
   { key: "k/assets/kesi-ko-horizontal-gradient.png", label: "국문 로고(그라데이션)", kind: "kit", createdAt: "" },
   { key: "k/assets/kesi-signature-ko.png", label: "가로형 시그니처", kind: "kit", createdAt: "" },
+  { key: "k/assets/case-aftercare-inspection.webp", label: "사후관리 현장진단(성공 사례)", kind: "kit", createdAt: "" },
+  { key: "k/assets/case-aftercare-process.webp", label: "사후관리 공정 설비(성공 사례)", kind: "kit", createdAt: "" },
 ];
 
 export async function listStudioImageAssets(limit = 200): Promise<StudioImageAsset[]> {

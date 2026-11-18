@@ -19,7 +19,6 @@ import type { AreaInfo, CatalogRenderData, CustomAreaInfo, RenderCtx } from "../
 import { barSpec, compareSpec, regionRows, stepsSpec } from "../infographic/adapt";
 import { InfoSlot, InfoSource } from "../infographic/slot";
 import type { InfoSpec } from "../infographic/types";
-import { KoreaMap } from "./infographics";
 import { AREA_ICON, AreaTag, Foot, Head, Icon, Kpi, M, Sheet, TitleBlock, asOfNote, cx, fmt, mval } from "./parts";
 
 // ── C08 사업 분야 개관 ──
@@ -797,15 +796,15 @@ export function StrengthsPage({ ctx, data, variant, sectionStart }: { ctx: Rende
 // ── C11 대표 성공 사례 ──
 export function CasePage({ ctx }: { ctx: RenderCtx; data: CatalogRenderData }) {
   const c = CASE_CONTENT;
-  const pins = c.list.filter((x) => x.lon != null && x.lat != null).map((x) => ({ lon: x.lon as number, lat: x.lat as number, num: x.num }));
+  const ac = c.aftercare;
   return (
     <Sheet ctx={ctx} area={1} anchors={["c11"]} outline="대표 성공 사례">
       <Head ctx={ctx} num="03" name="핵심 역량" sub="대표 성공 사례" />
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
         {/* 위·가운데 글 영역과 아래 KPI 사이에 몰리던 빈칸을 블록 사이에 고르게 나눈다(사용자 지시 2026-11-11) */}
         <article className="kc-span-8" style={{ display: "flex", flexDirection: "column", gap: 14, justifyContent: "space-between" }}>
-          <div className="kc-case">
-            <span className="kc-case__num">{c.num}</span>
+          {/* 왼쪽 위 사례 번호(01)는 다른 쪽과 어울리지 않아 뺐다(사용자 지시 2026-11-18) */}
+          <div className="kc-case" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 4 }}>
               <p className="kc-eyebrow">{c.eyebrow}</p>
               <p className="kc-page-title" style={{ fontSize: 21, lineHeight: "28px" }}>
@@ -850,27 +849,30 @@ export function CasePage({ ctx }: { ctx: RenderCtx; data: CatalogRenderData }) {
             ))}
           </div>
         </article>
-        <aside className="kc-span-4" style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 20, borderLeft: "var(--stroke-hair) solid var(--rule)" }}>
+        {/* 오른쪽 단 — 이 사례 고객사의 사후관리 사진·요약(사용자 지시 2026-11-18: 다른 실적 6선·지도는 이 사례와 맞지 않아 뺐다) */}
+        <aside className="kc-span-4" style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 20, borderLeft: "var(--stroke-hair) solid var(--rule)" }}>
           <p className="kc-blockhead">
-            대표 사례 {c.list.length}선<span className="kc-blockhead__aside">위치</span>
+            {ac.title}
+            <span className="kc-blockhead__aside">{ac.aside}</span>
           </p>
-          <div style={{ display: "flex", gap: 6 }}>
-            <KoreaMap mode="pins" area={1} pins={pins} zoom={0.72} frame={{ width: 120, height: 215 }} root={{ "data-widget": "map" }} />
-            <p className="kc-caption" style={{ alignSelf: "flex-end" }}>
-              번호는 아래 목록과 같습니다. 고객이 공개에 동의한 사례만 지명을 씁니다.
-            </p>
-          </div>
-          <ol className="kc-cases" style={{ marginTop: 2 }}>
-            {c.list.map((x) => (
-              <li key={x.num} style={{ gridTemplateColumns: "20px minmax(0, 1fr)" }} className={x.area !== 1 ? `kc-area-${x.area}` : undefined}>
-                <span className="kc-cases__year">{x.num}</span>
-                <span>
-                  <b>{x.title}</b>
-                  <span className="kc-table__sub">{x.sub}</span>
-                </span>
+          <p className="kc-caption" style={{ color: "var(--ink)" }}>
+            {ac.lead}
+          </p>
+          {ac.photos.map((ph) => (
+            <figure key={ph.key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <div className="kc-photo kc-photo--frame kc-ratio-hero">
+                <img src={ctx.url(ph.key)} alt={ph.caption} />
+              </div>
+              <figcaption className="kc-caption">{ph.caption}</figcaption>
+            </figure>
+          ))}
+          <ul className="kc-list" style={{ marginTop: 2 }}>
+            {ac.items.map((it) => (
+              <li key={it.head}>
+                <b style={{ color: "var(--area)" }}>{it.head}</b> {it.text}
               </li>
             ))}
-          </ol>
+          </ul>
         </aside>
       </div>
     </Sheet>

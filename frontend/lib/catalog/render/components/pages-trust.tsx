@@ -190,7 +190,11 @@ export function BackCoverPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
           {VISION_CONTENT.backSub[1]}
         </p>
       </div>
-      <div className="kc-backc__rule" style={{ position: "absolute", left: 48, right: 48, top: 420 }}></div>
+      {/* 구분선 오른쪽 끝에 '감사합니다'(사용자 지시 2026-11-18) — 선은 글 앞에서 끝난다 */}
+      <div style={{ position: "absolute", left: 48, right: 48, top: 420, display: "flex", alignItems: "center", gap: 18, transform: "translateY(-50%)" }}>
+        <div className="kc-backc__rule" style={{ flex: 1 }}></div>
+        <p className="kc-backc__thanks-inline">감사합니다</p>
+      </div>
       <div className="kc-backc__info" style={{ position: "absolute", left: 48, right: 48, top: 446 }}>
         <div className="kc-backc__col">
           <img src={ctx.url(LOGO)} alt={LOGO_ALT} style={{ display: "block", width: 168, height: "auto" }} />
@@ -211,6 +215,17 @@ export function BackCoverPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRend
               {o.phone ? (
                 <>
                   T <span className="kc-num">{o.phone}</span>
+                </>
+              ) : null}
+              {/* 전화 아래 팩스·메일(사용자 지시 2026-11-18) — 지사는 메일 없음 */}
+              {o.fax ? (
+                <>
+                  <br />F <span className="kc-num">{o.fax}</span>
+                </>
+              ) : null}
+              {o.email ? (
+                <>
+                  <br />E {o.email}
                 </>
               ) : null}
             </p>

@@ -35,6 +35,9 @@ export const DECOR_GROUP_RE = /\bkc-(front__orbit|pattern|kpis__bg|front__plate|
  */
 export const SOURCE_TEXT_RE = /\bkc-kpi__note\b/;
 
+/** 쪽 아래 각주(kc-footnote)·검토용 안내문(kc-notes) 상자 */
+export const NOTE_BOX_RE = /\bkc-(footnote|notes)\b/;
+
 /** 안의 SOURCE_TEXT_RE 칸을 글로 고칠 수 있는 위젯인가(원래 마크업 그대로인 쪽 고유 도식) */
 export function opensSourceText(w: CNode): boolean {
   const p = w.props as { source?: unknown; drawn?: unknown } | undefined;
@@ -168,11 +171,13 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
   const added = sel.kind === "added" || n.origin === "add";
   // 도식 안의 고칠 수 있는 칸(숫자 카드 설명) — 글 고치기·글자 크기·색만(자리는 도식이 정한다)
   const inSource = sel.path.slice(0, -1).some((a) => a.widget);
+  // 쪽 아래 각주·안내문(상자째) — 부록처럼 글만 고치는 쪽(L1)에서도 숨겨 지울 수 있다(사용자 지시 2026-11-18)
+  const inNotes = sel.path.some((a) => NOTE_BOX_RE.test(a.className ?? ""));
   const caps: Capabilities = {
     editText: (sel.kind === "text" || sel.kind === "item") && isTextBlock(n, sel.parent) || (added && n.className?.includes("kc-x-text") === true),
     image: sel.kind === "image" || (added && n.className?.includes("kc-x-image") === true),
     listItem: sel.kind === "item" || (sel.kind === "list" && (n.children?.length ?? 0) > 0),
-    hide: maxLevel >= 2 && !isRoot,
+    hide: (maxLevel >= 2 || inNotes) && !isRoot,
     infographic: maxLevel >= 2 && sel.kind === "infographic",
     columns: maxLevel >= 2 && !inWidget && gridColumnsOf(n) != null,
     photoLayout: maxLevel >= 2 && sel.kind === "image",
@@ -184,7 +189,7 @@ export function capabilities(sel: Selection, maxLevel: EditLevel): Capabilities 
     duplicate: maxLevel >= 3 && !isRoot && !inSource && (added || sel.kind === "text" || (sel.kind === "image" && Boolean(n.asset || n.attrs?.src))),
   };
   if (sel.kind === "widget") caps.locked = "데이터에서 자동으로 채우는 영역입니다. 행·항목은 데이터 화면에서 고칩니다.";
-  else if (maxLevel === 1) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";
+  else if (maxLevel === 1 && !inNotes) caps.locked = "자동으로 쪽을 나누는 부록 쪽이라 글만 고칠 수 있습니다.";
   else if (maxLevel === 2 && !inWidget) caps.locked = "자동으로 채우는 쪽이라 위치·크기는 바꿀 수 없습니다.";
   return caps;
 }

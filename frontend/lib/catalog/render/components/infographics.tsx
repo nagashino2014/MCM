@@ -299,8 +299,123 @@ const HUB_RE = /(총괄|본부장)/;
  *            → ② 연구소·지사(세로줄 양옆) → ③ 총괄본부장(세로줄 위) → ④ 본부 줄.
  *   총괄 상자가 없고 대표이사 아래가 하나뿐이면 그 상자를 ③으로 쓰고 그 안의 연구소·지사를 양옆에 둔다(이전 편집본 호환).
  */
+/** 상자 깊이(자기 포함) */
+const orgDepth = (n: OrgNode): number => 1 + Math.max(0, ...n.children.map(orgDepth));
+/** 나무 배치의 가지 폭 — 아래에 하위 조직이 있으면 그 폭의 합, 팀 목록(잎)만 있으면 한 칸 */
+const orgWeight = (n: OrgNode): number => (n.children.some((c) => c.children.length) ? n.children.reduce((s, c) => s + orgWeight(c), 0) : 1);
+
+/**
+ * 깊은 조직도(5단 — 대표이사 → 부사장 → 이사 → 본부 → 팀, 회사 조직도 2026.11 PPT 3쪽, 사용자 지시 2026-11-18)의 나무 배치.
+ * 한 상자 아래가 하위 조직이면 가로로 펼치고(폭 = 아래 칸 수), 팀(잎)만 있으면 세로 목록으로 쌓는다. 대표이사 바깥 가지(고문·자문)는 기존 배치와 같다.
+ */
+function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisorsLabel?: string; advisorsSub?: string }) {
+  const asides = root.children.filter((c) => c.badge);
+  const rest = root.children.filter((c) => !c.badge);
+  // 대표이사 아래가 하나(부사장 등)면 세로줄 위 상자로, 그 아래를 가로로 펼친다
+  const deputy = rest.length === 1 && rest[0].children.length ? rest[0] : null;
+  const top = deputy ? deputy.children : rest;
+  const showAdvisors = Boolean(advisorsLabel) && !root.children.some((c) => /자문/.test(c.label));
+  const teams = (list: OrgNode[], area: number | null) => (
+    <ul className="kc-org__teams">
+      {list.map((t) => {
+        const ta = areaOfLabel(t.label);
+        return (
+          <li key={t.id} className={ta && ta !== area ? `kc-area-${ta}` : undefined}>
+            {t.label}
+            {t.sub ? <small>{t.sub}</small> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+  const row = (list: OrgNode[]) => (
+    <div className="kc-org__row" style={{ gridTemplateColumns: list.map((n) => `minmax(0, ${orgWeight(n)}fr)`).join(" ") }}>
+      {list.map(branch)}
+    </div>
+  );
+  function branch(n: OrgNode): ReactNode {
+    const area = areaOfLabel(n.label);
+    const nested = n.children.some((c) => c.children.length);
+    return (
+      <div className={cx("kc-org__unit", area ? `kc-area-${area}` : null)} key={n.id}>
+        <span className="kc-org__box">
+          {n.label}
+          {n.sub ? <small>{n.sub}</small> : null}
+        </span>
+        {nested ? (
+          <>
+            <span className="kc-org__vline" style={{ alignSelf: "center" }}></span>
+            {row(n.children)}
+          </>
+        ) : n.children.length ? (
+          teams(n.children, area)
+        ) : null}
+      </div>
+    );
+  }
+  const far = (nodes: ReactNode[], side: "left" | "right") =>
+    nodes.length ? (
+      <div className={cx("kc-org__aside", "kc-org__aside--far", side === "left" && "kc-org__aside--left")}>
+        {side === "right" ? <span className="kc-org__hline"></span> : null}
+        {nodes}
+        {side === "left" ? <span className="kc-org__hline"></span> : null}
+      </div>
+    ) : (
+      <span></span>
+    );
+  const farLeft = showAdvisors
+    ? [
+        <span key="adv" className="kc-org__box kc-org__box--soft">
+          {advisorsLabel}
+          {advisorsSub ? <small>{advisorsSub}</small> : null}
+        </span>,
+      ]
+    : [];
+  const farRight: ReactNode[] = [];
+  asides.forEach((n, i) => {
+    if (i > 0) farRight.push(<span key={`h${i}`} className="kc-org__hline kc-org__hline--s"></span>);
+    farRight.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" />);
+  });
+  return (
+    <div className="kc-org kc-org--tree kc-ig" style={{ flex: 1, minHeight: 0, justifyContent: "center" }} data-widget="org">
+      <div className="kc-org__tier">
+        <span></span>
+        <div className="kc-org__stem kc-org__stem--top">
+          <span className="kc-org__box kc-org__box--top" style={{ fontSize: 12, padding: "9px 26px" }}>
+            {root.label}
+          </span>
+        </div>
+        <span></span>
+      </div>
+      <span className="kc-org__vline"></span>
+      {farLeft.length || farRight.length ? (
+        <>
+          <div className="kc-org__tier">
+            {far(farLeft, "left")}
+            <div className="kc-org__stem"></div>
+            {far(farRight, "right")}
+          </div>
+          <span className="kc-org__vline"></span>
+        </>
+      ) : null}
+      {deputy ? (
+        <>
+          <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 28px" }}>
+            {deputy.label}
+            {deputy.sub ? <small>{deputy.sub}</small> : null}
+          </span>
+          <span className="kc-org__vline"></span>
+        </>
+      ) : null}
+      {row(top)}
+    </div>
+  );
+}
+
 export function OrgChart({ doc, advisorsLabel, advisorsSub }: { doc: OrgChartDoc; advisorsLabel?: string; advisorsSub?: string }) {
   const root: OrgNode = doc.nodes.length === 1 ? doc.nodes[0] : { id: "root", label: "대표이사", sub: "", badge: "", children: doc.nodes };
+  // 5단 조직도(부사장·이사 단이 있는 조직)는 나무 배치로 — 4단(대표이사 → 총괄 → 본부 → 팀)은 아래 기존 배치
+  if (orgDepth(root) >= 5) return <OrgTree root={root} advisorsLabel={advisorsLabel} advisorsSub={advisorsSub} />;
   const isSide = (k: OrgNode) => k.children.length === 0 && SIDE_RE.test(k.label);
   const asides0 = root.children.filter((c) => c.badge);
   const rest = root.children.filter((c) => !c.badge);

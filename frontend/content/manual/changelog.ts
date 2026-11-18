@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18", kind: "개선", title: "계약 — 발주 주체 '소속 법인·모회사'에 그룹 대표 회사 발주 허용",
+    body: "발주 주체가 ‘소속 법인·모회사’일 때, 계약상대 업체가 대상사업장의 연결 법인이 아니어도 같은 그룹의 그룹 대표·본사 회사이면 대상사업장으로 고를 수 있습니다(계열사 사업장을 그룹 대표 회사가 발주한 계약).",
+    articles: ["contracts.manage"],
+  },
+  {
     date: "2026-11-18", kind: "개선", title: "회사소개서 조직도 — 상자 폭 정리",
     body: "5단 조직도에서 기술총괄 이사 상자를 부사장 상자와 같은 폭으로 가운데에 두고, 외부자문위원·고문 상자를 같은 크기로 맞춰 가운데 세로줄 가까이 놓았습니다.",
     articles: ["sales.catalog-org"],

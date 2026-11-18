@@ -248,7 +248,22 @@ async function loadGroupInfo(db: DbHandle, facilityId: string): Promise<Facility
     );
     const row = rows[0];
     if (!row) return null;
+    // 같은 그룹의 대표·본사 회사 — 역할이 그룹 대표이거나 본사 표시(is_headquarters)인 회사
+    const parentRows = rowsToObjects(
+      await db.exec(
+        `SELECT company_name, business_registration_no
+           FROM facility_group_companies
+          WHERE group_id = $1
+            AND (group_role = 'group_representative' OR is_headquarters = 1)
+          ORDER BY company_name`,
+        [row.group_id]
+      )
+    );
     return {
+      parentCompanies: parentRows.map((p) => ({
+        companyName: String(p.company_name ?? ""),
+        businessRegistrationNo: p.business_registration_no != null ? formatBusinessRegistrationNo(String(p.business_registration_no)) : null,
+      })),
       group: {
         groupId: String(row.group_id ?? ""),
         groupName: String(row.group_name ?? ""),

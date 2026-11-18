@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18", kind: "수정", title: "변경계약 입력 — 계약상대를 바꾼 뒤 대상사업장 검증",
+    body: "변경계약 입력에서 계약상대를 바꾼 뒤 발주 주체(소속 법인·모회사·위탁운영사)에 맞는 대상사업장을 고르면, 바꾸기 전 계약상대 기준으로 검증해 막히던 문제를 고쳤습니다. 이제 새로 고른 계약상대 기준으로 검증합니다.",
+    articles: ["contracts.manage"],
+  },
+  {
     date: "2026-11-18", kind: "수정", title: "계약 — 발주 주체 '위탁운영사'로 대상사업장을 고를 수 없던 문제",
     body: "사업장에 운영 주체(위탁 운영사)를 등록해 두어도 발주 주체 ‘위탁운영사’에서 “위탁 운영 설정이 없는 사업장입니다”가 뜨며 대상사업장을 고를 수 없던 문제를 고쳤습니다. 운영 주체가 계약상대 업체와 같으면 고를 수 있습니다.",
     articles: ["contracts.manage"],

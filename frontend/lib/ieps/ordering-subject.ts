@@ -128,8 +128,10 @@ interface OrderingValidationFacility {
     company?: { businessRegistrationNo?: string | null } | null;
     parentCompanies?: Array<{ businessRegistrationNo?: string | null }> | null;
   } | null;
+  // 사업장 상세의 운영 주체(FacilityOperatingEntityInfo) — 운영 법인은 counterparty 에 있다
+  // (2026-11-18: 예전 정의가 entity 를 읽어 번호가 늘 비어 '위탁운영사'가 한 번도 통과하지 못했다 — 한솔제지·평택에코센터)
   operatingEntityInfo?: {
-    entity?: { businessRegistrationNo?: string | null } | null;
+    counterparty?: { businessRegistrationNo?: string | null } | null;
     relation?: { relationType?: string | null } | null;
   } | null;
 }
@@ -166,7 +168,7 @@ export function validateOrderingTargetFacility(
     if (!cp) {
       return { ok: false, message: "계약상대 업체의 사업자등록번호가 없어 위탁 운영 여부를 검증할 수 없습니다." };
     }
-    const opBrn = normalizeBrn(facility.operatingEntityInfo?.entity?.businessRegistrationNo);
+    const opBrn = normalizeBrn(facility.operatingEntityInfo?.counterparty?.businessRegistrationNo);
     const relationType = facility.operatingEntityInfo?.relation?.relationType ?? "";
     if (!opBrn || opBrn !== cp || relationType !== "operating_entity") {
       return {

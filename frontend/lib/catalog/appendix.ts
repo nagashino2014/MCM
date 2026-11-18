@@ -85,7 +85,7 @@ export interface CatalogProjectRow {
   industryCode: string;
   permitIssuedAt: string;
   permitNo: string;
-  /** 완료일 — completionDateOf: 허가·수리 용역은 허가일, 그 밖은 허가일 또는 최종 대금 단계 계산서 발행일 */
+  /** 완료일 — completionDateOf: 허가일, 없으면 최종 대금 단계 계산서 발행일 */
   completedAt: string;
   meta: ContractCatalogMeta | null;
 }
@@ -102,18 +102,12 @@ export const INITIAL_PERMIT_SUBTYPES = ["최초허가", "통합허가", "시범�
 export const CHANGE_PERMIT_SUBTYPES = ["변경허가", "변경신고", "재검토"];
 
 /**
- * 허가일로만 완료를 판정하는 세분류(사용자 지시 2026-11-18) — 통합환경허가 분야에서 허가·수리를 받는 용역.
- * '통합허가'는 최초허가의 구 표기. 시범사업(2017, 결정번호 없음)·사후관리·통합교육은 허가일이 생기지 않아 넣지 않는다.
- */
-export const PERMIT_DATED_SUBTYPES = ["최초허가", "통합허가", "변경허가", "변경신고", "재검토"];
-
-/**
  * 계약 완료일(소개서 전체 — 부록 진행 중·완료, 최초허가·통합변경허가 등 지표가 같은 판정을 쓴다).
- * 허가·수리 용역은 허가 정보의 허가일(계약 상세 '완료일(허가일)')이 있어야 완료 — 대금 계산서 발행만으로는 완료가 아니다.
- * 그 밖의 계약(사후관리·교육, 다른 분야)은 지금처럼 허가일 또는 최종 대금 단계 계산서 발행일.
+ * 허가 정보의 허가일(계약 상세 '완료일(허가일)')이 있으면 그 날, 없으면 마지막 대금 단계 계산서 발행일.
+ * 수금이 덜 끝났어도 허가일이 있으면 완료다(사용자 확인 2026-11-18 — 11-18 오전에 '허가일이 있어야만 완료'로 잘못 바꿨다가
+ * 최초허가 97 → 11 처럼 지표가 무너져 되돌림: 허가·수리 용역 다수가 허가일 없이 계산서로만 완료돼 있다).
  */
-export function completionDateOf(category: string, subtype: string, permitIssuedAt: string, invoiceDoneDate: string): string {
-  if (category === PERMIT_CATEGORY && PERMIT_DATED_SUBTYPES.includes(subtype.trim())) return permitIssuedAt;
+export function completionDateOf(permitIssuedAt: string, invoiceDoneDate: string): string {
   return permitIssuedAt || invoiceDoneDate;
 }
 

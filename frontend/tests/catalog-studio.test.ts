@@ -954,16 +954,10 @@ test("성공 사례·조직도·임원진·뒤표지·부록 각주(2026-11-18)"
   assert.equal(capabilities(resolveSelection(tree, title.id)!, 1).hide, false);
 });
 
-test("완료 판정(2026-11-18) — 허가·수리 용역은 허가일만, 그 밖은 허가일 또는 최종 계산서", async () => {
-  const { completionDateOf, PERMIT_DATED_SUBTYPES } = await import("@/lib/catalog/appendix");
-  for (const sub of PERMIT_DATED_SUBTYPES) {
-    assert.equal(completionDateOf("통합환경허가", sub, "", "2025-03-02"), "", `${sub}: 계산서만으로는 완료 아님`);
-    assert.equal(completionDateOf("통합환경허가", sub, "2025-04-30", ""), "2025-04-30");
-  }
-  assert.equal(completionDateOf("통합환경허가", " 최초허가 ", "", "2025-03-02"), "", "세분류 앞뒤 공백");
-  // 허가일이 생기지 않는 세분류·다른 분야는 예전 기준
-  assert.equal(completionDateOf("통합환경허가", "사후관리", "", "2025-03-02"), "2025-03-02");
-  assert.equal(completionDateOf("통합환경허가", "시범사업", "", "2017-12-01"), "2017-12-01");
-  assert.equal(completionDateOf("ESG·탄소중립", "", "", "2025-03-02"), "2025-03-02");
-  assert.equal(completionDateOf("HAPs 용역", "", "", ""), "");
+test("완료 판정(2026-11-18 되돌림) — 허가일, 없으면 최종 계산서 발행일", async () => {
+  const { completionDateOf } = await import("@/lib/catalog/appendix");
+  assert.equal(completionDateOf("2025-04-30", ""), "2025-04-30", "수금이 덜 끝났어도 허가일이 있으면 완료");
+  assert.equal(completionDateOf("", "2025-03-02"), "2025-03-02", "허가일이 없으면 최종 계산서");
+  assert.equal(completionDateOf("2025-04-30", "2025-03-02"), "2025-04-30", "둘 다 있으면 허가일");
+  assert.equal(completionDateOf("", ""), "");
 });

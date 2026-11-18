@@ -927,11 +927,16 @@ test("성공 사례·조직도·임원진·뒤표지·부록 각주(2026-11-18)"
   assert.match(cs, /이어지는 사후관리/);
   assert.doesNotMatch(cs, /대표 사례 \d선/);
   // 뒤표지 — 감사합니다, 본사 팩스·메일
-  const fx2 = { ...fx, offices: fx.offices.map((o, i) => (i === 0 ? { ...o, fax: "02-6312-9569", email: "kesi@example.com" } : o)) };
+  // 지사 팩스는 master-content OFFICE_CONTENT 에서(data.ts 가 지사 칸을 그대로 펼친다) — 지사는 메일 없음
+  const { OFFICE_CONTENT } = await import("@/lib/catalog/render/master-content");
+  assert.equal(OFFICE_CONTENT.branches[0].fax, "052-260-1069");
+  const fx2 = { ...fx, offices: fx.offices.map((o, i) => (i === 0 ? { ...o, fax: "02-6312-9569", email: "kesi@example.com" } : { ...o, fax: OFFICE_CONTENT.branches[0].fax })) };
   const back = renderToStaticMarkup(buildPagePlan(ctxOf(), fx2, COVER).find((p) => p.key === "c19")!.element);
   assert.match(back, /kc-backc__thanks-inline">감사합니다</);
   assert.match(back, /F <span class="kc-num">02-6312-9569<\/span>/);
   assert.match(back, /E kesi@example\.com/);
+  assert.match(back, /F <span class="kc-num">052-260-1069<\/span>/);
+  assert.equal((back.match(/<br\/>E /g) ?? []).length, 1, "메일은 본사만");
   // 부록 쪽(L1)의 각주 상자는 숨길 수 있다, 다른 글은 여전히 글만
   const a01 = plan.find((p) => p.key.startsWith("a0"))!;
   const tree = applyEdits(elementToTree(a01.element, a01.key), { v: 1 });

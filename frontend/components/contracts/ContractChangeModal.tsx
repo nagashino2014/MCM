@@ -192,7 +192,9 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   });
 
   // 발주처(계약상대 업체) 변경(2026-08-24) — 엑셀 임포트 오기재 정정용. 선택 시에만 전송.
-  const [counterpartyChange, setCounterpartyChange] = useState<{ facilityId: string; name: string } | null>(null);
+  // 계약상대 변경 — 사업자번호도 함께 둬서 발주 주체 검증(소속 법인·모회사·위탁운영사)이 새 계약상대 기준으로 돈다(2026-11-18 포스코ESM→포스코)
+  const [counterpartyChange, setCounterpartyChange] = useState<{ facilityId: string; name: string; businessRegistrationNo: string | null } | null>(null);
+  const effectiveCounterpartyBrn = counterpartyChange ? counterpartyChange.businessRegistrationNo : props.counterpartyBusinessRegistrationNo ?? null;
   const [counterpartyQuery, setCounterpartyQuery] = useState("");
   const [counterpartyOptions, setCounterpartyOptions] = useState<FacilitySearchItem[]>([]);
   useEffect(() => {
@@ -450,7 +452,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
   // 계약상대 사업장이 없거나 지워졌으면 사업자번호로 찾는다(resolveSiteDirectTarget, 2026-11-18 — 지워진 중복 사업장 때문에
   // 번호 검색이 빗나간 씨제이제일제당 진천공장 사례).
   const siteDirectFacilityId = counterpartyChange?.facilityId ?? props.counterpartyFacilityId ?? null;
-  const siteDirectBrn = counterpartyChange ? null : props.counterpartyBusinessRegistrationNo;
+  const siteDirectBrn = effectiveCounterpartyBrn;
   const siteDirectName = counterpartyChange?.name ?? props.counterpartyName;
   useEffect(() => {
     if (serviceCategory.orderingSubjectType !== ORDERING_SUBJECT_SITE_DIRECT) return;
@@ -496,7 +498,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
         const result = validateOrderingTargetFacility(
           serviceCategory.orderingSubjectType,
           facilityDetail,
-          props.counterpartyBusinessRegistrationNo
+          effectiveCounterpartyBrn
         );
         if (!result.ok) {
           toast.show(result.message ?? "대상사업장 검증에 실패했습니다.", "error");
@@ -995,7 +997,7 @@ export default function ContractChangeModal(props: ContractChangeModalProps) {
                           type="button"
                           className="w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--cd-surface)]"
                           onClick={() => {
-                            setCounterpartyChange({ facilityId: entity.facilityId, name: entity.companyName });
+                            setCounterpartyChange({ facilityId: entity.facilityId, name: entity.companyName, businessRegistrationNo: entity.businessRegistrationNo ?? null });
                             setCounterpartyQuery("");
                             setCounterpartyOptions([]);
                           }}

@@ -630,6 +630,8 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
       address: profile.address,
       addressLines: hqLines.length > 1 ? [hqLines[0], hqLines.slice(1).join(", ")] : [profile.address],
       phone: profile.phone,
+      fax: profile.fax,
+      email: profile.email,
       contacts: contactsOf(OFFICE_CONTENT.hq.contacts),
       transit: OFFICE_CONTENT.hq.transit,
       lon: OFFICE_CONTENT.hq.lon,

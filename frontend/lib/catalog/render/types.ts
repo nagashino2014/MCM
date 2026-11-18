@@ -57,6 +57,9 @@ export interface Office {
   /** 주소 둘째 줄(건물·층) — 뒤표지 3칸 표기용 */
   addressLines: string[];
   phone: string;
+  /** 팩스·대표 메일 — 뒤표지 전화 아래(사용자 지시 2026-11-18). 본사는 회사 프로필, 지사는 메일을 싣지 않는다 */
+  fax?: string;
+  email?: string;
   /** 대표 전화 아래 담당자 휴대전화(오시는 길) — 사용자관리 휴대전화에서 채운다 */
   contacts?: Array<{ label: string; phone: string }>;
   transit: Array<{ label: string; text: string }>;

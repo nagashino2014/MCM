@@ -70,6 +70,14 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
 .kc-strengths__flow .kc-strengths__checks { margin-top: 0; padding-top: 1px; border-top: 0; }
 .kc-strengths__flow .kc-card__proof { flex-direction: column; align-items: flex-start; gap: 0; min-height: 31px; } /* 두 줄 24 + 위 여백 6 + 선(border-box) */
 
+/* 임원진 학력·자격·경력(사용자 지시 2026-11-18) — 줄이 바뀌면 글이 항목명 아래로 나오던 것을 항목명 뒤로 들여 쓴다(내어쓰기) */
+.kc-person__meta li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 4px; align-items: baseline; }
+.kc-person__meta b { margin-right: 0; }
+
+/* 뒤표지 구분선 오른쪽 '감사합니다'(사용자 지시 2026-11-18). 감사 변형(.kc-backc--thanks)은 큰 '감사합니다'가 따로 있어 숨긴다 */
+.kc-backc__thanks-inline { flex: none; margin: 0; font-family: var(--kc-font-display); font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.2px; color: var(--brand); }
+.kc-backc--thanks .kc-backc__thanks-inline { display: none; }
+
 /* 사업 분야 쪽 라벨(주요 서비스·수행 업종·수행 절차·대표 실적)과 그 아래 요소 사이(사용자 지시 2026-11-05) — 0 → 6px.
    늘어난 높이는 오른쪽 단 블록 사이(14 → 10px, pages-business.tsx)에서 받아 쪽 넘침을 막는다 */
 .kc-areapage .kc-blockhead { margin-bottom: 6px; }

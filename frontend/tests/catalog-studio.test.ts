@@ -900,3 +900,46 @@ test("사업 분야 쪽 문구(2026-11-18) — 수행 업종 3줄, ESG 순위·�
   assert.match(st, /연간보고서 작성 대행까지/);
   assert.equal((st.match(/class="kc-card__proof"/g) ?? []).length, 3);
 });
+
+test("성공 사례·조직도·임원진·뒤표지·부록 각주(2026-11-18)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { sanitizeOrgChart } = await import("@/lib/catalog/content-types");
+  // 371 마이그레이션의 조직도(PPT 3쪽) — 정리 함수를 그대로 통과하고 5단 나무 배치로 그린다
+  const sql = readFileSync("../infra/aws/371_catalog_org_chart_2026_11.sql", "utf8");
+  const raw = JSON.parse(/doc jsonb := '(.*)'::jsonb;/.exec(sql)![1]);
+  const org = sanitizeOrgChart(raw);
+  assert.deepEqual(org, raw, "정리 함수가 아무것도 버리지 않음");
+  const fx = { ...makeFixture(), orgChart: org };
+  const plan = buildPagePlan(ctxOf(), fx, COVER);
+  const html = (key: string) => renderToStaticMarkup(plan.find((p) => p.key === key)!.element);
+  const orgHtml = html("c12");
+  assert.match(orgHtml, /kc-org--tree/);
+  for (const l of ["부사장", "경영·관리 이사", "기술총괄 이사", "통합환경1본부", "기후대기본부", "울산지사", "탄소중립 미래연구소", "ISO인증 컨설팅팀", "HAPs 관리·지원팀"]) assert.ok(orgHtml.includes(l), l);
+  assert.match(orgHtml, /4개 본부와 연구소·지사로 일합니다/);
+  assert.match(orgHtml, /grid-template-columns:minmax\(0, 1fr\) minmax\(0, 5fr\) minmax\(0, 1fr\)/, "이사 단 폭 = 아래 칸 수");
+  // 4단 조직도는 예전 배치 그대로
+  assert.doesNotMatch(renderToStaticMarkup(buildPagePlan(ctxOf(), makeFixture(), COVER).find((p) => p.key === "c12")!.element), /kc-org--tree/);
+  // 성공 사례 — 번호 없음, 사후관리 사진 2장·요약, 지도·6선 없음
+  const cs = html("c11");
+  assert.doesNotMatch(cs, /kc-case__num/);
+  assert.match(cs, /case-aftercare-inspection\.webp/);
+  assert.match(cs, /case-aftercare-process\.webp/);
+  assert.match(cs, /이어지는 사후관리/);
+  assert.doesNotMatch(cs, /대표 사례 \d선/);
+  // 뒤표지 — 감사합니다, 본사 팩스·메일
+  const fx2 = { ...fx, offices: fx.offices.map((o, i) => (i === 0 ? { ...o, fax: "02-6312-9569", email: "kesi@example.com" } : o)) };
+  const back = renderToStaticMarkup(buildPagePlan(ctxOf(), fx2, COVER).find((p) => p.key === "c19")!.element);
+  assert.match(back, /kc-backc__thanks-inline">감사합니다</);
+  assert.match(back, /F <span class="kc-num">02-6312-9569<\/span>/);
+  assert.match(back, /E kesi@example\.com/);
+  // 부록 쪽(L1)의 각주 상자는 숨길 수 있다, 다른 글은 여전히 글만
+  const a01 = plan.find((p) => p.key.startsWith("a0"))!;
+  const tree = applyEdits(elementToTree(a01.element, a01.key), { v: 1 });
+  const foot = findBy(tree, hasClass("kc-footnote"))!;
+  assert.ok(foot, "각주 상자");
+  assert.equal(capabilities(resolveSelection(tree, foot.id)!, 1).hide, true);
+  const li = findBy(foot, (n) => n.tag === "li")!;
+  assert.equal(capabilities(resolveSelection(tree, li.id)!, 1).hide, true);
+  const title = findBy(tree, hasClass("kc-page-title"))!;
+  assert.equal(capabilities(resolveSelection(tree, title.id)!, 1).hide, false);
+});

@@ -46,7 +46,9 @@ export function OrgPage({ ctx, data }: { ctx: RenderCtx; data: CatalogRenderData
   // 총괄본부장 상자가 있으면 그 아래가 본부 줄이다(조직도 단 구성은 infographics OrgChart)
   const top = data.orgChart.nodes[0]?.children ?? [];
   const hubNode = top.find((c) => !c.badge && /(총괄|본부장)/.test(c.label) && c.children.length > 0);
-  const units = (hubNode ? hubNode.children : top).filter((c) => !c.badge && c.children.length > 0).length;
+  // 본부 수 — 조직도 어디에 있든 이름이 '본부'로 끝나는 상자(5단 조직도는 이사 아래에 본부가 있다, 2026-11-18). 없으면 예전처럼 총괄 아래 줄
+  const countBonbu = (list: typeof top): number => list.reduce((n, c) => n + (/본부\s*$/.test(c.label) ? 1 : 0) + countBonbu(c.children), 0);
+  const units = countBonbu(data.orgChart.nodes) || (hubNode ? hubNode.children : top).filter((c) => !c.badge && c.children.length > 0).length;
   const advisors = mval(data, "advisors.total") ?? 0;
   return (
     <Sheet ctx={ctx} anchors={["sec-04", "c12"]} section="04 조직과 사람" outline="조직">

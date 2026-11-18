@@ -534,6 +534,10 @@ export async function loadCatalogRenderData(o: LoadOptions): Promise<CatalogRend
                     SUBSTRING(COALESCE(NULLIF(c.contract_date, ''), c.started_at, c.created_at), 1, 4) AS year
                FROM service_participants sp JOIN contracts c ON c.contract_id = sp.contract_id AND c.deleted_at IS NULL
               WHERE sp.employee_id = ANY($1)
+                -- 계약해지·계약중지 계약은 수행 이력에서도 뺀다(listCatalogProjects 와 같은 판정, 2026-11-18)
+                AND COALESCE(c.contract_status, '') NOT IN ('terminated', 'suspended')
+                AND NULLIF(c.contract_terminated_at, '') IS NULL
+                AND NULLIF(c.contract_suspended_at, '') IS NULL
               ORDER BY year DESC NULLS LAST`,
             [ids]
           )

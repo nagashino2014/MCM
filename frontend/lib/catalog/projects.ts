@@ -3,6 +3,7 @@ import { categoryCaseSql } from "@/lib/ieps/contracts";
 import { loadPermitIndustries } from "@/lib/ieps/permit-industries-server";
 import {
   MANUAL_ID_PREFIX,
+  completionDateOf,
   sanitizeAppendixRules,
   type AppendixRules,
   type CatalogProjectRow,
@@ -18,7 +19,8 @@ import { regionGroupId } from "./regions";
 /*
  * 회사소개서 부록 실적 원천(서버) — 계약 + 사업장 + 완료일 + 대외 표기 메타(310 contract_catalog_meta).
  * 표기명·표시 범위 계산은 lib/catalog/appendix.ts(순수 함수)가 한다.
- * 분류는 계약 관리 대시보드와 같은 categoryCaseSql, 완료 판정은 completions-status 와 같은 규칙(허가일 또는 최종 계산서).
+ * 분류는 계약 관리 대시보드와 같은 categoryCaseSql, 완료 판정은 appendix.completionDateOf(허가·수리 용역은 허가일, 그 밖은 허가일 또는 최종 계산서).
+ * 계약해지·계약중지 계약은 싣지 않는다.
  */
 
 /** 계약 기준일 폴백 — contracts.ts 의 집계 규칙과 동일 */
@@ -42,7 +44,7 @@ function mapMeta(r: Record<string, unknown>): ContractCatalogMeta | null {
   };
 }
 
-/** 삭제되지 않은 전체 계약(RBAC 범위 없음 — 회사소개서는 전사 실적) + 계약 없는 실적(뒤에 붙임). */
+/** 삭제·해지·중지되지 않은 전체 계약(RBAC 범위 없음 — 회사소개서는 전사 실적) + 계약 없는 실적(뒤에 붙임). */
 export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
   const db = await getDb();
   // 업종 표기(buildDisplayIndustry)가 쓰는 통합허가 업종 목록 스냅숏을 갱신해 둔다(관리자 설정 '통합허가 업종')
@@ -67,7 +69,7 @@ export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
               COALESCE(NULLIF(sf.industry_code, ''), cp.industry_code, '') AS industry_code,
               COALESCE(SUBSTRING(NULLIF(c.permit_issued_at, ''), 1, 10), '') AS permit_issued_at,
               COALESCE(c.permit_no, '') AS permit_no,
-              COALESCE(SUBSTRING(NULLIF(c.permit_issued_at, ''), 1, 10), lm.invoice_done_date, '') AS completed_at,
+              COALESCE(lm.invoice_done_date, '') AS invoice_done_date,
               (m.contract_id IS NOT NULL) AS has_meta,
               m.display_title, m.display_industry, m.is_public, m.is_featured, m.display_override,
               m.group_key, m.note, m.site_count, m.reviewed_at
@@ -82,6 +84,11 @@ export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
          ) lm ON lm.contract_id = c.contract_id
          LEFT JOIN contract_catalog_meta m ON m.contract_id = c.contract_id
         WHERE c.deleted_at IS NULL
+          -- 계약해지·계약중지 계약은 실적이 아니므로 소개서(부록 목록·지표·실적 노출 관리)에서 뺀다(사용자 지시 2026-11-18).
+          -- 판정은 계약 관리 상태 표시(getContractStatusLabel)와 같다 — 상태값 또는 해지일·중지일
+          AND COALESCE(c.contract_status, '') NOT IN ('terminated', 'suspended')
+          AND NULLIF(c.contract_terminated_at, '') IS NULL
+          AND NULLIF(c.contract_suspended_at, '') IS NULL
         ORDER BY contract_date ASC NULLS LAST, c.contract_title ASC`
     )
   );
@@ -89,12 +96,13 @@ export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
     const contractDate = s(r.contract_date);
     const amountRaw = r.amount == null ? null : Number(r.amount);
     const regionSido = s(r.region_sido);
+    const category = isSoftwareServiceType(s(r.service_type)) ? SOFTWARE_CATEGORY : s(r.category) || "기타 용역";
     return {
       contractId: s(r.contract_id),
       source: "contract" as const,
       contractTitle: s(r.contract_title),
       // 응용소프트웨어 공급 계약은 소개서에서만 6번째 분야로 센다(계약 관리 분류는 그대로 — lib/catalog/areas.ts)
-      category: isSoftwareServiceType(s(r.service_type)) ? SOFTWARE_CATEGORY : s(r.category) || "기타 용역",
+      category,
       subtype: s(r.subtype),
       contractDate,
       year: /^\d{4}/.test(contractDate) ? contractDate.slice(0, 4) : "",
@@ -111,7 +119,8 @@ export async function listCatalogProjects(): Promise<CatalogProjectRow[]> {
       industryCode: s(r.industry_code),
       permitIssuedAt: s(r.permit_issued_at),
       permitNo: s(r.permit_no),
-      completedAt: s(r.completed_at),
+      // 완료 판정(사용자 지시 2026-11-18) — 허가·수리 용역은 허가일만, 그 밖은 허가일 또는 최종 계산서 발행일(appendix.completionDateOf)
+      completedAt: completionDateOf(category, s(r.subtype), s(r.permit_issued_at), s(r.invoice_done_date)),
       meta: mapMeta(r),
     };
   });

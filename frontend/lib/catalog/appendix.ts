@@ -85,7 +85,7 @@ export interface CatalogProjectRow {
   industryCode: string;
   permitIssuedAt: string;
   permitNo: string;
-  /** 완료일 = 허가일 또는 최종 대금 단계 계산서 발행일(completions-status 규칙) */
+  /** 완료일 — completionDateOf: 허가·수리 용역은 허가일, 그 밖은 허가일 또는 최종 대금 단계 계산서 발행일 */
   completedAt: string;
   meta: ContractCatalogMeta | null;
 }
@@ -100,6 +100,22 @@ const PERMIT_CATEGORY = DASHBOARD_SERVICE_CATEGORIES[0]; // 통합환경허가
 export const INITIAL_PERMIT_SUBTYPES = ["최초허가", "통합허가", "시범사업"];
 /** 통합변경허가·신고·재검토로 세는 세분류(사용자 지시 2026-11-18: 재검토 용역도 함께 센다) */
 export const CHANGE_PERMIT_SUBTYPES = ["변경허가", "변경신고", "재검토"];
+
+/**
+ * 허가일로만 완료를 판정하는 세분류(사용자 지시 2026-11-18) — 통합환경허가 분야에서 허가·수리를 받는 용역.
+ * '통합허가'는 최초허가의 구 표기. 시범사업(2017, 결정번호 없음)·사후관리·통합교육은 허가일이 생기지 않아 넣지 않는다.
+ */
+export const PERMIT_DATED_SUBTYPES = ["최초허가", "통합허가", "변경허가", "변경신고", "재검토"];
+
+/**
+ * 계약 완료일(소개서 전체 — 부록 진행 중·완료, 최초허가·통합변경허가 등 지표가 같은 판정을 쓴다).
+ * 허가·수리 용역은 허가 정보의 허가일(계약 상세 '완료일(허가일)')이 있어야 완료 — 대금 계산서 발행만으로는 완료가 아니다.
+ * 그 밖의 계약(사후관리·교육, 다른 분야)은 지금처럼 허가일 또는 최종 대금 단계 계산서 발행일.
+ */
+export function completionDateOf(category: string, subtype: string, permitIssuedAt: string, invoiceDoneDate: string): string {
+  if (category === PERMIT_CATEGORY && PERMIT_DATED_SUBTYPES.includes(subtype.trim())) return permitIssuedAt;
+  return permitIssuedAt || invoiceDoneDate;
+}
 
 const normName = (v: string) => v.replace(/\(주\)|㈜|주식회사|\s+/g, "").toLowerCase();
 

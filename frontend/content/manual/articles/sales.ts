@@ -1096,7 +1096,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
             ["기술인력", "재직자 중 통합허가 대행업 등급(고급·일반)이 있는 인원"],
             ["통합허가 최초허가 수행 비율", "환경부 통합허가 완료 사업장 수 대비 당사 최초허가 사업장 수"],
           ] },
-          { kind: "p", text: "'완료'는 계약에 허가일이 있거나 마지막 대금 단계의 계산서가 발행된 경우입니다. 수주/수금/발행 현황의 완료 현황과 같은 기준입니다." },
+          { kind: "p", text: "'완료'는 통합환경허가 분야의 허가·수리 용역(최초허가·변경허가·변경신고·재검토)이면 계약 상세 허가 정보에 허가일이 있는 경우입니다(계약 상세 '완료일(허가일)'). 대금 계산서를 모두 발행해도 허가일이 비어 있으면 수행 중입니다. 그 밖의 계약(사후관리·교육, 다른 분야)은 허가일이 있거나 마지막 대금 단계의 계산서가 발행된 경우입니다. 부록의 진행 중·완료 표시와 지표가 모두 이 기준을 씁니다. 계약해지·계약중지 계약은 소개서에 싣지 않습니다." },
           { kind: "p", text: "사업 분야는 계약 관리 5분류에 응용소프트웨어를 더한 6개입니다. 응용소프트웨어는 회사소개서에만 있는 분야로, 계약의 서비스 유형이 소프트웨어·SW·그룹웨어·ERP인 공급 계약을 이 분야로 셉니다. 계약 관리 화면의 분류는 그대로입니다." },
         ],
       },
@@ -1172,7 +1172,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/CatalogRenderPanel.tsx",
       "components/sales/catalog/CatalogReferencePanel.tsx",
     ],
-    reviewedAt: "2026-11-17",
+    reviewedAt: "2026-11-18",
   },
   {
     id: "sales.catalog-studio",
@@ -1629,7 +1629,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
         id: "list",
         title: "실적 목록",
         blocks: [
-          { kind: "p", text: "계약 관리에 등록된 모든 계약이 [[실적 목록]]에 나옵니다. 계약 입력 화면은 그대로이며, 대외 표기는 이 화면에서만 다룹니다. 새로 등록된 계약에는 [[미검토]] 표시가 붙습니다." },
+          { kind: "p", text: "계약 관리에 등록된 계약이 [[실적 목록]]에 나옵니다(계약해지·계약중지로 입력한 계약은 나오지 않고 부록·지표·수행 이력에서도 빠집니다). 계약 입력 화면은 그대로이며, 대외 표기는 이 화면에서만 다룹니다. 새로 등록된 계약에는 [[미검토]] 표시가 붙습니다." },
           { kind: "list", items: [
             "대외 표기는 메타가 없어도 규칙으로 자동으로 만들어집니다. 통합환경허가는 '발주처 사업장 통합환경허가 취득 용역 준공(허가일, 결정번호)' 형식, 진행 중이면 '수행 중'입니다.",
             "줄을 누르면 편집 창이 열립니다. 대외 표기명을 비워 두면 자동 표기를 계속 씁니다. [[저장]] 또는 [[검토 완료로 저장]]을 누릅니다.",
@@ -1687,7 +1687,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["부록", "실적", "수행실적", "대외 표기", "금액 기준", "500만 원", "표시 범위", "묶음", "비공개 고객", "대표 실적", "계약 없는 실적", "위임", "수기 실적", "표기 제안", "AI 표기"],
     sources: ["components/sales/catalog/CatalogProjectsBoard.tsx", "components/sales/catalog/CatalogManualProjects.tsx", "components/sales/catalog/CatalogLabelSuggest.tsx"],
-    reviewedAt: "2026-10-24",
+    reviewedAt: "2026-11-18",
   },
   {
     id: "sales.catalog-people",

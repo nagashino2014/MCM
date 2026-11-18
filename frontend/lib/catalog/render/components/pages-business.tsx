@@ -486,9 +486,7 @@ export function SoftwarePage({ ctx, data, area }: { ctx: RenderCtx; data: Catalo
               </span>
               <span className="kc-sw__name">{p.name}</span>
             </div>
-            <span className="kc-badge kc-badge--soft" style={{ alignSelf: "flex-start" }}>
-              {p.status}
-            </span>
+            {/* 개발 단계 표식(개발 중·사내 실사용 테스트 중·기획)은 싣지 않는다 — 시기는 아래 출시 일정·카드 끝 날짜로(사용자 지시 2026-11-18) */}
             <p className="kc-sw__pitch">{p.pitch}</p>
             <ul className="kc-sw__list">
               {p.points.map((pt, i) => (

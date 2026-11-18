@@ -39,6 +39,12 @@ ${BODY} .kc-person__initial, ${BODY} .kc-person__photo { border-radius: 10px; }
    틀(이니셜 상자와 같은 크기·둥근 모서리) 안에서 사진을 조금 키워 가장자리 여백을 잘라 낸다 */
 .pk-sheet .kc-person__photo > img { transform: scale(1.14); transform-origin: 50% 45%; }
 
+/* 응용소프트웨어 제품 카드(사용자 지시 2026-11-18 — 바탕색 때문에 읽기 어렵다) — 바탕색 없이 제품 색 계열의 연한 테두리(위 굵은 선은 그대로),
+   제품명은 제품 색, 그 아래 한 줄 소개는 본문색. ⚠ 디자인 시스템 bundle.css 의 같은 규칙은 다음 재export 때 반영 */
+.kc-sw__card { background: var(--paper); border: 1px solid color-mix(in srgb, var(--area) 35%, transparent); border-top: 3px solid var(--area); }
+.kc-sw__name { color: var(--area); }
+.kc-sw__pitch { color: var(--ink); }
+
 /* 응용소프트웨어 쪽 제품 카드 5장(2026-11-09) — 한 줄에 다 놓도록 안쪽 여백·글자를 한 단계 줄인다 */
 .kc-sw--compact { gap: 10px; }
 .kc-sw--compact .kc-sw__card { padding: 12px 11px 10px; gap: 6px; }

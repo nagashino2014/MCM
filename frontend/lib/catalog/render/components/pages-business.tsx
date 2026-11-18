@@ -2,6 +2,7 @@
  * 회사소개서 사업·역량 쪽 유형 — C08 사업 분야 개관 · C09 사업 분야 상세(5분야 공용) · C09 응용소프트웨어 2쪽 · C10 핵심 역량 · C11 대표 성공 사례.
  * 마크업은 P2 쪽 유형 목업과 같다. 분야 상세의 히어로는 사진 없는 변형(분야 누적 실적 숫자)을 쓴다 — 분야 사진 자산이 아직 없다.
  */
+import { orderAreas } from "@/lib/catalog/areas";
 import type { MetricId } from "@/lib/catalog/metrics";
 import { REGION_GROUPS } from "@/lib/catalog/regions";
 import {
@@ -43,7 +44,7 @@ function businessMapSpec(data: CatalogRenderData): InfoSpec {
     type: "hub",
     content: {
       center: { label: ORBIT_CENTER[ORBIT_CENTER.length - 1], desc: ORBIT_CENTER.slice(0, -1).join(" ") },
-      items: data.areas.map((a) => {
+      items: orderAreas(data.areas, data.theme?.areaOrder).map((a) => {
         const sw = a.index === 6;
         const bullets = sw ? SOFTWARE_CONTENT.products.map((p) => p.name) : AREA_CONTENT[a.category]?.overview ?? [];
         const products = sw && a.count === 0;
@@ -82,7 +83,7 @@ export function BusinessMapPage({ ctx, data, sectionStart, linked }: { ctx: Rend
             ))}
           </span>
         </div>
-        {data.areas.map((a, i) => {
+        {orderAreas(data.areas, data.theme?.areaOrder).map((a, i) => {
           const pos = ORBIT_POS[i];
           const sw = a.index === 6;
           // 응용소프트웨어는 제품이 늘어(5종) 이름만 두 개씩 한 줄로 — 상태·시기는 응용소프트웨어 쪽 카드에 있다(다섯 줄이면 카드가 쪽 각주를 덮음)

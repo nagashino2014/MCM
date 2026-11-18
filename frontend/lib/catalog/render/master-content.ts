@@ -75,7 +75,7 @@ export const AREA_CONTENT: Record<string, AreaContent> = {
     ],
     overview: ["화학사고 예방관리계획서", "유해화학물질 영업허가·설치검사·정기검사", "공정안전보고서(PSM)·유해위험방지계획서"],
     casesAside: "고객 · 수행 기간",
-    heroCaption: "장외·화관법 누적 수행",
+    heroCaption: "화학물질관리 누적 수행",
     draft: true,
   },
   "HAPs 용역": {
@@ -439,6 +439,8 @@ export const MATRIX_DESC: Record<string, string> = {
 
 /** 소개서 분야 표기명 기본값(catalog_business_areas.display_name 이 없을 때) */
 export const AREA_DISPLAY_NAME: Record<string, string> = {
+  // 2026-11-18 사용자 지시 — 소개서 표기만 바꾼다(계약 관리 분류명 '장외·화관법'은 그대로)
+  "장외·화관법": "화학물질관리",
   "HAPs 용역": "HAPs(비산배출)",
   "기타 용역": "환경 인허가·연구·교육",
 };

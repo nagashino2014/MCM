@@ -10,6 +10,7 @@
  */
 
 import { FONT_SETS } from "./fonts";
+import { sanitizeAreaNames, sanitizeAreaOrder } from "./areas";
 
 export const COVER_DESIGNS = [
   { id: "leaf", label: "A 잎 창", desc: "사옥 사진을 잎 모양 창에 담은 표지", photo: "hq-cover-tall", confirmed: true },
@@ -65,6 +66,10 @@ export interface DocumentTheme {
   motif: Motif;
   /** 선택 분야(brief 템플릿의 분야 1장 요약용, 분야 번호 1~6) — 다른 템플릿은 비움 */
   areas?: number[];
+  /** 사업 분야 순서(분야 번호 1~6 을 한 번씩) — 표지·목차·간지·개관·분야 쪽이 이 순서를 따른다. 없으면 기본 순서(lib/catalog/areas.ts) */
+  areaOrder?: number[];
+  /** 문서별 분야 이름 { "분야 번호": 이름 } — 없는 분야는 기본 표기명. 빈 객체 = 모두 기본 */
+  areaNames?: Record<string, string>;
 }
 
 export const DEFAULT_DOCUMENT_THEME: DocumentTheme = {
@@ -104,6 +109,8 @@ export function sanitizeDocumentTheme(input: unknown): DocumentTheme {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const fontSet = typeof o.fontSet === "string" && /^[a-z0-9-]{1,40}$/.test(o.fontSet) ? o.fontSet : DEFAULT_FONT_SET;
   const areas = sanitizeAreas(o.areas);
+  const areaOrder = sanitizeAreaOrder(o.areaOrder);
+  const areaNames = sanitizeAreaNames(o.areaNames);
   return {
     template: isTemplateId(o.template) ? o.template : DEFAULT_TEMPLATE,
     fontSet,
@@ -112,6 +119,8 @@ export function sanitizeDocumentTheme(input: unknown): DocumentTheme {
     concept: isColorConcept(o.concept) ? o.concept : DEFAULT_CONCEPT,
     motif: isMotif(o.motif) ? o.motif : DEFAULT_MOTIF,
     ...(areas ? { areas } : {}),
+    ...(areaOrder ? { areaOrder } : {}),
+    ...(areaNames ? { areaNames } : {}),
   };
 }
 
@@ -128,6 +137,8 @@ export function pickThemePatch(patch: Partial<DocumentTheme> | Record<string, un
   if (isColorConcept(t.concept)) clean.concept = t.concept;
   if (isMotif(t.motif)) clean.motif = t.motif;
   if ("areas" in t) clean.areas = sanitizeAreas(t.areas);
+  if ("areaOrder" in t) clean.areaOrder = sanitizeAreaOrder(t.areaOrder);
+  if ("areaNames" in t) clean.areaNames = sanitizeAreaNames(t.areaNames) ?? {};
   return clean;
 }
 

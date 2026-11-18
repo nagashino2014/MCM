@@ -12,6 +12,7 @@ import {
   sanitizeDocumentTheme,
   type DocumentTheme,
 } from "@/lib/catalog/document-theme";
+import { orderAreas, sanitizeAreaNames, sanitizeAreaOrder, withAreaNames } from "@/lib/catalog/areas";
 import { CATALOG_TEMPLATES, PAGE_VARIANT_FIELDS, TEMPLATE_LIST, fallbackNote, resolveVariant, templateOf, templateVariant } from "@/lib/catalog/templates";
 import { fitsPage } from "@/lib/catalog/illustration-types";
 import { buildPagePlan } from "@/lib/catalog/render/components/plan";
@@ -293,7 +294,7 @@ const htmlOf = (theme: DocumentTheme, pages: Parameters<typeof composeDocument>[
   return renderToStaticMarkup(renderTrees(composeDocument(ctx, d, cover, pages).map((p) => p.tree), { url: ctx.url, data: d }));
 };
 const STANDARD_KEYS = [
-  "c01", "c02", "c03", "c04", "c05", "c06-1", "c07-02", "c08", "area-1", "area-2", "area-3", "area-4", "area-5", "c09-software", "c09-platform",
+  "c01", "c02", "c03", "c04", "c05", "c06-1", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
   "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c16", "c17", "c18", "a01", "a02-1", "c19",
 ];
 /** research 쪽 계획(260928 양식 순서) — 픽스처는 임원 2명·기술인력 1명·자문위원 1명·인증 1건 */
@@ -308,7 +309,7 @@ test("buildPagePlan — 템플릿별 쪽 키 목록(standard·photo·graphic = �
   for (const id of ["photo", "graphic"] as const) assert.deepEqual(keysOf(CATALOG_TEMPLATES[id].theme), STANDARD_KEYS, id);
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.research.theme), RESEARCH_KEYS);
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.formal.theme), [
-    "c01", "c02", "c03", "c04", "c05", "c06-1", "c16", "c17", "a01", "c07-02", "c08", "area-1", "area-2", "area-3", "area-4", "area-5", "c09-software", "c09-platform",
+    "c01", "c02", "c03", "c04", "c05", "c06-1", "c16", "c17", "a01", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
     "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c18", "a02-1", "c19",
   ]);
   // 요약본은 부록을 빼지만 격조형의 수행실적 총괄(a01)은 본편이라 남는다
@@ -556,4 +557,49 @@ test("연구소형 수행실적 — 줄 예산 안에서 그룹마다 1건 이�
   // 모두 두 줄짜리(100자)면 16줄 예산에서 8건까지, 빈 그룹은 0
   const long = pickRecordRows([[f(100), f(100), f(100)], [f(100), f(100)], [], [f(100)], [f(100), f(100)]]);
   assert.deepEqual(long, [3, 2, 0, 1, 2]);
+});
+
+// ── 사업 분야 순서(사용자 요청 2026-11-18) ──
+test("사업 분야 순서 — 기본 1-4-5-2-3-6, 문서별 areaOrder, 잘못된 값은 기본", () => {
+  assert.deepEqual(sanitizeAreaOrder([6, 5, 4, 3, 2, 1]), [6, 5, 4, 3, 2, 1]);
+  assert.equal(sanitizeAreaOrder([1, 2, 3]), undefined, "6개가 아니면 버림");
+  assert.equal(sanitizeAreaOrder([1, 1, 2, 3, 4, 5]), undefined, "중복은 버림");
+  assert.equal(sanitizeAreaOrder([1, 2, 3, 4, 5, 7]), undefined, "범위 밖은 버림");
+  assert.deepEqual(orderAreas([1, 2, 3, 4, 5, 6].map((index) => ({ index }))).map((a) => a.index), [1, 4, 5, 2, 3, 6]);
+  // 저장·패치 경로가 순서를 지키고 잘못된 값은 남기지 않는다
+  assert.deepEqual(sanitizeDocumentTheme({ areaOrder: [2, 1, 3, 4, 5, 6] }).areaOrder, [2, 1, 3, 4, 5, 6]);
+  assert.equal("areaOrder" in sanitizeDocumentTheme({ areaOrder: [2, 2] }), false);
+  assert.deepEqual(pickThemePatch({ areaOrder: [6, 1, 2, 3, 4, 5] }).areaOrder, [6, 1, 2, 3, 4, 5]);
+
+  // 쪽 차례: 응용소프트웨어를 앞으로 옮기면 소프트웨어·플랫폼 쪽이 함께 앞으로, 분야 쪽 키는 분야 번호 그대로
+  const theme = { ...CATALOG_TEMPLATES.standard.theme, areaOrder: [6, 3, 1, 2, 4, 5] };
+  const keys = keysOf(theme);
+  const from = keys.indexOf("c08");
+  assert.deepEqual(keys.slice(from + 1, from + 8), ["c09-software", "c09-platform", "area-3", "area-1", "area-2", "area-4", "area-5"]);
+
+  // 표지 분야 목록·목차 바로 가기도 같은 순서(이름 = 표기명, 장외·화관법 → 화학물질관리)
+  const html = htmlOf(CATALOG_TEMPLATES.standard.theme);
+  const cover = html.match(/kc-front__areas[^>]*>(.*?)<\/ul>/)?.[1] ?? "";
+  const names = [...cover.matchAll(/<li class="kc-area-(\d)">/g)].map((m) => Number(m[1]));
+  assert.deepEqual(names, [1, 4, 5, 2, 3, 6]);
+  assert.ok(html.includes("화학물질관리") && !html.includes("장외·화관법"), "소개서 표기명은 화학물질관리");
+});
+
+test("분야 이름 — 문서별 areaNames 가 분야 목록·총괄표에 입혀지고, 비우면 기본 표기명", () => {
+  assert.deepEqual(sanitizeAreaNames({ "2": "  화학 안전  ", "9": "x", "3": "", "4": 5 }), { "2": "화학 안전" });
+  assert.deepEqual(sanitizeAreaNames({}), {}, "빈 객체 = 모두 기본(저장 덮어쓰기용)");
+  assert.equal(sanitizeAreaNames([1]), undefined);
+  assert.deepEqual(pickThemePatch({ areaNames: { "6": "SW 개발" } }).areaNames, { "6": "SW 개발" });
+
+  const base = makeFixture();
+  const data = withAreaNames({ ...base, areas: base.areas.map((a) => ({ ...a, baseName: a.name })), theme: { ...base.theme, areaNames: { "2": "화학 안전" } } });
+  assert.equal(data.areas.find((a) => a.index === 2)!.name, "화학 안전");
+  assert.equal(data.areas.find((a) => a.index === 1)!.name, base.areas[0].name);
+  if (data.matrix.some((s) => s.index === 2)) assert.equal(data.matrix.find((s) => s.index === 2)!.name, "화학 안전");
+  // 이름을 지우면 기본 표기명으로 돌아간다(스튜디오 즉시 미리보기)
+  const back = withAreaNames({ ...data, theme: { ...data.theme, areaNames: {} } });
+  assert.equal(back.areas.find((a) => a.index === 2)!.name, "화학물질관리");
+  // 렌더: 표지·쪽 제목에 새 이름
+  const html = htmlOf({ ...CATALOG_TEMPLATES.standard.theme, areaNames: { "2": "화학 안전" } }, [], COVER, data);
+  assert.ok(html.includes("화학 안전"));
 });

@@ -9,6 +9,7 @@ import type { CoverChoice } from "@/lib/catalog/render/components/pages-front";
 import type { PagePlanItem } from "@/lib/catalog/render/components/plan";
 import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "@/lib/catalog/render/types";
 import { usableFontSet, type FontSetDef } from "@/lib/catalog/fonts";
+import { withAreaNames } from "@/lib/catalog/areas";
 import { composePage, orderedPlan, variantsOf, type ComposedPage } from "@/lib/catalog/studio/compose";
 import { pageState, upsertPage, withOrder, type StudioDoc, type StudioPageState } from "@/lib/catalog/studio/doc";
 import { anchorPins, type PageEdits } from "@/lib/catalog/studio/edits";
@@ -122,7 +123,8 @@ export function useStudio(docId: string) {
         : null,
     [payload, theme, fontSet]
   );
-  const data: CatalogRenderData | null = useMemo(() => (payload && theme ? { ...payload.data, theme } : null), [payload, theme]);
+  // 문서별 분야 이름은 설정을 바꾸는 즉시 미리보기에 입힌다(서버 데이터는 열 때의 이름)
+  const data: CatalogRenderData | null = useMemo(() => (payload && theme ? withAreaNames({ ...payload.data, theme }) : null), [payload, theme]);
   const cover = useMemo(() => (payload && theme ? coverFor(theme, payload.cover) : null), [payload, theme]);
   const pages = state?.pages;
   const pagesRef = useRef(pages);

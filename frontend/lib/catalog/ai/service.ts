@@ -1,7 +1,7 @@
 import { AI_FEATURES, type AiFeatureKey } from "@/lib/ai/features";
 import { hasClaudeApiKey } from "@/lib/ai/claude-client";
 import { LlmError, anthropicChatJson } from "@/lib/ai/llm-json";
-import { CATALOG_CATEGORIES, areaIndex } from "@/lib/catalog/areas";
+import { CATALOG_CATEGORIES, areaIndex, orderAreas } from "@/lib/catalog/areas";
 import { buildDisplayTitle, isCompleted, projectPartyName, type CatalogProjectRow } from "@/lib/catalog/appendix";
 import { sanitizeCustomAreaContent, sanitizeAreaName, CUSTOM_AREA_LIMITS, type CustomAreaContent } from "@/lib/catalog/custom-area-types";
 import { pickAreaSlot } from "@/lib/catalog/custom-areas";
@@ -133,7 +133,7 @@ function companyBrief(data: CatalogRenderData) {
     slogan: c.slogan,
     research: VISION_CONTENT.research,
     registrations: c.registrations.slice(0, 8),
-    areas: data.areas.map((a) => a.name),
+    areas: orderAreas(data.areas, data.theme?.areaOrder).map((a) => a.name),
   };
 }
 

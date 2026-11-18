@@ -221,7 +221,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             "[[계약 유형]]은 [[매출 계약]]과 [[매입 계약]] 묶음이 나란히 있습니다(폭이 좁으면 두 줄). [[매출 계약]]에서 통합허가·화관법·HAPs·ESG·기타 중 이 사업장에 해당하는 용역을, [[매입 계약]]에서 외주 계약·정기 구독·임대 계약·관리 계약 중 해당 유형을 고릅니다. 매입 계약 태그는 순서대로 통합허가·화관법·HAPs·ESG와 같은 색입니다.",
           ] },
           { kind: "p", text: "[[이력]]·[[편집]]과 등록증 업로드·재분석은 사업장 편집 권한이 있는 사람에게만 보입니다. 메뉴 오른쪽 위의 [[정보 전수 점검]]·[[수동 등록]]도 마찬가지입니다. [[삭제]]는 사업장 삭제 권한, [[중복 병합]]은 사업장 병합 권한이 있는 사람에게만 보입니다." },
-          { kind: "warn", text: "[[삭제]] → [[휴지통으로 이동]]하면 목록에서 빠집니다. 허가·생산품·연간보고 자료는 보존되지만, 휴지통에는 복원 버튼이 없고 관리자만 영구 삭제할 수 있습니다." },
+          { kind: "warn", text: "[[삭제]] → [[휴지통으로 이동]]하면 목록에서 빠집니다. 허가·생산품·연간보고 자료는 보존되지만, 휴지통에는 복원 버튼이 없고 관리자만 영구 삭제할 수 있습니다. 계약(매출 계약의 계약상대·대상사업장, 매입 계약의 계약상대)이 걸린 사업장은 지워지지 않고 계약 건수가 안내됩니다. 같은 회사가 두 번 등록된 경우에는 삭제 대신 [[중복 병합]]으로 합치면 계약이 남길 사업장으로 함께 옮겨집니다." },
         ],
       },
       {
@@ -267,7 +267,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/facilities/FacilityOrdersModal.tsx",
       "components/facilities/FacilityContractTypeFields.tsx",
     ],
-    reviewedAt: "2026-11-10",
+    reviewedAt: "2026-11-18",
   },
   {
     id: "facilities.new",
@@ -522,7 +522,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "list", items: [
             "필수: 계약명·계약상대 업체·계약일. 빠지면 해당 탭으로 돌아갑니다.",
-            "발주 주체가 ‘대상사업장 본인’이면 대상사업장이 계약상대 업체의 사업자번호로 자동 지정됩니다. 사업장 마스터에서 찾지 못하면 등록이 멈추니 사업자번호를 확인하세요.",
+            "발주 주체가 ‘대상사업장 본인’이면 계약상대 업체로 고른 사업장이 그대로 대상사업장이 됩니다(같은 사업자번호를 쓰는 다른 사업장으로 바뀌지 않습니다). 계약상대 사업장이 삭제돼 있으면 안내가 뜨니, 변경계약 입력의 계약상대 변경에서 사업장 마스터의 사업장을 고르세요.",
             "EPC사 발주처럼 대상사업장이 아직 없으면 이름만으로 먼저 등록하고, 홈의 ‘임시 등록 사업장 완성’에서 보완합니다.",
           ] },
         ],
@@ -656,7 +656,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-10",
+    reviewedAt: "2026-11-18",
   },
   {
     id: "contracts.dashboard",

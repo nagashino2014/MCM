@@ -212,5 +212,7 @@ export async function collectBidSource(
 
   result.insertedItems = insertedItems;
   result.logs = run.logs;
+  // 일부 구간만 실패한 수집 — 적재는 했지만 구멍이 있으니 실행 로그에 실패로 남긴다.
+  if (run.error) result.error = run.error;
   return result;
 }

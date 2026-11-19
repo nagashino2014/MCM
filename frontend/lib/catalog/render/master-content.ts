@@ -238,7 +238,7 @@ export const OFFICE_CONTENT = {
 };
 
 export const SECTIONS = [
-  { key: "01", anchor: "sec-01", name: "회사 소개", desc: "대표이사 인사말 · 숫자로 보는 KESI · 회사 개요·비전 · 연혁" },
+  { key: "01", anchor: "sec-01", name: "회사 소개", desc: "대표이사 인사말 · 회사 개요·비전 · 숫자로 보는 KESI · 연혁" },
   { key: "02", anchor: "sec-02", name: "사업 분야", desc: "사업 분야 개관 · 분야별 상세 6개" },
   { key: "03", anchor: "sec-03", name: "핵심 역량", desc: "핵심 역량 · 대표 성공 사례" },
   { key: "04", anchor: "sec-04", name: "조직과 사람", desc: "조직 · 임원진 · 기술인력 · 자문위원" },
@@ -248,6 +248,9 @@ export const SECTIONS = [
 ] as const;
 
 export const DIVIDER_CONTENT = {
+  "01": {
+    lead: "KESI가 지향하는 비전과 경영철학, 숫자로 보는 실적, 설립 이후 걸어온 길을 소개합니다.",
+  },
   "02": {
     lead: "환경 컨설팅 5개 분야(계약 관리 분류)와 응용소프트웨어로 사업을 나눕니다. 분야마다 주요 서비스, 수행 절차, 실적 수치와 대표 실적을 정리했습니다.",
   },

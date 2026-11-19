@@ -129,6 +129,65 @@ test("나눈 구간 중 하나가 실패하면 모은 건과 함께 오류를 �
   assert.match(run.error ?? "", /99/);
 });
 
+// 포털 게이트웨이 오류(OpenAPI_ServiceResponse) — 인증키 미등록·요청 한도 초과 등.
+// 2026-11-19 실측: 키 오류는 HTTP 401/403 에 JSON 본문으로 온다. 같은 본문이 HTTP 200 으로 오면
+// JSON 은 오류 객체가 공고 1건으로, XML(옛 형식)은 0건 성공으로 지나가므로 둘 다 실패로 잡는다.
+
+const gatewayJson = (errMsg: string, authMsg: string, code: string) =>
+  JSON.stringify({ OpenAPI_ServiceResponse: { cmmMsgHeader: { errMsg, returnAuthMsg: authMsg, returnReasonCode: code } } });
+
+const gatewayXml = (authMsg: string, code: string) =>
+  `<OpenAPI_ServiceResponse>\n\t<cmmMsgHeader>\n\t\t<errMsg>SERVICE ERROR</errMsg>\n\t\t<returnAuthMsg>${authMsg}</returnAuthMsg>\n\t\t<returnReasonCode>${code}</returnReasonCode>\n\t</cmmMsgHeader>\n</OpenAPI_ServiceResponse>`;
+
+/** 모든 요청에 같은 응답을 돌려주는 fetch — 호출 횟수를 센다. */
+function installFixedFetch(status: number, contentType: string, body: string): { count: number } {
+  const calls = { count: 0 };
+  globalThis.fetch = (async () => {
+    calls.count++;
+    return new Response(body, { status, headers: { "content-type": contentType } });
+  }) as typeof fetch;
+  return calls;
+}
+
+test("포털 오류 본문이 HTTP 200 JSON 으로 와도 공고 1건으로 적재하지 않는다", async () => {
+  installFixedFetch(200, "application/json", gatewayJson("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "등록되지 않은 서비스키", "30"));
+  const run = await runApiCollect(PROFILE, bidConfig(6), { secret: "k" });
+  assert.equal(run.items.length, 0);
+  assert.match(run.error ?? "", /30/);
+  assert.match(run.error ?? "", /등록되지 않은 서비스키/);
+});
+
+test("포털 오류가 XML 본문으로 와도 0건 성공으로 넘기지 않는다", async () => {
+  installFixedFetch(200, "text/xml;charset=UTF-8", gatewayXml("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "22"));
+  const run = await runApiCollect(PROFILE, bidConfig(6), { secret: "k" });
+  assert.equal(run.items.length, 0);
+  assert.match(run.error ?? "", /22/);
+  assert.match(run.error ?? "", /LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR/);
+});
+
+test("HTTP 403 응답은 본문의 사유를 오류에 싣는다", async () => {
+  installFixedFetch(403, "application/json", gatewayJson("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "등록되지 않은 서비스키", "30"));
+  const run = await runApiCollect(PROFILE, bidConfig(6), { secret: "k" });
+  assert.equal(run.items.length, 0);
+  assert.match(run.error ?? "", /HTTP 403/);
+  assert.match(run.error ?? "", /등록되지 않은 서비스키/);
+});
+
+test("본문이 없는 HTTP 오류는 상태만 남긴다", async () => {
+  installFixedFetch(502, "text/html", "<html>Bad Gateway</html>");
+  const run = await runApiCollect(PROFILE, bidConfig(6), { secret: "k" });
+  assert.equal(run.items.length, 0);
+  assert.match(run.error ?? "", /^HTTP 502/);
+});
+
+test("포털 오류는 사유 번호가 07 이어도 조회 기간을 나누지 않는다", async () => {
+  const calls = installFixedFetch(200, "text/xml", gatewayXml("SOME_GATEWAY_ERROR", "07"));
+  const run = await runApiCollect(PROFILE, bidConfig(7), { secret: "k" });
+  assert.equal(calls.count, 1);
+  assert.equal(run.items.length, 0);
+  assert.match(run.error ?? "", /SOME_GATEWAY_ERROR/);
+});
+
 test("월 단위 조회(YYYYMM)는 나누지 않고 오류로 끝낸다", async () => {
   const calls = installFetch(6);
   const cfg: ApiConfig = {

@@ -190,14 +190,61 @@ function withDateWindow(apiConfig: ApiConfig, win: DateWindow): ApiConfig {
   };
 }
 
+interface ApiError {
+  code: string;
+  message: string;
+  /** 포털 게이트웨이 오류(인증키·요청 한도) — 서비스 resultCode 와 번호 체계가 달라 조회 기간 분할 판정에 쓰지 않는다. */
+  gateway?: boolean;
+}
+
+/** XML 본문에서 태그 하나의 값을 꺼낸다(게이트웨이 오류 본문 전용 — 일반 XML 파싱은 하지 않는다). */
+function xmlTagValue(xml: string, tag: string): string {
+  const m = xml.match(new RegExp(`<${tag}>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*</${tag}>`));
+  return m ? m[1].trim() : "";
+}
+
+function gatewayError(errMsg: unknown, authMsg: unknown, reasonCode: unknown): ApiError {
+  const parts = [errMsg, authMsg].map((v) => (v == null ? "" : String(v).trim())).filter(Boolean);
+  return {
+    code: reasonCode == null ? "" : String(reasonCode).trim(),
+    message: parts.join(" — ") || "OpenAPI_ServiceResponse",
+    gateway: true,
+  };
+}
+
 /**
- * 공공데이터포털(나라장터) JSON 오류 응답 판정.
- * 오류도 HTTP 200 에 {"nkoneps.com.response.ResponseError": {header: {resultCode, resultMsg}}} 로 온다.
+ * 공공데이터포털 게이트웨이 오류(OpenAPI_ServiceResponse) 판정 — 인증키 미등록·접근 거부·요청 한도 초과 등.
+ * 2026-11-19 실측: 키 오류는 HTTP 401/403 에 JSON 본문
+ * {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {errMsg, returnAuthMsg, returnReasonCode}}} 로 온다.
+ * 같은 본문이 HTTP 200 으로 오면 JSON 은 오류 객체가 item 1건으로, XML(옛 형식)은 0건 성공으로 지나간다.
+ */
+function detectGatewayError(rec: Record<string, unknown>): ApiError | null {
+  const wrapper = rec.OpenAPI_ServiceResponse;
+  if (wrapper && typeof wrapper === "object") {
+    const header = ((wrapper as Record<string, unknown>).cmmMsgHeader ?? {}) as Record<string, unknown>;
+    return gatewayError(header.errMsg, header.returnAuthMsg, header.returnReasonCode);
+  }
+  const raw = typeof rec.raw_xml === "string" ? rec.raw_xml : typeof rec.raw_text === "string" ? rec.raw_text : "";
+  if (raw.includes("<OpenAPI_ServiceResponse")) {
+    return gatewayError(
+      xmlTagValue(raw, "errMsg"),
+      xmlTagValue(raw, "returnAuthMsg"),
+      xmlTagValue(raw, "returnReasonCode")
+    );
+  }
+  return null;
+}
+
+/**
+ * 공공데이터포털(나라장터) 오류 응답 판정 — 게이트웨이 오류와 서비스 오류.
+ * 서비스 오류도 HTTP 200 에 {"nkoneps.com.response.ResponseError": {header: {resultCode, resultMsg}}} 로 온다.
  * 판정 없이 넘기면 배열 추출이 오류 객체를 item 1건으로 오인해 "수집 1건 성공"으로 기록된다
  * (2026-11 입찰공고 조회 기간 제한 때 9일간 수집 중단을 아무도 몰랐던 원인).
  */
-function detectApiError(data: unknown): { code: string; message: string } | null {
+function detectApiError(data: unknown): ApiError | null {
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const gateway = detectGatewayError(data as Record<string, unknown>);
+  if (gateway) return gateway;
   for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
     if (!key.endsWith("ResponseError")) continue;
     const header = (value as { header?: { resultCode?: unknown; resultMsg?: unknown } } | null)?.header;
@@ -211,6 +258,24 @@ function detectApiError(data: unknown): { code: string; message: string } | null
 
 /** 나라장터 "입력범위값 초과 에러" — 조회 기간이 서비스 한도를 넘었을 때(입찰공고는 달력 7일). */
 const RANGE_EXCEEDED_CODE = "07";
+
+/** HTTP 오류 응답 본문에서 포털 오류 사유를 읽는다 — 없거나 읽지 못하면 null(상태 문구만 남긴다). */
+async function readErrorReason(response: Response): Promise<string | null> {
+  try {
+    const text = await response.text();
+    let body: unknown;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { raw_text: text };
+    }
+    const apiError = detectApiError(body);
+    if (!apiError) return null;
+    return `${apiError.message}${apiError.code ? ` (${apiError.code})` : ""}`;
+  } catch {
+    return null;
+  }
+}
 
 function applySearchFilters(
   data: Record<string, unknown>[],
@@ -397,7 +462,11 @@ async function executeApiCall(
 
     logs.push(`[API] ${endpoint.method || "GET"} ${url.toString()}`);
     const response = await fetchWithRetry(url.toString(), { method: endpoint.method || "GET", headers }, logs);
-    if (!response.ok) return { data: null, error: `HTTP ${response.status}: ${response.statusText}` };
+    if (!response.ok) {
+      // 포털은 인증키·한도 오류를 4xx 에 본문으로 알려 준다 — "HTTP 403" 만으로는 원인을 알 수 없다.
+      const reason = await readErrorReason(response);
+      return { data: null, error: `HTTP ${response.status}: ${reason ?? response.statusText}` };
+    }
 
     const contentType = response.headers.get("content-type") || "";
     let data: unknown;
@@ -418,7 +487,7 @@ async function executeApiCall(
       return {
         data: null,
         error: `API 오류${apiError.code ? ` ${apiError.code}` : ""}: ${apiError.message}`,
-        errorCode: apiError.code,
+        errorCode: apiError.gateway ? undefined : apiError.code,
       };
     }
     return { data };

@@ -195,11 +195,37 @@ export function buildPagePlan(
     const r = rv("c04", "C04");
     add("c04", "C04", "숫자로 보는 KESI", "01", <FiguresPage ctx={ctx} data={data} sectionStart={sectionStart} variant={r.variant} note={r.note} />, r);
   };
+  const divider01 = () => {
+    const r = rv("c07-01", "C07");
+    add(
+      "c07-01",
+      "C07",
+      "간지 · 회사 소개",
+      "01",
+      <DividerPage
+        ctx={ctx}
+        num="01"
+        title="회사 소개"
+        lead={DIVIDER_CONTENT["01"].lead}
+        anchor="sec-01"
+        variant={r.variant}
+        note={r.note}
+        items={[
+          ...(data.ceoMessage ? [{ label: "대표이사 인사말", ref: "c03" }] : []),
+          { label: "회사 개요·비전", ref: "c05" },
+          { label: "숫자로 보는 KESI", ref: "c04" },
+          { label: "연혁", ref: "c06" },
+        ]}
+      />,
+      r
+    );
+  };
   const intro = () => {
+    // 01 섹션도 02·03 처럼 간지가 섹션 앵커를 맡는다(사용자 지시 2026-11-19). 비전이 숫자로 보는 KESI 보다 앞
+    divider01();
     if (data.ceoMessage) add("c03", "C03", "대표이사 인사말", "01", <MessagePage ctx={ctx} data={data} />);
-    // 인사말이 없으면 숫자로 보는 KESI 가 01 섹션의 첫 쪽
-    figures(!data.ceoMessage);
     add("c05", "C05", "회사 개요·비전", "01", <OverviewPage ctx={ctx} data={data} variant={v("c05", "C05")} />);
+    figures(false);
     historyParts.forEach((years, i) =>
       add(
         `c06-${i + 1}`,

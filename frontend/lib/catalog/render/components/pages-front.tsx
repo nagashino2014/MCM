@@ -266,7 +266,7 @@ export function MessagePage({ ctx, data }: { ctx: RenderCtx; data: CatalogRender
   const ceo = data.ceo;
   const long = msg.paragraphs.join("").length > 700;
   return (
-    <Sheet ctx={ctx} anchors={["sec-01", "c03"]} section="01 회사 소개" outline="대표이사 인사말">
+    <Sheet ctx={ctx} anchors={["c03"]} outline="대표이사 인사말">
       <Head ctx={ctx} num="01" name="회사 소개" sub="대표이사 인사말" />
       <div className="kc-message">
         <div className="kc-message__person">
@@ -433,7 +433,8 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
     <Sheet ctx={ctx} anchors={["c05"]} outline="회사 개요·비전">
       <Head ctx={ctx} num="01" name="회사 소개" sub="회사 개요·비전" />
       <div className="kc-grid" style={{ flex: 1, minHeight: 0 }}>
-        <div className="kc-span-7" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 좌: 일반현황·로고, 우: 비전·경영철학(사용자 지시 2026-11-19). 스튜디오 편집층은 노드 순서로 붙으므로 DOM 순서는 두고 격자 자리만 바꾼다 */}
+        <div className="kc-span-7" style={{ gridColumn: "6 / span 7", gridRow: 1, display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="kc-titleblock" style={{ gap: 8 }}>
             <p className="kc-eyebrow">비전</p>
             <p className="kc-statement" style={{ fontSize: 29, lineHeight: "38px" }}>
@@ -454,7 +455,7 @@ export function OverviewPage({ ctx, data, variant }: { ctx: RenderCtx; data: Cat
             <InfoSlot slot="c05.philosophy" spec={cardsSpec(VISION_CONTENT.philosophy)} box={{ w: 425, h: 175, fill: "height" }} />
           </div>
         </div>
-        <div className="kc-span-5" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="kc-span-5" style={{ gridColumn: "1 / span 5", gridRow: 1, display: "flex", flexDirection: "column", gap: 12 }}>
           <figure style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {visualPhoto ? (
               <div className="kc-photo kc-photo--frame kc-ratio-hero">

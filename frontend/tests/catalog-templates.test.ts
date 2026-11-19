@@ -294,7 +294,7 @@ const htmlOf = (theme: DocumentTheme, pages: Parameters<typeof composeDocument>[
   return renderToStaticMarkup(renderTrees(composeDocument(ctx, d, cover, pages).map((p) => p.tree), { url: ctx.url, data: d }));
 };
 const STANDARD_KEYS = [
-  "c01", "c02", "c03", "c04", "c05", "c06-1", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
+  "c01", "c02", "c07-01", "c03", "c05", "c04", "c06-1", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
   "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c16", "c17", "c18", "a01", "a02-1", "c19",
 ];
 /** research 쪽 계획(260928 양식 순서) — 픽스처는 임원 2명·기술인력 1명·자문위원 1명·인증 1건 */
@@ -309,7 +309,7 @@ test("buildPagePlan — 템플릿별 쪽 키 목록(standard·photo·graphic = �
   for (const id of ["photo", "graphic"] as const) assert.deepEqual(keysOf(CATALOG_TEMPLATES[id].theme), STANDARD_KEYS, id);
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.research.theme), RESEARCH_KEYS);
   assert.deepEqual(keysOf(CATALOG_TEMPLATES.formal.theme), [
-    "c01", "c02", "c03", "c04", "c05", "c06-1", "c16", "c17", "a01", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
+    "c01", "c02", "c07-01", "c03", "c05", "c04", "c06-1", "c16", "c17", "a01", "c07-02", "c08", "area-1", "area-4", "area-5", "area-2", "area-3", "c09-software", "c09-platform",
     "c07-03", "c10", "c11", "c12", "c13-1", "c14", "c15-staff", "c15-advisors", "c18", "a02-1", "c19",
   ]);
   // 요약본은 부록을 빼지만 격조형의 수행실적 총괄(a01)은 본편이라 남는다

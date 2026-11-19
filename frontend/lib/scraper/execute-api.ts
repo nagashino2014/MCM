@@ -84,6 +84,14 @@ export function formatDateForApi(date: Date, format?: string, endOfDay = false):
   );
 }
 
+/** 날짜 필터 필드가 기간의 시작인지 종료인지 — 이름에 start/from 이 있으면 시작, end/to 면 종료, 그 밖은 시작. */
+function dateFieldRole(field: string): "start" | "end" {
+  const f = field.toLowerCase();
+  if (f.includes("start") || f.includes("from")) return "start";
+  if (f.includes("end") || f.includes("to")) return "end";
+  return "start";
+}
+
 function applyDateFilters(
   params: Record<string, string>,
   dateFilters?: DateFilter[]
@@ -101,10 +109,7 @@ function applyDateFilters(
       startDate = formatDateForApi(past, df.format);
       endDate = formatDateForApi(today, df.format, true);
     }
-    const f = df.field.toLowerCase();
-    if (f.includes("start") || f.includes("from")) {
-      if (startDate) result[df.field] = startDate;
-    } else if (f.includes("end") || f.includes("to")) {
+    if (dateFieldRole(df.field) === "end") {
       if (endDate) result[df.field] = endDate;
     } else if (startDate) {
       result[df.field] = startDate;
@@ -112,6 +117,100 @@ function applyDateFilters(
   }
   return result;
 }
+
+/** 조회 기간(양끝 날짜 포함). 시각 성분은 버린다 — 나라장터는 시작일과 종료일의 날짜 차이로 범위를 판정한다. */
+interface DateWindow {
+  start: Date;
+  end: Date;
+}
+
+const DAY_MS = 86400 * 1000;
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function addDays(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+/** formatDateForApi 로 만든 문자열을 날짜로 되돌린다. 일(DD)이 없는 형식(YYYYMM 등)은 null. */
+function parseApiDate(value: string | undefined, format?: string): Date | null {
+  if (!value) return null;
+  const fmt = format || "YYYY-MM-DD";
+  const yi = fmt.indexOf("YYYY");
+  const mi = fmt.indexOf("MM"); // 첫 MM 이 월(formatDateForApi 와 같은 순서)
+  const di = fmt.indexOf("DD");
+  if (yi < 0 || mi < 0 || di < 0) return null;
+  const y = Number(value.slice(yi, yi + 4));
+  const m = Number(value.slice(mi, mi + 2));
+  const d = Number(value.slice(di, di + 2));
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * date_filters 가 실제로 요청하는 조회 기간을 날짜로 푼다(applyDateFilters 와 같은 규칙).
+ * 시작·종료 필드가 모두 있고 둘 다 일 단위로 풀릴 때만 돌려준다 — 그 밖에는 기간을 나눌 수 없다.
+ */
+function resolveDateWindow(dateFilters?: DateFilter[]): DateWindow | null {
+  if (!dateFilters?.length) return null;
+  const today = startOfDay(new Date());
+  let start: Date | null = null;
+  let end: Date | null = null;
+  for (const df of dateFilters) {
+    if (!df.field) continue;
+    if (!(df.format || "YYYY-MM-DD").includes("DD")) return null; // 월 단위 조회는 일 단위로 못 나눈다
+    const relative = df.relative_days != null && df.relative_days >= 0;
+    if (dateFieldRole(df.field) === "end") {
+      const d = relative ? today : parseApiDate(df.end_date, df.format);
+      if (!d) return null;
+      if (!end || d > end) end = d;
+    } else {
+      const d = relative ? addDays(today, -df.relative_days!) : parseApiDate(df.start_date, df.format);
+      if (!d) return null;
+      if (!start || d < start) start = d;
+    }
+  }
+  if (!start || !end || start > end) return null;
+  return { start, end };
+}
+
+/** 조회 기간을 고정값으로 박은 설정 복제본(백필 청크와 같은 모양 — 시작·종료 필드 양쪽에 값을 둔다). */
+function withDateWindow(apiConfig: ApiConfig, win: DateWindow): ApiConfig {
+  return {
+    ...apiConfig,
+    date_filters: (apiConfig.date_filters ?? []).map((df) => ({
+      field: df.field,
+      format: df.format,
+      start_date: formatDateForApi(win.start, df.format),
+      end_date: formatDateForApi(win.end, df.format, true),
+    })),
+  };
+}
+
+/**
+ * 공공데이터포털(나라장터) JSON 오류 응답 판정.
+ * 오류도 HTTP 200 에 {"nkoneps.com.response.ResponseError": {header: {resultCode, resultMsg}}} 로 온다.
+ * 판정 없이 넘기면 배열 추출이 오류 객체를 item 1건으로 오인해 "수집 1건 성공"으로 기록된다
+ * (2026-11 입찰공고 조회 기간 제한 때 9일간 수집 중단을 아무도 몰랐던 원인).
+ */
+function detectApiError(data: unknown): { code: string; message: string } | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (!key.endsWith("ResponseError")) continue;
+    const header = (value as { header?: { resultCode?: unknown; resultMsg?: unknown } } | null)?.header;
+    return {
+      code: header?.resultCode != null ? String(header.resultCode) : "",
+      message: header?.resultMsg != null ? String(header.resultMsg) : key,
+    };
+  }
+  return null;
+}
+
+/** 나라장터 "입력범위값 초과 에러" — 조회 기간이 서비스 한도를 넘었을 때(입찰공고는 달력 7일). */
+const RANGE_EXCEEDED_CODE = "07";
 
 function applySearchFilters(
   data: Record<string, unknown>[],
@@ -255,7 +354,7 @@ async function executeApiCall(
   pageParams: Record<string, string>,
   logs: string[],
   resolvedSecret: string | null
-): Promise<{ data: unknown; error?: string }> {
+): Promise<{ data: unknown; error?: string; errorCode?: string }> {
   const baseUrl = apiProfile.base_url;
   if (!baseUrl) return { data: null, error: "base_url이 설정되지 않았습니다." };
   const endpoint = apiConfig.primary_endpoint;
@@ -314,6 +413,14 @@ async function executeApiCall(
         data = { raw_text: text, content_type: contentType };
       }
     }
+    const apiError = detectApiError(data);
+    if (apiError) {
+      return {
+        data: null,
+        error: `API 오류${apiError.code ? ` ${apiError.code}` : ""}: ${apiError.message}`,
+        errorCode: apiError.code,
+      };
+    }
     return { data };
   } catch (error) {
     return { data: null, error: error instanceof Error ? error.message : String(error) };
@@ -323,6 +430,13 @@ async function executeApiCall(
 /** 페이지 수집 진행 보고 콜백 — 백필 진행률 바(폴링)용. 실패는 무시(수집을 막지 않는다). */
 export type FetchProgressFn = (p: { page: number; items: number }) => void;
 
+interface PageRun {
+  items: Record<string, unknown>[];
+  error?: string;
+  /** 첫 페이지가 API 오류 응답이었을 때의 resultCode. */
+  errorCode?: string;
+}
+
 /** 페이지네이션 루프 1회분 — primary_endpoint 를 max_pages 까지 수집. */
 async function collectPages(
   apiProfile: ApiProfile,
@@ -330,7 +444,7 @@ async function collectPages(
   logs: string[],
   secret: string | null,
   onProgress?: FetchProgressFn
-): Promise<{ items: Record<string, unknown>[]; error?: string }> {
+): Promise<PageRun> {
   const allData: Record<string, unknown>[] = [];
   const pagination = apiConfig.pagination;
   const paging = !!pagination && pagination.type !== "none";
@@ -350,7 +464,7 @@ async function collectPages(
     const result = await executeApiCall(apiProfile, apiConfig, pageParams, logs, secret);
     if (result.error) {
       logs.push(`[ERROR] ${result.error}`);
-      if (page === 1) return { items: [], error: result.error };
+      if (page === 1) return { items: [], error: result.error, errorCode: result.errorCode };
       break;
     }
     const items = extractDataFromResponse(result.data, logs, listPath);
@@ -369,6 +483,54 @@ async function collectPages(
   return { items: allData };
 }
 
+const ymd = (d: Date): string => formatDateForApi(d, "YYYY-MM-DD");
+
+/**
+ * collectPages + 조회 기간 한도 대응.
+ * 첫 페이지가 "입력범위값 초과(07)"면 조회 기간을 날짜 단위로 반씩 나눠 다시 조회한다(하루까지).
+ * 한도를 설정에 박지 않는 이유: 서비스마다 다르고(입찰공고 7일·사전규격 1개월 이상) 예고 없이 바뀐다.
+ * 나눈 구간 중 일부만 실패하면 모은 건은 돌려주되 error 를 함께 실어 구멍이 났음을 알린다.
+ */
+async function collectPagesWithinRange(
+  apiProfile: ApiProfile,
+  apiConfig: ApiConfig,
+  logs: string[],
+  secret: string | null,
+  onProgress?: FetchProgressFn
+): Promise<PageRun> {
+  const run = await collectPages(apiProfile, apiConfig, logs, secret, onProgress);
+  if (run.errorCode !== RANGE_EXCEEDED_CODE) return run;
+  const win = resolveDateWindow(apiConfig.date_filters);
+  if (!win) return run;
+  const days = Math.round((win.end.getTime() - win.start.getTime()) / DAY_MS) + 1;
+  if (days < 2) return run;
+
+  const half = Math.floor(days / 2);
+  const windows: DateWindow[] = [
+    { start: win.start, end: addDays(win.start, half - 1) },
+    { start: addDays(win.start, half), end: win.end },
+  ];
+  logs.push(
+    `[RANGE] 조회 기간 한도 초과(${days}일) — ${windows.map((w) => `${ymd(w.start)}~${ymd(w.end)}`).join(" / ")} 로 나눠 조회`
+  );
+
+  const items: Record<string, unknown>[] = [];
+  const errors: string[] = [];
+  for (const w of windows) {
+    const base = items.length;
+    const part = await collectPagesWithinRange(
+      apiProfile,
+      withDateWindow(apiConfig, w),
+      logs,
+      secret,
+      onProgress ? (p) => onProgress({ page: p.page, items: base + p.items }) : undefined
+    );
+    items.push(...part.items);
+    if (part.error) errors.push(`${ymd(w.start)}~${ymd(w.end)} ${part.error}`);
+  }
+  return errors.length ? { items, error: errors.join("; ") } : { items };
+}
+
 /**
  * 등록된 api_profile + api_config로 수집을 실행해 원시 item 목록을 반환한다.
  * 페이지네이션(page/offset), max_pages 상한, 빈 페이지 조기 종료, 검색/필드 필터 적용.
@@ -381,6 +543,8 @@ export async function runApiCollect(
 ): Promise<RunApiResult> {
   const logs: string[] = [];
   let allData: Record<string, unknown>[] = [];
+  // 일부 구간만 실패한 수집 — 모은 건은 돌려주되 호출자가 실패를 기록할 수 있게 error 를 함께 싣는다.
+  let partialError: string | undefined;
   const secret = opts.secret ?? null;
   try {
     if (!apiConfig?.primary_endpoint?.path) {
@@ -398,10 +562,11 @@ export async function runApiCollect(
         date_filters: listEp.date_filters ?? apiConfig.date_filters,
         response_fields: listEp.response_fields,
       };
-      const listRun = await collectPages(apiProfile, listCfg, logs, secret, opts.onProgress);
+      const listRun = await collectPagesWithinRange(apiProfile, listCfg, logs, secret, opts.onProgress);
       if (listRun.error && listRun.items.length === 0) {
         return { items: [], logs, error: `목록 단계 실패: ${listRun.error}` };
       }
+      if (listRun.error) partialError = `목록 단계 일부 실패: ${listRun.error}`;
       const listItems = listRun.items.filter((it) => !("raw_xml" in it));
       logs.push(`[2PHASE] 목록 ${listItems.length}건`);
 
@@ -449,8 +614,9 @@ export async function runApiCollect(
         await delay(300);
       }
     } else {
-      const run = await collectPages(apiProfile, apiConfig, logs, secret, opts.onProgress);
+      const run = await collectPagesWithinRange(apiProfile, apiConfig, logs, secret, opts.onProgress);
       if (run.error && run.items.length === 0) return { items: [], logs, error: run.error };
+      if (run.error) partialError = `일부 구간 실패: ${run.error}`;
       allData = run.items;
     }
 
@@ -463,7 +629,7 @@ export async function runApiCollect(
       allData = filterResponseFields(allData, apiConfig.response_fields);
     }
     logs.push(`[DONE] 수집 ${allData.length}건`);
-    return { items: allData, logs };
+    return partialError ? { items: allData, logs, error: partialError } : { items: allData, logs };
   } catch (error) {
     return { items: allData, logs, error: error instanceof Error ? error.message : String(error) };
   }

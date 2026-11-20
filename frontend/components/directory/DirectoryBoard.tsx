@@ -29,6 +29,8 @@ import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
 import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
 import { EmergencyContactsTab } from "@/components/directory/EmergencyContactsTab";
 import { mailToken } from "@/components/directory/mail-token";
+import { ExtraEmailsField } from "@/components/directory/ExtraEmailsField";
+import { normalizeExtraEmails } from "@/lib/directory-emails";
 import "@/components/cdash/cdash.css";
 
 type Tab = "staff" | "external" | "orgchart" | "emergency";
@@ -43,6 +45,8 @@ interface ExternalContact {
   officePhone: string | null;
   mobilePhone: string | null;
   email: string | null;
+  /** 추가 이메일(376) — 대표 이메일 외의 주소. */
+  extraEmails?: string[];
   deptType: string | null;
   orgCategory: string | null;
   status: string;
@@ -407,13 +411,18 @@ export function DirectoryBoard() {
                         <td className="cd-text-muted tabular-nums whitespace-nowrap">{c.mobilePhone ?? "-"}</td>
                         <td className="cd-text-muted tabular-nums whitespace-nowrap">{c.officePhone ?? "-"}</td>
                         <td>
-                          {c.email ? (
-                            <Link
-                              href={`/mail/compose?to=${encodeURIComponent(mailToken(c.personName, c.title, c.email))}`}
-                              className="cd-text-primary hover:underline"
-                            >
-                              {c.email}
-                            </Link>
+                          {c.email || c.extraEmails?.length ? (
+                            <div className="flex flex-col gap-0.5">
+                              {[c.email, ...(c.extraEmails ?? [])].filter((a): a is string => !!a).map((addr) => (
+                                <Link
+                                  key={addr}
+                                  href={`/mail/compose?to=${encodeURIComponent(mailToken(c.personName, c.title, addr))}`}
+                                  className="cd-text-primary hover:underline"
+                                >
+                                  {addr}
+                                </Link>
+                              ))}
+                            </div>
                           ) : (
                             <span className="cd-text-faint">-</span>
                           )}
@@ -476,6 +485,7 @@ export function DirectoryBoard() {
                 officePhone: c.officePhone,
                 mobilePhone: c.mobilePhone,
                 email: c.email,
+                extraEmails: c.extraEmails ?? [],
                 deptType: null,
                 // 연락처 구분은 사업장 속성 — 같은 사업장 담당자가 이미 있으면 그 값을 따른다.
                 orgCategory: (prev ?? []).find((x) => x.facilityId === c.facilityId)?.orgCategory ?? null,
@@ -613,6 +623,7 @@ function ContactEditModal({
   const [mobilePhone, setMobilePhone] = useState(contact.mobilePhone ?? "");
   const [officePhone, setOfficePhone] = useState(contact.officePhone ?? "");
   const [email, setEmail] = useState(contact.email ?? "");
+  const [extraEmails, setExtraEmails] = useState<string[]>(contact.extraEmails ?? []);
   const [orgCategory, setOrgCategory] = useState(contact.orgCategory ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -623,6 +634,11 @@ function ContactEditModal({
     }
     if (canEditCategory && !orgCategory) {
       toast("연락처 구분을 선택하세요.", "warn");
+      return;
+    }
+    const extra = normalizeExtraEmails(extraEmails, email);
+    if (extra.invalid) {
+      toast(`이메일 형식이 올바르지 않습니다: ${extra.invalid}`, "warn");
       return;
     }
     setSaving(true);
@@ -640,6 +656,7 @@ function ContactEditModal({
           mobilePhone: mobilePhone.trim() || null,
           officePhone: officePhone.trim() || null,
           email: email.trim() || null,
+          extraEmails: extra.emails,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -655,6 +672,7 @@ function ContactEditModal({
         mobilePhone: mobilePhone.trim() || null,
         officePhone: officePhone.trim() || null,
         email: email.trim() || null,
+        extraEmails: extra.emails,
         ...(canEditCategory ? { orgCategory } : {}),
       });
     } finally {
@@ -705,6 +723,7 @@ function ContactEditModal({
           <CdInput label="사무실" value={officePhone} onChange={(e) => setOfficePhone(e.target.value)} />
           <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
         </div>
+        <ExtraEmailsField value={extraEmails} onChange={setExtraEmails} />
       </div>
     </CdModal>
   );

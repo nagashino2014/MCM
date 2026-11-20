@@ -12,6 +12,8 @@ import { CdInput } from "@/components/cdash/CdField";
 import { CdModal } from "@/components/cdash/CdModal";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
+import { ExtraEmailsField } from "@/components/directory/ExtraEmailsField";
+import { normalizeExtraEmails } from "@/lib/directory-emails";
 
 export interface CreatedContact {
   id: number;
@@ -23,6 +25,7 @@ export interface CreatedContact {
   mobilePhone: string | null;
   officePhone: string | null;
   email: string | null;
+  extraEmails?: string[];
   /** 새 업체와 함께 간이 등록한 담당자(관리자 보완·확정 전). */
   quick?: boolean;
 }
@@ -65,7 +68,17 @@ export function ContactCreateModal({
   const [mobilePhone, setMobilePhone] = useState("");
   const [officePhone, setOfficePhone] = useState("");
   const [email, setEmail] = useState("");
+  const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  /** 추가 이메일 정리 — 형식이 틀리면 알리고 null. */
+  const cleanExtra = (): string[] | null => {
+    const { emails, invalid } = normalizeExtraEmails(extraEmails, email);
+    if (invalid) {
+      toast(`이메일 형식이 올바르지 않습니다: ${invalid}`, "warn");
+      return null;
+    }
+    return emails;
+  };
   // 목록에 없는 업체 — 검색어를 업체명으로 삼아 간이 업체를 함께 만든다.
   const [newCompany, setNewCompany] = useState(false);
   const [sameName, setSameName] = useState<SameNameHit[]>([]);
@@ -100,6 +113,8 @@ export function ContactCreateModal({
       toast("이름을 입력하세요.", "warn");
       return;
     }
+    const extra = cleanExtra();
+    if (!extra) return;
     setSaving(true);
     try {
       const person = {
@@ -124,8 +139,22 @@ export function ContactCreateModal({
         toast(String(d.error ?? "등록에 실패했습니다."), "error");
         return;
       }
+      // 간이 등록 경로는 추가 이메일을 받지 않는다 — 만든 담당자에 이어서 넣는다.
+      let savedExtra: string[] = [];
+      if (extra.length) {
+        const er = await fetch("/api/directory/contacts", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: Number(d.personId), extraEmails: extra }),
+        });
+        if (er.ok) savedExtra = extra;
+        else toast("담당자는 등록했지만 추가 이메일은 저장하지 못했습니다. 수정에서 다시 넣어 주세요.", "warn");
+      }
       toast("새 업체와 담당자를 등록했습니다.", "success");
-      onCreated({ id: Number(d.personId), facilityId: String(d.facilityId), facilityName: String(d.facilityName ?? companyName), quick: true, ...person });
+      onCreated({
+        id: Number(d.personId), facilityId: String(d.facilityId), facilityName: String(d.facilityName ?? companyName),
+        quick: true, ...person, extraEmails: savedExtra,
+      });
     } finally {
       setSaving(false);
     }
@@ -141,6 +170,8 @@ export function ContactCreateModal({
       toast("이름을 입력하세요.", "warn");
       return;
     }
+    const extra = cleanExtra();
+    if (!extra) return;
     setSaving(true);
     try {
       const body = {
@@ -151,6 +182,7 @@ export function ContactCreateModal({
         mobilePhone: mobilePhone.trim() || null,
         officePhone: officePhone.trim() || null,
         email: email.trim() || null,
+        extraEmails: extra,
       };
       const r = await fetch("/api/directory/contacts", {
         method: "POST",
@@ -294,6 +326,7 @@ export function ContactCreateModal({
           <CdInput label="사무실" value={officePhone} onChange={(e) => setOfficePhone(e.target.value)} />
           <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
         </div>
+        <ExtraEmailsField value={extraEmails} onChange={setExtraEmails} />
       </div>
     </CdModal>
   );

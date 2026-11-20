@@ -113,6 +113,26 @@ export async function resolveMailAddressBook(
       if (!name) continue;
       out[String(r.address)] = { name, title: text(r.title), org: text(r.company_name), kind: "contact" };
     }
+    // 추가 이메일(376)로 등록된 주소 — 대표 주소로 못 찾은 것만. 376 적용 전에는 safeRows 가 빈 결과를 준다.
+    const extraRest = rest.filter((a) => !out[a]);
+    if (extraRest.length) {
+      const extraRows = await safeRows(
+        db,
+        `SELECT DISTINCT ON (e.address) e.address, cp.person_name, cp.title, f.company_name
+           FROM facility_contact_people cp
+           CROSS JOIN LATERAL unnest(cp.extra_emails) AS e(address)
+           LEFT JOIN facilities f ON f.facility_id = cp.facility_id
+          WHERE cp.extra_emails && $1::text[] AND e.address = ANY($1::text[])
+            AND COALESCE(cp.status, 'active') <> 'inactive'
+          ORDER BY e.address, cp.id DESC`,
+        [extraRest]
+      );
+      for (const r of extraRows) {
+        const name = text(r.person_name);
+        if (!name) continue;
+        out[String(r.address)] = { name, title: text(r.title), org: text(r.company_name), kind: "contact" };
+      }
+    }
   }
 
   // 3) 내 메일 주소록(305) — 표시 이름만 있다.

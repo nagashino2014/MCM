@@ -8,6 +8,7 @@ import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { MAIL_DOMAIN } from "@/lib/mail/mailbox";
 import type { OrgCategory } from "@/lib/directory-categories";
+import { normalizeExtraEmails } from "@/lib/directory-emails";
 
 export { ORG_CATEGORIES, isOrgCategory, type OrgCategory } from "@/lib/directory-categories";
 
@@ -120,6 +121,8 @@ export async function updateContactPerson(
     status?: string;
     /** 부서명(2026-11-20) — 같은 사업장에 같은 이름의 부서가 있으면 그 부서로, 없으면 새로 만든다. null·빈 값이면 부서 없음. */
     departmentName?: string | null;
+    /** 추가 이메일(376) — 준 값으로 통째 바꾼다. 대표 이메일과 같은 값·중복은 빠진다. */
+    extraEmails?: string[];
   },
   actorUserId?: string
 ): Promise<void> {
@@ -136,11 +139,21 @@ export async function updateContactPerson(
   if (patch.email !== undefined) put("email", patch.email);
   if (patch.duties !== undefined) put("duties", patch.duties);
   if (patch.status != null) put("status", patch.status);
-  if (!sets.length && patch.departmentName === undefined) return;
+  if (!sets.length && patch.departmentName === undefined && patch.extraEmails === undefined) return;
   const now = new Date().toISOString();
   await withDbWrite(async (db) => {
     const before = rowsToObjects(await db.exec(`SELECT * FROM facility_contact_people WHERE id = $1`, [id]))[0];
     if (!before) throw new Error("담당자를 찾을 수 없습니다.");
+    if (patch.extraEmails !== undefined) {
+      const primary = patch.email !== undefined ? patch.email : before.email != null ? String(before.email) : null;
+      const { emails, invalid } = normalizeExtraEmails(patch.extraEmails, primary);
+      if (invalid) throw new Error(`이메일 형식이 올바르지 않습니다: ${invalid}`);
+      // 376 적용 전에는 열이 없다 — 넣을 값이 있거나 이미 값이 있던 행만 건드린다(빈 값 저장은 열 없이도 통과).
+      if (emails.length || "extra_emails" in before) {
+        params.push(emails);
+        sets.push(`extra_emails = $${params.length}::text[]`);
+      }
+    }
     if (patch.departmentName !== undefined) {
       const deptName = String(patch.departmentName ?? "").trim();
       let departmentId: number | null = null;
@@ -191,6 +204,8 @@ export interface NewContactPerson {
   mobilePhone?: string | null;
   email?: string | null;
   duties?: string | null;
+  /** 추가 이메일(376) — 대표 이메일 외의 주소. */
+  extraEmails?: string[];
 }
 
 /**
@@ -204,6 +219,8 @@ export async function createContactPerson(input: NewContactPerson, actorUserId: 
   };
   const personName = clean(input.personName);
   if (!personName) throw new Error("이름을 입력하세요.");
+  const extra = normalizeExtraEmails(input.extraEmails, input.email);
+  if (extra.invalid) throw new Error(`이메일 형식이 올바르지 않습니다: ${extra.invalid}`);
   const now = new Date().toISOString();
   return withDbWrite(async (db) => {
     const fac = rowsToObjects(
@@ -250,12 +267,16 @@ export async function createContactPerson(input: NewContactPerson, actorUserId: 
       )
     );
     const id = Number(inserted[0].id);
+    // 추가 이메일(376)은 값이 있을 때만 쓴다 — 없으면 열 기본값(빈 배열) 그대로.
+    if (extra.emails.length) {
+      await db.run(`UPDATE facility_contact_people SET extra_emails = $2::text[] WHERE id = $1`, [id, extra.emails]);
+    }
     await recordAuditLogInline(db, {
       actorUserId,
       action: "facility_contact_person_create",
       targetTable: "facility_contact_people",
       targetId: String(id),
-      after: row,
+      after: { ...row, extraEmails: extra.emails },
     });
     return id;
   });
@@ -313,12 +334,18 @@ export async function suggestRecipients(q: string, limit = 12): Promise<Recipien
   );
   const contacts = rowsToObjects(
     await db.exec(
-      `SELECT cp.person_name, cp.email, cp.title, f.company_name
+      // 대표 이메일과 추가 이메일(376)을 주소 한 줄씩으로 편다 — to_jsonb 로 읽어 376 적용 전에도 깨지지 않는다.
+      `SELECT cp.person_name, e.email, cp.title, f.company_name
          FROM facility_contact_people cp
          LEFT JOIN facilities f ON f.facility_id = cp.facility_id
-        WHERE cp.email IS NOT NULL AND cp.email <> '' AND COALESCE(cp.status, 'active') <> 'inactive'
-          AND (LOWER(cp.person_name) LIKE $1 OR LOWER(cp.email) LIKE $1 OR LOWER(COALESCE(f.company_name, '')) LIKE $1)
-        ORDER BY cp.person_name ASC LIMIT $2`,
+         CROSS JOIN LATERAL (
+           SELECT cp.email AS email, 0 AS ord
+           UNION ALL
+           SELECT x.email, 1 FROM jsonb_array_elements_text(COALESCE(to_jsonb(cp)->'extra_emails', '[]'::jsonb)) AS x(email)
+         ) e
+        WHERE e.email IS NOT NULL AND e.email <> '' AND COALESCE(cp.status, 'active') <> 'inactive'
+          AND (LOWER(cp.person_name) LIKE $1 OR LOWER(e.email) LIKE $1 OR LOWER(COALESCE(f.company_name, '')) LIKE $1)
+        ORDER BY cp.person_name ASC, e.ord ASC LIMIT $2`,
       [like, limit]
     )
   );

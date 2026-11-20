@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite } from "@/lib/db";
+import { normalizeExtraEmails, readExtraEmails } from "@/lib/directory-emails";
 import { recordAuditLogInline } from "@/lib/auth/audit";
 import { normalizeHomepage } from "@/lib/sales/business-card-parser";
 
@@ -238,7 +239,8 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
       for (const row of rowsToObjects(
         await db.exec(
           `SELECT id, card_storage_provider, card_storage_bucket, card_storage_key,
-                  card_public_path, card_ocr_text, card_parsed_json, card_captured_at
+                  card_public_path, card_ocr_text, card_parsed_json, card_captured_at,
+                  to_jsonb(facility_contact_people)->'extra_emails' AS extra_emails
              FROM facility_contact_people WHERE facility_id = $1`,
           [id]
         )
@@ -317,6 +319,12 @@ export async function PUT(req: NextRequest, ctx: RouteContext) {
           ]
         );
         const newId = Number(inserted[0]?.values[0]?.[0] ?? 0);
+        // 추가 이메일(376, 주소록에서 넣는다)도 이 화면이 다루지 않는 값이라 옛 id 기준으로 보존한다.
+        // 대표 이메일이 추가 이메일 중 하나로 바뀌었으면 그 주소는 뺀다. 값이 있을 때만 써서 376 적용 전에도 안전하다.
+        const keptExtra = normalizeExtraEmails(readExtraEmails(card?.extra_emails), person.email).emails;
+        if (keptExtra.length) {
+          await db.run(`UPDATE facility_contact_people SET extra_emails = $2::text[] WHERE id = $1`, [newId, keptExtra]);
+        }
         personIdMap.set(person.id ?? -(personIndex + 1), newId);
         personIndex += 1;
       }

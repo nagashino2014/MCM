@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       mobilePhone?: string | null;
       email?: string | null;
       duties?: string | null;
+      extraEmails?: string[];
     };
     if (!body.facilityId) return NextResponse.json({ error: "기관·업체를 선택하세요." }, { status: 400 });
     const id = await createContactPerson(
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
         mobilePhone: body.mobilePhone,
         email: body.email,
         duties: body.duties,
+        extraEmails: Array.isArray(body.extraEmails) ? body.extraEmails : undefined,
       },
       ctx.userId
     );
@@ -74,6 +76,7 @@ export async function PATCH(req: NextRequest) {
       email?: string | null;
       duties?: string | null;
       status?: string;
+      extraEmails?: string[];
     };
 
     // 연락처 구분은 사업장 속성(같은 사업장 담당자 전원에게 적용) — 사업장 수정 권한자만 바꾼다.
@@ -103,6 +106,7 @@ export async function PATCH(req: NextRequest) {
           duties: body.duties,
           status: body.status,
           departmentName: body.departmentName,
+          extraEmails: Array.isArray(body.extraEmails) ? body.extraEmails : undefined,
         },
         ctx.userId
       );

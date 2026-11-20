@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { AppHeader, Avatar, Button, ConfirmSheet, Input, Sheet, useToast } from '@/components/ui';
 import { ChatCamera } from '@/components/chat/ChatCamera';
+import { ChatImageViewer, useAuthedImage, type ChatViewerImage } from '@/components/chat/ChatImageViewer';
 import { ComposerPlusSheet, type ComposerPlusItem } from '@/components/chat/ComposerPlusSheet';
 import { EmojiPickerSheet } from '@/components/chat/EmojiPickerSheet';
 import { MentionSuggestions, type MentionCandidate } from '@/components/chat/MentionSuggestions';
@@ -35,13 +36,11 @@ import { applyMention, mentionQueryAtEnd, splitMentions } from '@/lib/chat-menti
 import { closeChatPopup } from '@/lib/chat-popup';
 import { CHAT_SHARE_ICONS, CHAT_SHARE_LABELS, isChatShareType, shareFallbackBody, type ChatShare } from '@/lib/chat-share';
 import { useAuth } from '@/lib/auth-context';
-import { API_BASE_URL } from '@/lib/config';
 import { fmtTime } from '@/lib/format';
 import { routeForLink } from '@/lib/deeplink';
 import { openAttachment } from '@/lib/open-attachment';
 import { dismissChatNotifications } from '@/lib/notification-tray';
 import { IS_CHAT_POPUP, IS_DESKTOP_WEB } from '@/lib/platform';
-import { getAccessToken } from '@/lib/tokens';
 import { uploadLargeFile } from '@/lib/upload-large';
 import { useApi } from '@/lib/use-api';
 import { useDirectorySnapshot } from '@/lib/use-directory-snapshot';
@@ -800,6 +799,18 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
 
   const title = (detail?.roomType === 'group' && detail.name) || (typeof name === 'string' && name ? name : '대화');
 
+  // 그림 뷰어 — 지금 불러온 메시지의 그림들을 시간순(오래된 것 먼저)으로 넘겨 본다.
+  const [viewerId, setViewerId] = useState<number | null>(null);
+  const viewerImages = useMemo<ChatViewerImage[]>(
+    () =>
+      (msgs ?? [])
+        .filter((m) => m.kind === 'image' && !m.deleted && m.attachment)
+        .map((m) => ({ messageId: m.messageId, senderName: m.senderName, createdAt: m.createdAt, attachment: m.attachment! }))
+        .reverse(),
+    [msgs]
+  );
+  const closeViewer = useCallback(() => setViewerId(null), []);
+
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {
       // 내림차순 배열 — index+1 이 시간상 직전 메시지.
@@ -826,6 +837,7 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
             grouped={grouped}
             mentionNames={mentionNames}
             onReply={item.kind !== 'system' && !item.deleted ? () => setMsgMenu(item) : undefined}
+            onOpenImage={setViewerId}
           />
         </View>
       );
@@ -1215,6 +1227,8 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
         onCancel={() => setLeaveConfirm(false)}
       />
 
+      <ChatImageViewer images={viewerImages} openId={viewerId} roomId={Number(roomId)} onClose={closeViewer} />
+
       {/* 사진 촬영 — 자체 카메라 덮개(앱) */}
       {cameraOpen ? (
         <ChatCamera onClose={() => setCameraOpen(false)} onShot={onShot} onError={(m) => toast.show(m, 'error')} />
@@ -1223,31 +1237,8 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
   );
 }
 
-/** 인증 이미지 소스 — 프록시 경로에 Bearer 를 붙인다(Avatar 의 useAuthedSource 패턴). */
-function useAuthedImage(path?: string | null) {
-  const [src, setSrc] = useState<{ uri: string; headers?: Record<string, string> } | null>(null);
-  useEffect(() => {
-    if (!path) {
-      setSrc(null);
-      return;
-    }
-    let alive = true;
-    void getAccessToken().then((token) => {
-      if (!alive) return;
-      setSrc({
-        uri: `${API_BASE_URL}${path}`,
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [path]);
-  return src;
-}
-
-/** 첨부 렌더 — image 는 인라인, file 은 카드(탭 → 다운로드/공유). */
-function AttachmentContent({ m, mine }: { m: ChatMessage; mine: boolean }) {
+/** 첨부 렌더 — image 는 인라인(탭 → 그림 뷰어), file 은 카드(탭 → 다운로드/공유). */
+function AttachmentContent({ m, mine, onOpenImage }: { m: ChatMessage; mine: boolean; onOpenImage?: (messageId: number) => void }) {
   const { c } = useTheme();
   const toast = useToast();
   const [opening, setOpening] = useState(false);
@@ -1268,7 +1259,11 @@ function AttachmentContent({ m, mine }: { m: ChatMessage; mine: boolean }) {
 
   if (m.kind === 'image') {
     return (
-      <Pressable onPress={() => void open()} className="active:opacity-80">
+      <Pressable
+        onPress={() => (onOpenImage ? onOpenImage(m.messageId) : void open())}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={`그림 크게 보기: ${att.fileName}`}
+        className="active:opacity-80">
         <Image
           source={imgSrc}
           style={{ width: 200, height: 200, borderRadius: 12, backgroundColor: c.surface }}
@@ -1309,6 +1304,7 @@ function MessageRow({
   grouped,
   mentionNames,
   onReply,
+  onOpenImage,
 }: {
   m: ChatMessage;
   mine: boolean;
@@ -1316,6 +1312,8 @@ function MessageRow({
   /** 그룹 방 멤버 이름 — 본문의 `@이름` 을 굵게 그린다. 1대1 방은 빈 배열. */
   mentionNames: string[];
   onReply?: () => void;
+  /** 그림 첨부를 눌렀을 때 — 그림 뷰어를 연다. */
+  onOpenImage?: (messageId: number) => void;
 }) {
   const { c } = useTheme();
   if (m.kind === 'system') {
@@ -1353,7 +1351,7 @@ function MessageRow({
           </Text>
         </View>
       ) : null}
-      {hasAttachment ? <AttachmentContent m={m} mine={mine} /> : null}
+      {hasAttachment ? <AttachmentContent m={m} mine={mine} onOpenImage={onOpenImage} /> : null}
       {shared && sharedRoute ? <Pressable accessibilityRole="link" accessibilityLabel={`브리핑 열기: ${shared.title}`} onPress={() => router.push(sharedRoute)} className="gap-2 rounded-lg border border-cd-border bg-cd-card p-3 active:opacity-70">
         <Text className="text-[12px] text-cd-muted">공유 브리핑</Text>
         <Text numberOfLines={3} className="text-[14px] font-medium text-cd-text">{shared.title}</Text>

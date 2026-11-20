@@ -54,6 +54,7 @@ export const HOME_ARTICLES: ManualArticle[] = [
             "2단계 · 데스크탑 위젯(exe): 설치 파일을 받아 실행합니다. 1단계를 했다면 Windows 보안 경고가 뜨지 않습니다. 설치 후 시작 메뉴의 ‘MCM’으로 엽니다.",
           ] },
           { kind: "tip", text: "1단계를 건너뛰어 ‘PC 보호’ 경고가 뜨면 추가 정보 → 실행을 누르면 됩니다. 새 버전은 같은 자리에서 다시 받아 덮어 설치합니다." },
+          { kind: "p", text: "데스크탑 위젯과 모바일 앱의 대화방에서 그림을 누르면 크게 보는 창이 뜹니다. 아래 도구로 원본크기·화면맞춤·확대·축소·회전을 하고, 좌우 화살표(앱은 옆으로 밀기)로 같은 대화방의 이전·다음 그림을 봅니다. 마우스 휠이나 두 손가락, 두 번 누르기로도 확대됩니다. 전달은 다른 대화방을 골라 그 그림을 보내고, 저장은 PC 에서는 내려받기, 앱에서는 공유 창(사진에 저장·다른 앱으로 보내기)을 엽니다. 인쇄는 PC 에서만 됩니다. Esc 나 X 로 닫습니다." },
         ],
       },
       {
@@ -81,6 +82,6 @@ export const HOME_ARTICLES: ManualArticle[] = [
       "components/home/widgets/InvoiceInboxCard.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-06",
+    reviewedAt: "2026-11-20",
   },
 ];

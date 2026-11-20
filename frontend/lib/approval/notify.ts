@@ -25,7 +25,8 @@ export type ApprovalNotifyEvent =
   | "absence_skipped"
   | "proxy_done"
   | "final_absent"
-  | "final_approved";
+  | "final_approved"
+  | "watch";
 
 /** 결재 이벤트 → 모바일 푸시 이벤트 키(앱 알림 설정에서 사용자가 켜고 끄는 단위).
  *  cancel_requested/canceled 는 기존 키를 재사용한다 — 모바일 알림 설정 화면 무변경. */
@@ -42,6 +43,8 @@ const PUSH_EVENT_BY_APPROVAL: Record<ApprovalNotifyEvent, PushEventKey> = {
   proxy_done: "approval.result",
   final_absent: "approval.result",
   final_approved: "approval.result",
+  // 참조·열람 대상 안내(2026-11-20) — 문서가 많은 사람이 따로 끌 수 있게 전용 키를 쓴다.
+  watch: "approval.watch",
 };
 
 interface NotifySettingRow {
@@ -222,15 +225,17 @@ async function deliver(params: {
   text: string;
   /** 푸시 본문(짧게 — 보통 문서 제목). 미지정 시 subject 를 쓴다. */
   pushBody?: string;
+  /** 앱 푸시만 보낸다(이메일·알림톡 제외) — 참조·열람 안내처럼 건수가 많은 통지용. */
+  pushOnly?: boolean;
 }): Promise<void> {
   const notifyId = await claimDedup(params.dedupKey, params.docId, params.stepId, params.event, params.userId);
   if (!notifyId) return; // 이미 발송됨
   const setting = await getNotifySetting(params.event);
   const channels: Record<string, ChannelSendResult> = {};
-  if (setting.emailEnabled && params.contact?.email) {
+  if (!params.pushOnly && setting.emailEnabled && params.contact?.email) {
     channels.email = await sendNotifyEmail({ to: [params.contact.email], subject: params.subject, text: params.text });
   }
-  if (setting.alimtalkEnabled && params.contact?.phone) {
+  if (!params.pushOnly && setting.alimtalkEnabled && params.contact?.phone) {
     channels.alimtalk = await sendAlimtalk({ to: [params.contact.phone], text: params.text });
   }
   // 모바일 푸시(M1) — 상위에서 이미 dedup 을 선점했으므로 여기서는 dedupKey 를 넘기지 않는다.
@@ -331,6 +336,53 @@ export async function notifyPendingSteps(docId: string): Promise<void> {
     await notifyAbsenceOutcomes(doc);
   } catch (err) {
     console.error("[approval-notify] notifyPendingSteps 실패", docId, err);
+  }
+}
+
+/**
+ * 참조·열람 대상자에게 "문서가 상신됐다"는 앱 알림(2026-11-20). 상신 직후 호출한다.
+ * - 앱 푸시만 보낸다. 모든 양식의 고정 참조·열람자는 하루에도 수십 건을 받으므로 이메일·알림톡은 쓰지 않는다
+ *   (앱 알림 설정의 "참조·열람 문서"로 각자 끌 수 있다).
+ * - 문서·사람당 한 번만 — 반려 후 재상신해도 다시 보내지 않는다.
+ * - 결재선에 있는 사람은 결재 차례 알림을 받으므로 제외한다.
+ */
+export async function notifyWatchers(docId: string): Promise<void> {
+  try {
+    const doc = await loadDocHeader(docId);
+    if (!doc) return;
+    const db = await getDb();
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT ON (w.user_id) w.user_id, w.kind
+           FROM approval_watchers w JOIN approval_docs d ON d.doc_id = w.doc_id
+          WHERE w.doc_id = $1 AND d.status = 'in_progress'
+            AND w.user_id IS DISTINCT FROM d.drafter_user_id
+            AND NOT EXISTS (SELECT 1 FROM approval_steps s
+                             WHERE s.doc_id = w.doc_id AND (s.assignee_user_id = w.user_id OR s.delegated_from = w.user_id))
+          ORDER BY w.user_id, w.kind`,
+        [docId]
+      )
+    );
+    const urgentTag = doc.urgent ? "[긴급] " : "";
+    for (const r of rows) {
+      const userId = String(r.user_id);
+      const kindLabel = String(r.kind) === "view" ? "열람" : "참조";
+      const subject = `[전자결재] ${urgentTag}${kindLabel} 문서: ${doc.title}`;
+      await deliver({
+        event: "watch",
+        docId,
+        stepId: null,
+        dedupKey: `watch:${docId}:${userId}`,
+        userId,
+        contact: undefined,
+        subject,
+        text: subject,
+        pushBody: `${doc.drafterName ?? "-"} · ${doc.formName}`,
+        pushOnly: true,
+      });
+    }
+  } catch (err) {
+    console.error("[approval-notify] notifyWatchers 실패", docId, err);
   }
 }
 

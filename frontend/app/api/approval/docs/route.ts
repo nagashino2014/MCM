@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { countApprovalBox, listMyDocs, listInbox, listActedDocs, listRefCandidates, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
+import { countApprovalBox, countWatchedBox, listMyDocs, listInbox, listActedDocs, listRefCandidates, listWatchedBox, saveDoc, submitDoc, type ApprovalLineStepInput, type ApprovalWatcherInput } from "@/lib/approval/docs";
 import { syncDocCardLinks } from "@/lib/barobill/classify";
 import { syncDocReceiptLinks } from "@/lib/finance/receipts";
 import { syncDocShopReceiptLinks } from "@/lib/receipts/shop-receipt-store";
@@ -14,7 +14,7 @@ import { describeFixedLine, sameLineAssignees } from "@/lib/approval/fixed-line-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET: 결재함 목록 — box=draft|in_progress|completed(기안함) / pending|upcoming(결재함) / acted(결재한 문서)
+// GET: 결재함 목록 — box=draft|in_progress|completed(기안함) / pending|upcoming(결재함) / acted(결재한 문서) / watched(참조·열람)
 //   limit(기본 30, 최대 100)·offset 으로 페이지를 나누고, total 에 박스 전체 건수를 함께 준다.
 export async function GET(req: NextRequest) {
   try {
@@ -34,6 +34,11 @@ export async function GET(req: NextRequest) {
     if (box === "draft" || box === "in_progress" || box === "completed") {
       const [docs, total] = await Promise.all([listMyDocs(ctx.userId, box, limit, offset), countApprovalBox(ctx.userId, box)]);
       return NextResponse.json({ docs, total });
+    }
+    // 내가 참조·열람 대상인 문서(2026-11-20) — unread 는 안 읽은 건수(좌측 뱃지)
+    if (box === "watched") {
+      const [docs, count] = await Promise.all([listWatchedBox(ctx.userId, limit, offset), countWatchedBox(ctx.userId)]);
+      return NextResponse.json({ docs, total: count.total, unread: count.unread });
     }
     // 선행 문서 후보(127) — 내가 기안한 특정 양식 문서(보고서 기안 화면의 연결 모달용)
     if (box === "ref-candidates") {

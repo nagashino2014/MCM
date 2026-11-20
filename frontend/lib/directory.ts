@@ -118,6 +118,8 @@ export async function updateContactPerson(
     email?: string | null;
     duties?: string | null;
     status?: string;
+    /** 부서명(2026-11-20) — 같은 사업장에 같은 이름의 부서가 있으면 그 부서로, 없으면 새로 만든다. null·빈 값이면 부서 없음. */
+    departmentName?: string | null;
   },
   actorUserId?: string
 ): Promise<void> {
@@ -134,12 +136,37 @@ export async function updateContactPerson(
   if (patch.email !== undefined) put("email", patch.email);
   if (patch.duties !== undefined) put("duties", patch.duties);
   if (patch.status != null) put("status", patch.status);
-  if (!sets.length) return;
-  params.push(new Date().toISOString());
-  sets.push(`updated_at = $${params.length}`);
+  if (!sets.length && patch.departmentName === undefined) return;
+  const now = new Date().toISOString();
   await withDbWrite(async (db) => {
     const before = rowsToObjects(await db.exec(`SELECT * FROM facility_contact_people WHERE id = $1`, [id]))[0];
     if (!before) throw new Error("담당자를 찾을 수 없습니다.");
+    if (patch.departmentName !== undefined) {
+      const deptName = String(patch.departmentName ?? "").trim();
+      let departmentId: number | null = null;
+      if (deptName) {
+        const found = rowsToObjects(
+          await db.exec(
+            `SELECT id FROM facility_contact_departments WHERE facility_id = $1 AND department_name = $2 ORDER BY id LIMIT 1`,
+            [before.facility_id, deptName]
+          )
+        );
+        departmentId = found.length
+          ? Number(found[0].id)
+          : Number(
+              rowsToObjects(
+                await db.exec(
+                  `INSERT INTO facility_contact_departments (facility_id, department_name, created_at, updated_at)
+                   VALUES ($1, $2, $3, $3) RETURNING id`,
+                  [before.facility_id, deptName, now]
+                )
+              )[0].id
+            );
+      }
+      put("department_id", departmentId);
+    }
+    params.push(now);
+    sets.push(`updated_at = $${params.length}`);
     await db.run(`UPDATE facility_contact_people SET ${sets.join(", ")} WHERE id = $1`, params);
     if (actorUserId) {
       await recordAuditLogInline(db, {

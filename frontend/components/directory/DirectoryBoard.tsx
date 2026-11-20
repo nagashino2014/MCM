@@ -480,6 +480,7 @@ export function DirectoryBoard() {
                 // 연락처 구분은 사업장 속성 — 같은 사업장 담당자가 이미 있으면 그 값을 따른다.
                 orgCategory: (prev ?? []).find((x) => x.facilityId === c.facilityId)?.orgCategory ?? null,
                 status: "active",
+                quick: c.quick,
               },
             ]);
             setCreating(false);
@@ -592,7 +593,7 @@ function ContactRow({ icon, children }: { icon: React.ReactNode; children: React
   );
 }
 
-/** 담당자 수정 — 이름·직급·연락처 + 소속 사업장의 연락처 구분(기관 유형). */
+/** 담당자 수정 — 이름·직급·부서·연락처 + 소속 사업장의 연락처 구분(기관 유형). */
 function ContactEditModal({
   contact,
   canEditCategory,
@@ -608,6 +609,7 @@ function ContactEditModal({
   const { toast } = useCdToast();
   const [personName, setPersonName] = useState(contact.personName);
   const [title, setTitle] = useState(contact.title ?? "");
+  const [departmentName, setDepartmentName] = useState(contact.departmentName ?? "");
   const [mobilePhone, setMobilePhone] = useState(contact.mobilePhone ?? "");
   const [officePhone, setOfficePhone] = useState(contact.officePhone ?? "");
   const [email, setEmail] = useState(contact.email ?? "");
@@ -634,6 +636,7 @@ function ContactEditModal({
           ...(canEditCategory ? { orgCategory } : {}),
           personName,
           title: title.trim() || null,
+          departmentName: departmentName.trim() || null,
           mobilePhone: mobilePhone.trim() || null,
           officePhone: officePhone.trim() || null,
           email: email.trim() || null,
@@ -648,6 +651,7 @@ function ContactEditModal({
       onSaved({
         personName,
         title: title.trim() || null,
+        departmentName: departmentName.trim() || null,
         mobilePhone: mobilePhone.trim() || null,
         officePhone: officePhone.trim() || null,
         email: email.trim() || null,
@@ -696,10 +700,11 @@ function ContactEditModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />
           <CdInput label="직급" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 부장" />
+          <CdInput label="부서" value={departmentName} onChange={(e) => setDepartmentName(e.target.value)} placeholder="예: 환경안전팀" />
           <CdInput label="휴대폰" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
           <CdInput label="사무실" value={officePhone} onChange={(e) => setOfficePhone(e.target.value)} />
+          <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
         </div>
-        <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
       </div>
     </CdModal>
   );

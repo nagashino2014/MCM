@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Archive,
+  ArrowUpDown,
+  Check,
   Inbox,
   Loader2,
   MailOpen,
@@ -29,12 +31,28 @@ import type { MailListItem } from "@/lib/mail/messages";
 import type { MailCategory } from "@/lib/mail/categories";
 import type { MailDraft } from "@/lib/mail/drafts";
 import { fmtListDate } from "@/components/mail/mail-date";
+import { formatBytes } from "@/lib/approval/attachments";
 import { MailPreviewModal } from "@/components/mail/MailPreviewModal";
 
 // 날짜 표시는 mail-date.ts(24시간 이내 오전/오후 시각, 그 밖 YY.MM.DD). 기존 import 경로 유지용 재수출.
 export { fmtListDate };
 
 export type BulkAction = { action: string; target?: string };
+
+/** 목록 정렬(2026-11-20, 직원 요청 25) — "기준:방향". 서버가 쪽 나눔 전에 정렬한다. */
+export const MAIL_SORTS = ["date:desc", "date:asc", "size:desc", "size:asc", "from:asc", "subject:asc"] as const;
+export type MailListSort = (typeof MAIL_SORTS)[number];
+/** 보기 필터(직원 요청 26) — 전체·안 읽은 메일만·중요(별표) 메일만. */
+export type MailListFilter = "" | "unread" | "starred";
+
+const SORT_LABELS: Record<MailListSort, string> = {
+  "date:desc": "최신순",
+  "date:asc": "오래된순",
+  "size:desc": "크기 큰순",
+  "size:asc": "크기 작은순",
+  "from:asc": "보낸 사람순",
+  "subject:asc": "제목순",
+};
 
 export function MailListPane({
   folder,
@@ -56,7 +74,16 @@ export function MailListPane({
   total,
   footer,
   onSenderClick,
+  sort = "date:desc",
+  onSort,
+  filter = "",
+  onFilter,
 }: {
+  /** 정렬·보기 필터 — onSort/onFilter 를 주면 도구줄 오른쪽에 나타난다. */
+  sort?: MailListSort;
+  onSort?: (s: MailListSort) => void;
+  filter?: MailListFilter;
+  onFilter?: (f: MailListFilter) => void;
   /** stack = 좌우 분할용 3층 행 / row = 목록형(전체 폭 1줄: 보낸 사람 | 제목 — 미리보기 | 날짜). */
   layout?: "stack" | "row";
   /** 검색줄 오른쪽 끝에 붙일 요소(보기 전환 버튼 등). */
@@ -88,6 +115,12 @@ export function MailListPane({
   const [qInput, setQInput] = useState(q);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const isDrafts = folder === "drafts";
+  // 보낸편지함은 안읽음 개념이 없어 "안 읽음" 필터를 내지 않는다.
+  const filterOptions: { key: MailListFilter; label: string }[] = [
+    { key: "", label: "전체" },
+    ...(folder === "sent" ? [] : [{ key: "unread" as const, label: "안 읽음" }]),
+    { key: "starred", label: "중요" },
+  ];
   // 보낸편지함은 받는 사람이 표시되므로 보낸 사람 메뉴를 쓰지 않는다.
   const senderMenu = !!onSenderClick && folder !== "sent";
 
@@ -296,6 +329,47 @@ export function MailListPane({
           ) : (
             <span className="cd-text-faint ml-1">{loading ? "" : `${isDrafts ? drafts.length : total ?? items.length}건`}</span>
           )}
+          {(onFilter || onSort) && (
+            <div className="ml-auto flex items-center gap-0.5 shrink-0">
+              {onFilter &&
+                filterOptions.map((f) => (
+                  <button
+                    key={f.key || "all"}
+                    type="button"
+                    onClick={() => onFilter(f.key)}
+                    aria-pressed={filter === f.key}
+                    className={cn(
+                      "cd-action px-2 py-1 transition-colors",
+                      filter === f.key ? "cd-tint-primary font-semibold" : "cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover"
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              {onSort && (
+                <CdDropdown
+                  align="right"
+                  menuWidthClass="w-40"
+                  trigger={() => (
+                    <span
+                      className="cd-action flex items-center gap-1 px-2 py-1 transition-colors cd-text-muted hover:text-[color:var(--cd-text)] cd-row-hover cursor-pointer"
+                      role="button"
+                      title="정렬"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{SORT_LABELS[sort]}</span>
+                    </span>
+                  )}
+                  items={MAIL_SORTS.map((key) => ({
+                    key,
+                    label: SORT_LABELS[key],
+                    icon: <Check className={cn("w-3.5 h-3.5", key === sort ? "opacity-100" : "opacity-0")} />,
+                    onSelect: () => onSort(key),
+                  }))}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -332,7 +406,11 @@ export function MailListPane({
             </ul>
           )
         ) : items.length === 0 ? (
-          <CdEmptyState title={q ? "검색 결과가 없습니다." : "메일이 없습니다."} />
+          <CdEmptyState
+            title={
+              q ? "검색 결과가 없습니다." : filter === "unread" ? "안 읽은 메일이 없습니다." : filter === "starred" ? "중요 메일이 없습니다." : "메일이 없습니다."
+            }
+          />
         ) : layout === "row" ? (
           // 목록형(네이버·지메일식): 한 줄 = 안읽음 점 · 선택 · 별표 · 보낸 사람 · 제목 · 미리보기(돋보기) · 첨부 · 날짜.
           // 본문 미리보기 글은 제목 뒤에 붙이지 않고 돋보기 팝업으로 본다(10-16, 가독성).
@@ -397,6 +475,9 @@ export function MailListPane({
                       </button>
                     </div>
                     {m.hasAttachments && <Paperclip className="w-3.5 h-3.5 cd-text-faint shrink-0" aria-label="첨부 있음" />}
+                    <span className="w-16 shrink-0 text-right text-[12px] tabular-nums cd-text-faint" title="메일 크기">
+                      {formatBytes(m.sizeBytes)}
+                    </span>
                     <button
                       onClick={() => onOpen(m.messageId)}
                       className={cn("w-20 shrink-0 text-right text-[12px] tabular-nums", unread ? "font-semibold cd-text" : "cd-text-faint")}
@@ -458,7 +539,10 @@ export function MailListPane({
                         ) : (
                           <span className={cn("text-xs truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>{who}</span>
                         )}
-                        <span className="text-[10.5px] cd-text-faint shrink-0 tabular-nums">{fmtListDate(m.createdAt)}</span>
+                        <span className="text-[10.5px] cd-text-faint shrink-0 tabular-nums">
+                          {m.sizeBytes > 0 && <span title="메일 크기">{formatBytes(m.sizeBytes)} · </span>}
+                          {fmtListDate(m.createdAt)}
+                        </span>
                       </div>
                       <span className={cn("text-[13px] truncate", unread ? "font-bold cd-text" : "font-normal cd-text-muted")}>
                         {m.subject || "(제목 없음)"}

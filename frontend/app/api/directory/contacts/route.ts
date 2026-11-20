@@ -68,6 +68,7 @@ export async function PATCH(req: NextRequest) {
       orgCategory?: string;
       personName?: string;
       title?: string | null;
+      departmentName?: string | null;
       officePhone?: string | null;
       mobilePhone?: string | null;
       email?: string | null;
@@ -101,6 +102,7 @@ export async function PATCH(req: NextRequest) {
           email: body.email,
           duties: body.duties,
           status: body.status,
+          departmentName: body.departmentName,
         },
         ctx.userId
       );

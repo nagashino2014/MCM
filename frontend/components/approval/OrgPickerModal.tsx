@@ -34,25 +34,33 @@ export function OrgPickerModal({
   size?: "sm" | "md" | "lg" | "xl";
 }) {
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(snapshotCache);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!open || snapshotCache) return;
+    if (!open) return;
+    if (snapshotCache) {
+      // 한 화면에 이 모달이 여러 개 떠 있다(결재선·참조용 하나, 양식의 사용자 선택·동행자 필드마다 하나).
+      // 다른 모달이 먼저 받아 캐시에 넣었으면 이 모달의 state 에도 옮긴다 — 요청만 건너뛰면 "불러오는 중"에서 멈춘다.
+      setSnapshot(snapshotCache);
+      return;
+    }
     let cancelled = false;
+    setFailed(false);
     fetch("/api/org/snapshot", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
-        if (d && !cancelled) {
-          snapshotCache = d as OrganizationSnapshot;
-          setSnapshot(snapshotCache);
-        }
+        // 캐시는 이 모달이 닫혔어도 채운다(받은 응답을 버리면 다음에 다시 받아야 한다).
+        snapshotCache = d as OrganizationSnapshot;
+        if (!cancelled) setSnapshot(snapshotCache);
       })
       .catch(() => {
-        // 무시 — 로딩 안내 유지
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, attempt]);
 
   return (
     <CdModal open={open} onClose={onClose} title={title} size={size} footer={footer}>
@@ -66,6 +74,17 @@ export function OrgPickerModal({
             employeeCheckbox={checkedEmployeeIds !== undefined}
             checkedEmployeeIds={checkedEmployeeIds}
           />
+        ) : failed ? (
+          <div className="py-6 flex flex-col items-center gap-2">
+            <p className="text-[12px] cd-error-text">조직도를 불러오지 못했습니다.</p>
+            <button
+              type="button"
+              className="cd-btn border cd-border-c px-2.5 py-1.5 text-[12px]"
+              onClick={() => setAttempt((n) => n + 1)}
+            >
+              다시 시도
+            </button>
+          </div>
         ) : (
           <p className="text-[12px] cd-text-faint py-6 text-center">조직도를 불러오는 중입니다.</p>
         )}

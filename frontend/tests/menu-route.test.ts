@@ -22,7 +22,7 @@ const CEO_PERMS = [...EXEC_PERMS, "billing.view@all", "payroll.view@all", "finan
 
 test("기존 메뉴의 모든 진입 URL은 정확히 자기 메뉴를 선택한다", () => {
   assert.equal(MENU_ITEMS.length, 29);
-  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 87);
+  assert.equal(MENU_ITEMS.reduce((count, item) => count + (item.submenu?.length ?? 0), 0), 88);
   const survey = MENU_ITEMS.find((item) => item.title === "설문");
   assert.equal(survey?.href, "/survey/internal");
   assert.deepEqual(survey?.submenu?.map(({ title, href }) => ({ title, href })), [
@@ -166,8 +166,8 @@ test("API 가 관리 권한을 요구하는 화면은 메뉴·URL 도 같은 키
     assert.equal(hrefs.includes("/approval/records"), false);
     assert.equal(hrefs.includes("/approval/insights"), false);
   }
-  // 전자결재 홈·공문·내부고시·양식별 문서 조회·데이터 분석·결재 인사이트·부재·대결 설정(main 의 대결 메뉴 포함 7개)
-  assert.equal(visibleSubmenu(approval, [...STAFF_PERMS, "approval.manage@all"]).length, 7);
+  // 전자결재 홈·참조·열람 문서·공문·내부고시·양식별 문서 조회·데이터 분석·결재 인사이트·부재·대결 설정(8개, 2026-11-20 참조·열람 문서 추가)
+  assert.equal(visibleSubmenu(approval, [...STAFF_PERMS, "approval.manage@all"]).length, 8);
   assert.deepEqual(requiredPermissionsForPath("/approval/records/42"), ["approval.manage"]);
   // 파일함은 files.manage, 문서함·개인문서함은 전원 — 상위 메뉴는 남고 대표 경로는 보이는 첫 서브로
   const files = MENU_ITEMS.find((item) => item.title === "파일 · 문서함")!;

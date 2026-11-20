@@ -2,7 +2,9 @@
 
 // 외부 담당자 등록 — 출장·영업에서 만난 사람을 직원이 직접 등록한다(2026-10-30 사용자 결정, contact.edit).
 // 주소록(외부 연락처)과 결재 양식의 접견인 칸에서 같이 쓴다. 기관·업체는 이미 등록된 사업장에서 고른다
-// (사업장 신규 등록은 사업장 수정 권한이 필요하다). 저장은 POST /api/directory/contacts.
+// — 저장은 POST /api/directory/contacts.
+// 목록에 없는 업체(2026-11-20, 직원 요청 30)는 [새 업체로 등록]으로 업체명만 넣어 함께 등록한다 — 메일의 주소록 간이
+// 등록(357)과 같은 경로(POST /api/directory/quick)라 '기타 업체·기관'에 간이 업체로 들어가고 관리자가 나중에 보완·확정한다.
 
 import { useEffect, useRef, useState } from "react";
 import { CdButton } from "@/components/cdash/CdButton";
@@ -21,6 +23,15 @@ export interface CreatedContact {
   mobilePhone: string | null;
   officePhone: string | null;
   email: string | null;
+  /** 새 업체와 함께 간이 등록한 담당자(관리자 보완·확정 전). */
+  quick?: boolean;
+}
+
+/** 같은 이름의 업체가 이미 있을 때 서버가 돌려주는 후보. */
+interface SameNameHit {
+  facilityId: string;
+  companyName: string;
+  region: string | null;
 }
 
 interface FacilityHit {
@@ -55,6 +66,9 @@ export function ContactCreateModal({
   const [officePhone, setOfficePhone] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  // 목록에 없는 업체 — 검색어를 업체명으로 삼아 간이 업체를 함께 만든다.
+  const [newCompany, setNewCompany] = useState(false);
+  const [sameName, setSameName] = useState<SameNameHit[]>([]);
 
   useEffect(() => {
     const q = fq.trim();
@@ -75,9 +89,52 @@ export function ContactCreateModal({
     };
   }, [fq, facility]);
 
+  /** 새 업체와 담당자를 함께 등록 — force 는 같은 이름의 업체가 있어도 새로 만들 때. */
+  const saveWithNewCompany = async (force: boolean) => {
+    const companyName = fq.trim();
+    if (!companyName) {
+      toast("새 업체명을 입력하세요.", "warn");
+      return;
+    }
+    if (!personName.trim()) {
+      toast("이름을 입력하세요.", "warn");
+      return;
+    }
+    setSaving(true);
+    try {
+      const person = {
+        personName: personName.trim(),
+        title: title.trim() || null,
+        departmentName: departmentName.trim() || null,
+        mobilePhone: mobilePhone.trim() || null,
+        officePhone: officePhone.trim() || null,
+        email: email.trim() || null,
+      };
+      const r = await fetch("/api/directory/quick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facilityId: null, newFacility: { companyName }, forceNewFacility: force, person, source: "directory" }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 409 && Array.isArray(d.candidates)) {
+        setSameName(d.candidates as SameNameHit[]);
+        return;
+      }
+      if (!r.ok) {
+        toast(String(d.error ?? "등록에 실패했습니다."), "error");
+        return;
+      }
+      toast("새 업체와 담당자를 등록했습니다.", "success");
+      onCreated({ id: Number(d.personId), facilityId: String(d.facilityId), facilityName: String(d.facilityName ?? companyName), quick: true, ...person });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const save = async () => {
+    if (newCompany && !facility) return saveWithNewCompany(false);
     if (!facility) {
-      toast("기관·업체를 검색해 선택하세요.", "warn");
+      toast("기관·업체를 검색해 선택하세요. 목록에 없으면 [새 업체로 등록]을 누르세요.", "warn");
       return;
     }
     if (!personName.trim()) {
@@ -133,20 +190,29 @@ export function ContactCreateModal({
             <div className="flex items-center gap-2 text-[13px]">
               <span className="cd-label m-0">기관·업체</span>
               <span className="cd-text font-semibold">{facility.name}</span>
-              <button type="button" className="text-[12px] cd-text-primary" onClick={() => setFacility(null)}>
+              <button
+                type="button"
+                className="text-[12px] cd-text-primary"
+                onClick={() => {
+                  setFacility(null);
+                  setNewCompany(false);
+                  setSameName([]);
+                }}
+              >
                 다시 고르기
               </button>
             </div>
           ) : (
             <CdInput
-              label="기관·업체"
+              label={newCompany ? "새 업체명" : "기관·업체"}
               required
               value={fq}
-              placeholder="업체명 검색(2자 이상)"
+              placeholder={newCompany ? "예: ○○환경(주)" : "업체명 검색(2자 이상)"}
               onFocus={() => setOpen(true)}
               onChange={(e) => {
                 setFq(e.target.value);
                 setOpen(true);
+                setSameName([]);
               }}
             />
           )}
@@ -172,8 +238,53 @@ export function ContactCreateModal({
             </div>
           )}
         </div>
-        {!facility && (
-          <p className="-mt-2 cd-hint">등록된 사업장에서 고릅니다. 목록에 없으면 사업장 관리 담당자에게 등록을 요청하세요.</p>
+        {!facility && !newCompany && (
+          <p className="-mt-2 cd-hint">
+            등록된 사업장에서 고릅니다. 목록에 없으면{" "}
+            <button type="button" className="cd-text-primary font-semibold" onClick={() => setNewCompany(true)}>
+              새 업체로 등록
+            </button>
+            을 누르세요.
+          </p>
+        )}
+        {!facility && newCompany && (
+          <p className="-mt-2 cd-hint">
+            적은 이름으로 새 업체를 만들어 함께 등록합니다. 위 검색 결과에 같은 곳이 보이면 그것을 고르세요.{" "}
+            <button
+              type="button"
+              className="cd-text-primary font-semibold"
+              onClick={() => {
+                setNewCompany(false);
+                setSameName([]);
+              }}
+            >
+              검색으로 돌아가기
+            </button>
+          </p>
+        )}
+        {!facility && sameName.length > 0 && (
+          <div className="rounded-lg border cd-border-c p-2.5 flex flex-col gap-1.5">
+            <p className="text-[12px] cd-warn-text">같은 이름의 업체가 이미 있습니다. 같은 곳이면 고르고, 다른 곳이면 새로 만드세요.</p>
+            {sameName.map((h) => (
+              <button
+                key={h.facilityId}
+                type="button"
+                className="text-left text-[13px] px-2 py-1.5 rounded-lg hover:bg-[color:var(--cd-surface)]"
+                onClick={() => {
+                  setFacility({ facilityId: h.facilityId, name: h.companyName });
+                  setSameName([]);
+                }}
+              >
+                <span className="cd-text">{h.companyName}</span>
+                {h.region && <span className="ml-2 text-[11px] cd-text-faint">{h.region}</span>}
+              </button>
+            ))}
+            <div>
+              <CdButton size="sm" loading={saving} onClick={() => saveWithNewCompany(true)}>
+                그래도 새로 만들기
+              </CdButton>
+            </div>
+          </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />

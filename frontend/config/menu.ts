@@ -85,6 +85,7 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: ClipboardCheck,
     submenu: [
       { title: "전자결재 홈", href: "/approval" },
+      { title: "참조·열람 문서", href: "/approval?box=watched" },
       { title: "공문 작성", href: "/approval/letter" },
       { title: "내부고시 작성", href: "/approval/notice" },
       { title: "양식별 문서 조회", href: "/approval/records" },

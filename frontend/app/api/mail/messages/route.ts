@@ -11,7 +11,7 @@ const ALLOWED_ACTIONS = new Set<MailBulkAction>([
 ]);
 const ALLOWED_MOVE_TARGETS = new Set(["inbox", "archive", "spam"]);
 
-// GET: 메일함 폴더 메시지 목록 — folder=inbox|sent|...|user:<folderId>, q(검색), category(받은편지함 필터), limit, offset
+// GET: 메일함 폴더 메시지 목록 — folder=inbox|sent|...|user:<folderId>, q(검색), category(받은편지함 필터), sort(date|size|from|subject)·dir(asc|desc), filter(unread|starred), limit, offset
 export async function GET(req: NextRequest) {
   try {
     const ctx = await requireSession();
@@ -23,7 +23,11 @@ export async function GET(req: NextRequest) {
     const offset = Number(req.nextUrl.searchParams.get("offset") ?? "0");
     const q = req.nextUrl.searchParams.get("q") ?? undefined;
     const categoryId = req.nextUrl.searchParams.get("category") ?? undefined;
-    const res = await listFolderMessages(ctx.userId, folder, { limit, offset, q, categoryId });
+    // 정렬·보기 필터(선택) — 값 검증은 listFolderMessages 의 화이트리스트가 한다.
+    const sort = req.nextUrl.searchParams.get("sort") ?? undefined;
+    const dir = req.nextUrl.searchParams.get("dir") ?? undefined;
+    const filter = req.nextUrl.searchParams.get("filter") ?? undefined;
+    const res = await listFolderMessages(ctx.userId, folder, { limit, offset, q, categoryId, sort, dir, filter });
     return NextResponse.json(res);
   } catch (err) {
     return authErrorToResponse(err);

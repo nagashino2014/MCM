@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, CheckCircle2, ClipboardCheck, Columns2, FileEdit, FilePen, FileText, FolderOpen,
+  ArrowLeft, CheckCircle2, ClipboardCheck, Columns2, Eye, FileEdit, FilePen, FileText, FolderOpen,
   Hourglass, Inbox, Plus, RefreshCw, Rows3, Sparkles, Star,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
@@ -41,6 +41,9 @@ interface DocSummary {
   completedAt: string | null;
   updatedAt: string;
   myStepId?: string | null;
+  /** 참조·열람 상자 전용 — ref(참조)|view(열람), 아직 열어 보지 않았는지 */
+  watchKind?: string;
+  unread?: boolean;
   aiSummary?: { lines: string[]; figures: { label: string; value: string }[]; precedent?: string | null } | null;
 }
 
@@ -56,12 +59,14 @@ interface FolderRow {
   name: string;
 }
 
-type BoxKey = "pending" | "upcoming" | "draft" | "in_progress" | "completed" | "acted";
+type BoxKey = "pending" | "upcoming" | "draft" | "in_progress" | "completed" | "acted" | "watched";
 
 const BOXES: { key: BoxKey; label: string; icon: typeof Inbox; group: "inbox" | "mine" }[] = [
   { key: "pending", label: "결재 대기", icon: Inbox, group: "inbox" },
   { key: "upcoming", label: "결재 예정", icon: Hourglass, group: "inbox" },
   { key: "acted", label: "내가 결재한 문서", icon: CheckCircle2, group: "inbox" },
+  // 내가 참조·열람 대상인 문서(2026-11-20) — 문서함 [참조·열람] 탭과 같은 범위. 사이드바 "참조·열람 문서"가 이 상자를 연다.
+  { key: "watched", label: "참조·열람", icon: Eye, group: "inbox" },
   { key: "draft", label: "작성중 · 반려", icon: FileEdit, group: "mine" },
   { key: "in_progress", label: "결재 진행", icon: FilePen, group: "mine" },
   { key: "completed", label: "완료", icon: FileText, group: "mine" },
@@ -100,10 +105,13 @@ export function ApprovalHomeBoard() {
   const { theme } = useCdashTheme();
   const router = useRouter();
   // 홈 위젯 등에서 특정 문서로 딥링크(/approval?docId=...) — 초기 선택으로만 사용.
-  const initialDocId = useSearchParams().get("docId");
-  const [box, setBox] = useState<BoxKey>("pending");
+  const searchParams = useSearchParams();
+  const initialDocId = searchParams.get("docId");
+  // 사이드바 "참조·열람 문서"(/approval?box=watched)로 들어오면 그 상자부터 연다.
+  const urlBox: BoxKey = searchParams.get("box") === "watched" ? "watched" : "pending";
+  const [box, setBox] = useState<BoxKey>(urlBox);
   const [docs, setDocs] = useState<DocSummary[]>([]);
-  const [counts, setCounts] = useState<{ pending: number; upcoming: number }>({ pending: 0, upcoming: 0 });
+  const [counts, setCounts] = useState<{ pending: number; upcoming: number; watchedUnread: number }>({ pending: 0, upcoming: 0, watchedUnread: 0 });
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(initialDocId);
   const [formModal, setFormModal] = useState(false);
@@ -151,11 +159,16 @@ export function ApprovalHomeBoard() {
   // 대기/예정 카운트는 좌측 뱃지용으로 항상 로드한다(박스 선택과 무관).
   const loadCounts = useCallback(async () => {
     try {
-      const [p, u] = await Promise.all([
+      const [p, u, w] = await Promise.all([
         fetch("/api/approval/docs?box=pending&limit=1", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/approval/docs?box=upcoming&limit=1", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/approval/docs?box=watched&limit=1", { cache: "no-store" }).then((r) => r.json()),
       ]);
-      setCounts({ pending: Number(p.total ?? (p.docs ?? []).length), upcoming: Number(u.total ?? (u.docs ?? []).length) });
+      setCounts({
+        pending: Number(p.total ?? (p.docs ?? []).length),
+        upcoming: Number(u.total ?? (u.docs ?? []).length),
+        watchedUnread: Number(w.unread ?? 0),
+      });
     } catch {
       // 무시 — 뱃지 0 유지
     }
@@ -191,7 +204,8 @@ export function ApprovalHomeBoard() {
   // 좌우 분할 보기 진입 시 첫 문서 자동 선택 — 뷰어가 빈 상태로 시작하던 문제(분석 §2 /approval).
   // 작성중·반려함은 클릭이 기안 편집으로 가는 흐름이라, 목록형은 목록을 먼저 보여 주므로 자동 선택에서 제외한다.
   useEffect(() => {
-    if (!isWide || viewMode === "list" || loading || box === "draft") return;
+    // 참조·열람 상자도 제외 — 문서를 여는 순간 읽음으로 기록되므로, 누르지 않은 문서가 읽음이 되면 안 된다.
+    if (!isWide || viewMode === "list" || loading || box === "draft" || box === "watched") return;
     if (selectedId && docs.some((d) => d.docId === selectedId)) return;
     setSelectedId(docs[0]?.docId ?? null);
   }, [docs, loading, isWide, viewMode, box, selectedId]);
@@ -222,6 +236,26 @@ export function ApprovalHomeBoard() {
     }
   };
 
+  /** 상자 바꾸기 — 주소의 box 도 맞춰 사이드바의 현재 메뉴 표시가 상자와 어긋나지 않게 한다. */
+  const selectBox = (k: BoxKey) => {
+    setBox(k);
+    setOffset(0);
+    setSelectedId(null);
+    setMobileView("list");
+    const want = k === "watched" ? "/approval?box=watched" : "/approval";
+    if ((k === "watched") !== (searchParams.get("box") === "watched")) window.history.replaceState(null, "", want);
+  };
+  // 사이드바에서 "전자결재 홈" ↔ "참조·열람 문서"를 오가면 주소만 바뀐다 — 상자를 주소에 맞춘다.
+  const boxRef = useRef(box);
+  boxRef.current = box;
+  useEffect(() => {
+    if ((urlBox === "watched") === (boxRef.current === "watched")) return;
+    setBox(urlBox);
+    setOffset(0);
+    setSelectedId(null);
+    setMobileView("list");
+  }, [urlBox]);
+
   const openDoc = (d: DocSummary) => {
     // 미상신(작성중) 문서는 바로 기안 편집으로 — 기존 흐름 유지. 양식 전용 화면(공문·견적서)은 그쪽으로.
     // 반려 문서는 먼저 상세(반려 사유·결재선)를 보여주고, 뷰어의 [수정 후 재상신]으로 편집에 들어간다.
@@ -231,6 +265,11 @@ export function ApprovalHomeBoard() {
     }
     setSelectedId(d.docId);
     setMobileView("viewer");
+    // 참조·열람 문서는 여는 순간 서버가 읽음으로 기록한다 — 목록의 점과 좌측 뱃지도 바로 맞춘다.
+    if (box === "watched" && d.unread) {
+      setDocs((prev) => prev.map((x) => (x.docId === d.docId ? { ...x, unread: false } : x)));
+      setCounts((prev) => ({ ...prev, watchedUnread: Math.max(0, prev.watchedUnread - 1) }));
+    }
   };
 
   // 결재 처리 후 — 목록·카운트 갱신, 처리한 문서는 대기함에서 빠지므로 뷰어를 비운다.
@@ -254,7 +293,8 @@ export function ApprovalHomeBoard() {
           </p>
           {BOXES.filter((b) => b.group === group).map((b) => {
             const Icon = b.icon;
-            const count = b.key === "pending" ? counts.pending : b.key === "upcoming" ? counts.upcoming : null;
+            const count =
+              b.key === "pending" ? counts.pending : b.key === "upcoming" ? counts.upcoming : b.key === "watched" ? counts.watchedUnread : null;
             return (
               <button
                 key={b.key}
@@ -262,12 +302,7 @@ export function ApprovalHomeBoard() {
                 className={`flex items-center gap-2 rounded-lg px-2.5 py-[13px] text-[13px] text-left transition-colors ${
                   box === b.key ? "cd-glass-active font-semibold" : "cd-text-muted cd-row-hover"
                 }`}
-                onClick={() => {
-                  setBox(b.key);
-                  setOffset(0);
-                  setSelectedId(null);
-                  setMobileView("list");
-                }}
+                onClick={() => selectBox(b.key)}
               >
                 <Icon className="w-4 h-4 shrink-0" />
                 <span className="flex-1 truncate">{b.label}</span>
@@ -301,12 +336,23 @@ export function ApprovalHomeBoard() {
     </span>
   );
 
+  // 참조·열람 상자 — 구분(참조/열람) 꼬리표, 이미 연 문서는 굵기를 낮춰 안 읽은 문서가 눈에 띄게 한다.
+  const watchTag = (d: DocSummary) =>
+    box === "watched" && d.watchKind ? (
+      <span className="text-[11px] font-semibold rounded-lg px-1.5 py-0.5 mr-1.5 cd-tint-primary align-[1px]">
+        {d.watchKind === "view" ? "열람" : "참조"}
+      </span>
+    ) : null;
+  const readRow = (d: DocSummary) => box === "watched" && d.unread === false;
+
   const listPane = (
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex items-center gap-2 px-3 py-2 border-b cd-hairline-c shrink-0">
         <span className="text-[13px] font-semibold cd-text">{boxLabel}</span>
-        {(box === "pending" || box === "upcoming") && <CdHelp topic="approval.inbox-boxes" />}
-        <span className="text-[11px] cd-text-faint">{total}건</span>
+        {(box === "pending" || box === "upcoming" || box === "watched") && <CdHelp topic="approval.inbox-boxes" />}
+        <span className="text-[11px] cd-text-faint">
+          {total}건{box === "watched" && counts.watchedUnread > 0 ? ` · 안 읽음 ${counts.watchedUnread}` : ""}
+        </span>
         <span className="ml-auto flex items-center gap-1">
           <CdIconButton label="새로고침" size="sm" onClick={refreshAll}>
             <RefreshCw className="w-3.5 h-3.5" />
@@ -330,8 +376,12 @@ export function ApprovalHomeBoard() {
               title={DOC_STATUS_LABEL[d.status] ?? d.status}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_DOT[d.status] ?? "var(--cd-faint)" }} aria-hidden />
-              <span className="flex-1 min-w-0 truncate text-[14px] font-semibold cd-text leading-[1.4]" title={d.title}>
+              <span
+                className={`flex-1 min-w-0 truncate text-[14px] leading-[1.4] ${readRow(d) ? "font-normal cd-text-muted" : "font-semibold cd-text"}`}
+                title={d.title}
+              >
                 {d.urgent && urgentTag}
+                {watchTag(d)}
                 {d.title}
                 {d.aiSummary && d.aiSummary.lines.length > 0 && (
                   <Sparkles className="inline w-3 h-3 ml-1 cd-text-primary" aria-label="AI 요약 있음" />
@@ -369,8 +419,12 @@ export function ApprovalHomeBoard() {
                 aria-hidden
               />
               <span className="flex-1 min-w-0">
-                <span className="block text-[14px] font-semibold cd-text leading-[1.4] truncate" title={d.title}>
+                <span
+                  className={`block text-[14px] leading-[1.4] truncate ${readRow(d) ? "font-normal cd-text-muted" : "font-semibold cd-text"}`}
+                  title={d.title}
+                >
                   {d.urgent && urgentTag}
+                  {watchTag(d)}
                   {d.title}
                   {d.aiSummary && d.aiSummary.lines.length > 0 && (
                     <Sparkles className="inline w-3 h-3 ml-1 cd-text-primary" aria-label="AI 요약 있음" />
@@ -468,14 +522,10 @@ export function ApprovalHomeBoard() {
                     items={BOXES.map((b) => ({
                       key: b.key,
                       label: b.label,
-                      count: b.key === "pending" ? counts.pending || undefined : undefined,
+                      count: b.key === "pending" ? counts.pending || undefined : b.key === "watched" ? counts.watchedUnread || undefined : undefined,
                     }))}
                     active={box}
-                    onChange={(k) => {
-                      setBox(k as BoxKey);
-                      setOffset(0);
-                      setSelectedId(null);
-                    }}
+                    onChange={(k) => selectBox(k as BoxKey)}
                   />
                 </div>
                 <div className="flex-1 min-h-0">{listPane}</div>

@@ -5,6 +5,7 @@ import {
   createContactPerson,
   deleteContactPerson,
   isOrgCategory,
+  listFacilityDepartmentNames,
   setFacilityOrgCategory,
   updateContactPerson,
 } from "@/lib/directory";
@@ -22,6 +23,19 @@ async function requireContactEditor() {
   const ctx = await requireSession();
   if ((await hasPermission(ctx.userId, "contact.edit")) || (await hasPermission(ctx.userId, "facility.edit"))) return ctx;
   throw new AuthError("담당자를 등록·수정할 권한이 없습니다.", 403);
+}
+
+// GET ?facilityId= — 그 기관·업체의 부서 목록(담당자 등록·수정 창에서 부서를 고를 때).
+export async function GET(req: NextRequest) {
+  try {
+    await requireContactEditor();
+    const facilityId = String(req.nextUrl.searchParams.get("facilityId") ?? "").trim();
+    if (!facilityId) return NextResponse.json({ error: "facilityId 가 필요합니다." }, { status: 400 });
+    const names = await listFacilityDepartmentNames(facilityId);
+    return NextResponse.json({ departments: names.map((name) => ({ name })) });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
 }
 
 export async function POST(req: NextRequest) {

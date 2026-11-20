@@ -29,6 +29,7 @@ import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
 import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
 import { EmergencyContactsTab } from "@/components/directory/EmergencyContactsTab";
 import { mailToken } from "@/components/directory/mail-token";
+import { DepartmentField } from "@/components/directory/DepartmentField";
 import { ExtraEmailsField } from "@/components/directory/ExtraEmailsField";
 import { normalizeExtraEmails } from "@/lib/directory-emails";
 import "@/components/cdash/cdash.css";
@@ -718,7 +719,7 @@ function ContactEditModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />
           <CdInput label="직급" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 부장" />
-          <CdInput label="부서" value={departmentName} onChange={(e) => setDepartmentName(e.target.value)} placeholder="예: 환경안전팀" />
+          <DepartmentField facilityId={contact.facilityId} value={departmentName} onChange={setDepartmentName} />
           <CdInput label="휴대폰" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
           <CdInput label="사무실" value={officePhone} onChange={(e) => setOfficePhone(e.target.value)} />
           <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />

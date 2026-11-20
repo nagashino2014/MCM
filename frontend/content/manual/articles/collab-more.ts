@@ -57,6 +57,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "list", items: [
             "기관·업체는 이미 등록된 사업장에서 고릅니다. 목록에 없으면 입력란 아래 [[새 업체로 등록]]을 누르고 업체명을 적어 담당자와 함께 등록합니다. 같은 이름의 업체가 이미 있으면 후보를 보여 주므로, 같은 곳이면 고르고 다른 곳이면 [[그래도 새로 만들기]]를 누릅니다. 이렇게 만든 업체는 [[미지정]]으로 들어가고 사업장 관리 담당자가 나중에 정보를 보완합니다.",
+            "부서는 그 기관·업체에 이미 있는 부서에서 고릅니다. 없는 부서는 목록 맨 아래 [[＋ 새 부서 입력]]을 골라 이름을 적으면 저장할 때 부서가 만들어지고 그 담당자에게 지정됩니다(사업장 상세로 가지 않아도 됩니다). 부서를 빼려면 [[부서 없음]]을 고릅니다. 부서 전화·팩스나 (계약)·(환경)·(계산서) 유형은 사업장 상세에서 넣습니다.",
             "메일 주소가 여러 개인 사람(회사 메일·개인 메일 등)은 등록·수정 창의 이메일 칸 아래 [[이메일 추가]]로 최대 5개까지 더 넣습니다. 표의 이메일 칸에 모두 보이고, 메일 쓰기 받는 사람 칸에서도 어느 주소로든 찾을 수 있습니다. 세금계산서 수신처 등은 맨 위 이메일 칸의 주소를 씁니다.",
             "이름 옆 [[간이]] 표시는 새 업체와 함께 등록했거나 메일에서 간이 등록한 뒤 아직 보완·확정하지 않은 담당자입니다.",
             "[[연락처 구분]]은 소속 기관·업체의 속성이라 사업장 수정 권한이 있는 사람만 바꿉니다. 바꾸면 같은 기관·업체의 담당자 전원에게 함께 적용됩니다.",
@@ -106,7 +107,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형", "담당자 등록", "접견인", "비상 연락망", "비상연락망", "엑셀", "PDF", "총 인원"],
-    sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/ExtraEmailsField.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx"],
+    sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/ExtraEmailsField.tsx", "components/directory/DepartmentField.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx"],
     reviewedAt: "2026-11-20",
   },
 

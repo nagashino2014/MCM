@@ -282,6 +282,20 @@ export async function createContactPerson(input: NewContactPerson, actorUserId: 
   });
 }
 
+/** 기관·업체의 부서 이름 목록 — 주소록 담당자 등록·수정 창의 부서 고르기용(같은 이름은 하나로). */
+export async function listFacilityDepartmentNames(facilityId: string): Promise<string[]> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT department_name FROM facility_contact_departments
+        WHERE facility_id = $1 AND NULLIF(TRIM(department_name), '') IS NOT NULL
+        GROUP BY department_name ORDER BY department_name`,
+      [facilityId]
+    )
+  );
+  return rows.map((r) => String(r.department_name));
+}
+
 export async function deleteContactPerson(id: number): Promise<void> {
   await withDbWrite(async (db) => {
     await db.run(`DELETE FROM facility_contact_people WHERE id = $1`, [id]);

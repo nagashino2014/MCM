@@ -40,7 +40,12 @@ export function CalendarRefPickerModal({
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || snapshotCache) return;
+    if (!open) return;
+    if (snapshotCache) {
+      // 다른 인스턴스가 먼저 받아 둔 스냅샷 — 이 인스턴스 state 에도 반영한다(건너뛰기만 하면 로딩에서 멈춘다).
+      setSnapshot(snapshotCache);
+      return;
+    }
     let cancelled = false;
     fetch("/api/org/snapshot", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))

@@ -14,7 +14,7 @@ import { CdSplitPane } from "@/components/cdash/CdSplitPane";
 import { CdTabs } from "@/components/cdash/CdTabs";
 import { useCdToast } from "@/components/cdash/CdToast";
 import { MailFolderPane } from "@/components/mail/MailFolderPane";
-import { MailListPane, type BulkAction } from "@/components/mail/MailListPane";
+import { MAIL_SORTS, MailListPane, type BulkAction, type MailListFilter, type MailListSort } from "@/components/mail/MailListPane";
 import { MailViewerPane } from "@/components/mail/MailViewerPane";
 import { MailReceiptsPane } from "@/components/mail/MailReceiptsPane";
 import { MailSettingsPane } from "@/components/mail/MailSettingsPane";
@@ -51,6 +51,25 @@ export function MailBoard() {
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [q, setQ] = useState("");
+  // 목록 정렬·보기 필터(2026-11-20, 직원 요청 25·26). 정렬은 사람별로 기억하고, 필터는 폴더를 옮기면 전체로 돌아간다.
+  const [sort, setSort] = useState<MailListSort>("date:desc");
+  const [listFilter, setListFilter] = useState<MailListFilter>("");
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("mail-list-sort");
+      if (saved && (MAIL_SORTS as readonly string[]).includes(saved)) setSort(saved as MailListSort);
+    } catch {
+      /* 저장소 차단 — 기본값 유지 */
+    }
+  }, []);
+  const changeSort = (s: MailListSort) => {
+    setSort(s);
+    try {
+      window.localStorage.setItem("mail-list-sort", s);
+    } catch {
+      /* 무시 */
+    }
+  };
   const [detail, setDetail] = useState<MailMessageDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [isWide, setIsWide] = useState(true);
@@ -138,7 +157,7 @@ export function MailBoard() {
   // 폴더 전환과 쪽 초기화가 겹치면 요청이 두 번 나간다 — 마지막 요청의 응답만 반영한다.
   const listReq = useRef(0);
   const loadList = useCallback(
-    async (f: string, query: string, category: string, size: number, from: number) => {
+    async (f: string, query: string, category: string, size: number, from: number, order: MailListSort, view: MailListFilter) => {
       if (f === "receipts" || f === "settings") return; // 자체 뷰
       const req = ++listReq.current;
       setLoadingList(true);
@@ -153,6 +172,12 @@ export function MailBoard() {
           const params = new URLSearchParams({ folder: f, limit: String(size), offset: String(from) });
           if (query) params.set("q", query);
           if (f === "inbox" && category) params.set("category", category);
+          if (order !== "date:desc") {
+            const [key, dir] = order.split(":");
+            params.set("sort", key);
+            params.set("dir", dir);
+          }
+          if (view && !(view === "unread" && f === "sent")) params.set("filter", view);
           const r = await fetch(`/api/mail/messages?${params.toString()}`);
           if (r.ok) {
             const d = await r.json();
@@ -173,13 +198,17 @@ export function MailBoard() {
     loadFolders();
     loadSenderRules();
   }, [loadMailbox, loadFolders, loadSenderRules]);
-  // 폴더·검색·카테고리가 바뀌면 첫 쪽부터.
+  // 폴더·검색·카테고리·정렬·보기 필터가 바뀌면 첫 쪽부터.
   useEffect(() => {
     setOffset(0);
-  }, [folder, q, activeCategory]);
+  }, [folder, q, activeCategory, sort, listFilter]);
+  // 폴더를 옮기면 보기 필터는 전체로.
   useEffect(() => {
-    loadList(folder, q, activeCategory, pageSize, offset);
-  }, [folder, q, activeCategory, pageSize, offset, loadList]);
+    setListFilter("");
+  }, [folder]);
+  useEffect(() => {
+    loadList(folder, q, activeCategory, pageSize, offset, sort, listFilter);
+  }, [folder, q, activeCategory, pageSize, offset, sort, listFilter, loadList]);
   // 마지막 쪽의 메일을 모두 옮기거나 지워 쪽이 비면 앞 쪽으로 돌아간다.
   useEffect(() => {
     if (!loadingList && items.length === 0 && offset > 0) setOffset(Math.max(0, offset - pageSize));
@@ -258,9 +287,9 @@ export function MailBoard() {
   const goFolder = (k: string) => navTo({ folder: k, id: null }, k !== urlFolder || urlId ? "push" : "replace");
 
   const refreshAll = useCallback(() => {
-    loadList(folder, q, activeCategory, pageSize, offset);
+    loadList(folder, q, activeCategory, pageSize, offset, sort, listFilter);
     loadFolders();
-  }, [folder, q, activeCategory, pageSize, offset, loadList, loadFolders]);
+  }, [folder, q, activeCategory, pageSize, offset, sort, listFilter, loadList, loadFolders]);
 
   // ── 카테고리 관리(G2-12) ──────────────────────────
   const createCategory = async () => {
@@ -520,6 +549,10 @@ export function MailBoard() {
       onDeleteDraft={deleteDraft}
       onBulk={runBulk}
       onToggleStar={toggleStar}
+      sort={sort}
+      onSort={changeSort}
+      filter={listFilter}
+      onFilter={setListFilter}
       onSenderClick={(addr, rect) => setSenderMenu({ address: addr, anchor: { left: rect.left, top: rect.top, bottom: rect.bottom } })}
     />
   );

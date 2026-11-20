@@ -23,6 +23,7 @@ export type PushEventKey =
   | "approval.result"
   | "approval.remind"
   | "approval.delegated"
+  | "approval.watch"
   | "mail.received"
   | "leave.notice"
   | "invoice.request"
@@ -58,6 +59,7 @@ const EVENT_DEFAULT: Record<PushEventKey, boolean> = {
   "approval.result": true,
   "approval.remind": true,
   "approval.delegated": true,
+  "approval.watch": true,
   "mail.received": true,
   "leave.notice": true,
   "invoice.request": true,
@@ -88,6 +90,7 @@ export const PUSH_EVENTS: { key: PushEventKey; label: string; description: strin
   { key: "approval.result", label: "기안 결과", description: "내가 올린 문서가 승인·반려됐을 때" },
   { key: "approval.remind", label: "결재 재촉", description: "결재가 지연될 때 알림" },
   { key: "approval.delegated", label: "대결 위임", description: "다른 사람의 결재를 대신 맡게 됐을 때" },
+  { key: "approval.watch", label: "참조·열람 문서", description: "내가 참조·열람 대상인 문서가 상신됐을 때" },
   { key: "board.posted", label: "공지·게시판", description: "새 공지·부서 게시글이 등록됐을 때" },
   { key: "mail.received", label: "새 메일", description: "받은메일함에 새 메일이 왔을 때(스팸함·보낸 사람 자동 분류·대량 발송 메일은 제외, 몰려 오면 한 번에 묶음)" },
   { key: "leave.notice", label: "연차 촉진 고지", description: "연차 사용 촉진 고지가 도착했을 때" },

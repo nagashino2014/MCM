@@ -9,7 +9,7 @@ import { assessMealChecksOnSubmit } from "@/lib/approval/overtime-meal";
 import { assessRefLinkOnSubmit } from "@/lib/approval/ref-check";
 import { runRuleChecks } from "@/lib/approval/precheck";
 import { resolveOpenCancelRequests } from "@/lib/approval/cancel";
-import { notifyPendingSteps, notifyDrafterResult, notifyFinalApproved, notifyProxyDone } from "@/lib/approval/notify";
+import { notifyPendingSteps, notifyDrafterResult, notifyFinalApproved, notifyProxyDone, notifyWatchers } from "@/lib/approval/notify";
 import { canFinalApprove, docDeptId } from "@/lib/approval/final-rules";
 import { generateDocSummary } from "@/lib/approval/summarize";
 import { assignManualDocNo, markLetterPendingOnApproval } from "@/lib/letter/store";
@@ -966,6 +966,8 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
   await runFormActionsForDoc(docId, "submitted");
   // 커밋 후 — 첫 결재자에게 알림(fire-and-forget, 실패해도 상신은 완료)
   await notifyPendingSteps(docId);
+  // 참조·열람 대상자에게 앱 알림(2026-11-20) — 문서·사람당 한 번, 실패해도 상신은 완료.
+  await notifyWatchers(docId);
   // AI 요약 생성(상신 시 자동, 비차단) — 결재자가 열기 전 준비. 실패해도 원문 폴백.
   void generateDocSummary(docId).catch(() => {});
   return { docNo };
@@ -1383,6 +1385,50 @@ export async function listWatchedDocs(userId: string, limit = 50): Promise<Array
     watchKind: String(r.watch_kind ?? "ref"),
     unread: r.read_at == null,
   }));
+}
+
+/**
+ * 결재함 [참조·열람] 상자(2026-11-20) — listWatchedDocs 와 같은 범위를 쪽 나눔으로 준다.
+ * 안 읽은 문서가 먼저, 그 안에서는 상신이 최근인 순.
+ */
+export async function listWatchedBox(
+  userId: string,
+  limit = 30,
+  offset = 0
+): Promise<Array<ApprovalDocSummary & { watchKind: string; unread: boolean }>> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT d.*, f.name AS form_name, w.kind AS watch_kind, w.read_at
+         FROM approval_watchers w
+         JOIN approval_docs d ON d.doc_id = w.doc_id
+         JOIN approval_forms f ON f.form_id = d.form_id
+        WHERE w.user_id = $1 AND d.status <> 'draft'
+        ORDER BY (w.read_at IS NULL) DESC, COALESCE(d.submitted_at, d.updated_at) DESC, d.doc_id
+        LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    )
+  );
+  return rows.map((r) => ({
+    ...mapSummary(r),
+    watchKind: String(r.watch_kind ?? "ref"),
+    unread: r.read_at == null,
+  }));
+}
+
+/** [참조·열람] 상자의 전체 건수와 안 읽은 건수(좌측 뱃지). */
+export async function countWatchedBox(userId: string): Promise<{ total: number; unread: number }> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE w.read_at IS NULL)::int AS unread
+         FROM approval_watchers w
+         JOIN approval_docs d ON d.doc_id = w.doc_id
+        WHERE w.user_id = $1 AND d.status <> 'draft'`,
+      [userId]
+    )
+  );
+  return { total: Number(rows[0]?.n ?? 0), unread: Number(rows[0]?.unread ?? 0) };
 }
 
 /**

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { readExtraEmails } from "@/lib/directory-emails";
 import { shortSido } from "@/lib/catalog/regions";
 import { syncSalesStaffGrants } from "./staff-access";
 import { openQuickPersonIds } from "@/lib/contact-quick/flags";
@@ -537,6 +538,8 @@ export interface SalesContact {
   officePhone: string | null;
   mobilePhone: string | null;
   email: string | null;
+  /** 추가 이메일(376) — 대표 이메일 외의 주소. */
+  extraEmails: string[];
   duties: string | null;
   status: string; // active | inactive
   deptType: string | null; // contract(계약) | env(환경)
@@ -579,6 +582,7 @@ export async function listSalesContacts(
       `SELECT p.id, p.facility_id, f.company_name AS facility_name, f.org_category,
               p.department_id, d.department_name,
               p.person_name, p.title, p.office_phone, p.mobile_phone, p.email,
+              to_jsonb(p)->'extra_emails' AS extra_emails,
               p.duties, p.status, p.dept_type,
               p.appointed_at, p.transferred_at, p.resigned_at, p.updated_at
          FROM facility_contact_people p
@@ -602,6 +606,7 @@ export async function listSalesContacts(
     officePhone: text(r.office_phone),
     mobilePhone: text(r.mobile_phone),
     email: text(r.email),
+    extraEmails: readExtraEmails(r.extra_emails),
     duties: text(r.duties),
     status: String(r.status ?? "active"),
     deptType: text(r.dept_type),

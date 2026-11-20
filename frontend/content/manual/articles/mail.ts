@@ -21,7 +21,8 @@ export const MAIL_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "image", src: "/manual/shots/mail-list.webp", alt: "메일 화면 — 왼쪽 편지함과 가운데 메일 목록" },
           { kind: "p", text: "넓은 화면은 기본이 목록형입니다. 왼쪽 폴더 옆에 목록이 한 줄씩 보이고, 메일을 누르면 그 자리에 본문이 열립니다([[목록]]으로 복귀). 목록 위 보기 버튼으로 좌우 분할(가운데 목록·오른쪽 본문)로 바꿀 수 있습니다. 좁은 화면에서는 폴더가 위쪽 탭으로 바뀝니다." },
-          { kind: "p", text: "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩을 고르고 쪽 번호로 넘깁니다. 읽지 않은 메일은 보낸 사람·제목이 굵게 표시됩니다." },
+          { kind: "p", text: "목록은 한 화면에 50개씩 보이며, 오른쪽 아래에서 20·30·50개씩을 고르고 쪽 번호로 넘깁니다. 읽지 않은 메일은 보낸 사람·제목이 굵게 표시됩니다. 날짜 앞에는 메일 크기(본문과 첨부를 합친 용량)가 보입니다." },
+          { kind: "p", text: "목록 위 오른쪽에서 보기와 순서를 바꿉니다. [[안 읽음]]은 읽지 않은 메일만, [[중요]]는 별표를 붙인 메일만 보여 주고 [[전체]]로 되돌립니다(보낸편지함에는 [[안 읽음]]이 없습니다). 그 옆 정렬 메뉴에서 [[최신순]]·[[오래된순]]·[[크기 큰순]]·[[크기 작은순]]·[[보낸 사람순]]·[[제목순]]을 고릅니다. 정렬은 다음에도 유지되고, 보기는 폴더를 옮기면 전체로 돌아갑니다." },
           {
             kind: "table",
             head: ["폴더", "목록 위 일괄 버튼"],
@@ -136,7 +137,7 @@ export const MAIL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["메일", "이메일", "받은편지함", "스팸", "수신 확인", "읽음 확인", "보관", "카테고리", "자동 분류", "주소록", "차단", "용량", "여러 개 선택", "Shift", "전체답장", "첨부 전체 저장", "ZIP", "첨부 아이콘", "첨부 미리보기", "미리보기", "개인문서함으로 저장", "주소 태그", "압축", "아웃룩", "IMAP", "SMTP", "앱 비밀번호", "외부 메일 프로그램", "알림", "PC 알림", "새 메일 알림"],
     sources: ["components/mail/MailBoard.tsx", "components/mail/MailFolderPane.tsx", "components/mail/MailListPane.tsx", "components/mail/MailViewerPane.tsx", "components/mail/MailAttachmentList.tsx", "components/mail/MailAttachmentPreviewModal.tsx", "components/mail/MailSenderMenu.tsx", "components/mail/MailAddressLink.tsx", "components/directory/QuickContactModal.tsx", "components/mail/MailReceiptsPane.tsx", "components/mail/MailSettingsPane.tsx", "components/mail/MailExternalClientSection.tsx", "components/notify/PcNotifySection.tsx"],
-    reviewedAt: "2026-11-12",
+    reviewedAt: "2026-11-20",
   },
   {
     id: "mail.compose",

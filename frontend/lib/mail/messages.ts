@@ -21,6 +21,8 @@ export interface MailListItem {
   isRead: boolean;
   isStarred: boolean;
   categoryId: string | null;
+  /** 메일 크기(바이트) — 원문 길이, 없으면 본문 + 첨부 합계 */
+  sizeBytes: number;
 }
 
 export interface MailFolderInfo {
@@ -329,14 +331,42 @@ function parseAddrs(v: unknown): { name?: string; address: string }[] {
 }
 
 /**
- * 특정 폴더의 메시지 목록(최신순, 검색 q 옵션).
+ * 메일 한 통의 크기 — 발송·가져오기는 원문 길이(size_bytes)가 있고, 일반 수신 메일은 비어 있어
+ * 본문 + 첨부 합계로 근사한다(getMailboxUsage 의 사용량 계산과 같은 식).
+ */
+const MAIL_SIZE_SQL = `COALESCE(m.size_bytes,
+  octet_length(COALESCE(m.body_text, '')) + octet_length(COALESCE(m.body_html, ''))
+  + COALESCE((SELECT SUM(a.size_bytes) FROM mail_attachments a WHERE a.message_id = m.message_id), 0))::bigint`;
+
+/** 목록 정렬 기준 → ORDER BY 식(화이트리스트). from 은 보낸편지함에서도 보낸 사람 열 기준이다. */
+const MAIL_SORT_SQL = {
+  date: "m.created_at",
+  size: MAIL_SIZE_SQL,
+  from: "lower(COALESCE(m.from_addr, ''))",
+  subject: "lower(COALESCE(m.subject, ''))",
+} as const;
+export type MailSortKey = keyof typeof MAIL_SORT_SQL;
+
+/**
+ * 특정 폴더의 메시지 목록(기본 최신순, 검색 q·정렬·보기 필터 옵션).
  * folderKind = 시스템 종류(inbox…) 또는 "user:<folderId>"(카테고리 폴더, G2-12).
  * opts.categoryId — 받은편지함 카테고리 필터.
  */
 export async function listFolderMessages(
   userId: string,
   folderKind: string,
-  opts?: { limit?: number; offset?: number; q?: string; categoryId?: string }
+  opts?: {
+    limit?: number;
+    offset?: number;
+    q?: string;
+    categoryId?: string;
+    /** 정렬 기준(기본 date) — 화이트리스트 밖 값은 date 로 본다. */
+    sort?: string;
+    /** 정렬 방향(기본 desc) */
+    dir?: string;
+    /** 보기 필터 — unread(안 읽은 메일만)·starred(중요 메일만). 그 밖은 전체. */
+    filter?: string;
+  }
 ): Promise<{ items: MailListItem[]; total: number; address: string | null }> {
   const mailbox = await getMailboxByUser(userId);
   if (!mailbox) return { items: [], total: 0, address: null };
@@ -360,8 +390,18 @@ export async function listFolderMessages(
   // 검색·카테고리 조건 — 빈 값이면 항상 참이 되는 고정 자리 파라미터로 단순화(순번 재계산 불필요).
   //   $A = 검색어('%%' 이면 전체), $B = 카테고리('' 이면 전체)
   const qParam = q ? `%${q}%` : "";
+  // 보기 필터·정렬은 파라미터가 아니라 고정 SQL 조각으로만 고른다(화이트리스트 — 입력 문자열을 SQL 에 싣지 않는다).
+  const filterSql =
+    opts?.filter === "unread" ? "AND s.is_read = 0" : opts?.filter === "starred" ? "AND s.is_starred = 1" : "";
   const condSql = `AND ($C = '' OR m.subject ILIKE $C OR m.from_addr ILIKE $C OR m.snippet ILIKE $C OR m.body_text ILIKE $C)
-                   AND ($D = '' OR s.category_id = $D)`;
+                   AND ($D = '' OR s.category_id = $D) ${filterSql}`;
+  const dirSql = opts?.dir === "asc" ? "ASC" : "DESC";
+  const sortKey = opts?.sort && opts.sort in MAIL_SORT_SQL ? (opts.sort as MailSortKey) : "date";
+  // 같은 값끼리는 최신순으로 고정해 쪽을 넘겨도 순서가 흔들리지 않게 한다.
+  const orderSql =
+    sortKey === "date"
+      ? `m.created_at ${dirSql}, m.message_id ${dirSql}`
+      : `${MAIL_SORT_SQL[sortKey]} ${dirSql}, m.created_at DESC, m.message_id DESC`;
 
   const totalRows = rowsToObjects(
     await db.exec(
@@ -377,11 +417,12 @@ export async function listFolderMessages(
   const rows = rowsToObjects(
     await db.exec(
       `SELECT m.message_id, m.direction, m.subject, m.snippet, m.from_addr, m.to_addrs,
-              m.has_attachments, m.sent_at, m.created_at, s.is_read, s.is_starred, s.category_id
+              m.has_attachments, m.sent_at, m.created_at, s.is_read, s.is_starred, s.category_id,
+              ${MAIL_SIZE_SQL} AS size_bytes
          FROM mail_message_state s
          JOIN mail_messages m ON m.message_id = s.message_id
         WHERE s.folder_id = $1 AND s.is_deleted = 0 ${condSql.replaceAll("$C", "$4").replaceAll("$D", "$5")}
-        ORDER BY m.created_at DESC
+        ORDER BY ${orderSql}
         LIMIT $2 OFFSET $3`,
       [folderId, limit, offset, qParam, categoryId]
     )
@@ -400,6 +441,7 @@ export async function listFolderMessages(
     isRead: Number(r.is_read ?? 0) === 1,
     isStarred: Number(r.is_starred ?? 0) === 1,
     categoryId: r.category_id != null ? String(r.category_id) : null,
+    sizeBytes: Number(r.size_bytes ?? 0),
   }));
 
   return { items, total, address: mailbox.address };

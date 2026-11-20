@@ -5,6 +5,7 @@ import {
   createContactPerson,
   deleteContactPerson,
   isOrgCategory,
+  listFacilityDepartmentNames,
   setFacilityOrgCategory,
   updateContactPerson,
 } from "@/lib/directory";
@@ -24,6 +25,19 @@ async function requireContactEditor() {
   throw new AuthError("담당자를 등록·수정할 권한이 없습니다.", 403);
 }
 
+// GET ?facilityId= — 그 기관·업체의 부서 목록(담당자 등록·수정 창에서 부서를 고를 때).
+export async function GET(req: NextRequest) {
+  try {
+    await requireContactEditor();
+    const facilityId = String(req.nextUrl.searchParams.get("facilityId") ?? "").trim();
+    if (!facilityId) return NextResponse.json({ error: "facilityId 가 필요합니다." }, { status: 400 });
+    const names = await listFacilityDepartmentNames(facilityId);
+    return NextResponse.json({ departments: names.map((name) => ({ name })) });
+  } catch (err) {
+    return authErrorToResponse(err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ctx = await requireContactEditor();
@@ -36,6 +50,7 @@ export async function POST(req: NextRequest) {
       mobilePhone?: string | null;
       email?: string | null;
       duties?: string | null;
+      extraEmails?: string[];
     };
     if (!body.facilityId) return NextResponse.json({ error: "기관·업체를 선택하세요." }, { status: 400 });
     const id = await createContactPerson(
@@ -48,6 +63,7 @@ export async function POST(req: NextRequest) {
         mobilePhone: body.mobilePhone,
         email: body.email,
         duties: body.duties,
+        extraEmails: Array.isArray(body.extraEmails) ? body.extraEmails : undefined,
       },
       ctx.userId
     );
@@ -68,11 +84,13 @@ export async function PATCH(req: NextRequest) {
       orgCategory?: string;
       personName?: string;
       title?: string | null;
+      departmentName?: string | null;
       officePhone?: string | null;
       mobilePhone?: string | null;
       email?: string | null;
       duties?: string | null;
       status?: string;
+      extraEmails?: string[];
     };
 
     // 연락처 구분은 사업장 속성(같은 사업장 담당자 전원에게 적용) — 사업장 수정 권한자만 바꾼다.
@@ -101,6 +119,8 @@ export async function PATCH(req: NextRequest) {
           email: body.email,
           duties: body.duties,
           status: body.status,
+          departmentName: body.departmentName,
+          extraEmails: Array.isArray(body.extraEmails) ? body.extraEmails : undefined,
         },
         ctx.userId
       );

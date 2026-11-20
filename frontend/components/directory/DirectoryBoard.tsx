@@ -29,6 +29,9 @@ import type { DirectoryDepartment, DirectoryPerson } from "@/lib/directory";
 import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
 import { EmergencyContactsTab } from "@/components/directory/EmergencyContactsTab";
 import { mailToken } from "@/components/directory/mail-token";
+import { DepartmentField } from "@/components/directory/DepartmentField";
+import { ExtraEmailsField } from "@/components/directory/ExtraEmailsField";
+import { normalizeExtraEmails } from "@/lib/directory-emails";
 import "@/components/cdash/cdash.css";
 
 type Tab = "staff" | "external" | "orgchart" | "emergency";
@@ -43,6 +46,8 @@ interface ExternalContact {
   officePhone: string | null;
   mobilePhone: string | null;
   email: string | null;
+  /** 추가 이메일(376) — 대표 이메일 외의 주소. */
+  extraEmails?: string[];
   deptType: string | null;
   orgCategory: string | null;
   status: string;
@@ -407,13 +412,18 @@ export function DirectoryBoard() {
                         <td className="cd-text-muted tabular-nums whitespace-nowrap">{c.mobilePhone ?? "-"}</td>
                         <td className="cd-text-muted tabular-nums whitespace-nowrap">{c.officePhone ?? "-"}</td>
                         <td>
-                          {c.email ? (
-                            <Link
-                              href={`/mail/compose?to=${encodeURIComponent(mailToken(c.personName, c.title, c.email))}`}
-                              className="cd-text-primary hover:underline"
-                            >
-                              {c.email}
-                            </Link>
+                          {c.email || c.extraEmails?.length ? (
+                            <div className="flex flex-col gap-0.5">
+                              {[c.email, ...(c.extraEmails ?? [])].filter((a): a is string => !!a).map((addr) => (
+                                <Link
+                                  key={addr}
+                                  href={`/mail/compose?to=${encodeURIComponent(mailToken(c.personName, c.title, addr))}`}
+                                  className="cd-text-primary hover:underline"
+                                >
+                                  {addr}
+                                </Link>
+                              ))}
+                            </div>
                           ) : (
                             <span className="cd-text-faint">-</span>
                           )}
@@ -476,10 +486,12 @@ export function DirectoryBoard() {
                 officePhone: c.officePhone,
                 mobilePhone: c.mobilePhone,
                 email: c.email,
+                extraEmails: c.extraEmails ?? [],
                 deptType: null,
                 // 연락처 구분은 사업장 속성 — 같은 사업장 담당자가 이미 있으면 그 값을 따른다.
                 orgCategory: (prev ?? []).find((x) => x.facilityId === c.facilityId)?.orgCategory ?? null,
                 status: "active",
+                quick: c.quick,
               },
             ]);
             setCreating(false);
@@ -592,7 +604,7 @@ function ContactRow({ icon, children }: { icon: React.ReactNode; children: React
   );
 }
 
-/** 담당자 수정 — 이름·직급·연락처 + 소속 사업장의 연락처 구분(기관 유형). */
+/** 담당자 수정 — 이름·직급·부서·연락처 + 소속 사업장의 연락처 구분(기관 유형). */
 function ContactEditModal({
   contact,
   canEditCategory,
@@ -608,9 +620,11 @@ function ContactEditModal({
   const { toast } = useCdToast();
   const [personName, setPersonName] = useState(contact.personName);
   const [title, setTitle] = useState(contact.title ?? "");
+  const [departmentName, setDepartmentName] = useState(contact.departmentName ?? "");
   const [mobilePhone, setMobilePhone] = useState(contact.mobilePhone ?? "");
   const [officePhone, setOfficePhone] = useState(contact.officePhone ?? "");
   const [email, setEmail] = useState(contact.email ?? "");
+  const [extraEmails, setExtraEmails] = useState<string[]>(contact.extraEmails ?? []);
   const [orgCategory, setOrgCategory] = useState(contact.orgCategory ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -621,6 +635,11 @@ function ContactEditModal({
     }
     if (canEditCategory && !orgCategory) {
       toast("연락처 구분을 선택하세요.", "warn");
+      return;
+    }
+    const extra = normalizeExtraEmails(extraEmails, email);
+    if (extra.invalid) {
+      toast(`이메일 형식이 올바르지 않습니다: ${extra.invalid}`, "warn");
       return;
     }
     setSaving(true);
@@ -634,9 +653,11 @@ function ContactEditModal({
           ...(canEditCategory ? { orgCategory } : {}),
           personName,
           title: title.trim() || null,
+          departmentName: departmentName.trim() || null,
           mobilePhone: mobilePhone.trim() || null,
           officePhone: officePhone.trim() || null,
           email: email.trim() || null,
+          extraEmails: extra.emails,
         }),
       });
       const d = await r.json().catch(() => ({}));
@@ -648,9 +669,11 @@ function ContactEditModal({
       onSaved({
         personName,
         title: title.trim() || null,
+        departmentName: departmentName.trim() || null,
         mobilePhone: mobilePhone.trim() || null,
         officePhone: officePhone.trim() || null,
         email: email.trim() || null,
+        extraEmails: extra.emails,
         ...(canEditCategory ? { orgCategory } : {}),
       });
     } finally {
@@ -696,10 +719,12 @@ function ContactEditModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <CdInput label="이름" required value={personName} onChange={(e) => setPersonName(e.target.value)} />
           <CdInput label="직급" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 부장" />
+          <DepartmentField facilityId={contact.facilityId} value={departmentName} onChange={setDepartmentName} />
           <CdInput label="휴대폰" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} />
           <CdInput label="사무실" value={officePhone} onChange={(e) => setOfficePhone(e.target.value)} />
+          <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
         </div>
-        <CdInput label="이메일" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
+        <ExtraEmailsField value={extraEmails} onChange={setExtraEmails} />
       </div>
     </CdModal>
   );

@@ -30,11 +30,12 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
         "**결재 대기**: 지금 내 차례인 문서입니다. 바로 승인·반려할 수 있습니다.",
         "**결재 예정**: 결재선에 내가 있지만 앞 순번이 아직 처리하지 않은 문서입니다. 앞 사람이 승인하면 결재 대기로 옮겨집니다.",
         "내가 부재로 등록돼 있으면 내 차례 문서가 대결자에게 넘어갈 수 있습니다(최종 결재 제외).",
+        "**참조·열람**: 결재하지 않고 함께 보는 문서입니다. 열어 보지 않은 문서가 위에 굵게 나옵니다.",
       ] },
     ],
     more: { article: "approval.home", section: "boxes" },
     sources: ["components/approval/ApprovalHomeBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-20",
   },
   {
     id: "approval.cancel-request",

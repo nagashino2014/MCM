@@ -14,7 +14,12 @@ let snapshotCache: OrganizationSnapshot | null = null;
 export function useOrgSnapshot(enabled: boolean): OrganizationSnapshot | null {
   const [snapshot, setSnapshot] = useState<OrganizationSnapshot | null>(snapshotCache);
   useEffect(() => {
-    if (!enabled || snapshotCache) return;
+    if (!enabled) return;
+    if (snapshotCache) {
+      // 다른 선택기가 먼저 받아 둔 스냅샷 — 이 훅의 state 에도 반영한다(건너뛰기만 하면 로딩에서 멈춘다).
+      setSnapshot(snapshotCache);
+      return;
+    }
     let cancelled = false;
     fetch("/api/calendar/org", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))

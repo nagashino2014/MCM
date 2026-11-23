@@ -16,6 +16,7 @@ import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { CdDateInput } from "@/components/cdash/CdField";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
@@ -355,6 +356,15 @@ export function ApprovalNoticeBoard() {
     [docId, subject, buildFieldValues, line, watchers, canAssign, noLocked, manualOn, manualNo]
   );
 
+  // 자동 저장(5분, 변화 있을 때만 — 2026-11-23, 공문과 같은 방식). 본문은 contentEditable 이라 호출 시점에 읽는다.
+  const getSnapshot = useCallback(() => JSON.stringify({ v: buildFieldValues(), line, watchers }), [buildFieldValues, line, watchers]);
+  const hasContent = useCallback(
+    () => docId != null || subject.trim().length > 0 || (editorRef.current?.textContent ?? "").trim().length > 0,
+    [docId, subject]
+  );
+  const autosaveSave = useCallback(() => persist("save"), [persist]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null, hasContent, getSnapshot, save: autosaveSave });
+
   const validate = useCallback((): string | null => {
     if (!subject.trim()) return "제목을 입력하세요.";
     if (!recipientText.trim()) return "수신을 입력하세요(예: 전 임직원).";
@@ -450,6 +460,7 @@ export function ApprovalNoticeBoard() {
       try {
         // 항상 save 먼저 — 반환된 docId 를 이어지는 submit 에 명시 전달(이중 문서 생성 방지)
         const saved = await persist("save");
+        markSaved();
         if (action === "save") {
           alert("임시저장되었습니다.");
           return;
@@ -463,7 +474,7 @@ export function ApprovalNoticeBoard() {
         setBusy(null);
       }
     },
-    [validate, persist, router]
+    [validate, persist, markSaved, router]
   );
 
   return (
@@ -475,12 +486,13 @@ export function ApprovalNoticeBoard() {
         subtitle="사내 전파용 고시입니다. 상신 시 문서번호가 확정되고, 결재 완료 문서는 PDF 로 열람합니다."
         actions={
           <div className="flex items-center gap-2">
+            <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
             <button
               type="button"
               className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
               disabled={busy != null}
               onClick={() => send("save")}
-              title="작성 중인 내부고시와 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성)"
+              title="작성 중인 내부고시와 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
             >
               <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
             </button>

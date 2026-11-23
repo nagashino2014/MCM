@@ -17,6 +17,7 @@ import { OrgPickerModal } from "@/components/approval/OrgPickerModal";
 import { FixedLineList, fixedLineBlockMessage, fixedLineToSteps, useFixedLine } from "@/components/approval/FixedLineList";
 import { FixedWatcherNote } from "@/components/approval/FixedWatcherNote";
 import { useDragOrder } from "@/components/approval/useDragOrder";
+import { AutosaveStatus, useAutosave } from "@/components/approval/useAutosave";
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { autofillFromRefDoc, compareWithRefDoc } from "@/lib/approval/ref-link";
 import { isUnusedVehicleField } from "@/lib/approval/trip";
@@ -1129,6 +1130,27 @@ export function ApprovalDraftBoard() {
     [form, docId, title, urgent, values, fileAttachments, line, watchers, refDoc]
   );
 
+  // 자동 저장(5분, 변화 있을 때만 — 2026-11-23 사용자 요청, 공문·견적서와 같은 방식).
+  // 저장 대상 = 제목·긴급·양식 값·첨부·결재선·참조자·선행 문서. 아무것도 적지 않은 새 문서는 저장하지 않는다.
+  const getSnapshot = useCallback(
+    () => JSON.stringify({ title, urgent, values, fileAttachments, line, watchers, ref: refDoc?.docId ?? null }),
+    [title, urgent, values, fileAttachments, line, watchers, refDoc]
+  );
+  // 새 문서는 제목(양식 이름)·기본값이 자동으로 채워지므로 "값이 있다"로는 판단할 수 없다 —
+  // 사용자가 화면을 한 번이라도 만진 뒤에만 저장해, 양식을 열어만 둔 문서가 작성중 함에 쌓이지 않게 한다.
+  const touchedRef = useRef(false);
+  const markTouched = useCallback(() => {
+    touchedRef.current = true;
+  }, []);
+  const hasContent = useCallback(() => docId != null || touchedRef.current, [docId]);
+  const autosaveSave = useCallback(() => persist("save"), [persist]);
+  const { lastSavedAt, lastError, markSaved } = useAutosave({
+    ready: !loading && !error && form != null && busy == null && !aiBusy,
+    hasContent,
+    getSnapshot,
+    save: autosaveSave,
+  });
+
   /** 첨부 업로드 — DnD/파일 선택 공용. 결재자가 뷰어에서 열 수 있는 형식만 받는다. */
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
@@ -1311,7 +1333,11 @@ export function ApprovalDraftBoard() {
       setBusy(action);
       try {
         const saved = await persist("save");
-        if (action === "save") return;
+        markSaved();
+        if (action === "save") {
+          alert("임시저장되었습니다.");
+          return;
+        }
         // 상신 전 규칙 사전검토(항상 자동)
         const preRes = await fetch(`/api/approval/docs/${encodeURIComponent(saved.docId)}/precheck`, {
           method: "POST",
@@ -1339,7 +1365,7 @@ export function ApprovalDraftBoard() {
         setBusy(null);
       }
     },
-    [form, validateForSubmit, persist, router, refDoc, refCandidates, refMismatches, isOvertimeForm, otUsage, values]
+    [form, validateForSubmit, persist, markSaved, router, refDoc, refCandidates, refMismatches, isOvertimeForm, otUsage, values]
   );
 
   // AI 검토(수동, 비용 통제) — 저장 후 LLM 사전검토+유사 문서.
@@ -1369,14 +1395,35 @@ export function ApprovalDraftBoard() {
   }, [form, persist]);
 
   return (
-    <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg" data-theme={theme}>
+    <div
+      className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-lg"
+      data-theme={theme}
+      onInputCapture={markTouched}
+      onClickCapture={markTouched}
+      onDropCapture={markTouched}
+    >
       <CdPageHeader
         icon={<ClipboardCheck className="w-5 h-5" />}
         eyebrow="Approval · Draft"
         title={form ? `기안 작성 — ${form.name}` : "기안 작성"}
-        help="양식 항목을 입력하고 결재선에 합의·승인 결재자를 추가하세요. 상신하면 결재선 위에서 아래 순서로 한 명씩 결재가 진행됩니다. 참조·열람자는 결재하지 않고, 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 작성 내용은 자동 저장되지 않으니 [임시저장]을 눌러 보관하세요."
+        help="양식 항목을 입력하고 결재선에 합의·승인 결재자를 추가하세요. 상신하면 결재선 위에서 아래 순서로 한 명씩 결재가 진행됩니다. 참조·열람자는 결재하지 않고, 상신한 뒤부터 진행 중에도 문서를 볼 수 있습니다. 작성 내용은 바뀐 것이 있으면 5분마다 자동 저장되고, 위쪽 [저장]이나 결재선 아래 [임시저장]으로 바로 저장할 수 있습니다."
         actions={
           <div className="flex items-center gap-2">
+            {/* 중간 저장(2026-11-23) — 공문 작성과 같은 자리. 결재선 카드 하단의 임시저장과 같은 동작 */}
+            {form && !loading && !error && (
+              <>
+                <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                  disabled={busy != null}
+                  onClick={() => send("save")}
+                  title="작성 중인 문서와 첨부파일을 임시저장합니다(상신 전, 나중에 이어서 작성). 5분마다 자동 저장됩니다"
+                >
+                  <Save className="w-3.5 h-3.5" /> {busy === "save" ? "저장 중..." : "저장"}
+                </button>
+              </>
+            )}
             <DeleteDraftButton docId={docId} meta={editMeta} />
             <Link href="/approval" className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs flex items-center gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> 전자결재 홈

@@ -149,12 +149,12 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     id: "approval.draft-save",
     label: "임시저장 도움말",
     blocks: [
-      { kind: "p", text: "기안 화면은 자동 저장되지 않습니다. 오래 작성할 때는 중간중간 임시저장을 누르세요. 저장한 문서는 결재함 [작성중 · 반려]에서 이어 씁니다." },
-      { kind: "p", text: "공문·견적서·계약서·착수계 화면은 내용이 바뀌면 5분마다 자동 저장됩니다." },
+      { kind: "p", text: "기안 화면은 내용이 바뀌면 5분마다 자동 저장됩니다. 화면 오른쪽 위 저장이나 결재선 아래 임시저장으로 바로 저장할 수도 있습니다. 저장한 문서는 결재함 [작성중 · 반려]에서 이어 씁니다." },
+      { kind: "p", text: "공문·내부고시·견적서·계약서·착수계 화면도 같은 방식으로 자동 저장됩니다." },
     ],
     more: { article: "approval.draft", section: "submit" },
     sources: ["components/approval/ApprovalDraftBoard.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-23",
   },
   {
     id: "approval.card-audit",

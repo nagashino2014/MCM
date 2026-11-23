@@ -48,23 +48,29 @@ interface FacilityHit {
 
 export function ContactCreateModal({
   initialName,
+  initialTitle,
+  initialFacility,
   onClose,
   onCreated,
 }: {
   /** 검색하던 이름을 이름 칸에 미리 채운다(접견인 칸에서 열 때). */
   initialName?: string;
+  /** 검색란에 `성명 직함`으로 적었을 때의 직함. */
+  initialTitle?: string;
+  /** 양식에서 이미 고른 업체 — 기관·업체를 미리 채운다([다시 고르기]로 바꿀 수 있다). */
+  initialFacility?: { facilityId: string; name: string } | null;
   onClose: () => void;
   onCreated: (c: CreatedContact) => void;
 }) {
   const { toast } = useCdToast();
-  const [facility, setFacility] = useState<{ facilityId: string; name: string } | null>(null);
+  const [facility, setFacility] = useState<{ facilityId: string; name: string } | null>(initialFacility ?? null);
   const [fq, setFq] = useState("");
   const [hits, setHits] = useState<FacilityHit[]>([]);
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   useOutsideDismiss(boxRef, open, () => setOpen(false));
   const [personName, setPersonName] = useState(initialName ?? "");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle ?? "");
   const [departmentName, setDepartmentName] = useState("");
   const [mobilePhone, setMobilePhone] = useState("");
   const [officePhone, setOfficePhone] = useState("");

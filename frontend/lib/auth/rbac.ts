@@ -45,7 +45,40 @@ export interface UserAccess {
   /** 부서별 계약·영업건 집합 — 부서 범위 단건 판정은 그 grant 가 가리키는 부서의 집합만 본다(겸직 L-1). */
   deptContractsByDept: Map<string, Set<string>>;
   deptProjectsByDept: Map<string, Set<string>>;
+  /**
+   * 용역 유형별 계약 열람 부여(contract_type_view_grants, 377)로 열리는 계약 id 집합 — 열람 키
+   * (CONTRACT_TYPE_VIEW_KEYS)의 단건·목록 판정에만 더해진다. 수정·삭제 키에는 쓰지 않는다.
+   */
+  typeViewContractIds: Set<string>;
   grants: GrantRow[];
+}
+
+/** 용역 유형별 계약 열람 부여(377)가 넓히는 권한 키 — 열람 전용. 수정·삭제·수금 키를 넣지 않는다. */
+export const CONTRACT_TYPE_VIEW_KEYS: ReadonlySet<string> = new Set(["contract.view"]);
+
+/**
+ * 용역 유형별 계약 열람 부여(377)로 열리는 계약 id — 계정의 미회수 부여 중 대분류(·세분류)가 맞는 계약.
+ * 377 적용 전 환경(표 없음, 42P01)에서는 빈 배열 — 권한 판정이 마이그 순서 때문에 멈추지 않게 한다.
+ */
+export async function loadTypeViewContractIds(userId: string): Promise<string[]> {
+  const db = await getDb();
+  try {
+    const rows = rowsToObjects(
+      await db.exec(
+        `SELECT DISTINCT c.contract_id
+           FROM contract_type_view_grants g
+           JOIN contracts c
+             ON c.service_type = g.service_type
+            AND (g.service_subtype IS NULL OR g.service_subtype = c.service_subtype)
+          WHERE g.user_id = $1 AND g.revoked_at IS NULL`,
+        [userId]
+      )
+    );
+    return rows.map((r) => String(r.contract_id));
+  } catch (err) {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  }
 }
 
 /** grant 가 가리키는 부서들 — self_dept = 활성 보직 부서 전체, specific_dept = 지정 부서, 그 외 = 없음. */
@@ -222,12 +255,20 @@ export async function loadUserAccess(userId: string): Promise<UserAccess> {
     for (const r of pRows) put(deptProjectsByDept, deptProjectIds, r.dept_id, r.project_id);
   }
 
+  // 용역 유형별 계약 열람 부여(377) — 열람 키 grant 가 있는 계정만 읽는다(계약 메뉴가 없는 계정을 이 표로 열지 않는다).
+  const typeViewContractIds = new Set<string>(
+    grants.some((g) => g.effect === "allow" && CONTRACT_TYPE_VIEW_KEYS.has(g.permissionKey))
+      ? await loadTypeViewContractIds(userId)
+      : []
+  );
+
   return {
     userId, role, deptId, employeeId,
     postDeptIds, headDeptIds,
     participantContractIds, participantProjectIds,
     deptIds, deptContractIds, deptProjectIds,
     deptContractsByDept, deptProjectsByDept,
+    typeViewContractIds,
     grants,
   };
 }
@@ -275,9 +316,27 @@ function scopeMatches(grant: GrantRow, access: UserAccess, target: PermissionTar
  */
 const ADMIN_BYPASS = process.env.RBAC_ADMIN_BYPASS === "true";
 
+/**
+ * 용역 유형별 계약 열람 부여(377) — 열람 키의 allow grant 가 범위(참여·부서) 때문에 막힐 때, 대상 계약이 부여된
+ * 유형이면 통과시킨다. 계약 단건(target.contractId 만 있는 호출)에만 적용하고 deny 는 넓히지 않는다.
+ */
+function typeViewMatches(grant: GrantRow, access: UserAccess, target: PermissionTarget): boolean {
+  return (
+    grant.effect === "allow" &&
+    CONTRACT_TYPE_VIEW_KEYS.has(grant.permissionKey) &&
+    target.contractId != null &&
+    target.projectId == null &&
+    target.deptId == null &&
+    target.userId == null &&
+    access.typeViewContractIds.has(target.contractId)
+  );
+}
+
 export function checkPermission(access: UserAccess, permissionKey: string, target: PermissionTarget = {}): boolean {
   if (ADMIN_BYPASS && access.role === "admin") return true;
-  const matching = access.grants.filter((g) => g.permissionKey === permissionKey && scopeMatches(g, access, target));
+  const matching = access.grants.filter(
+    (g) => g.permissionKey === permissionKey && (scopeMatches(g, access, target) || typeViewMatches(g, access, target))
+  );
   if (matching.some((g) => g.effect === "deny")) return false;
   return matching.some((g) => g.effect === "allow");
 }

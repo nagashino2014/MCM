@@ -6,13 +6,14 @@
  * 설계: docs/permission-rbac-redesign.md §3.5.
  */
 import { getDb, rowsToObjects } from "@/lib/db";
-import { loadUserAccess, grantDeptIds } from "./rbac";
+import { loadUserAccess, grantDeptIds, CONTRACT_TYPE_VIEW_KEYS } from "./rbac";
 
 export type ContractScope =
   | { kind: "all" } // 전사 — 필터 없음
-  | { kind: "dept"; deptIds: string[] } // 부서장: owning_dept ∈ depts OR 부서원 참여
-  | { kind: "participant"; employeeId: string } // 실무자: 본인 참여(종료 포함)
+  | { kind: "dept"; deptIds: string[]; extraContractIds?: string[] } // 부서장: owning_dept ∈ depts OR 부서원 참여
+  | { kind: "participant"; employeeId: string; extraContractIds?: string[] } // 실무자: 본인 참여(종료 포함)
   | { kind: "none" }; // 가시 계약 없음 — 빈 결과
+// extraContractIds = 용역 유형별 계약 열람 부여(377)로 더 보이는 계약. 단건 판정(rbac.ts checkPermission)과 같은 집합이다.
 
 /**
  * permissionKey(contract.view | billing.view)에 대해 사용자가 볼 수 있는 계약 범위를 해석.
@@ -32,15 +33,23 @@ export async function resolveContractScope(
 
   if (grants.some((g) => g.scopeKind === "all")) return { kind: "all" };
 
+  // 용역 유형별 계약 열람 부여(377) — 열람 키에만 더한다(billing.view 등 다른 키의 범위는 그대로).
+  const extra =
+    CONTRACT_TYPE_VIEW_KEYS.has(permissionKey) && access.typeViewContractIds.size > 0
+      ? { extraContractIds: [...access.typeViewContractIds] }
+      : {};
+
   const deptIds = new Set<string>();
   for (const g of grants) {
     for (const d of grantDeptIds(access, g)) deptIds.add(d); // self_dept = 보직 부서 전체(겸직 300)
   }
-  if (deptIds.size > 0) return { kind: "dept", deptIds: [...deptIds] };
+  if (deptIds.size > 0) return { kind: "dept", deptIds: [...deptIds], ...extra };
 
   if (grants.some((g) => g.scopeKind === "participant" || g.scopeKind === "self")) {
-    // 계정-직원 미연결이면 가시 계약 0건(none).
-    return access.employeeId ? { kind: "participant", employeeId: access.employeeId } : { kind: "none" };
+    // 계정-직원 미연결이면 참여 계약은 0건 — 유형별 열람 부여가 있으면 그 계약만 보인다
+    // (employeeId 빈 값은 어떤 참여 행과도 맞지 않는다).
+    if (access.employeeId) return { kind: "participant", employeeId: access.employeeId, ...extra };
+    return extra.extraContractIds ? { kind: "participant", employeeId: "", ...extra } : { kind: "none" };
   }
 
   return { kind: "none" };
@@ -65,6 +74,9 @@ export async function resolveVisibleContractIds(
   if (scope.kind === "none") return [];
 
   const db = await getDb();
+  // 용역 유형별 계약 열람 부여(377) 계약을 합친다.
+  const withExtra = (ids: string[]) =>
+    scope.extraContractIds?.length ? [...new Set([...ids, ...scope.extraContractIds])] : ids;
   if (scope.kind === "dept") {
     const rows = rowsToObjects(
       await db.exec(
@@ -79,7 +91,7 @@ export async function resolveVisibleContractIds(
         [scope.deptIds]
       )
     );
-    return rows.map((r) => String(r.contract_id));
+    return withExtra(rows.map((r) => String(r.contract_id)));
   }
   // participant
   const rows = rowsToObjects(
@@ -88,7 +100,7 @@ export async function resolveVisibleContractIds(
       [scope.employeeId]
     )
   );
-  return rows.map((r) => String(r.contract_id));
+  return withExtra(rows.map((r) => String(r.contract_id)));
 }
 
 /**
@@ -101,23 +113,32 @@ export function contractScopeWhere(
   alias: string,
   addParam: (value: unknown) => string
 ): string | null {
+  // 용역 유형별 계약 열람 부여(377) 계약은 범위 조건과 OR 로 묶는다.
+  const orExtra = (cond: string, extraContractIds?: string[]) =>
+    extraContractIds?.length ? `(${cond} OR ${alias}.contract_id = ANY(${addParam(extraContractIds)}))` : cond;
   switch (scope.kind) {
     case "all":
       return null; // 필터 없음
     case "dept": {
       const d = addParam(scope.deptIds);
-      return `(${alias}.owning_dept_id = ANY(${d}) OR EXISTS (
+      return orExtra(
+        `(${alias}.owning_dept_id = ANY(${d}) OR EXISTS (
         SELECT 1 FROM service_participants sp
         JOIN employee_profiles ep ON ep.employee_id = sp.employee_id
         WHERE sp.contract_id = ${alias}.contract_id AND ep.dept_id = ANY(${d})
-      ))`;
+      ))`,
+        scope.extraContractIds
+      );
     }
     case "participant": {
       const e = addParam(scope.employeeId);
-      return `EXISTS (
+      return orExtra(
+        `EXISTS (
         SELECT 1 FROM service_participants sp
         WHERE sp.contract_id = ${alias}.contract_id AND sp.employee_id = ${e}
-      )`;
+      )`,
+        scope.extraContractIds
+      );
     }
     case "none":
       return "FALSE";

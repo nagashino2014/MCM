@@ -25,7 +25,14 @@ const PAIR_TABLES = ["contracts", "quotations", "quote_rate_sets", "agreement_te
 /** 대분류만 저장하는 표 — 대분류 이름 변경·사용 건수 대상 */
 const TYPE_ONLY_TABLES = ["contract_outsourcing", "process_stage_templates", "process_stage_presets", "agreement_clause_library"] as const;
 
+/**
+ * 용역 유형별 계약 열람 부여(377) — 이름 변경만 따라간다. 사용 건수(삭제 가능 판정)에는 넣지 않는다:
+ * 부여가 남아 있다는 이유로 분류 삭제가 사용 중지로 바뀌지 않게 한다(이름이 사라지면 맞는 계약이 없을 뿐이다).
+ */
+const VIEW_GRANT_TABLES = ["contract_type_view_grants"] as const;
+
 const TABLE_LABELS: Record<string, string> = {
+  contract_type_view_grants: "유형별 계약 열람 부여",
   contracts: "계약",
   quotations: "견적 대장",
   quote_rate_sets: "견적 단가 세트",
@@ -224,8 +231,17 @@ async function cascadeRename(
         ]);
         if (n) changed[t] = n;
       }
+      // 용역 유형별 계약 열람 부여(377) — 세분류까지 지정한 부여의 이름도 함께 바꾼다.
+      for (const t of await existingTables(db, VIEW_GRANT_TABLES)) {
+        const n = await countUpdate(db, `UPDATE ${t} SET service_subtype = $3 WHERE service_type = $1 AND service_subtype = $2`, [
+          typeLabel,
+          oldLabel,
+          newLabel,
+        ]);
+        if (n) changed[t] = n;
+      }
     } else {
-      for (const t of await existingTables(db, [...PAIR_TABLES, ...TYPE_ONLY_TABLES])) {
+      for (const t of await existingTables(db, [...PAIR_TABLES, ...TYPE_ONLY_TABLES, ...VIEW_GRANT_TABLES])) {
         const n = await countUpdate(db, `UPDATE ${t} SET service_type = $2 WHERE service_type = $1`, [oldLabel, newLabel]);
         if (n) changed[t] = n;
       }

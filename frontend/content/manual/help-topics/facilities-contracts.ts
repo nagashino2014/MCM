@@ -111,6 +111,7 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     blocks: [
       { kind: "table", head: ["역할", "볼 수 있는 계약"], rows: [
         ["사원", "본인이 참여한 계약"],
+        ["용역 유형별 열람을 받은 직원", "본인이 참여한 계약 + 부여받은 용역 유형의 계약 전체(열람만)"],
         ["부서장", "소속 부서가 수행부서이거나 부서원이 참여한 계약"],
         ["임원·관리자", "전체 계약"],
       ] },
@@ -118,7 +119,7 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     ],
     more: { article: "contracts.manage", section: "roles" },
     sources: ["app/(app)/contracts/page.tsx", "lib/auth/contract-scope.ts"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-23",
   },
   {
     id: "contracts.stages",

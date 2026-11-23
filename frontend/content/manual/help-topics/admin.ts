@@ -40,6 +40,22 @@ export const ADMIN_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "admin.contract-type-view",
+    label: "용역 유형별 계약 열람 도움말",
+    blocks: [
+      { kind: "p", text: "수행인력으로 등록되지 않은 계약도, 고른 용역 유형이면 이 계정이 열람합니다. 한 용역 유형을 총괄하는 사람에게 씁니다." },
+      { kind: "list", items: [
+        "[[용역 대분류]]만 고르면 그 대분류 전체, [[세분류]]까지 고르면 그 세분류만입니다.",
+        "열람만 넓어지고 계약 등록·수정·삭제 권한은 그대로입니다.",
+        "[[열람 부여]]·[[회수]]는 바로 적용됩니다(다시 로그인하지 않아도 됩니다).",
+      ] },
+      { kind: "warn", text: "계약 조회 권한이 든 템플릿이 없는 계정에는 효력이 없습니다." },
+    ],
+    more: { article: "admin.users", section: "type-view" },
+    sources: ["components/admin/users/ContractTypeViewGrantsCard.tsx"],
+    reviewedAt: "2026-11-23",
+  },
+  {
     id: "admin.template-perms",
     label: "권한 선택 도움말",
     blocks: [

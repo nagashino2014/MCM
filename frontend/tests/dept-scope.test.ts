@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { allowedDeptIds, checkPermission, resolveDeptScope, type UserAccess, type ScopeKind } from "../lib/auth/rbac";
+import { contractScopeWhere } from "../lib/auth/contract-scope";
 
 // 겸직(복수 부서 보직, 300) 판정 — docs/concurrent-dept-post-design-2026-10-20.md §4·§6.
 // 한도경 사례: 주 소속 통합환경2(env2) + 화학안전(chem) 겸직 부서장.
@@ -24,6 +25,7 @@ function access(partial: Partial<UserAccess>): UserAccess {
     deptProjectIds: new Set(),
     deptContractsByDept: new Map(),
     deptProjectsByDept: new Map(),
+    typeViewContractIds: new Set(),
     grants: [],
     ...partial,
   };
@@ -93,4 +95,50 @@ test("보직이 하나도 없으면 self_dept 는 target 이 있을 때 불통�
   const noDept = access({ deptId: null, postDeptIds: [], grants: [grant("work_plan.view", "self_dept")] });
   assert.equal(checkPermission(noDept, "work_plan.view", { deptId: "env2" }), false);
   assert.deepEqual(resolveDeptScope(noDept, "work_plan.view"), { kind: "none" });
+});
+
+// 용역 유형별 계약 열람 부여(377) — 이근형 차장 사례: 사원 템플릿(참여 용역)인데 화관법 계약 전체 열람을 받았다.
+const typeViewer = access({
+  userId: "u-lee",
+  deptId: "chem",
+  employeeId: "e-lee",
+  postDeptIds: ["chem"],
+  participantContractIds: new Set(["c-mine"]),
+  typeViewContractIds: new Set(["c-chem-1", "c-chem-2"]),
+  grants: [grant("contract.view", "participant"), grant("contract.edit", "participant")],
+});
+
+test("유형별 열람 부여: 부여된 유형의 계약은 참여하지 않아도 열람된다", () => {
+  assert.equal(checkPermission(typeViewer, "contract.view", { contractId: "c-mine" }), true);
+  assert.equal(checkPermission(typeViewer, "contract.view", { contractId: "c-chem-1" }), true);
+  assert.equal(checkPermission(typeViewer, "contract.view", { contractId: "c-haps" }), false);
+});
+
+test("유형별 열람 부여: 수정 권한은 넓어지지 않는다", () => {
+  assert.equal(checkPermission(typeViewer, "contract.edit", { contractId: "c-mine" }), true);
+  assert.equal(checkPermission(typeViewer, "contract.edit", { contractId: "c-chem-1" }), false);
+});
+
+test("유형별 열람 부여: 열람 키가 없는 계정·deny 에는 효력이 없다", () => {
+  const noKey = access({ typeViewContractIds: new Set(["c-chem-1"]), grants: [] });
+  assert.equal(checkPermission(noKey, "contract.view", { contractId: "c-chem-1" }), false);
+  const denied = access({
+    typeViewContractIds: new Set(["c-chem-1"]),
+    grants: [grant("contract.view", "participant"), { ...grant("contract.view", "all"), effect: "deny" as const }],
+  });
+  assert.equal(checkPermission(denied, "contract.view", { contractId: "c-chem-1" }), false);
+});
+
+test("유형별 열람 부여: 목록 WHERE 는 범위 조건과 부여 계약을 OR 로 묶는다", () => {
+  const params: unknown[] = [];
+  const addParam = (v: unknown) => {
+    params.push(v);
+    return `$${params.length}`;
+  };
+  const sql = contractScopeWhere({ kind: "participant", employeeId: "e-lee", extraContractIds: ["c-chem-1"] }, "c", addParam);
+  assert.match(String(sql), /^\(EXISTS \([\s\S]*\) OR c\.contract_id = ANY\(\$2\)\)$/);
+  assert.deepEqual(params, ["e-lee", ["c-chem-1"]]);
+  // 부여가 없으면 종전 조건 그대로
+  const plain = contractScopeWhere({ kind: "participant", employeeId: "e-lee" }, "c", addParam);
+  assert.match(String(plain), /^EXISTS \(/);
 });

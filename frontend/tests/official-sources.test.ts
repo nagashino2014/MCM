@@ -78,7 +78,7 @@ test("실제 KDI 월 선택 버튼은 코드 실행 없이 최신 순으로 읽�
   assert.deepEqual(officialArticleLinks(kdi, html, kdi.homeUrl), [19304, 19271, 19252].map(id => `${kdi.homeUrl}?pub_no=${id}`));
 });
 test("전사 정보원 관리는 scope all 편집 허용과 deny 우선을 모두 요구한다", () => {
-  const access = { userId: "u", role: "member", deptId: "d", employeeId: "e", postDeptIds: ["d"], headDeptIds: new Set(), participantContractIds: new Set(), participantProjectIds: new Set(), deptIds: new Set(), deptContractIds: new Set(), deptProjectIds: new Set(), deptContractsByDept: new Map(), deptProjectsByDept: new Map(), grants: [] } as UserAccess;
+  const access = { userId: "u", role: "member", deptId: "d", employeeId: "e", postDeptIds: ["d"], headDeptIds: new Set(), participantContractIds: new Set(), participantProjectIds: new Set(), deptIds: new Set(), deptContractIds: new Set(), deptProjectIds: new Set(), deptContractsByDept: new Map(), deptProjectsByDept: new Map(), typeViewContractIds: new Set(), grants: [] } as UserAccess;
   for (const scopeKind of ["self", "participant", "self_dept", "specific_dept"] as const) { access.grants = [{ permissionKey: "sales.edit", scopeKind, scopeDeptId: "d", effect: "allow" }]; assert.equal(canManageOfficialSources(access), false); }
   access.grants = [{ permissionKey: "sales.edit", scopeKind: "all", scopeDeptId: null, effect: "allow" }]; assert.equal(canManageOfficialSources(access), true);
   access.grants.push({ permissionKey: "sales.edit", scopeKind: "self_dept", scopeDeptId: "d", effect: "deny" }); assert.equal(canManageOfficialSources(access), false);

@@ -426,7 +426,12 @@ export function FieldInput({
       const companyField = allFields.find((x) => x.type === "company_select" && !isPlaceField(x));
       const cv = companyField ? (allValues[companyField.key] as CompanyValue | undefined) : undefined;
       const manualCompany = cv && typeof cv === "object" && cv.manual === true ? (cv.name ?? "").trim() : null;
-      return <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} manualCompany={manualCompany} />;
+      // 등록된 업체를 골랐으면 [접견인 추가] 창의 기관·업체를 그 업체로 미리 채운다(2026-11-23).
+      const contactFacility =
+        cv && typeof cv === "object" && cv.facilityId && !cv.manual ? { facilityId: cv.facilityId, name: cv.name ?? "" } : null;
+      return (
+        <ContactSelectInput field={f} value={value} onSet={onSet} readOnly={dis} manualCompany={manualCompany} companyFacility={contactFacility} />
+      );
     }
     case "leave_type":
       return <LeaveTypeInput value={value} onSet={onSet} readOnly={dis} />;
@@ -915,6 +920,7 @@ function ContactSelectInput({
   onSet,
   readOnly,
   manualCompany,
+  companyFacility,
 }: {
   field: ApprovalFieldDef;
   value: unknown;
@@ -922,6 +928,8 @@ function ContactSelectInput({
   readOnly?: boolean;
   /** 업체가 미계약(직접 입력)일 때의 업체명(빈 문자열 가능). null 이면 담당자 검색 방식 */
   manualCompany?: string | null;
+  /** 같은 양식에서 고른 등록 업체 — [접견인 추가] 창의 기관·업체 초기값 */
+  companyFacility?: { facilityId: string; name: string } | null;
 }) {
   const people: ContactPersonValue[] = Array.isArray(value)
     ? (value as ContactPersonValue[]).filter((p) => p && p.name)
@@ -947,6 +955,8 @@ function ContactSelectInput({
   const perms = permsOf(session?.user);
   const canCreate = hasPerm(perms, "contact.edit") || hasPerm(perms, "facility.edit");
   const [creating, setCreating] = useState(false);
+  // 검색란에 `성명 직함`으로 적어 둔 채 [접견인 추가]를 누르면 등록 창의 이름·직급에 나눠 넣는다.
+  const typed = parseReceivers(q)[0] ?? null;
 
   useEffect(() => {
     const term = q.trim();
@@ -1049,6 +1059,16 @@ function ContactSelectInput({
             setOpen(true);
           }}
         />
+        {canCreate && (
+          <button
+            type="button"
+            className="cd-btn border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1 shrink-0"
+            title="목록에 없는 사람을 이 업체의 담당자로 등록하고 바로 접견인으로 넣습니다"
+            onClick={() => setCreating(true)}
+          >
+            <Plus className="w-3.5 h-3.5" /> 접견인 추가
+          </button>
+        )}
         {people.map((p) => (
           <span key={personKey(p)} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
             {tagLabel(p)}
@@ -1062,20 +1082,18 @@ function ContactSelectInput({
             기존 입력: {legacyText}
           </span>
         )}
-        {canCreate && (
-          <button
-            type="button"
-            className="text-[12px] cd-text-primary flex items-center gap-0.5 shrink-0"
-            title="목록에 없는 담당자를 등록하고 바로 접견인으로 넣습니다"
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="w-3.5 h-3.5" /> 새 담당자
-          </button>
-        )}
       </div>
+      {/* 검색란에 적기만 하면 접견인으로 들어가지 않는다 — 적어 둔 글자가 있고 고른 사람이 없을 때 방법을 알려 준다. */}
+      {q.trim().length >= 2 && !(open && options.length > 0) && (
+        <p className="mt-1 text-[12px] cd-warn-text">
+          검색란에 적은 내용은 접견인으로 들어가지 않습니다. 검색 결과에서 고르거나{canCreate ? " [접견인 추가]로 등록하세요." : " 주소록에 먼저 등록해 주세요."}
+        </p>
+      )}
       {creating && (
         <ContactCreateModal
-          initialName={q.trim()}
+          initialName={typed?.name ?? q.trim()}
+          initialTitle={typed?.title || undefined}
+          initialFacility={companyFacility ?? null}
           onClose={() => setCreating(false)}
           onCreated={(c) => {
             if (!people.some((p) => p.id === c.id)) {

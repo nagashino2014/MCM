@@ -53,7 +53,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
           { kind: "steps", items: [
             "[[외부 연락처]] 탭 오른쪽 위 [[담당자 등록]]을 누르고, 기관·업체를 검색해 고른 뒤 이름·직급·부서·연락처를 넣고 [[등록]]을 누릅니다.",
             "고칠 때는 표 오른쪽 [[관리]] 열의 연필 아이콘 → [[담당자 수정]] 창에서 이름·직급·부서·휴대폰·사무실·이메일을 고치고 [[저장]]을 누릅니다.",
-            "출장보고서의 접견인 칸에서도 [[새 담당자]]로 등록하면서 바로 접견인으로 넣을 수 있습니다.",
+            "출장보고서의 접견인 칸에서도 검색란 오른쪽 [[접견인 추가]]로 등록하면서 바로 접견인으로 넣을 수 있습니다. 양식에서 고른 업체가 기관·업체 칸에 미리 들어가고, 부서도 그 창에서 고르거나 새로 만듭니다.",
           ] },
           { kind: "list", items: [
             "기관·업체는 이미 등록된 사업장에서 고릅니다. 목록에 없으면 입력란 아래 [[새 업체로 등록]]을 누르고 업체명을 적어 담당자와 함께 등록합니다. 같은 이름의 업체가 이미 있으면 후보를 보여 주므로, 같은 곳이면 고르고 다른 곳이면 [[그래도 새로 만들기]]를 누릅니다. 이렇게 만든 업체는 [[미지정]]으로 들어가고 사업장 관리 담당자가 나중에 정보를 보완합니다.",
@@ -108,7 +108,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형", "담당자 등록", "접견인", "비상 연락망", "비상연락망", "엑셀", "PDF", "총 인원"],
     sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/ExtraEmailsField.tsx", "components/directory/DepartmentField.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx"],
-    reviewedAt: "2026-11-20",
+    reviewedAt: "2026-11-23",
   },
 
   // ── 공지·게시판 ──

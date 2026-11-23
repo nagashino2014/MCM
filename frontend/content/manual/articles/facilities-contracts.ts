@@ -480,6 +480,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
             head: ["역할", "볼 수 있는 계약"],
             rows: [
               ["사원", "본인이 수행인력으로 참여한 계약(종료 포함)"],
+              ["용역 유형별 열람을 받은 직원", "본인이 참여한 계약 + 관리자가 부여한 용역 유형의 계약 전체(열람만)"],
               ["부서장·임원·대표이사·관리자", "전체 계약"],
             ],
           },
@@ -658,7 +659,7 @@ export const FACILITIES_CONTRACTS_ARTICLES: ManualArticle[] = [
       "components/contracts/RateCardEditor.tsx",
       "components/contracts/TaxInvoiceIssueModal.tsx",
     ],
-    reviewedAt: "2026-11-18",
+    reviewedAt: "2026-11-23",
   },
   {
     id: "contracts.dashboard",

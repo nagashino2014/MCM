@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CdHelp } from "@/components/cdash/CdHelp";
+import ContractTypeViewGrantsCard from "@/components/admin/users/ContractTypeViewGrantsCard";
 import type {
   DepartmentRow,
   PermissionRow,
@@ -809,6 +810,10 @@ function AccountDetailPanel({
   const activeTemplates = (permissions?.templates ?? []).filter((t) => t.isActive);
   // 비활성 템플릿 부여는 기록만 남고 권한은 적용되지 않는다(F-29).
   const inactiveTemplateIds = new Set((permissions?.templates ?? []).filter((t) => !t.isActive).map((t) => t.templateId));
+  // 용역 유형별 계약 열람(377)은 계약 조회 권한이 있는 계정에만 효력이 있다 — 부여된 활성 템플릿에 contract.view 가 있는지.
+  const hasContractView = activeTemplates.some(
+    (t) => assignedTemplateIds.has(t.templateId) && t.grants.some((g) => g.permissionKey === "contract.view" && g.effect === "allow")
+  );
 
   if (!selectedAccount.userId) {
     return (
@@ -1020,6 +1025,16 @@ function AccountDetailPanel({
           </button>
         </div>
       </div>
+      )}
+
+      {/* 용역 유형별 계약 열람(377) — rbac.assignment.manage 보유자만 */}
+      {canAssign && (
+        <ContractTypeViewGrantsCard
+          userId={selectedAccount.userId}
+          canAssign={canAssign}
+          hasContractView={hasContractView}
+          toast={toast}
+        />
       )}
       </>
       )}

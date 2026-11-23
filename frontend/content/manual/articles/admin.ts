@@ -99,6 +99,27 @@ export const ADMIN_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "type-view",
+        title: "용역 유형별 계약 열람 부여",
+        requires: ["rbac.assignment.manage"],
+        blocks: [
+          { kind: "p", text: "사원은 본인이 수행인력으로 등록된 계약만 봅니다. 한 용역 유형을 총괄하는 사람처럼 수행인력으로 일일이 등록하지 않고도 그 유형의 계약을 모두 봐야 하면, 계정에 용역 유형별 계약 열람을 부여합니다." },
+          { kind: "steps", items: [
+            "왼쪽 조직도에서 사람을 누릅니다.",
+            "[[용역 유형별 계약 열람]] 칸에서 [[용역 대분류]]를 고릅니다. 그 대분류 안의 한 세분류만 줄 때는 [[세분류]]도 고릅니다. [[전체 세분류]]로 두면 대분류 전체입니다.",
+            "필요하면 [[사유(선택)]]를 적고 [[열람 부여]]를 누릅니다. 바로 적용되며 대상자가 다시 로그인하지 않아도 됩니다.",
+          ] },
+          { kind: "list", items: [
+            "열람만 넓어집니다. 계약 등록·수정·삭제 권한은 그대로입니다.",
+            "계약 목록·계약 상세·대시보드·계약 문서·통합 검색에 같은 범위가 적용됩니다.",
+            "목록의 ‘계약 N건’은 지금 그 부여로 열리는 계약 수입니다. 같은 유형의 계약이 새로 등록되면 따로 손대지 않아도 보입니다.",
+            "회수는 해당 줄의 [[회수]]를 누릅니다.",
+          ] },
+          { kind: "warn", text: "계약 조회 권한이 든 템플릿(일반 사원 기본 등)이 없는 계정에는 부여해도 계약 메뉴가 열리지 않습니다. 화면에 안내가 보이면 먼저 권한 템플릿을 부여하세요." },
+          { kind: "tip", text: "용역 분류 화면에서 대분류·세분류 이름을 바꾸면 여기서 부여한 유형 이름도 함께 바뀝니다." },
+        ],
+      },
+      {
         id: "relogin",
         title: "권한 변경이 반영되는 시점",
         blocks: [
@@ -143,14 +164,15 @@ export const ADMIN_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["권한", "권한 템플릿", "권한 부여", "권한 회수", "범위", "스코프", "관리자 지정", "계정 비활성", "계정 삭제", "영구 삭제", "재로그인", "Master", "미연결 계정"],
+    keywords: ["권한", "권한 템플릿", "권한 부여", "권한 회수", "범위", "스코프", "계약 열람", "용역 유형별 계약 열람", "유형별 열람", "관리자 지정", "계정 비활성", "계정 삭제", "영구 삭제", "재로그인", "Master", "미연결 계정"],
     sources: [
       "app/(app)/admin/users/page.tsx",
       "components/admin/users/PermissionManagementPanel.tsx",
       "components/admin/users/OrganizationTree.tsx",
       "components/admin/users/AccountPurgeModal.tsx",
+      "components/admin/users/ContractTypeViewGrantsCard.tsx",
     ],
-    reviewedAt: "2026-10-21",
+    reviewedAt: "2026-11-23",
   },
   {
     id: "admin.registry",

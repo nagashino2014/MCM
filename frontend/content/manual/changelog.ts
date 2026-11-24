@@ -6,6 +6,11 @@ import type { ChangelogEntry } from "./types";
  */
 export const MANUAL_CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-24", kind: "수정", title: "메일 읽기 — 본문이 두 줄 높이로 잘려 보이던 문제",
+    body: "본문 끝의 수신 확인용 그림이 늦게 받아지는 환경에서, 메일 본문 창이 두 줄 높이로 멈추고 창 안에 스크롤 막대가 생기던 것을 고쳤습니다. 이제 본문 글이 들어오는 즉시 전체 높이로 펼쳐집니다.",
+    articles: ["mail.box"],
+  },
+  {
     date: "2026-11-24", kind: "개선", title: "전자결재 — 결재선 줄 오른쪽에도 [승인] 버튼",
     body: "결재할 문서를 열면 맨 위 결재선 줄 오른쪽에 [승인]이 보여, 문서를 끝까지 내리지 않고 바로 승인할 수 있습니다. 반려·결재 의견·전결은 종전대로 아래 처리 바에서 합니다.",
     articles: ["approval.home"],

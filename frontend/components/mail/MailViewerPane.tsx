@@ -63,10 +63,13 @@ function MailBodyFrame({ html }: { html: string }) {
     const frame = ref.current;
     if (!frame) return;
     let cleanup: (() => void) | null = null;
+    let attached: Document | null = null;
+    let measureNow: (() => void) | null = null;
     const attach = () => {
-      cleanup?.();
       const doc = frame.contentDocument;
-      if (!doc?.documentElement) return;
+      if (!doc?.documentElement || doc === attached) return;
+      cleanup?.();
+      attached = doc;
       // 높이를 내용에 맞추는 동안 html·body 의 퍼센트 높이(height:100% 등)는 의미가 없고,
       // 남겨 두면 iframe 을 늘릴 때마다 본문도 같이 늘어 높이가 끝없이 커진다 — auto 로 고정한다.
       if (!doc.getElementById("__mcm_autoheight")) {
@@ -84,6 +87,7 @@ function MailBodyFrame({ html }: { html: string }) {
         // 상한 — 100vh 요소처럼 iframe 높이를 따라 커지는 본문이 있어도 무한히 늘지 않게 한다(넘치면 iframe 안에서 스크롤).
         setHeight(Math.min(40000, Math.max(80, Math.ceil(h) + hScroll)));
       };
+      measureNow = measure;
       measure();
       const onLoadCapture = () => measure();
       doc.addEventListener("load", onLoadCapture, true); // 이미지 load 는 bubble 되지 않아 capture 로 받는다
@@ -96,10 +100,28 @@ function MailBodyFrame({ html }: { html: string }) {
         ro?.disconnect();
       };
     };
-    frame.addEventListener("load", attach);
-    if (frame.contentDocument?.readyState === "complete") attach();
+    // ⚠ iframe 의 load 는 본문 안 그림을 **전부** 받은 뒤에야 난다(2026-11-24 실사례). 본문 끝의 발송 추적 픽셀
+    //   (awstrack.me·수신 확인) 같은 바깥 그림 하나가 늦거나 멈추면 load 가 오지 않아 높이가 처음 잰 빈 문서(about:blank)
+    //   기준 80px 에 머물렀다 — 본문 두 줄만 보이고 iframe 안에 스크롤 막대가 생겼다.
+    //   그래서 load 를 기다리지 않고, 본문 문서(about:srcdoc)가 파싱되는 즉시 붙는다. 이후 그림·글꼴은 위 관찰자가 잡는다.
+    const poll = window.setInterval(() => {
+      const doc = frame.contentDocument;
+      if (!doc || doc.readyState === "loading") return;
+      attach();
+      if (doc.URL === "about:srcdoc") window.clearInterval(poll);
+    }, 50);
+    const stopPoll = window.setTimeout(() => window.clearInterval(poll), 10000);
+    // load 가 오면(그림까지 다 받음) 한 번 더 잰다 — 이미 붙은 문서면 attach 는 건너뛴다.
+    const onFrameLoad = () => {
+      attach();
+      measureNow?.();
+    };
+    frame.addEventListener("load", onFrameLoad);
+    attach();
     return () => {
-      frame.removeEventListener("load", attach);
+      window.clearInterval(poll);
+      window.clearTimeout(stopPoll);
+      frame.removeEventListener("load", onFrameLoad);
       cleanup?.();
     };
   }, [html]);

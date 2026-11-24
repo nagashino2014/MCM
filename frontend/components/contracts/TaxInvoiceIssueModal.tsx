@@ -36,6 +36,17 @@ interface LineItem {
   remark: string;
 }
 
+/** 전송 대상자 한 명 — primary 는 바로빌이 계산서 원본 메일을, cc 는 앱이 발행 안내 메일을 보낸다. */
+interface Recipient {
+  email: string;
+  kind: "primary" | "cc";
+  name: string;
+  title: string | null;
+  /** 담당자 목록에 없는(직접 입력한) 주소면 비어 있다. */
+  facilityId?: string;
+  facilityName?: string;
+}
+
 const emptyLine = (): LineItem => ({ name: "", spec: "", qty: "1", unitPrice: "", amount: "", remark: "" });
 
 interface ExistingInvoice {
@@ -158,10 +169,17 @@ export default function TaxInvoiceIssueModal({
         setInvoicerEmail(p.invoicer.email);
         setIssuerEmails(p.issuerEmails ?? []);
         // 사업장 담당자에 '계산서' 태그가 지정돼 있으면 그 담당자가 기본 수신처다(첫 명이 대표, 나머지는 추가).
-        // 계약 상대에 '계산서' 담당자가 있으면 그쪽만 쓰고, 없을 때만 관계 사업장의 '계산서' 담당자를 쓴다.
+        // 계약 상대에 '계산서' 담당자가 있으면 그쪽만, 없으면 계약 대상 사업장의 담당자만 쓴다.
+        // 둘 다 없을 때만 연결된 다른 사업장의 '계산서' 담당자를 쓴다 — 세종사업장 계약의 계산서 안내가
+        // 부산사업장 담당자에게도 나간 사례(2026-11-23)가 있어 다른 사업장은 자동으로 넣지 않는다.
         const billingAll = p.contacts.filter((c) => c.billing && c.email);
-        const billingOwn = billingAll.filter((c) => (c.source ?? "counterparty") === "counterparty");
-        const billing = billingOwn.length ? billingOwn : billingAll;
+        const billingOf = (source: NonNullable<Contact["source"]>) =>
+          billingAll.filter((c) => (c.source ?? "counterparty") === source);
+        const billing = billingOf("counterparty").length
+          ? billingOf("counterparty")
+          : billingOf("site").length
+            ? billingOf("site")
+            : billingAll;
         const primary = billing[0] ?? p.contacts.find((c) => c.email);
         if (primary) {
           setEmail(primary.email ?? "");
@@ -274,6 +292,57 @@ export default function TaxInvoiceIssueModal({
     [],
   );
 
+  /**
+   * 전송 대상자 — 발행하면 실제로 메일이 나가는 사람 전부(대표 1명 + 추가 수신처).
+   * 담당자 목록은 스크롤 안에 있어 체크된 사람이 가려질 수 있으므로 따로 모아 보여 준다.
+   */
+  const recipients = useMemo<Recipient[]>(() => {
+    const contacts = prefill?.contacts ?? [];
+    const find = (address: string) =>
+      contacts.find((c) => c.email != null && c.email.trim().toLowerCase() === address.toLowerCase());
+    const primary = email.trim();
+    const out: Recipient[] = [];
+    if (primary) {
+      const c = find(primary);
+      out.push({
+        email: primary,
+        kind: "primary",
+        name: c?.name ?? contactName.trim(),
+        title: c?.title ?? null,
+        facilityId: c?.facilityId,
+        facilityName: c?.facilityName,
+      });
+    }
+    for (const address of ccEmails) {
+      if (address.toLowerCase() === primary.toLowerCase()) continue;
+      const c = find(address);
+      out.push({
+        email: address,
+        kind: "cc",
+        name: c?.name ?? "",
+        title: c?.title ?? null,
+        facilityId: c?.facilityId,
+        facilityName: c?.facilityName,
+      });
+    }
+    return out;
+  }, [prefill, email, contactName, ccEmails]);
+
+  /** 전송 대상자의 소속 사업장별 인원 — 둘 이상이면 소속이 섞인 것이다(직접 입력한 주소는 소속을 알 수 없어 뺀다). */
+  const recipientFacilities = useMemo(() => {
+    const groups: Array<{ facilityId: string; name: string; count: number }> = [];
+    for (const r of recipients) {
+      if (!r.facilityId) continue;
+      const found = groups.find((g) => g.facilityId === r.facilityId);
+      if (found) found.count += 1;
+      else groups.push({ facilityId: r.facilityId, name: r.facilityName || "(이름 없는 사업장)", count: 1 });
+    }
+    return groups;
+  }, [recipients]);
+  const affiliationMismatch = recipientFacilities.length > 1;
+  // 소속이 섞였을 때 눈에 띄게 할 기준 — 대표 수신처의 소속(대표가 목록 밖 주소면 첫 소속).
+  const baseFacilityId = recipients.find((r) => r.kind === "primary")?.facilityId ?? recipientFacilities[0]?.facilityId;
+
   /** 발행 담당자 이메일 저장·삭제 — 목록은 서버 응답으로 갱신한다. */
   const mutateIssuerEmail = async (action: "save-issuer-email" | "delete-issuer-email", address: string) => {
     setError(null);
@@ -295,6 +364,18 @@ export default function TaxInvoiceIssueModal({
     if (!isValidDateString(writeDate)) {
       setError("작성일자를 8자리(YYYYMMDD)로 정확히 입력하세요.");
       return;
+    }
+    // 전송 대상자의 소속 사업장이 섞여 있으면 발행 전에 한 번 더 확인받는다(발행 후에는 메일을 되돌릴 수 없다).
+    if (affiliationMismatch) {
+      const lines = recipients.map(
+        (r) => `· ${r.name || "(이름 없음)"} — ${r.facilityName || "직접 입력한 주소"} (${r.email})`,
+      );
+      const ok = window.confirm(
+        `계산서 전송 대상자의 소속 사업장이 서로 다릅니다.\n\n${lines.join("\n")}\n\n` +
+          `이대로 ${recipients.length}명 모두에게 보내고 발행할까요?\n` +
+          "받을 필요가 없는 담당자가 있으면 취소한 뒤 전송 대상자 목록에서 빼 주세요.",
+      );
+      if (!ok) return;
     }
     setBusy(true);
     setError(null);
@@ -620,21 +701,75 @@ export default function TaxInvoiceIssueModal({
                   </label>
                 </div>
 
-                {/* 추가 수신처 — 바로빌 메일은 대표 1명에게만 나가고, 이쪽은 발행 직후 앱이 안내 메일을 보낸다. */}
-                <div className="mt-2">
+                {/* 전송 대상자 — 발행하면 메일이 나가는 사람 전부. 바로빌 메일은 대표 1명에게만 나가고,
+                    추가 수신처에는 발행 직후 앱이 안내 메일을 보낸다. */}
+                <div className="mt-3">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="cd-label-text">추가 수신처</span>
-                    {ccEmails.filter((e) => e !== email).map((address) => (
-                      <span key={address} className="cd-action inline-flex items-center gap-1 rounded-full border cd-border-c px-2 py-0.5 text-[11px]">
-                        {address}
-                        <button type="button" className="cd-text-faint" onClick={() => toggleCc(address)}>
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                    {ccEmails.filter((e) => e !== email).length === 0 && <span className="text-[11px] cd-text-faint">없음</span>}
+                    <span className="cd-label-text">전송 대상자</span>
+                    <span className="cd-hint">{recipients.length}명 · 발행하면 아래 주소로 메일이 나갑니다.</span>
+                  </div>
+                  {affiliationMismatch && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border p-2.5 mt-1.5 text-[11px]"
+                      style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft)" }}
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> 전송 대상자의 소속 사업장이 서로 다릅니다
+                      </div>
+                      <div className="mt-0.5">
+                        {recipientFacilities.map((g) => `${g.name} ${g.count}명`).join(" · ")} — 이 계산서를 받을 필요가 없는 담당자는 빼고 발행하세요.
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-lg border cd-border-c mt-1.5">
+                    {recipients.length === 0 && (
+                      <div className="px-2.5 py-2 text-[11px] cd-text-faint">대표 수신처 이메일을 입력하면 여기에 표시됩니다.</div>
+                    )}
+                    {recipients.map((r) => {
+                      const otherSite = affiliationMismatch && Boolean(r.facilityId) && r.facilityId !== baseFacilityId;
+                      return (
+                        <div key={`${r.kind}:${r.email}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 text-[11px] border-b cd-border-c last:border-b-0">
+                          {r.kind === "primary" ? (
+                            <span className="rounded-full px-1.5 py-0.5 cd-tint-primary shrink-0" title="바로빌이 계산서 원본 메일을 보냅니다">
+                              대표 · 계산서 원본
+                            </span>
+                          ) : (
+                            <span className="rounded-full border cd-border-c px-1.5 py-0.5 cd-text-muted shrink-0" title="발행 직후 발행 안내 메일이 따로 나갑니다">
+                              추가 · 발행 안내
+                            </span>
+                          )}
+                          <span className="cd-text font-medium shrink-0">{r.name || "(이름 없음)"}</span>
+                          {r.title && <span className="cd-text-muted shrink-0">{r.title}</span>}
+                          {r.facilityName ? (
+                            <span
+                              className="rounded-full border cd-border-c px-1.5 py-0.5 cd-text-muted shrink-0"
+                              style={otherSite ? { borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft)" } : undefined}
+                              title={otherSite ? "대표 수신처와 소속 사업장이 다릅니다" : "소속 사업장"}
+                            >
+                              {r.facilityName}
+                            </span>
+                          ) : (
+                            <span className="cd-text-faint shrink-0">직접 입력</span>
+                          )}
+                          <span className="cd-text-faint truncate flex-1 basis-40 min-w-0" title={r.email}>{r.email}</span>
+                          {r.kind === "cc" && (
+                            <button
+                              type="button"
+                              className="cd-text-faint hover:cd-text shrink-0"
+                              title="전송 대상에서 빼기"
+                              aria-label={`${r.name || r.email} 전송 대상에서 빼기`}
+                              onClick={() => toggleCc(r.email)}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="cd-label-text shrink-0">추가 수신처</span>
                     <input
                       className="cd-input"
                       style={{ maxWidth: 260 }}
@@ -650,7 +785,7 @@ export default function TaxInvoiceIssueModal({
                     />
                     <button
                       type="button"
-                      className="rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] disabled:opacity-40"
+                      className="rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] shrink-0 disabled:opacity-40"
                       disabled={!isEmail(ccInput)}
                       onClick={() => {
                         toggleCc(ccInput);
@@ -841,12 +976,22 @@ export default function TaxInvoiceIssueModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t cd-border-c">
-          <button type="button" className="rounded-lg border cd-border-c px-3.5 py-2 text-sm cd-text-muted" onClick={onClose}>
+          {prefill && (
+            <span className="mr-auto min-w-0 inline-flex flex-wrap items-center gap-x-1.5 text-xs cd-text-muted">
+              전송 대상 {recipients.length}명
+              {affiliationMismatch && (
+                <span className="inline-flex items-center gap-1 font-semibold" style={{ color: "var(--cd-warning)" }}>
+                  <AlertTriangle className="w-3.5 h-3.5" /> 소속이 서로 다름
+                </span>
+              )}
+            </span>
+          )}
+          <button type="button" className="rounded-lg border cd-border-c px-3.5 py-2 text-sm cd-text-muted shrink-0" onClick={onClose}>
             취소
           </button>
           <button
             type="button"
-            className="rounded-lg px-3.5 py-2 text-sm text-white cd-fill-primary disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="rounded-lg px-3.5 py-2 text-sm text-white cd-fill-primary disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
             disabled={!canIssue}
             onClick={issue}
           >

@@ -66,14 +66,14 @@ export const FACILITIES_CONTRACTS_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "담당자마다 업무 분류 태그(계약부서·환경부서·계산서)를 여러 개 붙일 수 있습니다.",
-        "**계산서** 태그가 있고 이메일이 있는 재직 담당자는 이 사업장 계약의 전자세금계산서 기본 수신처가 됩니다. 여러 명이면 첫 사람이 대표 수신처, 나머지는 추가 수신처입니다.",
+        "**계산서** 태그가 있고 이메일이 있는 재직 담당자는 이 사업장 계약의 전자세금계산서 기본 수신처가 됩니다. 여러 명이면 첫 사람이 대표 수신처, 나머지는 추가 수신처입니다. 계약 상대나 계약 대상 사업장에 계산서 담당자가 있으면 연결된 다른 사업장의 담당자는 자동으로 들어가지 않습니다.",
         "태그가 없으면 이메일이 있는 첫 담당자가 기본 수신처가 되며, 발행 창에서 바꿀 수 있습니다.",
         "연락처 구분은 담당자가 아니라 사업장 단위 속성(주소록 분류)입니다.",
       ] },
     ],
     more: { article: "facilities.main", section: "contacts" },
     sources: ["components/facilities/FacilityDetailPanel.tsx", "lib/barobill/invoicing.ts", "components/contracts/TaxInvoiceIssueModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-23",
   },
   {
     id: "facilities.bizcert",

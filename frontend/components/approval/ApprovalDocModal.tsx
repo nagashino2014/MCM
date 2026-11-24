@@ -539,6 +539,19 @@ export function ApprovalDocViewer({
                   </div>
                 );
               })}
+              {/* 결재선 행 오른쪽 승인(2026-11-24 사용자 요청) — 문서를 끝까지 내리지 않고 바로 승인할 수 있게.
+                  반려·의견·전결은 종전대로 하단 처리 바에서만 하며, 하단 의견을 적어 두었으면 함께 전달된다. */}
+              {detail.myStepId && detail.status === "in_progress" && (
+                <button
+                  type="button"
+                  className="cd-btn cd-btn-primary ml-auto px-[18px] py-2 text-[13px] disabled:opacity-50"
+                  disabled={acting}
+                  onClick={() => act("approve")}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  승인
+                </button>
+              )}
             </div>
 
             {/* 참조·열람자(직원 요청 21) — 진행 중에도 누구에게 공유됐는지 결재선 아래 한 줄로 보인다.

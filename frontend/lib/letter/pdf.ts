@@ -25,7 +25,7 @@ import {
   type LetterLayout,
   type TextRun,
 } from "./types";
-import { LIST_LEVEL_STEP_PT } from "./list-markers";
+import { LIST_LEVEL_STEP_PT, TYPED_MARKER_RE } from "./list-markers";
 
 const INK = rgb(0.1, 0.1, 0.12);
 const LINE_THIN = 0.8;
@@ -146,9 +146,31 @@ export function segsWidth(segs: StyledSeg[], fonts: Fonts, size: number): number
   return segs.reduce((w, s) => w + (s.bold ? fonts.bold : fonts.regular).widthOfTextAtSize(s.text, size), 0);
 }
 
+// 머리부(수신·참조·제목) 글자 크기·라벨 — 본문 들여쓰기가 제목 값 시작점을 따르므로 함께 쓴다.
+const HEAD_SIZE = 10.5;
+const HEAD_LABEL = "수    신";
+
+/**
+ * 머리부 값(제목 '삼성전기 …' 등)의 시작 x(좌여백 기준 pt). 본문 번호 항목의 첫 줄도 여기서 시작한다
+ * (2026-11-24 사용자 요청 — 종전 BODY_INDENT 65pt 는 들여쓰기가 과해 보였다).
+ */
+function headValueIndent(fonts: Fonts): number {
+  return fonts.bold.widthOfTextAtSize(HEAD_LABEL, HEAD_SIZE) + fonts.regular.widthOfTextAtSize(" : ", HEAD_SIZE) + 2;
+}
+
+/**
+ * 본문 문단 이어지는 줄의 내어쓰기 폭 — 손으로 친 항목 번호("2. "·"가. "·"(1) " 등)나 글머리 기호 뒤 글자에 맞춘다.
+ * 번호가 없는 문단은 0(첫 줄 시작점에 맞춤).
+ */
+function bodyHangWidth(b: Extract<LetterBlock, { kind: "p" }>, fonts: Fonts, size: number): number {
+  const prefix = b.marker ?? TYPED_MARKER_RE.exec(b.runs[0]?.text ?? "")?.[0] ?? "";
+  return prefix ? fonts.regular.widthOfTextAtSize(prefix, size) : 0;
+}
+
 /**
  * 왼쪽 정렬 문단의 가로 배치(2026-10-13).
- * - 본문(번호 항목): 첫 줄 BODY_INDENT 들여쓰기, 이어지는 줄은 좌여백부터(실측 재현), 문단 뒤 2pt.
+ * - 본문(번호 항목): 첫 줄은 머리부 제목 값 시작점(headValueIndent), 이어지는 줄은 항목 번호 뒤 글자에 맞춘다
+ *   (2026-11-24 사용자 요청 — 종전에는 첫 줄 65pt 들여쓰기·이어지는 줄 좌여백부터), 문단 뒤 2pt.
  * - "- 아 래 -" 아래(below): 좌여백을 본문 들여쓰기의 절반으로 잡고 이어지는 줄도 그 안에서 시작(여백으로
  *   삐져나오지 않게), 목록 항목(가. 밑의 1. 2. 3.)은 깊이마다 두 글자 폭만큼 더 들여쓰며 번호 뒤에 맞춰 이어 쓴다,
  *   문단 뒤 추가 간격 없음(줄바꿈·번호가 있어도 본문 행간 그대로).
@@ -160,12 +182,13 @@ function paraGeometry(b: Extract<LetterBlock, { kind: "p" }>, fonts: Fonts, size
   // 이어지는 줄은 기호 뒤 글자 시작점에 맞춘다(내어쓰기). "- 아 래 -" 아래는 그쪽 좁은 여백을 기준으로 같은 규칙.
   const level = b.listLevel ?? 0;
   if (level >= 1) {
-    const base = MARGIN_L + (b.below ? BODY_INDENT * BELOW_MARGIN_RATIO : BODY_INDENT) + extraIndent + level * LIST_LEVEL_STEP_PT;
+    const base = MARGIN_L + (b.below ? BODY_INDENT * BELOW_MARGIN_RATIO : headValueIndent(fonts)) + extraIndent + level * LIST_LEVEL_STEP_PT;
     const hang = b.marker ? fonts.regular.widthOfTextAtSize(b.marker, size) : 0;
     return { firstX: base, restX: base + hang, gapAfter: b.below ? 0 : 2 };
   }
   if (!b.below) {
-    return { firstX: MARGIN_L + BODY_INDENT + extraIndent, restX: MARGIN_L + extraIndent, gapAfter: 2 };
+    const firstX = MARGIN_L + headValueIndent(fonts) + extraIndent;
+    return { firstX, restX: firstX + bodyHangWidth(b, fonts, size), gapAfter: 2 };
   }
   const depth = b.listDepth ?? 0;
   const base = MARGIN_L + BODY_INDENT * BELOW_MARGIN_RATIO + extraIndent + depth * size * 2;
@@ -354,10 +377,10 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
   }
 
   // ── 2) 수신/참조/제목(일반) 또는 발신/수신/제목(내용증명) ──
-  const headSize = 10.5;
+  const headSize = HEAD_SIZE;
   const headLineH = 19;
-  const labelW = fonts.bold.widthOfTextAtSize("수    신", headSize);
-  const valueX = MARGIN_L + labelW + fonts.regular.widthOfTextAtSize(" : ", headSize) + 2;
+  const labelW = fonts.bold.widthOfTextAtSize(HEAD_LABEL, headSize);
+  const valueX = MARGIN_L + headValueIndent(fonts); // 본문 첫 줄도 이 자리에서 시작(paraGeometry)
   const headLine = (label: string, value: string, cont = false) => {
     if (!cont) {
       page.drawText(label, { x: MARGIN_L, y: y - headSize, size: headSize, font: fonts.bold, color: INK });
@@ -502,7 +525,7 @@ export async function renderLetterPdf(layout: LetterLayout, opts: { fit?: FitPar
         }
         y -= 2;
       } else {
-        // 기본: 첫 줄 들여쓰기(BODY_INDENT + 에디터 들여쓰기), 이후 줄은 좌여백부터(실측 재현).
+        // 기본: 첫 줄은 제목 값 시작점(+ 에디터 들여쓰기), 이후 줄은 항목 번호 뒤 글자에 맞춘다(paraGeometry).
         // "- 아 래 -" 아래는 paraGeometry 의 좁은 여백·하위 항목 들여쓰기 규칙.
         const lines = wrapRuns(b.runs, fonts, size, PAGE_W - MARGIN_R - g.firstX, PAGE_W - MARGIN_R - g.restX);
         lines.forEach((segs, i) => {

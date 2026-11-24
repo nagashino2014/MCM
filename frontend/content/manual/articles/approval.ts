@@ -65,6 +65,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "필요하면 [[결재 의견]]을 적습니다. **반려할 때는 의견이 필수**입니다.",
             "[[승인]] 또는 [[반려]]를 누릅니다.",
           ] },
+          { kind: "tip", text: "[[승인]]은 문서 맨 위 결재선 줄 오른쪽에도 있어, 끝까지 내리지 않고 바로 승인할 수 있습니다. 반려·전결은 아래 처리 바에서 합니다. 아래 [[결재 의견]]에 적어 둔 내용은 위쪽 [[승인]]으로 승인해도 함께 남습니다." },
           { kind: "list", items: [
             "경고 카드(주 12시간 초과근무, 식대 기준, 선행 문서 불일치 등)가 보이면 내용을 확인한 뒤 결재하세요.",
             "‘AI 요약’은 참고용입니다. 결재 판단은 본문 기준으로 합니다.",
@@ -136,7 +137,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["결재", "승인", "반려", "결재함", "기안함", "참조", "열람", "결재 대기", "결재 예정", "재상신", "반려 요청", "결재 취소", "전결", "회수", "관리자 수정", "값 수정", "고정 참조", "참조자 확인", "열람자 확인"],
     sources: ["components/approval/ApprovalHomeBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx", "components/approval/ApprovalDocAdminPanel.tsx"],
-    reviewedAt: "2026-11-20",
+    reviewedAt: "2026-11-24",
   },
   {
     id: "approval.draft",
@@ -325,6 +326,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "list", items: [
             "본문은 A4 한 장에 자동으로 맞춰집니다. 한 장을 넘으면 상신할 수 없으니 줄이거나 붙임으로 돌리세요.",
+            "본문 문단은 제목 글자와 같은 자리에서 시작하고, 줄이 넘어가면 다음 줄은 ‘1.’·‘가.’ 같은 항목 번호 뒤 글자에 맞춰 이어집니다. 번호는 문단 맨 앞에 ‘2. ’처럼 번호와 띄어쓰기로 적습니다.",
             "[[미리보기·조정]]에서 실제 지면을 확인하고 [[레이아웃 미세조정]]으로 인감 위치(▲◀▶▼)·글꼴·간격을 맞춥니다. 조정값은 승인 후 발송본에도 그대로 적용됩니다.",
             "공문 화면은 내용이 바뀌면 5분마다 자동 저장되며, 위쪽 [[저장]]으로 바로 저장할 수도 있습니다.",
           ] },
@@ -345,7 +347,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송"],
     sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
-    reviewedAt: "2026-11-12",
+    reviewedAt: "2026-11-24",
   },
   {
     id: "approval.notice",

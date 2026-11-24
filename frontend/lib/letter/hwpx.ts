@@ -12,8 +12,15 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { BODY_INDENT, DEFAULT_TABLE_WIDTH_PCT } from "./types";
-import { LIST_LEVEL_STEP_PT } from "./list-markers";
+import { LIST_LEVEL_STEP_PT, TYPED_MARKER_RE } from "./list-markers";
 import type { FitParams, LetterBlock, LetterLayout, TableCell, TextRun } from "./types";
+
+/**
+ * 머리부 값(제목 '삼성전기 …' 등)의 시작 x(본문 좌여백 기준 pt) — letter.hwpx 를 한글 2020 으로 PDF 변환해 잰
+ * 제목 값 위치 55.8pt(표 바깥 여백 2.8 + 셀 안 여백 5.1 + '수   신'·' : ' 맑은 고딕 12pt). 본문 번호 항목 첫 줄이
+ * 여기서 시작한다(2026-11-24 사용자 요청). PDF 는 같은 규칙을 pdf.ts headValueIndent 가 자기 머리부 글자 크기로 계산한다.
+ */
+const HEAD_VALUE_INDENT_PT = 56;
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 export const LINESEG_RE = /<hp:linesegarray>[\s\S]*?<\/hp:linesegarray>/g; // hwpx-fill.ts 이식
@@ -434,8 +441,29 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
   const listParaPrOf = (b: Extract<LetterBlock, { kind: "p" }>): string | null => {
     if (!headerXml || !b.listLevel) return null;
     const fontPt = opts.fit.bodyFontPt;
-    const basePt = (b.below ? BODY_INDENT * 0.5 : BODY_INDENT) + (b.indentPt ?? 0) + b.listLevel * LIST_LEVEL_STEP_PT;
+    const basePt = (b.below ? BODY_INDENT * 0.5 : HEAD_VALUE_INDENT_PT) + (b.indentPt ?? 0) + b.listLevel * LIST_LEVEL_STEP_PT;
     const hangPt = b.marker ? markerWidthPt(b.marker, fontPt) : 0;
+    return hangParaPrOf(basePt, hangPt);
+  };
+  // 본문 번호 항목(2026-11-24 사용자 요청) — 첫 줄은 머리부 제목 값 시작점, 이어지는 줄은 항목 번호("2. ") 뒤
+  // 글자에 맞춘다. 종전에는 템플릿 본문 paraPr(첫 줄 65pt 들여쓰기, 이어지는 줄 좌여백부터)을 그대로 썼다.
+  const bodyItemParaPrOf = (b: Extract<LetterBlock, { kind: "p" }>): string | null => {
+    if (!headerXml) return null;
+    const prefix = b.marker ?? TYPED_MARKER_RE.exec(b.runs[0]?.text ?? "")?.[0] ?? "";
+    return hangParaPrOf(HEAD_VALUE_INDENT_PT + (b.indentPt ?? 0), prefix ? markerWidthPt(prefix, opts.fit.bodyFontPt) : 0);
+  };
+  // "- 아 래 -" 아래 문단 — PDF(paraGeometry)와 같은 좁은 좌여백(BODY_INDENT 절반)에서 시작하고 이어지는 줄도 그 안에
+  // 둔다. 하위 항목(가. 밑의 1. 2. 3.)은 깊이마다 두 글자 폭 더 들여 쓰고 번호 뒤에 맞춘다. 종전에는 템플릿 본문
+  // paraPr(첫 줄 65pt, 이어지는 줄 좌여백부터)에 전각 공백을 붙였다 — 새 paraPr 의 좌여백이 무시된다던 실측은
+  // 2026-11-24 한글 2020 PDF 변환으로 다시 재 보니 좌여백·내어쓰기 모두 반영됐다.
+  const belowParaPrOf = (b: Extract<LetterBlock, { kind: "p" }>): string | null => {
+    const fontPt = opts.fit.bodyFontPt;
+    const depth = b.listDepth ?? 0;
+    const prefix = depth > 0 ? b.marker ?? /^(\d+\.\s+|•\s+)/.exec(b.runs[0]?.text ?? "")?.[0] ?? "" : "";
+    return hangParaPrOf(BODY_INDENT * 0.5 + (b.indentPt ?? 0) + depth * fontPt * 2, prefix ? markerWidthPt(prefix, fontPt) : 0);
+  };
+  const hangParaPrOf = (basePt: number, hangPt: number): string | null => {
+    if (!headerXml) return null;
     const key = `${basePt.toFixed(1)}|${hangPt.toFixed(1)}`;
     const hit = listParaCache.get(key);
     if (hit) return hit;
@@ -530,12 +558,11 @@ export async function renderLetterHwpx(layout: LetterLayout, opts: HwpxRenderOpt
       } else if (b.listLevel && b.listLevel >= 1) {
         const listed = listParaPrOf(b);
         if (listed) paraPr = listed;
+      } else {
+        const item = b.below ? belowParaPrOf(b) : bodyItemParaPrOf(b);
+        if (item) paraPr = item;
       }
-      // "- 아 래 -" 아래 하위 항목(가. 밑의 1. 2. 3.) 들여쓰기 — 한글은 새로 등록한 paraPr 의 좌여백을
-      // 무시하므로(실측) 깊이마다 전각 공백 2자로 맞춘다(PDF 의 두 글자 폭 들여쓰기와 같은 정도).
-      // 글머리 기호 단계(listLevel)가 있는 항목은 위 paraPr 이 들여쓰기를 맡는다.
-      const runs = b.below && b.listDepth && b.listLevel === undefined ? [{ ...b.runs[0], text: "\u3000".repeat(b.listDepth * 2) + (b.runs[0]?.text ?? "") }, ...b.runs.slice(1)] : b.runs;
-      bodyXmlParts.push(paragraphXml(runs, paraPr, bodyCharPr, boldCharPr));
+      bodyXmlParts.push(paragraphXml(b.runs, paraPr, bodyCharPr, boldCharPr));
     } else if (tableTpl) {
       bodyXmlParts.push(buildTableXml(b, tableTpl, opts.fit.bodyFontPt, bodyCharPr, boldCharPr, alignParaPrOf));
     } else {

@@ -1415,6 +1415,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "p", text: "[[미리보기]]는 PDF 와 같은 조판(자동 분쪽 포함)으로 문서 전체를 봅니다. [[PDF 받기]]는 지금 저장된 편집본으로 PDF 를 만들고 쪽 수·넘침 수를 보여 준 뒤 내려받게 합니다. 첫 화면에서 만드는 PDF 에도 같은 편집이 들어갑니다." },
           { kind: "p", text: "PDF 를 만든 뒤 [[PPT 받기]]를 누르면 같은 판을 PowerPoint(PPTX)로 받습니다. 첫 장 표지는 글상자·로고가 따로 올라가 PowerPoint 에서 고칠 수 있고, 나머지 쪽은 그림입니다(1분 안팎)." },
+          { kind: "p", text: "한 쪽만 필요하면 PDF 를 만든 뒤 '쪽별 받기'에서 쪽을 고르고 [[이 쪽 받기]]를 누릅니다. 처음에는 지금 스튜디오에서 연 쪽이 골라져 있고, 여러 쪽으로 나뉘는 명단·이력 쪽은 이어진 쪽을 함께 받습니다. 쪽 번호를 직접 적고(예: 3 또는 3-5, 8) [[번호로 받기]]를 눌러도 됩니다." },
           { kind: "tip", text: "숫자·목록을 고치지 않고 두면 계약이 늘거나 직원이 바뀔 때 PDF 에 바로 반영됩니다. 꼭 필요한 문장만 고치는 것이 관리하기 쉽습니다." },
         ],
       },
@@ -1435,7 +1436,7 @@ export const SALES_ARTICLES: ManualArticle[] = [
       "components/sales/catalog/studio/BindPicker.tsx",
       "components/sales/catalog/studio/PanelCases.tsx",
     ],
-    reviewedAt: "2026-11-18",
+    reviewedAt: "2026-11-25",
   },
   {
     id: "sales.catalog-fonts",
@@ -1785,7 +1786,8 @@ export const SALES_ARTICLES: ManualArticle[] = [
         title: "상자 고치기",
         blocks: [
           { kind: "list", items: [
-            "상자마다 이름, 아래 줄(책임자·인원 등), 표시(촉탁·자문·외부)를 고칩니다. 고문 같은 촉탁 임원은 '촉탁'으로 표시되고, 소개서에서는 대표이사 아래 오른쪽 바깥 가지에 그려집니다(왼쪽 바깥 가지는 외부자문위원).",
+            "상자마다 이름, 아래 줄(책임자·인원 등), 표시(촉탁·자문·외부·독립)를 고칩니다. 고문 같은 촉탁 임원은 '촉탁'으로 표시되고, 소개서에서는 대표이사 아래 오른쪽 바깥 가지에 그려집니다(왼쪽 바깥 가지는 외부자문위원).",
+            "대표이사 직속 별도 독립 조직(예: 녹색채권 검토본부)은 대표이사 바로 아래 상자로 두고 표시를 '독립'으로 고릅니다. 고문·외부자문위원처럼 대표이사 세로줄 옆 가지로 그리며, 옆 가지가 셋 이상이면 두 개씩 단을 나눠 아래로 잇습니다. '촉탁'·'독립'은 글로 적지 않고 자리로만 드러납니다.",
             "기본안은 연구소·지사를 대표이사 바로 아래에, 나머지 본부를 '총괄본부장' 상자 아래에 둡니다. 소개서에서는 연구소·지사 아래 세로줄 위에 총괄본부장이 놓이고 그 아래로 본부들이 이어집니다. 확정판을 이미 만들었다면 [[MCM 조직에서 다시 불러오기]] 후 확정해야 이 모양이 됩니다.",
             "화살표로 같은 단계 안에서 순서를 바꾸고, + 단추로 하위 조직을 더하며, 휴지통으로 지웁니다(하위 조직도 함께 지워집니다).",
             "[[최상위 상자 추가]]로 맨 위 단계에 상자를 더합니다. 단계는 5단계, 상자는 150개까지입니다.",
@@ -1794,6 +1796,17 @@ export const SALES_ARTICLES: ManualArticle[] = [
           ] },
           { kind: "tip", text: "이름을 비운 상자는 저장할 때 빠집니다." },
           { kind: "warn", text: "여기서 고친 내용은 회사소개서에만 쓰입니다. MCM 인사 조직(조직·직급 관리)은 바뀌지 않습니다." },
+        ],
+      },
+      {
+        id: "preview",
+        title: "미리보기",
+        blocks: [
+          { kind: "list", items: [
+            "오른쪽 미리보기는 스튜디오·PDF 와 같은 조직 쪽(쪽 제목·인원 통계·스튜디오에서 고친 내용 포함)에 지금 편집 중인 상자를 얹어 그립니다. 상자를 고치면 바로 바뀝니다.",
+            "[[크게 보기]]를 누르면 같은 쪽을 넓은 창에서 봅니다.",
+            "미리보기는 확정 전 모양입니다. 회사소개서에는 [[확정]]해야 쓰입니다.",
+          ] },
         ],
       },
       {
@@ -1808,9 +1821,9 @@ export const SALES_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["조직도", "조직", "부서", "팀", "회사소개서 조직도", "고문", "촉탁"],
-    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx", "components/sales/catalog/ContentVersions.tsx"],
-    reviewedAt: "2026-11-18",
+    keywords: ["조직도", "조직", "부서", "팀", "회사소개서 조직도", "고문", "촉탁", "독립", "녹색채권", "미리보기"],
+    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx", "components/sales/catalog/CatalogOrgPreview.tsx", "components/sales/catalog/ContentVersions.tsx"],
+    reviewedAt: "2026-11-25",
   },
   {
     id: "sales.catalog-message",

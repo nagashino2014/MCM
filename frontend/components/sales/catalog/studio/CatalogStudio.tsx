@@ -50,6 +50,7 @@ import type { InfoSlotProps } from "@/lib/catalog/render/infographic/slot";
 import { renderNode } from "@/lib/catalog/studio/render-tree";
 import { capabilities, outermost, resolveSelection, type Selection } from "@/lib/catalog/studio/select";
 import type { StudioImageAsset } from "@/lib/catalog/studio/store";
+import { parsePageSpec } from "@/lib/catalog/render/pdf-pages";
 import { renderToStaticMarkup } from "react-dom/server";
 import { catalogFetch } from "../catalogFetch";
 import { CatalogPendingButton, CatalogPendingModal, usePending } from "../CatalogPending";
@@ -954,7 +955,7 @@ export function CatalogStudio({ docId = "master" }: { docId?: string }) {
           </div>
         ) : null}
       </CdModal>
-      <PdfModal open={modal === "pdf"} onClose={() => setModal(null)} view={studio.view} />
+      <PdfModal open={modal === "pdf"} onClose={() => setModal(null)} view={studio.view} pageList={plan} currentKey={item?.key ?? ""} />
       <CatalogPendingModal
         open={modal === "pending"}
         onClose={() => setModal(null)}
@@ -1095,19 +1096,41 @@ interface EditionSummary {
   sizeBytes: number;
   totalMs: number;
   fileName: string;
+  /** 쪽 키 → PDF 쪽 범위(쪽별 받기) */
+  pageRanges: Record<string, [number, number]>;
 }
 
-function PdfModal({ open, onClose, view }: { open: boolean; onClose: () => void; view: RenderOptions }) {
+function PdfModal({
+  open,
+  onClose,
+  view,
+  pageList,
+  currentKey,
+}: {
+  open: boolean;
+  onClose: () => void;
+  view: RenderOptions;
+  /** 스튜디오 쪽 목록(쪽 이름) — 쪽별 받기 고르기 */
+  pageList: Array<{ key: string; label: string }>;
+  /** 지금 스튜디오에서 연 쪽 — 쪽별 받기 기본값 */
+  currentKey: string;
+}) {
   const [opts, setOpts] = useState<RenderOptions>(view);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EditionSummary | null>(null);
+  const [pick, setPick] = useState("");
+  const [spec, setSpec] = useState("");
   useEffect(() => {
     if (open) {
       setOpts(view);
       setResult(null);
       setError(null);
+      setPick(currentKey);
+      setSpec("");
     }
+    // 대화상자를 열 때만 지금 쪽으로 맞춘다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, view]);
   const make = async () => {
     setBusy(true);
@@ -1122,6 +1145,13 @@ function PdfModal({ open, onClose, view }: { open: boolean; onClose: () => void;
     }
   };
   const overflow = result?.warnings.filter((w) => w.kind === "overflow").length ?? 0;
+  // 쪽별 받기 — 스튜디오 쪽 ↔ PDF 쪽 범위(흐름 쪽은 여러 쪽). 쪽 지도가 없으면 번호로만 받는다
+  const ranges = result?.pageRanges ?? {};
+  const pageOptions = pageList.filter((p) => ranges[p.key]).sort((a, b) => ranges[a.key][0] - ranges[b.key][0]);
+  const pickKey = ranges[pick] ? pick : (pageOptions[0]?.key ?? "");
+  const rangeText = (r: [number, number]) => (r[0] === r[1] ? `${r[0]}` : `${r[0]}-${r[1]}`);
+  const specPages = result ? parsePageSpec(spec, result.pages) : null;
+  const pagesHref = (q: string) => (result ? `/api/catalog/editions/${result.editionId}/pdf?download=1&pages=${encodeURIComponent(q)}` : "#");
   return (
     <CdModal open={open} onClose={onClose} title="편집본 PDF 받기" size="md">
       <div className="p-4 flex flex-col gap-3 text-sm">
@@ -1171,6 +1201,45 @@ function PdfModal({ open, onClose, view }: { open: boolean; onClose: () => void;
               </a>
             </div>
             <p className="text-xs cd-text-faint">PPT 는 첫 장 표지를 글상자·로고로 나눠 PowerPoint 에서 고칠 수 있고, 나머지 쪽은 그림으로 넣습니다(1분 안팎).</p>
+            <div className="flex flex-col gap-1.5 border-t cd-border-c pt-2 mt-1">
+              <span className="cd-label-text">쪽별 받기</span>
+              {pageOptions.length ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <select className="cd-select" style={{ width: 280 }} value={pickKey} onChange={(e) => setPick(e.target.value)} aria-label="받을 쪽">
+                    {pageOptions.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {rangeText(ranges[p.key])}쪽 · {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <a className="cd-btn cd-btn-soft cd-btn-sm cd-action" href={pickKey ? pagesHref(rangeText(ranges[pickKey])) : "#"} aria-disabled={!pickKey}>
+                    <Download className="w-3.5 h-3.5" /> 이 쪽 받기
+                  </a>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  className="cd-input"
+                  style={{ width: 160 }}
+                  value={spec}
+                  placeholder={`예: 3 또는 3-5, 8`}
+                  onChange={(e) => setSpec(e.target.value)}
+                  aria-label="받을 쪽 번호"
+                />
+                {specPages ? (
+                  <a className="cd-btn cd-btn-soft cd-btn-sm cd-action" href={pagesHref(spec.replace(/\s+/g, ""))}>
+                    <Download className="w-3.5 h-3.5" /> 번호로 받기
+                  </a>
+                ) : (
+                  <button type="button" className="cd-btn cd-btn-soft cd-btn-sm" disabled>
+                    <Download className="w-3.5 h-3.5" /> 번호로 받기
+                  </button>
+                )}
+              </div>
+              <span className="cd-hint">
+                {spec && !specPages ? `쪽 번호를 1~${result.pages} 안에서 적으세요(예: 3 또는 3-5, 8).` : "고른 쪽만 PDF 로 받습니다. 여러 쪽으로 나뉘는 명단·이력 쪽은 이어진 쪽을 함께 받습니다."}
+              </span>
+            </div>
           </div>
         ) : null}
       </div>

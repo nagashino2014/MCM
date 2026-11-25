@@ -3175,6 +3175,9 @@ function EditMilestoneModal({
   const [saving, setSaving] = useState(false);
   const invoiceFileRef = useRef<File | null>(null);
   const [invoiceFileName, setInvoiceFileName] = useState("");
+  // 창을 연 시점에 발행 기록이 있던 단계만 [계산서 발행 취소]를 보인다(입력 중인 발행일과 무관).
+  const [wasIssued] = useState(() => Boolean(state.issueDate));
+  const [canceling, setCanceling] = useState(false);
   // 어음 상세 노출 — 계약의 대금 지급 방식이 어음이거나, 단계 지급조건에 어음이 명시된 경우.
   const isNotePayment = state.paymentMethod.startsWith("어음") || /어음|전자어음/.test(state.paymentTerms);
 
@@ -3257,6 +3260,39 @@ function EditMilestoneModal({
     }
   };
 
+  // 계산서 발행 취소 표시(2026-11-25) — 바로빌·홈택스에서 이미 취소한 계산서를 단계에 반영한다.
+  // 발행일·발행금액을 비우고 등록된 세금계산서 PDF를 지운다. 바로빌에는 요청을 보내지 않는다.
+  const cancelInvoice = async () => {
+    const ok = window.confirm(
+      `${state.stageLabel} 단계의 계산서 발행을 취소로 표시할까요?\n\n` +
+        "· 계산서 발행일·발행금액을 비워 미발행 단계로 되돌립니다.\n" +
+        "· 이 단계에 등록된 세금계산서 PDF를 삭제합니다.\n" +
+        "· 앱에서 전자발행한 계산서는 발행 이력에 '취소됨'으로 남습니다.\n" +
+        "· 수금 정보는 그대로 둡니다.\n\n" +
+        "바로빌·국세청의 계산서는 취소되지 않습니다. 바로빌에서 발행 취소(또는 수정세금계산서 발행)를 먼저 마친 뒤 표시해 주세요.",
+    );
+    if (!ok) return;
+    setCanceling(true);
+    try {
+      const res = await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/milestones/${encodeURIComponent(state.milestoneId)}/invoice-cancel`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error ?? "HTTP " + res.status);
+      const removed = Number(body?.removedInvoiceDocuments ?? 0);
+      toast.show(
+        removed > 0 ? `계산서 발행을 취소로 표시하고 계산서 PDF ${removed}건을 삭제했습니다.` : "계산서 발행을 취소로 표시했습니다.",
+        "success",
+      );
+      onSaved();
+    } catch (err) {
+      toast.show("발행 취소 실패: " + (err as Error).message, "error");
+    } finally {
+      setCanceling(false);
+    }
+  };
+
   return (
     <ModalShell title={`${state.stageLabel} 단계 수정`} onClose={onClose}>
       <div className="p-5 grid gap-3 grid-cols-2">
@@ -3272,10 +3308,23 @@ function EditMilestoneModal({
           <span className="cd-label-text">대금 지급 조건</span>
           <input className="cd-input" value={state.paymentTerms} onChange={(e) => onChange({ ...state, paymentTerms: e.target.value })} />
         </label>
-        <label className="grid gap-1 text-sm">
-          <span className="cd-label-text">계산서 발행일</span>
+        {/* 버튼을 품으므로 label 이 아닌 div — label 이면 글자를 눌러도 버튼이 눌린다. */}
+        <div className="grid gap-1 text-sm">
+          <span className="flex items-center justify-between gap-2">
+            <span className="cd-label-text">계산서 발행일</span>
+            {wasIssued && (
+              <button
+                type="button"
+                onClick={() => void cancelInvoice()}
+                disabled={saving || canceling}
+                className="cd-btn cd-btn-ghost cd-btn-sm shrink-0 -my-1.5"
+              >
+                {canceling ? "취소 처리 중..." : "계산서 발행 취소"}
+              </button>
+            )}
+          </span>
           <DateInput value={state.issueDate} onChange={(issueDate) => onChange({ ...state, issueDate })} />
-        </label>
+        </div>
         <label className="grid gap-1 text-sm">
           <span className="cd-label-text">계산서 발행금액</span>
           <input className="cd-input tabular-nums" inputMode="numeric" value={formatThousands(state.invoiceAmount)} onChange={(e) => onChange({ ...state, invoiceAmount: stripDigits(e.target.value) })} />

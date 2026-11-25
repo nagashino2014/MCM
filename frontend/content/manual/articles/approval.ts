@@ -167,7 +167,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
             "계약·업체 검색 목록은 다른 곳을 누르거나 Esc를 누르면 닫힙니다.",
             "날짜 칸은 숫자 8자리(예: 20261124)를 이어 치면 날짜로 바뀝니다. 달력에서 고르려면 칸 오른쪽 끝의 달력 아이콘을 누르거나 칸에서 Alt+↓를 누릅니다. 달력 안에서는 화살표로 날짜를, PageUp·PageDown으로 달을 옮기고 Enter로 고르며 Esc로 닫습니다. 기간은 시작일·종료일 칸 각각에서 엽니다.",
             "출장보고서에서 업체를 [[미계약 업체(직접 입력)]]로 적으면 접견인 칸이 직접 입력으로 바뀝니다. ‘홍길동 부장, 김철수 대리’처럼 성명과 직함을 쉼표로 구분해 적으면 칸 아래에 인식 결과가 보입니다. 인식 결과가 다르면 띄어쓰기를 고쳐 주세요.",
-            "등록된 업체를 골랐을 때는 접견인을 검색해서 고릅니다. 검색에 없는 사람은 검색란 오른쪽 [[접견인 추가]]를 눌러 그 업체의 담당자로 등록하면 바로 접견인에 들어갑니다(검색란에 성명·직함을 적기만 해서는 들어가지 않습니다). 등록 창에서 부서를 고르거나 새로 만들 수 있습니다.",
+            "등록된 업체를 골랐을 때는 접견인을 검색해서 고릅니다. 검색에 없는 사람은 검색란 오른쪽 [[접견인 추가]]를 눌러 그 업체의 담당자로 등록하면 바로 접견인에 들어갑니다(검색란에 성명·직함을 적기만 해서는 들어가지 않습니다). 등록 창에서 부서를 고르거나 새로 만들 수 있습니다. [[접견인 추가]]는 모든 직원에게 보이며, 휴대폰 앱과 PC 위젯의 출장보고서에서도 접견인 칸 아래 접견인 추가로 같은 등록을 할 수 있습니다.",
           ] },
         ],
       },
@@ -276,7 +276,7 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
     ],
     keywords: ["기안", "상신", "결재선", "고정 결재선", "결재선 잠금", "결재자 추가", "프리셋", "참조", "열람", "임시저장", "카드 내역", "영수증", "기타 개인 지출증빙", "계좌이체 확인증", "지출결의", "출장보고서", "초과근무", "휴가신청"],
     sources: ["components/approval/ApprovalDraftBoard.tsx", "components/approval/ApprovalHomeBoard.tsx", "components/approval/OvertimeConsentModal.tsx", "lib/approval/expense-purpose.ts", "components/layout/TopBar.tsx", "components/finance/ReceiptPickerModal.tsx", "components/approval/ApprovalFormRenderer.tsx", "components/approval/FixedLineList.tsx"],
-    reviewedAt: "2026-11-23",
+    reviewedAt: "2026-11-25",
   },
   {
     id: "approval.letter",

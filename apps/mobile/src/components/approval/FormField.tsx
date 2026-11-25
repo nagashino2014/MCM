@@ -6,6 +6,7 @@ import { Badge, Chip, HtmlView, Input, Sheet, Textarea } from '@/components/ui';
 import { DatePickerSheet } from '@/components/calendar/DatePickerSheet';
 import { EntityPickerSheet, type EntityKind, type EntityOption } from '@/components/pickers/EntityPickerSheet';
 import { OrgPickerSheet } from '@/components/pickers/OrgPickerSheet';
+import { ContactCreateSheet } from '@/components/approval/ContactCreateSheet';
 import { useApi } from '@/lib/use-api';
 import { useTheme } from '@/theme/useTheme';
 import { parseTimeRange, timeRangeInvalid, timeRangeMinutes, type ApprovalFieldDef } from '@/lib/approval/form-types';
@@ -270,7 +271,16 @@ export function FormField({
   periodAutoDays,
 }: Props) {
   const { c } = useTheme();
-  const [sheet, setSheet] = useState<null | 'date' | 'period' | 'select' | 'org' | 'entity' | 'leave'>(null);
+  const [sheet, setSheet] = useState<null | 'date' | 'period' | 'select' | 'org' | 'entity' | 'leave' | 'contactCreate'>(null);
+  // 접견인 추가(2026-11-25) — 같은 양식의 업체 칸에서 고른 등록 업체의 담당자로 등록한다.
+  const contactCompany =
+    f.type === 'contact_select'
+      ? rec((allValues ?? {})[(allFields ?? []).find((x) => x.type === 'company_select' && !isPlaceField(x))?.key ?? ''])
+      : {};
+  const contactFacility =
+    contactCompany.facilityId && contactCompany.manual !== true
+      ? { facilityId: str(contactCompany.facilityId), name: str(contactCompany.name) }
+      : null;
 
   const label = (
     <View className="flex-row items-center gap-1">
@@ -546,9 +556,17 @@ export function FormField({
             <Pressable
               onPress={() => setSheet('entity')}
               className="min-h-[46px] flex-row items-center justify-between rounded-xl border border-cd-border bg-cd-card px-3 active:opacity-70">
-              <Text className="text-[14px] text-cd-faint">담당자 추가</Text>
+              <Text className="text-[14px] text-cd-faint">담당자 검색</Text>
               <Ionicons name="search-outline" size={16} color={c.faint} />
             </Pressable>
+            {/* 목록에 없는 사람은 바로 등록 — 웹의 [접견인 추가]와 같다(전 직원, 2026-11-25) */}
+            <Pressable
+              onPress={() => setSheet('contactCreate')}
+              className="min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-xl border border-cd-border bg-cd-card px-3 active:opacity-70">
+              <Ionicons name="add" size={16} color={c.primary} />
+              <Text className="text-[14px] font-semibold text-cd-primary">접견인 추가</Text>
+            </Pressable>
+            <Text className="text-[12px] text-cd-faint">검색에 없는 사람은 접견인 추가로 등록하면 바로 들어갑니다.</Text>
           </View>
         );
       }
@@ -674,6 +692,17 @@ export function FormField({
         }}
         onClose={() => setSheet(null)}
       />
+      {f.type === 'contact_select' ? (
+        <ContactCreateSheet
+          visible={sheet === 'contactCreate'}
+          facility={contactFacility}
+          onCreated={(p) => {
+            const cur = Array.isArray(value) ? (value as { id?: string }[]) : [];
+            if (!cur.some((x) => x.id === p.id)) onSet([...cur, p]);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
       <EntityPickerSheet
         visible={sheet === 'entity'}
         kind={entityKind}

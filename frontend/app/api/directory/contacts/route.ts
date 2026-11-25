@@ -15,10 +15,12 @@ export const dynamic = "force-dynamic";
 
 // 주소록 외부 연락처 관리 — 담당자 개별 추가·수정·삭제 + 소속 사업장의 연락처 구분(기관 유형) 설정.
 // 사업장 상세(FacilityDetailPanel)의 일괄 저장과 별개로, 주소록·결재 양식에서 바로 고칠 때 쓴다.
-// 권한(2026-10-30 사용자 결정): 담당자 추가·수정은 contact.edit(전 직원), 삭제와 연락처 구분(사업장 속성)
+// 권한(2026-10-30 사용자 결정): 담당자 수정은 contact.edit(전 직원), 삭제와 연락처 구분(사업장 속성)
 // 변경은 facility.edit 만 — 출장·영업에서 만난 사람은 담당 직원이 직접 등록·갱신하되 지우지는 못한다.
+// 추가(POST)와 부서 목록(GET)은 로그인한 직원이면 된다(2026-11-25 사용자 결정) — 출장보고서의 [접견인 추가]는
+// 전 직원이 쓰므로 권한 템플릿 구성에 따라 막히지 않게 한다. 누가 넣었는지는 created_by·감사 로그에 남는다.
 
-/** 담당자 추가·수정 — contact.edit 또는 facility.edit(사업장 관리자는 원래 수정할 수 있었다). */
+/** 담당자 수정 — contact.edit 또는 facility.edit(사업장 관리자는 원래 수정할 수 있었다). */
 async function requireContactEditor() {
   const ctx = await requireSession();
   if ((await hasPermission(ctx.userId, "contact.edit")) || (await hasPermission(ctx.userId, "facility.edit"))) return ctx;
@@ -28,7 +30,7 @@ async function requireContactEditor() {
 // GET ?facilityId= — 그 기관·업체의 부서 목록(담당자 등록·수정 창에서 부서를 고를 때).
 export async function GET(req: NextRequest) {
   try {
-    await requireContactEditor();
+    await requireSession();
     const facilityId = String(req.nextUrl.searchParams.get("facilityId") ?? "").trim();
     if (!facilityId) return NextResponse.json({ error: "facilityId 가 필요합니다." }, { status: 400 });
     const names = await listFacilityDepartmentNames(facilityId);
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireContactEditor();
+    const ctx = await requireSession();
     const body = (await req.json().catch(() => ({}))) as {
       facilityId?: string;
       personName?: string;

@@ -16,8 +16,6 @@ import { AutoDateInput } from "@/components/ui/AutoDateInput";
 import { AutoTimeInput } from "@/components/ui/AutoTimeInput";
 import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
 import { ContactCreateModal } from "@/components/directory/ContactCreateModal";
-import { useSession } from "next-auth/react";
-import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { MailEditor } from "@/components/mail/MailEditor";
 import {
   parseTimeRange,
@@ -950,10 +948,9 @@ function ContactSelectInput({
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   useOutsideDismiss(boxRef, open, () => setOpen(false));
-  // 목록에 없는 사람은 바로 등록 — 전 직원 contact.edit(2026-10-30 사용자 결정). 삭제는 여기서 하지 않는다.
-  const { data: session } = useSession();
-  const perms = permsOf(session?.user);
-  const canCreate = hasPerm(perms, "contact.edit") || hasPerm(perms, "facility.edit");
+  // 목록에 없는 사람은 바로 등록 — 출장보고서는 전 직원이 쓰는 양식이라 [접견인 추가]는 권한 요약과 무관하게
+  // 항상 보인다(2026-11-25 사용자 결정). 로그인 때 실린 권한 요약이 낡은 세션에서 버튼이 사라지던 문제를 없앤다.
+  // 등록 API(POST /api/directory/contacts)도 로그인한 직원이면 통과한다. 삭제는 여기서 하지 않는다.
   const [creating, setCreating] = useState(false);
   // 검색란에 `성명 직함`으로 적어 둔 채 [접견인 추가]를 누르면 등록 창의 이름·직급에 나눠 넣는다.
   const typed = parseReceivers(q)[0] ?? null;
@@ -1059,16 +1056,14 @@ function ContactSelectInput({
             setOpen(true);
           }}
         />
-        {canCreate && (
-          <button
-            type="button"
-            className="cd-btn border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1 shrink-0"
-            title="목록에 없는 사람을 이 업체의 담당자로 등록하고 바로 접견인으로 넣습니다"
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="w-3.5 h-3.5" /> 접견인 추가
-          </button>
-        )}
+        <button
+          type="button"
+          className="cd-btn border cd-border-c px-2.5 py-1.5 text-[12px] flex items-center gap-1 shrink-0"
+          title="목록에 없는 사람을 이 업체의 담당자로 등록하고 바로 접견인으로 넣습니다"
+          onClick={() => setCreating(true)}
+        >
+          <Plus className="w-3.5 h-3.5" /> 접견인 추가
+        </button>
         {people.map((p) => (
           <span key={personKey(p)} className="cd-action inline-flex items-center gap-1 rounded-full cd-tint-primary px-2.5 py-1 text-[12px] shrink-0">
             {tagLabel(p)}
@@ -1086,7 +1081,7 @@ function ContactSelectInput({
       {/* 검색란에 적기만 하면 접견인으로 들어가지 않는다 — 적어 둔 글자가 있고 고른 사람이 없을 때 방법을 알려 준다. */}
       {q.trim().length >= 2 && !(open && options.length > 0) && (
         <p className="mt-1 text-[12px] cd-warn-text">
-          검색란에 적은 내용은 접견인으로 들어가지 않습니다. 검색 결과에서 고르거나{canCreate ? " [접견인 추가]로 등록하세요." : " 주소록에 먼저 등록해 주세요."}
+          검색란에 적은 내용은 접견인으로 들어가지 않습니다. 검색 결과에서 고르거나 [접견인 추가]로 등록하세요.
         </p>
       )}
       {creating && (

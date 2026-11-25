@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireContactEditor();
+    // 등록은 로그인한 직원이면 된다(2026-11-25 사용자 결정) — [접견인 추가] 창의 '새 업체로 등록'이 이 경로다.
+    const ctx = await requireSession();
     const body = (await req.json().catch(() => ({}))) as QuickRegisterInput;
     if (!body || typeof body !== "object" || !body.person) return NextResponse.json({ error: "담당자 정보를 입력하세요." }, { status: 400 });
     try {

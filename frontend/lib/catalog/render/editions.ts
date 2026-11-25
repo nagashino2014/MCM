@@ -7,6 +7,7 @@ import { loadStudioDoc } from "@/lib/catalog/studio/store";
 import { computeCatalogFingerprint, resolvePendingByEdition, runCatalogRefresh } from "@/lib/catalog/refresh/service";
 import { loadCatalogRenderData } from "./data";
 import { buildCatalogHtml } from "./html";
+import { pageRangesOf } from "./pdf-pages";
 import { EDITION_LABEL, NAMING_LABEL, SCOPE_LABEL, type EditionKind, type NamingMode, type RenderOptions, type ScopeMode } from "./types";
 
 /*
@@ -55,6 +56,8 @@ export interface CatalogEditionSummary {
   /** 데이터 기준일 */
   asOf: string;
   distributions: CatalogDistribution[];
+  /** 스튜디오 쪽 키 → PDF 쪽 범위 [첫 쪽, 끝 쪽](쪽별 받기, pdf-pages.ts). 2026-11-25 전에 만든 PDF 는 빈 객체 */
+  pageRanges: Record<string, [number, number]>;
 }
 
 const s = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -105,6 +108,7 @@ function mapEdition(r: Record<string, unknown>, dists: CatalogDistribution[] = [
     resolvedCount: Number(options.resolvedCount ?? 0),
     asOf: s(snap.asOf),
     distributions: dists,
+    pageRanges: pageRangesOf(map.anchors, Number(map.pages ?? 0)),
   };
 }
 
@@ -256,6 +260,7 @@ export async function generateCatalogPdf(opts: RenderOptions, actorUserId: strin
     resolvedCount: 0,
     asOf: data.asOf,
     distributions: [],
+    pageRanges: pageRangesOf(rendered.anchors, rendered.pages),
   };
 }
 

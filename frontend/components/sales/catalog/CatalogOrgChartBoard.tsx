@@ -21,6 +21,7 @@ import { catalogFetch } from "./catalogFetch";
 import { ContentVersions } from "./ContentVersions";
 import "@/components/cdash/cdash.css";
 import { CatalogBackLink } from "./CatalogBackLink";
+import { CatalogOrgPreview } from "./CatalogOrgPreview";
 
 type ContentState = AnyContentState<"org_chart">;
 type Path = number[];
@@ -185,16 +186,6 @@ export function CatalogOrgChartBoard() {
       );
     });
 
-  const Box = ({ n }: { n: OrgNode }) => (
-    <div className="rounded-lg border cd-border-c px-3 py-2 text-center" style={{ background: "var(--cd-card)", minWidth: 120 }}>
-      <p className="text-sm cd-text font-semibold">
-        {n.label}
-        {n.badge && <span className="cd-pill cd-pill-idle ml-1">{n.badge}</span>}
-      </p>
-      {n.sub && <p className="text-[11px] cd-text-muted">{n.sub}</p>}
-    </div>
-  );
-
   return (
     <div className="cdash cd-fields-white p-2" data-theme={theme}>
       <CdPageHeader
@@ -267,30 +258,8 @@ export function CatalogOrgChartBoard() {
           <div className="grid gap-3 content-start">
             <section className="cd-card p-4">
               <h3 className="cd-text font-semibold text-base mb-2">미리보기</h3>
-              <div className="rounded-lg border cd-border-c p-4 overflow-x-auto">
-                {draft.nodes.map((root) => (
-                  <div key={root.id} className="flex flex-col items-center gap-3 mb-4 last:mb-0">
-                    <Box n={root} />
-                    {root.children.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {root.children.map((c) => (
-                          <div key={c.id} className="flex flex-col items-center gap-1.5">
-                            <Box n={c} />
-                            {c.children.map((g) => (
-                              <div key={g.id} className="rounded border cd-border-c px-2 py-1 text-[11px] cd-text-muted text-center" style={{ minWidth: 100 }}>
-                                {g.label}
-                                {g.badge && ` (${g.badge})`}
-                                {g.children.length > 0 && ` 외 ${countOrgNodes(g.children)}`}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] cd-text-faint mt-2">실제 소개서 지면의 선·크기는 디자인 시스템을 따릅니다.</p>
+              <CatalogOrgPreview draft={draft} />
+              <p className="text-[11px] cd-text-faint mt-2">스튜디오·PDF 와 같은 조직 쪽입니다. 편집 중인 상자가 바로 반영되며, 소개서에는 확정해야 쓰입니다.</p>
             </section>
             <ContentVersions versions={state?.versions ?? []} busy={busy} helpTopic="catalog.org-versions" onRestore={restore} />
           </div>

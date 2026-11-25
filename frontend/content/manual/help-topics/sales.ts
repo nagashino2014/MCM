@@ -688,27 +688,28 @@ export const SALES_HELP: HelpTopic[] = [
     blocks: [
       { kind: "list", items: [
         "처음에는 MCM 조직(부서·부서장·인원)으로 만든 기본안이 나옵니다. 연구소·지사는 대표이사 아래에, 나머지 본부는 총괄본부장 아래에 둡니다. 소개서용으로 고쳐도 인사 조직은 바뀌지 않습니다.",
-        "소개서에는 대표이사 아래 바깥 가지로 외부자문위원(왼쪽, 자문위원 명부 인원)과 '촉탁' 표시 상자(오른쪽, 고문 등)가 그려집니다.",
+        "소개서에는 대표이사 아래 바깥 가지로 외부자문위원(왼쪽, 자문위원 명부 인원)과 '촉탁'·'독립' 표시 상자(고문, 녹색채권 검토본부 같은 직속 독립 조직)가 그려집니다. 셋 이상이면 두 개씩 단을 나눕니다.",
+        "오른쪽 미리보기는 스튜디오·PDF 와 같은 조직 쪽입니다. [[크게 보기]]로 넓게 봅니다.",
         "[[임시 저장]]은 편집 중 내용만 남기고, [[확정]]하면 새 판으로 기록됩니다. 소개서는 최신 확정판을 씁니다.",
       ] },
     ],
     more: { article: "sales.catalog-org", section: "edit" },
-    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx"],
-    reviewedAt: "2026-11-11",
+    sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx", "components/sales/catalog/CatalogOrgPreview.tsx"],
+    reviewedAt: "2026-11-25",
   },
   {
     id: "catalog.org-edit",
     label: "조직도 상자 편집 도움말",
     blocks: [
       { kind: "list", items: [
-        "왼쪽부터 이름, 아래 줄(책임자·인원 등), 표시(촉탁·자문·외부)입니다.",
+        "왼쪽부터 이름, 아래 줄(책임자·인원 등), 표시(촉탁·자문·외부·독립)입니다. 대표이사 직속 독립 조직은 '독립'을 고르면 옆 가지로 그립니다.",
         "화살표 = 같은 단계 안 순서, + = 하위 조직 추가, 휴지통 = 삭제(하위 조직 포함).",
         "[[MCM 조직에서 다시 불러오기]]는 편집 칸만 다시 채웁니다(확정판은 그대로).",
       ] },
     ],
     more: { article: "sales.catalog-org", section: "edit" },
     sources: ["components/sales/catalog/CatalogOrgChartBoard.tsx"],
-    reviewedAt: "2026-10-22",
+    reviewedAt: "2026-11-25",
   },
   {
     id: "catalog.org-versions",

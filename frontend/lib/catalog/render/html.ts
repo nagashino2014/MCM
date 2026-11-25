@@ -15,6 +15,7 @@ import type { StudioPageState } from "@/lib/catalog/studio/doc";
 import { renderTrees } from "@/lib/catalog/studio/render-tree";
 import type { CoverChoice } from "./components/pages-front";
 import { maskNamesInHtml } from "./masking";
+import { PAGE_KEY_ANCHOR } from "./pdf-pages";
 import { PRINT_OVERRIDES } from "./print-overrides";
 import tokensJson from "./tokens.json";
 import type { CatalogRenderData, ImageKey, RenderCtx, RenderOptions } from "./types";
@@ -143,7 +144,12 @@ export async function buildCatalogHtml(
   await registerUsedIllustrations(opts.pages ?? []);
   const composedAll = composeDocument(ctx, data, cover, opts.pages ?? []);
   const pages = opts.onlyTypes ? composedAll.filter((p) => opts.onlyTypes!.includes(p.item.type)) : composedAll;
-  const drawn = renderStatic(renderTrees(pages.map((p) => p.tree), { url, data }));
+  // 쪽 시트에 쪽 키 anchor(pg:키)를 단다 — PDF 쪽 지도로 스튜디오 쪽 ↔ PDF 쪽 번호를 잇는다(쪽별 PDF 받기, pdf-pages.ts)
+  const keyed = pages.map((p) => ({
+    ...p.tree,
+    attrs: { ...p.tree.attrs, "data-anchors": [p.tree.attrs?.["data-anchors"], `${PAGE_KEY_ANCHOR}${p.item.key}`].filter(Boolean).join(" ") },
+  }));
+  const drawn = renderStatic(renderTrees(keyed, { url, data }));
   const body = opts.naming === "masked" ? maskNamesInHtml(drawn, data.maskNames ?? []) : drawn;
   // 실제로 그린 이미지만 converter 에 보낸다(숨긴 쪽·숨긴 요소·바꾼 사진의 원래 그림은 빼고)
   const used = new Set<ImageKey>();

@@ -52,7 +52,8 @@ export interface ContentState<K extends ContentKey = ContentKey> {
   versions: ContentVersion<K>[];
 }
 
-export const ORG_BADGES = ["촉탁", "자문", "외부"] as const;
+/** 조직도 상자 표시 — 표시가 있는 대표이사 직속 상자는 옆 가지로 그린다. 독립 = 대표이사 직속 별도 조직(녹색채권 검토본부, 2026-11-25) */
+export const ORG_BADGES = ["촉탁", "자문", "외부", "독립"] as const;
 export const ORG_LIMITS = { maxNodes: 150, maxDepth: 5, label: 40, sub: 80 } as const;
 
 export function isContentKey(v: string): v is ContentKey {

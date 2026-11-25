@@ -2,7 +2,7 @@
  * 회사소개서 인포그래픽 — 디자인 시스템 인포그래픽 16종 중 마스터본이 쓰는 것(정적 SVG 도형 + HTML 글자, ApexCharts 미사용).
  * 글자는 SVG <text> 가 아니라 HTML 로 얹어 PDF 에서 검색·복사되게 한다(README §인포그래픽).
  */
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import type { OrgChartDoc, OrgNode } from "@/lib/catalog/content-types";
 import { MAP_H, MAP_REGION_LABELS, MAP_W, SIDO_PATHS, project } from "../korea-map";
 import type { HistoryYear } from "../types";
@@ -274,7 +274,8 @@ function areaOfLabel(label: string): number | null {
   return null;
 }
 
-const shownBadge = (badge: string) => (badge === "촉탁" ? "" : badge);
+// 촉탁·독립(대표이사 직속 별도 조직)은 옆 가지 배치로 드러나므로 글로 적지 않는다
+const shownBadge = (badge: string) => (badge === "촉탁" || badge === "독립" ? "" : badge);
 
 function OrgBox({ node, cls, style, align }: { node: OrgNode; cls?: string; style?: CSSProperties; align?: "left" }) {
   const area = areaOfLabel(node.label);
@@ -362,31 +363,32 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
       </div>
     );
   }
-  // 옆 가지 — 쪽 끝까지 뻗지 않고 가운데 세로줄에서 ORG_TREE_SIDE_GAP 만큼(양쪽 같은 폭·높이)
-  const sideBox: CSSProperties = { width: ORG_TREE_SIDE_W, minHeight: 36, boxSizing: "border-box", justifyContent: "center" };
-  const far = (nodes: ReactNode[], side: "left" | "right") =>
-    nodes.length ? (
+  // 옆 가지 — 쪽 끝까지 뻗지 않고 가운데 세로줄에서 ORG_TREE_SIDE_GAP 만큼(양쪽 같은 폭·높이). 이름이 길면(녹색채권 검토본부) 그만큼만 넓힌다
+  const sideBox: CSSProperties = { minWidth: ORG_TREE_SIDE_W, minHeight: 36, boxSizing: "border-box", justifyContent: "center" };
+  const far = (node: ReactNode | undefined, side: "left" | "right") =>
+    node ? (
       <div className={cx("kc-org__aside", side === "left" && "kc-org__aside--left")}>
         {side === "right" ? <span className="kc-org__hline" style={{ width: ORG_TREE_SIDE_GAP }}></span> : null}
-        {nodes}
+        {node}
         {side === "left" ? <span className="kc-org__hline" style={{ width: ORG_TREE_SIDE_GAP }}></span> : null}
       </div>
     ) : (
       <span></span>
     );
-  const farLeft = showAdvisors
-    ? [
-        <span key="adv" className="kc-org__box kc-org__box--soft" style={sideBox}>
-          {advisorsLabel}
-          {advisorsSub ? <small>{advisorsSub}</small> : null}
-        </span>,
-      ]
-    : [];
-  const farRight: ReactNode[] = [];
-  asides.forEach((n, i) => {
-    if (i > 0) farRight.push(<span key={`h${i}`} className="kc-org__hline kc-org__hline--s"></span>);
-    farRight.push(<OrgBox key={n.id} node={n} cls="kc-org__box--soft" style={sideBox} />);
-  });
+  // 대표이사 직속 옆 가지 — 첫 단은 왼쪽 외부자문위원·오른쪽 첫 표시 상자(고문), 나머지 표시 상자(독립 조직 등)는
+  // 아래 단에 왼쪽·오른쪽 두 개씩 더한다(사용자 지시 2026-11-25 녹색채권 검토본부)
+  const advBox = showAdvisors ? (
+    <span key="adv" className="kc-org__box kc-org__box--soft" style={sideBox}>
+      {advisorsLabel}
+      {advisorsSub ? <small>{advisorsSub}</small> : null}
+    </span>
+  ) : undefined;
+  const asideBoxes = asides.map((n) => <OrgBox key={n.id} node={n} cls="kc-org__box--soft" style={sideBox} />);
+  const more = asideBoxes.slice(1);
+  const sideTiers = [
+    ...(advBox || asideBoxes.length ? [{ left: advBox, right: asideBoxes[0] }] : []),
+    ...more.filter((_, i) => i % 2 === 0).map((left, i) => ({ left, right: more[i * 2 + 1] })),
+  ];
   return (
     <div className="kc-org kc-org--tree kc-ig" style={{ flex: 1, minHeight: 0, justifyContent: "center" }} data-widget="org">
       <div className="kc-org__tier">
@@ -399,16 +401,16 @@ function OrgTree({ root, advisorsLabel, advisorsSub }: { root: OrgNode; advisors
         <span></span>
       </div>
       <span className="kc-org__vline"></span>
-      {farLeft.length || farRight.length ? (
-        <>
+      {sideTiers.map((t, i) => (
+        <Fragment key={i}>
           <div className="kc-org__tier">
-            {far(farLeft, "left")}
+            {far(t.left, "left")}
             <div className="kc-org__stem"></div>
-            {far(farRight, "right")}
+            {far(t.right, "right")}
           </div>
           <span className="kc-org__vline"></span>
-        </>
-      ) : null}
+        </Fragment>
+      ))}
       {deputy ? (
         <>
           <span className="kc-org__box" style={{ fontSize: 11.5, padding: "8px 12px", width: ORG_TREE_HEAD_W, boxSizing: "border-box" }}>

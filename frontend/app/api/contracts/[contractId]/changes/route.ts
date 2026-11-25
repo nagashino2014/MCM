@@ -186,6 +186,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
                     WHEN $3::double precision > 0
                       THEN (CASE WHEN COALESCE(collected_amount, 0) >= $3::double precision - 1 THEN 1 ELSE 0 END)
                     ELSE payment_collected END,
+                  -- 미발행 단계에 남은 발행금액은 비운다(2026-11-25) — 발행 취소 뒤 단계를 나누면
+                  -- 옛 invoice_amount 가 발행 창·미수금에 그대로 쓰였다. 발행된 단계는 실제 발행액이라 둔다.
+                  invoice_amount = CASE WHEN COALESCE(invoice_issued, 0) = 1 THEN invoice_amount ELSE NULL END,
                   updated_at = $4`;
       for (const row of amountRows) {
         const rowMilestoneId = String(row?.milestoneId ?? "").trim();

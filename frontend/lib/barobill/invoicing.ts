@@ -360,7 +360,7 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio,
+      `SELECT m.milestone_id, m.stage_label, m.amount, m.invoice_amount, m.amount_ratio, m.invoice_issued,
               c.contract_title, c.contract_amount, c.counterparty_facility_id, c.facility_id AS site_facility_id,
               (SELECT SUM(s.amount) FROM contract_payment_milestones s WHERE s.contract_id = m.contract_id) AS stage_total,
               f.company_name, f.normalized_company_name, f.business_registration_no, f.representative_name, f.site_address,
@@ -416,7 +416,11 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     milestoneId,
     contractTitle: String(row.contract_title ?? ""),
     stageLabel: String(row.stage_label ?? ""),
-    stageAmount: Number(row.invoice_amount ?? row.amount ?? 0),
+    // 미발행 단계는 단계 금액을 쓴다(2026-11-25) — 발행을 취소·되돌린 단계에는 첫 발행 때의
+    // invoice_amount 가 남아 있을 수 있어, 그 뒤 단계 금액을 나눠도 옛 금액이 품목에 들어갔다.
+    stageAmount: Number(
+      Number(row.invoice_issued ?? 0) === 1 ? row.invoice_amount ?? row.amount ?? 0 : row.amount ?? row.invoice_amount ?? 0,
+    ),
     // 묶음 발행 비고의 비중 기준 — 단계 비중과 같은 기준(단계 합계 우선)을 쓴다.
     contractAmount: Number(row.stage_total ?? 0) > 0 ? Number(row.stage_total) : Number(row.contract_amount ?? 0),
     defaultRemark: stageRemark(String(row.stage_label ?? ""), stageRatioPct(row)),
@@ -457,7 +461,8 @@ export async function buildIssuePrefill(contractId: string, milestoneId: string)
     ).map((m) => ({
       milestoneId: String(m.milestone_id),
       stageLabel: String(m.stage_label ?? ""),
-      amount: Number(m.invoice_amount ?? m.amount ?? 0),
+      // 미발행 단계만 모으므로 단계 금액이 우선이다(남은 invoice_amount 는 취소 전 발행분).
+      amount: Number(m.amount ?? m.invoice_amount ?? 0),
     })),
     contacts,
     existing: (await listContractInvoices(contractId)).filter((inv) => inv.milestoneId === milestoneId),
@@ -1047,7 +1052,7 @@ export async function cancelTaxInvoice(invoiceId: string): Promise<void> {
     if (rows[0].milestone_id) {
       await tx.run(
         `UPDATE contract_payment_milestones
-            SET invoice_issued = 0, invoice_issued_at = NULL, updated_at = $2
+            SET invoice_issued = 0, invoice_issued_at = NULL, invoice_amount = NULL, updated_at = $2
           WHERE milestone_id = $1`,
         [String(rows[0].milestone_id), new Date().toISOString()],
       );

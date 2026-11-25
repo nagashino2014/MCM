@@ -44,6 +44,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.invoiceIssued !== undefined) pushSet("invoice_issued", body.invoiceIssued ? 1 : 0);
     if (body.invoiceIssuedAt !== undefined) pushSet("invoice_issued_at", body.invoiceIssuedAt || null);
     if (body.invoiceAmount !== undefined) pushSet("invoice_amount", toNullableNumber(body.invoiceAmount));
+    // 미발행 단계에 남은 발행금액 비우기(2026-11-25) — 발행을 되돌리거나 미발행 단계의 금액을 바꾸면
+    // 첫 발행 때의 invoice_amount 가 남아 발행 창·미수금이 옛 금액을 쓰던 문제를 막는다.
+    // (SET 식의 invoice_issued 는 UPDATE 전 값이다.)
+    else if (body.invoiceIssued !== undefined && !body.invoiceIssued) setClauses.push("invoice_amount = NULL");
+    else if (body.amount !== undefined && body.invoiceIssued === undefined) {
+      setClauses.push("invoice_amount = CASE WHEN COALESCE(invoice_issued, 0) = 1 THEN invoice_amount ELSE NULL END");
+    }
     if (body.paymentCollected !== undefined) pushSet("payment_collected", body.paymentCollected ? 1 : 0);
     if (body.paymentCollectedAt !== undefined) pushSet("payment_collected_at", body.paymentCollectedAt || null);
     if (body.collectionRatio !== undefined) pushSet("collection_ratio", toNullableNumber(body.collectionRatio));

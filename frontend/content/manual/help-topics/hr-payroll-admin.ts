@@ -204,6 +204,20 @@ export const HR_PAYROLL_ADMIN_HELP: HelpTopic[] = [
     reviewedAt: "2026-10-20",
   },
   {
+    id: "hr.meal-return",
+    label: "식사 외출 대조 도움말",
+    blocks: [
+      { kind: "list", items: [
+        "출입 태그는 들어올 때만 남습니다. ‘결제 후 복귀’는 식대 결제 시각부터 출입문 진입 태그까지로, 외출 시간의 최소값입니다. ‘최대 외출’은 결제 직전 태그부터 복귀까지입니다.",
+        "함께 들어와 진입 태그가 빠지면 ‘복귀 미기록’, 결제 뒤 태그가 없으면 ‘태그 없음’, 배달앱 결제는 ‘배달 결제’로 두고 평균에서 뺍니다.",
+        "한 건보다 반복 여부로 판단하세요. 처분은 ‘식대 경고’ 탭에서 합니다.",
+      ] },
+    ],
+    more: { article: "hr.attendance-admin", section: "meal-return" },
+    sources: ["components/approval/AttendanceBoard.tsx"],
+    reviewedAt: "2026-11-26",
+  },
+  {
     id: "hr.leave-promotion",
     label: "연차 고지 발송 도움말",
     blocks: [

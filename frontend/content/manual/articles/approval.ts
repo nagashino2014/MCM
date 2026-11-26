@@ -321,6 +321,19 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "copy",
+        title: "예전 공문 불러오기",
+        blocks: [
+          { kind: "list", items: [
+            "같은 수신처에 비슷한 공문을 다시 보낼 때는 위쪽 [[공문 불러오기]]로 예전 공문을 골라 내용을 그대로 가져온 뒤 고쳐 씁니다.",
+            "창 위 검색창에 공문명·수신처명·공문번호·기안자를 적어 찾습니다. 목록은 연도별로 묶여 있고, 연도를 누르면 펼치거나 접습니다. 수신처를 먼저 넣었다면 검색창 아래 수신처 이름을 눌러 그 수신처 공문만 볼 수 있습니다.",
+            "공문을 고르면 오른쪽에 PDF가 보입니다. [[불러오기]]를 누르거나 목록에서 두 번 누르면 제목·유형·수신처·참조·외부 참조·본문·붙임 목록·인감 날인·HWPX 동봉·주소 표기가 옮겨집니다.",
+          ] },
+          { kind: "warn", text: "문서번호·시행일·첨부파일·결재선은 가져오지 않습니다. 첨부파일은 다시 올리고, 본문의 날짜·금액·차수를 꼭 고쳐 쓰세요. 작성 중이던 제목·본문·수신처는 불러온 내용으로 바뀝니다." },
+          { kind: "tip", text: "앱 밖에서 보내 이관 등록한 과거 공문은 본문 원본이 없어 목록에 나오지 않습니다." },
+        ],
+      },
+      {
         id: "write",
         title: "본문과 미리보기",
         blocks: [
@@ -345,9 +358,9 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송"],
-    sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
-    reviewedAt: "2026-11-24",
+    keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송", "공문 불러오기", "복사"],
+    sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/LetterCopyModal.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
+    reviewedAt: "2026-11-26",
   },
   {
     id: "approval.notice",

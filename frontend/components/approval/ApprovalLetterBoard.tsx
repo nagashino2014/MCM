@@ -29,7 +29,7 @@ import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/ap
 import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
 import { LetterCopyModal } from "@/components/approval/LetterCopyModal";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
-import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
+import { LETTER_ATTACHMENT_ACCEPT, LETTER_ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
 import { recipientsDisplay } from "@/lib/letter/compose";
 import {
@@ -962,14 +962,16 @@ export function ApprovalLetterBoard() {
     const list = Array.from(files);
     if (!list.length) return;
     // 결재자가 뷰어에서 열 수 없는 형식은 올리기 전에 막는다(서버도 같은 화이트리스트로 재검사).
-    const rejected = list.filter((f) => !isAllowedAttachment(f.name));
+    // 공문은 zip 도 받는다(2026-11-26) — 미리보기 없이 내려받아 확인한다.
+    const rejected = list.filter((f) => !isAllowedAttachment(f.name, "letter"));
     if (rejected.length) {
-      alert(`첨부할 수 없는 형식입니다 — ${rejected.map((f) => f.name).join(", ")}\n허용 형식: ${ATTACHMENT_ALLOWED_TEXT}`);
+      alert(`첨부할 수 없는 형식입니다 — ${rejected.map((f) => f.name).join(", ")}\n허용 형식: ${LETTER_ATTACHMENT_ALLOWED_TEXT}`);
       return;
     }
     setUploading(true);
     try {
       const fd = new FormData();
+      fd.append("scope", "letter");
       for (const f of list) fd.append("files", f);
       const res = await fetch("/api/approval/attachments", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
@@ -1407,7 +1409,7 @@ export function ApprovalLetterBoard() {
                 </button>
               </div>
               <span className="cd-hint">
-                결재자가 내용을 확인할 수 있는 형식만 첨부할 수 있습니다 — {ATTACHMENT_ALLOWED_TEXT}
+                첨부할 수 있는 형식 — {LETTER_ATTACHMENT_ALLOWED_TEXT}. 압축 파일은 미리보기 없이 내려받아 확인합니다
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 <label
@@ -1431,7 +1433,7 @@ export function ApprovalLetterBoard() {
                   <input
                     type="file"
                     multiple
-                    accept={ATTACHMENT_ACCEPT}
+                    accept={LETTER_ATTACHMENT_ACCEPT}
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files) void uploadFiles(e.target.files);

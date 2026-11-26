@@ -1,7 +1,13 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
-import { ATTACHMENT_ALLOWED_TEXT, attachmentContentType, attachmentPreviewKind, isAllowedAttachment } from "@/lib/approval/attachments";
+import {
+  ATTACHMENT_ALLOWED_TEXT,
+  LETTER_ATTACHMENT_ALLOWED_TEXT,
+  attachmentContentType,
+  attachmentPreviewKind,
+  isAllowedAttachment,
+} from "@/lib/approval/attachments";
 import { putContractDocument, readContractDocument, sanitizeFilename } from "@/lib/storage/contract-document-storage";
 import { convertToPdf, pdfResponse, previewKey, rawResponse } from "@/lib/approval/attachment-preview";
 
@@ -16,20 +22,23 @@ const MAX_FILE_BYTES = 200 * 1024 * 1024;
 // POST: 전자결재 첨부 업로드(multipart files[]) — 공문·일반 기안 공용.
 // S3 approval/attachments/{YYYYMM}/ 에 적재하고 {name,key,size} 목록을 반환한다.
 // 결재자가 뷰어에서 내용을 확인할 수 있는 형식만 받는다(구형 hwp·zip 등은 거절).
+// 단 scope=letter(공문 동봉 첨부)는 zip 도 받는다(2026-11-26 사용자 요청).
 export async function POST(req: NextRequest) {
   try {
     await requirePermission("approval.view");
     const form = await req.formData();
     const files = form.getAll("files").filter((f): f is File => f instanceof File);
+    const scope = form.get("scope") === "letter" ? "letter" : "default";
+    const allowedText = scope === "letter" ? LETTER_ATTACHMENT_ALLOWED_TEXT : ATTACHMENT_ALLOWED_TEXT;
     if (!files.length) return NextResponse.json({ error: "files 가 필요합니다." }, { status: 400 });
 
     const ym = new Date().toISOString().slice(0, 7).replace("-", "");
     const items: { name: string; key: string; size: number }[] = [];
     for (const file of files) {
       const name = sanitizeFilename(file.name || "첨부파일");
-      if (!isAllowedAttachment(name)) {
+      if (!isAllowedAttachment(name, scope)) {
         return NextResponse.json(
-          { error: `${name}: 첨부할 수 없는 형식입니다. 허용 형식 — ${ATTACHMENT_ALLOWED_TEXT}` },
+          { error: `${name}: 첨부할 수 없는 형식입니다. 허용 형식 — ${allowedText}` },
           { status: 400 }
         );
       }

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, BookmarkPlus, Eye, FileText, GripVertical, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
+  ArrowLeft, BookmarkPlus, Eye, FileText, FolderOpen, GripVertical, Plus, Save, Search, Send, ShieldCheck, Stamp, Trash2, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdHelp } from "@/components/cdash/CdHelp";
@@ -27,6 +27,7 @@ import { useOutsideDismiss } from "@/components/ui/useOutsideDismiss";
 import { DeleteDraftButton, RejectedBanner, toEditDocMeta, type EditDocMeta } from "@/components/approval/DraftEditNotice";
 import PaymentRequestModal, { type PaymentRequestCreated } from "@/components/approval/PaymentRequestModal";
 import { LetterReviewModal } from "@/components/approval/LetterReviewModal";
+import { LetterCopyModal } from "@/components/approval/LetterCopyModal";
 import AttachmentPreviewModal from "@/components/approval/AttachmentPreviewModal";
 import { ATTACHMENT_ACCEPT, ATTACHMENT_ALLOWED_TEXT, isAllowedAttachment, type DocAttachment } from "@/lib/approval/attachments";
 import { MailEditor } from "@/components/mail/MailEditor";
@@ -34,7 +35,7 @@ import { recipientsDisplay } from "@/lib/letter/compose";
 import {
   COMPANY_ADDRESS, COMPANY_BIZ_NO, COMPANY_CEO, COMPANY_CONTACT_EMAIL, COMPANY_KO, COMPANY_PHONE,
   ISO_DATE_RE, LETTER_FORM_ID, LETTER_RULE_KEY, formatLetterNo, parseLetterNo,
-  type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
+  type LetterCopySource, type LetterFieldValues, type LetterLayoutOverrides, type LetterRecipient, type ProofParty,
 } from "@/lib/letter/types";
 import "@/components/cdash/cdash.css";
 
@@ -468,6 +469,7 @@ export function ApprovalLetterBoard() {
   const [orgModal, setOrgModal] = useState<OrgTarget | null>(null);
   // 사전 검수(221) — 상신 전 공문(안)·첨부서류를 사내 검수자에게 보내 확인받는다.
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false); // 공문 불러오기 창(2026-11-26)
   const [busy, setBusy] = useState<"save" | "submit" | "preview" | null>(null);
   const [loading, setLoading] = useState(!!editDocId);
   // 레이아웃 미세조정(사용자 확정) — 미리보기 모달에서 조정, field_values 로 저장돼 발송본에 반영
@@ -884,6 +886,31 @@ export function ApprovalLetterBoard() {
     [subject, recipients]
   );
   const autosaveSave = useCallback(() => persist("save"), [persist]);
+
+  // 공문 불러오기(2026-11-26 사용자 요청) — 예전 공문의 제목·유형·수신처·참조·본문·붙임 목록·
+  // 날인/동봉/주소 표기를 옮긴다. 문서번호·시행일·동봉 첨부파일·결재선·하단 연락처는 지금 화면 값을 둔다.
+  // 레이아웃 미세조정은 예전 본문 길이에 맞춘 값이라 비운다(새 내용으로 A4 자동 맞춤).
+  const applyCopySource = useCallback(
+    (s: LetterCopySource) => {
+      if (hasContent() && !window.confirm("작성 중인 제목·본문·수신처가 불러온 공문 내용으로 바뀝니다. 계속할까요?")) return;
+      setSubject(s.subject);
+      setLetterKind(s.letterKind);
+      setRecipients(s.recipients);
+      setCcRefs(s.ccRefs);
+      setExtCcRefs(s.extCcRefs);
+      setProofReceiver(s.letterKind === "proof" && s.proofReceiver ? s.proofReceiver : EMPTY_PROOF);
+      setAttachItems(s.attachItems);
+      setStampOn(s.stamp);
+      setIncludeHwpx(s.includeHwpx);
+      setIncludeAddress(s.includeAddress);
+      setInternalCcTarget(s.internalCcTarget);
+      setOverrides({});
+      if (editorRef.current) editorRef.current.innerHTML = s.bodyHtml;
+      else pendingHtmlRef.current = s.bodyHtml;
+      setCopyOpen(false);
+    },
+    [hasContent]
+  );
   const { lastSavedAt, lastError, markSaved } = useAutosave({ ready: !loading && busy == null, hasContent, getSnapshot, save: autosaveSave });
 
   const validate = useCallback((): string | null => {
@@ -1047,6 +1074,15 @@ export function ApprovalLetterBoard() {
         actions={
           <div className="flex items-center gap-2">
             <AutosaveStatus lastSavedAt={lastSavedAt} lastError={lastError} />
+            <button
+              type="button"
+              className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              disabled={busy != null || loading}
+              onClick={() => setCopyOpen(true)}
+              title="예전에 보낸 공문을 골라 제목·수신처·본문을 그대로 가져온 뒤 고쳐 씁니다"
+            >
+              <FolderOpen className="w-3.5 h-3.5" /> 공문 불러오기
+            </button>
             <button
               type="button"
               className="cd-btn rounded-lg border cd-border-c px-3 py-2 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
@@ -1712,6 +1748,14 @@ export function ApprovalLetterBoard() {
       )}
 
       {/* 사전 검수 요청(221) — 검수자 선택은 같은 조직도 트리 모달을 쓴다 */}
+      {copyOpen && (
+        <LetterCopyModal
+          theme={theme}
+          recipientNames={recipients.map((r) => r.name)}
+          onClose={() => setCopyOpen(false)}
+          onPick={applyCopySource}
+        />
+      )}
       <LetterReviewModal
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}

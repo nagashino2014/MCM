@@ -11,6 +11,8 @@ import {
   LETTER_SEQ_START,
   formatLetterNo,
   parseLetterNo,
+  type LetterCopySource,
+  type LetterFieldValues,
   type LetterRecipient,
   type LetterSendRecord,
   type LetterSendStatus,
@@ -211,6 +213,71 @@ export async function listLetters(params: { from?: string | null; to?: string | 
     )
   );
   return rows.map(mapRow);
+}
+
+/**
+ * 공문 불러오기 후보(2026-11-26 사용자 요청) — 앱에서 결재로 만든 공문만(본문 원본이
+ * approval_docs.field_values 에 있음). 과거 이관(imported) 공문은 hwp·pdf 파일뿐이라 제외한다.
+ * q = 제목·공문번호·기안자·수신처·참조 검색. 화면은 연도별 트리로 묶으므로 넉넉히 돌려준다.
+ */
+export async function listCopyableLetters(params: { q?: string | null; limit?: number }): Promise<OfficialLetterRow[]> {
+  const db = await getDb();
+  const args: unknown[] = [LETTER_FORM_ID];
+  const cond = [`l.source = 'system'`, `d.form_id = $1`];
+  if (params.q?.trim()) {
+    args.push(`%${params.q.trim()}%`);
+    const p = `$${args.length}`;
+    cond.push(`(l.title ILIKE ${p} OR l.letter_no ILIKE ${p} OR l.drafter_name ILIKE ${p} OR l.recipients::text ILIKE ${p} OR l.cc_refs::text ILIKE ${p})`);
+  }
+  args.push(Math.min(3000, Math.max(1, params.limit ?? 2000)));
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT l.* FROM official_letters l
+         JOIN approval_docs d ON d.doc_id = l.doc_id
+        WHERE ${cond.join(" AND ")}
+        ORDER BY l.letter_no DESC NULLS LAST, l.created_at DESC
+        LIMIT $${args.length}`,
+      args
+    )
+  );
+  return rows.map(mapRow);
+}
+
+/** 공문 불러오기 — 결재 문서 원본에서 새 공문에 옮길 값만 추린다(번호·시행일·첨부파일·결재선 제외). */
+export async function getLetterCopySource(letterId: string): Promise<LetterCopySource | null> {
+  const db = await getDb();
+  const rows = rowsToObjects(
+    await db.exec(
+      `SELECT l.letter_no, d.title, d.field_values FROM official_letters l
+         JOIN approval_docs d ON d.doc_id = l.doc_id
+        WHERE l.letter_id = $1 AND l.source = 'system' AND d.form_id = $2`,
+      [letterId, LETTER_FORM_ID]
+    )
+  );
+  if (!rows.length) return null;
+  const r = rows[0];
+  let v: Partial<LetterFieldValues> = {};
+  try {
+    v = (typeof r.field_values === "string" ? JSON.parse(String(r.field_values)) : (r.field_values ?? {})) as Partial<LetterFieldValues>;
+  } catch {
+    v = {};
+  }
+  const kind = v.letter_kind === "proof" ? "proof" : "general";
+  return {
+    letterNo: r.letter_no != null ? String(r.letter_no) : null,
+    subject: String(r.title ?? v.subject ?? ""),
+    letterKind: kind,
+    recipients: Array.isArray(v.recipients) ? v.recipients : [],
+    ccRefs: Array.isArray(v.cc_refs) ? v.cc_refs : [],
+    extCcRefs: Array.isArray(v.ext_cc_refs) ? v.ext_cc_refs : [],
+    proofReceiver: kind === "proof" && v.proof_receiver ? v.proof_receiver : null,
+    bodyHtml: String(v.body_html ?? ""),
+    attachItems: Array.isArray(v.attachments_list) ? v.attachments_list.map((a) => String(a?.text ?? "")).filter((t) => t.trim()) : [],
+    stamp: v.stamp !== 0,
+    includeHwpx: v.include_hwpx === 1,
+    includeAddress: v.include_address === 1,
+    internalCcTarget: v.internal_cc_target === "company" ? "company" : "personal",
+  };
 }
 
 /** 수신처·참조 사후 편집(백필 문서 메일주소 보완 등). */

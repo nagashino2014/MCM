@@ -200,6 +200,27 @@ export interface LetterFieldValues {
   letter_kind_display?: string;
 }
 
+/**
+ * 공문 불러오기(2026-11-26 사용자 요청) — 같은 수신처에 비슷한 공문을 다시 보낼 때
+ * 예전 공문의 내용을 새 작성 화면에 옮긴다. 문서번호·시행일·동봉 첨부파일·결재선·레이아웃
+ * 미세조정·하단 담당 연락처는 새 공문 것이어야 하므로 싣지 않는다.
+ */
+export interface LetterCopySource {
+  letterNo: string | null;
+  subject: string;
+  letterKind: "general" | "proof";
+  recipients: LetterRecipient[];
+  ccRefs: LetterRecipient[];
+  extCcRefs: LetterRecipient[];
+  proofReceiver: ProofParty | null;
+  bodyHtml: string;
+  attachItems: string[];
+  stamp: boolean;
+  includeHwpx: boolean;
+  includeAddress: boolean;
+  internalCcTarget: "personal" | "company";
+}
+
 // ── A4 1장 맞춤 파라미터 — PDF 측정으로 확정 후 HWPX 에 동일 적용 ──
 // 실측(2025-대외-01001 PDF): 서명줄(사명·대표이사·인감)은 본문 길이와 무관하게 하단부 위
 // 고정 배치. 본문이 길면 ① 서명줄을 아래로 내리고(간격 축소) ② 본문 폰트를 축소한다.

@@ -38,7 +38,7 @@ import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } 
 import type { OvertimeMatchRow } from "@/lib/payroll/overtime";
 import type { MealWarningAction, MealWarningRow } from "@/lib/approval/overtime-meal";
 import type { MealReturnResult, MealReturnRow, MealReturnTagView } from "@/lib/approval/meal-return";
-import { LONG_OUT_MINUTES } from "@/lib/approval/meal-return-pure";
+import { LONG_OUT_MINUTES, MEAL_OUT_ALERT_LIMITS, validateMealOutAlertSettings, type MealOutAlertSettings } from "@/lib/approval/meal-return-pure";
 import "@/components/cdash/cdash.css";
 
 /* ---------- 표시 헬퍼 ---------- */
@@ -748,17 +748,19 @@ function MealReturnPanel() {
     load(year, month);
   }, [load, year, month]);
 
+  // 긴 외출 기준(분) — 아래 반복 외출 경고 설정과 같은 값(380). 응답 전에는 기본 60분.
+  const longMin = data?.longOutMinutes ?? LONG_OUT_MINUTES;
   const rows = useMemo(
     () =>
       (data?.rows ?? []).filter(
-        (r) => (!person || r.employeeId === person) && (!onlyLong || (r.minOutMinutes ?? -1) >= LONG_OUT_MINUTES)
+        (r) => (!person || r.employeeId === person) && (!onlyLong || (r.minOutMinutes ?? -1) >= longMin)
       ),
-    [data, person, onlyLong]
+    [data, person, onlyLong, longMin]
   );
   const all = data?.rows ?? [];
   const tagged = all.filter((r) => r.status === "tagged");
   const avg = tagged.length ? Math.round(tagged.reduce((a, r) => a + (r.minOutMinutes ?? 0), 0) / tagged.length) : null;
-  const longCount = tagged.filter((r) => (r.minOutMinutes ?? 0) >= LONG_OUT_MINUTES).length;
+  const longCount = tagged.filter((r) => (r.minOutMinutes ?? 0) >= longMin).length;
   const years = [now.getFullYear(), now.getFullYear() - 1];
 
   return (
@@ -789,7 +791,7 @@ function MealReturnPanel() {
           <Kpi icon={<UtensilsCrossed className="w-4 h-4" />} label="대조 식대" value={`${all.length}건`} />
           <Kpi icon={<DoorOpen className="w-4 h-4" />} label="복귀 확인" value={`${tagged.length}건`} />
           <Kpi icon={<Clock3 className="w-4 h-4" />} label="결제 후 복귀 평균" value={avg != null ? hm(avg) : "-"} />
-          <Kpi icon={<TriangleAlert className="w-4 h-4" />} label={`${LONG_OUT_MINUTES}분 이상`} value={`${longCount}건`} danger={longCount > 0} />
+          <Kpi icon={<TriangleAlert className="w-4 h-4" />} label={`${longMin}분 이상`} value={`${longCount}건`} danger={longCount > 0} />
         </div>
       )}
 
@@ -810,7 +812,7 @@ function MealReturnPanel() {
               <span className="text-right">복귀 확인</span>
               <span className="text-right">결제 후 복귀 평균</span>
               <span className="text-right">최장</span>
-              <span className="text-right">{LONG_OUT_MINUTES}분 이상</span>
+              <span className="text-right">{longMin}분 이상</span>
             </div>
             {data.people.map((p) => (
               <button
@@ -836,7 +838,7 @@ function MealReturnPanel() {
           <div className="flex items-center gap-3 flex-wrap">
             <label className="flex items-center gap-1.5 text-[13px] cd-text">
               <input type="checkbox" checked={onlyLong} onChange={(e) => setOnlyLong(e.target.checked)} />
-              <span>결제 후 복귀 {LONG_OUT_MINUTES}분 이상만</span>
+              <span>결제 후 복귀 {longMin}분 이상만</span>
             </label>
             {person && (
               <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold" onClick={() => setPerson("")}>
@@ -890,7 +892,7 @@ function MealReturnPanel() {
                   </span>
                   <span
                     className="text-right tabular-nums font-semibold"
-                    style={{ color: (r.minOutMinutes ?? 0) >= LONG_OUT_MINUTES ? "var(--cd-error)" : "var(--cd-text)" }}
+                    style={{ color: (r.minOutMinutes ?? 0) >= longMin ? "var(--cd-error)" : "var(--cd-text)" }}
                   >
                     {r.minOutMinutes != null ? hm(r.minOutMinutes) : "-"}
                   </span>
@@ -903,6 +905,114 @@ function MealReturnPanel() {
             </div>
           )}
         </>
+      )}
+
+      <MealOutAlertSettingsCard onSaved={() => load(year, month)} />
+    </div>
+  );
+}
+
+/* 반복 외출 경고 설정(마이그 380) — 긴 외출 날이 최근 N일 안에 M회 이상이면 초과근무 신청서 위에 경고 */
+function MealOutAlertSettingsCard({ onSaved }: { onSaved: () => void }) {
+  const [form, setForm] = useState<MealOutAlertSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/payroll/meal-return?settings=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.settings) setForm(d.settings as MealOutAlertSettings);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!form) return null;
+  const set = (patch: Partial<MealOutAlertSettings>) => {
+    setForm({ ...form, ...patch });
+    setMessage(null);
+  };
+  const save = async () => {
+    const invalid = validateMealOutAlertSettings(form);
+    if (invalid) {
+      setMessage({ ok: false, text: invalid });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/payroll/meal-return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "설정을 저장하지 못했습니다.");
+      setMessage({ ok: true, text: "저장했습니다. 다음에 여는 초과근무 신청서부터 적용됩니다." });
+      onSaved();
+    } catch (err) {
+      setMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const numInput = (key: "longOutMinutes" | "lookbackDays" | "repeatCount", label: string, unit: string) => {
+    const [lo, hi] = MEAL_OUT_ALERT_LIMITS[key];
+    return (
+      <label className="flex flex-col gap-1">
+        <span className="cd-label-text">{label}</span>
+        <span className="flex items-center gap-1.5">
+          <input
+            type="number"
+            className="cd-input"
+            style={{ width: 96 }}
+            min={lo}
+            max={hi}
+            step={1}
+            disabled={!form.enabled}
+            value={Number.isFinite(form[key]) ? form[key] : ""}
+            onChange={(e) => set({ [key]: e.target.value === "" ? NaN : Number(e.target.value) } as Partial<MealOutAlertSettings>)}
+          />
+          <span className="text-[13px] cd-text-muted">{unit}</span>
+        </span>
+      </label>
+    );
+  };
+
+  return (
+    <div className="cd-card rounded-lg p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <AlarmClockCheck className="w-4 h-4 cd-text-primary" />
+        <span className="text-[14px] font-semibold cd-text">반복 외출 경고 설정</span>
+      </div>
+      <p className="cd-hint">
+        결제 후 복귀가 외출 기준 이상 걸린 날이 최근 조회 기간 안에 경고 횟수 이상이면, 그 직원이 초과근무 신청서를 쓸 때 양식 위에
+        경고가 뜹니다. 상신은 막지 않습니다. 외출 기준은 위 대조표의 강조 기준으로도 쓰입니다.
+      </p>
+      <label className="flex items-center gap-1.5 text-[13px] cd-text">
+        <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+        <span>초과근무 신청서에 반복 외출 경고 띄우기</span>
+      </label>
+      <div className="flex items-end gap-4 flex-wrap">
+        {numInput("longOutMinutes", "외출 기준", "분 이상")}
+        {numInput("lookbackDays", "조회 기간", "일")}
+        {numInput("repeatCount", "경고 횟수", "회 이상")}
+        <button
+          type="button"
+          className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50 flex items-center gap-1.5"
+          disabled={saving}
+          onClick={save}
+        >
+          <Save className="w-4 h-4" /> 경고 설정 저장
+        </button>
+      </div>
+      {message && (
+        <p className={`text-[13px] ${message.ok ? "cd-text-muted" : "cd-error-text"}`} role={message.ok ? "status" : "alert"}>
+          {message.text}
+        </p>
       )}
     </div>
   );

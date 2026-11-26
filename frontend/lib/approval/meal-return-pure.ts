@@ -114,11 +114,11 @@ export interface MealReturnPersonSummary {
   tagged: number; // 복귀 태그가 확인된 건수
   avgMinOut: number | null; // 복귀 확인 건의 결제 후 복귀까지 평균(분)
   maxMinOut: number | null;
-  longCount: number; // LONG_OUT_MINUTES 이상
+  longCount: number; // longMinutes(기본 LONG_OUT_MINUTES) 이상
 }
 
 /** 직원별 요약 — 평균·최대·장시간 건수는 복귀 태그가 확인된 건만 센다. */
-export function summarizeByPerson(rows: MealReturnSummaryInput[]): MealReturnPersonSummary[] {
+export function summarizeByPerson(rows: MealReturnSummaryInput[], longMinutes: number = LONG_OUT_MINUTES): MealReturnPersonSummary[] {
   const by = new Map<string, MealReturnSummaryInput[]>();
   for (const r of rows) {
     if (!by.has(r.employeeId)) by.set(r.employeeId, []);
@@ -133,9 +133,69 @@ export function summarizeByPerson(rows: MealReturnSummaryInput[]): MealReturnPer
       tagged: mins.length,
       avgMinOut: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : null,
       maxMinOut: mins.length ? Math.max(...mins) : null,
-      longCount: mins.filter((m) => m >= LONG_OUT_MINUTES).length,
+      longCount: mins.filter((m) => m >= longMinutes).length,
     });
   }
   // 장시간 건수 → 평균 순으로 — 확인이 필요한 사람이 위로 온다.
   return out.sort((a, b) => b.longCount - a.longCount || (b.avgMinOut ?? -1) - (a.avgMinOut ?? -1));
+}
+
+/* ── 반복 외출 경고(마이그 380) — 초과근무 신청서 작성 시 양식 위에 띄운다 ── */
+
+/** 관리자 설정(meal_out_alert_settings). */
+export interface MealOutAlertSettings {
+  enabled: boolean;
+  longOutMinutes: number; // 결제 후 복귀가 이 분 이상이면 긴 외출
+  lookbackDays: number; // 최근 며칠
+  repeatCount: number; // 긴 외출 날이 이 횟수 이상이면 경고
+}
+
+export const DEFAULT_MEAL_OUT_ALERT_SETTINGS: MealOutAlertSettings = {
+  enabled: true,
+  longOutMinutes: LONG_OUT_MINUTES,
+  lookbackDays: 30,
+  repeatCount: 3,
+};
+
+/** 설정 범위(380 CHECK 와 같다) — 저장·화면 입력 검증 공용. */
+export const MEAL_OUT_ALERT_LIMITS = {
+  longOutMinutes: [10, 600],
+  lookbackDays: [7, 365],
+  repeatCount: [1, 50],
+} as const;
+
+/** 입력값 검증 — 범위를 벗어나면 오류 문구, 맞으면 null. */
+export function validateMealOutAlertSettings(s: MealOutAlertSettings): string | null {
+  const label = { longOutMinutes: "외출 기준(분)", lookbackDays: "조회 기간(일)", repeatCount: "경고 횟수(회)" } as const;
+  for (const k of Object.keys(MEAL_OUT_ALERT_LIMITS) as Array<keyof typeof MEAL_OUT_ALERT_LIMITS>) {
+    const v = s[k];
+    const [lo, hi] = MEAL_OUT_ALERT_LIMITS[k];
+    if (!Number.isInteger(v) || v < lo || v > hi) return `${label[k]} 값은 ${lo}~${hi} 사이의 정수로 입력하세요.`;
+  }
+  return null;
+}
+
+export interface MealOutAlert {
+  warn: boolean;
+  /** 긴 외출 날(최근순) — 같은 날 여러 건이면 가장 긴 값 하나. */
+  days: Array<{ usedOn: string; minOutMinutes: number }>;
+}
+
+/**
+ * 반복 외출 판정(순수 함수). 복귀 태그가 확인된(tagged) 건 중 결제 후 복귀가 기준 이상인 날을
+ * 날짜 단위로 센다(한 저녁에 나눠 결제한 영수증이 두 번 세지지 않게). 기간 거르기는 호출부가 한다.
+ */
+export function evaluateMealOutAlert(
+  rows: Array<{ usedOn: string; status: ReturnStatus; minOutMinutes: number | null }>,
+  settings: Pick<MealOutAlertSettings, "enabled" | "longOutMinutes" | "repeatCount">
+): MealOutAlert {
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    if (r.status !== "tagged" || r.minOutMinutes == null || r.minOutMinutes < settings.longOutMinutes) continue;
+    byDay.set(r.usedOn, Math.max(byDay.get(r.usedOn) ?? 0, r.minOutMinutes));
+  }
+  const days = Array.from(byDay, ([usedOn, minOutMinutes]) => ({ usedOn, minOutMinutes })).sort((a, b) =>
+    b.usedOn.localeCompare(a.usedOn)
+  );
+  return { warn: settings.enabled && days.length >= settings.repeatCount, days };
 }

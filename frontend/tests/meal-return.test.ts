@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_MEAL_OUT_ALERT_SETTINGS,
   LONG_OUT_MINUTES,
+  evaluateMealOutAlert,
+  validateMealOutAlertSettings,
   isDeliveryVendor,
   pairReturn,
   secOfClock,
@@ -86,4 +89,39 @@ test("휴일 식대는 신청 시간과 무관하게 불인정(379)", () => {
   assert.deepEqual(evaluateMealRow({ paidAtHm: "18:30", isOffDay: false, appliedMinutes: 120 }), { violation: false, requiredMinutes: 120 });
   assert.deepEqual(evaluateMealRow({ paidAtHm: "18:30", isOffDay: false, appliedMinutes: 90 }), { violation: true, requiredMinutes: 120 });
   assert.equal(evaluateMealRow({ paidAtHm: "12:30", isOffDay: false, appliedMinutes: 0 }), null);
+});
+
+test("반복 외출 경고 — 기준 이상인 날을 날짜 단위로 세고 횟수 이상이면 warn", () => {
+  const rows = [
+    { usedOn: "2026-11-03", status: "tagged" as const, minOutMinutes: 75 },
+    { usedOn: "2026-11-03", status: "tagged" as const, minOutMinutes: 90 }, // 같은 날 나눠 결제 — 한 번만
+    { usedOn: "2026-11-10", status: "tagged" as const, minOutMinutes: 60 }, // 기준과 같으면 포함
+    { usedOn: "2026-11-12", status: "tagged" as const, minOutMinutes: 59 },
+    { usedOn: "2026-11-14", status: "untagged" as const, minOutMinutes: null },
+    { usedOn: "2026-11-18", status: "tagged" as const, minOutMinutes: 120 },
+  ];
+  const a = evaluateMealOutAlert(rows, { enabled: true, longOutMinutes: 60, repeatCount: 3 });
+  assert.equal(a.warn, true);
+  assert.deepEqual(a.days, [
+    { usedOn: "2026-11-18", minOutMinutes: 120 },
+    { usedOn: "2026-11-10", minOutMinutes: 60 },
+    { usedOn: "2026-11-03", minOutMinutes: 90 },
+  ]);
+  assert.equal(evaluateMealOutAlert(rows, { enabled: true, longOutMinutes: 60, repeatCount: 4 }).warn, false);
+  assert.equal(evaluateMealOutAlert(rows, { enabled: true, longOutMinutes: 80, repeatCount: 2 }).days.length, 2);
+  assert.equal(evaluateMealOutAlert(rows, { enabled: false, longOutMinutes: 60, repeatCount: 1 }).warn, false);
+});
+
+test("반복 외출 경고 설정 검증 — 380 CHECK 범위와 같다", () => {
+  assert.equal(validateMealOutAlertSettings(DEFAULT_MEAL_OUT_ALERT_SETTINGS), null);
+  assert.deepEqual(DEFAULT_MEAL_OUT_ALERT_SETTINGS, { enabled: true, longOutMinutes: 60, lookbackDays: 30, repeatCount: 3 });
+  assert.match(validateMealOutAlertSettings({ ...DEFAULT_MEAL_OUT_ALERT_SETTINGS, repeatCount: 0 }) ?? "", /경고 횟수/);
+  assert.match(validateMealOutAlertSettings({ ...DEFAULT_MEAL_OUT_ALERT_SETTINGS, lookbackDays: 400 }) ?? "", /조회 기간/);
+  assert.match(validateMealOutAlertSettings({ ...DEFAULT_MEAL_OUT_ALERT_SETTINGS, longOutMinutes: 45.5 }) ?? "", /외출 기준/);
+  assert.match(validateMealOutAlertSettings({ ...DEFAULT_MEAL_OUT_ALERT_SETTINGS, longOutMinutes: NaN }) ?? "", /외출 기준/);
+});
+
+test("직원별 요약 — 설정한 외출 기준으로 장시간 건수를 센다", () => {
+  const s = summarizeByPerson([{ employeeId: "a", status: "tagged", minOutMinutes: 50 }], 45);
+  assert.equal(s[0].longCount, 1);
 });

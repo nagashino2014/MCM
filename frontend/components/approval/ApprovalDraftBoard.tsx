@@ -224,6 +224,12 @@ export function ApprovalDraftBoard() {
   const [otHint, setOtHint] = useState<string | null>(null);
   const isOvertimeForm = form?.formId === "frm-overtime-request";
   const otFrom = isOvertimeForm ? ((values.work_period ?? {}) as { from?: string }).from : undefined;
+  // 반복 식사 외출 경고(마이그 380) — 최근 식대 결제 후 복귀가 기준 이상 걸린 날이 설정 횟수 이상이면 양식 위에 띄운다.
+  const [mealOutAlert, setMealOutAlert] = useState<{
+    warn: boolean;
+    settings: { longOutMinutes: number; lookbackDays: number; repeatCount: number };
+    days: Array<{ usedOn: string; minOutMinutes: number }>;
+  } | null>(null);
   // 12h 초과 상신 동의(전자서명) — 모달에서 받은 동의는 ref 로 들고 있다가 persist 시 field_values 에 병합한다.
   const [consentModal, setConsentModal] = useState(false);
   const otConsentRef = useRef<OvertimeConsent | null>(null);
@@ -580,6 +586,24 @@ export function ApprovalDraftBoard() {
     const hours = String(Math.round((minutes / 60) * 100) / 100);
     setValues((prev) => (String(prev.apply_hours ?? "") === hours ? prev : { ...prev, apply_hours: hours }));
   }, [isOvertimeForm, otRangeKey, otRangeValue]);
+
+  // 반복 식사 외출 경고 — 초과근무 양식을 열 때 한 번 조회(본인 기록만, 상신은 막지 않는다).
+  useEffect(() => {
+    if (!isOvertimeForm) {
+      setMealOutAlert(null);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/approval/overtime/meal-out-alert", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setMealOutAlert(d?.alert ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isOvertimeForm]);
 
   // 신청 시작일이 속한 주의 사용량 조회(시작일이 바뀔 때만).
   useEffect(() => {
@@ -1510,6 +1534,34 @@ export function ApprovalDraftBoard() {
                 </span>
               )}
             </div>
+            {/* 반복 식사 외출 경고(380) — 관리자 설정(근태·초과근무 관리 > 식사 외출 대조) 기준 */}
+            {isOvertimeForm && mealOutAlert?.warn && (
+              <div
+                role="alert"
+                className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-1"
+                style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
+              >
+                <p className="text-[13px] font-semibold flex items-center gap-1.5 cd-warn-text">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  최근 {mealOutAlert.settings.lookbackDays}일 동안 식대 결제 후 사무실 복귀까지 {mealOutAlert.settings.longOutMinutes}분 이상 걸린 날이{" "}
+                  {mealOutAlert.days.length}회 있습니다.
+                </p>
+                <p className="text-[12px] cd-text">
+                  초과근무 중 식사 시간이 길어지지 않도록 유의해 주세요. 식대 결제 시각과 출입 기록을 기준으로 집계했습니다.
+                </p>
+                <p className="text-[12px] cd-text-faint">
+                  {mealOutAlert.days
+                    .slice(0, 5)
+                    .map((d) => {
+                      const h = Math.floor(d.minOutMinutes / 60);
+                      const m = d.minOutMinutes % 60;
+                      return `${d.usedOn.slice(5).replace("-", "/")} ${h > 0 ? `${h}시간 ` : ""}${m}분`;
+                    })
+                    .join(" · ")}
+                  {mealOutAlert.days.length > 5 ? ` 외 ${mealOutAlert.days.length - 5}회` : ""}
+                </p>
+              </div>
+            )}
             {/* 선행 문서 연결(127) — 신청서→보고서 연관. 배너는 렌더러 위에 상시 표시된다. */}
             {form.refFormId && (
               <div

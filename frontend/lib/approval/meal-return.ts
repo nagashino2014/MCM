@@ -1,15 +1,19 @@
-import { getDb, rowsToObjects } from "@/lib/db";
+import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { timeRangeMinutes, timeRangeText } from "@/lib/approval/fields";
 import { OVERTIME_FORM_ID } from "@/lib/approval/overtime";
 import { offDaySet } from "@/lib/hr/holidays";
 import { TERMINAL_NAMES } from "@/lib/adt/events";
 import {
+  DEFAULT_MEAL_OUT_ALERT_SETTINGS,
   clockOfSec,
+  evaluateMealOutAlert,
   isDeliveryVendor,
   pairReturn,
   secOfClock,
   summarizeByPerson,
   tagSecOnDay,
+  validateMealOutAlertSettings,
+  type MealOutAlertSettings,
   type MealReturnPersonSummary,
   type ReturnStatus,
   type ReturnTag,
@@ -21,6 +25,8 @@ import {
  * 판정 규칙·한계는 meal-return-pure.ts 머리 주석. 대상 행은 식대 대조(overtime-meal.ts)와 같다:
  * 평일 17:00 이후 결제분 + 휴일 결제분, 결제 시각을 알 수 있는 행만(법인카드 승인시각·개인영수증 거래일시).
  * 조회 전용 — 표·처분을 바꾸지 않는다.
+ * 반복 외출 경고(마이그 380): 같은 행 수집을 본인·최근 N일로 돌려, 긴 외출 날이 설정 횟수 이상이면
+ * 초과근무 신청서 작성 화면 위에 경고를 띄운다(mealOutAlertForUser). 긴 외출 기준은 대조표와 공유.
  */
 
 const MEAL_FORM_CATEGORY: Record<string, string> = {
@@ -66,6 +72,8 @@ export interface MealReturnResult {
   people: Array<MealReturnPersonSummary & { empName: string }>;
   /** 결제 시각을 알 수 없어 대조하지 못한 식대 행 수(수기 입력·롯데카드 등 날짜만 있는 승인). */
   noTimeCount: number;
+  /** 긴 외출 기준(분) — 반복 경고 설정(380)과 같은 값. */
+  longOutMinutes: number;
 }
 
 const ymd8 = (d: string) => d.replace(/-/g, "");
@@ -79,11 +87,25 @@ function clockOf(v: unknown): string | null {
   return m ? m[1] : null;
 }
 
+/** 귀속 월(전월 26일~금월 25일) 대조표 — 관리자 화면. */
 export async function listMealReturnChecks(payYear: number, payMonth: number): Promise<MealReturnResult> {
   const db = await getDb();
   const from = new Date(Date.UTC(payYear, payMonth - 2, 26)).toISOString().slice(0, 10);
   const to = `${payYear}-${String(payMonth).padStart(2, "0")}-25`;
+  const settings = await loadMealOutAlertSettings(db);
+  const { rows, noTimeCount } = await collectMealReturnRows(db, from, to, null);
+  const nameByEmp = new Map(rows.map((r) => [r.employeeId, r.empName]));
+  const people = summarizeByPerson(rows, settings.longOutMinutes).map((s) => ({ ...s, empName: nameByEmp.get(s.employeeId) ?? "" }));
+  return { from, to, rows, people, noTimeCount, longOutMinutes: settings.longOutMinutes };
+}
 
+/** 구간 [from, to] 의 식대 행 × 출입 태그 짝짓기. employeeIds 가 있으면 그 기안자만. */
+async function collectMealReturnRows(
+  db: PgDatabase,
+  from: string,
+  to: string,
+  employeeIds: string[] | null
+): Promise<{ rows: MealReturnRow[]; noTimeCount: number }> {
   // ① 구간 안에 식대 행이 있는 지출결의서(진행·승인).
   const docs = rowsToObjects(
     await db.exec(
@@ -92,11 +114,12 @@ export async function listMealReturnChecks(payYear: number, payMonth: number): P
          LEFT JOIN employee_profiles p ON p.employee_id = d.drafter_employee_id
         WHERE d.form_id = ANY($1::text[]) AND d.status IN ('in_progress','approved')
           AND d.drafter_employee_id IS NOT NULL
+          AND ($4::text[] IS NULL OR d.drafter_employee_id = ANY($4::text[]))
           AND EXISTS (
                 SELECT 1 FROM jsonb_array_elements(
                          CASE WHEN jsonb_typeof(d.field_values->'expenses') = 'array' THEN d.field_values->'expenses' ELSE '[]'::jsonb END) e
                  WHERE left(e->>'used_on', 10) BETWEEN $2 AND $3)`,
-      [Object.keys(MEAL_FORM_CATEGORY), from, to]
+      [Object.keys(MEAL_FORM_CATEGORY), from, to, employeeIds]
     )
   );
 
@@ -136,7 +159,7 @@ export async function listMealReturnChecks(payYear: number, payMonth: number): P
       });
     });
   }
-  if (!items.length) return { from, to, rows: [], people: [], noTimeCount: 0 };
+  if (!items.length) return { rows: [], noTimeCount: 0 };
 
   // ② 결제 시각 — 법인카드 승인일시 / 개인영수증 거래일시. 둘 다 없으면 대조 불가.
   const paidByTxn = new Map<string, string | null>();
@@ -174,7 +197,7 @@ export async function listMealReturnChecks(payYear: number, payMonth: number): P
     if (!isOffDay && paidSec < DINNER_FROM_SEC) continue;
     targets.push({ ...it, paidSec, isOffDay });
   }
-  if (!targets.length) return { from, to, rows: [], people: [], noTimeCount };
+  if (!targets.length) return { rows: [], noTimeCount };
 
   // ③ 직원 → ADT 사번 후보: 근태 일별(실제 연결된 사번) · 직원 마스터 adt_emp_no · 지사 별칭.
   const empIds = Array.from(new Set(targets.map((t) => t.employeeId)));
@@ -291,8 +314,75 @@ export async function listMealReturnChecks(payYear: number, payMonth: number): P
     };
   });
   rows.sort((a, b) => a.empName.localeCompare(b.empName, "ko") || a.usedOn.localeCompare(b.usedOn) || a.paidAtHm.localeCompare(b.paidAtHm));
+  return { rows, noTimeCount };
+}
 
-  const nameByEmp = new Map(rows.map((r) => [r.employeeId, r.empName]));
-  const people = summarizeByPerson(rows).map((s) => ({ ...s, empName: nameByEmp.get(s.employeeId) ?? "" }));
-  return { from, to, rows, people, noTimeCount };
+/* ── 반복 외출 경고 설정·판정(마이그 380) ─────────────────────────────── */
+
+/** meal_out_alert_settings('default') — 행이 없거나 380 미적용이면 기본값. */
+export async function loadMealOutAlertSettings(database?: PgDatabase): Promise<MealOutAlertSettings> {
+  const db = database ?? (await getDb());
+  try {
+    const r = rowsToObjects(await db.exec(`SELECT * FROM meal_out_alert_settings WHERE id = 'default' LIMIT 1`))[0];
+    if (!r) return { ...DEFAULT_MEAL_OUT_ALERT_SETTINGS };
+    const d = DEFAULT_MEAL_OUT_ALERT_SETTINGS;
+    const n = (v: unknown, f: number) => (Number.isFinite(Number(v)) ? Number(v) : f);
+    return {
+      enabled: r.enabled === true || r.enabled === "t",
+      longOutMinutes: n(r.long_out_minutes, d.longOutMinutes),
+      lookbackDays: n(r.lookback_days, d.lookbackDays),
+      repeatCount: n(r.repeat_count, d.repeatCount),
+    };
+  } catch (err) {
+    // 380 미적용 환경 — 대조표·기안 화면을 막지 않고 기본값으로 동작한다.
+    if (/meal_out_alert_settings/.test((err as Error).message)) return { ...DEFAULT_MEAL_OUT_ALERT_SETTINGS };
+    throw err;
+  }
+}
+
+export async function saveMealOutAlertSettings(s: MealOutAlertSettings, actorUserId: string): Promise<void> {
+  const error = validateMealOutAlertSettings(s);
+  if (error) throw Object.assign(new Error(error), { status: 400 });
+  await withDbWrite(async (db) => {
+    await db.run(
+      `INSERT INTO meal_out_alert_settings (id, enabled, long_out_minutes, lookback_days, repeat_count, updated_by, updated_at)
+       VALUES ('default', $1, $2, $3, $4, $5, now()::text)
+       ON CONFLICT (id) DO UPDATE SET
+         enabled = EXCLUDED.enabled, long_out_minutes = EXCLUDED.long_out_minutes,
+         lookback_days = EXCLUDED.lookback_days, repeat_count = EXCLUDED.repeat_count,
+         updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`,
+      [s.enabled, s.longOutMinutes, s.lookbackDays, s.repeatCount, actorUserId]
+    );
+  });
+}
+
+export interface MealOutAlertResult {
+  warn: boolean;
+  settings: MealOutAlertSettings;
+  from: string;
+  to: string;
+  days: Array<{ usedOn: string; minOutMinutes: number }>;
+}
+
+/** 'YYYY-MM-DD'(KST 오늘). */
+function todayKst(): string {
+  return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * 초과근무 신청서 작성자 본인의 반복 외출 판정 — 최근 lookbackDays 일(오늘 포함) 식대 중
+ * 결제 후 복귀가 longOutMinutes 이상인 날이 repeatCount 이상이면 warn. 꺼져 있으면 조회하지 않는다.
+ */
+export async function mealOutAlertForUser(userId: string): Promise<MealOutAlertResult> {
+  const db = await getDb();
+  const settings = await loadMealOutAlertSettings(db);
+  const to = todayKst();
+  const from = addDays(to, -(settings.lookbackDays - 1));
+  if (!settings.enabled) return { warn: false, settings, from, to, days: [] };
+  const emp = rowsToObjects(await db.exec(`SELECT employee_id FROM users WHERE user_id = $1`, [userId]))[0];
+  const employeeId = emp?.employee_id != null ? String(emp.employee_id) : null;
+  if (!employeeId) return { warn: false, settings, from, to, days: [] };
+  const { rows } = await collectMealReturnRows(db, from, to, [employeeId]);
+  const alert = evaluateMealOutAlert(rows, settings);
+  return { warn: alert.warn, settings, from, to, days: alert.days };
 }

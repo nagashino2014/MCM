@@ -347,6 +347,18 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "attach",
+        title: "첨부서류(동봉 파일)",
+        blocks: [
+          { kind: "list", items: [
+            "아래 첨부서류 칸에 파일을 끌어다 놓거나 눌러 고릅니다. 공문 PDF 뒤에 올린 순서대로 메일에 동봉되며, 끌어서 순서를 바꿀 수 있습니다.",
+            "pdf·hwpx·docx·xlsx·pptx·이미지 외에 **압축 파일(zip)**도 올릴 수 있습니다. 여러 서류를 한 파일로 묶어 보내야 할 때 씁니다.",
+            "공문 포함 총 25MB 까지는 파일로 직접 첨부되고, 넘으면 다운로드 링크(7일 유효)로 바뀝니다.",
+          ] },
+          { kind: "warn", text: "압축 파일은 미리보기가 없어 결재자가 [[원본 내려받기]]로 내용을 확인해야 합니다. 받는 쪽 메일 보안 설정에 따라 zip 첨부가 걸러질 수 있으니 중요한 서류는 pdf 로도 함께 보내세요." },
+        ],
+      },
+      {
         id: "after",
         title: "승인 뒤 — 발송 확인과 재발송",
         blocks: [
@@ -358,8 +370,8 @@ export const APPROVAL_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송", "공문 불러오기", "복사"],
-    sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/LetterCopyModal.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
+    keywords: ["공문", "공문번호", "수신처", "참조", "발송", "내용증명", "인감", "결번", "재발송", "공문 불러오기", "복사", "첨부", "zip", "압축"],
+    sources: ["components/approval/ApprovalLetterBoard.tsx", "components/approval/LetterCopyModal.tsx", "components/approval/AttachmentPreviewModal.tsx", "components/approval/DocAttachmentViewer.tsx", "components/approval/ApprovalDocModal.tsx", "components/approval/ApprovalArchiveBoard.tsx"],
     reviewedAt: "2026-11-26",
   },
   {

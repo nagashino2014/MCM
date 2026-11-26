@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { Download, FileWarning, Paperclip } from "lucide-react";
 import {
+  ATTACHMENT_NO_PREVIEW_TEXT,
   attachmentPreviewKind,
   attachmentTypeLabel,
   formatBytes,
@@ -85,7 +86,7 @@ export function DocAttachmentViewer({ docId, items }: { docId: string; items: Do
         </div>
       )}
 
-      {convertError ? (
+      {convertError || kind === "download" ? (
         <div
           className="rounded-lg border px-3.5 py-3 flex flex-col gap-1"
           style={{ borderColor: "var(--cd-warning)", background: "var(--cd-warning-soft, rgba(255,174,31,0.1))" }}
@@ -93,7 +94,7 @@ export function DocAttachmentViewer({ docId, items }: { docId: string; items: Do
           <span className="text-[12px] font-semibold flex items-center gap-1.5 cd-warn-text">
             <FileWarning className="w-4 h-4" /> 미리보기를 표시할 수 없습니다
           </span>
-          <p className="text-[12px] cd-text">{convertError}</p>
+          <p className="text-[12px] cd-text">{convertError ?? ATTACHMENT_NO_PREVIEW_TEXT}</p>
           <span className="text-[11px] cd-text-faint">위 [원본 내려받기]로 파일을 확인한 뒤 결재해 주세요.</span>
         </div>
       ) : kind === "image" ? (

@@ -109,6 +109,8 @@ async function attachmentPdf(att: LetterAttachmentItem): Promise<{ pdf: Uint8Arr
     const converted = await convertCached(att.key, att.name);
     return converted.ok ? { pdf: converted.pdf } : { pdf: null, error: converted.error };
   }
+  // 압축(zip) — 공문 동봉 첨부에만 허용(2026-11-26). 원본을 읽지 않고 내려받기로 안내한다.
+  if (kind === "download") return { pdf: null, error: "압축 파일은 미리보기를 만들 수 없습니다. 내려받아 확인하세요." };
   const bytes = await readContractDocument(att.key);
   if (!bytes) return { pdf: null, error: "원본을 읽을 수 없습니다." };
   if (kind === "pdf") return { pdf: new Uint8Array(bytes) };

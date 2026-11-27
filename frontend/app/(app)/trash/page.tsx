@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Database, FileSignature, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { Contact, Database, FileSignature, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { hasPerm, permsOf } from "@/lib/auth/perms";
 import { useToast } from "@/components/ui/Toast";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import "@/components/cdash/cdash.css";
 
-type TrashType = "facility" | "contract";
+type TrashType = "facility" | "contract" | "contact_person";
 
 interface TrashItem {
   trashId: string;
@@ -25,9 +26,26 @@ interface TrashItem {
 const TABS: Array<{ type: TrashType; label: string; icon: typeof Database }> = [
   { type: "facility", label: "사업장 DB", icon: Database },
   { type: "contract", label: "계약관리 DB", icon: FileSignature },
+  // 주소록 외부 담당자(381, 2026-11-27) — 주소록에서 삭제한 담당자. 복원하면 주소록·사업장 상세에 다시 나온다.
+  { type: "contact_person", label: "주소록 담당자", icon: Contact },
 ];
 
+const TYPE_WHERE: Record<TrashType, string> = {
+  facility: "사업장 DB",
+  contract: "계약관리",
+  contact_person: "주소록",
+};
+
 export default function TrashPage() {
+  // useSearchParams(?type=) 는 Suspense 경계 안에서 읽는다(Next 15 정적 렌더 규칙 — 계약관리 화면과 같은 방식).
+  return (
+    <Suspense fallback={null}>
+      <TrashPageInner />
+    </Suspense>
+  );
+}
+
+function TrashPageInner() {
   const { theme, toggleTheme } = useCdashTheme();
   const toast = useToast();
   const { data: session } = useSession();
@@ -36,7 +54,12 @@ export default function TrashPage() {
   // 복원 = trash.restore(부서장·영업관리·관리자). 원래 목록으로 되돌린다(F-11).
   const canRestore = hasPerm(permsOf(session?.user), "trash.restore");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [type, setType] = useState<TrashType>("facility");
+  // 주소록의 [휴지통] 링크(?type=contact_person)로 들어오면 그 탭부터 연다.
+  const searchParams = useSearchParams();
+  const initialType = searchParams?.get("type");
+  const [type, setType] = useState<TrashType>(
+    TABS.some((t) => t.type === initialType) ? (initialType as TrashType) : "facility"
+  );
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +88,7 @@ export default function TrashPage() {
 
   const restore = async (item: TrashItem) => {
     if (!canRestore) return;
-    const where = item.itemType === "contract" ? "계약관리" : "사업장 DB";
+    const where = TYPE_WHERE[item.itemType] ?? "원래";
     if (!window.confirm(`'${item.itemTitle || item.itemId}' 항목을 복원할까요? ${where} 목록에 다시 나타납니다.`)) return;
     setBusyId(item.trashId);
     try {

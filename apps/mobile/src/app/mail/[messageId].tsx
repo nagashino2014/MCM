@@ -196,13 +196,7 @@ export default function MailViewerScreen() {
           <Button label="브리핑 보고서 열기" icon="document-text-outline" onPress={() => router.push(briefingRoute)} full />
         ) : null}
 
-        {/* 본문 — 이미지는 차단·경고 없이 바로 표시한다(사용자 확정 2026-08-10).
-            트레이드오프: 원격 이미지 자동 로드 = 발신자 수신확인 픽셀이 동작한다(사내 메일 위주라 수용). */}
-        <View className="overflow-hidden rounded-card border border-cd-border bg-cd-card px-3 py-2">
-          <HtmlView html={html} showImages />
-        </View>
-
-        {/* 첨부 */}
+        {/* 첨부 — PC 읽기 창처럼 본문 위에 둔다(긴 본문 끝까지 내려야 보이던 문제, 2026-11-27 직원 요청 33). */}
         {fileAtts.length > 0 ? (
           <View className="gap-2 rounded-card border border-cd-border bg-cd-card p-4">
             <Text className="text-[13px] font-bold text-cd-muted">첨부 {fileAtts.length}</Text>
@@ -224,6 +218,12 @@ export default function MailViewerScreen() {
             ))}
           </View>
         ) : null}
+
+        {/* 본문 — 이미지는 차단·경고 없이 바로 표시한다(사용자 확정 2026-08-10).
+            트레이드오프: 원격 이미지 자동 로드 = 발신자 수신확인 픽셀이 동작한다(사내 메일 위주라 수용). */}
+        <View className="overflow-hidden rounded-card border border-cd-border bg-cd-card px-3 py-2">
+          <HtmlView html={html} showImages />
+        </View>
       </ScrollView>
 
       <ActionBar>

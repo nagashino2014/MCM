@@ -3,12 +3,13 @@
 // 일정 메뉴(G6-C) 월 캘린더 — SalesCalendar 의 6주 격자·레인 배정을 복제 확장한 통합판.
 // 바 색은 카테고리(TAG_COLOR)로 구분하며, 바 클릭은 하단 카테고리 목록의 해당 카드로 연결된다(onEventClick).
 // 날짜 셀 클릭(onDayClick)은 일정 메뉴에서는 일정 추가 메뉴, 휴무일 지정 화면에서는 휴무일 지정으로 쓴다.
-// 복수 태그 동시 표시로 밀도가 높아 레인을 3→4로 늘렸다. 초과분은 셀 하단 "+N".
+// 복수 태그 동시 표시로 밀도가 높아 레인을 3→4로 늘렸다. 초과분은 셀 하단 "+N" — 누르면 그날 일정 전체 목록(2026-11-27 직원 요청 38).
 // 드래그 재일정(onEventDrop): canDrag 가 true 인 바(할 일)는 다른 날짜 셀로 끌어 놓을 수 있다 — HTML5 DnD, 셀은 drop 대상.
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { TAG_COLOR, TAG_INK, type CalendarEvent } from "@/lib/calendar/types";
+import { CALENDAR_TAG_LABELS, TAG_COLOR, TAG_INK, type CalendarEvent } from "@/lib/calendar/types";
+import { CdModal } from "@/components/cdash/CdModal";
 import type { OffDay } from "@/lib/hr/holidays";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -66,6 +67,8 @@ export function ScheduleCalendar({
   const [overIso, setOverIso] = useState<string | null>(null);
   // 휴무일(법정공휴일·근로자의 날·사내 지정) — 붉은 날짜 + 휴무일명. 소스는 /api/home/holidays 단일 창구.
   const [offDays, setOffDays] = useState<Map<string, OffDay>>(new Map());
+  // "+N" 을 누른 날짜 — 그날 걸친 일정 전체를 목록 창으로 보인다.
+  const [dayListIso, setDayListIso] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -151,6 +154,17 @@ export function ScheduleCalendar({
 
   const todayIso = ymd(now);
   const cellH = 28 + MAX_LANES * LANE_H + 8;
+
+  // 목록 창 — 그날 걸친 일정(바로 그려진 것 + 넘친 것) 전부, 시작 시각·제목 순.
+  const dayListItems = useMemo(() => {
+    if (!dayListIso) return [];
+    const dn = dayNum(dayListIso);
+    return spans
+      .filter((it) => dn >= it.s && dn <= it.e)
+      .map((it) => it.ev)
+      .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.title.localeCompare(b.title));
+  }, [dayListIso, spans]);
+  const dayListLabel = dayListIso ? `${Number(dayListIso.slice(5, 7))}월 ${Number(dayListIso.slice(8, 10))}일` : "";
 
   return (
     <div className="cd-card-bg rounded-2xl border cd-border-c p-3 min-w-0">
@@ -285,7 +299,20 @@ export function ScheduleCalendar({
                       <span className="text-[9.5px] font-bold truncate" style={{ color: "#EF4444" }}>{off.name}</span>
                     )}
                   </span>
-                  {overflow[di] > 0 && <span className="cd-text-faint text-[9px] mt-auto">+{overflow[di]}</span>}
+                  {overflow[di] > 0 && (
+                    // 셀 클릭(일정 추가·휴무일 지정)과 겹치지 않게 전파를 막는다.
+                    <button
+                      type="button"
+                      className="self-start mt-auto px-1 rounded text-[10px] font-semibold cd-text-muted hover:text-[color:var(--cd-primary)] hover:bg-[color:var(--cd-primary-soft)]"
+                      title={`${iso} 일정 전체 보기`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDayListIso(iso);
+                      }}
+                    >
+                      +{overflow[di]}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -336,6 +363,33 @@ export function ScheduleCalendar({
           </div>
         );
       })}
+
+      <CdModal open={dayListIso != null} onClose={() => setDayListIso(null)} title={`${dayListLabel} 일정 ${dayListItems.length}건`} size="sm">
+        <ul className="flex flex-col gap-1.5">
+          {dayListItems.map((ev) => (
+            <li key={ev.id}>
+              <button
+                type="button"
+                className="w-full flex items-center gap-2 rounded-lg border cd-border-c px-2.5 py-2 text-left hover:bg-[color:var(--cd-surface)]"
+                onClick={() => {
+                  setDayListIso(null);
+                  onEventClick(ev);
+                }}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: TAG_COLOR[ev.tag] }} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-semibold cd-text truncate">{ev.title}</span>
+                  <span className="block text-[11px] cd-text-faint">
+                    {CALENDAR_TAG_LABELS[ev.tag]}
+                    {ev.startDate !== ev.endDate ? ` · ${ev.startDate.slice(5)} ~ ${ev.endDate.slice(5)}` : ""}
+                    {ev.startTime ? ` · ${ev.startTime}${ev.endTime ? `~${ev.endTime}` : ""}` : ""}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </CdModal>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
+import { recordAuditLogInline } from "@/lib/auth/audit";
 import { missingTableRequirements, parseFields, type ApprovalFieldDef } from "@/lib/approval/fields";
 import { checkExpenseRowSources } from "@/lib/approval/expense-sources-check";
 import { getForm } from "@/lib/approval/forms";
@@ -520,6 +521,52 @@ export async function recallLetterDoc(docId: string, actorUserId: string, isMana
       new Date().toISOString(),
     ]);
   });
+}
+
+/**
+ * 상신 취소(2026-11-27 직원 요청 31) — 결재 중인 본인 기안을 작성중으로 되돌린다.
+ * 아직 아무 결재자도 승인·반려하지 않았을 때만 허용한다(누군가 처리한 뒤에는 반려 요청·결재자 반려로).
+ * 반려 뒤 재상신과 같은 모양이 된다: 결재선은 모두 대기로 되돌리고(대결로 바뀐 처리자는 원결재자로),
+ * 문서번호·상신 이력(submitted_at)은 유지해 고친 뒤 다시 상신하면 같은 번호로 결재가 다시 시작된다.
+ */
+export function canWithdrawSteps(steps: { status: string }[]): boolean {
+  return !steps.some((s) => s.status === "approved" || s.status === "rejected");
+}
+
+export async function withdrawDoc(docId: string, actorUserId: string): Promise<{ docNo: string | null }> {
+  let docNo: string | null = null;
+  await withDbWrite(async (txn) => {
+    const rows = rowsToObjects(
+      await txn.exec(`SELECT status, drafter_user_id, doc_no FROM approval_docs WHERE doc_id = $1 FOR UPDATE`, [docId])
+    );
+    if (!rows.length) throw userError("문서를 찾을 수 없습니다.", 404);
+    const doc = rows[0];
+    if (String(doc.drafter_user_id) !== actorUserId) throw userError("본인 기안만 상신 취소할 수 있습니다.", 403);
+    if (String(doc.status) !== "in_progress") throw userError("결재 중인 문서만 상신 취소할 수 있습니다.");
+    const steps = rowsToObjects(await txn.exec(`SELECT status FROM approval_steps WHERE doc_id = $1`, [docId]));
+    if (!canWithdrawSteps(steps.map((s) => ({ status: String(s.status) })))) {
+      throw userError("이미 결재가 진행된 문서는 상신 취소할 수 없습니다 — 결재자에게 반려를 요청하세요.", 409);
+    }
+    docNo = doc.doc_no != null ? String(doc.doc_no) : null;
+    const now = new Date().toISOString();
+    await txn.run(`UPDATE approval_docs SET status = 'draft', completed_at = NULL, updated_at = $2 WHERE doc_id = $1`, [docId, now]);
+    await restoreDelegatedAssignees(txn, docId);
+    await txn.run(
+      `UPDATE approval_steps SET status = 'waiting', acted_at = NULL, comment = NULL, act_type = NULL, skip_reason = NULL, absence_id = NULL
+        WHERE doc_id = $1`,
+      [docId]
+    );
+    await resolveOpenCancelRequests(txn, docId, "withdrawn", actorUserId);
+    await recordAuditLogInline(txn, {
+      actorUserId,
+      action: "approval_doc_withdraw",
+      targetTable: "approval_docs",
+      targetId: docId,
+      before: { status: "in_progress", docNo },
+      after: { status: "draft", docNo },
+    });
+  });
+  return { docNo };
 }
 
 /**

@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
             quoteOf: (form.get("quoteOf") as string | null) || null,
             quoteMode: form.get("quoteMode") === "forward" ? "forward" : "reply",
             applySignature: form.get("applySignature") !== "0",
+            signatureId: (form.get("signatureId") as string | null) || null,
           })
         : String(form.get("bodyHtml") ?? "");
     const idempotencyKey = (form.get("idempotencyKey") as string | null) ?? undefined;

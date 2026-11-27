@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { hasPermission } from "@/lib/auth/rbac";
 import { recordAuditLog } from "@/lib/auth/audit";
-import { deleteDoc, getDoc, markWatcherRead } from "@/lib/approval/docs";
+import { canWithdrawSteps, deleteDoc, getDoc, markWatcherRead } from "@/lib/approval/docs";
 import { unlinkDocCards } from "@/lib/barobill/classify";
 import { unlinkDocReceipts } from "@/lib/finance/receipts";
 import { resolveDocAccess } from "@/lib/approval/access";
@@ -61,6 +61,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
     // 문서 삭제 — 관리자는 승인 완료 포함 전 상태(테스트·오기안 정리),
     // 기안자는 아직 결재가 걸려 있지 않은 본인 문서(작성중·반려)만.
     const canDelete = isManager || isOwnEditable;
+    // 상신 취소(직원 요청 31) — 본인 기안이 결재 중이고 아직 아무도 승인·반려하지 않았을 때(서버 withdrawDoc 판정과 동일).
+    const canWithdraw = doc.drafterUserId === ctx.userId && doc.status === "in_progress" && canWithdrawSteps(doc.steps);
     return NextResponse.json({
       doc: {
         ...doc,
@@ -76,6 +78,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ doc
         adminEdits,
         canEdit,
         canDelete,
+        canWithdraw,
       },
     });
   } catch (err) {

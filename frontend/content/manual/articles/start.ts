@@ -322,6 +322,18 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
       {
+        id: "app-mail",
+        title: "앱에서 메일 읽기·쓰기",
+        blocks: [
+          { kind: "list", items: [
+            "메일을 열면 첨부 파일 목록이 본문 위에 보입니다. 파일을 누르면 내려받아 열거나 공유합니다.",
+            "메일 쓰기에서 [[+ 참조 추가]] · [[+ 숨은참조 추가]]로 참조·숨은참조 칸을 엽니다. 숨은참조로 넣은 사람은 다른 받는 사람에게 보이지 않습니다.",
+            "본문 아래 ‘서명’에서 보낼 서명을 고릅니다. 처음에는 기본 서명이 골라져 있고, 넣지 않으려면 [[서명 없음]]을 누릅니다. 서명이 하나도 없으면 [[+ 서명 만들기]]로 적고 [[서명 저장]]을 누르면 기본 서명이 되어 PC 메일에서도 쓰입니다.",
+            "답장·전달·보내기 버튼 줄은 휴대폰 아래쪽 내비게이션 바 위에 놓입니다.",
+          ] },
+        ],
+      },
+      {
         id: "app-manual",
         title: "앱에서 매뉴얼 보기",
         blocks: [
@@ -334,8 +346,8 @@ export const START_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부", "앱 알림", "푸시", "알림 켜기", "메일 알림", "메신저 알림", "알림 숫자", "배지"],
-    sources: ["components/mobile/MobileHome.tsx", "lib/mail/inbound-push.ts", "../apps/mobile/src/lib/use-nav-badges.ts", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx", "../apps/mobile/src/app/notification-settings.tsx"],
-    reviewedAt: "2026-11-12",
+    keywords: ["모바일", "휴대폰", "앱", "영수증 촬영", "명함", "앱 매뉴얼", "PC 앱", "설치", "데스크탑 위젯", "메신저", "대화", "멘션", "엔터 전송", "문서 공유", "파일 첨부", "앱 알림", "푸시", "알림 켜기", "메일 알림", "메신저 알림", "알림 숫자", "배지", "앱 메일", "숨은참조", "서명"],
+    sources: ["components/mobile/MobileHome.tsx", "lib/mail/inbound-push.ts", "../apps/mobile/src/lib/use-nav-badges.ts", "components/home/HomeBoard.tsx", "../apps/mobile/src/app/(tabs)/more.tsx", "../apps/mobile/src/app/(tabs)/_layout.tsx", "../apps/mobile/src/app/chat/[roomId].tsx", "../apps/mobile/src/app/notification-settings.tsx", "../apps/mobile/src/app/mail/compose.tsx", "../apps/mobile/src/app/mail/[messageId].tsx"],
+    reviewedAt: "2026-11-27",
   },
 ];

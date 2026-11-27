@@ -31,6 +31,8 @@ export async function DELETE(_: NextRequest, ctx: RouteContext) {
         await db.run("DELETE FROM contracts WHERE contract_id = $1", [itemId]);
       } else if (itemType === "facility") {
         await purgeFacility(db, itemId);
+      } else if (itemType === "contact_person") {
+        // 주소록 담당자(381) — 원본 행은 휴지통으로 옮길 때 이미 뺐다. 휴지통 기록만 완전 삭제 처리한다.
       } else {
         throw new Error("지원하지 않는 휴지통 항목입니다.");
       }

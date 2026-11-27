@@ -118,6 +118,8 @@ export type AuditAction =
   | "approval_doc_submit"
   | "approval_doc_act"
   | "approval_doc_cancel"
+  | "approval_doc_withdraw"
+  | "contact_person_trash"
   | "approval_absence_create"
   | "approval_absence_cancel"
   | "approval_default_delegate_update"

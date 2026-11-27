@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get("type");
     const where = ["t.purged_at IS NULL"];
     const params: unknown[] = [];
-    if (type === "facility" || type === "contract") {
+    if (type === "facility" || type === "contract" || type === "contact_person") {
       params.push(type);
       where.push(`t.item_type = $${params.length}`);
     }

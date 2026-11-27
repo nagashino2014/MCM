@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 
-import { ActionBar, Button, Input, Textarea, useToast } from '@/components/ui';
+import { ActionBar, Button, FilterPill, Input, Textarea, useToast } from '@/components/ui';
+import { htmlToPlain, plainToHtml } from '@/components/approval/FormField';
 import { apiFetch, apiJson } from '@/lib/api';
 import { RecipientField } from '@/components/mail/RecipientField';
 import { useTheme } from '@/theme/useTheme';
@@ -21,6 +22,16 @@ interface MailDetail {
   rfcMessageId: string | null;
   references: string[];
 }
+
+interface Signature {
+  signatureId: string;
+  name: string;
+  bodyHtml: string;
+  isDefault: boolean;
+}
+
+/** 서명 없음 선택값 — 서버에 applySignature=0 으로 보낸다. */
+const NO_SIGNATURE = '__none__';
 
 interface Picked {
   uri: string;
@@ -55,6 +66,14 @@ export default function MailComposeScreen() {
   const [to, setTo] = useState(toParam ?? '');
   const [cc, setCc] = useState('');
   const [showCc, setShowCc] = useState(false);
+  // 숨은참조(2026-11-27 직원 요청 36) — 받는 사람에게 보이지 않는 수신자. 서버 /api/mail/send 의 bcc 필드.
+  const [bcc, setBcc] = useState('');
+  const [showBcc, setShowBcc] = useState(false);
+  // 서명(직원 요청 35) — 내 서명 목록에서 고른다. 기본 서명이 처음 선택되고, 하나도 없으면 여기서 바로 만든다.
+  const [signatures, setSignatures] = useState<Signature[] | null>(null);
+  const [signatureId, setSignatureId] = useState<string>(NO_SIGNATURE);
+  const [sigDraft, setSigDraft] = useState<string | null>(null);
+  const [sigSaving, setSigSaving] = useState(false);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<Picked[]>([]);
@@ -83,6 +102,48 @@ export default function MailComposeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteOf, forward]);
 
+  const loadSignatures = async (select?: string) => {
+    try {
+      const d = await apiJson<{ signatures?: Signature[] }>('/api/mail/signatures');
+      const list = Array.isArray(d.signatures) ? d.signatures : [];
+      setSignatures(list);
+      setSignatureId(select ?? list.find((s) => s.isDefault)?.signatureId ?? NO_SIGNATURE);
+    } catch {
+      setSignatures(null); // 서명 목록을 못 받아도 메일은 쓸 수 있다(서버가 기본 서명을 붙인다)
+    }
+  };
+  useEffect(() => {
+    void loadSignatures();
+  }, []);
+
+  // 서명이 하나도 없을 때 — 평문 서명을 만들어 기본 서명으로 저장한다(PC 메일 설정의 서명과 같은 목록).
+  const saveNewSignature = async () => {
+    const text = (sigDraft ?? '').trim();
+    if (!text) {
+      toast.show('서명 내용을 입력하세요.', 'error');
+      return;
+    }
+    setSigSaving(true);
+    try {
+      const res = await apiFetch('/api/mail/signatures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '기본 서명', bodyHtml: plainToHtml(text), isDefault: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { error?: string; signatureId?: string };
+      if (!res.ok) throw new Error(d.error ?? `서명 저장 실패 (HTTP ${res.status})`);
+      setSigDraft(null);
+      await loadSignatures(d.signatureId);
+      toast.show('서명을 저장했습니다.', 'success');
+    } catch (e) {
+      toast.show((e as Error).message, 'error');
+    } finally {
+      setSigSaving(false);
+    }
+  };
+
+  const selectedSig = signatures?.find((s) => s.signatureId === signatureId) ?? null;
+
   const pickFiles = async () => {
     const res = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
     if (res.canceled) return;
@@ -108,9 +169,15 @@ export default function MailComposeScreen() {
       const fd = new FormData();
       fd.append('to', to.trim());
       if (cc.trim()) fd.append('cc', cc.trim());
+      if (bcc.trim()) fd.append('bcc', bcc.trim());
       fd.append('subject', subject);
       // 서버가 평문을 HTML 로 바꾸고 서명·인용을 붙인다.
       fd.append('plainBody', body);
+      // 서명 — 목록을 받았을 때만 고른 값을 보낸다(못 받았으면 지금처럼 서버가 기본 서명을 붙인다).
+      if (signatures) {
+        if (signatureId === NO_SIGNATURE) fd.append('applySignature', '0');
+        else fd.append('signatureId', signatureId);
+      }
       if (quoteOf) {
         fd.append('quoteOf', quoteOf);
         fd.append('quoteMode', quoteMode);
@@ -140,20 +207,30 @@ export default function MailComposeScreen() {
   return (
     <SafeAreaView edges={[]} className="flex-1 bg-transparent">
       <ShellBackground />
+      {/* 안드로이드도 padding — edge-to-edge 에서는 창이 키보드만큼 줄지 않아 입력란이 가려진다(직원 요청 37과 같은 원인). */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         className="flex-1"
         keyboardVerticalOffset={90}>
         <ScrollView automaticallyAdjustKeyboardInsets className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
           <RecipientField label="받는 사람" value={to} onChange={setTo} autoFocus={!quoteOf} />
 
-          {showCc ? (
-            <RecipientField label="참조" value={cc} onChange={setCc} />
-          ) : (
-            <Pressable onPress={() => setShowCc(true)} className="self-start active:opacity-70">
-              <Text className="text-[13px] font-bold text-cd-primary">+ 참조 추가</Text>
-            </Pressable>
-          )}
+          {showCc ? <RecipientField label="참조" value={cc} onChange={setCc} /> : null}
+          {showBcc ? <RecipientField label="숨은참조" value={bcc} onChange={setBcc} /> : null}
+          {!showCc || !showBcc ? (
+            <View className="flex-row gap-4">
+              {!showCc ? (
+                <Pressable onPress={() => setShowCc(true)} className="active:opacity-70">
+                  <Text className="text-[13px] font-bold text-cd-primary">+ 참조 추가</Text>
+                </Pressable>
+              ) : null}
+              {!showBcc ? (
+                <Pressable onPress={() => setShowBcc(true)} className="active:opacity-70">
+                  <Text className="text-[13px] font-bold text-cd-primary">+ 숨은참조 추가</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           <Input label="제목" value={subject} onChangeText={setSubject} placeholder="제목" />
 
@@ -165,12 +242,54 @@ export default function MailComposeScreen() {
             minHeight={200}
           />
 
+          {/* 서명 — 본문 아래에 붙는다(서버 조립). 목록을 못 받으면 칸을 숨기고 서버가 기본 서명을 붙인다. */}
+          {signatures ? (
+            <View className="gap-1.5">
+              <Text className="text-[12px] font-medium text-cd-muted">서명</Text>
+              {signatures.length ? (
+                <View className="flex-row flex-wrap gap-1.5">
+                  {signatures.map((s) => (
+                    <FilterPill
+                      key={s.signatureId}
+                      label={s.name || '서명'}
+                      active={signatureId === s.signatureId}
+                      onPress={() => setSignatureId(s.signatureId)}
+                    />
+                  ))}
+                  <FilterPill label="서명 없음" active={signatureId === NO_SIGNATURE} onPress={() => setSignatureId(NO_SIGNATURE)} />
+                </View>
+              ) : sigDraft == null ? (
+                <Pressable onPress={() => setSigDraft('')} className="self-start active:opacity-70">
+                  <Text className="text-[13px] font-bold text-cd-primary">+ 서명 만들기</Text>
+                </Pressable>
+              ) : null}
+              {selectedSig ? (
+                <View className="rounded-xl border border-cd-border bg-cd-surface px-3 py-2">
+                  <Text className="text-[12px] text-cd-muted">{htmlToPlain(selectedSig.bodyHtml).trim()}</Text>
+                </View>
+              ) : null}
+              {sigDraft != null ? (
+                <View className="gap-2">
+                  <Textarea
+                    value={sigDraft}
+                    onChangeText={setSigDraft}
+                    placeholder={'이름 직급\n회사명 · 전화번호'}
+                    minHeight={80}
+                  />
+                  <View className="flex-row gap-2">
+                    <Button label="취소" variant="ghost" size="sm" onPress={() => setSigDraft(null)} />
+                    <Button label="서명 저장" size="sm" onPress={saveNewSignature} loading={sigSaving} />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {quoteOf ? (
             <View className="flex-row items-center gap-1.5 rounded-xl bg-cd-surface px-3 py-2">
               <Ionicons name="information-circle-outline" size={14} color={c.faint} />
               <Text className="flex-1 text-[12px] text-cd-faint">
-                {forward ? '원문이 아래에 함께 전달됩니다.' : '원문이 아래에 인용됩니다.'} 서명도
-                자동으로 붙습니다.
+                {forward ? '원문이 아래에 함께 전달됩니다.' : '원문이 아래에 인용됩니다.'}
               </Text>
             </View>
           ) : null}

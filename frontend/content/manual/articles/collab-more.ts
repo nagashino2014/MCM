@@ -49,7 +49,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         title: "담당자 등록·수정·삭제",
         requires: ["contact.edit"],
         blocks: [
-          { kind: "p", text: "외부 담당자 등록과 수정은 전 직원이 할 수 있습니다. 만난 사람의 직급·부서·연락처가 바뀐 것을 알게 되면 바로 고쳐 주세요. 삭제는 사업장 관리 담당자만 할 수 있습니다." },
+          { kind: "p", text: "외부 담당자 등록·수정·삭제는 전 직원이 할 수 있습니다. 만난 사람의 직급·부서·연락처가 바뀐 것을 알게 되면 바로 고쳐 주세요. 삭제한 담당자는 휴지통으로 가며, 완전 삭제는 관리자만 합니다." },
           { kind: "steps", items: [
             "[[외부 연락처]] 탭 오른쪽 위 [[담당자 등록]]을 누르고, 기관·업체를 검색해 고른 뒤 이름·직급·부서·연락처를 넣고 [[등록]]을 누릅니다.",
             "고칠 때는 표 오른쪽 [[관리]] 열의 연필 아이콘 → [[담당자 수정]] 창에서 이름·직급·부서·휴대폰·사무실·이메일을 고치고 [[저장]]을 누릅니다.",
@@ -63,7 +63,12 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
             "[[연락처 구분]]은 소속 기관·업체의 속성이라 사업장 수정 권한이 있는 사람만 바꿉니다. 바꾸면 같은 기관·업체의 담당자 전원에게 함께 적용됩니다.",
             "등록·수정 기록은 누가 언제 바꿨는지 남습니다.",
           ] },
-          { kind: "warn", text: "휴지통 아이콘(사업장 수정 권한자에게만 보임) → [[담당자 삭제]]는 사업장 상세의 담당자 목록에서도 지웁니다. 휴지통으로 가지 않으므로 되돌릴 수 없습니다." },
+          { kind: "steps", items: [
+            "지울 사람 줄의 [[관리]] 열 휴지통 아이콘을 누릅니다. 한 번에 한 사람씩만 지울 수 있습니다(여러 명을 골라 한꺼번에 지우는 기능은 없습니다).",
+            "[[담당자 삭제]] 창에서 [[삭제]]를 누르면 그 담당자가 휴지통으로 옮겨지고 사업장 상세의 담당자 목록에서도 빠집니다.",
+          ] },
+          { kind: "warn", text: "담당자 삭제는 한 사람이 하루(24시간)에 5건까지입니다. 5건을 지우면 그때부터 24시간 동안 삭제가 멈추고 [[삭제 한도]] 경고 창이 뜹니다. 잘못 지웠다면 휴지통 권한자(부서장·관리자)에게 복원을 요청하세요. 관리자는 이 제한을 받지 않습니다." },
+          { kind: "p", text: "휴지통 권한이 있으면 [[외부 연락처]] 탭 위쪽 [[휴지통]]으로 지운 담당자를 바로 볼 수 있습니다." },
         ],
       },
       {
@@ -106,9 +111,9 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         ],
       },
     ],
-    keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형", "담당자 등록", "접견인", "비상 연락망", "비상연락망", "엑셀", "PDF", "총 인원"],
-    sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/ExtraEmailsField.tsx", "components/directory/DepartmentField.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx"],
-    reviewedAt: "2026-11-23",
+    keywords: ["주소록", "연락처", "전화번호", "조직도", "외부 연락처", "담당자", "거래처", "연락처 구분", "기관 유형", "담당자 등록", "담당자 삭제", "주소록 휴지통", "삭제 한도", "접견인", "비상 연락망", "비상연락망", "엑셀", "PDF", "총 인원"],
+    sources: ["components/directory/DirectoryBoard.tsx", "components/directory/ContactCreateModal.tsx", "components/directory/ExtraEmailsField.tsx", "components/directory/DepartmentField.tsx", "components/directory/EmergencyContactsTab.tsx", "components/approval/ApprovalFormRenderer.tsx", "lib/directory-trash.ts"],
+    reviewedAt: "2026-11-27",
   },
 
   // ── 공지·게시판 ──
@@ -661,7 +666,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
     routes: ["/trash"],
     audience: ["head", "admin"],
     summary: [
-      "삭제한 사업장과 계약이 [[사업장 DB]] / [[계약관리 DB]] 탭에 남습니다.",
+      "삭제한 사업장·계약·주소록 담당자가 [[사업장 DB]] / [[계약관리 DB]] / [[주소록 담당자]] 탭에 남습니다.",
       "누가 언제 무슨 사유로 지웠는지 확인하고, 잘못 지운 항목은 [[복원]]으로 원래 목록에 되돌립니다.",
       "관리자는 [[영구 삭제]]로 완전히 지웁니다.",
     ],
@@ -671,8 +676,9 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         title: "휴지통에 들어오는 것",
         blocks: [
           { kind: "list", items: [
-            "사업장 삭제, 계약 삭제만 휴지통에 남습니다.",
-            "공지 글·설문·주소록 담당자·자산 등 다른 메뉴에서 지운 자료는 여기에 나오지 않습니다.",
+            "사업장 삭제, 계약 삭제, 주소록 외부 담당자 삭제가 휴지통에 남습니다.",
+            "주소록의 [[휴지통]] 버튼으로 들어오면 [[주소록 담당자]] 탭이 바로 열립니다.",
+            "공지 글·설문·자산 등 다른 메뉴에서 지운 자료는 여기에 나오지 않습니다.",
           ] },
         ],
       },
@@ -683,7 +689,7 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         blocks: [
           { kind: "steps", items: [
             "되돌릴 항목 줄의 [[복원]]을 누릅니다.",
-            "확인 창에서 확인하면 그 사업장·계약이 사업장 DB·계약관리 목록에 다시 나타나고 휴지통에서 빠집니다.",
+            "확인 창에서 확인하면 그 사업장·계약·담당자가 원래 목록(사업장 DB·계약관리·주소록과 사업장 상세)에 다시 나타나고 휴지통에서 빠집니다.",
           ] },
           { kind: "p", text: "복원하면 삭제 표시와 삭제 사유가 지워집니다. 누가 언제 복원했는지는 감사 기록에 남습니다. 이미 영구 삭제한 항목은 복원할 수 없습니다." },
         ],
@@ -693,12 +699,12 @@ export const COLLAB_MORE_ARTICLES: ManualArticle[] = [
         title: "영구 삭제",
         requires: ["trash.purge"],
         blocks: [
-          { kind: "warn", text: "[[영구 삭제]]는 되돌릴 수 없습니다. 사업장이면 그 사업장의 담당자·연락 이력·연간 보고 같은 딸린 자료까지 함께 지워집니다." },
+          { kind: "warn", text: "[[영구 삭제]]는 되돌릴 수 없습니다. 사업장이면 그 사업장의 담당자·연락 이력·연간 보고 같은 딸린 자료까지 함께 지워집니다. 주소록 담당자는 영구 삭제하면 더는 복원할 수 없습니다." },
         ],
       },
     ],
-    keywords: ["휴지통", "삭제", "복원", "영구 삭제", "삭제된 사업장", "삭제된 계약"],
-    sources: ["app/(app)/trash/page.tsx", "app/api/trash/[trashId]/restore/route.ts"],
-    reviewedAt: "2026-10-21",
+    keywords: ["휴지통", "삭제", "복원", "영구 삭제", "삭제된 사업장", "삭제된 계약", "삭제된 담당자", "주소록 휴지통"],
+    sources: ["app/(app)/trash/page.tsx", "app/api/trash/[trashId]/restore/route.ts", "lib/directory-trash.ts"],
+    reviewedAt: "2026-11-27",
   },
 ];

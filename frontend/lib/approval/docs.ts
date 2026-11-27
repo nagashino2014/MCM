@@ -956,7 +956,7 @@ export async function submitDoc(docId: string, actorUserId: string): Promise<{ d
     await activateOrder(txn, docId, 1);
     // 초과근무 신청 — 주 12h 초과 판정을 상신 시점에 고정 저장(결재 화면 경고 배너의 근거).
     await assessOverLimitOnSubmit(txn, docId);
-    // 지출결의서 — 식대(복리후생비) 사용을 그 날 초과근무 신청(평일 2h·휴일 4h)과 대조해
+    // 지출결의서 — 식대(복리후생비) 사용을 그 날 초과근무 신청(평일 2h, 휴일은 불인정 — 379)과 대조해
     // 미달분을 경고 스냅샷·이력으로 남긴다(상신 차단 없음, 결재 화면 배너의 근거).
     await assessMealChecksOnSubmit(txn, docId);
     // 선행 문서 연계 정합성 — 불일치 판정·숙박출장수당 산정 내역을 상신 시점에 고정 저장(결재 화면 배너).

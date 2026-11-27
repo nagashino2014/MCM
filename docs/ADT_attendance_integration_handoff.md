@@ -328,6 +328,8 @@ ON CONFLICT (emp_no, work_date) DO UPDATE
    (computeDaily isOffDay, 마이그 201 재산정). 평일 점심 60분 공제는 유지.
 3. **식대 × 초과근무 신청 대조** (마이그 203, `lib/approval/overtime-meal.ts`) —
    저녁 식대 인정 기준: 평일 그 날 초과근무 신청 2h 이상, 휴일 4h 이상.
+   ⚠ 2026-11-26 개정(마이그 379): 휴일 식대는 신청 시간과 무관하게 불인정 — 개인 결제분은
+   상신 시 불지급(withhold) 자동 처분, 법인카드분은 경고로 남겨 관리자가 환수 여부를 정한다.
    지출결의서(frm-expense-report) 상신 시 식대(복리후생비) 행을 판정한다:
    평일은 결제 17:00 이후 건만(점심 회식 오탐 방지, 결제 시각은 법인카드
    `card_transactions.approved_at`·개인영수증 `personal_receipts.paid_at`, 시각

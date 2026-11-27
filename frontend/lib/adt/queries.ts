@@ -515,7 +515,8 @@ export interface MyMealWarningRow {
   usedOn: string;
   vendor: string | null;
   amount: number | null;
-  requiredMinutes: number;
+  isOffDay: boolean;
+  requiredMinutes: number; // 휴일 불인정(379 이후)은 0
   appliedMinutes: number;
   action: string; // warning | no_pay | clawback ...
   actionNote: string | null;
@@ -527,7 +528,7 @@ export async function listMyMealWarnings(userId: string, year: string): Promise<
   const db = await getDb();
   const rows = rowsToObjects(
     await db.exec(
-      `SELECT m.warning_id, to_char(m.used_on, 'YYYY-MM-DD') AS used_on, m.vendor, m.amount,
+      `SELECT m.warning_id, to_char(m.used_on, 'YYYY-MM-DD') AS used_on, m.vendor, m.amount, m.is_off_day,
               m.required_minutes, m.applied_minutes, m.action, m.action_note, m.doc_id
          FROM users u
          JOIN overtime_meal_warnings m ON m.employee_id = u.employee_id
@@ -541,6 +542,7 @@ export async function listMyMealWarnings(userId: string, year: string): Promise<
     usedOn: String(r.used_on),
     vendor: r.vendor != null ? String(r.vendor) : null,
     amount: r.amount != null ? Number(r.amount) : null,
+    isOffDay: r.is_off_day === true || r.is_off_day === "t",
     requiredMinutes: Number(r.required_minutes ?? 0),
     appliedMinutes: Number(r.applied_minutes ?? 0),
     action: String(r.action ?? "warning"),

@@ -7,7 +7,11 @@ import { offDaySet } from "@/lib/hr/holidays";
 
 /*
  * 지출결의서 식대 × 초과근무 신청 대조 (2026-08-27 사규 확정, 마이그 203).
- * 저녁 식대 인정 기준: 평일은 그 날 초과근무 신청 2시간 이상, 휴일(토·일·공휴일)은 4시간 이상.
+ * 저녁 식대 인정 기준: 평일은 그 날 초과근무 신청 2시간 이상. 휴일(토·일·공휴일)은 신청 시간과
+ * 무관하게 식대를 인정하지 않는다(2026-11-26 사용자 결정, 마이그 379 — 휴일 근무는 시간 전부를
+ * 초과근무로 인정하므로 식대까지 주면 중복 지출). 휴일 식대 중 회사가 아직 지급하지 않은 행
+ * (법인카드가 아닌 개인 결제)은 상신 시 '불지급'으로 자동 처분하고, 법인카드 행은 이미 결제된
+ * 돈이라 경고로 남겨 환수(급여 차감) 여부를 관리자가 정한다.
  * 지출결의서(frm-expense-report) 상신 시 식대(복리후생비) 행의 사용일·결제시각을
  * 법인카드(card_transactions)·개인영수증(personal_receipts)에서 찾아 그 날 초과근무
  * 신청 시간(진행+승인 합)과 대조한다. 기준 미달이면:
@@ -28,9 +32,11 @@ const MEAL_FORM_CATEGORY: Record<string, string> = {
 };
 /** 평일 저녁 식사로 보는 결제 시각 하한 — 점심 회식·다과(초과근무와 무관)를 오탐하지 않기 위한 경계. */
 const DINNER_FROM_HM = "17:00";
-/** 인정 기준(분): 평일 2시간, 휴일 4시간. */
+/** 인정 기준(분): 평일 2시간. 휴일은 불인정 — 기준 0 으로 저장한다(isOffDay && requiredMinutes 0 = 휴일 불인정). */
 export const MEAL_REQUIRED_WEEKDAY_MIN = 120;
-export const MEAL_REQUIRED_OFFDAY_MIN = 240;
+export const MEAL_OFFDAY_NOT_ALLOWED_MIN = 0;
+/** 휴일 식대 자동 불지급 처분 메모. */
+export const MEAL_OFFDAY_AUTO_NOTE = "휴일 식대 불인정(자동)";
 
 export interface MealViolation {
   rowNo: number; // expenses 표 행 순번(1부터)
@@ -39,8 +45,15 @@ export interface MealViolation {
   amount: number | null;
   paidAtHm: string | null; // 결제 시각 'HH:MM'(미상 NULL)
   isOffDay: boolean;
-  requiredMinutes: number;
+  requiredMinutes: number; // 휴일 불인정은 0(2026-11-26 이전 스냅샷은 휴일 240)
   appliedMinutes: number; // 그 날 초과근무 신청 분
+  /** 휴일 식대 개인 결제분 — 상신 시 불지급으로 자동 처분됨(379). 이전 스냅샷에는 없다. */
+  autoWithheld?: boolean;
+}
+
+/** 휴일 식대 불인정 판정분인지(이전 '휴일 4시간' 스냅샷과 구분). */
+export function isOffDayNotAllowed(v: { isOffDay: boolean; requiredMinutes: number }): boolean {
+  return v.isOffDay && Number(v.requiredMinutes) === MEAL_OFFDAY_NOT_ALLOWED_MIN;
 }
 
 /** 상신 시 field_values._meal_check 로 고정 저장되는 판정 스냅샷. */
@@ -53,7 +66,7 @@ export interface MealCheckSnapshot {
 
 /**
  * 식대 행 1건 판정(순수 함수).
- * 휴일: 결제 시각 무관 4시간 기준. 평일: 저녁(17:00 이후) 결제만 2시간 기준 —
+ * 휴일: 결제 시각·신청 시간 무관 불인정(항상 위반). 평일: 저녁(17:00 이후) 결제만 2시간 기준 —
  * 결제 시각을 알 수 없는 수기 행은 점심(무관 지출)일 수 있어 판정하지 않는다(오탐 방지).
  */
 export function evaluateMealRow(input: {
@@ -62,7 +75,7 @@ export function evaluateMealRow(input: {
   appliedMinutes: number;
 }): { violation: boolean; requiredMinutes: number } | null {
   if (input.isOffDay) {
-    return { violation: input.appliedMinutes < MEAL_REQUIRED_OFFDAY_MIN, requiredMinutes: MEAL_REQUIRED_OFFDAY_MIN };
+    return { violation: true, requiredMinutes: MEAL_OFFDAY_NOT_ALLOWED_MIN };
   }
   if (!input.paidAtHm || input.paidAtHm < DINNER_FROM_HM) return null;
   return { violation: input.appliedMinutes < MEAL_REQUIRED_WEEKDAY_MIN, requiredMinutes: MEAL_REQUIRED_WEEKDAY_MIN };
@@ -188,6 +201,7 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
           vendor: row.vendor != null && String(row.vendor) !== "" ? String(row.vendor) : null,
           amount: Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null,
           paidAtHm,
+          isCard: !!cardTxnId,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -211,6 +225,8 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
           isOffDay,
           requiredMinutes: verdict.requiredMinutes,
           appliedMinutes,
+          // 휴일 식대 개인 결제분은 아직 지급 전이라 불지급으로 자동 처분한다(법인카드분은 경고 → 관리자 판단).
+          ...(isOffDay && !it.isCard ? { autoWithheld: true } : {}),
         });
       }
     }
@@ -236,15 +252,20 @@ export async function assessMealChecksOnSubmit(txn: PgDatabase, docId: string): 
     };
     next._meal_check = snapshot;
     for (const v of violations) {
+      // 휴일 개인 결제분은 처분 'withhold'(불지급)로 바로 적재 — 정산·분개가 이 행을 제외한다
+      // (expense-meal-actions). 처분자는 시스템이라 action_by 는 비운다.
       await txn.run(
         `INSERT INTO overtime_meal_warnings
            (warning_id, employee_id, doc_id, used_on, row_no, vendor, amount, paid_at_hm,
-            is_off_day, required_minutes, applied_minutes, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now()::text)`,
+            is_off_day, required_minutes, applied_minutes, created_at, action, action_note, action_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now()::text, $12, $13,
+                 CASE WHEN $12::text = 'warning' THEN NULL ELSE now()::text END)`,
         [
           "omw-" + crypto.randomUUID().replace(/-/g, "").slice(0, 14),
           employeeId, docId, v.usedOn, v.rowNo, v.vendor, v.amount, v.paidAtHm,
           v.isOffDay, v.requiredMinutes, v.appliedMinutes,
+          v.autoWithheld ? "withhold" : "warning",
+          v.autoWithheld ? MEAL_OFFDAY_AUTO_NOTE : null,
         ]
       );
     }

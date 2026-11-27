@@ -724,6 +724,7 @@ export function ApprovalDocViewer({
                       isOffDay: boolean;
                       requiredMinutes: number;
                       appliedMinutes: number;
+                      autoWithheld?: boolean;
                     }>;
                   }
                 | undefined;
@@ -738,7 +739,7 @@ export function ApprovalDocViewer({
               return (
                 <div className="rounded-lg border px-3.5 py-2.5 flex flex-col gap-0.5" style={{ borderColor: tone, background: toneSoft }}>
                   <span className="text-[12px] font-semibold" style={{ color: tone }}>
-                    ⚠ 식대 인정 기준 미달 {mc.violations.length}건 — 초과근무 신청(평일 2h·휴일 4h) 없이 사용된 식대입니다
+                    ⚠ 식대 인정 기준 미달 {mc.violations.length}건 — 평일은 초과근무 신청 2h 이상일 때만, 휴일 식대는 인정하지 않습니다
                     {repeat ? ` · 과거 경고 ${mc.priorWarningCount}회(재발 — 사용액 반환 청구 검토 대상)` : " · 1차 — 경고 처리 대상"}
                   </span>
                   {mc.violations.map((v, i) => (
@@ -746,7 +747,12 @@ export function ApprovalDocViewer({
                       · {v.usedOn}
                       {v.isOffDay ? "(휴일)" : ""} {v.vendor ?? "사용처 미상"}
                       {v.amount != null ? ` ${Number(v.amount).toLocaleString()}원` : ""}
-                      {v.paidAtHm ? ` · 결제 ${v.paidAtHm}` : ""} — 신청 {h(v.appliedMinutes)}h / 기준 {h(v.requiredMinutes)}h
+                      {v.paidAtHm ? ` · 결제 ${v.paidAtHm}` : ""} —{" "}
+                      {v.isOffDay && Number(v.requiredMinutes) === 0
+                        ? v.autoWithheld
+                          ? "휴일 식대 불인정 · 불지급(자동)"
+                          : "휴일 식대 불인정 · 법인카드 사용분은 관리자가 환수 여부 지정"
+                        : `신청 ${h(v.appliedMinutes)}h / 기준 ${h(v.requiredMinutes)}h`}
                     </span>
                   ))}
                 </div>

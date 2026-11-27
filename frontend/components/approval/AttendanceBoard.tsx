@@ -3,6 +3,7 @@
 // 근태·초과근무 관리(/approval/attendance, admin) — ADT캡스 근태 수신분의 주별 초과근무 리포트.
 // 탭: ①주별 초과근무(주 선택·직원별 연장/야간/12h초과, 행 펼침→일별) ②신청 대조(초과근무 신청서×근태)
 //     ③식대 경고(식대×초과근무 신청 대조 위반 — 경고/불지급/급여 차감 처분, 마이그 203·204)
+//     ③-2 식사 외출 대조(식대 결제 시각×ADT 출입 태그 — 결제 후 복귀까지, 2026-11-26 조회 전용)
 //     ④미매칭 매핑(ADT 사번↔직원) ⑤산정 정책(엑셀 업로드·산정 기준·직원별 출근시각).
 // 사규: 주 52h(일요일 시작)·야간 22:00~06:00 2.0배·그외 연장 1.5배·주 12h 초과분은 특별휴가 대상(리포트).
 // 설계: docs/ADT_attendance_integration_handoff.md §7-1.
@@ -13,6 +14,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  DoorOpen,
   FileSpreadsheet,
   Link2,
   Moon,
@@ -35,6 +37,8 @@ import type { AttendanceSettings, WorkScheduleKind, WorkScheduleRow } from "@/li
 import type { DailyRow, IgnoredEmp, MappableEmployee, UnmatchedRow, WeeklyRow } from "@/lib/adt/queries";
 import type { OvertimeMatchRow } from "@/lib/payroll/overtime";
 import type { MealWarningAction, MealWarningRow } from "@/lib/approval/overtime-meal";
+import type { MealReturnResult, MealReturnRow, MealReturnTagView } from "@/lib/approval/meal-return";
+import { LONG_OUT_MINUTES, MEAL_OUT_ALERT_LIMITS, validateMealOutAlertSettings, type MealOutAlertSettings } from "@/lib/approval/meal-return-pure";
 import "@/components/cdash/cdash.css";
 
 /* ---------- 표시 헬퍼 ---------- */
@@ -58,7 +62,7 @@ const dowOf = (d: string): string => {
   return Number.isNaN(t) ? "" : DOW[new Date(t).getUTCDay()];
 };
 
-type Tab = "weekly" | "match" | "meal" | "mapping" | "settings" | "absence";
+type Tab = "weekly" | "match" | "meal" | "mealout" | "mapping" | "settings" | "absence";
 
 export function AttendanceBoard() {
   const { theme } = useCdashTheme();
@@ -84,6 +88,7 @@ export function AttendanceBoard() {
             ["weekly", "주별 초과근무"],
             ["match", "신청 대조"],
             ["meal", "식대 경고"],
+            ["mealout", "식사 외출 대조"],
             ["mapping", "미매칭 매핑"],
             ["settings", "산정 정책"],
             ["absence", "결근사유서"],
@@ -105,6 +110,7 @@ export function AttendanceBoard() {
         {tab === "weekly" && <WeeklyPanel />}
         {tab === "match" && <MatchPanel />}
         {tab === "meal" && <MealPanel />}
+        {tab === "mealout" && <MealReturnPanel />}
         {tab === "mapping" && <MappingPanel onCount={setUnmatchedCount} />}
         {tab === "settings" && <SettingsPanel />}
         {tab === "absence" && <AbsenceRequestPanel />}
@@ -608,7 +614,7 @@ function MealPanel() {
     <div className="flex flex-col gap-4">
       <p className="text-[13px] cd-text-muted">
         지출결의서의 <b>식대(복리후생비)</b> 사용을 그 날 <b>초과근무 신청</b>과 대조해 기준 미달 건을 자동 검출합니다
-        (평일: 결제 17시 이후·신청 2시간 이상 / 휴일: 신청 4시간 이상). 1·2회는 <b>경고</b>로 처리하고, 반복되면
+        (평일: 결제 17시 이후·신청 2시간 이상 / 휴일: 식대 불인정 — 개인 결제분은 <b>불지급</b>으로 자동 처분). 1·2회는 <b>경고</b>로 처리하고, 반복되면
         <b> 불지급</b> 또는 <b>급여 차감</b>(사용액이 급여대장 &lsquo;식대환수&rsquo; 공제로 자동 반영)을 지정할 수 있습니다.
       </p>
 
@@ -663,7 +669,13 @@ function MealPanel() {
               <span className="cd-text text-right">{r.amount != null ? `${won(r.amount)}원` : "-"}</span>
               <span className="cd-text-faint">{r.paidAtHm ?? "-"}</span>
               <span className="cd-text">
-                {toH(r.appliedMinutes)}h <span className="cd-text-faint">/ {toH(r.requiredMinutes)}h</span>
+                {r.isOffDay && r.requiredMinutes === 0 ? (
+                  <span className="cd-text-faint">휴일 불인정</span>
+                ) : (
+                  <>
+                    {toH(r.appliedMinutes)}h <span className="cd-text-faint">/ {toH(r.requiredMinutes)}h</span>
+                  </>
+                )}
               </span>
               <span
                 className="text-[11px] font-semibold"
@@ -696,6 +708,318 @@ function MealPanel() {
 }
 
 const mealGrid = { display: "grid", gridTemplateColumns: "minmax(0,0.9fr) 0.9fr minmax(0,1.2fr) 0.8fr 0.6fr 0.8fr 0.6fr 1fr minmax(0,1fr)", gap: "8px" } as const;
+
+/* ================= 식사 외출 대조 (식대 결제 × 출입 태그, 2026-11-26) ================= */
+const RETURN_STATUS_LABEL: Record<MealReturnRow["status"], string> = {
+  tagged: "복귀 확인",
+  untagged: "복귀 미기록",
+  none: "태그 없음",
+  delivery: "배달 결제",
+};
+const tagText = (t: MealReturnTagView | null): string =>
+  t ? `${t.nextDay ? "익일 " : ""}${t.hm} ${t.terminal}${t.code === "2" ? "(퇴근)" : t.code === "1" ? "(출근)" : ""}` : "-";
+
+function MealReturnPanel() {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [data, setData] = useState<MealReturnResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [onlyLong, setOnlyLong] = useState(false);
+  const [person, setPerson] = useState<string>("");
+
+  const load = useCallback(async (y: number, m: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/payroll/meal-return?year=${y}&month=${m}`, { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error ?? "식사 외출 대조를 불러오지 못했습니다.");
+      setData(d as MealReturnResult);
+    } catch (err) {
+      setError((err as Error).message);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load(year, month);
+  }, [load, year, month]);
+
+  // 긴 외출 기준(분) — 아래 반복 외출 경고 설정과 같은 값(380). 응답 전에는 기본 60분.
+  const longMin = data?.longOutMinutes ?? LONG_OUT_MINUTES;
+  const rows = useMemo(
+    () =>
+      (data?.rows ?? []).filter(
+        (r) => (!person || r.employeeId === person) && (!onlyLong || (r.minOutMinutes ?? -1) >= longMin)
+      ),
+    [data, person, onlyLong, longMin]
+  );
+  const all = data?.rows ?? [];
+  const tagged = all.filter((r) => r.status === "tagged");
+  const avg = tagged.length ? Math.round(tagged.reduce((a, r) => a + (r.minOutMinutes ?? 0), 0) / tagged.length) : null;
+  const longCount = tagged.filter((r) => (r.minOutMinutes ?? 0) >= longMin).length;
+  const years = [now.getFullYear(), now.getFullYear() - 1];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-start gap-1">
+        <p className="text-[13px] cd-text-muted">
+          지출결의서 <b>식대</b>의 결제 시각과 <b>출입 태그</b>를 맞춰, 결제한 뒤 사무실에 다시 들어오기까지 걸린 시간을 봅니다.
+          나갈 때는 태그가 남지 않아 <b>결제 후 복귀</b>는 외출 시간의 최소값, <b>최대 외출</b>은 결제 직전 태그부터 복귀까지입니다.
+        </p>
+        <CdHelp topic="hr.meal-return" />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="cd-label-text">귀속 월</span>
+        <select className="cd-select" style={{ width: 110 }} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {years.map((y) => <option key={y} value={y}>{y}년</option>)}
+        </select>
+        <select className="cd-select" style={{ width: 100 }} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{m}월</option>)}
+        </select>
+        <span className="text-[12px] cd-text-faint">
+          귀속 구간 {month === 1 ? year - 1 : year}-{String(month === 1 ? 12 : month - 1).padStart(2, "0")}-26 ~ {year}-{String(month).padStart(2, "0")}-25
+        </span>
+      </div>
+
+      {data && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Kpi icon={<UtensilsCrossed className="w-4 h-4" />} label="대조 식대" value={`${all.length}건`} />
+          <Kpi icon={<DoorOpen className="w-4 h-4" />} label="복귀 확인" value={`${tagged.length}건`} />
+          <Kpi icon={<Clock3 className="w-4 h-4" />} label="결제 후 복귀 평균" value={avg != null ? hm(avg) : "-"} />
+          <Kpi icon={<TriangleAlert className="w-4 h-4" />} label={`${longMin}분 이상`} value={`${longCount}건`} danger={longCount > 0} />
+        </div>
+      )}
+
+      {error && <p className="text-[13px] cd-error-text">{error}</p>}
+      {loading ? (
+        <p className="text-[13px] cd-text-faint">불러오는 중입니다.</p>
+      ) : !data || all.length === 0 ? (
+        <p className="text-[13px] cd-text-faint py-4">
+          해당 월에 대조할 식대가 없습니다{data && data.noTimeCount > 0 ? ` (결제 시각을 알 수 없는 식대 ${data.noTimeCount}건 제외)` : ""}.
+        </p>
+      ) : (
+        <>
+          {/* 직원별 요약 — 행을 누르면 아래 상세를 그 직원으로 거른다 */}
+          <div className="rounded-lg border cd-border-c overflow-x-auto">
+            <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={returnPersonGrid}>
+              <span>직원</span>
+              <span className="text-right">식대</span>
+              <span className="text-right">복귀 확인</span>
+              <span className="text-right">결제 후 복귀 평균</span>
+              <span className="text-right">최장</span>
+              <span className="text-right">{longMin}분 이상</span>
+            </div>
+            {data.people.map((p) => (
+              <button
+                key={p.employeeId}
+                type="button"
+                onClick={() => setPerson(person === p.employeeId ? "" : p.employeeId)}
+                className="grid w-full text-left items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[13px]"
+                style={{ ...returnPersonGrid, background: person === p.employeeId ? "var(--cd-primary-soft)" : undefined }}
+                aria-pressed={person === p.employeeId}
+              >
+                <span className="font-semibold cd-text truncate">{p.empName}</span>
+                <span className="cd-text text-right tabular-nums">{p.count}건</span>
+                <span className="cd-text text-right tabular-nums">{p.tagged}건</span>
+                <span className="cd-text text-right tabular-nums">{p.avgMinOut != null ? hm(p.avgMinOut) : "-"}</span>
+                <span className="cd-text text-right tabular-nums">{p.maxMinOut != null ? hm(p.maxMinOut) : "-"}</span>
+                <span className="text-right tabular-nums font-semibold" style={{ color: p.longCount > 0 ? "var(--cd-error)" : "var(--cd-text)" }}>
+                  {p.longCount}건
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-[13px] cd-text">
+              <input type="checkbox" checked={onlyLong} onChange={(e) => setOnlyLong(e.target.checked)} />
+              <span>결제 후 복귀 {longMin}분 이상만</span>
+            </label>
+            {person && (
+              <button type="button" className="cd-btn rounded-lg border cd-border-c px-3 py-1.5 text-xs font-semibold" onClick={() => setPerson("")}>
+                전체 직원 보기
+              </button>
+            )}
+            {data.noTimeCount > 0 && (
+              <span className="text-[12px] cd-text-faint">결제 시각을 알 수 없는 식대 {data.noTimeCount}건은 제외했습니다.</span>
+            )}
+          </div>
+
+          {rows.length === 0 ? (
+            <p className="text-[13px] cd-text-faint py-2">조건에 맞는 건이 없습니다.</p>
+          ) : (
+            <div className="rounded-lg border cd-border-c overflow-x-auto">
+              <div className="cd-table-head hidden md:grid px-3 py-2 text-[11px] font-semibold cd-text-faint border-b cd-border-c" style={returnGrid}>
+                <span>직원</span>
+                <span>사용일</span>
+                <span>사용처</span>
+                <span className="text-right">금액</span>
+                <span>결제</span>
+                <span>직전 태그</span>
+                <span>복귀(다음 태그)</span>
+                <span className="text-right">결제 후 복귀</span>
+                <span className="text-right">최대 외출</span>
+                <span className="pl-4">초과근무 신청</span>
+              </div>
+              {rows.map((r) => (
+                <div key={`${r.docId}-${r.rowNo}`} className="grid items-center px-3 py-[11.5px] border-b cd-border-c last:border-b-0 text-[13px]" style={returnGrid}>
+                  <span className="font-semibold cd-text truncate">{r.empName}</span>
+                  <span className="cd-text">
+                    {r.usedOn.slice(5)}({dowOf(r.usedOn)}){r.isOffDay ? <span className="ml-1 text-[11px] font-semibold cd-error-text">휴일</span> : null}
+                  </span>
+                  <span className="cd-text truncate" title={r.docNo ? `문서 ${r.docNo}` : undefined}>{r.vendor ?? "미상"}</span>
+                  <span className="cd-text text-right tabular-nums">{r.amount != null ? `${won(r.amount)}원` : "-"}</span>
+                  <span className="cd-text tabular-nums">
+                    {r.paidAtHm}
+                    <span className="ml-1 text-[11px] cd-text-faint">{r.payKind === "card" ? "법인카드" : "개인"}</span>
+                  </span>
+                  <span className="cd-text-faint text-[12px] truncate">{tagText(r.lastBefore)}</span>
+                  <span className="text-[12px] truncate">
+                    {r.status === "tagged" ? (
+                      <span className="cd-text">{tagText(r.next)}</span>
+                    ) : (
+                      <span className="cd-text-faint">
+                        {RETURN_STATUS_LABEL[r.status]}
+                        {r.status === "untagged" && r.next ? ` · ${tagText(r.next)}` : ""}
+                        {r.status === "none" && !r.hasTags ? " · 그날 태그 없음" : ""}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className="text-right tabular-nums font-semibold"
+                    style={{ color: (r.minOutMinutes ?? 0) >= longMin ? "var(--cd-error)" : "var(--cd-text)" }}
+                  >
+                    {r.minOutMinutes != null ? hm(r.minOutMinutes) : "-"}
+                  </span>
+                  <span className="cd-text-faint text-right tabular-nums">{r.maxOutMinutes != null ? hm(r.maxOutMinutes) : "-"}</span>
+                  <span className="cd-text-faint text-[12px] truncate pl-4" title={r.appliedTime ?? undefined}>
+                    {r.appliedMinutes > 0 ? `${toH(r.appliedMinutes)}h${r.appliedTime ? ` · ${r.appliedTime}` : ""}` : "없음"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <MealOutAlertSettingsCard onSaved={() => load(year, month)} />
+    </div>
+  );
+}
+
+/* 반복 외출 경고 설정(마이그 380) — 긴 외출 날이 최근 N일 안에 M회 이상이면 초과근무 신청서 위에 경고 */
+function MealOutAlertSettingsCard({ onSaved }: { onSaved: () => void }) {
+  const [form, setForm] = useState<MealOutAlertSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/payroll/meal-return?settings=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.settings) setForm(d.settings as MealOutAlertSettings);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!form) return null;
+  const set = (patch: Partial<MealOutAlertSettings>) => {
+    setForm({ ...form, ...patch });
+    setMessage(null);
+  };
+  const save = async () => {
+    const invalid = validateMealOutAlertSettings(form);
+    if (invalid) {
+      setMessage({ ok: false, text: invalid });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/payroll/meal-return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error ?? "설정을 저장하지 못했습니다.");
+      setMessage({ ok: true, text: "저장했습니다. 다음에 여는 초과근무 신청서부터 적용됩니다." });
+      onSaved();
+    } catch (err) {
+      setMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const numInput = (key: "longOutMinutes" | "lookbackDays" | "repeatCount", label: string, unit: string) => {
+    const [lo, hi] = MEAL_OUT_ALERT_LIMITS[key];
+    return (
+      <label className="flex flex-col gap-1">
+        <span className="cd-label-text">{label}</span>
+        <span className="flex items-center gap-1.5">
+          <input
+            type="number"
+            className="cd-input"
+            style={{ width: 96 }}
+            min={lo}
+            max={hi}
+            step={1}
+            disabled={!form.enabled}
+            value={Number.isFinite(form[key]) ? form[key] : ""}
+            onChange={(e) => set({ [key]: e.target.value === "" ? NaN : Number(e.target.value) } as Partial<MealOutAlertSettings>)}
+          />
+          <span className="text-[13px] cd-text-muted">{unit}</span>
+        </span>
+      </label>
+    );
+  };
+
+  return (
+    <div className="cd-card rounded-lg p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <AlarmClockCheck className="w-4 h-4 cd-text-primary" />
+        <span className="text-[14px] font-semibold cd-text">반복 외출 경고 설정</span>
+      </div>
+      <p className="cd-hint">
+        결제 후 복귀가 외출 기준 이상 걸린 날이 최근 조회 기간 안에 경고 횟수 이상이면, 그 직원이 초과근무 신청서를 쓸 때 양식 위에
+        경고가 뜹니다. 상신은 막지 않습니다. 외출 기준은 위 대조표의 강조 기준으로도 쓰입니다.
+      </p>
+      <label className="flex items-center gap-1.5 text-[13px] cd-text">
+        <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+        <span>초과근무 신청서에 반복 외출 경고 띄우기</span>
+      </label>
+      <div className="flex items-end gap-4 flex-wrap">
+        {numInput("longOutMinutes", "외출 기준", "분 이상")}
+        {numInput("lookbackDays", "조회 기간", "일")}
+        {numInput("repeatCount", "경고 횟수", "회 이상")}
+        <button
+          type="button"
+          className="cd-btn cd-btn-primary rounded-lg px-4 py-2 text-[13px] font-semibold disabled:opacity-50 flex items-center gap-1.5"
+          disabled={saving}
+          onClick={save}
+        >
+          <Save className="w-4 h-4" /> 경고 설정 저장
+        </button>
+      </div>
+      {message && (
+        <p className={`text-[13px] ${message.ok ? "cd-text-muted" : "cd-error-text"}`} role={message.ok ? "status" : "alert"}>
+          {message.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const returnPersonGrid = { display: "grid", gridTemplateColumns: "minmax(0,1.2fr) 0.6fr 0.7fr 1fr 0.7fr 0.8fr", gap: "8px" } as const;
+const returnGrid = { display: "grid", gridTemplateColumns: "minmax(0,0.8fr) 0.8fr minmax(0,1.1fr) 0.7fr 0.9fr minmax(0,1.1fr) minmax(0,1.3fr) 0.7fr 0.6fr minmax(0,1.1fr)", gap: "8px", minWidth: 1080 } as const;
 
 /* ================= 미매칭 매핑 ================= */
 function MappingPanel({ onCount }: { onCount: (n: number) => void }) {

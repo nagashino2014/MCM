@@ -51,6 +51,7 @@ interface MealWarning {
   usedOn: string;
   vendor: string | null;
   amount: number | null;
+  isOffDay?: boolean;
   requiredMinutes: number;
   appliedMinutes: number;
   action: string;
@@ -314,7 +315,11 @@ export function MyAttendanceSection({ theme }: { theme: CdTheme }) {
                     <span className="tabular-nums cd-text">{w.usedOn}</span>
                     {w.vendor && <span>{w.vendor}</span>}
                     {w.amount != null && <span className="tabular-nums">{Math.round(w.amount).toLocaleString("ko-KR")}원</span>}
-                    <span>초과근무 신청 {hm(w.appliedMinutes)} / 기준 {hm(w.requiredMinutes)}</span>
+                    <span>
+                      {w.isOffDay && w.requiredMinutes === 0
+                        ? "휴일 식대 불인정"
+                        : `초과근무 신청 ${hm(w.appliedMinutes)} / 기준 ${hm(w.requiredMinutes)}`}
+                    </span>
                     <span className="cd-pill cd-pill-warn">{MEAL_ACTION_LABEL[w.action] ?? w.action}</span>
                     {w.actionNote && <span className="cd-text-faint">{w.actionNote}</span>}
                   </div>

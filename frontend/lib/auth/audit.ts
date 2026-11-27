@@ -154,6 +154,7 @@ export type AuditAction =
   | "adt_attendance_schedule"
   | "overtime_match_override"
   | "overtime_meal_action"
+  | "meal_out_alert_settings" // 반복 외출 경고 설정(380)
   | "payroll_ledger_import" // 급여대장 엑셀 가져오기 — 확정 대장 신규·덮어쓰기 적재
   | "company_holiday_set"
   | "approval_notify_settings_update"

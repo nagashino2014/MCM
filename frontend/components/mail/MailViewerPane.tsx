@@ -91,12 +91,30 @@ function MailBodyFrame({ html }: { html: string }) {
       measure();
       const onLoadCapture = () => measure();
       doc.addEventListener("load", onLoadCapture, true); // 이미지 load 는 bubble 되지 않아 capture 로 받는다
+      // 본문 링크는 새 탭으로 연다(2026-11-27 직원 요청 32). sandbox 에 allow-downloads·allow-popups 가 없어
+      // 대용량 첨부 링크(/api/mail/large/…)를 누르면 iframe 안에서 내려받기가 막혔고, 일반 링크는 본문 자리에서 열렸다.
+      // 스크립트 차단(sandbox)은 그대로 두고 부모 쪽에서 클릭을 받아 새 탭으로 넘긴다 — 첨부 응답은 attachment 라 새 탭은 바로 닫히고 파일이 받아진다.
+      const onLinkClick = (e: MouseEvent) => {
+        const target = e.target as Element | null;
+        const a = target && typeof target.closest === "function" ? (target.closest("a[href]") as HTMLAnchorElement | null) : null;
+        if (!a) return;
+        const href = a.href;
+        if (!/^https?:/i.test(href)) {
+          // 본문 안 #앵커는 iframe 안에서 그대로 이동, mailto 등 그 밖의 주소는 막혀 있던 그대로 둔다.
+          if (!href.startsWith("about:srcdoc#")) e.preventDefault();
+          return;
+        }
+        e.preventDefault();
+        window.open(href, "_blank", "noopener,noreferrer");
+      };
+      doc.addEventListener("click", onLinkClick);
       doc.fonts?.ready.then(measure).catch(() => {});
       const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
       ro?.observe(frame); // 폭이 바뀌면 줄바꿈이 달라진다
       if (doc.body) ro?.observe(doc.body);
       cleanup = () => {
         doc.removeEventListener("load", onLoadCapture, true);
+        doc.removeEventListener("click", onLinkClick);
         ro?.disconnect();
       };
     };

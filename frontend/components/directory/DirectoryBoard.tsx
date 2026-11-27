@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
   Beaker, Building2, Landmark, Mail, Network, Pencil, Phone, Plus, Search, Smartphone,
-  Trash2, Users, X,
+  Trash2, TriangleAlert, Users, X,
 } from "lucide-react";
 import { useCdashTheme } from "@/components/cdash/useCdashTheme";
 import { CdPageHeader } from "@/components/cdash/CdPageHeader";
@@ -56,17 +56,37 @@ interface ExternalContact {
 }
 
 const DEPT_TYPE_LABEL: Record<string, string> = { contract: "계약", env: "환경", billing: "계산서" };
+
+/** 담당자 삭제 하루 제한(서버 lib/directory-trash.ts 와 같은 값 — 안내 문구용). */
+const CONTACT_DELETE_LIMIT = 5;
+
+interface DeleteQuota {
+  limit: number;
+  used: number;
+  lockedUntil: string | null;
+  exempt: boolean;
+}
+
+/** 잠금 해제 시각 — "11월 28일 14:05". */
+function formatUnlock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 const UNCATEGORIZED = "__none__";
 
 export function DirectoryBoard() {
   const { theme } = useCdashTheme();
   const { toast } = useCdToast();
   const { data: session } = useSession();
-  // 외부 연락처 권한(2026-10-30 사용자 결정): 추가·수정은 contact.edit(전 직원), 삭제·연락처 구분 변경은
+  // 외부 연락처 권한(2026-10-30 사용자 결정): 추가·수정은 contact.edit(전 직원), 연락처 구분 변경은
   // facility.edit 만. 같은 키 보유자에게만 해당 아이콘·입력을 보인다(F-25).
+  // 삭제(2026-11-27 사용자 결정, 직원 요청 27): 수정 권한자가 한 명씩 휴지통으로 옮긴다(일괄 삭제 없음, 하루 5건).
+  // 완전 삭제는 휴지통에서 관리자만.
   const perms = permsOf(session?.user);
-  const canDeleteContacts = hasPerm(perms, "facility.edit");
-  const canEditContacts = canDeleteContacts || hasPerm(perms, "contact.edit");
+  const canEditCategory = hasPerm(perms, "facility.edit");
+  const canEditContacts = canEditCategory || hasPerm(perms, "contact.edit");
+  const canViewTrash = hasPerm(perms, "trash.view");
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<Tab>("staff");
 
@@ -84,6 +104,11 @@ export function DirectoryBoard() {
   const [category, setCategory] = useState<string | null>(null);
   const [editing, setEditing] = useState<ExternalContact | null>(null);
   const [deleting, setDeleting] = useState<ExternalContact | null>(null);
+  // 삭제 확인 창의 하루 제한 안내(최근 24시간 건수·잠금 해제 시각) — 창을 열 때 받는다.
+  const [deleteQuota, setDeleteQuota] = useState<DeleteQuota | null>(null);
+  const [removing, setRemoving] = useState(false);
+  // 하루 제한 경고 창 문구.
+  const [limitNotice, setLimitNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,23 +207,46 @@ export function DirectoryBoard() {
 
   const selectedDeptName = deptId ? departments.find((d) => d.deptId === deptId)?.deptName : null;
 
+  const openDelete = (c: ExternalContact) => {
+    setDeleting(c);
+    setDeleteQuota(null);
+    fetch("/api/directory/contacts?quota=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setDeleteQuota(d?.quota ?? null))
+      .catch(() => {});
+  };
+
+  // 휴지통으로 이동 — 완전 삭제가 아니다. 하루 제한(5건)에 걸리면 경고 창을 띄운다.
   const removeContact = async (c: ExternalContact) => {
-    const r = await fetch(`/api/directory/contacts?id=${c.id}`, { method: "DELETE" });
-    if (r.ok) {
-      toast(`'${c.personName}' 담당자를 삭제했습니다.`, "success");
-      setContacts((prev) => (prev ?? []).filter((x) => x.id !== c.id));
-    } else {
+    setRemoving(true);
+    try {
+      const r = await fetch(`/api/directory/contacts?id=${c.id}`, { method: "DELETE" });
       const d = await r.json().catch(() => ({}));
-      toast(String(d.error ?? "삭제에 실패했습니다."), "error");
+      if (r.ok) {
+        toast(`'${c.personName}' 담당자를 휴지통으로 옮겼습니다.`, "success");
+        setContacts((prev) => (prev ?? []).filter((x) => x.id !== c.id));
+        const q = d.quota as DeleteQuota | undefined;
+        if (q?.lockedUntil) {
+          setLimitNotice(
+            `오늘 담당자 ${q.limit}건을 삭제했습니다. ${formatUnlock(q.lockedUntil)}까지(24시간) 더 삭제할 수 없습니다.`
+          );
+        }
+      } else if (r.status === 429) {
+        setLimitNotice(String(d.error ?? "하루에 삭제할 수 있는 건수를 넘었습니다."));
+      } else {
+        toast(String(d.error ?? "삭제에 실패했습니다."), "error");
+      }
+    } finally {
+      setRemoving(false);
+      setDeleting(null);
     }
-    setDeleting(null);
   };
 
   return (
     <div className="cdash cd-fields-white flex h-full min-h-0 flex-col gap-5 p-4 md:p-5 rounded-3xl" data-theme={theme}>
       <CdPageHeader
         title="주소록 · 조직도"
-        help="임직원과 외부 담당자의 연락처를 조회합니다. 출장·영업에서 만난 외부 담당자는 외부 연락처 탭에서 직접 등록하고 직급·연락처를 고칠 수 있습니다(삭제는 사업장 관리 담당자). 명함 촬영은 사업장 상세·앱에서 합니다."
+        help="임직원과 외부 담당자의 연락처를 조회합니다. 출장·영업에서 만난 외부 담당자는 외부 연락처 탭에서 직접 등록하고 직급·연락처를 고칠 수 있습니다. 삭제한 담당자는 휴지통으로 가며 완전 삭제는 관리자만 합니다. 명함 촬영은 사업장 상세·앱에서 합니다."
         meta={`임직원 ${people.length}명 · 외부 연락처 ${activeContacts.length}명`}
       />
 
@@ -356,6 +404,12 @@ export function DirectoryBoard() {
                   </button>
                 )}
                 <span className="ml-auto text-[11.5px] cd-text-faint">{filteredContacts.length}명</span>
+                {canViewTrash && (
+                  <Link href="/trash?type=contact_person" className="cd-btn cd-btn-ghost cd-btn-sm cd-action" title="주소록에서 삭제한 담당자 — 복원·완전 삭제">
+                    <Trash2 className="w-3.5 h-3.5" />
+                    휴지통
+                  </Link>
+                )}
                 {canEditContacts && (
                   <CdButton size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>
                     담당자 등록
@@ -439,16 +493,14 @@ export function DirectoryBoard() {
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                              {canDeleteContacts && (
-                                <button
-                                  type="button"
-                                  className="p-1 rounded-md cd-text-faint hover:cd-error-text"
-                                  title="삭제"
-                                  onClick={() => setDeleting(c)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="p-1 rounded-md cd-text-faint hover:cd-error-text"
+                                title="삭제(휴지통으로 이동)"
+                                onClick={() => openDelete(c)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -502,7 +554,7 @@ export function DirectoryBoard() {
       {editing && (
         <ContactEditModal
           contact={editing}
-          canEditCategory={canDeleteContacts}
+          canEditCategory={canEditCategory}
           onClose={() => setEditing(null)}
           onSaved={(patch) => {
             // 연락처 구분은 사업장 속성 — 같은 사업장의 다른 담당자에게도 즉시 반영한다.
@@ -528,7 +580,13 @@ export function DirectoryBoard() {
         footer={
           <>
             <CdButton onClick={() => setDeleting(null)}>취소</CdButton>
-            <CdButton variant="danger" icon={<Trash2 className="w-4 h-4" />} onClick={() => deleting && removeContact(deleting)}>
+            <CdButton
+              variant="danger"
+              icon={<Trash2 className="w-4 h-4" />}
+              loading={removing}
+              disabled={!!deleteQuota?.lockedUntil}
+              onClick={() => deleting && removeContact(deleting)}
+            >
               삭제
             </CdButton>
           </>
@@ -537,7 +595,34 @@ export function DirectoryBoard() {
         <p className="text-sm cd-text">
           {deleting ? `'${deleting.personName}'(${deleting.facilityName ?? "-"}) 담당자를 주소록에서 삭제할까요?` : ""}
         </p>
-        <p className="text-xs cd-text-faint mt-1.5">삭제하면 사업장 상세의 담당자 목록에서도 제거됩니다.</p>
+        <p className="text-xs cd-text-faint mt-1.5">
+          삭제한 담당자는 휴지통으로 옮겨지고 사업장 상세의 담당자 목록에서도 빠집니다. 완전 삭제는 관리자만 할 수 있습니다.
+        </p>
+        {deleteQuota && !deleteQuota.exempt && (
+          <p className={`text-xs mt-1.5 ${deleteQuota.lockedUntil ? "cd-error-text font-semibold" : "cd-text-muted"}`}>
+            {deleteQuota.lockedUntil
+              ? `하루 삭제 한도 ${deleteQuota.limit}건을 모두 썼습니다. ${formatUnlock(deleteQuota.lockedUntil)} 이후에 다시 삭제할 수 있습니다.`
+              : `담당자 삭제는 하루(24시간) ${deleteQuota.limit}건까지입니다 — 최근 24시간 ${deleteQuota.used}건 삭제.`}
+          </p>
+        )}
+      </CdModal>
+
+      <CdModal
+        open={limitNotice != null}
+        onClose={() => setLimitNotice(null)}
+        title="삭제 한도"
+        size="sm"
+        footer={<CdButton variant="primary" onClick={() => setLimitNotice(null)}>확인</CdButton>}
+      >
+        <div className="flex items-start gap-2">
+          <TriangleAlert className="w-5 h-5 shrink-0" style={{ color: "var(--cd-warning, #d97706)" }} />
+          <div>
+            <p className="text-sm cd-text">{limitNotice}</p>
+            <p className="text-xs cd-text-faint mt-1.5">
+              주소록 담당자는 한 사람씩만 삭제할 수 있고, 하루(24시간)에 {CONTACT_DELETE_LIMIT}건을 넘으면 하루 동안 삭제가 멈춥니다. 잘못 지웠다면 휴지통에서 복원을 요청하세요.
+            </p>
+          </div>
+        </div>
       </CdModal>
     </div>
   );

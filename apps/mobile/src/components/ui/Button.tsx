@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/theme/useTheme";
 
@@ -121,10 +122,17 @@ export function PrimaryIconButton({
   );
 }
 
-/** 하단 고정 액션 바(결재 승인/반려 등) — 카드 면 + 위쪽 hairline. */
+/**
+ * 하단 고정 액션 바(결재 승인/반려 등) — 카드 면 + 위쪽 hairline.
+ * 아래 여백은 기기 하단 안전 영역(안드로이드 내비게이션 바·iOS 홈 표시줄)만큼 늘린다 — 고정 24 만 두면
+ * 안드로이드 3버튼 내비게이션 바(edge-to-edge)에 버튼이 가려졌다(2026-11-27 직원 요청 34).
+ */
 export function ActionBar({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View className="flex-row gap-2 border-t border-cd-border bg-cd-card px-4 pb-6 pt-3">
+    <View
+      style={{ paddingBottom: Math.max(24, insets.bottom + 12) }}
+      className="flex-row gap-2 border-t border-cd-border bg-cd-card px-4 pt-3">
       {children}
     </View>
   );

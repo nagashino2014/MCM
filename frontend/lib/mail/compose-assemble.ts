@@ -32,13 +32,15 @@ export async function assembleBody(input: {
   quoteOf?: string | null;
   quoteMode?: QuoteMode;
   applySignature?: boolean;
+  /** 앱 메일쓰기에서 고른 서명(2026-11-27 직원 요청 35). 없거나 내 서명이 아니면 기본 서명. */
+  signatureId?: string | null;
 }): Promise<string> {
   const parts: string[] = [plainToHtml(input.plain)];
 
   if (input.applySignature !== false) {
     try {
       const sigs = await listSignatures(input.userId);
-      const def = sigs.find((s) => s.isDefault) ?? null;
+      const def = (input.signatureId ? sigs.find((s) => s.signatureId === input.signatureId) : null) ?? sigs.find((s) => s.isDefault) ?? null;
       if (def?.bodyHtml) parts.push(`<br /><div>${def.bodyHtml}</div>`);
     } catch {
       // 서명 조회 실패는 발송을 막지 않는다.

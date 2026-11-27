@@ -3,6 +3,7 @@ import { authErrorToResponse, requirePermission } from "@/lib/auth/guards";
 import { getDb, rowsToObjects, withDbWrite, type PgDatabase } from "@/lib/db";
 import { withContractTransactionWrite } from "@/lib/finance/contract-link-lock";
 import { recordAuditLogInline } from "@/lib/auth/audit";
+import { restoreContactPersonFromTrash } from "@/lib/directory-trash";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,21 @@ export async function POST(_: NextRequest, ctx: RouteContext) {
       if (!item) throw new Error("휴지통 항목을 찾을 수 없습니다.");
       const itemType = String(item.item_type ?? "");
       const itemId = String(item.item_id ?? "");
+
+      // 주소록 담당자(381) — 원본 행이 없으므로 휴지통에 담아 둔 행을 같은 id 로 다시 넣는다.
+      if (itemType === "contact_person") {
+        await restoreContactPersonFromTrash(db, item);
+        await db.run("DELETE FROM trash_items WHERE trash_id = $1", [trashId]);
+        await recordAuditLogInline(db, {
+          actorUserId: actor.userId,
+          action: "trash_restore",
+          targetTable: "facility_contact_people",
+          targetId: itemId,
+          before: item,
+          after: { restored: true, itemType, itemId },
+        });
+        return;
+      }
 
       const table = itemType === "contract" ? "contracts" : itemType === "facility" ? "facilities" : null;
       const idCol = itemType === "contract" ? "contract_id" : "facility_id";

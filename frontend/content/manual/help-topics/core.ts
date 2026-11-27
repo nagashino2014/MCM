@@ -71,6 +71,7 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     label: "삭제·재상신 도움말",
     blocks: [
       { kind: "list", items: [
+        "**상신 취소**: 아직 아무도 결재하지 않은 결재 중 문서를 작성중으로 되돌립니다. 문서번호는 그대로이고, 고쳐서 다시 상신하면 결재선이 처음부터 진행합니다.",
         "**수정 후 재상신**: 문서번호는 그대로이고 결재선은 처음 단계부터 다시 진행합니다.",
         "**이어 작성**: 임시 저장한 문서를 계속 씁니다.",
         "**삭제**: 결재선·참조 기록까지 지워지고 되돌릴 수 없습니다. 휴가 문서면 차감된 연차가 복원됩니다.",
@@ -78,7 +79,7 @@ export const HELP_TOPIC_LIST: HelpTopic[] = [
     ],
     more: { article: "approval.home", section: "fix" },
     sources: ["components/approval/ApprovalDocModal.tsx"],
-    reviewedAt: "2026-10-20",
+    reviewedAt: "2026-11-27",
   },
   {
     id: "approval.draft-line",

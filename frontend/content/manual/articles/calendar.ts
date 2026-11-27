@@ -25,7 +25,7 @@ export const CALENDAR_ARTICLES: ManualArticle[] = [
             "‘영업’은 영업 권한이 있을 때만, ‘면접’은 참석자·면접 관리자에게만 보입니다.",
             "태그마다 색이 다릅니다 — ‘본인’은 밝은 파랑, ‘선택’은 남색, ‘할 일’은 연보라.",
             "‘할 일’은 날짜가 있는 하위 작업(마일스톤)이 있으면 상위 막대 대신 ‘상위 제목 - 하위 제목’ 하위 작업만 표시됩니다.",
-            "한 칸에 다 보이지 않으면 ‘+N’을 눌러 펼칩니다.",
+            "한 칸에 다 보이지 않으면 날짜 칸 아래 ‘+N’을 누릅니다. 그날의 일정이 모두 담긴 목록 창이 열리고, 일정을 누르면 아래 목록의 그 일정 카드로 갑니다(날짜 칸의 빈 곳을 누르면 종전처럼 일정 추가 메뉴가 열립니다).",
           ] },
         ],
       },
@@ -59,7 +59,7 @@ export const CALENDAR_ARTICLES: ManualArticle[] = [
       },
     ],
     keywords: ["일정", "캘린더", "달력", "회의", "면접", "미팅", "정기 회의", "출장 신청", "휴가 신청"],
-    sources: ["components/calendar/CalendarBoard.tsx", "components/calendar/DayActionModal.tsx", "components/calendar/MeetingRulesModal.tsx", "components/calendar/CalendarEntryModal.tsx", "components/calendar/CalendarRefsModal.tsx"],
-    reviewedAt: "2026-11-03",
+    sources: ["components/calendar/CalendarBoard.tsx", "components/calendar/ScheduleCalendar.tsx", "components/calendar/DayActionModal.tsx", "components/calendar/MeetingRulesModal.tsx", "components/calendar/CalendarEntryModal.tsx", "components/calendar/CalendarRefsModal.tsx"],
+    reviewedAt: "2026-11-27",
   },
 ];

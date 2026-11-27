@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { CheckCircle2, Paperclip, Pencil, Sparkles, Trash2, X } from "lucide-react";
+import { CheckCircle2, Paperclip, Pencil, Sparkles, Trash2, Undo2, X } from "lucide-react";
 import { ApprovalFormRenderer } from "@/components/approval/ApprovalFormRenderer";
 import { DocAttachmentViewer } from "@/components/approval/DocAttachmentViewer";
 import { approvalEditHref } from "@/lib/approval/edit-route";
@@ -81,6 +81,8 @@ export interface DocDetailData {
   canDelete?: boolean;
   /** 이어 작성·재기안 권한 — 기안자 본인의 작성중·반려 문서. */
   canEdit?: boolean;
+  /** 상신 취소 — 기안자 본인의 결재 중 문서, 아직 아무도 승인·반려하지 않았을 때(직원 요청 31). */
+  canWithdraw?: boolean;
   /** 참조·열람자(직원 요청 21) — fixed=고정·직원별 규칙(346·353)으로 자동 추가. 관계자 외 열람자에게는 서버가 비워 보낸다 */
   watchers?: DocWatcherRow[];
 }
@@ -434,6 +436,32 @@ export function ApprovalDocViewer({
                   <Pencil className="w-3.5 h-3.5" /> {resending ? "처리 중..." : "회수 후 수정"}
                 </button>
               )}
+              {/* 상신 취소(직원 요청 31) — 결재 중이고 아직 아무도 처리하지 않은 본인 기안. 작성중으로 돌아가 고친 뒤 다시 상신한다. */}
+              {detail.canWithdraw && (
+                <button
+                  type="button"
+                  className="cd-btn rounded-lg border cd-border-c px-2.5 py-1.5 text-[11px] flex items-center gap-1 shrink-0 disabled:opacity-50"
+                  title="결재를 멈추고 작성중으로 되돌립니다(문서번호 유지) — 아직 아무도 결재하지 않았을 때만"
+                  disabled={acting}
+                  onClick={async () => {
+                    if (!window.confirm("상신을 취소할까요?\n\n문서는 작성중으로 돌아가고 결재자의 결재 대기에서 빠집니다.\n문서번호는 그대로 두며, 고친 뒤 다시 상신하면 결재가 처음부터 시작됩니다.")) return;
+                    setActing(true);
+                    try {
+                      const res = await fetch(`/api/approval/docs/${encodeURIComponent(detail.docId)}/withdraw`, { method: "POST" });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(data?.error ?? "상신 취소 실패");
+                      alert("상신을 취소했습니다. 작성중 문서에서 고쳐 다시 상신할 수 있습니다.");
+                      onActed?.();
+                    } catch (err) {
+                      alert((err as Error).message);
+                    } finally {
+                      setActing(false);
+                    }
+                  }}
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> 상신 취소
+                </button>
+              )}
               {/* 이어 작성·재기안 — 본인 기안의 작성중·반려 문서. 양식 전용 화면(공문·견적서)으로 분기한다. */}
               {detail.canEdit && (
                 <Link
@@ -475,7 +503,7 @@ export function ApprovalDocViewer({
                   <Trash2 className="w-3.5 h-3.5" /> 삭제
                 </button>
               )}
-              {(detail.canEdit || detail.canDelete) && <CdHelp topic="approval.delete-resubmit" />}
+              {(detail.canEdit || detail.canDelete || detail.canWithdraw) && <CdHelp topic="approval.delete-resubmit" />}
               {headerRight}
             </div>
 

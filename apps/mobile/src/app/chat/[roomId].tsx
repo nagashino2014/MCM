@@ -869,9 +869,11 @@ export function ChatRoomView({ roomId, name, embedded, popup, onLeft }: { roomId
         }
       />
 
+      {/* 안드로이드도 padding(2026-11-27 직원 요청 37) — edge-to-edge(SDK 57 기본)에서는 창이 키보드만큼 줄지 않아
+          behavior 를 비워 두면 키보드가 입력란을 덮었다. 웹(위젯·PWA)은 브라우저가 처리하므로 끈다. */}
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         keyboardVerticalOffset={0}>
         {/* 대화 영역 — 틀 배치에서는 좌우·위 12 를 띄운 둥근 틀(반경 10) 안에 그라데이션과 메시지를 담는다. */}
         <View className="flex-1" style={framed ? { marginHorizontal: 12, marginTop: 12, borderRadius: 10, overflow: 'hidden' } : undefined}>

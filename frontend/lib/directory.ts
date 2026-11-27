@@ -296,11 +296,7 @@ export async function listFacilityDepartmentNames(facilityId: string): Promise<s
   return rows.map((r) => String(r.department_name));
 }
 
-export async function deleteContactPerson(id: number): Promise<void> {
-  await withDbWrite(async (db) => {
-    await db.run(`DELETE FROM facility_contact_people WHERE id = $1`, [id]);
-  });
-}
+// 담당자 삭제는 휴지통 이동만 한다 — lib/directory-trash.ts moveContactPersonToTrash(2026-11-27, 직원 요청 27).
 
 export interface RecipientSuggestion {
   /** 표시 이름(임직원명·별칭·담당자명). */
